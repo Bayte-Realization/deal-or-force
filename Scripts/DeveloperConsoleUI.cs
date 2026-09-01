@@ -39,11 +39,11 @@ public partial class GlobalityGame
         };
         header.AddThemeConstantOverride("separation", 8);
         rows.AddChild(header);
-        var title = Title("COMMAND CONSOLE", 18, new Color("#e7c966"));
+        var title = Title("COMMAND CONSOLE", 18, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         title.VerticalAlignment = VerticalAlignment.Center;
         header.AddChild(title);
-        var closeHint = Title("~ / Esc to close", 12, new Color("#7e8fa3"));
+        var closeHint = Title("~ / Esc to close", 12, Ui.Colour("text.hint"));
         closeHint.CustomMinimumSize = new Vector2(112, 28);
         closeHint.VerticalAlignment = VerticalAlignment.Center;
         closeHint.HorizontalAlignment = HorizontalAlignment.Right;
@@ -59,7 +59,7 @@ public partial class GlobalityGame
             SelectionEnabled = true,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 260),
-            Text = "[color=#e7c966]By Deal or Force console[/color]\nType [color=#a8c9e8]help[/color] for commands. Commands are local and deterministic."
+            Text = Bb("text.accent") + "By Deal or Force console[/color]\nType " + Bb("state.info") + "help[/color] for commands. Commands are local and deterministic."
         };
         _developerConsoleOutput.AddThemeFontSizeOverride("normal_font_size", 14);
         rows.AddChild(_developerConsoleOutput);
@@ -97,7 +97,7 @@ public partial class GlobalityGame
     {
         raw = (raw ?? "").Trim();
         if (raw.Length == 0) return;
-        _developerConsoleOutput.AppendText($"\n[color=#8798aa]> {EscapeBb(raw)}[/color]");
+        _developerConsoleOutput.AppendText($"\n{Bb("text.caption")}> {EscapeBb(raw)}[/color]");
         _developerConsoleInput.Clear();
         var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var command = parts[0].ToLowerInvariant();
@@ -127,6 +127,7 @@ public partial class GlobalityGame
                 "economy" or "gdp" => ConsoleEconomy(),
                 "loc" or "localization" => ConsoleLocalization(argument),
                 "effects" => ConsoleEffectVocabulary(),
+                "skin" or "interface" => ConsoleSkin(argument),
                 "date" => _campaign?.Date.ToString() ?? "No campaign",
                 _ => $"Unknown command '{command}'. Type help."
             };
@@ -134,17 +135,52 @@ public partial class GlobalityGame
         }
         catch (Exception exception)
         {
-            _developerConsoleOutput.AppendText($"\n[color=#e06b6b]Command failed: {EscapeBb(exception.Message)}[/color]");
+            _developerConsoleOutput.AppendText($"\n{Bb("state.negative")}Command failed: {EscapeBb(exception.Message)}[/color]");
         }
         _developerConsoleInput.GrabFocus();
     }
 
+    /// <summary>BBCode markers that follow the skin, so the console recolours with the game.</summary>
+    private static string Bb(string token) => "[color=" + Simulation.InterfaceSkin.Colour(token) + "]";
+
     private static string ConsoleHelp() =>
-        "[color=#e7c966]CONTROL[/color]  tag TAG · observe · pause · speed 1-5 · freecam [on/off]\n" +
-        "[color=#e7c966]MAP[/color]  mapmode pol/dip/war/pop/gdp · focus LAT LON · teleport PROVINCE\n" +
-        "[color=#e7c966]STATE[/color]  money AMOUNT · manpower AMOUNT · stability 0-100\n" +
-        "[color=#e7c966]DEBUG[/color]  fps · sim · armies · fronts · province · date · clear\n" +
-        "[color=#e7c966]CONTENT[/color]  economy · effects · loc [language]";
+        Bb("text.accent") + "CONTROL[/color]  tag TAG · observe · pause · speed 1-5 · freecam [on/off]\n" +
+        Bb("text.accent") + "MAP[/color]  mapmode pol/dip/war/pop/gdp · focus LAT LON · teleport PROVINCE\n" +
+        Bb("text.accent") + "STATE[/color]  money AMOUNT · manpower AMOUNT · stability 0-100\n" +
+        Bb("text.accent") + "DEBUG[/color]  fps · sim · armies · fronts · province · date · clear\n" +
+        Bb("text.accent") + "CONTENT[/color]  economy · effects · loc [language] · skin [token]";
+
+    /// <summary>
+    /// What the interface is actually painted with. With no argument it reports which
+    /// tokens a mod has moved off their shipped values - the fastest way to tell a broken
+    /// reskin from a broken layout.
+    /// </summary>
+    private static string ConsoleSkin(string argument)
+    {
+        var skin = typeof(Simulation.InterfaceSkin);
+        if (!string.IsNullOrWhiteSpace(argument))
+        {
+            var filter = argument.Trim();
+            var matches = Simulation.InterfaceSkin.Tokens
+                .Where(entry => entry.Token.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .Take(40)
+                .Select(entry => $"  {Bb(entry.Token)}■[/color] {entry.Token} = {entry.Value}")
+                .ToList();
+            return matches.Count == 0
+                ? $"No interface token matches '{filter}'."
+                : string.Join("\n", matches);
+        }
+
+        var overridden = Simulation.InterfaceSkin.Overridden;
+        var total = Simulation.InterfaceSkin.Tokens.Count();
+        if (overridden.Count == 0)
+            return $"{total} interface tokens, all at their shipped values. " +
+                   "'skin text' lists a family; a mod overrides them from interface/skin.json.";
+
+        return $"{total} interface tokens · {overridden.Count} overridden by mods:\n" +
+               string.Join("\n", overridden.Take(30).Select(token =>
+                   $"  {Bb(token)}■[/color] {token} = {Simulation.InterfaceSkin.Colour(token)}"));
+    }
 
     /// <summary>Proves the emergent economy still reproduces the authored 2024 figures.</summary>
     private string ConsoleEconomy()
@@ -184,7 +220,7 @@ public partial class GlobalityGame
 
     private string ClearConsole()
     {
-        _developerConsoleOutput.Text = "[color=#e7c966]Console cleared.[/color]";
+        _developerConsoleOutput.Text = Bb("text.accent") + "Console cleared.[/color]";
         return "";
     }
 

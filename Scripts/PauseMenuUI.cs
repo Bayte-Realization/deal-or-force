@@ -32,15 +32,15 @@ public partial class GlobalityGame
         panel.OffsetBottom = 245;
 
         var rows = PanelRows(panel, 30, 26, 12);
-        rows.AddChild(Title("CAMPAIGN PAUSED", 28, new Color("#e7c966")));
+        rows.AddChild(Title("CAMPAIGN PAUSED", 28, Ui.Colour("text.accent")));
         rows.AddChild(Title("The simulation is stopped. Your campaign remains in memory.", 14,
-            new Color("#98a8ba")));
+            Ui.Colour("text.muted")));
         rows.AddChild(ActionButton("Resume campaign", HidePauseMenu, 330, 46, true));
         rows.AddChild(ActionButton("Quick save  [F5]", QuickSave, 330, 42));
         rows.AddChild(ActionButton("Save / load campaign", ShowSaveLoadInterface, 330, 42));
         rows.AddChild(ActionButton("Return to main menu", ReturnToMainMenu, 330, 42));
         rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
-        rows.AddChild(Title("Esc closes this menu", 12, new Color("#7f8d9e")));
+        rows.AddChild(Title("Esc closes this menu", 12, Ui.Colour("text.hint")));
     }
 
     private void ShowPauseMenu()

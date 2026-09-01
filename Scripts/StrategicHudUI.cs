@@ -158,7 +158,7 @@ public partial class GlobalityGame
         else
         {
             var definition = CommodityCatalog.Get(worstGood.Commodity);
-            AddOutlinerButton($"{definition.Name} · {worstGood.Satisfaction:P0} · ${worstGood.Price:0.000}B",
+            AddOutlinerButton($"{definition.Name} · {worstGood.Satisfaction:P0} · {Fmt.Money(worstGood.Price)}",
                 () => OpenScreen("Economy"),
                 $"Production {worstGood.Production:0.0}, demand {worstGood.Demand:0.0}, imports {worstGood.Imports:0.0}, exports {worstGood.Exports:0.0}");
         }
@@ -187,10 +187,10 @@ public partial class GlobalityGame
     }
 
     private void AddOutlinerHeader(string text) =>
-        _outlinerRows.AddChild(Title(text, 11, new Color("#d2bc68")));
+        _outlinerRows.AddChild(Title(text, 11, Ui.Colour("text.accent_dim")));
 
     private void AddOutlinerHint(string text) =>
-        _outlinerRows.AddChild(Title(text, 12, new Color("#8190a1")));
+        _outlinerRows.AddChild(Title(text, 12, Ui.Colour("text.hint")));
 
     private void AddOutlinerButton(string text, Action action, string tooltip)
     {
@@ -238,7 +238,7 @@ public partial class GlobalityGame
         _battleDetailControls = new VBoxContainer { Visible = false };
         _battleDetailControls.AddThemeConstantOverride("separation", 5);
         parent.AddChild(_battleDetailControls);
-        _battleDetailControls.AddChild(Title("BATTLE COHESION", 11, new Color("#8e9daf")));
+        _battleDetailControls.AddChild(Title("BATTLE COHESION", 11, Ui.Colour("text.caption")));
         _attackerOrganisation = new ProgressBar { MinValue = 0, MaxValue = 100, ShowPercentage = true };
         _defenderOrganisation = new ProgressBar { MinValue = 0, MaxValue = 100, ShowPercentage = true };
         _battleDetailControls.AddChild(_attackerOrganisation);

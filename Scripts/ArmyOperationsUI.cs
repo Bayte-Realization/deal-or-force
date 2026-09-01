@@ -18,9 +18,9 @@ public partial class GlobalityGame
         _armyOrders = new VBoxContainer { Visible = false };
         _armyOrders.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_armyOrders);
-        _armyOrders.AddChild(Title("OPERATIONAL ORDER", 12, new Color("#8e9daf")));
+        _armyOrders.AddChild(Title("OPERATIONAL ORDER", 12, Ui.Colour("text.caption")));
         _armyCommandFeedback = Title("RMB: march / attack · Shift+RMB: append waypoint · Shift+click: add to selection",
-            11, new Color("#b9c7d7"));
+            11, Ui.Colour("text.body_soft"));
         _armyCommandFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _armyOrders.AddChild(_armyCommandFeedback);
         var row = new HBoxContainer();
@@ -42,7 +42,7 @@ public partial class GlobalityGame
         spearhead.TooltipText = "Concentrate on the last selected enemy region, or on the war goal if no region was selected.";
         doctrine.AddChild(spearhead);
 
-        _armyOrders.AddChild(Title("COMBAT POSTURE", 11, new Color("#8e9daf")));
+        _armyOrders.AddChild(Title("COMBAT POSTURE", 11, Ui.Colour("text.caption")));
         var posture = new HBoxContainer();
         posture.AddThemeConstantOverride("separation", 5);
         _armyOrders.AddChild(posture);
@@ -56,7 +56,7 @@ public partial class GlobalityGame
         aggressive.TooltipText = "Faster movement and stronger attacks, at the cost of recovery, defence and heavier casualties.";
         posture.AddChild(aggressive);
 
-        _armyOrders.AddChild(Title("REINFORCEMENT PRIORITY", 11, new Color("#8e9daf")));
+        _armyOrders.AddChild(Title("REINFORCEMENT PRIORITY", 11, Ui.Colour("text.caption")));
         var priority = new HBoxContainer();
         priority.AddThemeConstantOverride("separation", 5);
         _armyOrders.AddChild(priority);
@@ -67,7 +67,7 @@ public partial class GlobalityGame
         AddReinforcementPriorityButton(priority, "High", ReinforcementPriority.High,
             "Receives 1.90 reinforcement weight. Front-line formations recover first, starving lower priorities if reserves are scarce.");
 
-        _armyOrders.AddChild(Title("ARMY ORGANISATION", 11, new Color("#8e9daf")));
+        _armyOrders.AddChild(Title("ARMY ORGANISATION", 11, Ui.Colour("text.caption")));
         var grouping = new HBoxContainer();
         grouping.AddThemeConstantOverride("separation", 5);
         _armyOrders.AddChild(grouping);

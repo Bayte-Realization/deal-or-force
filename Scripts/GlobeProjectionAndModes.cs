@@ -273,24 +273,24 @@ public sealed partial class GlobePresentation
         switch (_mapMode)
         {
             case StrategicMapMode.Diplomatic:
-                if (nation == player) return new Color("#4fb477");
+                if (nation == player) return Ui.Colour("map.player");
                 var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
-                if (CampaignDiplomacy.AtWar(_campaign, player.Id, nation.Id)) return new Color("#c94f55");
+                if (CampaignDiplomacy.AtWar(_campaign, player.Id, nation.Id)) return Ui.Colour("map.at_war");
                 return relation.Stance switch
                 {
-                    DiplomaticStance.Allied => new Color("#4e83c7"),
-                    DiplomaticStance.Friendly => new Color("#4ea6a0"),
-                    DiplomaticStance.Rival => new Color("#c77943"),
+                    DiplomaticStance.Allied => Ui.Colour("map.allied"),
+                    DiplomaticStance.Friendly => Ui.Colour("map.friendly"),
+                    DiplomaticStance.Rival => Ui.Colour("map.rival"),
                     _ => Color.FromHsv(0.58f, 0.10f, Mathf.Clamp(0.46f + relation.Opinion / 500f, 0.30f, 0.65f))
                 };
             case StrategicMapMode.Wars:
-                if (nation == player) return new Color("#d3b34e");
+                if (nation == player) return Ui.Colour("map.war_self");
                 var war = _campaign.Wars.FirstOrDefault(candidate => !candidate.Ended &&
                     (candidate.Involves(player.Id) || candidate.Involves(nation.Id)) && candidate.Involves(nation.Id));
-                if (war is null) return new Color("#49515d");
-                if (war.AttackerId == nation.Id) return new Color("#b85443");
-                if (war.DefenderId == nation.Id) return new Color("#4b75aa");
-                return new Color("#7b687f");
+                if (war is null) return Ui.Colour("map.neutral");
+                if (war.AttackerId == nation.Id) return Ui.Colour("map.war_attacker");
+                if (war.DefenderId == nation.Id) return Ui.Colour("map.war_defender");
+                return Ui.Colour("map.war_bystander");
             case StrategicMapMode.Population:
                 return HeatRamp((float)((Math.Log10(Math.Max(1, nation.Population)) - minPopulation) /
                     Math.Max(0.001, maxPopulation - minPopulation)));
@@ -306,16 +306,16 @@ public sealed partial class GlobePresentation
     {
         value = Mathf.Clamp(value, 0f, 1f);
         return value < 0.5f
-            ? new Color("#173b56").Lerp(new Color("#3aa6a0"), value * 2f)
-            : new Color("#3aa6a0").Lerp(new Color("#f0c85b"), (value - 0.5f) * 2f);
+            ? Ui.Colour("map.value_low").Lerp(Ui.Colour("map.value_mid"), value * 2f)
+            : Ui.Colour("map.value_mid").Lerp(Ui.Colour("map.value_high"), (value - 0.5f) * 2f);
     }
 
     private static Color EconomicRamp(float value)
     {
         value = Mathf.Clamp(value, 0f, 1f);
         return value < 0.5f
-            ? new Color("#3c294f").Lerp(new Color("#477f73"), value * 2f)
-            : new Color("#477f73").Lerp(new Color("#d6c45d"), (value - 0.5f) * 2f);
+            ? Ui.Colour("map.terrain_low").Lerp(Ui.Colour("map.terrain_mid"), value * 2f)
+            : Ui.Colour("map.terrain_mid").Lerp(Ui.Colour("map.terrain_high"), (value - 0.5f) * 2f);
     }
 
     private void UpdateMapModePaletteIfNeeded()

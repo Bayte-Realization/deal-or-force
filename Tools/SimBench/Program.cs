@@ -61,6 +61,8 @@ public static class Program
         failures += Check("scripted content parses and applies", ScriptedContentWorks(campaign));
         failures += Check("modifiers grant, tick and expire", ModifiersWork(campaign));
         failures += Check("no nation ran to a nonsense GDP", GdpSane(campaign));
+        failures += Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
+        failures += Check("headline figures format the way a player reads them", FiguresReadWell());
 
         Console.WriteLine();
         Console.WriteLine(failures == 0
@@ -157,6 +159,84 @@ public static class Program
     {
         var moved = campaign.Nations.Count(nation => nation.GrossOutput > 0f);
         return moved > 0 ? "" : "no nation produced anything";
+    }
+
+    /// <summary>
+    /// The shipped skin.json is what a modder copies as their starting point, so it has to
+    /// still say what the game actually uses. A token added in code and forgotten in the
+    /// file - or the reverse - is caught here rather than by a modder overriding a key
+    /// that does nothing.
+    /// </summary>
+    private static string SkinIsCoherent()
+    {
+        var tokens = InterfaceSkin.Tokens.ToList();
+        if (tokens.Count < 40) return $"only {tokens.Count} interface tokens loaded";
+
+        var overridden = InterfaceSkin.Overridden;
+        if (overridden.Count > 0)
+            return "game/interface/skin.json disagrees with the compiled defaults for: " +
+                   string.Join(", ", overridden.Take(8));
+
+        foreach (var (token, value) in tokens)
+        {
+            if (string.IsNullOrEmpty(value) || value[0] != '#')
+                return $"'{token}' is not a colour: \"{value}\"";
+            if (value.Length - 1 is not (3 or 4 or 6 or 8))
+                return $"'{token}' = \"{value}\" is not #rgb, #rrggbb or #rrggbbaa";
+        }
+
+        // Roles the interface asks for by name everywhere. Losing one of these turns a
+        // screen magenta rather than throwing, which is exactly the kind of failure a
+        // build should catch instead of a player.
+        foreach (var required in new[]
+                 {
+                     "text.accent", "text.bright", "text.body", "text.caption", "text.faint",
+                     "state.positive", "state.negative", "state.warning",
+                     "button.text", "button.fill", "button.border",
+                     "surface.background", "map.player", "map.at_war",
+                 })
+            if (!InterfaceSkin.Has(required)) return $"required token '{required}' is missing";
+
+        // A mod's override has to actually take, and resetting has to actually undo it.
+        InterfaceSkin.Merge("{\"colors\":{\"text.accent\":\"#123456\"}}", "bench", null);
+        if (InterfaceSkin.Colour("text.accent") != "#123456") return "a skin override did not apply";
+        InterfaceSkin.ResetCatalog();
+        if (InterfaceSkin.Colour("text.accent") == "#123456") return "resetting the skin did not undo an override";
+
+        return "";
+    }
+
+    /// <summary>
+    /// Headline figures are formatted once and read everywhere, so the boundaries between
+    /// units are worth pinning down: a trillion-dollar economy printed as "$21433.20B" is
+    /// the bug this format exists to prevent.
+    /// </summary>
+    private static string FiguresReadWell()
+    {
+        var cases = new (float Billions, string Expected)[]
+        {
+            (21433.2f, "$21.43T"),
+            (845.25f, "$845.3B"),
+            (176.76f, "$176.8B"),
+            (21.433f, "$21.43B"),
+            (1f, "$1B"),
+            (0.5f, "$500M"),
+            (0.0004f, "$400k"),
+            (0f, "$0"),
+            (-1200f, "$-1.2T"),
+        };
+        foreach (var (billions, expected) in cases)
+        {
+            var actual = Fmt.Money(billions);
+            if (actual != expected) return $"Money({billions}) is \"{actual}\", expected \"{expected}\"";
+        }
+
+        if (Fmt.People(1_412_000_000d) != "1.41B") return $"People(1.412bn) is \"{Fmt.People(1_412_000_000d)}\"";
+        if (Fmt.People(51_780_579d) != "51.8M") return $"People(51.8m) is \"{Fmt.People(51_780_579d)}\"";
+        if (Fmt.MoneyDelta(0f) != "—") return "a zero change should read as an em dash, not +$0";
+        if (!Fmt.MoneyDelta(2.5f).StartsWith("+")) return "a rise is missing its sign";
+        if (Fmt.Direction(0.001d, 0.005d) != 0) return "a change inside the deadband counted as movement";
+        return "";
     }
 
     private static string GdpSane(Campaign campaign)

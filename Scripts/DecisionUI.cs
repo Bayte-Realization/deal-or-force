@@ -14,7 +14,7 @@ public partial class GlobalityGame
         _decisionControls = new VBoxContainer { Visible = false };
         _decisionControls.AddThemeConstantOverride("separation", 5);
         parent.AddChild(_decisionControls);
-        _decisionControls.AddChild(Title("AVAILABLE ACTIONS", 12, new Color("#8e9daf")));
+        _decisionControls.AddChild(Title("AVAILABLE ACTIONS", 12, Ui.Colour("text.caption")));
         foreach (var definition in DecisionCatalog.All)
         {
             var captured = definition;
@@ -23,7 +23,7 @@ public partial class GlobalityGame
             button.TooltipText = definition.Description;
             _decisionControls.AddChild(button);
         }
-        _decisionStatus = Title("", 12, new Color("#e7c966"));
+        _decisionStatus = Title("", 12, Ui.Colour("text.accent"));
         _decisionStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _decisionControls.AddChild(_decisionStatus);
     }
@@ -36,12 +36,12 @@ public partial class GlobalityGame
         _sideBody.Text =
             $"NATIONAL DECISIONS\n\nTurn treasury and political opportunity into concrete change. " +
             $"Every decision has a real cost and cooldown.\n\nAvailable now: {available}/{DecisionCatalog.All.Count}\n" +
-            $"Treasury: ${nation.Treasury:0.00}B · stability: {nation.Stability:P0}\n" +
+            $"Treasury: {Fmt.Money(nation.Treasury)} · stability: {nation.Stability:P0}\n" +
             $"Literacy: {nation.Literacy:P0} · living standard: {nation.StandardOfLiving:P0}";
         _decisionStatus.Text = string.Join("\n", DecisionCatalog.All.Select(definition =>
         {
             var block = DecisionCatalog.BlockReason(_campaign, nation, definition);
-            return $"{definition.Name}: ${DecisionCatalog.Cost(nation, definition):0.00}B" +
+            return $"{definition.Name}: {Fmt.Money(DecisionCatalog.Cost(nation, definition))}" +
                    (block.Length == 0 ? " · READY" : $" · {block}");
         }));
     }

@@ -28,10 +28,10 @@ public partial class GlobalityGame
         panel.OffsetLeft = -310; panel.OffsetRight = 310;
         panel.OffsetTop = -225; panel.OffsetBottom = 225;
         var rows = PanelRows(panel, 34, 30, 14);
-        rows.AddChild(Title("EVENT", 12, new Color("#8e9daf")));
-        _eventTitle = Title("", 28, new Color("#e7c966"));
+        rows.AddChild(Title("EVENT", 12, Ui.Colour("text.caption")));
+        _eventTitle = Title("", 28, Ui.Colour("text.accent"));
         rows.AddChild(_eventTitle);
-        _eventDescription = Title("", 16, new Color("#dce5ef"));
+        _eventDescription = Title("", 16, Ui.Colour("text.body_soft"));
         _eventDescription.SizeFlagsVertical = SizeFlags.ExpandFill;
         rows.AddChild(_eventDescription);
         _eventOptionA = ActionButton("", () => ResolveShownEvent(0), 520, 54, true);

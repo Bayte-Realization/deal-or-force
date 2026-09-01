@@ -94,6 +94,7 @@ public sealed class ModLoader
         HydrologyCatalog.ResetCatalog();
         MapRasterCatalog.ResetCatalog();
         Loc.ResetCatalog();
+        InterfaceSkin.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
         DecisionCatalog.ResetCatalog();
@@ -112,6 +113,7 @@ public sealed class ModLoader
             ApplyAiStrategies(package);
             ApplyMapData(package);
             ApplyLocalization(package);
+            ApplySkin(package);
             ApplyCountries(package, campaign);
             ApplyHistory(package, campaign);
         }
@@ -206,6 +208,17 @@ public sealed class ModLoader
     {
         try { Loc.LoadDirectory(Path.Combine(package.PhysicalRoot, "localization"), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"localization: {exception.Message}"); }
+    }
+
+    /// <summary>
+    /// A reskin is a folder of interface/*.json files overriding named colour tokens. It is
+    /// the same layered pass as everything else, so a later mod can retint an earlier one -
+    /// and a mod that only changes three tokens keeps the rest of the game's palette.
+    /// </summary>
+    private void ApplySkin(ModPackage package)
+    {
+        try { InterfaceSkin.LoadDirectory(Path.Combine(package.PhysicalRoot, "interface"), package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"interface: {exception.Message}"); }
     }
 
     private void ApplyHistory(ModPackage package, Campaign campaign)

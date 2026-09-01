@@ -17,7 +17,7 @@ public partial class GlobalityGame
         _economyControls = new VBoxContainer { Visible = false };
         _economyControls.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_economyControls);
-        _economyControls.AddChild(Title("CONSTRUCTION", 12, new Color("#8e9daf")));
+        _economyControls.AddChild(Title("CONSTRUCTION", 12, Ui.Colour("text.caption")));
 
         var rowA = new HBoxContainer();
         var rowB = new HBoxContainer();
@@ -44,12 +44,12 @@ public partial class GlobalityGame
         AddBuildButton(rowD, BuildingKind.PowerPlant, "Power plant");
         AddBuildButton(rowE, BuildingKind.ArmsIndustry, "Arms industry");
 
-        _constructionStatus = Title("No active construction.", 12, new Color("#a8b5c4"));
+        _constructionStatus = Title("No active construction.", 12, Ui.Colour("text.muted"));
         _constructionStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _economyControls.AddChild(_constructionStatus);
 
-        _economyControls.AddChild(Title("NATIONAL MARKET", 12, new Color("#8e9daf")));
-        _marketStatus = Title("Market data is recalculated every economic week.", 12, new Color("#cbd4df"));
+        _economyControls.AddChild(Title("NATIONAL MARKET", 12, Ui.Colour("text.caption")));
+        _marketStatus = Title("Market data is recalculated every economic week.", 12, Ui.Colour("text.body_soft"));
         _marketStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _marketStatus.TooltipText = "Output + imports − demand − exports. Satisfaction below 100% is a real shortage that affects prices, GDP and living standards.";
         _economyControls.AddChild(_marketStatus);
@@ -59,7 +59,7 @@ public partial class GlobalityGame
     {
         var definition = BuildingCatalog.Get(kind);
         var button = ActionButton(label, () => QueueBuilding(kind), 154, 32, kind == BuildingKind.CivilianIndustry);
-        button.TooltipText = $"{definition.Name}: ${definition.Cost:0.00}B, {definition.Days} days. {definition.Description}";
+        button.TooltipText = $"{definition.Name}: {Fmt.Money(definition.Cost)}, {definition.Days} days. {definition.Description}";
         row.AddChild(button);
     }
 
@@ -87,13 +87,13 @@ public partial class GlobalityGame
         var state = _selectedState;
         var queue = _campaign.Construction.Where(project => project.NationId == player.Id).OrderBy(project => project.Id).ToArray();
         _sideBody.Text =
-            $"{player.Name} economy\n\nGDP: ${player.Gdp:0.00}B\nTreasury: ${player.Treasury:0.00}B\n" +
-            $"Weekly taxes: ${player.WeeklyTaxIncome:0.000}B · tariffs: ${player.WeeklyTariffIncome:0.000}B\n" +
-            $"Weekly expenses: ${player.WeeklyExpenses:0.000}B\n" +
+            $"{player.Name} economy\n\nGDP: {Fmt.Money(player.Gdp)}\nTreasury: {Fmt.Money(player.Treasury)}\n" +
+            $"Weekly taxes: {Fmt.Money(player.WeeklyTaxIncome)} · tariffs: {Fmt.Money(player.WeeklyTariffIncome)}\n" +
+            $"Weekly expenses: {Fmt.Money(player.WeeklyExpenses)}\n" +
             $"Balance: {SignedMoney(player.WeeklyBalance)}\nTax rate: {player.TaxRate:P0}\n" +
             $"Productivity: {player.Productivity:0.00} · stability: {player.Stability:P0}\n\n" +
             (state is null ? "Select an owned state on the map." :
-                $"SELECTED STATE — {state.Name}\nPopulation: {state.Population:N0}\n" +
+                $"SELECTED STATE — {state.Name}\nPopulation: {Fmt.People(state.Population)}\n" +
                 $"Literacy: {state.Literacy:P0} · standard of living: {state.StandardOfLiving:P0}\n" +
                 $"Urbanisation: {state.Urbanization:P0} · radicalism: {state.Radicalism:P0}\n" +
                 $"Workers: {GroupSize(state, SocialClass.Workers):N0} · farmers: {GroupSize(state, SocialClass.Farmers):N0}\n" +
@@ -115,7 +115,7 @@ public partial class GlobalityGame
                 var definition = CommodityCatalog.Get(quote.Commodity);
                 var flow = quote.Net >= 0f ? $"+{quote.Net:0.0}" : $"{quote.Net:0.0}";
                 var condition = quote.IsShortage ? "SHORTAGE" : quote.Exports > 0.01f ? "SURPLUS" : "BALANCED";
-                return $"{definition.Icon} {definition.Name}: {quote.Satisfaction:P0} · {condition} · net {flow} · ${quote.Price:0.000}B";
+                return $"{definition.Icon} {definition.Name}: {quote.Satisfaction:P0} · {condition} · net {flow} · {Fmt.Money(quote.Price)}";
             });
         _marketStatus.Text = string.Join("\n", marketLines) +
             $"\nMarket access: {player.MarketAccess:P0} · trade: {SignedMoney(player.WeeklyTradeBalance)}\n" +
@@ -125,5 +125,5 @@ public partial class GlobalityGame
     private static long GroupSize(ScenarioState state, SocialClass socialClass) =>
         state.PopulationGroups.Where(group => group.Class == socialClass).Sum(group => group.Size);
 
-    private static string SignedMoney(float value) => value >= 0f ? $"+${value:0.000}B" : $"-${Math.Abs(value):0.000}B";
+    private static string SignedMoney(float value) => (value >= 0f ? "+" : "-") + Fmt.Money(Math.Abs(value));
 }

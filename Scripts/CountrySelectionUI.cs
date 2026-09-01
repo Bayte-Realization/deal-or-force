@@ -38,9 +38,9 @@ public partial class GlobalityGame
         heading.OffsetTop = 18;
         heading.OffsetBottom = 106;
         var headingRows = PanelRows(heading, 18, 10, 2);
-        _pickerHeading = Title("SELECT A COUNTRY", 26, new Color("#e7c966"));
+        _pickerHeading = Title("SELECT A COUNTRY", 26, Ui.Colour("text.accent"));
         headingRows.AddChild(_pickerHeading);
-        _pickerSubheading = Title("1 January 2024 · click the political map or search", 13, new Color("#9dabbc"));
+        _pickerSubheading = Title("1 January 2024 · click the political map or search", 13, Ui.Colour("text.muted"));
         headingRows.AddChild(_pickerSubheading);
 
         var panel = TexturedPanel(_pickerLayer);
@@ -54,7 +54,7 @@ public partial class GlobalityGame
         panel.OffsetBottom = 338;
         var rows = PanelRows(panel, 20, 16, 8);
 
-        rows.AddChild(Title("THE WORLD IN 2024", 13, new Color("#8d9caf")));
+        rows.AddChild(Title("THE WORLD IN 2024", 13, Ui.Colour("text.caption")));
         _pickerSearch = new LineEdit
         {
             PlaceholderText = "Search countries or tags…",
@@ -68,14 +68,14 @@ public partial class GlobalityGame
         _pickerResults.AddThemeConstantOverride("separation", 4);
         rows.AddChild(_pickerResults);
 
-        _pickerName = Title("South Korea", 27, new Color("#e7c966"));
+        _pickerName = Title("South Korea", 27, Ui.Colour("text.accent"));
         rows.AddChild(_pickerName);
-        _pickerTier = Title("KOR · major power", 13, new Color("#9eacbc"));
+        _pickerTier = Title("KOR · major power", 13, Ui.Colour("text.muted"));
         rows.AddChild(_pickerTier);
-        _pickerStats = Title("", 15, new Color("#edf2f8"));
+        _pickerStats = Title("", 15, Ui.Colour("text.bright"));
         _pickerStats.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_pickerStats);
-        _pickerLocation = Title("Click a region to inspect its tactical province.", 13, new Color("#8d9caf"));
+        _pickerLocation = Title("Click a region to inspect its tactical province.", 13, Ui.Colour("text.caption"));
         _pickerLocation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_pickerLocation);
 
@@ -146,8 +146,8 @@ public partial class GlobalityGame
         _pickerTier.Text = $"{nation.Tag} · rank #{rank} · {tier}";
         _pickerStats.Text =
             $"Capital  {nation.CapitalName}\n" +
-            $"Population  {nation.Population:N0}\n" +
-            $"GDP  ${nation.Gdp:0.00}B    Treasury  ${nation.Treasury:0.00}B\n" +
+            $"Population  {Fmt.People(nation.Population)}\n" +
+            $"GDP  {Fmt.Money(nation.Gdp)}    Treasury  {Fmt.Money(nation.Treasury)}\n" +
             $"Regions  {states:N0}    Divisions  {divisions:0.#}";
         _pickerLocation.Text = "Click the map to inspect a region and its tactical province.";
         _pickerBegin.Text = _pickerHotseatMode
@@ -245,7 +245,7 @@ public partial class GlobalityGame
         if (_pickerSeats is null) return;
         foreach (var child in _pickerSeats.GetChildren()) child.QueueFree();
         if (!_pickerHotseatMode) return;
-        _pickerSeats.AddChild(Title($"SEATED PLAYERS ({_campaign.HumanSeats.Count})", 12, new Color("#8d9caf")));
+        _pickerSeats.AddChild(Title($"SEATED PLAYERS ({_campaign.HumanSeats.Count})", 12, Ui.Colour("text.caption")));
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 4);
         _pickerSeats.AddChild(row);

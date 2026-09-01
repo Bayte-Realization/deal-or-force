@@ -18,11 +18,18 @@ public partial class GlobalityGame : Control
     private Label _date = null!;
     private Label _identity = null!;
     private Label _identityTag = null!;
-    private Label _treasury = null!;
-    private Label _gdp = null!;
-    private Label _population = null!;
+    private StatReadout _treasury = null!;
+    private StatReadout _gdp = null!;
+    private StatReadout _population = null!;
+    private readonly Trend _treasuryTrend = new();
+    private readonly Trend _gdpTrend = new();
+    private readonly Trend _populationTrend = new();
+    private readonly System.Collections.Generic.List<Button> _speedButtons = new();
+    private readonly System.Collections.Generic.Dictionary<string, Button> _screenButtons = new();
+    private Label _militarySpendingReadout = null!;
     private Label _sideTitle = null!;
     private Label _sideBody = null!;
+    private VBoxContainer _sideDetail = null!;
     private HSlider _militarySpending = null!;
     private Button _pause = null!;
     private Button _mainProjectionButton = null!;
@@ -130,6 +137,8 @@ public partial class GlobalityGame : Control
             _campaign.Changed -= Refresh;
 
         _campaign = Campaign.CreateBootstrap(20260830);
+        ResetTrends();
+        _lastAutosaveDay = -1;
 
         // Day-zero proof that the emergent economy still reproduces the scenario's
         // authored 2024 figures. If this ever drifts, the calibration broke, not the map.
@@ -152,7 +161,7 @@ public partial class GlobalityGame : Control
         InitializeModding();
         var background = new ColorRect
         {
-            Color = new Color("#060b13"),
+            Color = Ui.Colour("surface.background"),
             MouseFilter = MouseFilterEnum.Ignore
         };
         background.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -197,17 +206,17 @@ public partial class GlobalityGame : Control
         panel.OffsetBottom = 315;
 
         var rows = PanelRows(panel, 28, 24, 16);
-        rows.AddChild(Title("BY DEAL OR FORCE", 34, new Color("#e7c966")));
+        rows.AddChild(Title("BY DEAL OR FORCE", 34, Ui.Colour("text.accent")));
         rows.AddChild(Title(
             "The world as it stands in 2024 — its borders, its people and its economy.",
             15,
-            new Color("#aab6c6")));
+            Ui.Colour("text.muted")));
 
-        rows.AddChild(Title("1 January 2024", 17, new Color("#eef4fb")));
-        _scenarioSummary = Title("Preparing campaign data…", 14, new Color("#8998aa"));
+        rows.AddChild(Title("1 January 2024", 17, Ui.Colour("text.bright")));
+        _scenarioSummary = Title("Preparing campaign data…", 14, Ui.Colour("text.hint"));
         rows.AddChild(_scenarioSummary);
 
-        _modStatus = Title(_modLoader.StatusLine, 12, new Color("#718299"));
+        _modStatus = Title(_modLoader.StatusLine, 12, Ui.Colour("text.faint"));
         _modStatus.TooltipText = "Development mods: res://Mods · installed mods: user://mods";
         rows.AddChild(_modStatus);
 
@@ -226,7 +235,7 @@ public partial class GlobalityGame : Control
         rows.AddChild(_languageButton);
         rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
 
-        _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 13, new Color("#8190a2"));
+        _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 13, Ui.Colour("text.hint"));
         _navigationHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_navigationHint);
     }
@@ -255,22 +264,22 @@ public partial class GlobalityGame : Control
         var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(230, 0) };
         identityBox.AddThemeConstantOverride("separation", 2);
         row.AddChild(identityBox);
-        _identity = Title("South Korea", 21, new Color("#e7c966"));
+        _identity = Title("South Korea", 21, Ui.Colour("text.accent"));
         identityBox.AddChild(_identity);
-        _identityTag = Title("KOR · player nation", 13, new Color("#91a0b2"));
+        _identityTag = Title("KOR · player nation", 13, Ui.Colour("text.muted"));
         identityBox.AddChild(_identityTag);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         stats.AddThemeConstantOverride("separation", 28);
         row.AddChild(stats);
-        _treasury = Stat(stats, "TREASURY");
-        _gdp = Stat(stats, "GDP");
-        _population = Stat(stats, "POPULATION");
+        _treasury = Stat(stats, "TREASURY", "Cash on hand. The line below is the change over the last week of campaign time.");
+        _gdp = Stat(stats, "GDP", "Annual gross domestic product, as it emerges from what your economy actually produces.");
+        _population = Stat(stats, "POPULATION", "Everyone living in your states, and how that has moved over the last week.");
 
         var clock = new VBoxContainer { CustomMinimumSize = new Vector2(276, 0) };
         clock.AddThemeConstantOverride("separation", 6);
         row.AddChild(clock);
-        _date = Title("1 January 2024", 17, new Color("#eef4fb"));
+        _date = Title("1 January 2024", 17, Ui.Colour("text.bright"));
         _date.HorizontalAlignment = HorizontalAlignment.Right;
         clock.AddChild(_date);
 
@@ -283,11 +292,15 @@ public partial class GlobalityGame : Control
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 44, 34, true);
         speeds.AddChild(_pause);
+        _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
         {
             var captured = speed;
-            speeds.AddChild(ActionButton(speed.ToString(), () => SetSpeed(captured), 38, 34));
+            var button = ActionButton(speed.ToString(), () => SetSpeed(captured), 38, 34);
+            _speedButtons.Add(button);
+            speeds.AddChild(button);
         }
+        UpdateSpeedButtons();
 
         var navigation = TexturedPanel(_hudLayer);
         navigation.AnchorLeft = 0.5f;
@@ -305,12 +318,15 @@ public partial class GlobalityGame : Control
         nav.AddThemeConstantOverride("separation", 8);
         navMargin.AddChild(nav);
 
+        _screenButtons.Clear();
         foreach (var screen in new[] { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "Ledger" })
         {
             var captured = screen;
-            nav.AddChild(ActionButton(screen, () => OpenScreen(captured), 118, 38,
-                screen is "Military" or "Wars"));
+            var button = ActionButton(screen, () => OpenScreen(captured), 118, 38);
+            _screenButtons[captured] = button;
+            nav.AddChild(button);
         }
+        UpdateScreenButtons();
 
         _sidePanel = TexturedPanel(_hudLayer);
         _sidePanel.AnchorLeft = 0;
@@ -326,15 +342,21 @@ public partial class GlobalityGame : Control
         var sideRows = ScrollablePanelRows(_sidePanel, 24, 20, 12);
         var header = new HBoxContainer();
         sideRows.AddChild(header);
-        _sideTitle = Title("Nation", 27, new Color("#e7c966"));
+        _sideTitle = Title("Nation", 27, Ui.Colour("text.accent"));
         _sideTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(_sideTitle);
         header.AddChild(ActionButton("×", CloseSidePanel, 38, 34));
 
-        _sideBody = Title("", 16, new Color("#e9eef5"));
+        _sideBody = Title("", 16, Ui.Colour("text.body"));
         _sideBody.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _sideBody.SizeFlagsVertical = SizeFlags.ExpandFill;
         sideRows.AddChild(_sideBody);
+
+        // Figures belong in aligned rows, not in a paragraph. A player comparing two
+        // numbers should not have to find them inside a sentence first.
+        _sideDetail = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _sideDetail.AddThemeConstantOverride("separation", 3);
+        sideRows.AddChild(_sideDetail);
 
         BuildArmyOrderControls(sideRows);
         BuildCountryActionControls(sideRows);
@@ -354,6 +376,12 @@ public partial class GlobalityGame : Control
         _militarySpending.ValueChanged += OnSpendingChanged;
         sideRows.AddChild(_militarySpending);
 
+        // A bare slider tells the player nothing about what they just set. The readout
+        // below it names the figure and what it costs, and hides with the slider.
+        _militarySpendingReadout = Title("", 12, Ui.Colour("text.caption"));
+        _militarySpendingReadout.Visible = false;
+        sideRows.AddChild(_militarySpendingReadout);
+
         BuildLedgerInterface();
         BuildMapControls();
         BuildStrategicHud();
@@ -369,6 +397,7 @@ public partial class GlobalityGame : Control
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _campaign.IsPaused = true;
         _pause.Text = "▶";
+        StyleButton(_pause, true);
         UpdateHotseatHud();
         UpdateNetworkHud();
         if (_campaign.IsHotseat && !_networkConnected) ShowSeatHandover();
@@ -410,18 +439,35 @@ public partial class GlobalityGame : Control
         _warControls.Visible = screen == "Wars";
         _battleDetailControls.Visible = false;
         _militarySpending.Visible = screen == "Military";
+        _militarySpendingReadout.Visible = screen == "Military";
+        UpdateScreenButtons();
 
         var player = _campaign.Player;
         var nation = _selectedNation ?? player;
         _sideTitle.Text = screen;
+        ClearDetail();
 
         switch (screen)
         {
             case "Nation":
-                _sideBody.Text =
-                    $"{nation.Name} ({nation.Tag})\n" +
-                    $"Capital: {nation.CapitalName}\nContinent: {nation.Continent}\nRegion: {nation.Region}\n\n" +
-                    $"Population: {nation.Population:N0}\nGDP: ${nation.Gdp:0.00}B\nTreasury: ${nation.Treasury:0.00}B";
+                _sideBody.Text = $"{nation.Name} ({nation.Tag}) · {nation.Region}, {nation.Continent}";
+                DetailHeading("STATE");
+                DetailRow("Capital", nation.CapitalName);
+                DetailRow("States held", _campaign.StatesOf(nation).Length.ToString("N0"));
+                DetailRow("Population", Fmt.People(nation.Population), Fmt.PeopleExact(nation.Population));
+                DetailHeading("ECONOMY");
+                DetailRow("GDP", Fmt.Money(nation.Gdp), Fmt.MoneyExact(nation.Gdp));
+                DetailRow("GDP per head", Fmt.Money(nation.Gdp / Mathf.Max(1f, nation.Population)),
+                    "Annual output divided by everyone living in the country.");
+                DetailRow("Treasury", Fmt.Money(nation.Treasury), Fmt.MoneyExact(nation.Treasury),
+                    nation.Treasury < 0f ? "state.negative" : "text.bright");
+                DetailRow("Tax rate", Fmt.Percent(nation.TaxRate));
+                DetailHeading("SOCIETY");
+                DetailRow("Standard of living", Fmt.Percent(nation.StandardOfLiving));
+                DetailRow("Literacy", Fmt.Percent(nation.Literacy));
+                DetailRow("Stability", Fmt.Percent(nation.Stability),
+                    "Below a third, radicalism starts to bite.",
+                    nation.Stability < 0.34f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "state.positive");
                 break;
 
             case "Economy":
@@ -487,6 +533,7 @@ public partial class GlobalityGame : Control
     {
         _sidePanel.Visible = false;
         _openScreen = "";
+        UpdateScreenButtons();
         _selectedArmy = null;
         _selectedArmies.Clear();
         _globe.SelectArmy(-1);
@@ -534,6 +581,7 @@ public partial class GlobalityGame : Control
         }
         _campaign.IsPaused = !_campaign.IsPaused;
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
+        StyleButton(_pause, _campaign.IsPaused);
         Refresh();
     }
 
@@ -549,6 +597,7 @@ public partial class GlobalityGame : Control
         {
             _campaign.IsPaused = false;
             _pause.Text = "II";
+            StyleButton(_pause, false);
         }
         Refresh();
     }
@@ -574,28 +623,194 @@ public partial class GlobalityGame : Control
         _identity.Text = $"{player.Name} ({player.Tag})";
         _identityTag.Text = _observerMode ? "OBS · observer mode" : $"{player.Tag} · player nation";
         _date.Text = _campaign.Date.ToString();
-        _treasury.Text = $"${player.Treasury:0.00}B";
-        _gdp.Text = $"${player.Gdp:0.00}B";
-        _population.Text = $"{player.Population:N0}";
+
+        var day = _campaign.ElapsedDays;
+        _treasuryTrend.Sample(day, player.Treasury);
+        _gdpTrend.Sample(day, player.Gdp);
+        _populationTrend.Sample(day, player.Population);
+
+        WriteStat(_treasury, Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
+            Fmt.MoneyDelta((float)_treasuryTrend.Delta), Fmt.Direction(_treasuryTrend.Delta, 0.005d));
+        WriteStat(_gdp, Fmt.Money(player.Gdp), Fmt.MoneyExact(player.Gdp),
+            Fmt.MoneyDelta((float)_gdpTrend.Delta), Fmt.Direction(_gdpTrend.Delta, 0.005d));
+        WriteStat(_population, Fmt.People(player.Population), Fmt.PeopleExact(player.Population),
+            Fmt.PeopleDelta(_populationTrend.Delta), Fmt.Direction(_populationTrend.Delta, 1d));
+
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
+        UpdateSpendingReadout(player);
+        UpdateSpeedButtons();
+        UpdateScreenButtons();
         RefreshStrategicAudio();
         RefreshEventInterface();
         RefreshStrategicHud();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
         if (_selectedArmy is not null && _armyOrders.Visible) ShowSelectedArmies();
-        else if (_sidePanel.Visible && (_openScreen == "Wars" || _openScreen == "Military" || _openScreen == "Economy"))
+        else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation")
             OpenScreen(_openScreen);
     }
 
-    private Label Stat(Container parent, string caption)
+    /// <summary>
+    /// One headline figure in the top bar: its caption, the compact value, and the week's
+    /// movement underneath. A number with no direction is only half the information a
+    /// player needs - "$40B" answers nothing that "$40B, −$1.2B this week" does not.
+    /// </summary>
+    private sealed class StatReadout
     {
-        var box = new VBoxContainer { CustomMinimumSize = new Vector2(128, 0) };
+        internal Label Value = null!;
+        internal Label Delta = null!;
+    }
+
+    private StatReadout Stat(Container parent, string caption, string tooltip)
+    {
+        var box = new VBoxContainer { CustomMinimumSize = new Vector2(132, 0), TooltipText = tooltip };
         box.AddThemeConstantOverride("separation", 1);
+        box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
-        box.AddChild(Title(caption, 11, new Color("#8291a4")));
-        var value = Title("—", 17, new Color("#eef4fb"));
-        box.AddChild(value);
-        return value;
+        box.AddChild(Title(caption, 11, Ui.Colour("text.caption")));
+
+        var readout = new StatReadout
+        {
+            Value = Title("—", 17, Ui.Colour("text.bright")),
+            Delta = Title("", 11, Ui.Colour("text.faint"))
+        };
+        box.AddChild(readout.Value);
+        box.AddChild(readout.Delta);
+        return readout;
+    }
+
+    /// <summary>
+    /// Write one headline figure and its movement. The exact figure goes into the tooltip:
+    /// the compact form is for scanning, and the moment a player wants the real number
+    /// they want every digit of it.
+    /// </summary>
+    private static void WriteStat(StatReadout stat, string compact, string exact, string delta, int direction)
+    {
+        if (stat is null) return;
+        stat.Value.Text = compact;
+        stat.Value.TooltipText = exact;
+        stat.Value.MouseFilter = MouseFilterEnum.Stop;
+        stat.Delta.Text = delta;
+        stat.Delta.AddThemeColorOverride("font_color", direction switch
+        {
+            > 0 => Ui.Colour("state.positive"),
+            < 0 => Ui.Colour("state.negative"),
+            _ => Ui.Colour("text.faint")
+        });
+    }
+
+    /// <summary>
+    /// A rolling week of daily samples of one figure, so the top bar can show real movement
+    /// rather than a number that simply is what it is. Kept to eight days: the campaign
+    /// advances one day at a time, and a week is the horizon a player plans against.
+    /// </summary>
+    private sealed class Trend
+    {
+        private readonly System.Collections.Generic.List<(int Day, double Value)> _samples = new();
+
+        internal void Sample(int day, double value)
+        {
+            if (_samples.Count > 0 && _samples[^1].Day == day)
+            {
+                _samples[^1] = (day, value);
+                return;
+            }
+            _samples.Add((day, value));
+            while (_samples.Count > 1 && day - _samples[0].Day > 7) _samples.RemoveAt(0);
+        }
+
+        /// <summary>Movement across the sampled window; exactly zero until a second day exists.</summary>
+        internal double Delta => _samples.Count < 2 ? 0d : _samples[^1].Value - _samples[0].Value;
+
+        internal void Reset() => _samples.Clear();
+    }
+
+    /// <summary>Empty the structured rows before a screen writes its own.</summary>
+    private void ClearDetail()
+    {
+        if (_sideDetail is null) return;
+        foreach (var child in _sideDetail.GetChildren())
+        {
+            _sideDetail.RemoveChild(child);
+            child.QueueFree();
+        }
+    }
+
+    /// <summary>One caption/value row, the caption left and the value right against it.</summary>
+    private void DetailRow(string caption, string value, string tooltip = null, string valueToken = "text.bright")
+    {
+        var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        if (!string.IsNullOrEmpty(tooltip))
+        {
+            row.TooltipText = tooltip;
+            row.MouseFilter = MouseFilterEnum.Stop;
+        }
+
+        var label = Title(caption, 13, Ui.Colour("text.caption"));
+        label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        label.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.AddChild(label);
+
+        var figure = Title(value, 14, Ui.Colour(valueToken));
+        figure.HorizontalAlignment = HorizontalAlignment.Right;
+        figure.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.AddChild(figure);
+
+        _sideDetail.AddChild(row);
+    }
+
+    /// <summary>A small capitalised rule between groups of rows.</summary>
+    private void DetailHeading(string text)
+    {
+        var heading = Title(text, 11, Ui.Colour("text.caption"));
+        heading.CustomMinimumSize = new Vector2(0, 22);
+        heading.VerticalAlignment = VerticalAlignment.Bottom;
+        _sideDetail.AddChild(heading);
+    }
+
+    /// <summary>
+    /// What the military slider is actually setting. The slider itself carries no units,
+    /// and "0.34" means nothing until it is named as a share of output and priced.
+    /// </summary>
+    private void UpdateSpendingReadout(Nation player)
+    {
+        if (_militarySpendingReadout is null || player is null) return;
+        var annual = player.Gdp * player.MilitarySpending;
+        _militarySpendingReadout.Text =
+            $"{Fmt.Percent(player.MilitarySpending)} of output · about {Fmt.Money(annual)} a year";
+    }
+
+    /// <summary>Forget the week of history behind the top bar - a new campaign has none.</summary>
+    private void ResetTrends()
+    {
+        _treasuryTrend.Reset();
+        _gdpTrend.Reset();
+        _populationTrend.Reset();
+    }
+
+    /// <summary>The speed the campaign is actually running at, lit so the player can see it.</summary>
+    private void UpdateSpeedButtons()
+    {
+        var running = _campaign is not null && !_campaign.IsPaused;
+        for (var index = 0; index < _speedButtons.Count; index++)
+        {
+            var button = _speedButtons[index];
+            if (!GodotObject.IsInstanceValid(button)) continue;
+            StyleButton(button, running && index + 1 == _speed);
+            button.TooltipText = _campaign is null
+                ? $"Campaign speed {index + 1}"
+                : $"Campaign speed {index + 1} · {_campaign.Defines.SecondsForSpeed(index + 1):0.##}s per day";
+        }
+    }
+
+    /// <summary>The screen currently open, lit in the bottom bar.</summary>
+    private void UpdateScreenButtons()
+    {
+        var open = _ledgerLayer is { Visible: true } ? "Ledger" : _sidePanel is { Visible: true } ? _openScreen : "";
+        foreach (var (screen, button) in _screenButtons)
+        {
+            if (!GodotObject.IsInstanceValid(button)) continue;
+            StyleButton(button, screen == open);
+        }
     }
 
     private Control FullLayer(string name)
@@ -695,15 +910,7 @@ public partial class GlobalityGame : Control
         };
         button.SetMeta(LocSourceMeta, text);
         button.SetMeta(LocAppliedMeta, button.Text);
-        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0));
-        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1));
-        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2));
-        button.AddThemeStyleboxOverride("disabled", ButtonStyle(false, 3));
-        button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1));
-        button.AddThemeColorOverride("font_color", new Color("#edf2f7"));
-        button.AddThemeColorOverride("font_hover_color", new Color("#fff0b0"));
-        button.AddThemeColorOverride("font_pressed_color", new Color("#d7c581"));
-        button.AddThemeColorOverride("font_disabled_color", new Color("#667586"));
+        StyleButton(button, primary);
         button.AddThemeFontSizeOverride("font_size", height >= 42 ? 15 : 13);
         button.Pressed += () =>
         {
@@ -787,21 +994,40 @@ public partial class GlobalityGame : Control
         }
     }
 
+    /// <summary>
+    /// Paint one button as ordinary or accented. Split out of button construction because
+    /// accent is not a fixed property of a button any more: the speed the campaign is
+    /// running at and the screen that is open are both shown by lighting the control that
+    /// represents them, which means re-painting a button that already exists.
+    /// </summary>
+    internal static void StyleButton(Button button, bool primary)
+    {
+        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0));
+        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1));
+        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2));
+        button.AddThemeStyleboxOverride("disabled", ButtonStyle(false, 3));
+        button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1));
+        button.AddThemeColorOverride("font_color", primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text"));
+        button.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
+        button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
+        button.AddThemeColorOverride("font_disabled_color", Ui.Colour("button.text_disabled"));
+    }
+
     private static StyleBoxFlat ButtonStyle(bool primary, int state)
     {
         var background = state switch
         {
-            1 => primary ? new Color("#6b5620") : new Color("#273647"),
-            2 => primary ? new Color("#382f19") : new Color("#101923"),
-            3 => new Color("#111923"),
-            _ => primary ? new Color("#55451f") : new Color("#1a2735")
+            1 => primary ? Ui.Colour("button.primary_fill_hover") : Ui.Colour("button.fill_hover"),
+            2 => primary ? Ui.Colour("button.primary_fill_pressed") : Ui.Colour("button.fill_pressed"),
+            3 => Ui.Colour("button.fill_disabled"),
+            _ => primary ? Ui.Colour("button.primary_fill") : Ui.Colour("button.fill")
         };
         var border = state switch
         {
-            1 => new Color("#edcf68"),
-            2 => new Color("#9f8845"),
-            3 => new Color("#354351"),
-            _ => primary ? new Color("#c7a94e") : new Color("#60758a")
+            1 => Ui.Colour("button.border_hover"),
+            2 => Ui.Colour("button.border_pressed"),
+            3 => Ui.Colour("button.border_disabled"),
+            _ => primary ? Ui.Colour("button.primary_border") : Ui.Colour("button.border")
         };
         return new StyleBoxFlat
         {

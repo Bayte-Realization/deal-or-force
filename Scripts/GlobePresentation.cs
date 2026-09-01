@@ -166,9 +166,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         var environment = new WorldEnvironment { Environment = new Godot.Environment() };
         environment.Environment.BackgroundMode = Godot.Environment.BGMode.Color;
-        environment.Environment.BackgroundColor = new Color("#030914");
+        environment.Environment.BackgroundColor = Ui.Colour("globe.space");
         environment.Environment.AmbientLightSource = Godot.Environment.AmbientSource.Color;
-        environment.Environment.AmbientLightColor = new Color("#9eb7d4");
+        environment.Environment.AmbientLightColor = Ui.Colour("globe.ambient");
         environment.Environment.AmbientLightEnergy = 0.72f;
         world.AddChild(environment);
 
@@ -1042,8 +1042,8 @@ void fragment() {
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 FixedSize = true,
                 OutlineSize = 8,
-                Modulate = new Color("#f2f5f7"),
-                OutlineModulate = new Color("#111821"),
+                Modulate = Ui.Colour("globe.label"),
+                OutlineModulate = Ui.Colour("globe.label_outline"),
                 Position = new Vector3(0f, 0f, 0.004f),
                 NoDepthTest = true
             };
@@ -1058,8 +1058,8 @@ void fragment() {
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 FixedSize = true,
                 OutlineSize = 6,
-                Modulate = new Color("#d9e4e9"),
-                OutlineModulate = new Color("#10161d"),
+                Modulate = Ui.Colour("globe.label_minor"),
+                OutlineModulate = Ui.Colour("globe.label_minor_outline"),
                 Position = new Vector3(0f, -0.025f, 0.005f),
                 NoDepthTest = true
             };
@@ -1144,7 +1144,7 @@ void fragment() {
             {
                 Text = fleet.Hulls.ToString(), FontSize = 24, PixelSize = 0.00024f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FixedSize = true,
-                OutlineSize = 7, Modulate = new Color("#e8f5f7"), OutlineModulate = new Color("#10202a"),
+                OutlineSize = 7, Modulate = Ui.Colour("globe.label_province"), OutlineModulate = Ui.Colour("globe.label_province_outline"),
                 Position = new Vector3(0f, 0f, 0.004f), NoDepthTest = true
             };
             marker.AddChild(strength);
@@ -1270,7 +1270,7 @@ void fragment() {
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                Modulate = new Color("#f4d66b")
+                Modulate = Ui.Colour("globe.selection")
             };
 
             marker.Position = SurfacePoint(nation.CapitalLatitude, nation.CapitalLongitude, SurfaceMarkerRadius);

@@ -124,9 +124,9 @@ public sealed partial class GlobePresentation
                 // The lower line is reserved for actual personnel. Order, stance,
                 // organisation and planning remain available in the selection panel.
                 status.Modulate = supply < 0.45 || cutOff
-                    ? new Color("#ef8c62")
-                    : organisation < 0.35 ? new Color("#e7b058")
-                    : planning > 0.70 ? new Color("#f3d36c") : new Color("#d9e4e9");
+                    ? Ui.Colour("military.routed")
+                    : organisation < 0.35 ? Ui.Colour("military.shaken")
+                    : planning > 0.70 ? Ui.Colour("military.planning") : Ui.Colour("military.ready");
             }
         }
         UpdateBattleMarkers();
@@ -154,16 +154,16 @@ public sealed partial class GlobePresentation
                 {
                     Name = "BattleIcon", Text = "⚔", FontSize = 46, PixelSize = 0.00030f,
                     FixedSize = true, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-                    OutlineSize = 10, Modulate = new Color("#ffb34d"),
-                    OutlineModulate = new Color("#631f1b"), NoDepthTest = true
+                    OutlineSize = 10, Modulate = Ui.Colour("military.battle"),
+                    OutlineModulate = Ui.Colour("military.battle_outline"), NoDepthTest = true
                 };
                 node.AddChild(icon);
                 var balance = new Label3D
                 {
                     Name = "BattleBalance", FontSize = 16, PixelSize = 0.00022f,
                     FixedSize = true, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-                    OutlineSize = 6, Modulate = new Color("#fff1cf"),
-                    OutlineModulate = new Color("#291613"), NoDepthTest = true,
+                    OutlineSize = 6, Modulate = Ui.Colour("military.clash"),
+                    OutlineModulate = Ui.Colour("military.clash_outline"), NoDepthTest = true,
                     Position = new Vector3(0f, -0.025f, 0.01f)
                 };
                 node.AddChild(balance);

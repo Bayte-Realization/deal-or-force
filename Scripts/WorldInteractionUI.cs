@@ -15,7 +15,7 @@ public partial class GlobalityGame
         _countryActions = new VBoxContainer { Visible = false };
         _countryActions.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_countryActions);
-        _countryActions.AddChild(Title("DIPLOMATIC ACTIONS", 12, new Color("#8e9daf")));
+        _countryActions.AddChild(Title("DIPLOMATIC ACTIONS", 12, Ui.Colour("text.caption")));
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 5);
         _countryActions.AddChild(row);
@@ -25,7 +25,7 @@ public partial class GlobalityGame
         _declareWarButton = ActionButton("Declare war", ConfirmOrDeclareWar, 0, 38);
         _declareWarButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _countryActions.AddChild(_declareWarButton);
-        _countryActionFeedback = Title("", 12, new Color("#c9d2de"));
+        _countryActionFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _countryActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _countryActions.AddChild(_countryActionFeedback);
     }

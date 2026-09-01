@@ -32,12 +32,14 @@ public partial class GlobalityGame
     private readonly Dictionary<TradePolicy, Button> _ledgerTradeButtons = new();
     private readonly Dictionary<GovernmentFocus, Button> _ledgerFocusButtons = new();
 
-    private static readonly Color Gold = new("#e6c760");
-    private static readonly Color Blue = new("#65a9df");
-    private static readonly Color Green = new("#55c58a");
-    private static readonly Color Red = new("#e06b6b");
-    private static readonly Color Violet = new("#a98be3");
-    private static readonly Color Orange = new("#e49a56");
+    // Properties rather than fields: a mod's skin is layered in after this class is first
+    // touched, and a `static readonly` would have frozen the shipped palette before then.
+    private static Color Gold => Ui.Colour("series.gold");
+    private static Color Blue => Ui.Colour("series.blue");
+    private static Color Green => Ui.Colour("series.green");
+    private static Color Red => Ui.Colour("series.red");
+    private static Color Violet => Ui.Colour("series.violet");
+    private static Color Orange => Ui.Colour("series.orange");
 
     private void BuildLedgerInterface()
     {
@@ -64,7 +66,7 @@ public partial class GlobalityGame
         var header = new HBoxContainer();
         header.AddThemeConstantOverride("separation", 8);
         rows.AddChild(header);
-        _ledgerTitle = Title("NATIONAL LEDGER", 25, new Color("#e7c966"));
+        _ledgerTitle = Title("NATIONAL LEDGER", 25, Ui.Colour("text.accent"));
         _ledgerTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(_ledgerTitle);
 
@@ -109,7 +111,7 @@ public partial class GlobalityGame
             _ledgerTabButtons[tab] = button;
         }
 
-        _ledgerSummary = Title("", 13, new Color("#b8c5d2"));
+        _ledgerSummary = Title("", 13, Ui.Colour("text.body_soft"));
         _ledgerSummary.CustomMinimumSize = new Vector2(0, 34);
         rows.AddChild(_ledgerSummary);
 
@@ -144,7 +146,7 @@ public partial class GlobalityGame
         };
         _ledgerFiscalControls.AddThemeConstantOverride("separation", 10);
         rows.AddChild(_ledgerFiscalControls);
-        var fiscalCaption = Title("TAX RATE", 12, new Color("#91a1b3"));
+        var fiscalCaption = Title("TAX RATE", 12, Ui.Colour("text.caption"));
         fiscalCaption.AutowrapMode = TextServer.AutowrapMode.Off;
         fiscalCaption.CustomMinimumSize = new Vector2(78, 0);
         fiscalCaption.VerticalAlignment = VerticalAlignment.Center;
@@ -160,8 +162,8 @@ public partial class GlobalityGame
         _ledgerTaxRate.ValueChanged += OnLedgerTaxChanged;
         _ledgerFiscalControls.AddChild(_ledgerTaxRate);
         _ledgerFiscalControls.AddChild(Title("Changes enter the deterministic command queue immediately.", 11,
-            new Color("#74879a")));
-        _ledgerFiscalFeedback = Title("", 11, new Color("#d5bd67"));
+            Ui.Colour("text.hint")));
+        _ledgerFiscalFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
         _ledgerFiscalFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _ledgerFiscalControls.AddChild(_ledgerFiscalFeedback);
 
@@ -173,7 +175,7 @@ public partial class GlobalityGame
         };
         _ledgerTradeControls.AddThemeConstantOverride("separation", 7);
         rows.AddChild(_ledgerTradeControls);
-        var tradeCaption = Title("TRADE POLICY", 12, new Color("#91a1b3"));
+        var tradeCaption = Title("TRADE POLICY", 12, Ui.Colour("text.caption"));
         tradeCaption.AutowrapMode = TextServer.AutowrapMode.Off;
         tradeCaption.CustomMinimumSize = new Vector2(98, 0);
         tradeCaption.VerticalAlignment = VerticalAlignment.Center;
@@ -184,7 +186,7 @@ public partial class GlobalityGame
             "Moderate access and tariffs without a strong structural bias.");
         AddTradePolicyButton("Autarky", TradePolicy.StrategicAutarky,
             "Restricts trade and raises tariffs; safer politically, but shortages become harder to cover.");
-        _ledgerPolicyFeedback = Title("", 11, new Color("#d5bd67"));
+        _ledgerPolicyFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
         _ledgerPolicyFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _ledgerTradeControls.AddChild(_ledgerPolicyFeedback);
 
@@ -196,7 +198,7 @@ public partial class GlobalityGame
         };
         _ledgerGovernmentControls.AddThemeConstantOverride("separation", 7);
         rows.AddChild(_ledgerGovernmentControls);
-        var cabinetCaption = Title("CABINET", 12, new Color("#91a1b3"));
+        var cabinetCaption = Title("CABINET", 12, Ui.Colour("text.caption"));
         cabinetCaption.CustomMinimumSize = new Vector2(78, 0);
         cabinetCaption.VerticalAlignment = VerticalAlignment.Center;
         _ledgerGovernmentControls.AddChild(cabinetCaption);
@@ -205,7 +207,7 @@ public partial class GlobalityGame
         AddGovernmentFocusButton("Cohesion", GovernmentFocus.SocialCohesion);
         AddGovernmentFocusButton("Science", GovernmentFocus.EducationAndScience);
         AddGovernmentFocusButton("Security", GovernmentFocus.NationalSecurity);
-        _ledgerGovernanceFeedback = Title("", 11, new Color("#d5bd67"));
+        _ledgerGovernanceFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
         _ledgerGovernanceFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _ledgerGovernmentControls.AddChild(_ledgerGovernanceFeedback);
 
@@ -245,7 +247,7 @@ public partial class GlobalityGame
     private void AddSocialSpendingSlider(string caption, string tooltip, float maximum,
         out HSlider slider, Godot.Range.ValueChangedEventHandler handler)
     {
-        var label = Title(caption, 11, new Color("#91a1b3"));
+        var label = Title(caption, 11, Ui.Colour("text.caption"));
         label.CustomMinimumSize = new Vector2(80, 0);
         label.VerticalAlignment = VerticalAlignment.Center;
         _ledgerSocialControls.AddChild(label);
@@ -357,7 +359,7 @@ public partial class GlobalityGame
             ? nation.Population / 1_000_000f / first.PopulationMillions - 1f : 0f;
         _ledgerTitle.Text = $"NATIONAL LEDGER · {nation.Name.ToUpperInvariant()}";
         _ledgerSummary.Text = $"{_ledgerTab.ToUpperInvariant()}  ·  GDP {SignedPercent(gdpTrend)}  ·  population {SignedPercent(populationTrend)}  ·  " +
-                              $"market access {nation.MarketAccess:P0}  ·  treasury ${nation.Treasury:0.00}B  ·  " +
+                              $"market access {nation.MarketAccess:P0}  ·  treasury {Fmt.Money(nation.Treasury)}  ·  " +
                               $"{samples.Count} weekly observation{(samples.Count == 1 ? "" : "s")}";
 
         // Named conditions belong where the player already reads the country's state -
@@ -586,13 +588,13 @@ public partial class GlobalityGame
     {
         Commodity.Food => Green,
         Commodity.ConsumerGoods => Violet,
-        Commodity.IndustrialMaterials => new Color("#aeb8c2"),
+        Commodity.IndustrialMaterials => Ui.Colour("goods.industrial_materials"),
         Commodity.Energy => Orange,
         Commodity.Arms => Red,
-        Commodity.Coal => new Color("#5f6871"),
-        Commodity.Oil => new Color("#403a52"),
-        Commodity.IronOre => new Color("#a65f45"),
-        Commodity.RareEarths => new Color("#4ec8b6"),
+        Commodity.Coal => Ui.Colour("goods.coal"),
+        Commodity.Oil => Ui.Colour("goods.oil"),
+        Commodity.IronOre => Ui.Colour("goods.iron_ore"),
+        Commodity.RareEarths => Ui.Colour("goods.rare_earths"),
         Commodity.Machinery => Gold,
         _ => Blue
     };
@@ -600,23 +602,16 @@ public partial class GlobalityGame
     private static Color BuildingColor(BuildingKind kind) => kind switch
     {
         BuildingKind.CivilianIndustry => Blue,
-        BuildingKind.Infrastructure => new Color("#9eb0c2"),
+        BuildingKind.Infrastructure => Ui.Colour("building.infrastructure"),
         BuildingKind.University => Violet,
         BuildingKind.Hospital => Green,
         BuildingKind.Agriculture => Orange,
         BuildingKind.Barracks => Red,
-        BuildingKind.ExtractionIndustry => new Color("#a65f45"),
-        BuildingKind.PowerPlant => new Color("#dfb14a"),
-        BuildingKind.ArmsIndustry => new Color("#b9414b"),
+        BuildingKind.ExtractionIndustry => Ui.Colour("building.extraction"),
+        BuildingKind.PowerPlant => Ui.Colour("building.power_plant"),
+        BuildingKind.ArmsIndustry => Ui.Colour("building.arms_industry"),
         _ => Gold
     };
 
-    private static void ApplyLedgerButtonState(Button button, bool selected)
-    {
-        button.AddThemeStyleboxOverride("normal", ButtonStyle(selected, 0));
-        button.AddThemeStyleboxOverride("hover", ButtonStyle(selected, 1));
-        button.AddThemeStyleboxOverride("pressed", ButtonStyle(selected, 2));
-        button.AddThemeStyleboxOverride("focus", ButtonStyle(selected, 1));
-        button.AddThemeColorOverride("font_color", selected ? new Color("#fff0b0") : new Color("#edf2f7"));
-    }
+    private static void ApplyLedgerButtonState(Button button, bool selected) => StyleButton(button, selected);
 }

@@ -37,7 +37,7 @@ public partial class GlobalityGame
         AddMode(row, StrategicMapMode.Population, "POP", "Population: logarithmic population density by country.");
         AddMode(row, StrategicMapMode.Economy, "GDP", "Economy: logarithmic GDP scale by country.");
 
-        _mapModeLegend = Title("POLITICAL", 12, new Color("#d7c57b"));
+        _mapModeLegend = Title("POLITICAL", 12, Ui.Colour("text.accent_dim"));
         _mapModeLegend.CustomMinimumSize = new Vector2(92, 0);
         _mapModeLegend.HorizontalAlignment = HorizontalAlignment.Center;
         row.AddChild(_mapModeLegend);

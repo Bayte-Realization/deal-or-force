@@ -47,7 +47,7 @@ public partial class GlobalityGame
         _networkHud.OffsetBottom = 208;
         _networkHud.Visible = false;
         var hudRows = PanelRows(_networkHud, 10, 7, 2);
-        _networkHudStatus = Title("NETWORK", 11, new Color("#77c9e8"));
+        _networkHudStatus = Title("NETWORK", 11, Ui.Colour("state.info"));
         hudRows.AddChild(_networkHudStatus);
 
         _networkLayer = FullLayer("NetworkMultiplayer");
@@ -67,8 +67,8 @@ public partial class GlobalityGame
         panel.OffsetTop = -340;
         panel.OffsetBottom = 340;
         var rows = PanelRows(panel, 26, 22, 10);
-        rows.AddChild(Title("MULTIPLAYER · LAN / DIRECT IP", 26, new Color("#e7c966")));
-        var explanation = Title("Host an authoritative campaign or join by IPv4 address. Radmin/Hamachi work as a virtual LAN: enter the host's VPN IPv4 address.", 13, new Color("#aeb9c8"));
+        rows.AddChild(Title("MULTIPLAYER · LAN / DIRECT IP", 26, Ui.Colour("text.accent")));
+        var explanation = Title("Host an authoritative campaign or join by IPv4 address. Radmin/Hamachi work as a virtual LAN: enter the host's VPN IPv4 address.", 13, Ui.Colour("text.muted"));
         explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(explanation);
 
@@ -91,10 +91,10 @@ public partial class GlobalityGame
         _networkStart = ActionButton("START CAMPAIGN", StartHostedNetworkCampaign, 0, 44, true);
         _networkStart.Disabled = true;
         rows.AddChild(_networkStart);
-        _networkStatus = Title("Not connected.", 13, new Color("#cbd4df"));
+        _networkStatus = Title("Not connected.", 13, Ui.Colour("text.body_soft"));
         _networkStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_networkStatus);
-        _networkRoster = Title("", 12, new Color("#8fa1b5"));
+        _networkRoster = Title("", 12, Ui.Colour("text.hint"));
         _networkRoster.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_networkRoster);
         rows.AddChild(ActionButton("DISCONNECT / BACK", CloseNetworkMultiplayer, 0, 36));

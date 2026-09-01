@@ -14,7 +14,7 @@ public partial class GlobalityGame
         _warControls = new VBoxContainer { Visible = false };
         _warControls.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_warControls);
-        _warControls.AddChild(Title("PEACE NEGOTIATION", 12, new Color("#8e9daf")));
+        _warControls.AddChild(Title("PEACE NEGOTIATION", 12, Ui.Colour("text.caption")));
         var ceasefire = ActionButton("Ceasefire", () => ProposePeace(PeaceTerms.Ceasefire), 150, 32);
         ceasefire.TooltipText = PeaceNegotiation.Description(PeaceTerms.Ceasefire);
         _warControls.AddChild(ceasefire);
@@ -50,7 +50,7 @@ public partial class GlobalityGame
         var capitulate = ActionButton("Capitulate", () => ProposePeace(PeaceTerms.Capitulate), 310, 30);
         capitulate.TooltipText = "Concede the war immediately and accept the current occupation map.";
         _warControls.AddChild(capitulate);
-        _peaceStatus = Title("", 12, new Color("#e7c966"));
+        _peaceStatus = Title("", 12, Ui.Colour("text.accent"));
         _peaceStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _warControls.AddChild(_peaceStatus);
     }

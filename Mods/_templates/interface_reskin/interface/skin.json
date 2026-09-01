@@ -1,0 +1,44 @@
+// Example reskin: an atlas on a table instead of a screen in a war room.
+//
+// Only the tokens listed here change. Everything left out keeps the value the base game
+// gives it in game/interface/skin.json, so a reskin stays small and survives updates that
+// add new tokens.
+{
+  "colors": {
+    // Ink on paper, five steps deep.
+    "text.accent":     "#7a4b1e",
+    "text.accent_dim": "#95724a",
+    "text.bright":     "#2b2116",
+    "text.body":       "#3a2d1f",
+    "text.body_soft":  "#4e4030",
+    "text.muted":      "#6b5a45",
+    "text.hint":       "#7d6c57",
+    "text.faint":      "#907e68",
+    "text.caption":    "#6b5a45",
+
+    // Paper, not glass.
+    "surface.background": "#e8dcc3",
+    "surface.panel_tint": "#fff4dcff",
+    "surface.overlay":    "#efe3c8f0",
+    "surface.inset":      "#dccfb2",
+    "surface.line":       "#a8977a",
+
+    // Buttons cut from card.
+    "button.text":          "#3a2d1f",
+    "button.text_hover":    "#7a4b1e",
+    "button.fill":          "#ddd0b2",
+    "button.fill_hover":    "#efe2c2",
+    "button.fill_pressed":  "#c9bb9c",
+    "button.border":        "#a8977a",
+    "button.border_hover":  "#7a4b1e",
+    "button.primary_fill":  "#d8c294",
+    "button.primary_border":"#8a5c26",
+
+    // The map keeps its meaning, in cartographer's inks.
+    "map.player":   "#4a7a4e",
+    "map.at_war":   "#a63b32",
+    "map.allied":   "#3f6b98",
+    "map.friendly": "#4b8a80",
+    "map.rival":    "#b06a2c"
+  }
+}

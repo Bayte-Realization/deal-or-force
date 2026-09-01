@@ -57,16 +57,16 @@ public sealed partial class StrategicLineChart : Control
     public override void _Draw()
     {
         var font = ThemeDB.FallbackFont;
-        DrawRect(new Rect2(Vector2.Zero, Size), new Color("#0d1722e8"), true);
-        DrawRect(new Rect2(Vector2.Zero, Size), new Color("#50677d"), false, 1f);
-        DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, new Color("#e8cc70"));
-        DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, -1, 11, new Color("#8394a8"));
+        DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.overlay"), true);
+        DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.line"), false, 1f);
+        DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, Ui.Colour("text.accent"));
+        DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, -1, 11, Ui.Colour("text.caption"));
 
         _plot = new Rect2(54, 56, MathF.Max(40, Size.X - 70), MathF.Max(50, Size.Y - 88));
         if (_days.Count == 0 || _series.Count == 0 || _series.All(series => series.Values.Count == 0))
         {
             DrawString(font, _plot.GetCenter(), "History will appear after the first simulation week.",
-                HorizontalAlignment.Center, -1, 12, new Color("#78899a"));
+                HorizontalAlignment.Center, -1, 12, Ui.Colour("text.hint"));
             return;
         }
 
@@ -91,10 +91,10 @@ public sealed partial class StrategicLineChart : Control
         {
             var ratio = row / 4f;
             var y = _plot.Position.Y + _plot.Size.Y * ratio;
-            DrawLine(new Vector2(_plot.Position.X, y), new Vector2(_plot.End.X, y), new Color("#33455688"), 1f);
+            DrawLine(new Vector2(_plot.Position.X, y), new Vector2(_plot.End.X, y), Ui.Colour("surface.line_faint"), 1f);
             var value = Mathf.Lerp(maximum, minimum, ratio);
             DrawString(font, new Vector2(5, y + 4), Format(value, _format), HorizontalAlignment.Right, 44, 10,
-                new Color("#8393a5"));
+                Ui.Colour("text.caption"));
         }
 
         foreach (var series in _series)
@@ -115,18 +115,18 @@ public sealed partial class StrategicLineChart : Control
         {
             DrawRect(new Rect2(legendX, Size.Y - 25, 10, 4), series.Color, true);
             DrawString(font, new Vector2(legendX + 15, Size.Y - 18), series.Name,
-                HorizontalAlignment.Left, -1, 10, new Color("#b9c5d2"));
+                HorizontalAlignment.Left, -1, 10, Ui.Colour("text.body_soft"));
             legendX += 20 + font.GetStringSize(series.Name, HorizontalAlignment.Left, -1, 10).X;
         }
 
         DrawString(font, new Vector2(_plot.Position.X, _plot.End.Y + 15), $"day {_days[0]:N0}",
-            HorizontalAlignment.Left, -1, 9, new Color("#687a8c"));
+            HorizontalAlignment.Left, -1, 9, Ui.Colour("chart.tick"));
         DrawString(font, new Vector2(_plot.End.X - 90, _plot.End.Y + 15), $"day {_days[^1]:N0}",
-            HorizontalAlignment.Right, 90, 9, new Color("#687a8c"));
+            HorizontalAlignment.Right, 90, 9, Ui.Colour("chart.tick"));
 
         if (_hoverIndex < 0) return;
         var hoverX = _plot.Position.X + _plot.Size.X * (_days.Count == 1 ? 0f : _hoverIndex / (float)(_days.Count - 1));
-        DrawLine(new Vector2(hoverX, _plot.Position.Y), new Vector2(hoverX, _plot.End.Y), new Color("#f3d46fcc"), 1f);
+        DrawLine(new Vector2(hoverX, _plot.Position.Y), new Vector2(hoverX, _plot.End.Y), Ui.Colour("chart.hover"), 1f);
         foreach (var series in _series)
         {
             var value = ValueAt(series, _hoverIndex);
@@ -201,10 +201,10 @@ public sealed partial class StrategicBarChart : Control
     public override void _Draw()
     {
         var font = ThemeDB.FallbackFont;
-        DrawRect(new Rect2(Vector2.Zero, Size), new Color("#0d1722e8"), true);
-        DrawRect(new Rect2(Vector2.Zero, Size), new Color("#50677d"), false, 1f);
-        DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, new Color("#e8cc70"));
-        DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, -1, 11, new Color("#8394a8"));
+        DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.overlay"), true);
+        DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.line"), false, 1f);
+        DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, Ui.Colour("text.accent"));
+        DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, -1, 11, Ui.Colour("text.caption"));
         _barRects.Clear();
         if (_entries.Count == 0) return;
 
@@ -218,14 +218,14 @@ public sealed partial class StrategicBarChart : Control
             var entry = _entries[index];
             var y = 57f + index * rowHeight;
             DrawString(font, new Vector2(14, y + 15), entry.Name, HorizontalAlignment.Left, labelWidth - 16, 11,
-                index == _hover ? new Color("#fff0b0") : new Color("#c7d1dc"));
+                index == _hover ? Ui.Colour("chart.row_hover") : Ui.Colour("text.body_soft"));
             var background = new Rect2(labelWidth, y + 4, barWidth, MathF.Max(8f, rowHeight - 9));
-            DrawRect(background, new Color("#172635"), true);
+            DrawRect(background, Ui.Colour("surface.inset"), true);
             var fill = new Rect2(background.Position, new Vector2(background.Size.X * MathF.Abs(entry.Value) / maximum,
                 background.Size.Y));
             DrawRect(fill, index == _hover ? entry.Color.Lightened(0.16f) : entry.Color, true);
             DrawString(font, new Vector2(background.End.X + 7, y + 15), StrategicLineChart.Format(entry.Value, _format),
-                HorizontalAlignment.Left, 72, 10, new Color("#aebdca"));
+                HorizontalAlignment.Left, 72, 10, Ui.Colour("text.muted"));
             _barRects.Add(new Rect2(8, y, Size.X - 16, rowHeight));
         }
     }

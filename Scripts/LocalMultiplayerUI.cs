@@ -23,7 +23,7 @@ public partial class GlobalityGame
         _hotseatHud.OffsetBottom = 224;
         _hotseatHud.Visible = false;
         var hudRows = PanelRows(_hotseatHud, 12, 8, 3);
-        _hotseatStatus = Title("PLAYER 1 / 2", 12, new Color("#e7c966"));
+        _hotseatStatus = Title("PLAYER 1 / 2", 12, Ui.Colour("text.accent"));
         hudRows.AddChild(_hotseatStatus);
         hudRows.AddChild(ActionButton("PASS TO NEXT PLAYER", PassHotseat, 240, 31, true));
 
@@ -48,10 +48,10 @@ public partial class GlobalityGame
         panel.OffsetTop = -160;
         panel.OffsetBottom = 160;
         var rows = PanelRows(panel, 30, 26, 14);
-        rows.AddChild(Title("PRIVATE HANDOVER", 15, new Color("#8d9caf")));
-        _handoverTitle = Title("PLAYER 1", 34, new Color("#e7c966"));
+        rows.AddChild(Title("PRIVATE HANDOVER", 15, Ui.Colour("text.caption")));
+        _handoverTitle = Title("PLAYER 1", 34, Ui.Colour("text.accent"));
         rows.AddChild(_handoverTitle);
-        _handoverHint = Title("Pass the device. The map and national information are hidden.", 16, new Color("#c5ceda"));
+        _handoverHint = Title("Pass the device. The map and national information are hidden.", 16, Ui.Colour("text.body_soft"));
         _handoverHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_handoverHint);
         rows.AddChild(ActionButton("I AM READY", AcceptHotseat, 330, 48, true));

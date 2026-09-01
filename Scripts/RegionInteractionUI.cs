@@ -17,7 +17,7 @@ public partial class GlobalityGame
         _regionControls = new VBoxContainer { Visible = false };
         _regionControls.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_regionControls);
-        _regionControls.AddChild(Title("REGION & PROVINCE", 12, new Color("#8e9daf")));
+        _regionControls.AddChild(Title("REGION & PROVINCE", 12, Ui.Colour("text.caption")));
 
         var tabs = new HBoxContainer();
         tabs.AddThemeConstantOverride("separation", 5);
@@ -46,7 +46,7 @@ public partial class GlobalityGame
         strategic.AddChild(ActionButton("Power", () => QueueRegionalBuilding(BuildingKind.PowerPlant), 92, 31));
         strategic.AddChild(ActionButton("Arms", () => QueueRegionalBuilding(BuildingKind.ArmsIndustry), 105, 31));
 
-        _regionActionFeedback = Title("", 12, new Color("#d8c27b"));
+        _regionActionFeedback = Title("", 12, Ui.Colour("text.accent_dim"));
         _regionActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _regionControls.AddChild(_regionActionFeedback);
     }

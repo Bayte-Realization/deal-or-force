@@ -35,10 +35,10 @@ public partial class GlobalityGame
         panel.OffsetLeft = -420; panel.OffsetRight = 420;
         panel.OffsetTop = -360; panel.OffsetBottom = 360;
         var rows = PanelRows(panel, 28, 24, 10);
-        rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, new Color("#e7c966")));
+        rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, Ui.Colour("text.accent")));
         rows.AddChild(Title("Atomic compressed saves · scenario/mod compatibility checks · F5 quicksave / F9 quickload",
-            13, new Color("#95a5b8")));
-        _saveStatus = Title("Choose a slot.", 13, new Color("#d3bf72"));
+            13, Ui.Colour("text.muted")));
+        _saveStatus = Title("Choose a slot.", 13, Ui.Colour("text.accent_dim"));
         rows.AddChild(_saveStatus);
 
         AddSaveSlotRow(rows, SaveSystem.AutoSlot, "AUTOSAVE", false);
@@ -53,7 +53,7 @@ public partial class GlobalityGame
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
         parent.AddChild(row);
-        var info = Title(title, 13, new Color("#dce5ef"));
+        var info = Title(title, 13, Ui.Colour("text.body_soft"));
         info.CustomMinimumSize = new Vector2(405, 42);
         info.VerticalAlignment = VerticalAlignment.Center;
         row.AddChild(info);
@@ -120,9 +120,22 @@ public partial class GlobalityGame
         if (_campaign is not null) _campaign.Changed -= Refresh;
         _campaign = result.Campaign;
         _campaign.Changed += Refresh;
+
+        // Everything the interface was pointing at belonged to the campaign that just
+        // ended. An army, a state or a screen carried across would be a live reference
+        // into a dead object graph, so selection is dropped wholesale rather than remapped.
         _selectedNation = _campaign.Player;
         _selectedState = _campaign.States.FirstOrDefault(state => state.NationMapIndex == _campaign.Player.MapIndex);
         _pickerNation = _campaign.Player;
+        _selectedArmy = null;
+        _selectedArmies.Clear();
+        _selectedProvinceId = 0;
+        _openScreen = "";
+        _globe.SelectArmy(-1);
+        ClearDetail();
+        ResetTrends();
+        _lastAutosaveDay = -1;
+
         _modApi.Bind(_campaign);
         _globe.BindCampaign(_campaign);
         ResetStrategicAudioState();
@@ -130,9 +143,13 @@ public partial class GlobalityGame
         _pickerLayer.Visible = false;
         _pauseMenuLayer.Visible = false;
         _saveLoadLayer.Visible = false;
+        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
+        if (_eventLayer is not null) _eventLayer.Visible = false;
         _hudLayer.Visible = true;
         _sidePanel.Visible = false;
+        _armyOrders.Visible = false;
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
+        StyleButton(_pause, _campaign.IsPaused);
         _saveStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? "Campaign restored." : result.Warning;
         Refresh();
     }
