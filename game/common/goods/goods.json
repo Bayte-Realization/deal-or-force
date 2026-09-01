@@ -1,0 +1,12 @@
+{
+  "Food": { "name": "Food", "icon": "●", "base_price": 0.012, "essential_weight": 1.00, "description": "Household food supply and agricultural output." },
+  "ConsumerGoods": { "name": "Consumer goods", "icon": "◆", "base_price": 0.024, "essential_weight": 0.75, "description": "Everyday manufactured goods that support living standards." },
+  "IndustrialMaterials": { "name": "Industrial materials", "icon": "■", "base_price": 0.038, "essential_weight": 0.62, "description": "Steel, cement and components used by industry and construction." },
+  "Energy": { "name": "Energy", "icon": "▲", "base_price": 0.031, "essential_weight": 0.90, "description": "Electricity and fuels required by households and factories." },
+  "Arms": { "name": "Arms", "icon": "✦", "base_price": 0.085, "essential_weight": 0.30, "description": "Weapons and military equipment consumed by field formations." },
+  "Coal": { "name": "Coal", "icon": "◆", "base_price": 0.019, "essential_weight": 0.45, "description": "Fuel for power generation and heavy industry." },
+  "Oil": { "name": "Oil", "icon": "●", "base_price": 0.052, "essential_weight": 0.68, "description": "Fuel and petrochemical feedstock for transport, armies and industry." },
+  "IronOre": { "name": "Iron ore", "icon": "⬟", "base_price": 0.026, "essential_weight": 0.38, "description": "Ore refined into construction and industrial materials." },
+  "RareEarths": { "name": "Rare earths", "icon": "✧", "base_price": 0.094, "essential_weight": 0.32, "description": "Strategic minerals for advanced electronics and precision equipment." },
+  "Machinery": { "name": "Machinery", "icon": "⚙", "base_price": 0.072, "essential_weight": 0.54, "description": "Machine tools, engines and industrial equipment." }
+}

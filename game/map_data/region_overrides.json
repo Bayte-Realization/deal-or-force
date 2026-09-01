@@ -1,0 +1,116 @@
+{
+  "regions": [
+    {
+      "map_index": 1711,
+      "nation": "ABK",
+      "name": "Abkhazia",
+      "iso": "ABK-X01",
+      "kind": "Disputed region",
+      "population": 245000,
+      "min_longitude": 39.7,
+      "max_longitude": 42.4,
+      "min_latitude": 42.0,
+      "max_latitude": 44.1
+    },
+    {
+      "map_index": 1712,
+      "nation": "OST",
+      "name": "South Ossetia",
+      "iso": "OST-X01",
+      "kind": "Disputed region",
+      "population": 56500,
+      "min_longitude": 42.8,
+      "max_longitude": 44.9,
+      "min_latitude": 41.6,
+      "max_latitude": 43.1
+    },
+    {
+      "map_index": 1713,
+      "nation": "IND",
+      "name": "Andaman and Nicobar Islands",
+      "iso": "IN-AN",
+      "kind": "Union Territory",
+      "donor_iso": "IN-RJ",
+      "population": 434192,
+      "min_longitude": 91.4,
+      "max_longitude": 94.7,
+      "min_latitude": 6.0,
+      "max_latitude": 14.8
+      ,"seed_points": [[92.9, 13.2, 1], [92.75, 11.65, 1], [92.75, 9.2, 1], [93.85, 7.0, 1]]
+    },
+    {
+      "map_index": 1714,
+      "nation": "IND",
+      "name": "Lakshadweep",
+      "iso": "IN-LD",
+      "kind": "Union Territory",
+      "donor_iso": "IN-RJ",
+      "population": 64473,
+      "min_longitude": 71.0,
+      "max_longitude": 74.2,
+      "min_latitude": 7.5,
+      "max_latitude": 13.8
+      ,"seed_points": [[72.19, 10.85, 1], [72.64, 10.57, 1], [73.05, 8.28, 1]]
+    },
+    {
+      "map_index": 1715,
+      "nation": "PMR",
+      "source_nation": "MDA",
+      "name": "Transnistria",
+      "iso": "PMR-X01",
+      "kind": "De facto republic",
+      "population": 367776,
+      "min_longitude": 28.45,
+      "max_longitude": 29.98,
+      "min_latitude": 46.54,
+      "max_latitude": 48.19,
+      "boundary_source": "OpenStreetMap relation 65335, ODbL, simplified to source-raster resolution",
+      "polygon": [
+        [29.39072, 47.37976], [29.42705, 47.29215], [29.57406, 47.37047],
+        [29.57992, 47.13576], [29.49475, 47.13152], [29.53020, 47.07545],
+        [29.61240, 47.09960], [29.57209, 46.94025], [29.97993, 46.81971],
+        [29.93517, 46.80578], [29.96328, 46.58376], [29.87597, 46.54671],
+        [29.72349, 46.59912], [29.76346, 46.66829], [29.60161, 46.67928],
+        [29.65367, 46.74936], [29.56823, 46.70467], [29.51037, 46.79283],
+        [29.39328, 46.75915], [29.43278, 46.84884], [29.49008, 46.85380],
+        [29.47127, 46.94954], [29.29133, 46.98543], [29.37569, 46.99451],
+        [29.39162, 47.05921], [29.11237, 47.28642], [29.17156, 47.32897],
+        [29.12353, 47.32200], [29.16122, 47.35530], [29.07571, 47.41474],
+        [29.11869, 47.46349], [29.01914, 47.52503], [28.96587, 47.71888],
+        [29.02372, 47.84931], [28.82621, 47.90131], [28.69745, 48.02413],
+        [28.53715, 47.99958], [28.63523, 48.07891], [28.50294, 48.15079],
+        [28.84112, 48.12554], [28.83945, 48.03495], [28.92585, 47.96014],
+        [29.17532, 47.99378], [29.20064, 47.88437], [29.28157, 47.88795],
+        [29.19854, 47.81851], [29.27639, 47.80208], [29.20436, 47.71907],
+        [29.21766, 47.61229], [29.11695, 47.55442], [29.18967, 47.51397],
+        [29.18950, 47.42607], [29.31749, 47.44920], [29.33593, 47.37723],
+        [29.16769, 47.30719], [29.39072, 47.37976]
+      ]
+    },
+    {
+      "map_index": 1716,
+      "nation": "MDV",
+      "name": "Maldives",
+      "iso": "MV-X01",
+      "kind": "Atoll republic",
+      "population": 530953,
+      "min_longitude": 72.3,
+      "max_longitude": 73.8,
+      "min_latitude": -0.8,
+      "max_latitude": 7.4,
+      "seed_points": [[73.15, 6.75, 1], [73.48, 4.18, 1], [73.10, 1.95, 1], [73.18, -0.30, 1]]
+    }
+  ],
+  "adjacency_repairs": [
+    {
+      "subject": "ABK",
+      "neighbor": "RUS",
+      "through": "GEO",
+      "min_longitude": 39.7,
+      "max_longitude": 42.3,
+      "min_latitude": 42.0,
+      "max_latitude": 44.1,
+      "corridor_radius": 8
+    }
+  ]
+}

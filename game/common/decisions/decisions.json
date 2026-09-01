@@ -1,0 +1,37 @@
+{
+  "economic_stimulus": {
+    "name": "Economic stimulus",
+    "description": "Fund domestic demand and industrial orders. Immediate GDP and stability, paid from the treasury.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0040,
+    "kind": "EconomicStimulus"
+  },
+  "education_reform": {
+    "name": "National education reform",
+    "description": "Raise literacy and productivity; universities amplify the result over time.",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.0025,
+    "kind": "EducationReform"
+  },
+  "public_health": {
+    "name": "Public health campaign",
+    "description": "Improve living standards and population growth throughout the country.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0018,
+    "kind": "PublicHealthCampaign"
+  },
+  "anti_corruption": {
+    "name": "Anti-corruption drive",
+    "description": "Improve tax collection and state stability at a short-term administrative cost.",
+    "cooldown_days": 600,
+    "gdp_cost_share": 0.0012,
+    "kind": "AntiCorruptionDrive"
+  },
+  "emergency_mobilisation": {
+    "name": "Emergency mobilisation",
+    "description": "Restore frontline readiness during an active war, at a cost to stability and the economy.",
+    "cooldown_days": 180,
+    "gdp_cost_share": 0.0020,
+    "kind": "EmergencyMobilisation"
+  }
+}

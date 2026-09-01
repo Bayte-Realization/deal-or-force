@@ -1,0 +1,57 @@
+{
+  "war_economy": {
+    "name": "War economy",
+    "description": "Industry has been placed on a war footing. Output climbs; the people notice what it costs.",
+    "days": 365,
+    "positive": true,
+    "effects": { "productivity": 0.0022, "state.radicalism": 0.0010 }
+  },
+
+  "national_mourning": {
+    "name": "National mourning",
+    "description": "The country is grieving. Ordinary business waits.",
+    "days": 90,
+    "positive": false,
+    "effects": { "stability": -0.0015, "productivity": -0.0012 }
+  },
+
+  "postwar_settlement": {
+    "name": "Post-war settlement",
+    "description": "The guns are quiet and the reconstruction budget is being spent.",
+    "days": 540,
+    "positive": true,
+    "effects": { "stability": 0.0016, "state.standard_of_living": 0.0008 }
+  },
+
+  "investment_boom": {
+    "name": "Investment boom",
+    "description": "Capital is arriving faster than anyone planned for.",
+    "days": 270,
+    "positive": true,
+    "effects": { "productivity": 0.0026, "construction_capacity": 0.004 }
+  },
+
+  "austerity": {
+    "name": "Austerity programme",
+    "description": "The budget balances. Very little else does.",
+    "days": 365,
+    "positive": false,
+    "effects": { "state.standard_of_living": -0.0010, "state.radicalism": 0.0014 }
+  },
+
+  "cultural_moment": {
+    "name": "A cultural moment",
+    "description": "For a while, the whole world is curious about this country.",
+    "days": 180,
+    "positive": true,
+    "effects": { "stability": 0.0008, "literacy": 0.0004 }
+  },
+
+  "industrial_renewal": {
+    "name": "Industrial renewal",
+    "description": "New plant is coming online across the country's older manufacturing regions.",
+    "days": 450,
+    "positive": true,
+    "effects": { "productivity": 0.0018, "construction_capacity": 0.003 }
+  }
+}

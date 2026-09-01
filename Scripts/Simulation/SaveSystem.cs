@@ -1,0 +1,339 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace ByDealOrForce.Simulation;
+
+public sealed class SaveMetadata
+{
+    public int FormatVersion { get; set; } = SaveSystem.FormatVersion;
+    public string Slot { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string NationTag { get; set; } = "";
+    public string NationName { get; set; } = "";
+    public string GameDate { get; set; } = "";
+    public int ElapsedDays { get; set; }
+    public DateTime SavedUtc { get; set; }
+    public string GameVersion { get; set; } = SaveSystem.GameVersion;
+    public string MapDataVersion { get; set; } = SaveSystem.MapDataVersion;
+    public int ProvinceCount { get; set; }
+    public string ModFingerprint { get; set; } = "";
+    public string Checksum { get; set; } = "";
+    public long CompressedBytes { get; set; }
+    public bool IsAutosave { get; set; }
+}
+
+public readonly record struct SaveLoadResult(Campaign Campaign, SaveMetadata Metadata, string Warning)
+{
+    public bool Success => Campaign is not null;
+}
+
+/// <summary>
+/// Versioned, compressed and atomic campaign persistence. Saves contain simulation
+/// state only: presentation can change without invalidating a campaign. A readable
+/// sidecar index lets the menu enumerate slots without inflating every full save.
+/// </summary>
+public static class SaveSystem
+{
+    public const int FormatVersion = 2;
+    public const string GameVersion = "0.4-migration";
+    public const string MapDataVersion = "2024.09.01-e";
+    public const string QuickSlot = "quicksave";
+    public const string AutoSlot = "autosave";
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        IncludeFields = true,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = false,
+        PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString
+    };
+
+    private static readonly JsonSerializerOptions MetadataOptions = new(JsonOptions) { WriteIndented = true };
+
+    public static SaveMetadata Save(string root, string slot, Campaign campaign, string modFingerprint,
+        string displayName = "", bool autosave = false)
+    {
+        if (campaign?.Player is null) throw new InvalidOperationException("No active campaign to save.");
+        if (campaign.ProvinceMap is null || campaign.ProvinceController is null || campaign.ProvinceOccupation is null)
+            throw new InvalidOperationException("The tactical map is still being prepared; try saving again in a moment.");
+        Directory.CreateDirectory(root);
+        slot = SafeSlot(slot);
+        var payload = CampaignSave.Capture(campaign, modFingerprint);
+        var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
+        byte[] compressed;
+        using (var memory = new MemoryStream())
+        {
+            using (var gzip = new GZipStream(memory, CompressionLevel.SmallestSize, true))
+                gzip.Write(json);
+            compressed = memory.ToArray();
+        }
+
+        var metadata = new SaveMetadata
+        {
+            Slot = slot,
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? SlotTitle(slot) : displayName.Trim(),
+            NationTag = campaign.Player.Tag,
+            NationName = campaign.Player.Name,
+            GameDate = campaign.Date.ToString(),
+            ElapsedDays = campaign.ElapsedDays,
+            SavedUtc = DateTime.UtcNow,
+            MapDataVersion = MapDataVersion,
+            ProvinceCount = payload.ProvinceCount,
+            ModFingerprint = modFingerprint ?? "",
+            Checksum = Convert.ToHexString(SHA256.HashData(compressed)),
+            CompressedBytes = compressed.LongLength,
+            IsAutosave = autosave
+        };
+
+        AtomicWrite(DataPath(root, slot), compressed);
+        AtomicWrite(MetaPath(root, slot), JsonSerializer.SerializeToUtf8Bytes(metadata, MetadataOptions));
+        return metadata;
+    }
+
+    /// <summary>Compact authoritative snapshot used for joining and resynchronising LAN peers.</summary>
+    public static byte[] ExportNetworkSnapshot(Campaign campaign, string modFingerprint)
+    {
+        if (campaign?.Player is null || campaign.ProvinceMap is null || campaign.ProvinceController is null ||
+            campaign.ProvinceOccupation is null) return Array.Empty<byte>();
+        var payload = CampaignSave.Capture(campaign, modFingerprint ?? "");
+        var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
+        using var memory = new MemoryStream();
+        using (var gzip = new GZipStream(memory, CompressionLevel.Fastest, true)) gzip.Write(json);
+        return memory.ToArray();
+    }
+
+    public static SaveLoadResult ImportNetworkSnapshot(byte[] compressed, string activeModFingerprint)
+    {
+        if (compressed is null || compressed.Length == 0)
+            return new SaveLoadResult(null, null, "The host sent an empty campaign snapshot.");
+        try
+        {
+            using var input = new MemoryStream(compressed);
+            using var gzip = new GZipStream(input, CompressionMode.Decompress);
+            var payload = JsonSerializer.Deserialize<CampaignSave>(gzip, JsonOptions);
+            if (payload is null || payload.FormatVersion != FormatVersion ||
+                !string.Equals(payload.MapDataVersion, MapDataVersion, StringComparison.Ordinal) ||
+                payload.ProvinceCount <= 0 || payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
+                payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)
+                return new SaveLoadResult(null, null, "Host campaign uses incompatible save or map data.");
+            var campaign = payload.Restore();
+            var warning = string.Equals(payload.ModFingerprint ?? "", activeModFingerprint ?? "", StringComparison.Ordinal)
+                ? "" : "Host and client mod fingerprints differ; the session may desynchronise.";
+            return new SaveLoadResult(campaign, null, warning);
+        }
+        catch (Exception exception)
+        {
+            return new SaveLoadResult(null, null, $"Could not import host snapshot: {exception.Message}");
+        }
+    }
+
+    public static SaveLoadResult Load(string root, string slot, string activeModFingerprint)
+    {
+        slot = SafeSlot(slot);
+        var dataPath = DataPath(root, slot);
+        if (!File.Exists(dataPath)) return new SaveLoadResult(null, null, "Save slot is empty.");
+        var compressed = File.ReadAllBytes(dataPath);
+        var metadata = ReadMetadata(root, slot);
+        var checksum = Convert.ToHexString(SHA256.HashData(compressed));
+        if (metadata is not null && !string.Equals(metadata.Checksum, checksum, StringComparison.OrdinalIgnoreCase))
+            return new SaveLoadResult(null, metadata, "Save checksum mismatch; the file may be incomplete or corrupted.");
+
+        CampaignSave payload;
+        try
+        {
+            using var input = new MemoryStream(compressed);
+            using var gzip = new GZipStream(input, CompressionMode.Decompress);
+            payload = JsonSerializer.Deserialize<CampaignSave>(gzip, JsonOptions);
+        }
+        catch (Exception exception)
+        {
+            return new SaveLoadResult(null, metadata, $"Could not read save: {exception.Message}");
+        }
+        if (payload is null || payload.FormatVersion > FormatVersion)
+            return new SaveLoadResult(null, metadata, "This save was created by a newer, unsupported format.");
+        if (payload.FormatVersion < FormatVersion)
+            return new SaveLoadResult(null, metadata,
+                "This save predates the current map topology and cannot be restored safely.");
+        if (!string.Equals(payload.MapDataVersion, MapDataVersion, StringComparison.Ordinal))
+            return new SaveLoadResult(null, metadata,
+                $"This save uses map data '{payload.MapDataVersion}', but the active map is '{MapDataVersion}'.");
+        if (payload.ProvinceCount <= 0 ||
+            payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
+            payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)
+            return new SaveLoadResult(null, metadata,
+                "The save contains an incomplete province-control snapshot.");
+
+        try
+        {
+            var campaign = payload.Restore();
+            var warning = string.Equals(payload.ModFingerprint ?? "", activeModFingerprint ?? "", StringComparison.Ordinal)
+                ? ""
+                : "Loaded with a different mod set; unknown content may use base definitions.";
+            return new SaveLoadResult(campaign, metadata, warning);
+        }
+        catch (Exception exception)
+        {
+            return new SaveLoadResult(null, metadata, $"Save migration failed: {exception.Message}");
+        }
+    }
+
+    public static IReadOnlyList<SaveMetadata> List(string root)
+    {
+        if (!Directory.Exists(root)) return Array.Empty<SaveMetadata>();
+        return Directory.EnumerateFiles(root, "*.meta.json", SearchOption.TopDirectoryOnly)
+            .Select(path =>
+            {
+                try { return JsonSerializer.Deserialize<SaveMetadata>(File.ReadAllText(path), MetadataOptions); }
+                catch { return null; }
+            })
+            .Where(item => item is not null)
+            .OrderByDescending(item => item.SavedUtc)
+            .ToArray();
+    }
+
+    public static bool Delete(string root, string slot)
+    {
+        slot = SafeSlot(slot);
+        var removed = false;
+        foreach (var path in new[] { DataPath(root, slot), MetaPath(root, slot) })
+            if (File.Exists(path)) { File.Delete(path); removed = true; }
+        return removed;
+    }
+
+    private static SaveMetadata ReadMetadata(string root, string slot)
+    {
+        var path = MetaPath(root, slot);
+        if (!File.Exists(path)) return null;
+        try { return JsonSerializer.Deserialize<SaveMetadata>(File.ReadAllText(path), MetadataOptions); }
+        catch { return null; }
+    }
+
+    private static void AtomicWrite(string target, byte[] data)
+    {
+        var temporary = target + ".tmp";
+        File.WriteAllBytes(temporary, data);
+        File.Move(temporary, target, true);
+    }
+
+    private static string SafeSlot(string slot)
+    {
+        var safe = new string((slot ?? "").Where(character => char.IsLetterOrDigit(character) || character is '_' or '-').ToArray());
+        if (string.IsNullOrWhiteSpace(safe)) throw new ArgumentException("Save slot has no valid characters.", nameof(slot));
+        return safe.ToLowerInvariant();
+    }
+
+    private static string DataPath(string root, string slot) => Path.Combine(root, slot + ".bdfsave");
+    private static string MetaPath(string root, string slot) => Path.Combine(root, slot + ".meta.json");
+    private static string SlotTitle(string slot) => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(slot.Replace('_', ' '));
+
+    private sealed class CampaignSave
+    {
+        public int FormatVersion = SaveSystem.FormatVersion;
+        public string GameVersion = SaveSystem.GameVersion;
+        public string MapDataVersion = SaveSystem.MapDataVersion;
+        public string ModFingerprint = "";
+        public int ProvinceCount;
+        public int Seed;
+        public GameDate Date;
+        public int ElapsedDays;
+        public bool IsPaused;
+        public uint RandomState;
+        public int PlayerId;
+        public int ActiveSeat;
+        public int NextBattleId;
+        public int MapRevision;
+        public bool InitialDeploymentCompleted;
+        public List<int> HumanSeats = new();
+        public List<Nation> Nations = new();
+        public List<ScenarioState> States = new();
+        public List<Army> Armies = new();
+        public List<ArmyGroup> ArmyGroups = new();
+        public List<Fleet> Fleets = new();
+        public List<StrategicWar> Wars = new();
+        public List<LandBattle> Battles = new();
+        public List<ConstructionProject> Construction = new();
+        public List<PendingCampaignEvent> PendingEvents = new();
+        public Dictionary<long, DiplomaticRelation> Relations = new();
+        public Dictionary<int, List<NationHistorySample>> History = new();
+        public ushort[] ProvinceController = Array.Empty<ushort>();
+        public float[] ProvinceOccupation = Array.Empty<float>();
+
+        public static CampaignSave Capture(Campaign campaign, string modFingerprint) => new()
+        {
+            ModFingerprint = modFingerprint ?? "",
+            ProvinceCount = campaign.ProvinceMap?.ProvinceCount ??
+                Math.Max(0, (campaign.ProvinceController?.Length ?? 1) - 1),
+            Seed = campaign.Seed,
+            Date = campaign.Date,
+            ElapsedDays = campaign.ElapsedDays,
+            IsPaused = campaign.IsPaused,
+            RandomState = campaign.Random.State,
+            PlayerId = campaign.Player?.Id ?? 0,
+            ActiveSeat = campaign.ActiveSeat,
+            NextBattleId = campaign.NextBattleId,
+            MapRevision = campaign.MapRevision,
+            InitialDeploymentCompleted = campaign.InitialDeploymentCompleted,
+            HumanSeats = new List<int>(campaign.HumanSeats),
+            Nations = new List<Nation>(campaign.Nations),
+            States = new List<ScenarioState>(campaign.States),
+            Armies = new List<Army>(campaign.Armies),
+            ArmyGroups = new List<ArmyGroup>(campaign.ArmyGroups),
+            Fleets = new List<Fleet>(campaign.Fleets),
+            Wars = new List<StrategicWar>(campaign.Wars),
+            Battles = new List<LandBattle>(campaign.Battles),
+            Construction = new List<ConstructionProject>(campaign.Construction),
+            PendingEvents = new List<PendingCampaignEvent>(campaign.PendingEvents),
+            Relations = new Dictionary<long, DiplomaticRelation>(campaign.Relations),
+            History = campaign.History.Export(),
+            ProvinceController = campaign.ProvinceController is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceController.Clone(),
+            ProvinceOccupation = campaign.ProvinceOccupation is null ? Array.Empty<float>() : (float[])campaign.ProvinceOccupation.Clone()
+        };
+
+        public Campaign Restore()
+        {
+            var campaign = Campaign.CreateBootstrap(Seed);
+            Replace(campaign.Nations, Nations);
+            Replace(campaign.States, States);
+            Replace(campaign.Armies, Armies);
+            Replace(campaign.ArmyGroups, ArmyGroups);
+            Replace(campaign.Fleets, Fleets);
+            Replace(campaign.Wars, Wars);
+            Replace(campaign.Battles, Battles);
+            Replace(campaign.Construction, Construction);
+            Replace(campaign.PendingEvents, PendingEvents);
+            campaign.Relations.Clear();
+            foreach (var entry in Relations) campaign.Relations[entry.Key] = entry.Value;
+            campaign.History.Restore(History);
+            campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
+                HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
+                ProvinceController, ProvinceOccupation);
+
+            // The state list was just replaced wholesale, so the ownership index built
+            // against the bootstrap campaign no longer describes it.
+            campaign.InvalidateStateIndex();
+
+            // A save written before output became emergent carries no calibration factor.
+            // Recalibrating against the GDP the save already holds is exactly right for
+            // both cases: an old save keeps the economy it was played with, and a current
+            // save re-derives the same factor it was saved with.
+            if (campaign.Nations.Any(nation => nation.OutputScale <= 0f))
+                EconomySystem.CalibrateOutput(campaign);
+
+            return campaign;
+        }
+
+        private static void Replace<T>(List<T> target, List<T> source)
+        {
+            target.Clear();
+            if (source is not null) target.AddRange(source);
+        }
+    }
+}

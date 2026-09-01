@@ -1,0 +1,29 @@
+{
+  "line_infantry": {
+    "name": "Line infantry",
+    "counter_symbol": "infantry",
+    "attack": 0.95,
+    "defense": 1.10,
+    "speed": 1.00,
+    "combat_width": 1.80,
+    "supply_use": 0.95
+  },
+  "motorized_corps": {
+    "name": "Motorized corps",
+    "counter_symbol": "motorized",
+    "attack": 1.08,
+    "defense": 0.96,
+    "speed": 1.28,
+    "combat_width": 2.00,
+    "supply_use": 1.18
+  },
+  "armored_corps": {
+    "name": "Armored corps",
+    "counter_symbol": "armor",
+    "attack": 1.32,
+    "defense": 1.12,
+    "speed": 1.12,
+    "combat_width": 2.80,
+    "supply_use": 1.55
+  }
+}

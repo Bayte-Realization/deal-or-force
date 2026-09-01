@@ -1,0 +1,8 @@
+{
+  "language.name": "English",
+
+  "_comment": "The base game is written in English, so this table only names the language and holds keys that are not literal UI source strings. Any caption the code passes to Title() or ActionButton() is looked up by its own English text: an untranslated string simply renders as itself. A translation mod drops localization/<language>.json into its own folder and maps those same English strings.",
+
+  "loc.missing_report": "{0} untranslated string(s) in {1}",
+  "loc.language_cycled": "Interface language: {0}"
+}

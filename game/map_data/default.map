@@ -1,0 +1,6 @@
+# Authoritative global data maps. Paths are relative to this directory.
+provinces = "provinces.png"
+definition = "definition.csv"
+rivers = "rivers.png"
+lakes = "lakes.png"
+wrap_x = yes

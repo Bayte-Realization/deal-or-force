@@ -1,0 +1,13 @@
+{
+  "Food": {
+    "name": "Staple food",
+    "icon": "●",
+    "base_price": 0.012,
+    "essential_weight": 1.0,
+    "description": "Basic household food supply."
+  },
+  "IndustrialMaterials": {
+    "base_price": 0.040,
+    "essential_weight": 0.65
+  }
+}

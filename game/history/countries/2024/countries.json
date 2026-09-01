@@ -1,0 +1,36 @@
+{
+  "KOR": {
+    "tax_rate": 0.20,
+    "military_spending": 0.06,
+    "trade_policy": "OpenMarkets",
+    "literacy": 0.98,
+    "standard_of_living": 0.76,
+    "stability": 0.72,
+    "war_support": 0.63
+  },
+  "PRK": {
+    "tax_rate": 0.34,
+    "military_spending": 0.23,
+    "trade_policy": "StrategicAutarky",
+    "literacy": 0.91,
+    "standard_of_living": 0.31,
+    "stability": 0.78,
+    "war_support": 0.82
+  },
+  "RUS": { "trade_policy": "StrategicAutarky", "military_spending": 0.18, "war_support": 0.74 },
+  "UKR": { "trade_policy": "OpenMarkets", "military_spending": 0.27, "war_support": 0.88 },
+  "CHN": { "trade_policy": "BalancedTrade", "military_spending": 0.10 },
+  "USA": { "trade_policy": "OpenMarkets", "military_spending": 0.12 },
+  "PMR": {
+    "treasury": 0.12,
+    "gdp": 1.10,
+    "population": 367776,
+    "tax_rate": 0.27,
+    "military_spending": 0.17,
+    "trade_policy": "StrategicAutarky",
+    "literacy": 0.94,
+    "standard_of_living": 0.42,
+    "stability": 0.66,
+    "war_support": 0.71
+  }
+}

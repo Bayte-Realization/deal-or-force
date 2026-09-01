@@ -1,0 +1,198 @@
+using System.Collections.Generic;
+
+namespace Globality;
+
+/// <summary>
+/// The bundled map of Earth, generated from Natural Earth 1:10m admin-0 and admin-1
+/// boundaries (public domain, naturalearthdata.com) by tools/build_earth_data.py.
+///
+/// The grid is equirectangular at an eighth of a degree: row 0 is the north pole,
+/// column 0 is 180 degrees west. Three layers ride on it - who controls a cell, which
+/// administrative state it belongs to, and whether it is disputed.
+/// </summary>
+public static partial class EarthData
+{
+	public const int Width = 5760;
+	public const int Height = 2880;
+
+	public const float CellDegrees = 360f / Width;
+	public static int CellCount => Width * Height;
+
+	// Baked map data is compiled-in constants, not game state, so it must never be
+	// carried across a hot reload - doing so silently runs new code against old data.
+	[SkipHotload] static ushort[] _control;
+	[SkipHotload] static ushort[] _states;
+
+	/// <summary>Country index in de facto control of each cell. Zero is ocean.</summary>
+	public static ushort[] Control => Valid( _control ) ? _control : _control = Unpack( PackedControl );
+
+	/// <summary>Administrative state index of each cell. Zero is none.</summary>
+	public static ushort[] States => Valid( _states ) ? _states : _states = Unpack( PackedStates );
+
+	/// <summary>
+	/// Dispute index of each cell, or zero where nobody contests it. Held sparsely: a
+	/// few thousand cells are contested out of sixteen million, and a full grid spent
+	/// thirty three megabytes to store almost entirely zeroes.
+	/// </summary>
+	public static ushort DisputeAt( int cell )
+		=> DisputeCells.TryGetValue( cell, out var index ) ? index : (ushort)0;
+
+	[SkipHotload]
+	static Dictionary<int, ushort> _disputeCells;
+
+	static Dictionary<int, ushort> DisputeCells
+	{
+		get
+		{
+			// Rebuilt when the cached table was decoded at a different resolution.
+			if ( _disputeCells is not null && _disputeCells.Count > 0 ) return _disputeCells;
+
+			var grid = UnpackSparse( PackedDisputes );
+			var found = new Dictionary<int, ushort>();
+
+			for ( int cell = 0; cell < grid.Length; cell++ )
+			{
+				if ( grid[cell] != 0 ) found[cell] = grid[cell];
+			}
+
+			// The dense grid was only ever scaffolding; it is dropped here.
+			return _disputeCells = found;
+		}
+	}
+
+	/// <summary>
+	/// Statics survive a hot reload, so a cached grid can outlive the resolution it was
+	/// decoded at. Checking the length rather than just null catches that.
+	/// </summary>
+	static bool Valid( ushort[] grid ) => grid is not null && grid.Length == Width * Height;
+
+	// ------------------------------------------------------------------ decoding
+
+	/// <summary>Run-length stream of varint value then varint length. Fixed to the world
+	/// grid's own cell count.</summary>
+	static ushort[] Unpack( string packed ) => Unpack( packed, Width * Height );
+
+	/// <summary>As above, but for a grid <see cref="Pack"/> wrote at some other length -
+	/// a baked scenario's per-cell arrays are sized to province/state counts, not to the
+	/// fixed Earth grid, so the decoder needs to be told how many entries to expect.</summary>
+	public static ushort[] Unpack( string packed, int length )
+	{
+		var bytes = System.Convert.FromBase64String( packed );
+		var grid = new ushort[length];
+
+		var read = 0;
+		var write = 0;
+
+		while ( read < bytes.Length && write < grid.Length )
+		{
+			var value = (ushort)ReadVarint( bytes, ref read );
+			var count = ReadVarint( bytes, ref read );
+
+			for ( int i = 0; i < count && write < grid.Length; i++ ) grid[write++] = value;
+		}
+
+		return grid;
+	}
+
+	/// <summary>Sparse stream of varint gap, varint length, varint value.</summary>
+	static ushort[] UnpackSparse( string packed )
+	{
+		var bytes = System.Convert.FromBase64String( packed );
+		var grid = new ushort[Width * Height];
+
+		var read = 0;
+		var cursor = 0;
+
+		while ( read < bytes.Length )
+		{
+			cursor += ReadVarint( bytes, ref read );
+
+			var length = ReadVarint( bytes, ref read );
+			var value = (ushort)ReadVarint( bytes, ref read );
+
+			for ( int i = 0; i < length && cursor < grid.Length; i++ ) grid[cursor++] = value;
+		}
+
+		return grid;
+	}
+
+	static int ReadVarint( byte[] bytes, ref int read )
+	{
+		var value = 0;
+		var shift = 0;
+
+		while ( read < bytes.Length )
+		{
+			var bits = bytes[read++];
+			value |= (bits & 0x7F) << shift;
+
+			if ( (bits & 0x80) == 0 ) break;
+			shift += 7;
+		}
+
+		return value;
+	}
+
+	// ------------------------------------------------------------------ encoding
+	//
+	// The write side of Unpack's run-length varint stream - this game only ever decoded
+	// its own bundled data before now, baked offline by tools/build_earth_data.py. A
+	// baked scenario needs to write a grid this same shape at runtime (see
+	// Code/Sim/Scenario.cs), so the encoder belongs next to the format it has to match
+	// exactly, not reimplemented wherever the next thing that needs to bake a grid is.
+
+	/// <summary>Run-length varint stream of (value, length) pairs, base64-encoded -
+	/// the exact format <see cref="Unpack"/> reads back.</summary>
+	public static string Pack( ushort[] grid )
+	{
+		var bytes = new List<byte>( grid.Length / 8 + 16 );
+
+		var i = 0;
+
+		while ( i < grid.Length )
+		{
+			var value = grid[i];
+			var start = i;
+
+			while ( i < grid.Length && grid[i] == value ) i++;
+
+			WriteVarint( bytes, value );
+			WriteVarint( bytes, i - start );
+		}
+
+		return System.Convert.ToBase64String( bytes.ToArray() );
+	}
+
+	static void WriteVarint( List<byte> bytes, int value )
+	{
+		// Values here are cell counts and dense indices - never negative - so the sign
+		// bit Unpack's shift-based reader never has to account for is never an issue.
+		while ( true )
+		{
+			var bits = (byte)(value & 0x7F);
+			value >>= 7;
+
+			if ( value == 0 ) { bytes.Add( bits ); return; }
+
+			bytes.Add( (byte)(bits | 0x80) );
+		}
+	}
+
+	// ------------------------------------------------------------------ geometry
+
+	public static int CellIndex( int column, int row )
+	{
+		var c = ((column % Width) + Width) % Width;
+		var r = row < 0 ? 0 : (row >= Height ? Height - 1 : row);
+		return r * Width + c;
+	}
+
+	public static int ColumnOf( int cell ) => cell % Width;
+	public static int RowOf( int cell ) => cell / Width;
+
+	/// <summary>Latitude of a cell centre, +90 at the north pole.</summary>
+	public static float LatitudeOf( int row ) => 90f - (row + 0.5f) * 180f / Height;
+
+	/// <summary>Longitude of a cell centre, -180 at the left edge.</summary>
+	public static float LongitudeOf( int column ) => -180f + (column + 0.5f) * 360f / Width;
+}

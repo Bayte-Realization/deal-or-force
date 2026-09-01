@@ -1,0 +1,6 @@
+# Remove lines for layers this mod does not replace.
+provinces = "provinces.png"
+definition = "definition.csv"
+rivers = "rivers.png"
+lakes = "lakes.png"
+wrap_x = yes

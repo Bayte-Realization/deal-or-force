@@ -1,0 +1,46 @@
+{
+  "profiles": {
+    "default": {
+      "spearhead_share": 0.12,
+      "advance_share_attacker": 0.58,
+      "advance_share_defender": 0.34,
+      "defend_share": 0.26,
+      "offensive_stance": "Balanced",
+      "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.18
+    },
+    "major_offensive": {
+      "spearhead_share": 0.20,
+      "advance_share_attacker": 0.72,
+      "advance_share_defender": 0.46,
+      "defend_share": 0.18,
+      "offensive_stance": "Aggressive",
+      "defensive_stance": "Balanced",
+      "execute_planning_threshold": 0.28
+    },
+    "defensive": {
+      "spearhead_share": 0.06,
+      "advance_share_attacker": 0.38,
+      "advance_share_defender": 0.18,
+      "defend_share": 0.44,
+      "offensive_stance": "Balanced",
+      "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.42
+    },
+    "minor_power": {
+      "spearhead_share": 0.10,
+      "advance_share_attacker": 0.52,
+      "advance_share_defender": 0.28,
+      "defend_share": 0.30,
+      "offensive_stance": "Balanced",
+      "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.24
+    }
+  },
+  "country_profiles": {
+    "RUS": "major_offensive",
+    "USA": "major_offensive",
+    "CHN": "major_offensive",
+    "PRK": "defensive"
+  }
+}

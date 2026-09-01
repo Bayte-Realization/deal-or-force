@@ -1,0 +1,258 @@
+{
+  "industrial_bottlenecks": {
+    "title": "Industrial bottlenecks",
+    "description": "Manufacturers report that ageing plant and congested logistics are holding back output. The cabinet requests a clear priority.",
+    "weight": 1.0,
+    "options": [
+      {
+        "title": "Launch a modernisation programme",
+        "consequence": "Costs treasury; raises GDP, productivity and construction capacity.",
+        "effects": {
+          "treasury_percent": -0.06,
+          "gdp_percent": 0.0035,
+          "productivity": 0.008,
+          "construction_capacity": 0.18
+        },
+        "modifiers": [
+          "industrial_renewal"
+        ]
+      },
+      {
+        "title": "Industry must adapt privately",
+        "consequence": "Preserves cash; modest stability loss.",
+        "effects": {
+          "stability": -0.012
+        }
+      }
+    ]
+  },
+  "housing_pressure": {
+    "title": "Housing pressure in growing cities",
+    "description": "Rapid urbanisation is raising rents and worsening living conditions in the largest regional centres.",
+    "trigger": {
+      "min_state.urbanization": 0.35
+    },
+    "options": [
+      {
+        "title": "Fund public housing",
+        "consequence": "Costs treasury; improves living standards and reduces radicalism.",
+        "effects": {
+          "treasury_percent": -0.04,
+          "standard_of_living": 0.012,
+          "state.standard_of_living": 0.01,
+          "state.radicalism": -0.018
+        }
+      },
+      {
+        "title": "Ease planning rules",
+        "consequence": "Cheaper and pro-growth, but less socially stabilising.",
+        "effects": {
+          "gdp_percent": 0.0015,
+          "construction_capacity": 0.08
+        }
+      }
+    ]
+  },
+  "labour_dispute": {
+    "title": "National labour dispute",
+    "description": "A wage dispute is spreading across transport and heavy industry. Production is beginning to slow.",
+    "options": [
+      {
+        "title": "Broker a national settlement",
+        "consequence": "Costs treasury; restores stability and living standards.",
+        "effects": {
+          "treasury_percent": -0.03,
+          "stability": 0.018,
+          "standard_of_living": 0.006
+        }
+      },
+      {
+        "title": "Order workers back",
+        "consequence": "Preserves cash and output, but raises radicalism.",
+        "effects": {
+          "stability": -0.02,
+          "state.radicalism": 0.025
+        }
+      }
+    ]
+  },
+  "war_weariness": {
+    "title": "The war is being felt at home",
+    "description": "Casualty lists have reached the regional papers, and the queues outside recruitment offices are shorter every week.",
+    "trigger": {
+      "at_war": true,
+      "max_war_support": 0.75
+    },
+    "weight": 1.6,
+    "options": [
+      {
+        "title": "Address the nation honestly",
+        "consequence": "Costs nothing but candour; steadies support without hiding the cost.",
+        "effects": {
+          "war_support": 0.05,
+          "stability": 0.008,
+          "state.radicalism": 0.004
+        }
+      },
+      {
+        "title": "Raise separation allowances for families",
+        "consequence": "Expensive, but buys real patience.",
+        "effects": {
+          "treasury_percent": -0.05,
+          "war_support": 0.09,
+          "state.radicalism": -0.01
+        },
+        "modifiers": [
+          {
+            "id": "war_economy",
+            "days": 270
+          }
+        ]
+      },
+      {
+        "title": "Tighten reporting from the front",
+        "consequence": "Cheap and quick; corrosive if the war drags on.",
+        "effects": {
+          "war_support": 0.06,
+          "stability": -0.015,
+          "state.radicalism": 0.012
+        }
+      }
+    ]
+  },
+  "budget_crisis": {
+    "title": "The treasury is running dry",
+    "description": "The finance ministry reports that current commitments cannot be met past the next quarter without a decision.",
+    "trigger": {
+      "max_treasury": 5.0
+    },
+    "weight": 2.0,
+    "options": [
+      {
+        "title": "Raise taxes",
+        "consequence": "Restores the budget; unpopular and mildly deflationary.",
+        "effects": {
+          "tax_rate": 0.03,
+          "stability": -0.02,
+          "state.radicalism": 0.015
+        }
+      },
+      {
+        "title": "Cut the military budget",
+        "consequence": "Frees money immediately at the cost of readiness.",
+        "effects": {
+          "military_spending": -0.015,
+          "war_support": -0.03
+        }
+      },
+      {
+        "title": "Cut welfare and education",
+        "consequence": "Balances the books; the social cost lands on the regions.",
+        "effects": {
+          "welfare_spending": -0.012,
+          "education_spending": -0.01,
+          "state.radicalism": 0.02,
+          "state.standard_of_living": -0.01
+        },
+        "modifiers": [
+          "austerity"
+        ]
+      }
+    ]
+  },
+  "national_holiday": {
+    "title": "A day for celebration",
+    "description": "The whole country seems to have taken the day off at once - stalls in every square, music down every street, strangers embracing strangers. It happens like this every so often, and nobody ever quite plans it.",
+    "weight": 1.4,
+    "options": [
+      {
+        "title": "Open the public purse",
+        "consequence": "A modest cost; the mood is worth it.",
+        "effects": {
+          "treasury_percent": -0.01,
+          "standard_of_living": 0.008,
+          "state.radicalism": -0.014
+        }
+      },
+      {
+        "title": "Let the streets have their day",
+        "consequence": "Costs nothing at all.",
+        "effects": {
+          "state.radicalism": -0.006
+        }
+      }
+    ]
+  },
+  "sporting_triumph": {
+    "title": "A nation watching one screen",
+    "description": "For ninety minutes nobody in the country was arguing about anything else. The team has won, and for tonight at least, that is the only news that matters.",
+    "options": [
+      {
+        "title": "Throw them a parade",
+        "consequence": "A small cost; a real lift in the national mood.",
+        "effects": {
+          "treasury_percent": -0.012,
+          "stability": 0.01,
+          "state.radicalism": -0.02
+        }
+      },
+      {
+        "title": "Let the win speak for itself",
+        "consequence": "Free, and almost as good.",
+        "effects": {
+          "stability": 0.004
+        }
+      }
+    ]
+  },
+  "cultural_export": {
+    "title": "Everyone is watching us",
+    "description": "A film made here, on a budget nobody expected to travel, is filling cinemas on three continents. Diplomats report it is, unexpectedly, easier to get a meeting this month.",
+    "options": [
+      {
+        "title": "Back the industry that made it",
+        "consequence": "Costs treasury; lasting productivity and prestige.",
+        "effects": {
+          "treasury_percent": -0.018,
+          "productivity": 0.004,
+          "literacy": 0.002
+        },
+        "modifiers": [
+          "cultural_moment"
+        ]
+      },
+      {
+        "title": "Let the moment be its own reward",
+        "consequence": "No cost; a brief lift.",
+        "effects": {
+          "stability": 0.004
+        }
+      }
+    ]
+  },
+  "scientific_prize": {
+    "title": "A prize comes home",
+    "description": "A researcher who has spent a career in an underfunded university department has just won the field's highest honour. The interview requests have not stopped since.",
+    "trigger": {
+      "min_literacy": 0.55
+    },
+    "options": [
+      {
+        "title": "Fund the department properly at last",
+        "consequence": "Costs treasury; literacy and productivity rise.",
+        "effects": {
+          "treasury_percent": -0.02,
+          "literacy": 0.004,
+          "productivity": 0.006
+        }
+      },
+      {
+        "title": "A medal and a photograph",
+        "consequence": "Free; a small national lift.",
+        "effects": {
+          "stability": 0.006
+        }
+      }
+    ]
+  }
+}

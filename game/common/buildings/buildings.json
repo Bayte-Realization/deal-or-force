@@ -1,0 +1,74 @@
+{
+  "Agriculture": {
+    "name": "Agricultural complex",
+    "cost": 0.45,
+    "days": 120,
+    "gdp_gain": 0.22,
+    "capacity_gain": 0.05,
+    "description": "Food output and rural employment."
+  },
+  "CivilianIndustry": {
+    "name": "Civilian industry",
+    "cost": 2.40,
+    "days": 240,
+    "gdp_gain": 1.65,
+    "capacity_gain": 0.25,
+    "description": "Manufacturing output, tax base and construction capacity."
+  },
+  "Infrastructure": {
+    "name": "Infrastructure",
+    "cost": 1.35,
+    "days": 180,
+    "gdp_gain": 0.45,
+    "capacity_gain": 0.45,
+    "description": "Movement, market access and supply throughput."
+  },
+  "University": {
+    "name": "University",
+    "cost": 1.80,
+    "days": 300,
+    "gdp_gain": 0.30,
+    "capacity_gain": 0.05,
+    "description": "Literacy and long-term productivity."
+  },
+  "Hospital": {
+    "name": "Hospital",
+    "cost": 1.55,
+    "days": 260,
+    "gdp_gain": 0.18,
+    "capacity_gain": 0.05,
+    "description": "Population growth and standard of living."
+  },
+  "Barracks": {
+    "name": "Barracks",
+    "cost": 1.10,
+    "days": 150,
+    "gdp_gain": 0.12,
+    "capacity_gain": 0.05,
+    "description": "Military readiness and reinforcement capacity."
+  },
+  "ExtractionIndustry": {
+    "name": "Extraction industry",
+    "cost": 1.65,
+    "days": 210,
+    "gdp_gain": 0.85,
+    "capacity_gain": 0.12,
+    "description": "Mines, wells and processing sites that exploit regional deposits."
+  },
+  "PowerPlant": {
+    "name": "Power plant",
+    "cost": 2.05,
+    "days": 230,
+    "gdp_gain": 1.10,
+    "capacity_gain": 0.16,
+    "description": "Reliable energy for households, mines and manufacturing."
+  },
+  "ArmsIndustry": {
+    "name": "Arms industry",
+    "cost": 2.85,
+    "days": 280,
+    "gdp_gain": 1.45,
+    "capacity_gain": 0.10,
+    "description": "Dedicated weapons and ammunition production for field forces."
+  }
+}

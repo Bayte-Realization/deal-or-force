@@ -1,0 +1,27 @@
+# --- Godot ---
+.godot/
+/android/
+export_presets.cfg
+
+# --- .NET build output ---
+bin/
+obj/
+*.user
+*.swp
+
+# --- Editor / AI tooling (local dev tools, not part of the game) ---
+# addons/ holds third-party editor plugins (~1.6 GB) that are installed
+# per-machine, not shipped with the project. See README -> "Установка".
+addons/
+.fennara/
+.vs/
+.vscode/
+.idea/
+
+# --- Third-party demo content shipped with an addon, unused by the game ---
+demo/
+
+# --- OS noise ---
+.DS_Store
+Thumbs.db
+desktop.ini

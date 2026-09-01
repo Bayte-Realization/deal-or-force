@@ -1,0 +1,81 @@
+using System.Linq;
+using ByDealOrForce.Simulation;
+using Godot;
+
+namespace ByDealOrForce;
+
+public partial class GlobalityGame
+{
+    private Control _eventLayer = null!;
+    private Label _eventTitle = null!;
+    private Label _eventDescription = null!;
+    private Button _eventOptionA = null!;
+    private Button _eventOptionB = null!;
+    private PendingCampaignEvent _shownEvent;
+
+    private void BuildEventInterface()
+    {
+        _eventLayer = FullLayer("CampaignEvent");
+        _eventLayer.Visible = false;
+        _eventLayer.MouseFilter = MouseFilterEnum.Stop;
+        AddChild(_eventLayer);
+        var veil = new ColorRect { Color = new Color(0.01f, 0.02f, 0.04f, 0.66f), MouseFilter = MouseFilterEnum.Stop };
+        veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _eventLayer.AddChild(veil);
+        var panel = TexturedPanel(_eventLayer);
+        panel.AnchorLeft = panel.AnchorRight = 0.5f;
+        panel.AnchorTop = panel.AnchorBottom = 0.5f;
+        panel.OffsetLeft = -310; panel.OffsetRight = 310;
+        panel.OffsetTop = -225; panel.OffsetBottom = 225;
+        var rows = PanelRows(panel, 34, 30, 14);
+        rows.AddChild(Title("EVENT", 12, new Color("#8e9daf")));
+        _eventTitle = Title("", 28, new Color("#e7c966"));
+        rows.AddChild(_eventTitle);
+        _eventDescription = Title("", 16, new Color("#dce5ef"));
+        _eventDescription.SizeFlagsVertical = SizeFlags.ExpandFill;
+        rows.AddChild(_eventDescription);
+        _eventOptionA = ActionButton("", () => ResolveShownEvent(0), 520, 54, true);
+        _eventOptionB = ActionButton("", () => ResolveShownEvent(1), 520, 54);
+        rows.AddChild(_eventOptionA);
+        rows.AddChild(_eventOptionB);
+    }
+
+    private void RefreshEventInterface()
+    {
+        if (_campaign?.Player is null || !_hudLayer.Visible) return;
+        var pending = _campaign.PendingEvents.FirstOrDefault(item => item.NationId == _campaign.Player.Id);
+        if (pending is null)
+        {
+            _eventLayer.Visible = false;
+            _shownEvent = null;
+            return;
+        }
+        if (_shownEvent == pending && _eventLayer.Visible) return;
+        var newlyShown = _shownEvent != pending;
+        _shownEvent = pending;
+        _campaign.IsPaused = true;
+        _pause.Text = "▶";
+        _eventTitle.Text = pending.Title;
+        _eventDescription.Text = pending.Description;
+        _eventOptionA.Text = pending.Options[0].Title;
+        _eventOptionA.TooltipText = pending.Options[0].Consequence;
+        _eventOptionB.Text = pending.Options[1].Title;
+        _eventOptionB.TooltipText = pending.Options[1].Consequence;
+        _eventLayer.Visible = true;
+        _eventLayer.MoveToFront();
+        if (newlyShown) PlayStrategicCue("event_alert");
+    }
+
+    private void ResolveShownEvent(int option)
+    {
+        if (_shownEvent is null) return;
+        _campaign.Commands.Enqueue(new ResolveCampaignEventCommand
+        {
+            IssuerId = _campaign.Player.Id, EventId = _shownEvent.Id, OptionIndex = option
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        _eventLayer.Visible = false;
+        _shownEvent = null;
+        Refresh();
+    }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "example_csharp_mod",
+  "name": "Example: compiled C# mod",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 200,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": "csharp/bin/Debug/net8.0/ExampleCSharpMod.dll"
+}

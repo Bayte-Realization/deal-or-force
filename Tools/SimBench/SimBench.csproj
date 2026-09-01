@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Headless harness for the campaign simulation. The project's own performance contract
+    says "full campaign tick and pure systems must be runnable outside a Godot Node" -
+    this is that claim made executable: it compiles Scripts/Simulation and the legacy map
+    tables on their own, with no Godot reference at all. If someone ever imports Godot
+    into the simulation layer, this project stops compiling, which is the point.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <RootNamespace>ByDealOrForce.Tools</RootNamespace>
+    <AssemblyName>SimBench</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Scripts\Simulation\**\*.cs" />
+    <Compile Include="..\..\Scripts\LegacySourceMap\**\*.cs" />
+  </ItemGroup>
+
+</Project>
