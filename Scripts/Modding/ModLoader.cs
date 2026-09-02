@@ -95,6 +95,7 @@ public sealed class ModLoader
         MapRasterCatalog.ResetCatalog();
         Loc.ResetCatalog();
         InterfaceSkin.ResetCatalog();
+        ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
         DecisionCatalog.ResetCatalog();
@@ -115,6 +116,7 @@ public sealed class ModLoader
             ApplyLocalization(package);
             ApplySkin(package);
             ApplyCountries(package, campaign);
+            ApplyProvinceOwnership(package);
             ApplyHistory(package, campaign);
         }
     }
@@ -219,6 +221,17 @@ public sealed class ModLoader
     {
         try { InterfaceSkin.LoadDirectory(Path.Combine(package.PhysicalRoot, "interface"), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"interface: {exception.Message}"); }
+    }
+
+    /// <summary>
+    /// A mod's own political map. It lists only the provinces it moves, layered over the
+    /// base game's in load order, so redrawing one border is one line rather than a fork
+    /// of the whole world.
+    /// </summary>
+    private void ApplyProvinceOwnership(ModPackage package)
+    {
+        try { ProvinceOwnership.LoadDirectory(Path.Combine(package.PhysicalRoot, "history", "provinces"), package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"history/provinces: {exception.Message}"); }
     }
 
     private void ApplyHistory(ModPackage package, Campaign campaign)

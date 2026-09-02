@@ -36,7 +36,17 @@ for (var cell = 0; cell < SourceEarthData.Width * SourceEarthData.Height; cell++
 }
 if (sourceWetCells != rasterWetCells) throw new InvalidDataException("Hydrology PNG round trip changed its covered cells.");
 
+// The political map is data too, and the file a modder edits has to be the one the game
+// actually runs on rather than a hand-made approximation of it. It is written from the
+// same topology that was just compiled, so the two can never describe different worlds.
+campaign.AttachProvinceTopology(provinces);
+var history = Path.Combine(projectRoot, "game", "history", "provinces");
+Directory.CreateDirectory(history);
+var ownership = ProvinceOwnership.Export(campaign, provinces, out var ownedProvinces);
+File.WriteAllText(Path.Combine(history, "ownership.csv"), ownership);
+
 Console.WriteLine($"Wrote {provinces.ProvinceCount:N0} provinces ({provinces.EdgeCount:N0} edges) to {output}");
+Console.WriteLine($"Wrote the political map: {ownedProvinces:N0} owned provinces to {history}");
 Console.WriteLine($"Hydrology: {HydrologyCatalog.RiverFeatures.Count:N0} rivers, {HydrologyCatalog.LakeFeatures.Count:N0} lakes");
 Console.WriteLine($"PNG round trip: exact province IDs/adjacency, {rasterWetCells:N0} hydrology cells");
 foreach (var repair in repairs.Where(item => item.ConnectedComponents > 0))

@@ -222,6 +222,14 @@ public sealed class ProvinceTopology
     /// before it is baked to provinces.png. IDs, political/state borders and one seed
     /// pixel per province remain fixed; only internal tactical borders are relaxed.
     /// </summary>
+    /// <summary>
+    /// A copy that shares the expensive parts and owns its own political arrays. Used to
+    /// try a political override without touching the map the campaign is running on.
+    /// </summary>
+    public ProvinceTopology CloneForOverrides() =>
+        new(CellToProvince, (ushort[])ProvinceToState.Clone(), (ushort[])ProvinceToNation.Clone(),
+            ProvinceCenterCell, Neighbors, Width, Height);
+
     public ProvinceTopology RelaxShapes(ushort[] states, ushort[] control, int iterations = 3)
     {
         if (states.Length != CellToProvince.Length || control.Length != states.Length)

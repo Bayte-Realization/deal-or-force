@@ -81,6 +81,8 @@ public static class Program
         failures += Check("no nation ran to a nonsense GDP", GdpSane(campaign));
         failures += Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
+        if (mapped)
+            failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
         failures += Check("headline figures format the way a player reads them", FiguresReadWell());
 
         if (mapped)
@@ -879,6 +881,69 @@ public static class Program
             return $"'{taken.State.Name}' is full of foreign nationals and no angrier than before";
         return "";
     }
+
+    /// <summary>
+    /// The political map is data now, so two things have to be true of it: the file the
+    /// game ships must describe the world the game actually starts in, and a mod that
+    /// changes one line must move exactly that one province.
+    ///
+    /// The first matters because the file is generated from the compiled map: if the two
+    /// ever drift, a modder edits one world and plays another - which is the same failure
+    /// the shipped defines and the shipped skin have each already had once.
+    /// </summary>
+    private static string ThePoliticalMapIsData(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+        if (!ProvinceOwnership.HasData)
+            return "no political map was loaded; game/history/provinces is missing or empty";
+
+        var owned = 0;
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (topology.ProvinceToNation[province] != 0) owned++;
+        if (campaign.PoliticalOverridesApplied < owned)
+            return $"the shipped political map decides {campaign.PoliticalOverridesApplied:N0} provinces " +
+                   $"but {owned:N0} are owned; the file and the map have drifted apart";
+
+        // A mod's line has to win, and only over the province it names.
+        var subject = 1;
+        while (subject <= topology.ProvinceCount && topology.ProvinceToNation[subject] == 0) subject++;
+        if (subject > topology.ProvinceCount) return "no owned province to test an override against";
+
+        var before = topology.ProvinceToNation[subject];
+        var neighbourOwner = topology.ProvinceToNation[subject + 1 <= topology.ProvinceCount ? subject + 1 : subject];
+        var taker = campaign.Nations.FirstOrDefault(nation =>
+            nation.MapIndex != before && nation.Population > 0);
+        if (taker is null) return "no nation to hand the province to";
+
+        var errors = new List<string>();
+        ProvinceOwnership.Merge($"{subject};{taker.Tag}", "bench", errors);
+        if (errors.Count > 0) return $"a one-line political override was rejected: {errors[0]}";
+
+        var fresh = (ushort[])topology.ProvinceToNation.Clone();
+        var freshControllers = (ushort[])campaign.ProvinceController.Clone();
+        var scratch = ProvinceTopologyClone(topology);
+        ProvinceOwnership.Apply(campaign, scratch, freshControllers);
+
+        if (scratch.ProvinceToNation[subject] != (ushort)taker.MapIndex)
+            return $"the override did not move province {subject} to {taker.Tag}";
+        var collateral = 0;
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (province != subject && scratch.ProvinceToNation[province] != fresh[province]) collateral++;
+        if (collateral > 0)
+            return $"a one-province override also moved {collateral:N0} other province(s)";
+
+        // Put it back, so nothing downstream inherits a border the bench drew.
+        ProvinceOwnership.Merge($"{subject};{campaign.Nations.First(nation => nation.MapIndex == before).Tag}",
+            "bench", null);
+
+        Console.WriteLine($"  political map: {ProvinceOwnership.Count:N0} provinces are decided by " +
+                          $"game/history/provinces, and a one-line mod override moved exactly one of them.");
+        return "";
+    }
+
+    /// <summary>A throwaway copy, so the override test never touches the live map.</summary>
+    private static ProvinceTopology ProvinceTopologyClone(ProvinceTopology source) => source.CloneForOverrides();
 
     private static string GdpSane(Campaign campaign)
     {

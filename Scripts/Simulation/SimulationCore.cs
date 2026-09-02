@@ -204,6 +204,9 @@ public sealed partial class Campaign
     public int ActiveSeat { get; private set; }
     public bool IsHotseat => HumanSeats.Count > 1;
     public ProvinceTopology ProvinceMap { get; private set; }
+
+    /// <summary>How many provinces the political map file decided, rather than the raster.</summary>
+    public int PoliticalOverridesApplied { get; private set; }
     public ushort[] ProvinceController { get; private set; }
     public float[] ProvinceOccupation { get; private set; }
     public int MapRevision { get; private set; }
@@ -396,7 +399,12 @@ public sealed partial class Campaign
     public void AttachProvinceTopology(ProvinceTopology topology)
     {
         ProvinceMap = topology;
+
+        // The political map is data. The raster says where the provinces are; this says who
+        // owns them, and a mod that moves one border only has to name that one province.
         ProvinceController = (ushort[])topology.ProvinceToNation.Clone();
+        var politicalOverrides = ProvinceOwnership.Apply(this, topology, ProvinceController);
+        if (politicalOverrides > 0) PoliticalOverridesApplied = politicalOverrides;
         ProvinceOccupation = new float[topology.ProvinceCount + 1];
         var savedTopologyMatches = _pendingProvinceController is not null &&
             _pendingProvinceOccupation is not null &&

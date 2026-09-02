@@ -1,0 +1,16 @@
+# Redrawing a border is one line per province.
+#
+#   province;owner;controller
+#
+# The controller may be left out when the owner holds it. Provinces this file does not
+# mention keep the owner the base game gives them, so a mod that moves one border does
+# not have to restate the other thirty-seven thousand.
+#
+# Province ids come from game/map_data/definition.csv, and the full base-game map is in
+# game/history/provinces/ownership.csv - copy the lines you want from there.
+#
+# The two examples below are commented out because a template that silently annexed
+# something on first load would be a rude thing to ship.
+
+# 12345;FRA
+# 12346;FRA;DEU

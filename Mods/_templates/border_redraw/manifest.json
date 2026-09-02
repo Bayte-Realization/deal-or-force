@@ -1,0 +1,11 @@
+{
+  "id": "example_border_redraw",
+  "name": "Example: redraw a border",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 150,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}
