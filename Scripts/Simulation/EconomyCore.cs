@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 public enum SocialClass { Workers, Farmers, MiddleClass, Owners }
 public enum BuildingKind

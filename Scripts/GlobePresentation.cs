@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Godot;
 using SourceEarthData = Globality.EarthData;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
 public readonly record struct GlobePick(
     Simulation.Nation Nation,
@@ -114,9 +114,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         foreach (var repair in repairs)
         {
             if (repair.ChangedCells > 0)
-                GD.Print($"[globality] topology repair {repair.SubjectTag}->{repair.NeighborTag}: {repair.ChangedCells} cells");
+                GD.Print($"[dof] topology repair {repair.SubjectTag}->{repair.NeighborTag}: {repair.ChangedCells} cells");
             if (repair.ConnectedComponents > 0)
-                GD.Print($"[globality] topology region {repair.SubjectTag}: {repair.ConnectedComponents} connected component(s)");
+                GD.Print($"[dof] topology region {repair.SubjectTag}: {repair.ConnectedComponents} connected component(s)");
         }
 
         _colorByMapIndex.Clear();
@@ -280,7 +280,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             _mapFailureReported = true;
             var reason = _mapTask.Exception?.GetBaseException().Message ?? "unknown map-data error";
-            GD.PushError($"[globality] authored province map is required: {reason}");
+            GD.PushError($"[dof] authored province map is required: {reason}");
         }
         if (!_mapApplied && _pendingMapResult is not null) ApplyPoliticalMapStage();
     }
@@ -326,9 +326,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 break;
             default:
                 _provinceTopology = result.Provinces;
-                if (result.ProvinceRasterLoaded) GD.Print($"[globality] province data map loaded: {result.ProvinceSource}");
-                else GD.PushWarning($"[globality] province data map fallback: {result.ProvinceSource}");
-                GD.Print($"[globality] hydrology data source: {result.HydrologySource}");
+                if (result.ProvinceRasterLoaded) GD.Print($"[dof] province data map loaded: {result.ProvinceSource}");
+                else GD.PushWarning($"[dof] province data map fallback: {result.ProvinceSource}");
+                GD.Print($"[dof] hydrology data source: {result.HydrologySource}");
                 BindArmyTopology();
                 BuildArmyMarkers(_campaign);
                 BuildCountryLabels(result.LabelAnchors);
@@ -336,7 +336,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 RefreshProvinceControllers();
                 _pendingMapResult = null;
                 _mapApplied = true;
-                GD.Print($"[globality] tactical province topology ready: {_provinceTopology.ProvinceCount:N0} land provinces, " +
+                GD.Print($"[dof] tactical province topology ready: {_provinceTopology.ProvinceCount:N0} land provinces, " +
                          $"{_provinceTopology.RiverCrossingCount:N0} river crossings, " +
                          $"{Simulation.HydrologyCatalog.RiverFeatures.Count:N0} rivers and {Simulation.HydrologyCatalog.LakeFeatures.Count:N0} lakes");
                 break;
@@ -1193,9 +1193,9 @@ void fragment() {
             army.ProvinceId = _provinceTopology.CellToProvince[cell];
         }
         _campaign.AttachProvinceTopology(_provinceTopology);
-        GD.Print($"[globality] province graph ready: {_provinceTopology.ProvinceCount:N0} nodes, {_provinceTopology.EdgeCount:N0} edges");
+        GD.Print($"[dof] province graph ready: {_provinceTopology.ProvinceCount:N0} nodes, {_provinceTopology.EdgeCount:N0} edges");
         foreach (var war in _campaign.Wars)
-            GD.Print($"[globality] front {war.Name}: {war.AttackerFront.Count:N0}/{war.DefenderFront.Count:N0} provinces");
+            GD.Print($"[dof] front {war.Name}: {war.AttackerFront.Count:N0}/{war.DefenderFront.Count:N0} provinces");
     }
 
     private void RefreshProvinceControllers()

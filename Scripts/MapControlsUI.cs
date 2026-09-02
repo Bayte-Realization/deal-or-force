@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private readonly Dictionary<StrategicMapMode, Button> _mapModeButtons = new();
     private Button _projectionButton = null!;

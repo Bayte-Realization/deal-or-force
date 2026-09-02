@@ -1,4 +1,4 @@
-using ByDealOrForce.Modding;
+using DealOrForce.Modding;
 
 namespace ExampleCSharpMod;
 

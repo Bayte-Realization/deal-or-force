@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// Historical capital locations for the base 2024 scenario.  The lookup is deliberately
@@ -110,6 +110,9 @@ public static class CapitalCatalog
 		[ "IRQ" ] = new( "Baghdad", 33.3302f, 44.394f ),
 		[ "ISL" ] = new( "Reykjavik", 64.1353f, -21.8952f ),
 		[ "ITA" ] = new( "Rome", 41.8955f, 12.4823f ),
+		[ "VAT" ] = new( "Vatican City", 41.9029f, 12.4534f ),
+		[ "CYN" ] = new( "North Nicosia", 35.1856f, 33.3823f ),
+		[ "GIB" ] = new( "Gibraltar", 36.1408f, -5.3536f ),
 		[ "JAM" ] = new( "Kingston", 17.9927f, -76.792f ),
 		[ "JOR" ] = new( "Amman", 31.9497f, 35.9263f ),
 		[ "JPN" ] = new( "Tokyo", 35.67f, 139.77f ),

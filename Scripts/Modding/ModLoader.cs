@@ -7,10 +7,10 @@ using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce.Modding;
+namespace DealOrForce.Modding;
 
 public sealed class ModManifest
 {

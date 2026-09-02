@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// The scripted layer every piece of content writes its consequences in: events,

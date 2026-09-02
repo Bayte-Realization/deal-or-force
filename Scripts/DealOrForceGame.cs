@@ -1,14 +1,14 @@
 using System.Linq;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
 /// <summary>
 /// Godot presentation shell following the source GameHud/MainMenu information architecture.
 /// Campaign rules remain engine-neutral and all mutations pass through campaign commands.
 /// </summary>
-public partial class GlobalityGame : Control
+public partial class DealOrForceGame : Control
 {
     private Campaign _campaign;
     private GlobePresentation _globe = null!;
@@ -142,7 +142,7 @@ public partial class GlobalityGame : Control
 
         // Day-zero proof that the emergent economy still reproduces the scenario's
         // authored 2024 figures. If this ever drifts, the calibration broke, not the map.
-        GD.Print("[globality] " + Simulation.EconomySystem.LastCalibrationReport);
+        GD.Print("[dof] " + Simulation.EconomySystem.LastCalibrationReport);
         if (IsInstanceValid(_scenarioSummary))
             _scenarioSummary.Text = $"{_campaign.Nations.Count} nations · {_campaign.States.Count} states · deterministic campaign simulation";
         BindCampaignMods();
@@ -206,7 +206,7 @@ public partial class GlobalityGame : Control
         panel.OffsetBottom = 315;
 
         var rows = PanelRows(panel, 28, 24, 16);
-        rows.AddChild(Title("BY DEAL OR FORCE", 34, Ui.Colour("text.accent")));
+        rows.AddChild(Title("DEAL OR FORCE", 34, Ui.Colour("text.accent")));
         rows.AddChild(Title(
             "The world as it stands in 2024 — its borders, its people and its economy.",
             15,

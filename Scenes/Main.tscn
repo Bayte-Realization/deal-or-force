@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b4gdew4v1mi8q"]
 
-[ext_resource type="Script" uid="uid://mlrrju660bpg" path="res://Scripts/GlobalityGame.cs" id="1_game"]
+[ext_resource type="Script" uid="uid://mlrrju660bpg" path="res://Scripts/DealOrForceGame.cs" id="1_game"]
 
 [node name="Main" type="Control" unique_id=727056890]
 layout_mode = 3

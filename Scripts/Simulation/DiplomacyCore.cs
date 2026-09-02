@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 public enum DiplomaticStance
 {

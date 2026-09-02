@@ -1,11 +1,11 @@
 using System;
 using System.Linq;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private PanelContainer _outliner = null!;
     private VBoxContainer _outlinerRows = null!;

@@ -1,11 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private VBoxContainer _armyOrders = null!;
     private Army _selectedArmy;

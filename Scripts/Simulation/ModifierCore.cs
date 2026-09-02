@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// A named, usually temporary condition attached to a country - Hearts of Iron calls

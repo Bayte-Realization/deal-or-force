@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
 /// <summary>
 /// The Godot side of <see cref="InterfaceSkin"/>: turns a named token into a real

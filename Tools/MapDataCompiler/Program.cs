@@ -1,4 +1,4 @@
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using SourceEarthData = Globality.EarthData;
 
 var projectRoot = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));

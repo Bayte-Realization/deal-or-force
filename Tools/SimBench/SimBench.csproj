@@ -12,7 +12,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>disable</Nullable>
-    <RootNamespace>ByDealOrForce.Tools</RootNamespace>
+    <RootNamespace>DealOrForce.Tools</RootNamespace>
     <AssemblyName>SimBench</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>

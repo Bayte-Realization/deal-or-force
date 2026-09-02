@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// Engine-agnostic deterministic simulation foundation. This code intentionally depends

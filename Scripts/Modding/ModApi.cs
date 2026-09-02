@@ -1,10 +1,10 @@
 using System;
 using System.Globalization;
 using System.Reflection;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce.Modding;
+namespace DealOrForce.Modding;
 
 /// <summary>
 /// Narrow Godot-facing bridge used by GDScript mods. Methods intentionally exchange

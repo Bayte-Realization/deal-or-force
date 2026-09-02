@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// Every string the player reads, in one table per language, loaded the same layered way

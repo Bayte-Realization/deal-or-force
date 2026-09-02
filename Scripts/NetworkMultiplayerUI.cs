@@ -1,16 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
 /// <summary>
 /// Authoritative ENet session for direct IP, physical LAN and virtual LAN tools such as Radmin VPN.
 /// Commands use the deterministic campaign queue; peers never receive arbitrary CLR payload types.
 /// </summary>
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private const int DefaultNetworkPort = 7270;
     private Control _networkLayer = null!;

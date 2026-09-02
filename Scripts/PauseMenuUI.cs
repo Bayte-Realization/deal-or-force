@@ -1,8 +1,8 @@
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private Control _pauseMenuLayer = null!;
 

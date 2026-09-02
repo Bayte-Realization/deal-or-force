@@ -1,4 +1,4 @@
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 public static partial class EarthData
 {

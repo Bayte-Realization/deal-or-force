@@ -8,7 +8,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 public sealed class SaveMetadata
 {

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// Every tunable constant the simulation reads, in one place, so balance is a data

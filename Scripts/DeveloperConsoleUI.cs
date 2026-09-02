@@ -1,12 +1,12 @@
 using System;
 using System.Globalization;
 using System.Linq;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private Control _developerConsoleLayer = null!;
     private RichTextLabel _developerConsoleOutput = null!;
@@ -59,7 +59,7 @@ public partial class GlobalityGame
             SelectionEnabled = true,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 260),
-            Text = Bb("text.accent") + "By Deal or Force console[/color]\nType " + Bb("state.info") + "help[/color] for commands. Commands are local and deterministic."
+            Text = Bb("text.accent") + "Deal or Force console[/color]\nType " + Bb("state.info") + "help[/color] for commands. Commands are local and deterministic."
         };
         _developerConsoleOutput.AddThemeFontSizeOverride("normal_font_size", 14);
         rows.AddChild(_developerConsoleOutput);

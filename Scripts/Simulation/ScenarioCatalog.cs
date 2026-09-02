@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// A direct, engine-neutral representation of one administrative unit in the shipped
@@ -164,12 +164,22 @@ public static class ScenarioCatalog
 
         // Apply authoritative political/state corrections before economy, armies,
         // markets and UI consume the scenario. This makes breakaway states such as
-        // Abkhazia and Transnistria real simulation entities from tick zero.
+        // Abkhazia, Transnistria and Vatican City real simulation entities from tick zero.
+        var importedStates = campaign.States.Count;
         TerritorialTopology.Apply(campaign, Globality.EarthData.Control, Globality.EarthData.States,
             Globality.EarthData.Width, Globality.EarthData.Height);
 
-        if (campaign.Nations.Count != 261 || campaign.States.Count != 1716)
-            throw new InvalidOperationException($"Base scenario import drifted: {campaign.Nations.Count} nations, {campaign.States.Count} states.");
+        // The guard is arithmetic rather than a remembered total: the source table must
+        // still import whole, and every region correction must still have produced exactly
+        // one state. Adding a correction is then an ordinary edit, while losing half the
+        // source table is still caught before anything consumes the scenario.
+        var correctedStates = campaign.States.Count - importedStates;
+        if (campaign.Nations.Count != 261 || importedStates != EarthData.StateRows.Length ||
+            correctedStates != TerritorialTopology.RegionRuleCount)
+            throw new InvalidOperationException(
+                $"Base scenario import drifted: {campaign.Nations.Count} nations, " +
+                $"{importedStates} imported states (expected {EarthData.StateRows.Length}), " +
+                $"{correctedStates} region corrections (expected {TerritorialTopology.RegionRuleCount}).");
 
         var southKorea = campaign.NationByTag("KOR");
         if (southKorea is null || string.IsNullOrWhiteSpace(southKorea.CapitalName))

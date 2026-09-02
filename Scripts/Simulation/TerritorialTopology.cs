@@ -5,7 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// Small, reviewable corrections for topological errors in the baked political raster.
@@ -85,6 +85,19 @@ public static class TerritorialTopology
         new(29.16769f, 47.30719f), new(29.39072f, 47.37976f)
     };
 
+
+    // Northern Cyprus: everything on the island north of the Green Line. The southern
+    // edge follows the UN buffer-zone alignment; the other three sides are drawn far out
+    // to sea on purpose. The painter only ever converts cells the source nation already
+    // holds, so overshooting water costs nothing, while a coastline traced by hand at
+    // 0.0625-degree resolution left the Karpas peninsula in four disconnected pieces.
+    private static readonly GeoPoint[] NorthernCyprusBoundary =
+    {
+        new(32.20f, 35.10f), new(32.90f, 35.06f), new(33.15f, 35.16f), new(33.35f, 35.19f),
+        new(33.45f, 35.16f), new(33.70f, 35.04f), new(33.95f, 34.99f), new(34.15f, 34.99f),
+        new(34.95f, 35.95f), new(32.20f, 35.95f), new(32.20f, 35.10f)
+    };
+
     // Stable post-source IDs. These corrections are authoritative state identities,
     // not display aliases: construction, demographics, war goals and province picking
     // all consume the same repaired state raster.
@@ -113,8 +126,37 @@ public static class TerritorialTopology
             {
                 new RegionSeed(73.15f, 6.75f, 1), new RegionSeed(73.48f, 4.18f, 1),
                 new RegionSeed(73.10f, 1.95f, 1), new RegionSeed(73.18f, -0.30f, 1)
+            }),
+
+        // Vatican City. The source admin-1 raster has no cell for it, so the smallest
+        // sovereign state on Earth had a seat in the country table and no ground under it.
+        // One seed cell of radius zero, carved out of Rome: a 0.0625-degree cell is about
+        // 36 km2 against the real 0.49, so this is the finest the raster can express - but
+        // an over-large Vatican that exists, borders Italy and can be picked, negotiated
+        // over and fought around is truer to the game than an exact one that does not.
+        new(1717, "VAT", "ITA", "Vatican City", "VA-X01", "Ecclesiastical state", "IT-RM", 825,
+            12.4534f, 12.4534f, 41.9029f, 41.9029f, Array.Empty<GeoPoint>(), new[]
+            {
+                new RegionSeed(12.4534f, 41.9029f, 0)
+            }),
+
+        // Northern Cyprus. 326 000 people, a capital, an army and a de facto border, and
+        // no cell of its own in the source raster - the admin-1 layer draws Cyprus whole.
+        new(1718, "CYN", "CYP", "Northern Cyprus", "CYN-X01", "De facto republic", "CY-01", 326_000,
+            32.20f, 34.95f, 34.99f, 35.95f, NorthernCyprusBoundary, Array.Empty<RegionSeed>()),
+
+        // Gibraltar. Same story at 6.8 km2: a seed cell taken from Cadiz, over-large for
+        // the same reason Vatican City is.
+        new(1719, "GIB", "ESP", "Gibraltar", "GI-X01", "Overseas territory", "ES-CA", 33_701,
+            -5.3536f, -5.3536f, 36.1408f, 36.1408f, Array.Empty<GeoPoint>(), new[]
+            {
+                new RegionSeed(-5.3536f, 36.1408f, 0)
             })
     };
+
+    /// <summary>How many authoritative region corrections are loaded, so the scenario
+    /// import can assert its own arithmetic instead of a hard-coded total.</summary>
+    public static int RegionRuleCount => RegionRules.Count;
 
     private static readonly List<AdjacencyRule> BaseRules = new();
     private static readonly List<RegionRule> RegionRules = new();

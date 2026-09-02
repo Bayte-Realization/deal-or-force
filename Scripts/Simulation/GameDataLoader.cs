@@ -7,7 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// Loads human-editable common/ data before a campaign is created. The layout mirrors
@@ -37,7 +37,7 @@ public static class GameDataLoader
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"[globality] common defines ignored: {exception.Message}");
+            Debug.WriteLine($"[dof] common defines ignored: {exception.Message}");
         }
     }
 
@@ -55,7 +55,7 @@ public static class GameDataLoader
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"[globality] data table {suffix} ignored: {exception.Message}");
+            Debug.WriteLine($"[dof] data table {suffix} ignored: {exception.Message}");
         }
         return result;
     }

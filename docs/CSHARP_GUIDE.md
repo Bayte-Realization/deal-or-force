@@ -54,7 +54,7 @@ public Nation Nation(string tag)
 
 `Campaign.Changed` — событие. UI подписывается через `+= Refresh` и отписывается через `-= Refresh`. Симуляция сообщает об изменении, но ничего не знает о панели Godot.
 
-`partial class GlobalityGame` — один класс, разнесённый по нескольким файлам. Это организация исходников, а не несколько игровых объектов.
+`partial class DealOrForceGame` — один класс, разнесённый по нескольким файлам. Это организация исходников, а не несколько игровых объектов.
 
 ## Интерфейсы и моды
 
@@ -86,7 +86,7 @@ Button -> new SomeCommand(...) -> Campaign.Commands.Enqueue(...)
 ## C# и Godot
 
 ```csharp
-public partial class GlobalityGame : Control
+public partial class DealOrForceGame : Control
 {
     public override void _Ready() { }
     public override void _Process(double delta) { }

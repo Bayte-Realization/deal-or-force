@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// How figures are written for a reader rather than for a debugger.

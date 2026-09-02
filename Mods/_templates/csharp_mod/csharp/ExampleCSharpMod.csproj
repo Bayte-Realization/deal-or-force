@@ -6,6 +6,6 @@
     <AssemblyName>ExampleCSharpMod</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\ByDealOrForce.csproj" />
+    <ProjectReference Include="..\..\..\..\DealOrForce.csproj" />
   </ItemGroup>
 </Project>

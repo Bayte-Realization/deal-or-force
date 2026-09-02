@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
 public enum StrategicChartFormat { Number, MoneyBillions, Millions, Percent, Index }
 

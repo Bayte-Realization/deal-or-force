@@ -1,10 +1,10 @@
-using ByDealOrForce.Modding;
-using ByDealOrForce.Simulation;
+using DealOrForce.Modding;
+using DealOrForce.Simulation;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private readonly ModLoader _modLoader = new();
     private ModApi _modApi;

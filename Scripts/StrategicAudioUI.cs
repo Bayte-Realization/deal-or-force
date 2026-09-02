@@ -2,9 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Godot;
 
-namespace ByDealOrForce;
+namespace DealOrForce;
 
-public partial class GlobalityGame
+public partial class DealOrForceGame
 {
     private AudioStreamPlayer _strategicAudio = null!;
     private readonly Dictionary<string, AudioStream> _strategicCues = new();

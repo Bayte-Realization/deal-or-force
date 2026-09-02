@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>A readable daily combat record. Battles spend organisation and cost people.</summary>
 public sealed class LandBattle

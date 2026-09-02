@@ -1,6 +1,6 @@
 using System;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 /// <summary>
 /// A national cabinet priority. Unlike one-shot decisions, this is a persistent,

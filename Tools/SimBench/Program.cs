@@ -2,9 +2,9 @@ using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 
-namespace ByDealOrForce.Tools;
+namespace DealOrForce.Tools;
 
 /// <summary>
 /// Runs the campaign simulation without Godot: checks the invariants that are expensive
@@ -23,7 +23,7 @@ public static class Program
             : 730;
 
         Console.OutputEncoding = System.Text.Encoding.UTF8;
-        Console.WriteLine("By Deal or Force - headless simulation bench");
+        Console.WriteLine("Deal or Force - headless simulation bench");
         Console.WriteLine(new string('-', 62));
 
         var setup = Stopwatch.StartNew();
@@ -63,6 +63,7 @@ public static class Program
         failures += Check("no nation ran to a nonsense GDP", GdpSane(campaign));
         failures += Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
         failures += Check("headline figures format the way a player reads them", FiguresReadWell());
+        failures += Check("every nation on the map owns ground", EveryNationHasTerritory(campaign));
 
         Console.WriteLine();
         Console.WriteLine(failures == 0
@@ -237,6 +238,36 @@ public static class Program
         if (!Fmt.MoneyDelta(2.5f).StartsWith("+")) return "a rise is missing its sign";
         if (Fmt.Direction(0.001d, 0.005d) != 0) return "a change inside the deadband counted as movement";
         return "";
+    }
+
+    /// <summary>
+    /// Reefs and cays smaller than the source raster's 0.0625-degree cell. The Coral Sea
+    /// Islands (four residents) and the Spratlys (a hundred, on scattered outposts) have
+    /// no land pixel anywhere to carve a province out of, so they are rows in the country
+    /// table with nothing under them and no way to fix that short of a finer raster.
+    /// </summary>
+    private static readonly string[] SubPixelTerritories = { "CSI", "PGA" };
+
+    /// <summary>
+    /// A country with a seat in the table and no cell on the map cannot be picked, fought
+    /// over or negotiated with - it is a row, not a state. Vatican City, Northern Cyprus
+    /// and Gibraltar were exactly that until they were given ground, so the condition is
+    /// worth holding onto.
+    /// </summary>
+    private static string EveryNationHasTerritory(Campaign campaign)
+    {
+        var landless = campaign.Nations
+            // Uninhabited claims - Antarctica, Bir Tawil, Clipperton, the banks and reefs -
+            // have nobody to simulate, so ground for them would be ground nothing stands on.
+            .Where(nation => nation.Population > 0)
+            .Where(nation => !SubPixelTerritories.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase))
+            .Where(nation => campaign.StatesOf(nation).Length == 0)
+            .Select(nation => nation.Tag)
+            .OrderBy(tag => tag, StringComparer.Ordinal)
+            .ToList();
+        return landless.Count == 0
+            ? ""
+            : $"{landless.Count} nation(s) hold no state: {string.Join(", ", landless.Take(12))}";
     }
 
     private static string GdpSane(Campaign campaign)

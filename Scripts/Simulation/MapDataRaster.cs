@@ -7,7 +7,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
-namespace ByDealOrForce.Simulation;
+namespace DealOrForce.Simulation;
 
 public sealed record RgbDataMap(int Width, int Height, byte[] Pixels);
 

@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="By Deal or Force"
+config/name="Deal or Force"
 run/main_scene="res://Scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.svg"
@@ -30,7 +30,7 @@ window/stretch/aspect="expand"
 
 [dotnet]
 
-project/assembly_name="By Deal or Force"
+project/assembly_name="Deal or Force"
 
 [editor_plugins]
 

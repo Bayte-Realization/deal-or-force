@@ -1,7 +1,7 @@
 using System;
-using ByDealOrForce.Simulation;
+using DealOrForce.Simulation;
 
-namespace ByDealOrForce.Modding;
+namespace DealOrForce.Modding;
 
 /// <summary>
 /// Stable, deliberately small entry point for compiled desktop mods. A mod assembly
