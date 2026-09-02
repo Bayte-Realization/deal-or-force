@@ -44,6 +44,9 @@ public static class Program
         // populated country on the map. After a year of AI wars some of them have
         // been annexed, which is the point rather than a fault.
         failures += Check("every nation starts the scenario owning ground", EveryNationHasTerritory(campaign));
+        if (mapped)
+            failures += Check("every authored region correction exists on the map",
+                AuthoredRegionsExist(campaign));
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -964,6 +967,41 @@ public static class Program
 
     /// <summary>A throwaway copy, so the override test never touches the live map.</summary>
     private static ProvinceTopology ProvinceTopologyClone(ProvinceTopology source) => source.CloneForOverrides();
+
+    /// <summary>
+    /// Every authored region correction has to have produced a region with ground under it
+    /// and people on it. A rule whose bounding box missed, or whose donor was wrong, leaves
+    /// a region that exists in the list and nowhere on the map - which is exactly the state
+    /// Nakhchivan was in before it had a rule at all, only harder to notice.
+    /// </summary>
+    private static string AuthoredRegionsExist(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        var counts = new Dictionary<int, int>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            counts[topology.ProvinceToState[province]] = counts.GetValueOrDefault(topology.ProvinceToState[province]) + 1;
+
+        var authored = campaign.States
+            .Where(state => state.MapIndex >= 1711 && state.MapIndex < StatePartition.FirstDynamicMapIndex)
+            .OrderBy(state => state.MapIndex)
+            .ToList();
+        if (authored.Count == 0) return "no authored region corrections were applied at all";
+
+        var broken = new List<string>();
+        foreach (var state in authored)
+        {
+            var provinces = counts.GetValueOrDefault(state.MapIndex);
+            if (provinces == 0) broken.Add($"{state.Name} holds no province");
+            else if (state.Population <= 0) broken.Add($"{state.Name} has no people");
+        }
+        if (broken.Count > 0) return string.Join("; ", broken);
+
+        Console.WriteLine("  authored regions: " + string.Join(", ", authored.Select(state =>
+            $"{state.Name} {counts.GetValueOrDefault(state.MapIndex)}p/{Fmt.People(state.Population)}")));
+        return "";
+    }
 
     private static string GdpSane(Campaign campaign)
     {

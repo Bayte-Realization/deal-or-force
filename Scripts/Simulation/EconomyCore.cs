@@ -187,17 +187,47 @@ public static class EconomySystem
 
             var states = campaign.StatesOf(nation);
             if (states.Length == 0) continue;
-            var weights = states.Select(state => 0.75 + StableFraction(state.MapIndex) * 0.50).ToArray();
+
+            // A region correction that states its own population keeps it, and the rest of
+            // the country is spread over what is left. Spreading the whole national figure
+            // over every region discarded those numbers without saying so - which is how
+            // the Andaman Islands ended up with fifty million people and Nakhchivan with
+            // one and a half.
+            var authored = new long[states.Length];
+            long claimed = 0;
+            for (var index = 0; index < states.Length; index++)
+                if (TerritorialTopology.AuthoredPopulation(states[index].MapIndex, out var stated))
+                {
+                    authored[index] = stated;
+                    claimed += stated;
+                }
+
+            // If the authored regions between them claim more than the country has, they
+            // are scaled to fit rather than allowed to invent people.
+            var remaining = nation.Population - claimed;
+            var scale = 1.0;
+            if (remaining < 0 && claimed > 0)
+            {
+                scale = nation.Population / (double)claimed;
+                remaining = 0;
+            }
+
+            var free = Enumerable.Range(0, states.Length).Where(index => authored[index] == 0).ToArray();
+            var weights = free.Select(index => 0.75 + StableFraction(states[index].MapIndex) * 0.50).ToArray();
             var totalWeight = weights.Sum();
             long assigned = 0;
-            for (var index = 0; index < states.Length; index++)
+            for (var slot = 0; slot < free.Length; slot++)
             {
-                var population = index == states.Length - 1
-                    ? nation.Population - assigned
-                    : (long)(nation.Population * weights[index] / totalWeight);
+                var index = free[slot];
+                var population = slot == free.Length - 1
+                    ? remaining - assigned
+                    : (long)(remaining * weights[slot] / totalWeight);
                 assigned += population;
                 SeedState(states[index], nation, Math.Max(0, population));
             }
+            for (var index = 0; index < states.Length; index++)
+                if (authored[index] > 0)
+                    SeedState(states[index], nation, Math.Max(0, (long)(authored[index] * scale)));
         }
     }
 

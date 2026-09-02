@@ -157,6 +157,19 @@
       "min_latitude": 36.1408,
       "max_latitude": 36.1408,
       "seed_points": [[-5.3536, 36.1408, 0]]
+    },
+    {
+      "map_index": 1720,
+      "nation": "AZE",
+      "source_nation": "AZE",
+      "name": "Nakhchivan",
+      "iso": "AZ-NX",
+      "kind": "Autonomous Republic",
+      "population": 462500,
+      "min_longitude": 44.7,
+      "max_longitude": 46.2,
+      "min_latitude": 38.8,
+      "max_latitude": 39.85
     }
   ],
   "adjacency_repairs": [

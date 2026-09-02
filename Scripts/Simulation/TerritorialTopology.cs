@@ -145,6 +145,16 @@ public static class TerritorialTopology
         new(1718, "CYN", "CYP", "Northern Cyprus", "CYN-X01", "De facto republic", "CY-01", 326_000,
             32.20f, 34.95f, 34.99f, 35.95f, NorthernCyprusBoundary, Array.Empty<RegionSeed>()),
 
+        // Nakhchivan. An exclave of Azerbaijan with Armenia between it and the rest of the
+        // country - and the source admin-1 table gives Azerbaijan only four districts, so
+        // it had been swept into whichever of them the raster happened to reach it with.
+        // A region you cannot walk to from the rest of its own region is not one region.
+        //
+        // The box is drawn wide on purpose: only cells Azerbaijan already holds are taken,
+        // and the nearest other Azerbaijani ground is beyond Armenia and east of 46.2E.
+        new(1720, "AZE", "AZE", "Nakhchivan", "AZ-NX", "Autonomous Republic", "", 462_500,
+            44.70f, 46.20f, 38.80f, 39.85f, Array.Empty<GeoPoint>(), Array.Empty<RegionSeed>()),
+
         // Gibraltar. Same story at 6.8 km2: a seed cell taken from Cadiz, over-large for
         // the same reason Vatican City is.
         new(1719, "GIB", "ESP", "Gibraltar", "GI-X01", "Overseas territory", "ES-CA", 33_701,
@@ -153,6 +163,24 @@ public static class TerritorialTopology
                 new RegionSeed(-5.3536f, 36.1408f, 0)
             })
     };
+
+    /// <summary>
+    /// The population a region correction claims for itself, if any. The economy seeds
+    /// nations by spreading their whole population across their regions, which silently
+    /// discarded every authored figure for a region belonging to a country that has others:
+    /// the Andaman Islands came out with fifty million people in them.
+    /// </summary>
+    public static bool AuthoredPopulation(int mapIndex, out long population)
+    {
+        foreach (var rule in RegionRules)
+            if (rule.MapIndex == mapIndex && rule.Population > 0)
+            {
+                population = rule.Population;
+                return true;
+            }
+        population = 0;
+        return false;
+    }
 
     /// <summary>How many authoritative region corrections are loaded, so the scenario
     /// import can assert its own arithmetic instead of a hard-coded total.</summary>
@@ -250,12 +278,19 @@ public static class TerritorialTopology
                     Kind = rule.Kind
                 };
                 campaign.States.Add(state);
-                if (!string.IsNullOrWhiteSpace(rule.DonorIso))
-                {
-                    var donor = campaign.States.FirstOrDefault(candidate =>
+
+                // Somebody has to lose the people this region is about to have. A rule may
+                // name the region they come from, but naming it by hand is a thing to get
+                // wrong: the answer is already on the map, in whichever region currently
+                // holds the ground the rule is about to take.
+                var donor = string.IsNullOrWhiteSpace(rule.DonorIso)
+                    ? campaign.States.FirstOrDefault(candidate =>
+                        candidate.MapIndex == DominantState(control, states, width, height,
+                            (ushort)sourceNation.MapIndex, rule))
+                    : campaign.States.FirstOrDefault(candidate =>
                         string.Equals(candidate.Iso, rule.DonorIso, StringComparison.OrdinalIgnoreCase));
-                    if (donor is not null) EconomySystem.AdjustStatePopulation(donor, -rule.Population);
-                }
+                if (donor is not null && donor != state)
+                    EconomySystem.AdjustStatePopulation(donor, -rule.Population);
                 EconomySystem.SeedState(state, nation, rule.Population);
             }
             var changed = PaintRegion(control, states, width, height, (ushort)nation.MapIndex,
@@ -290,6 +325,50 @@ public static class TerritorialTopology
         }
 
         return summaries;
+    }
+
+    /// <summary>
+    /// Which region currently holds most of the ground a rule is about to take. Used to
+    /// find the donor when a rule does not name one, so authoring a new region is a
+    /// bounding box and a population rather than a bounding box, a population, and a
+    /// correct guess about what is underneath it.
+    /// </summary>
+    private static int DominantState(ushort[] control, ushort[] states, int width, int height,
+        ushort sourceNation, RegionRule rule)
+    {
+        var minX = LongitudeToX(rule.MinLongitude, width);
+        var maxX = LongitudeToX(rule.MaxLongitude, width);
+        var minY = LatitudeToY(rule.MaxLatitude, height);
+        var maxY = LatitudeToY(rule.MinLatitude, height);
+        var tally = new Dictionary<ushort, int>();
+
+        void Count(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= width || y >= height) return;
+            var cell = y * width + x;
+            if (control[cell] != sourceNation) return;
+            if (rule.Polygon.Length >= 3 && !Contains(rule.Polygon, XToLongitude(x, width), YToLatitude(y, height)))
+                return;
+            var state = states[cell];
+            if (state == 0) return;
+            tally[state] = tally.GetValueOrDefault(state) + 1;
+        }
+
+        for (var y = minY; y <= maxY; y++)
+        for (var x = minX; x <= maxX; x++)
+            Count(x, y);
+
+        foreach (var seed in rule.Seeds)
+        {
+            var centerX = LongitudeToX(seed.Longitude, width);
+            var centerY = LatitudeToY(seed.Latitude, height);
+            var radius = Math.Clamp(seed.RadiusCells, 0, 4);
+            for (var dy = -radius; dy <= radius; dy++)
+            for (var dx = -radius; dx <= radius; dx++)
+                Count(centerX + dx, centerY + dy);
+        }
+
+        return tally.Count == 0 ? -1 : tally.OrderByDescending(entry => entry.Value).First().Key;
     }
 
     private static int PaintRegion(
