@@ -65,6 +65,14 @@ public static class Fmt
         return (count > 0d ? "+" : "−") + People(Math.Abs(count));
     }
 
+    /// <summary>
+    /// A plain number, in the same invariant form as every other figure on screen. Without
+    /// this the interface mixes "1.09" and "1,09" depending on the operating system's
+    /// locale, in the middle of an English sentence.
+    /// </summary>
+    public static string Number(float value, string format = "0.00") =>
+        value.ToString(format, Invariant);
+
     /// <summary>A share of one, as whole percent.</summary>
     public static string Percent(float share) => (share * 100f).ToString("0.#", Invariant) + "%";
 

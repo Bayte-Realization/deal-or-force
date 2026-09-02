@@ -320,6 +320,7 @@ public static class EconomySystem
                 };
                 state.Radicalism = M.Clamp01(state.Radicalism +
                     (0.46f - state.StandardOfLiving) * 0.002f + welfareRadicalism + focusRadicalism);
+                MinorityPressure(campaign, nation, state);
                 totalPopulation += state.Population;
             }
             if (states.Length > 0) nation.Population = totalPopulation;
@@ -345,6 +346,100 @@ public static class EconomySystem
             if (nation.GovernmentFocus == GovernmentFocus.NationalSecurity)
                 nation.WarSupport = M.Clamp01(nation.WarSupport + 0.00010f);
         }
+    }
+
+    /// <summary>
+    /// The share of a region's people who are not of the nation that governs them.
+    ///
+    /// At the scenario's start this is zero everywhere: every region is populated by its
+    /// own country. It becomes non-zero the moment a border moves, because people do not
+    /// change nationality when a treaty is signed - and that is the whole point. A region
+    /// taken by force is full of people who did not choose it, and it stays restive until
+    /// a generation has passed.
+    /// </summary>
+    public static float ForeignShare(ScenarioState state, string ownerTag)
+    {
+        if (state is null || string.IsNullOrEmpty(ownerTag) || state.PopulationGroups.Count == 0) return 0f;
+        long total = 0;
+        long foreign = 0;
+        foreach (var group in state.PopulationGroups)
+        {
+            if (group.Size <= 0) continue;
+            total += group.Size;
+            if (!string.Equals(group.Nationality, ownerTag, StringComparison.OrdinalIgnoreCase))
+                foreign += group.Size;
+        }
+        return total <= 0 ? 0f : foreign / (float)total;
+    }
+
+    /// <summary>Every nationality living in a region, largest first.</summary>
+    public static IReadOnlyList<(string Nationality, long Size)> Nationalities(ScenarioState state)
+    {
+        if (state is null) return Array.Empty<(string, long)>();
+        var totals = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in state.PopulationGroups)
+        {
+            if (group.Size <= 0) continue;
+            var key = string.IsNullOrEmpty(group.Nationality) ? "?" : group.Nationality;
+            totals[key] = totals.GetValueOrDefault(key) + group.Size;
+        }
+        return totals.OrderByDescending(entry => entry.Value)
+            .Select(entry => (entry.Key, entry.Value))
+            .ToList();
+    }
+
+    /// <summary>
+    /// A week of living under a flag that is not yours. Minorities are more restive than
+    /// the people around them, and they slowly stop being minorities: schooling, a decent
+    /// standard of living and time all assimilate, while anger slows it down. A conquest
+    /// is therefore expensive for years and eventually is not - which is the difference
+    /// between a border that has moved and one that is still moving.
+    /// </summary>
+    private static void MinorityPressure(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        var defines = campaign.Defines;
+        var foreign = ForeignShare(state, nation.Tag);
+        if (foreign <= 0.0001f) return;
+
+        state.Radicalism = M.Clamp01(state.Radicalism + foreign * defines.MinorityRadicalismPerWeek);
+
+        // Assimilation. Fast where people are schooled and comfortable, slow where they
+        // are angry, and never instant.
+        var rate = defines.AssimilationPerWeek *
+                   M.Clamp(state.Literacy + state.StandardOfLiving, 0.2f, 2f) *
+                   M.Clamp(1f - state.Radicalism, 0.05f, 1f);
+        if (rate <= 0f) return;
+
+        long moved = 0;
+        foreach (var group in state.PopulationGroups)
+        {
+            if (group.Size <= 0) continue;
+            if (string.Equals(group.Nationality, nation.Tag, StringComparison.OrdinalIgnoreCase)) continue;
+            var share = (long)MathF.Round(group.Size * rate);
+            if (share <= 0) continue;
+            group.Size -= share;
+            moved += share;
+        }
+        if (moved <= 0) return;
+
+        var host = state.PopulationGroups.Find(group =>
+            string.Equals(group.Nationality, nation.Tag, StringComparison.OrdinalIgnoreCase));
+        if (host is null)
+        {
+            host = new PopulationGroup
+            {
+                Class = SocialClass.Workers,
+                Nationality = nation.Tag,
+                Size = 0,
+                Employment = 0.90f,
+                Wealth = 0.38f,
+                StandardOfLiving = state.StandardOfLiving,
+                Radicalism = state.Radicalism
+            };
+            state.PopulationGroups.Add(host);
+        }
+        host.Size += moved;
+        state.PopulationGroups.RemoveAll(group => group.Size <= 0 && group != host);
     }
 
     internal static void SeedState(ScenarioState state, Nation nation, long population)

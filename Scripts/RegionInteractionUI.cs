@@ -56,93 +56,199 @@ public partial class DealOrForceGame
         if (_regionControls is not null) _regionControls.Visible = false;
     }
 
+    /// <summary>
+    /// Everything a region is, in rows a player can read at a glance and interrogate one at
+    /// a time. The blob of text this replaced held most of the same numbers and none of the
+    /// meaning: a figure with no explanation is detail a newcomer skips and a Paradox
+    /// player has to guess at.
+    /// </summary>
     private void ShowRegionOverview()
     {
         if (_selectedState is null || _selectedNation is null) return;
         _sideTitle.Text = _selectedState.Name;
         _regionControls.Visible = true;
+        ClearDetail();
+
+        var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
+        var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex;
+        _sideBody.Text = $"{_selectedState.Kind} of {owner?.Name ?? "an unknown state"}" +
+                         (owned ? "" : " · foreign ground, read-only");
+
+        DetailHeading("PEOPLE");
+        DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
+        DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),
+            "How much of the region can read. Literacy raises productivity and assimilates minorities faster.");
+        DetailRow("Standard of living", Fmt.Percent(_selectedState.StandardOfLiving),
+            "How well people live here. Below the national average it feeds radicalism; above it, calm.");
+        DetailRow("Urbanisation", Fmt.Percent(_selectedState.Urbanization),
+            "Share living in towns. Urban regions industrialise more easily and riot more readily.");
+        DetailRow("Radicalism", Fmt.Percent(_selectedState.Radicalism),
+            "How angry the region is. Poverty, austerity and foreign rule all raise it.",
+            _selectedState.Radicalism > 0.45f ? "state.negative" :
+            _selectedState.Radicalism > 0.25f ? "state.warning" : "state.positive");
+
+        var foreign = EconomySystem.ForeignShare(_selectedState, owner?.Tag ?? "");
+        if (foreign > 0.001f)
+        {
+            var nationalities = EconomySystem.Nationalities(_selectedState);
+            var largest = nationalities.FirstOrDefault(entry =>
+                !string.Equals(entry.Nationality, owner?.Tag, StringComparison.OrdinalIgnoreCase));
+            DetailRow("Foreign nationals", Fmt.Percent(foreign),
+                "People here who are not of the nation that governs them. They are more restive than " +
+                "their neighbours and assimilate only slowly — the standing cost of a border that moved.",
+                foreign > 0.5f ? "state.negative" : "state.warning");
+            if (largest.Size > 0)
+                DetailRow("Largest minority", $"{largest.Nationality} {Fmt.People(largest.Size)}",
+                    "The biggest group living under a flag that is not its own.");
+        }
+
+        DetailHeading("ECONOMY");
         var buildings = BuildingCatalog.All
-            .Select(kind => $"{BuildingCatalog.Get(kind).Name}: {_selectedState.Buildings.GetValueOrDefault(kind)}")
-            .ToArray();
+            .Select(kind => (Kind: kind, Count: _selectedState.Buildings.GetValueOrDefault(kind)))
+            .Where(entry => entry.Count > 0)
+            .OrderByDescending(entry => entry.Count)
+            .ToList();
+        if (buildings.Count == 0) DetailRow("Buildings", "none", "Nothing has been built here yet.");
+        foreach (var entry in buildings.Take(8))
+        {
+            var definition = BuildingCatalog.Get(entry.Kind);
+            DetailRow(definition.Name, entry.Count.ToString("N0"), definition.Description);
+        }
+
+        var deposits = _selectedState.ResourceDeposits
+            .Where(entry => entry.Value > 0.05f)
+            .OrderByDescending(entry => entry.Value)
+            .Take(5)
+            .ToList();
+        if (deposits.Count > 0)
+        {
+            DetailHeading("SURVEYED DEPOSITS");
+            foreach (var entry in deposits)
+                DetailRow(CommodityCatalog.Get(entry.Key).Name, Fmt.Number(entry.Value),
+                    "Geological potential. Extraction buildings turn it into goods the market can price.");
+        }
+
         var queue = _campaign.Construction
             .Where(project => project.StateMapIndex == _selectedState.MapIndex)
             .OrderBy(project => project.Id)
-            .Select(project => $"{BuildingCatalog.Get(project.Building).Name} {project.Progress:P0}")
-            .ToArray();
-        var deposits = _selectedState.ResourceDeposits
-            .Where(entry => entry.Value > 0.05f && entry.Key is Commodity.Coal or Commodity.Oil or Commodity.IronOre or Commodity.RareEarths)
-            .OrderByDescending(entry => entry.Value)
-            .Select(entry => $"{CommodityCatalog.Get(entry.Key).Name}: potential {entry.Value:0.00}")
-            .ToArray();
-        var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex;
-        _sideBody.Text =
-            $"{_selectedState.Name} · {_selectedState.Kind}\n{_selectedNation.Name} ({_selectedNation.Tag})\n" +
-            $"Administrative ID: {_selectedState.Id} · map #{_selectedState.MapIndex:N0}\n\n" +
-            $"Population: {_selectedState.Population:N0}\n" +
-            $"Literacy: {_selectedState.Literacy:P0} · standard of living: {_selectedState.StandardOfLiving:P0}\n" +
-            $"Urbanisation: {_selectedState.Urbanization:P0} · radicalism: {_selectedState.Radicalism:P0}\n\n" +
-            "BUILDINGS\n" + string.Join("\n", buildings) + "\n\n" +
-            "STRATEGIC RESOURCES\n" + (deposits.Length == 0 ? "No significant surveyed deposits." : string.Join("\n", deposits)) + "\n\n" +
-            "CONSTRUCTION\n" + (queue.Length == 0 ? "No active regional projects." : string.Join("\n", queue)) +
-            (owned ? "\n\nOwned region: development and recruitment actions are available below." :
-                "\n\nForeign region: economic and recruitment actions are read-only.");
+            .ToList();
+        if (queue.Count > 0)
+        {
+            DetailHeading("UNDER CONSTRUCTION");
+            foreach (var project in queue.Take(5))
+                DetailRow(BuildingCatalog.Get(project.Building).Name, Fmt.Percent(project.Progress),
+                    $"Costs {Fmt.Money(project.Cost)} over {project.DurationDays} days.");
+        }
+
+        var provinces = _campaign.ProvinceMap is null
+            ? 0
+            : PeaceConference.ProvincesOfState(_campaign.ProvinceMap, _selectedState.MapIndex).Count;
+        var garrison = _campaign.Armies.Count(army => army.StateMapIndex == _selectedState.MapIndex);
+        DetailHeading("GROUND");
+        DetailRow("Provinces", provinces.ToString("N0"),
+            "Tactical provinces this region is made of. A border drawn through them splits the region in two.");
+        DetailRow("Divisions here", garrison.ToString("N0"),
+            "Formations currently standing inside the region.");
+
         SetRegionalActionsEnabled(owned);
     }
 
+    /// <summary>The demographic register: who lives here, by class and by nation.</summary>
     private void ShowRegionPopulation()
     {
         if (_selectedState is null) return;
-        _sideTitle.Text = $"{_selectedState.Name} — Population";
+        _sideTitle.Text = $"{_selectedState.Name} — people";
         _regionControls.Visible = true;
-        var classes = Enum.GetValues<SocialClass>()
-            .Select(socialClass =>
-            {
-                var groups = _selectedState.PopulationGroups.Where(group => group.Class == socialClass).ToArray();
-                var size = groups.Sum(group => group.Size);
-                var employed = size <= 0 ? 0f : groups.Sum(group => group.Size * group.Employment) / size;
-                var wealth = size <= 0 ? 0f : groups.Sum(group => group.Size * group.Wealth) / size;
-                return $"{ClassName(socialClass)}: {size:N0} · employed {employed:P0} · wealth {wealth:P0}";
-            });
-        var nationalities = _selectedState.PopulationGroups
-            .GroupBy(group => group.Nationality)
-            .Select(group => (Tag: group.Key, Size: group.Sum(item => item.Size)))
-            .OrderByDescending(group => group.Size)
-            .Select(group => $"{group.Tag}: {group.Size:N0} ({group.Size / (double)Math.Max(1, _selectedState.Population):P1})");
-        _sideBody.Text =
-            $"{_selectedState.Name} demographic register\n\nSOCIAL CLASSES\n" +
-            string.Join("\n", classes) + "\n\nNATIONALITIES\n" + string.Join("\n", nationalities) +
-            $"\n\nLiteracy {_selectedState.Literacy:P1} · SOL {_selectedState.StandardOfLiving:P1} · radicalism {_selectedState.Radicalism:P1}";
+        ClearDetail();
+
+        var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
+        var total = Math.Max(1L, _selectedState.Population);
+        _sideBody.Text = $"{Fmt.People(_selectedState.Population)} people under {owner?.Name ?? "an unknown flag"}";
+
+        DetailHeading("SOCIAL CLASSES");
+        foreach (var socialClass in Enum.GetValues<SocialClass>())
+        {
+            var groups = _selectedState.PopulationGroups.Where(group => group.Class == socialClass).ToArray();
+            var size = groups.Sum(group => group.Size);
+            if (size <= 0) continue;
+            var employed = groups.Sum(group => group.Size * group.Employment) / size;
+            var wealth = groups.Sum(group => group.Size * group.Wealth) / size;
+            var living = groups.Sum(group => group.Size * group.StandardOfLiving) / size;
+            DetailRow(ClassName(socialClass), $"{Fmt.People(size)} · {size / (double)total:P0}",
+                $"{Fmt.PeopleExact(size)} people\n" +
+                $"Employed {employed:P0} · wealth {wealth:P0} · standard of living {living:P0}");
+        }
+
+        DetailHeading("NATIONALITIES");
+        foreach (var entry in EconomySystem.Nationalities(_selectedState).Take(8))
+        {
+            var nation = _campaign.NationByTag(entry.Nationality);
+            var ruling = string.Equals(entry.Nationality, owner?.Tag, StringComparison.OrdinalIgnoreCase);
+            DetailRow((ruling ? "★ " : "") + (nation?.Name ?? entry.Nationality),
+                $"{Fmt.People(entry.Size)} · {entry.Size / (double)total:P0}",
+                ruling
+                    ? "The nation that governs here. Its people are the calm everything else is measured against."
+                    : "Living under another nation's flag. More restive than their neighbours, and " +
+                      "assimilating slowly — faster where people are schooled and comfortable, slower where they are angry.",
+                ruling ? "text.bright" : "state.warning");
+        }
     }
 
+    /// <summary>One tactical province: who owns it, who holds it, and what it is made of.</summary>
     private void ShowProvinceOverview()
     {
         var topology = _campaign.ProvinceMap;
         if (topology is null || _selectedProvinceId <= 0 || _selectedProvinceId > topology.ProvinceCount)
         {
-            _sideBody.Text = "Province topology is still being prepared.";
+            _sideBody.Text = "The province map is still being prepared.";
             return;
         }
         _regionControls.Visible = true;
-        var originalOwner = _campaign.Nations.FirstOrDefault(nation => nation.MapIndex == topology.ProvinceToNation[_selectedProvinceId]);
+        ClearDetail();
+
+        var owner = _campaign.Nations.Find(nation => nation.MapIndex == topology.ProvinceToNation[_selectedProvinceId]);
         var controllerIndex = _campaign.ProvinceController?[_selectedProvinceId] ?? topology.ProvinceToNation[_selectedProvinceId];
-        var controller = _campaign.Nations.FirstOrDefault(nation => nation.MapIndex == controllerIndex);
+        var controller = _campaign.Nations.Find(nation => nation.MapIndex == controllerIndex);
         var occupation = _campaign.ProvinceOccupation?[_selectedProvinceId] ?? 0f;
         var formations = _campaign.Armies.Where(army => army.ProvinceId == _selectedProvinceId).ToArray();
         var adjacent = topology.Neighbors[_selectedProvinceId];
-        var riverCrossings = adjacent.Count(province => topology.IsRiverCrossing(_selectedProvinceId, province));
-        var waterProfile = riverCrossings == 0 && !topology.HasLakeAccess(_selectedProvinceId)
-            ? "No mapped major inland water"
-            : $"River crossings: {riverCrossings}" +
-              (topology.HasLakeAccess(_selectedProvinceId) ? " · navigable lake shore" : "");
+        var crossings = adjacent.Count(province => topology.IsRiverCrossing(_selectedProvinceId, province));
+        var centre = topology.CenterOf(_selectedProvinceId);
+
         _sideTitle.Text = $"Province #{_selectedProvinceId:N0}";
-        _sideBody.Text =
-            $"TACTICAL PROVINCE #{_selectedProvinceId:N0}\n{_selectedState?.Name ?? "Unmapped region"}\n\n" +
-            $"Legal owner: {originalOwner?.Name ?? "Unknown"}\nController: {controller?.Name ?? "Unknown"}\n" +
-            $"Occupation progress: {occupation:P0}\nAdjacent provinces: {adjacent.Length}\nHydrography: {waterProfile}\n\n" +
-            $"Formations present: {formations.Length}\n" +
-            (formations.Length == 0 ? "No field formation is stationed here." : string.Join("\n", formations.Select(army =>
-                $"{army.Name}: {army.Divisions:0.0} divisions · org {army.Organisation:P0} · supply {army.SupplyLevel:P0}"))) +
-            "\n\nRight-click issues a movement order without replacing this inspection selection.";
+        _sideBody.Text = $"{_selectedState?.Name ?? "Unmapped ground"} · " +
+                         $"{MathF.Abs(centre.Latitude):0.0}°{(centre.Latitude >= 0 ? "N" : "S")} " +
+                         $"{MathF.Abs(centre.Longitude):0.0}°{(centre.Longitude >= 0 ? "E" : "W")}";
+
+        DetailHeading("STANDING");
+        DetailRow("Owner", owner?.Name ?? "unknown",
+            "Whose ground this is in law. Only a peace or an annexation changes it.");
+        DetailRow("Controller", controller?.Name ?? "unknown",
+            "Who holds it right now. An army takes control; a treaty takes ownership.",
+            controller == owner ? "text.bright" : "state.warning");
+        if (controller != owner)
+            DetailRow("Occupation", Fmt.Percent(occupation),
+                "How firmly the occupier holds it. Above the secure threshold it can be kept at a peace.",
+                occupation >= _campaign.Defines.OccupationSecureThreshold ? "state.positive" : "state.warning");
+
+        DetailHeading("GROUND");
+        DetailRow("Neighbours", adjacent.Length.ToString("N0"),
+            "Provinces an army can march to from here in one step.");
+        DetailRow("River crossings", crossings.ToString("N0"),
+            crossings == 0
+                ? "No river runs between this province and its neighbours."
+                : "Attacking across a river costs the attacker dearly; a major one costs more.");
+        DetailRow("Lake shore", topology.HasLakeAccess(_selectedProvinceId) ? "yes" : "no",
+            "A navigable lake shore eases supply.");
+
+        DetailHeading("FORMATIONS");
+        if (formations.Length == 0)
+            DetailRow("Divisions", "none", "Nobody is standing here.");
+        foreach (var army in formations.Take(8))
+            DetailRow(Shorten(army.Name, 18),
+                $"{army.Divisions:0.0} div · {army.Organisation:P0}",
+                DivisionTooltip(army),
+                army.CutOff ? "state.negative" : army.InBattle ? "state.warning" : "text.bright");
     }
 
     private void QueueRegionalBuilding(BuildingKind kind)

@@ -108,6 +108,8 @@ public static class Program
                 failures += Check("a redrawn border survives a save", BordersSurviveASave(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
                     APeaceCanBeWritten(sandbox));
+                failures += Check("a moved border leaves a national minority behind",
+                    ConquestLeavesMinorities(sandbox));
             }
         }
 
@@ -823,6 +825,58 @@ public static class Program
             return $"{drifted.Count} shipped define(s) disagree with the code: " +
                    string.Join("; ", drifted.Take(6));
         Console.WriteLine($"  {checkedKeys:N0} shipped defines all agree with the compiled values.");
+        return "";
+    }
+
+    /// <summary>
+    /// A border that moves leaves people behind. The piece a conqueror takes must be full
+    /// of the previous owner's nationality, that must make it restive, and time must
+    /// eventually settle it - otherwise conquest is either free or permanently poisoned,
+    /// and neither is a game.
+    /// </summary>
+    private static string ConquestLeavesMinorities(Campaign campaign)
+    {
+        var taken = campaign.States
+            .Where(state => state.MapIndex >= StatePartition.FirstDynamicMapIndex)
+            .Select(state => new
+            {
+                State = state,
+                Owner = campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex)
+            })
+            .Where(entry => entry.Owner is not null)
+            .Select(entry => new
+            {
+                entry.State,
+                entry.Owner,
+                Foreign = EconomySystem.ForeignShare(entry.State, entry.Owner.Tag)
+            })
+            .OrderByDescending(entry => entry.Foreign)
+            .FirstOrDefault();
+
+        if (taken is null) return "nothing was annexed, so there is no minority to check";
+        if (taken.Foreign < 0.5f)
+            return $"'{taken.State.Name}' changed hands and only {taken.Foreign:P0} of it is foreign; " +
+                   "people are apparently changing nationality when a treaty is signed";
+
+        var nationalities = EconomySystem.Nationalities(taken.State);
+        if (nationalities.Count == 0) return "the annexed region has nobody in it";
+
+        var radicalismBefore = taken.State.Radicalism;
+        var foreignBefore = taken.Foreign;
+        campaign.IsPaused = false;
+        for (var day = 0; day < 400; day++) campaign.Tick();
+        var foreignAfter = EconomySystem.ForeignShare(taken.State, taken.Owner.Tag);
+
+        Console.WriteLine($"  nationality: {taken.Owner.Tag} took {taken.State.Name}, " +
+                          $"{foreignBefore:P0} foreign at the treaty and {foreignAfter:P0} a year later " +
+                          $"({string.Join(", ", nationalities.Take(3).Select(entry => $"{entry.Nationality} {entry.Size:N0}"))}); " +
+                          $"radicalism {radicalismBefore:P0} -> {taken.State.Radicalism:P0}.");
+
+        if (foreignAfter >= foreignBefore)
+            return $"a year of rule assimilated nobody in '{taken.State.Name}'; " +
+                   "a conquest that can never settle is a conquest nobody would ever make";
+        if (taken.State.Radicalism <= radicalismBefore)
+            return $"'{taken.State.Name}' is full of foreign nationals and no angrier than before";
         return "";
     }
 

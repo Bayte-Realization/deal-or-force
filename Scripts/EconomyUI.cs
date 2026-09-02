@@ -79,6 +79,11 @@ public partial class DealOrForceGame
         ShowEconomyScreen();
     }
 
+    /// <summary>
+    /// The budget, in rows that say where the money comes from and where it goes. Every
+    /// line names what moves it, so a player who has never played one of these can learn
+    /// the economy by hovering rather than by losing a campaign to it.
+    /// </summary>
     private void ShowEconomyScreen()
     {
         var player = _campaign.Player;
@@ -86,18 +91,68 @@ public partial class DealOrForceGame
             _selectedState = _campaign.States.FirstOrDefault(state => state.NationMapIndex == player.MapIndex);
         var state = _selectedState;
         var queue = _campaign.Construction.Where(project => project.NationId == player.Id).OrderBy(project => project.Id).ToArray();
-        _sideBody.Text =
-            $"{player.Name} economy\n\nGDP: {Fmt.Money(player.Gdp)}\nTreasury: {Fmt.Money(player.Treasury)}\n" +
-            $"Weekly taxes: {Fmt.Money(player.WeeklyTaxIncome)} · tariffs: {Fmt.Money(player.WeeklyTariffIncome)}\n" +
-            $"Weekly expenses: {Fmt.Money(player.WeeklyExpenses)}\n" +
-            $"Balance: {SignedMoney(player.WeeklyBalance)}\nTax rate: {player.TaxRate:P0}\n" +
-            $"Productivity: {player.Productivity:0.00} · stability: {player.Stability:P0}\n\n" +
-            (state is null ? "Select an owned state on the map." :
-                $"SELECTED STATE — {state.Name}\nPopulation: {Fmt.People(state.Population)}\n" +
-                $"Literacy: {state.Literacy:P0} · standard of living: {state.StandardOfLiving:P0}\n" +
-                $"Urbanisation: {state.Urbanization:P0} · radicalism: {state.Radicalism:P0}\n" +
-                $"Workers: {GroupSize(state, SocialClass.Workers):N0} · farmers: {GroupSize(state, SocialClass.Farmers):N0}\n" +
-                $"Middle class: {GroupSize(state, SocialClass.MiddleClass):N0} · owners: {GroupSize(state, SocialClass.Owners):N0}");
+
+        _sideBody.Text = $"{player.Name} · {TradePolicyRules.Name(player.TradePolicy)}";
+        ClearDetail();
+
+        // Before the first economic week closes every one of these is genuinely zero, and
+        // three zeros on the screen a player opens first reads as a broken game rather than
+        // as a week that has not happened yet.
+        var settled = _campaign.ElapsedDays >= _campaign.Defines.EconomyTickDays;
+        string Weekly(float value) => settled ? Fmt.Money(value) : "—";
+
+        DetailHeading("THE WEEK");
+        DetailRow("Taxes", Weekly(player.WeeklyTaxIncome),
+            $"What the tax rate of {player.TaxRate:P0} raises from the economy each week. " +
+            "Raising it fills the treasury and empties the public's patience." +
+            (settled ? "" : " The first economic week has not closed yet."));
+        DetailRow("Tariffs", Weekly(player.WeeklyTariffIncome),
+            "Duty on goods crossing the border. Trade policy sets the rate.");
+        DetailRow("Expenses", Weekly(player.WeeklyExpenses),
+            "Divisions, fleets, buildings and the social budget, all of it weekly.");
+        DetailRow("Balance", settled ? SignedMoney(player.WeeklyBalance) : "—",
+            "What the week actually leaves behind. Negative for long enough and the treasury runs out, " +
+            "and a bankrupt state loses stability.",
+            player.WeeklyBalance >= 0f ? "state.positive" : "state.negative");
+        DetailRow("Treasury", Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
+            player.Treasury < 0f ? "state.negative" : "text.bright");
+
+        DetailHeading("OUTPUT");
+        DetailRow("GDP", Fmt.Money(player.Gdp),
+            "Annual output. It is not a dial - it emerges from what your buildings actually produce " +
+            "and what the world market pays for it.");
+        DetailRow("Productivity", Fmt.Number(player.Productivity),
+            "How much each worker makes. Literacy raises it; shortages, war and heavy taxation lower it.");
+        DetailRow("Market access", Fmt.Percent(player.MarketAccess),
+            "How much of the world market you can actually reach. Blockade and distance cut it.");
+        DetailRow("Trade balance", settled ? SignedMoney(player.WeeklyTradeBalance) : "—",
+            "Exports against imports for the week.",
+            player.WeeklyTradeBalance >= 0f ? "state.positive" : "state.warning");
+        DetailRow("Stability", Fmt.Percent(player.Stability),
+            "How settled the country is. Low stability slows everything and invites events you will not enjoy.",
+            player.Stability < 0.35f ? "state.negative" :
+            player.Stability < 0.55f ? "state.warning" : "state.positive");
+
+        if (state is not null)
+        {
+            DetailHeading($"REGION — {state.Name.ToUpperInvariant()}");
+            DetailRow("Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
+            DetailRow("Literacy", Fmt.Percent(state.Literacy), "Schooling here, against the national average.");
+            DetailRow("Standard of living", Fmt.Percent(state.StandardOfLiving),
+                "How well this region lives. It drifts toward the national figure over time.");
+            DetailRow("Urbanisation", Fmt.Percent(state.Urbanization), "Share living in towns.");
+            DetailRow("Radicalism", Fmt.Percent(state.Radicalism),
+                "Anger here. Poverty, austerity and foreign rule all feed it.",
+                state.Radicalism > 0.45f ? "state.negative" :
+                state.Radicalism > 0.25f ? "state.warning" : "state.positive");
+            foreach (var socialClass in Enum.GetValues<SocialClass>())
+            {
+                var size = GroupSize(state, socialClass);
+                if (size <= 0) continue;
+                DetailRow(ClassName(socialClass), Fmt.People(size),
+                    $"{Fmt.PeopleExact(size)} people of this class live in {state.Name}.");
+            }
+        }
 
         _constructionStatus.Text = queue.Length == 0
             ? "No active construction. Click a project above to add it to the queue."

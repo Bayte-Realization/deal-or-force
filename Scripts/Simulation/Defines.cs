@@ -141,6 +141,12 @@ public sealed class Defines
 	/// <summary>Share of a pop that may change profession in one population tick.</summary>
 	public float MobilityRate { get; set; } = 0.035f;
 
+	/// <summary>Radicalism a fully foreign-populated region gains each week.</summary>
+	public float MinorityRadicalismPerWeek { get; set; } = 0.0012f;
+
+	/// <summary>Share of a minority that assimilates each week under ideal conditions.</summary>
+	public float AssimilationPerWeek { get; set; } = 0.0009f;
+
 	public float RadicalismGain { get; set; } = 0.05f;
 	public float RadicalismDecay { get; set; } = 0.03f;
 

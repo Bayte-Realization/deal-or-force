@@ -300,9 +300,10 @@ public partial class DealOrForceGame : Control
         clock.AddChild(speeds);
 
         var menu = ActionButton("≡", ShowPauseMenu, 44, 34);
-        menu.TooltipText = "Pause menu (Esc)";
+        menu.TooltipText = "Pause menu (Esc) · F5 quick-saves, F9 loads, F10 flies the camera";
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 44, 34, true);
+        _pause.TooltipText = "Pause and resume campaign time (Space). Space never activates a focused button.";
         speeds.AddChild(_pause);
         _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
@@ -330,11 +331,25 @@ public partial class DealOrForceGame : Control
         nav.AddThemeConstantOverride("separation", 8);
         navMargin.AddChild(nav);
 
+        // Each screen says what it is for. A player who has never opened one of these games
+        // should be able to learn the interface by resting on it rather than by clicking
+        // everything to find out.
+        var screens = new (string Name, string Help)[]
+        {
+            ("Nation", "Who you are: capital, people, output, treasury and how settled the country is."),
+            ("Economy", "The budget: what the week raises, what it costs, and what the region you have selected is made of."),
+            ("Military", "The armed forces: how many, how ready, how well fed, and what spending buys."),
+            ("Diplomacy", "How the selected country regards you, and what can be done about it."),
+            ("Wars", "Every war being fought, what it is costing, and the table where it can be ended."),
+            ("Decisions", "One-off national actions, with their price and their consequence."),
+            ("Ledger", "The full record: charts, budget, trade, population and the cabinet.")
+        };
         _screenButtons.Clear();
-        foreach (var screen in new[] { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "Ledger" })
+        foreach (var (screen, help) in screens)
         {
             var captured = screen;
             var button = ActionButton(screen, () => OpenScreen(captured), 118, 38);
+            button.TooltipText = help;
             _screenButtons[captured] = button;
             nav.AddChild(button);
         }
@@ -493,14 +508,44 @@ public partial class DealOrForceGame : Control
                 var divisions = armies.Sum(army => army.Divisions);
                 var fleets = _campaign.Fleets.Where(fleet => fleet.NationId == player.Id).ToArray();
                 var personnel = MilitaryBootstrap.Personnel(player.Tag, player.Population);
-                _sideBody.Text =
-                    $"{player.Name} armed forces\n\nActive personnel: {personnel:N0}\n" +
-                    $"Divisions: {divisions:0.0}\nField armies: {armies.Length}\n" +
-                    $"Fleets: {fleets.Length} · commissioned hulls: {fleets.Sum(fleet => fleet.Hulls)}\n" +
-                    $"Manpower reserve: {player.ManpowerReserve:N0}\nDaily reinforcement capacity: {player.ReinforcementCapacity:N0}\n" +
-                    $"Average organisation: {(armies.Length == 0 ? 0 : armies.Average(army => army.Organisation)):P0}\n\n" +
-                    "Orders: Manual · Defend · Advance · Reserve · Spearhead\n" +
-                    "Close zoom reveals formation counters on the globe.";
+                _sideBody.Text = $"{player.Name} armed forces";
+
+                DetailHeading("FORCES");
+                DetailRow("Divisions", divisions.ToString("0.0"),
+                    "Independent formations under your flag. Each takes frontage in a battle, so more of " +
+                    "them is not the same as more strength in one province.");
+                DetailRow("Field armies", armies.Length.ToString("N0"),
+                    "Formations on the map, counted as units rather than as strength.");
+                DetailRow("Fleets", $"{fleets.Length:N0} · {fleets.Sum(fleet => fleet.Hulls):N0} hulls",
+                    "Commissioned squadrons and the hulls in them.");
+                DetailRow("Active personnel", Fmt.People(personnel), Fmt.PeopleExact(personnel));
+
+                DetailHeading("READINESS");
+                var organisation = armies.Length == 0 ? 0f : armies.Average(army => army.Organisation);
+                var strength = armies.Length == 0 ? 0f : armies.Average(army => army.Strength);
+                var supply = armies.Length == 0 ? 0f : armies.Average(army => army.SupplyLevel);
+                DetailRow("Organisation", Fmt.Percent(organisation),
+                    "The will to keep fighting, averaged. It empties in battle and recovers out of it; " +
+                    "a formation at zero is broken, not destroyed.",
+                    organisation < 0.35f ? "state.negative" : organisation < 0.6f ? "state.warning" : "state.positive");
+                DetailRow("Fighting strength", Fmt.Percent(strength),
+                    "How many of the establishment are still standing. This one is men, and it comes back slowly.",
+                    strength < 0.6f ? "state.warning" : "state.positive");
+                DetailRow("Supply", Fmt.Percent(supply),
+                    "How well the army is being fed. Infrastructure widens the throughput that decides it.",
+                    supply < 0.5f ? "state.negative" : supply < 0.8f ? "state.warning" : "state.positive");
+                DetailRow("Cut off", armies.Count(army => army.CutOff).ToString("N0"),
+                    "Formations with no supply route home. They bleed until the route is reopened.",
+                    armies.Any(army => army.CutOff) ? "state.negative" : "text.bright");
+
+                DetailHeading("MANPOWER");
+                DetailRow("Reserve", Fmt.People(player.ManpowerReserve),
+                    "Men available to replace losses. It refills from population and conscription.");
+                DetailRow("Daily reinforcement", Fmt.People(player.ReinforcementCapacity),
+                    "How many can be moved into formations each day. Barracks and military spending raise it.");
+                DetailRow("Military spending", Fmt.Percent(player.MilitarySpending),
+                    "Share of output going to the armed forces. The slider below sets it.");
+
                 _militarySpending.Value = player.MilitarySpending;
                 break;
 
