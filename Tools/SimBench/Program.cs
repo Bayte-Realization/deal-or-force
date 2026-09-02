@@ -63,6 +63,15 @@ public static class Program
         campaign.IsPaused = false;
         var ukraineTrace = new List<int>();
         var ukraineIndex = campaign.NationByTag("UKR")?.MapIndex ?? -1;
+        // Wall time on a developer's machine is noise - the same seed and the same code
+        // measured 11.5 ms and 19.2 ms a day depending on what else was running. What a
+        // day costs in garbage does not move, so that is what gets reported alongside it:
+        // allocation per day is the number that predicts stutter and memory both.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var allocatedBefore = GC.GetTotalAllocatedBytes(true);
+        var collectionsBefore = (GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2));
         var run = Stopwatch.StartNew();
         for (var day = 0; day < days; day++)
         {
@@ -75,16 +84,29 @@ public static class Program
         }
         run.Stop();
 
+        var allocated = GC.GetTotalAllocatedBytes(true) - allocatedBefore;
+        var collections = (GC.CollectionCount(0) - collectionsBefore.Item1,
+            GC.CollectionCount(1) - collectionsBefore.Item2,
+            GC.CollectionCount(2) - collectionsBefore.Item3);
         var perDay = run.Elapsed.TotalMilliseconds / days;
         Console.WriteLine($"  {run.ElapsedMilliseconds} ms total, {perDay:0.###} ms per campaign day.");
+        Console.WriteLine($"  {allocated / 1_048_576.0:0.#} MB allocated, " +
+                          $"{allocated / days / 1024.0:0.#} kB per day, " +
+                          $"{collections.Item1:N0}/{collections.Item2:N0}/{collections.Item3:N0} gen0/1/2 collections, " +
+                          $"{GC.GetTotalMemory(true) / 1_048_576.0:0.#} MB live, " +
+                          $"{Environment.WorkingSet / 1_048_576.0:0.#} MB resident.");
         Console.WriteLine($"  {campaign.Date} after {campaign.ElapsedDays} day(s).");
 
         Console.WriteLine();
-        Console.WriteLine("Slowest simulation passes (average per run):");
+        Console.WriteLine("Simulation passes, by the garbage they make (average per run):");
         foreach (var sample in SimProfiler.All
-                     .OrderByDescending(sample => sample.AverageMilliseconds)
-                     .Take(12))
-            Console.WriteLine($"  {sample.Name,-22} {sample.AverageMilliseconds,8:0.###} ms  ×{sample.Runs}");
+                     .OrderByDescending(entry => entry.AllocatedBytes)
+                     .ThenByDescending(entry => entry.AverageMilliseconds))
+            Console.WriteLine($"  {sample.Name,-16} {sample.AverageMilliseconds,8:0.###} ms  " +
+                              $"{sample.AllocatedBytes / 1_048_576.0,8:0.#} MB  " +
+                              $"{sample.AllocatedBytes / (double)Math.Max(1, sample.Runs) / 1024.0,8:0.#} kB/run  " +
+                              $"×{sample.Runs}");
+        Console.WriteLine();
 
         Console.WriteLine();
         failures += Check("the economy actually moved", EconomyMoved(campaign));

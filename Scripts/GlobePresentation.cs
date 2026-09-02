@@ -71,6 +71,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private ImageTexture _frontTexture;
     private int _controlRevision = -1;
     private int _frontRevision = -1;
+
+    // The two overlay textures are rewritten whenever a province changes hands, which in a
+    // world of a hundred and forty wars is most frames the game is running at speed. Each
+    // rewrite was a quarter of a megabyte of pixels and a fresh Image on top of it, twice
+    // over - a megabyte a frame handed to the collector for two textures that are always
+    // the same size. The buffers and the images are made once and overwritten.
+    private byte[] _controlPixels;
+    private byte[] _frontPixels;
+    private Image _controlImage;
+    private Image _frontImage;
     private int _selectedArmyId = -1;
     private int _armyStructureFingerprint = int.MinValue;
     private int _routeFingerprint = int.MinValue;
@@ -596,7 +606,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (_campaign?.ProvinceMap is null || _globeMaterial is null) return;
         _frontMesh.ClearSurfaces();
         _frontPreview.Visible = false;
-        var pixels = new byte[256 * 256 * 4];
+        var pixels = _frontPixels ??= new byte[256 * 256 * 4];
+        Array.Clear(pixels);
         foreach (var war in _campaign.Wars)
         {
             if (war.Ended) continue;
@@ -637,13 +648,17 @@ public sealed partial class GlobePresentation : SubViewportContainer
             }
         }
 
-        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         if (_frontTexture is null)
         {
-            _frontTexture = ImageTexture.CreateFromImage(image);
+            _frontImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+            _frontTexture = ImageTexture.CreateFromImage(_frontImage);
             _globeMaterial.SetShaderParameter("front_membership", _frontTexture);
         }
-        else _frontTexture.Update(image);
+        else
+        {
+            _frontImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+            _frontTexture.Update(_frontImage);
+        }
     }
 
     private static byte PlanCode(Simulation.FrontLineKind kind) => kind switch
@@ -1486,7 +1501,8 @@ void fragment() {
     {
         if (_campaign?.ProvinceMap is null || _campaign.ProvinceController is null || _globeMaterial is null) return;
         var topology = _campaign.ProvinceMap;
-        var pixels = new byte[256 * 256 * 4];
+        var pixels = _controlPixels ??= new byte[256 * 256 * 4];
+        Array.Clear(pixels);
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var controller = _campaign.ProvinceController[province];
@@ -1515,15 +1531,16 @@ void fragment() {
             }
         }
 
-        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         if (_controllerTexture is null)
         {
-            _controllerTexture = ImageTexture.CreateFromImage(image);
+            _controlImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+            _controllerTexture = ImageTexture.CreateFromImage(_controlImage);
             _globeMaterial.SetShaderParameter("province_control_colors", _controllerTexture);
         }
         else
         {
-            _controllerTexture.Update(image);
+            _controlImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+            _controllerTexture.Update(_controlImage);
         }
         _controlRevision = _campaign.MapRevision;
         BuildFrontPreview();

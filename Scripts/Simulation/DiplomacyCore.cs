@@ -119,7 +119,12 @@ public static class CampaignDiplomacy
     private static Dictionary<int, HashSet<int>> Borders(Campaign campaign)
     {
         if (_borders is not null && _borderRevision == campaign.MapRevision) return _borders;
-        _borders = new Dictionary<int, HashSet<int>>();
+        // Rebuilt whenever a province changes hands, which is most days - so the table and
+        // its sets are emptied and refilled rather than thrown away and built again. The
+        // scan has to happen; handing the collector a dictionary of two hundred and sixty
+        // fresh hash sets every time it does was the AI's whole allocation cost.
+        _borders ??= new Dictionary<int, HashSet<int>>();
+        foreach (var set in _borders.Values) set.Clear();
         _borderRevision = campaign.MapRevision;
 
         var topology = campaign.ProvinceMap;

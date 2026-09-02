@@ -472,6 +472,34 @@ public sealed class ProvinceTopology
     }
 
     /// <summary>Shortest land route constrained to one political controller.</summary>
+    // Route scratch. A breadth-first search over the province graph needs one entry per
+    // province to remember where it came from - and every search was allocating that array
+    // fresh, a hundred and fifty kilobytes of it, and then filling all thirty-eight
+    // thousand entries with -1 before touching a few dozen. Front reassignment issues one
+    // search per formation it re-tasks, so on a day when fifty wars redrew their fronts
+    // this alone was the better part of a gigabyte over a campaign.
+    //
+    // The buffer is kept, and a generation stamp marks which entries belong to the search
+    // running now, so nothing has to be cleared and nothing has to be allocated. Per
+    // topology rather than static, because a second campaign has its own map.
+    private int[] _routePrevious = Array.Empty<int>();
+    private int[] _routeStamp = Array.Empty<int>();
+    private int _routeGeneration;
+    private readonly Queue<int> _routeFrontier = new();
+    private readonly List<int> _routeBuffer = new();
+
+    private int BeginRouteSearch()
+    {
+        if (_routePrevious.Length < Neighbors.Length)
+        {
+            _routePrevious = new int[Neighbors.Length];
+            _routeStamp = new int[Neighbors.Length];
+            _routeGeneration = 0;
+        }
+        _routeFrontier.Clear();
+        return ++_routeGeneration;
+    }
+
     public int[] FindRoute(int startProvince, int targetProvince, ushort nationMapIndex)
         => FindRoute(startProvince, targetProvince, nationMapIndex, ProvinceToNation);
 
@@ -487,25 +515,29 @@ public sealed class ProvinceTopology
             return Array.Empty<int>();
         if (startProvince == targetProvince) return Array.Empty<int>();
 
-        var previous = new int[Neighbors.Length];
-        Array.Fill(previous, -1);
-        var queue = new Queue<int>();
+        var generation = BeginRouteSearch();
+        var previous = _routePrevious;
+        var stamp = _routeStamp;
+        var queue = _routeFrontier;
+        stamp[startProvince] = generation;
         previous[startProvince] = startProvince;
         queue.Enqueue(startProvince);
 
-        while (queue.Count > 0 && previous[targetProvince] < 0)
+        while (queue.Count > 0 && stamp[targetProvince] != generation)
         {
             var current = queue.Dequeue();
             foreach (var next in Neighbors[current])
             {
-                if (previous[next] >= 0 || controllers[next] != nationMapIndex) continue;
+                if (stamp[next] == generation || controllers[next] != nationMapIndex) continue;
+                stamp[next] = generation;
                 previous[next] = current;
                 queue.Enqueue(next);
             }
         }
 
-        if (previous[targetProvince] < 0) return Array.Empty<int>();
-        var route = new List<int>();
+        if (stamp[targetProvince] != generation) return Array.Empty<int>();
+        var route = _routeBuffer;
+        route.Clear();
         for (var cursor = targetProvince; cursor != startProvince; cursor = previous[cursor])
             route.Add(cursor);
         route.Reverse();
@@ -528,9 +560,11 @@ public sealed class ProvinceTopology
             return Array.Empty<int>();
         if (targets.Contains(startProvince)) return Array.Empty<int>();
 
-        var previous = new int[Neighbors.Length];
-        Array.Fill(previous, -1);
-        var queue = new Queue<int>();
+        var generation = BeginRouteSearch();
+        var previous = _routePrevious;
+        var stamp = _routeStamp;
+        var queue = _routeFrontier;
+        stamp[startProvince] = generation;
         previous[startProvince] = startProvince;
         queue.Enqueue(startProvince);
         var found = -1;
@@ -540,7 +574,8 @@ public sealed class ProvinceTopology
             var current = queue.Dequeue();
             foreach (var next in Neighbors[current])
             {
-                if (previous[next] >= 0 || controllers[next] != nationMapIndex) continue;
+                if (stamp[next] == generation || controllers[next] != nationMapIndex) continue;
+                stamp[next] = generation;
                 previous[next] = current;
                 if (targets.Contains(next))
                 {
@@ -551,7 +586,8 @@ public sealed class ProvinceTopology
             }
         }
         if (found < 0) return Array.Empty<int>();
-        var route = new List<int>();
+        var route = _routeBuffer;
+        route.Clear();
         for (var cursor = found; cursor != startProvince; cursor = previous[cursor]) route.Add(cursor);
         route.Reverse();
         return route.ToArray();

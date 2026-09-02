@@ -68,6 +68,85 @@ public static partial class Warfare
         perWar[outcome] = perWar.GetValueOrDefault(outcome) + 1;
     }
 
+    // Scratch shared by the whole pass. Warfare made three megabytes of garbage a
+    // campaign day, nearly all of it these indexes and the little arrays that LINQ hands
+    // back from a Where or an OrderBy - one set per advancing division per day, several
+    // hundred times over. They are all overwritten before they are read again, so they are
+    // kept and emptied instead of rebuilt. The simulation is single-threaded by
+    // construction, because it has to be to stay replayable, so one set is enough.
+    private static readonly Dictionary<int, List<Army>> ByProvince = new();
+    private static readonly Dictionary<int, List<Army>> ByWar = new();
+    private static readonly Dictionary<int, Army> ById = new();
+    private static readonly Dictionary<int, StrategicWar> WarById = new();
+    private static readonly List<StrategicWar> Stale = new();
+    private static readonly HashSet<int> Moved = new();
+    private static readonly List<int> Candidates = new();
+    private static readonly List<Army> Present = new();
+    private static readonly List<Army> AttackingSide = new();
+    private static readonly List<Army> DefendingSide = new();
+    private static readonly HashSet<int> CoverSeen = new();
+    private static readonly List<int> CoverRing = new();
+    private static readonly List<int> CoverNext = new();
+
+    /// <summary>
+    /// Set whenever a province changes hands, because taking one moves the formations that
+    /// took it. The province index is only rebuilt when that has actually happened, which
+    /// keeps it exactly as truthful as walking every division would be and costs one pass
+    /// over the army list instead of one per battle.
+    /// </summary>
+    private static bool _provinceIndexStale;
+
+    // How much ground each country originally owned, and how much of it somebody else is
+    // standing on. Every war used to work this out for itself by walking all thirty-eight
+    // thousand provinces - with fifty wars going stale on the same day that was two million
+    // province reads for a table that is the same table every time.
+    private static readonly Dictionary<ushort, int> HomeProvinces = new();
+    private static readonly Dictionary<long, int> OccupiedPairs = new();
+
+    private static void MeasureOccupation(Campaign campaign)
+    {
+        HomeProvinces.Clear();
+        OccupiedPairs.Clear();
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (topology is null || controllers is null) return;
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var original = topology.ProvinceToNation[province];
+            if (original == 0) continue;
+            HomeProvinces[original] = HomeProvinces.GetValueOrDefault(original) + 1;
+            var controller = controllers[province];
+            if (controller == 0 || controller == original) continue;
+            var key = ((long)original << 32) | controller;
+            OccupiedPairs[key] = OccupiedPairs.GetValueOrDefault(key) + 1;
+        }
+    }
+
+    private static int Occupied(ushort original, ushort by) =>
+        OccupiedPairs.GetValueOrDefault(((long)original << 32) | by);
+
+    private static void IndexArmies(Campaign campaign)
+    {
+        foreach (var list in ByProvince.Values) list.Clear();
+        foreach (var list in ByWar.Values) list.Clear();
+        ById.Clear();
+        foreach (var army in campaign.Armies)
+        {
+            ById[army.Id] = army;
+            if (army.ProvinceId > 0)
+            {
+                if (!ByProvince.TryGetValue(army.ProvinceId, out var here))
+                    ByProvince[army.ProvinceId] = here = new List<Army>();
+                here.Add(army);
+            }
+            if (army.AssignedWarId < 0) continue;
+            if (!ByWar.TryGetValue(army.AssignedWarId, out var fighting))
+                ByWar[army.AssignedWarId] = fighting = new List<Army>();
+            fighting.Add(army);
+        }
+        _provinceIndexStale = false;
+    }
+
     public static void Tick(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;
@@ -79,56 +158,51 @@ public static partial class Warfare
         // was one pass; with seventy it was seventy, and it made warfare the most expensive
         // system in the simulation. Decide once whether the map needs redrawing, redraw it
         // once, and then let each war do its own follow-up.
-        var stale = new List<StrategicWar>();
+        Stale.Clear();
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
             if (war.FrontDirty || war.LastFrontDay < 0 || campaign.ElapsedDays - war.LastFrontDay >= 5)
-                stale.Add(war);
+                Stale.Add(war);
         }
 
-        if (stale.Count > 0)
+        if (Stale.Count > 0)
+        using (SimProfiler.Measure("  war:fronts"))
         {
-            var moved = new HashSet<int>();
-            foreach (var war in stale) if (war.FrontDirty) moved.Add(war.Id);
-            RebuildFronts(campaign);
-            foreach (var war in stale)
-            {
-                UpdateWarMetrics(campaign, war);
-                if (!moved.Contains(war.Id)) continue;
-                FrontPlanner.RefreshAssignments(campaign, war);
-                FrontPlanner.ReassignAi(campaign, war);
-            }
+            Moved.Clear();
+            foreach (var war in Stale) if (war.FrontDirty) Moved.Add(war.Id);
+            using (SimProfiler.Measure("    fr:rebuild")) RebuildFronts(campaign);
+            using (SimProfiler.Measure("    fr:census")) MeasureOccupation(campaign);
+            using (SimProfiler.Measure("    fr:metrics"))
+                foreach (var war in Stale) UpdateWarMetrics(campaign, war);
+            using (SimProfiler.Measure("    fr:refresh"))
+                foreach (var war in Stale)
+                    if (Moved.Contains(war.Id)) FrontPlanner.RefreshAssignments(campaign, war);
+            using (SimProfiler.Measure("    fr:reassign"))
+                foreach (var war in Stale)
+                    if (Moved.Contains(war.Id)) FrontPlanner.ReassignAi(campaign, war);
         }
 
         // Two indexes, built once. ResolveAdvances used to walk every division in the world
         // for every war - seventy wars against fourteen hundred divisions - and then walk
         // them again for each province it was weighing up. Both questions are lookups now.
-        var byProvince = new Dictionary<int, List<Army>>();
-        var byWar = new Dictionary<int, List<Army>>();
-        foreach (var army in campaign.Armies)
+        using (SimProfiler.Measure("  war:index"))
         {
-            if (army.ProvinceId > 0)
+            IndexArmies(campaign);
+            WarById.Clear();
+            foreach (var war in campaign.Wars) WarById[war.Id] = war;
+        }
+
+        using (SimProfiler.Measure("  war:advances"))
+            foreach (var war in campaign.Wars)
             {
-                if (!byProvince.TryGetValue(army.ProvinceId, out var here))
-                    byProvince[army.ProvinceId] = here = new List<Army>();
-                here.Add(army);
+                if (war.Ended) continue;
+                FrontPlanner.UpdateAiExecution(campaign, war);
+                ResolveAdvances(campaign, war);
             }
-            if (army.AssignedWarId < 0) continue;
-            if (!byWar.TryGetValue(army.AssignedWarId, out var fighting))
-                byWar[army.AssignedWarId] = fighting = new List<Army>();
-            fighting.Add(army);
-        }
 
-        foreach (var war in campaign.Wars)
-        {
-            if (war.Ended) continue;
-            FrontPlanner.UpdateAiExecution(campaign, war);
-            ResolveAdvances(campaign, war, byProvince, byWar);
-        }
-
-        ResolveBattles(campaign);
-        SecureOccupation(campaign);
+        using (SimProfiler.Measure("  war:battles")) ResolveBattles(campaign);
+        using (SimProfiler.Measure("  war:occupation")) SecureOccupation(campaign);
         campaign.Battles.RemoveAll(battle => battle.Ended && campaign.ElapsedDays - battle.StartedDay > 180);
     }
 
@@ -137,14 +211,13 @@ public static partial class Warfare
     private static List<Army> In(Dictionary<int, List<Army>> index, int key) =>
         index.TryGetValue(key, out var list) ? list : NoArmies;
 
-    private static void ResolveAdvances(Campaign campaign, StrategicWar war,
-        Dictionary<int, List<Army>> byProvince, Dictionary<int, List<Army>> byWar)
+    private static void ResolveAdvances(Campaign campaign, StrategicWar war)
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
 
-        foreach (var army in In(byWar, war.Id))
+        foreach (var army in In(ByWar, war.Id))
         {
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
@@ -154,35 +227,55 @@ public static partial class Warfare
             var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
             var enemy = campaign.NationById(enemyId);
             if (enemy is null || army.ProvinceId <= 0) continue;
-            var candidates = topology.Neighbors[army.ProvinceId]
-                .Where(province => controllers[province] == (ushort)enemy.MapIndex)
-                .ToArray();
-            if (candidates.Length == 0) continue;
-            if (army.OrderProvinceId > 0 && candidates.Contains(army.OrderProvinceId))
-                candidates = new[] { army.OrderProvinceId };
+            Candidates.Clear();
+            foreach (var province in topology.Neighbors[army.ProvinceId])
+                if (controllers[province] == (ushort)enemy.MapIndex) Candidates.Add(province);
+            if (Candidates.Count == 0) continue;
+            if (army.OrderProvinceId > 0 && Candidates.Contains(army.OrderProvinceId))
+            {
+                Candidates.Clear();
+                Candidates.Add(army.OrderProvinceId);
+            }
             if (army.OrderKind == ArmyOrder.Spearhead && army.ObjectiveStateMapIndex >= 0)
             {
-                var focused = candidates.Where(province => topology.ProvinceToState[province] == army.ObjectiveStateMapIndex).ToArray();
-                if (focused.Length > 0) candidates = focused;
+                // Compacted in place, by index: writing through a list's indexer counts as
+                // modifying it, so a foreach over the same list would throw.
+                var kept = 0;
+                for (var index = 0; index < Candidates.Count; index++)
+                {
+                    var province = Candidates[index];
+                    if (topology.ProvinceToState[province] == army.ObjectiveStateMapIndex)
+                        Candidates[kept++] = province;
+                }
+                if (kept > 0) Candidates.RemoveRange(kept, Candidates.Count - kept);
             }
             // The front AI probes weak sectors and prefers dry crossings. Spearheads
             // accept more terrain risk, while regular advances strongly avoid
-            // needlessly attacking across a defended river line.
+            // needlessly attacking across a defended river line. Picking the best of a
+            // handful of neighbours by hand rather than by OrderBy().First() is the same
+            // choice - lowest score, ties to the lower province id - without the sorter,
+            // the key buffer and the enumerator that went with it every single time.
             var terrainWeight = army.OrderKind == ArmyOrder.Spearhead ? 0.38f : 1f;
-            var target = candidates
-                .OrderBy(province => topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight +
-                    Power(In(byProvince, province), enemyId) * 0.018f)
-                .ThenBy(province => province)
-                .First();
+            var target = -1;
+            var bestScore = 0f;
+            foreach (var province in Candidates)
+            {
+                var score = topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight +
+                    Power(In(ByProvince, province), enemyId) * 0.018f;
+                if (target >= 0 && (score > bestScore || (score == bestScore && province > target))) continue;
+                bestScore = score;
+                target = province;
+            }
             // Everyone standing in the target province, including anyone already fighting
             // there. Excluding divisions that were in a battle meant a province being
             // actively defended looked empty to the next attacker, which walked into it
             // unopposed while the defenders were busy holding it. Ten province captures in
             // eleven came through that hole rather than through winning anything.
-            var present = In(byProvince, target)
-                .Where(other => other.NationId == enemyId && other.Divisions >= 0.1f).ToArray();
+            Present.Clear();
+            foreach (var other in In(ByProvince, target))
+                if (other.NationId == enemyId && other.Divisions >= 0.1f) Present.Add(other);
 
-            if (present.Length == 0)
+            if (Present.Count == 0)
             {
                 var riverAdvance = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier,
                     topology.RiverCrossingStrength(army.ProvinceId, target));
@@ -204,7 +297,7 @@ public static partial class Warfare
                 // costs nothing measurable per day.
                 var coveringPower = 0f;
                 var covering = 0f;
-                Cover(campaign, topology, byProvince, target, enemyId, ref coveringPower, ref covering);
+                Cover(campaign, topology, target, enemyId, ref coveringPower, ref covering);
                 if (coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
                 var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
 
@@ -231,7 +324,7 @@ public static partial class Warfare
                     RiverCrossingStrength = topology.RiverCrossingStrength(army.ProvinceId, target)
                 };
                 campaign.Battles.Add(battle);
-                foreach (var defending in present) Join(battle, defending, false);
+                foreach (var defending in Present) Join(battle, defending, false);
             }
             Join(battle, army, true);
         }
@@ -242,18 +335,24 @@ public static partial class Warfare
         foreach (var battle in campaign.Battles)
         {
             if (battle.Ended) continue;
-            var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId);
+            WarById.TryGetValue(battle.WarId, out var war);
             if (war is null || war.Ended) { Close(campaign, battle, -1, "War ended"); continue; }
 
             ReinforceBattle(campaign, battle);
 
-            foreach (var army in campaign.Armies)
-                if (!army.InBattle && army.ProvinceId == battle.ProvinceId &&
-                    army.NationId == battle.DefenderId && army.Divisions >= 0.1f)
+            // Whoever is standing in the province and not already committed joins the
+            // defence. This used to walk every division in the world once per battle -
+            // three hundred and sixty battles against fourteen hundred divisions, half a
+            // million comparisons a day - to answer a question the province index already
+            // answers. The index is refreshed only after a capture has moved somebody, so
+            // it says exactly what the walk said.
+            if (_provinceIndexStale) IndexArmies(campaign);
+            foreach (var army in In(ByProvince, battle.ProvinceId))
+                if (!army.InBattle && army.NationId == battle.DefenderId && army.Divisions >= 0.1f)
                     Join(battle, army, false);
 
-            var attacking = Side(campaign, battle.Attackers, battle.AttackerId);
-            var defending = Side(campaign, battle.Defenders, battle.DefenderId);
+            var attacking = Side(battle.Attackers, battle.AttackerId, AttackingSide);
+            var defending = Side(battle.Defenders, battle.DefenderId, DefendingSide);
             if (attacking.Count == 0) { Close(campaign, battle, battle.DefenderId, "Attackers withdrew"); continue; }
             if (defending.Count == 0)
             {
@@ -437,6 +536,9 @@ public static partial class Warfare
         IReadOnlyCollection<Army> advancing, IReadOnlyCollection<Army> retreating, string how)
     {
         Tally(war.Id, "capture: " + how);
+        // Taking a province moves whoever took it, so the province index no longer
+        // describes where everyone is standing.
+        _provinceIndexStale = true;
         var winner = campaign.NationById(winnerId);
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -491,12 +593,19 @@ public static partial class Warfare
         var controllers = campaign.ProvinceController;
         var occupation = campaign.ProvinceOccupation;
         if (controllers is null || occupation is null) return;
+        // The garrison is whoever is standing in the province. Asking that with a Where
+        // over the whole army list, once per occupied province per day, was a thousand
+        // occupied provinces times fourteen hundred divisions - and it made securing
+        // occupations the single slowest thing the simulation did.
+        if (_provinceIndexStale) IndexArmies(campaign);
         foreach (var war in campaign.Wars)
         foreach (var pair in war.OriginalController)
         {
             var province = pair.Key;
             if (controllers[province] == pair.Value) { occupation[province] = 0f; continue; }
-            var garrison = campaign.Armies.Where(army => army.ProvinceId == province && !army.InBattle).Sum(army => army.Power);
+            var garrison = 0f;
+            foreach (var army in In(ByProvince, province))
+                if (!army.InBattle) garrison += army.Power;
             occupation[province] = M.Clamp01(occupation[province] + campaign.Defines.OccupationDailyProgress *
                 M.Clamp(garrison / 3f, 0.25f, 1f));
         }
@@ -511,24 +620,10 @@ public static partial class Warfare
         if (topology is null || controllers is null || attacker is null || defender is null) return;
         var attackerMap = (ushort)attacker.MapIndex;
         var defenderMap = (ushort)defender.MapIndex;
-        var attackerHome = 0;
-        var defenderHome = 0;
-        var attackerOccupied = 0;
-        var defenderOccupied = 0;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-        {
-            var original = topology.ProvinceToNation[province];
-            if (original == attackerMap)
-            {
-                attackerHome++;
-                if (controllers[province] == defenderMap) attackerOccupied++;
-            }
-            else if (original == defenderMap)
-            {
-                defenderHome++;
-                if (controllers[province] == attackerMap) defenderOccupied++;
-            }
-        }
+        var attackerHome = HomeProvinces.GetValueOrDefault(attackerMap);
+        var defenderHome = HomeProvinces.GetValueOrDefault(defenderMap);
+        var attackerOccupied = Occupied(attackerMap, defenderMap);
+        var defenderOccupied = Occupied(defenderMap, attackerMap);
         war.OccupationScore = (defenderHome == 0 ? 0f : defenderOccupied * 65f / defenderHome) -
                               (attackerHome == 0 ? 0f : attackerOccupied * 65f / attackerHome);
         var totalLosses = war.AttackerLosses + war.DefenderLosses;
@@ -669,14 +764,18 @@ public static partial class Warfare
     /// fraction of a division's worth of resistance, not none and not all of it.
     /// </summary>
     private static void Cover(Campaign campaign, ProvinceTopology topology,
-        Dictionary<int, List<Army>> byProvince, int target, int enemyId,
-        ref float coveringPower, ref float covering)
+        int target, int enemyId, ref float coveringPower, ref float covering)
     {
         var radius = Math.Max(1, campaign.Defines.FrontCoverageRadius);
         var falloff = M.Clamp01(campaign.Defines.FrontCoverageFalloff);
-        var seen = new HashSet<int> { target };
-        var ring = new List<int> { target };
-        var next = new List<int>();
+        var seen = CoverSeen;
+        var ring = CoverRing;
+        var next = CoverNext;
+        seen.Clear();
+        seen.Add(target);
+        ring.Clear();
+        ring.Add(target);
+        next.Clear();
         var weight = 1f;
         for (var hop = 0; hop < radius; hop++)
         {
@@ -686,7 +785,7 @@ public static partial class Warfare
             {
                 if (!seen.Add(neighbour)) continue;
                 next.Add(neighbour);
-                foreach (var other in In(byProvince, neighbour))
+                foreach (var other in In(ByProvince, neighbour))
                 {
                     if (other.NationId != enemyId || other.Divisions < 0.1f) continue;
                     coveringPower += M.Max(other.Power,
@@ -711,10 +810,22 @@ public static partial class Warfare
         return divisions <= 0f ? 0f : side.Sum(army => army.Planning * M.Max(0.01f, army.Divisions)) / divisions;
     }
 
-    private static List<Army> Side(Campaign campaign, IEnumerable<int> ids, int nationId) => ids
-        .Select(id => campaign.Armies.Find(army => army.Id == id))
-        .Where(army => army is not null && army.NationId == nationId && army.Divisions >= 0.1f)
-        .ToList();
+    /// <summary>
+    /// The formations on one side of a battle, in the order the battle listed them.
+    ///
+    /// This used to resolve every id with a linear search of the whole army list, once per
+    /// side per battle per day: three hundred and sixty battles times fourteen hundred
+    /// divisions times the ids on each side. It is a dictionary lookup now, and the result
+    /// goes into a buffer the caller owns rather than a fresh list.
+    /// </summary>
+    private static List<Army> Side(IEnumerable<int> ids, int nationId, List<Army> into)
+    {
+        into.Clear();
+        foreach (var id in ids)
+            if (ById.TryGetValue(id, out var army) && army.NationId == nationId && army.Divisions >= 0.1f)
+                into.Add(army);
+        return into;
+    }
 
     private static void Join(LandBattle battle, Army army, bool attacker)
     {

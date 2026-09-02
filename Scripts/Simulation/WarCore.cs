@@ -153,26 +153,48 @@ public static partial class Warfare
 
 public static partial class FrontPlanner
 {
+    /// <summary>
+    /// The provinces a reserve stands on: everything of ours that touches our own front
+    /// without being on it.
+    ///
+    /// This is the same answer for every formation of a nation in a war, and it was being
+    /// worked out separately for each of them - twice, because issuing the order asked for
+    /// it again - by walking the whole front and all its neighbours and building a fresh
+    /// set each time. That was most of the garbage the war pass made. It is worked out once
+    /// and kept until the front is redrawn or a province changes hands, which is exactly
+    /// when the answer can change.
+    /// </summary>
+    private static readonly Dictionary<long, (int Stamp, HashSet<int> Line)> ReserveLines = new();
+
     public static HashSet<int> ReserveLine(Campaign campaign, StrategicWar war, int nationId)
     {
-        var result = new HashSet<int>();
         var topology = campaign.ProvinceMap;
         var nation = campaign.NationById(nationId);
         var controllers = campaign.ProvinceController;
-        if (topology is null || nation is null || controllers is null) return result;
+        if (topology is null || nation is null || controllers is null) return new HashSet<int>();
+
+        var key = ((long)war.Id << 32) | (uint)nationId;
+        var stamp = HashCode.Combine(war.LastFrontDay, campaign.MapRevision,
+            war.AttackerFront.Count, war.DefenderFront.Count);
+        if (ReserveLines.TryGetValue(key, out var cached) && cached.Stamp == stamp) return cached.Line;
+
+        var result = new HashSet<int>();
         var front = war.FriendlyFront(nationId);
         foreach (var province in front)
         foreach (var neighbor in topology.Neighbors[province])
             if (!front.Contains(neighbor) && controllers[neighbor] == nation.MapIndex)
                 result.Add(neighbor);
-        return result.Count > 0 ? result : new HashSet<int>(front);
+        if (result.Count == 0) result = new HashSet<int>(front);
+        ReserveLines[key] = (stamp, result);
+        return result;
     }
 
     public static void RefreshAssignments(Campaign campaign, StrategicWar war)
     {
-        foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id &&
-                     army.OrderKind != ArmyOrder.Manual && !army.InBattle).ToArray())
+        foreach (var army in campaign.Armies)
         {
+            if (army.AssignedWarId != war.Id || army.OrderKind == ArmyOrder.Manual || army.InBattle)
+                continue;
             var expected = BattlePlanning.Posts(campaign, war, army);
             if (expected.Count == 0 || expected.Contains(army.ProvinceId) ||
                 (army.OrderProvinceId > 0 && expected.Contains(army.OrderProvinceId)))

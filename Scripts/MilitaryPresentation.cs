@@ -94,15 +94,31 @@ public sealed partial class GlobePresentation
         foreach (var (marker, stack) in _armyByMarker)
         {
             if (!IsInstanceValid(marker)) continue;
-            var army = stack.FirstOrDefault();
-            if (army is null) continue;
-            var anySelected = stack.Any(division => _selectedArmyIds.Contains(division.Id));
-            var anyBattle = stack.Any(division => division.InBattle);
-            var anyMoving = stack.Any(division => division.IsMoving);
-            var organisation = stack.Average(division => division.Organisation);
-            var planning = stack.Average(division => division.Planning);
-            var supply = stack.Average(division => division.SupplyLevel);
-            var cutOff = stack.Any(division => division.CutOff);
+            if (stack.Count == 0) continue;
+            // One pass instead of seven. This runs for every counter on the map every
+            // frame, and each of those Any and Average calls was a delegate and an
+            // enumerator - some seven thousand of them a frame, for arithmetic over a
+            // handful of divisions.
+            var anySelected = false;
+            var anyBattle = false;
+            var anyMoving = false;
+            var cutOff = false;
+            var organisationSum = 0f;
+            var planningSum = 0f;
+            var supplySum = 0f;
+            foreach (var division in stack)
+            {
+                if (_selectedArmyIds.Contains(division.Id)) anySelected = true;
+                if (division.InBattle) anyBattle = true;
+                if (division.IsMoving) anyMoving = true;
+                if (division.CutOff) cutOff = true;
+                organisationSum += division.Organisation;
+                planningSum += division.Planning;
+                supplySum += division.SupplyLevel;
+            }
+            var organisation = organisationSum / stack.Count;
+            var planning = planningSum / stack.Count;
+            var supply = supplySum / stack.Count;
             var plate = marker.GetChildOrNull<Sprite3D>(0);
             var count = marker.GetNodeOrNull<Label3D>("DivisionCount");
             var status = marker.GetNodeOrNull<Label3D>("OperationalStatus");
@@ -132,18 +148,55 @@ public sealed partial class GlobePresentation
         UpdateBattleMarkers();
     }
 
+    private int _battleMarkerDay = -1;
+    private readonly HashSet<int> _activeBattleIds = new();
+    private readonly List<int> _finishedBattleIds = new();
+    private readonly Dictionary<int, Simulation.Army> _armyById = new();
+
+    /// <summary>
+    /// Which battles are on the map, and how they are going.
+    ///
+    /// All of this used to run every frame, and the worst of it resolved each participant
+    /// by searching the whole army list: three hundred battles, a handful of divisions
+    /// each, fourteen hundred divisions to search - millions of comparisons sixty times a
+    /// second, to redraw numbers that only change when a day passes. Battles start, end and
+    /// grind only inside a tick, so the work happens once a day; only the placement, which
+    /// follows the camera, still happens every frame.
+    /// </summary>
     private void UpdateBattleMarkers()
     {
         if (!IsInstanceValid(_battleRoot) || _campaign?.ProvinceMap is null) return;
-        var active = _campaign.Battles.Where(battle => !battle.Ended).ToDictionary(battle => battle.Id);
-        foreach (var old in _battleMarkers.Keys.Where(id => !active.ContainsKey(id)).ToArray())
+        if (_battleMarkerDay != _campaign.ElapsedDays)
+        {
+            _battleMarkerDay = _campaign.ElapsedDays;
+            RebuildBattleMarkers();
+        }
+        foreach (var marker in _battleMarkers.Values)
+            if (IsInstanceValid(marker.Node)) PositionBattleMarker(marker.Node, marker.Normal);
+        FinishBattleMarkers();
+    }
+
+    private void RebuildBattleMarkers()
+    {
+        _activeBattleIds.Clear();
+        foreach (var battle in _campaign.Battles)
+            if (!battle.Ended) _activeBattleIds.Add(battle.Id);
+
+        _finishedBattleIds.Clear();
+        foreach (var id in _battleMarkers.Keys)
+            if (!_activeBattleIds.Contains(id)) _finishedBattleIds.Add(id);
+        foreach (var old in _finishedBattleIds)
         {
             if (IsInstanceValid(_battleMarkers[old].Node)) _battleMarkers[old].Node.QueueFree();
             _battleMarkers.Remove(old);
         }
 
-        foreach (var battle in active.Values)
+        _armyById.Clear();
+        foreach (var army in _campaign.Armies) _armyById[army.Id] = army;
+
+        foreach (var battle in _campaign.Battles)
         {
+            if (battle.Ended) continue;
             if (!_battleMarkers.TryGetValue(battle.Id, out var marker))
             {
                 var center = _campaign.ProvinceMap.CenterOf(battle.ProvinceId);
@@ -171,16 +224,29 @@ public sealed partial class GlobePresentation
                 _battleMarkers[battle.Id] = marker;
             }
 
-            var attackers = battle.Attackers.Select(id => _campaign.Armies.Find(army => army.Id == id)).Where(army => army is not null).ToArray();
-            var defenders = battle.Defenders.Select(id => _campaign.Armies.Find(army => army.Id == id)).Where(army => army is not null).ToArray();
-            var attackerOrganisation = attackers.Length == 0 ? 0f : attackers.Average(army => army!.Organisation);
-            var defenderOrganisation = defenders.Length == 0 ? 0f : defenders.Average(army => army!.Organisation);
             var label = marker.Node.GetNodeOrNull<Label3D>("BattleBalance");
             if (label is not null)
-                label.Text = $"{attackerOrganisation * 100f:00}  |  {defenderOrganisation * 100f:00}";
-            PositionBattleMarker(marker.Node, marker.Normal);
+                label.Text = $"{SideOrganisation(battle.Attackers) * 100f:00}  |  " +
+                             $"{SideOrganisation(battle.Defenders) * 100f:00}";
         }
+    }
 
+    private float SideOrganisation(List<int> ids)
+    {
+        var sum = 0f;
+        var count = 0;
+        foreach (var id in ids)
+        {
+            if (!_armyById.TryGetValue(id, out var army)) continue;
+            sum += army.Organisation;
+            count++;
+        }
+        return count == 0 ? 0f : sum / count;
+    }
+
+    /// <summary>Which markers the camera can see. Cheap, and camera-dependent, so per frame.</summary>
+    private void FinishBattleMarkers()
+    {
         _battleRoot.Visible = _flatMap ? _flatZoom <= 9.4f : _distance <= 14f;
         if (!_flatMap && _battleRoot.Visible)
         {

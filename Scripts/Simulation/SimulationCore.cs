@@ -546,6 +546,13 @@ public static class SimProfiler
         public double LastMilliseconds;
         public double AverageMilliseconds;
         public int Runs;
+
+        /// <summary>
+        /// Bytes this pass has asked the allocator for, in total. Wall time on a machine
+        /// that is also running an editor is noise; garbage is not, and garbage is what
+        /// turns into a stutter every time the collector has to catch up.
+        /// </summary>
+        public long AllocatedBytes;
     }
 
     private static readonly Dictionary<string, Sample> Samples = new();
@@ -558,22 +565,26 @@ public static class SimProfiler
     {
         private readonly string _name;
         private readonly long _started;
+        private readonly long _allocated;
 
         public Scope(string name)
         {
             _name = name;
+            _allocated = GC.GetAllocatedBytesForCurrentThread();
             _started = Stopwatch.GetTimestamp();
         }
 
         public void Dispose()
         {
             var elapsed = (Stopwatch.GetTimestamp() - _started) * 1000.0 / Stopwatch.Frequency;
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - _allocated;
             if (!Samples.TryGetValue(_name, out var sample))
             {
                 sample = new Sample { Name = _name };
                 Samples.Add(_name, sample);
             }
 
+            sample.AllocatedBytes += allocated;
             sample.LastMilliseconds = elapsed;
             sample.AverageMilliseconds = sample.Runs == 0
                 ? elapsed
