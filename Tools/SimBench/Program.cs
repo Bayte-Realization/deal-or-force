@@ -88,6 +88,9 @@ public static class Program
                 RegionsSplitAlongNewBorders(campaign));
         if (mapped)
             failures += Check("a redrawn border survives a save", BordersSurviveASave(campaign));
+        if (mapped)
+            failures += Check("a peace can be written, priced, refused and signed",
+                APeaceCanBeWritten(campaign));
 
         Console.WriteLine();
         Console.WriteLine(failures == 0
@@ -600,6 +603,95 @@ public static class Program
 
         Console.WriteLine($"  save round trip: {states:N0} regions including {dynamic:N0} created by a border, " +
                           $"and every province came back where the peace left it.");
+        return "";
+    }
+
+    /// <summary>
+    /// Write a peace and sign it. The invariants that matter are the ones that make it a
+    /// negotiation rather than a wish: ground you never took has to cost more than ground
+    /// you hold, the bill has to be refused when it exceeds what the war was worth, and
+    /// signing has to actually move the border and end the war.
+    /// </summary>
+    private static string APeaceCanBeWritten(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+        var war = campaign.Wars.Find(candidate => !candidate.Ended);
+        if (war is null) return "no war left to negotiate";
+
+        var winner = campaign.NationById(war.AttackerId);
+        var loser = campaign.NationById(war.DefenderId);
+        if (winner is null || loser is null) return "the war has no belligerents";
+
+        var ledger = new PeaceLedger(campaign, war, winner.Id);
+        var claimable = PeaceConference.Claimable(campaign, war, winner.Id);
+        if (claimable.Count == 0) return $"{loser.Tag} owns nothing that could be demanded";
+
+        // Ground the winner holds against ground it has never touched.
+        var held = claimable.FirstOrDefault(province =>
+            campaign.ProvinceController[province] == (ushort)winner.MapIndex);
+        var untouched = claimable.FirstOrDefault(province =>
+            campaign.ProvinceController[province] == (ushort)loser.MapIndex);
+        if (held > 0 && untouched > 0)
+        {
+            var heldPrice = ledger.Price(held);
+            var untouchedPrice = ledger.Price(untouched);
+            if (untouchedPrice.Cost <= heldPrice.Cost)
+                return $"taking ground never touched ({untouchedPrice.Cost:0.00}) is not dearer than " +
+                       $"taking ground already held ({heldPrice.Cost:0.00})";
+        }
+
+        // A demand nobody could pay for has to be refused, with a reason.
+        var greedy = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        foreach (var province in claimable) greedy.Provinces.Add(province);
+        greedy.Humiliate = true;
+        var refusal = PeaceConference.BlockReason(campaign, war, greedy);
+        if (refusal.Length == 0)
+            return $"annexing all {claimable.Count:N0} of {loser.Tag} was accepted; the budget is not binding";
+        if (!refusal.Contains("will not sign", StringComparison.Ordinal))
+            return $"the refusal does not explain itself: \"{refusal}\"";
+
+        // A demand inside the budget has to be accepted, and has to move the border.
+        var demand = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        foreach (var province in claimable
+                     .Where(province => campaign.ProvinceController[province] == (ushort)winner.MapIndex)
+                     .OrderBy(province => ledger.Price(province).Cost))
+        {
+            demand.Provinces.Add(province);
+            if (ledger.Cost(demand) > ledger.Budget * 0.8f)
+            {
+                demand.Provinces.Remove(province);
+                break;
+            }
+        }
+        if (demand.Provinces.Count == 0)
+        {
+            Console.WriteLine($"  peace: {winner.Tag} holds nothing worth {ledger.Budget:0} of war score; " +
+                              "an affordable territorial demand does not exist yet.");
+            return "";
+        }
+
+        var block = PeaceConference.BlockReason(campaign, war, demand);
+        if (block.Length > 0) return $"an affordable demand was still refused: {block}";
+
+        var before = demand.Provinces.Count(province =>
+            topology.ProvinceToNation[province] == (ushort)winner.MapIndex);
+        var cost = ledger.Cost(demand);
+        var states = campaign.States.Count;
+        if (!PeaceConference.Resolve(campaign, war, demand))
+            return "an affordable, unblocked demand failed to resolve";
+
+        if (!war.Ended) return "the peace was signed and the war is still running";
+        var after = demand.Provinces.Count(province =>
+            topology.ProvinceToNation[province] == (ushort)winner.MapIndex);
+        if (after != demand.Provinces.Count)
+            return $"{demand.Provinces.Count - after} demanded province(s) did not change owner";
+        if (before == after) return "the border did not move";
+
+        Console.WriteLine($"  peace: {winner.Tag} took {demand.Provinces.Count:N0} province(s) from {loser.Tag} " +
+                          $"for {cost:0.0} of {ledger.Budget:0.0} war score, " +
+                          $"splitting {campaign.States.Count - states} region(s).");
+        Console.WriteLine($"    {war.PeaceSummary}");
         return "";
     }
 

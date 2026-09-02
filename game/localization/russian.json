@@ -286,5 +286,19 @@
   "Region": "Регион",
   "Army": "Армия",
   "Click a division to command it alone · Ctrl+click to add or remove · double-click to take every division of the same template": "Клик по дивизии — командовать ей одной · Ctrl+клик — добавить или убрать · двойной клик — взять все дивизии того же типа",
-  "Right-click to march or attack · Shift+right-click queues a waypoint": "ПКМ — марш или атака · Shift+ПКМ — добавить путевую точку"
+  "Right-click to march or attack · Shift+right-click queues a waypoint": "ПКМ — марш или атака · Shift+ПКМ — добавить путевую точку",
+  "PEACE CONFERENCE": "МИРНАЯ КОНФЕРЕНЦИЯ",
+  "TERRITORY DEMANDED": "ТРЕБУЕМАЯ ТЕРРИТОРИЯ",
+  "OTHER TERMS": "ПРОЧИЕ УСЛОВИЯ",
+  "Open the peace conference": "Открыть мирную конференцию",
+  "Trade concessions": "Торговые уступки",
+  "Demilitarise them": "Разоружить их",
+  "Humiliate them": "Унизить их",
+  "Ten-year truce": "Десятилетнее перемирие",
+  "Clear": "Сбросить",
+  "Claim held": "Взять занятое",
+  "Propose": "Предложить",
+  "Leave": "Уйти",
+  "Nothing claimed yet.": "Пока ничего не затребовано.",
+  "Drag the left button across the map to claim ground · drag the right button to give it back · click a region below to take or release all of it": "Тяните левой кнопкой по карте, чтобы забирать землю · правой — возвращать · клик по региону ниже берёт или отдаёт его целиком"
 }

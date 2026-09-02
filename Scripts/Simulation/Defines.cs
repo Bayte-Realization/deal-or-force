@@ -283,6 +283,35 @@ public sealed class Defines
 	public int SupplyTraceRange { get; set; } = 20;
 
 	/// <summary>War score at which the losing side gives in.</summary>
+	// ---- Peace conference: what a demand costs against the war score that buys it ----
+
+	/// <summary>Base price of keeping one province in a written peace.</summary>
+	public float PeaceCostPerProvince { get; set; } = 0.9f;
+
+	/// <summary>Multiplier for ground held and secured. What you hold is cheap to keep.</summary>
+	public float PeaceCostSecuredFactor { get; set; } = 1.0f;
+
+	/// <summary>Multiplier for ground held but not yet secured.</summary>
+	public float PeaceCostHeldFactor { get; set; } = 1.8f;
+
+	/// <summary>Multiplier for ground never taken. A conference is not a land grab.</summary>
+	public float PeaceCostUnheldFactor { get; set; } = 4.5f;
+
+	/// <summary>Discount inside the war goal that was actually declared.</summary>
+	public float PeaceCostWarGoalFactor { get; set; } = 0.65f;
+
+	/// <summary>Multiplier on the region holding the loser's seat of government.</summary>
+	public float PeaceCostCapitalFactor { get; set; } = 2.6f;
+
+	/// <summary>People per province at which the population surcharge reaches one.</summary>
+	public float PeaceCostPopulationScale { get; set; } = 400_000f;
+
+	public float PeaceCostReparations { get; set; } = 14f;
+	public float PeaceCostTradeConcessions { get; set; } = 11f;
+	public float PeaceCostDemilitarise { get; set; } = 22f;
+	public float PeaceCostHumiliate { get; set; } = 26f;
+	public float PeaceCostLongTruce { get; set; } = 9f;
+
 	public float WarScoreForVictory { get; set; } = 55f;
 
 	/// <summary>Base daily progress with which an occupied province is secured. A local

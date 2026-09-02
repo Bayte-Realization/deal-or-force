@@ -128,6 +128,7 @@ public partial class DealOrForceGame
                 "loc" or "localization" => ConsoleLocalization(argument),
                 "effects" => ConsoleEffectVocabulary(),
                 "skin" or "interface" => ConsoleSkin(argument),
+                "peace" or "conference" => ConsolePeaceConference(),
                 "date" => _campaign?.Date.ToString() ?? "No campaign",
                 _ => $"Unknown command '{command}'. Type help."
             };
@@ -148,7 +149,19 @@ public partial class DealOrForceGame
         Bb("text.accent") + "MAP[/color]  mapmode pol/dip/war/pop/gdp · focus LAT LON · teleport PROVINCE\n" +
         Bb("text.accent") + "STATE[/color]  money AMOUNT · manpower AMOUNT · stability 0-100\n" +
         Bb("text.accent") + "DEBUG[/color]  fps · sim · armies · fronts · province · date · clear\n" +
-        Bb("text.accent") + "CONTENT[/color]  economy · effects · loc [language] · skin [token]";
+        Bb("text.accent") + "CONTENT[/color]  economy · effects · loc [language] · skin [token]\n" +
+        Bb("text.accent") + "WAR[/color]  peace - open the conference for your current war";
+
+    /// <summary>Open the peace conference for whatever war the player is fighting.</summary>
+    private string ConsolePeaceConference()
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var war = _campaign.Wars.FirstOrDefault(candidate => !candidate.Ended && candidate.Involves(_campaign.Player.Id));
+        if (war is null) return $"{_campaign.Player.Name} is not at war.";
+        CloseDeveloperConsole();
+        OpenPeaceConference(war);
+        return "";
+    }
 
     /// <summary>
     /// What the interface is actually painted with. With no argument it reports which

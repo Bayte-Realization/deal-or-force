@@ -102,6 +102,42 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public event Action<IReadOnlyList<Simulation.Army>> ArmiesBoxPicked;
     public event Action<GlobePick> ProvinceCommanded;
 
+    /// <summary>
+    /// Painting a peace. While this is on, the map is a canvas: dragging the left button
+    /// claims the provinces under the cursor and the right button gives them back, which is
+    /// the same gesture a player already uses to draw a battle plan.
+    /// </summary>
+    public bool PaintMode { get; set; }
+
+    /// <summary>A painted province, and whether the stroke was claiming or releasing it.</summary>
+    public event Action<GlobePick, bool> ProvincePainted;
+
+    private bool _painting;
+    private bool _paintingClaims;
+    private int _lastPaintedProvince = -1;
+    private readonly HashSet<int> _peacePreview = new();
+    private ushort _peacePreviewOwner;
+
+    /// <summary>
+    /// Show a demand on the map as the border it would produce. The provinces are drawn in
+    /// the claimant's own colour, so the player is looking at the peace rather than at a
+    /// list describing one.
+    /// </summary>
+    public void SetPeacePreview(IEnumerable<int> provinces, int ownerMapIndex)
+    {
+        _peacePreview.Clear();
+        if (provinces is not null) foreach (var province in provinces) _peacePreview.Add(province);
+        _peacePreviewOwner = (ushort)ownerMapIndex;
+        RefreshProvinceControllers();
+    }
+
+    public void ClearPeacePreview()
+    {
+        if (_peacePreview.Count == 0) return;
+        _peacePreview.Clear();
+        RefreshProvinceControllers();
+    }
+
     public void BindCampaign(Simulation.Campaign campaign)
     {
         _campaign = campaign;
@@ -360,6 +396,51 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _targetDistance = Mathf.Clamp(distance, MinimumDistance, MaximumDistance);
     }
 
+    /// <summary>
+    /// The brush. A press starts a stroke, motion continues it, and a release ends it;
+    /// each province is reported once per stroke so dragging slowly does not send the same
+    /// province forty times. Returns true when the event was a stroke, so ordinary picking
+    /// and camera dragging stay out of the way while a peace is being drawn.
+    /// </summary>
+    private bool HandlePaintInput(InputEvent inputEvent)
+    {
+        if (inputEvent is InputEventMouseButton button &&
+            button.ButtonIndex is MouseButton.Left or MouseButton.Right)
+        {
+            if (button.Pressed)
+            {
+                _painting = true;
+                _paintingClaims = button.ButtonIndex == MouseButton.Left;
+                _lastPaintedProvince = -1;
+                Paint(button.Position);
+            }
+            else
+            {
+                _painting = false;
+                _lastPaintedProvince = -1;
+            }
+            AcceptEvent();
+            return true;
+        }
+
+        if (inputEvent is InputEventMouseMotion motion && _painting)
+        {
+            Paint(motion.Position);
+            AcceptEvent();
+            return true;
+        }
+
+        return false;
+    }
+
+    private void Paint(Vector2 pixel)
+    {
+        if (!TryPick(pixel, out var pick, updateSelection: false)) return;
+        if (pick.ProvinceId <= 0 || pick.ProvinceId == _lastPaintedProvince) return;
+        _lastPaintedProvince = pick.ProvinceId;
+        ProvincePainted?.Invoke(pick, _paintingClaims);
+    }
+
     private bool TryPick(Vector2 pixel, out GlobePick pick, bool updateSelection = true)
     {
         pick = default;
@@ -609,6 +690,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _GuiInput(InputEvent inputEvent)
     {
+        if (PaintMode && HandlePaintInput(inputEvent)) return;
+
         if (inputEvent is InputEventMouseButton button)
         {
             if (button.ButtonIndex == MouseButton.Left)
@@ -1214,6 +1297,23 @@ void fragment() {
             pixels[write + 2] = (byte)((packed >> 8) & 0xFF);
             pixels[write + 3] = 255;
         }
+        // The peace being negotiated is drawn over the controller map, so the player sees
+        // the border they are proposing rather than the one that exists.
+        if (_peacePreview.Count > 0)
+        {
+            var packed = _colorByMapIndex.TryGetValue(_peacePreviewOwner, out var claimColor)
+                ? claimColor : 0xE7C966FFu;
+            foreach (var province in _peacePreview)
+            {
+                if (province <= 0 || province > topology.ProvinceCount) continue;
+                var write = province * 4;
+                pixels[write] = (byte)((packed >> 24) & 0xFF);
+                pixels[write + 1] = (byte)((packed >> 16) & 0xFF);
+                pixels[write + 2] = (byte)((packed >> 8) & 0xFF);
+                pixels[write + 3] = 255;
+            }
+        }
+
         var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         if (_controllerTexture is null)
         {

@@ -117,7 +117,9 @@ public partial class DealOrForceGame : Control
         if (_handoverLayer is { Visible: true }) return;
         if (_eventLayer is { Visible: true }) return;
 
-        if (_pauseMenuLayer is { Visible: true })
+        if (_peaceLayer is { Visible: true })
+            ClosePeaceConference();
+        else if (_pauseMenuLayer is { Visible: true })
             HidePauseMenu();
         else if (_ledgerLayer is { Visible: true })
             CloseLedger();
@@ -383,6 +385,7 @@ public partial class DealOrForceGame : Control
         sideRows.AddChild(_militarySpendingReadout);
 
         BuildArmyPanel();
+        BuildPeaceConference();
         BuildLedgerInterface();
         BuildMapControls();
         BuildStrategicHud();

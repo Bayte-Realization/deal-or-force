@@ -15,6 +15,19 @@ public partial class DealOrForceGame
         _warControls.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_warControls);
         _warControls.AddChild(Title("PEACE NEGOTIATION", 12, Ui.Colour("text.caption")));
+
+        // The written settlement first: the fixed terms below it are shortcuts for peaces
+        // that happen to fit a name, and this is the one for every peace that does not.
+        var conference = ActionButton("Open the peace conference", () =>
+        {
+            var war = PlayerWar();
+            if (war is null) { _peaceStatus.Text = "You are not at war."; return; }
+            OpenPeaceConference(war);
+        }, 310, 36, true);
+        conference.TooltipText = "Draw the settlement on the map: claim the ground you mean to keep, " +
+                                 "priced against what the war is actually worth.";
+        _warControls.AddChild(conference);
+
         var ceasefire = ActionButton("Ceasefire", () => ProposePeace(PeaceTerms.Ceasefire), 150, 32);
         ceasefire.TooltipText = PeaceNegotiation.Description(PeaceTerms.Ceasefire);
         _warControls.AddChild(ceasefire);

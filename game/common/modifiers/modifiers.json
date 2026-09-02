@@ -53,5 +53,27 @@
     "days": 450,
     "positive": true,
     "effects": { "productivity": 0.0018, "construction_capacity": 0.003 }
+  },
+  "humiliated": {
+    "name": "Humiliated at the table",
+    "description": "The terms were read out in public. Nobody in the country has forgotten who signed them, and nobody has forgotten who made them.",
+    "days": 1095,
+    "positive": false,
+    "effects": {
+      "war_support": -0.0009,
+      "stability": -0.0007,
+      "state.radicalism": 0.0016
+    }
+  },
+  "ceded_territory": {
+    "name": "Ceded territory",
+    "description": "Land the country still names on its own maps is administered from another capital.",
+    "days": 1825,
+    "positive": false,
+    "effects": {
+      "stability": -0.0005,
+      "war_support": 0.0006,
+      "state.radicalism": 0.0011
+    }
   }
 }
