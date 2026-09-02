@@ -69,6 +69,13 @@ public static class StrategicDeploymentPlanner
                         Math.Max(1, armies.Length - operationalCount), nation.MapIndex + 31);
 
                 Place(armies[index], province, topology);
+
+                // A campaign that opens in the third year of a war does not open with
+                // everyone standing in the open. Divisions posted to a live front start
+                // dug in; the rest have a peacetime spadeful.
+                armies[index].Entrenchment = activeWar is not null && index < operationalCount
+                    ? campaign.Defines.EntrenchmentAtScenarioStart
+                    : 0.20f;
             }
         }
     }
@@ -85,7 +92,6 @@ public static class StrategicDeploymentPlanner
         army.MoveProgress = 0f;
         army.OrderProvinceId = -1;
         army.OrderStateMapIndex = -1;
-        army.Entrenchment = 0.20f;
     }
 
     private static int EvenlySpaced(IReadOnlyList<int> values, int index, int count, int salt)

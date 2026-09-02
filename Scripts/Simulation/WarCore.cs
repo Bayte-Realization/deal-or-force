@@ -193,30 +193,41 @@ public static partial class FrontPlanner
         var defend = (int)MathF.Round(armies.Count * profile.DefendShare);
         for (var index = 0; index < armies.Count; index++)
         {
+            var army = armies[index];
             var order = index < spearhead ? ArmyOrder.Spearhead :
                 index < advance ? ArmyOrder.AdvanceFront :
                 index < advance + defend ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
-            new SetArmyOrderCommand
-            {
-                IssuerId = nationId,
-                ArmyId = armies[index].Id,
-                ObjectiveStateMapIndex = war.ClaimedStateMapIndex,
-                Order = order
-            }.Apply(campaign);
-            new SetArmyStanceCommand
-            {
-                IssuerId = nationId,
-                ArmyId = armies[index].Id,
-                Stance = order == ArmyOrder.Spearhead || order == ArmyOrder.AdvanceFront
-                    ? profile.OffensiveStance
-                    : order == ArmyOrder.DefendFront ? profile.DefensiveStance : ArmyStance.Balanced
-            }.Apply(campaign);
-            new SetArmyPlanExecutionCommand
-            {
-                IssuerId = nationId,
-                ArmyId = armies[index].Id,
-                Active = armies[index].Planning >= profile.ExecutePlanningThreshold
-            }.Apply(campaign);
+            var stance = order == ArmyOrder.Spearhead || order == ArmyOrder.AdvanceFront
+                ? profile.OffensiveStance
+                : order == ArmyOrder.DefendFront ? profile.DefensiveStance : ArmyStance.Balanced;
+
+            // Re-issuing an order a division already has is not free: it clears the route,
+            // picks a fresh target from a front list that shifts every time a province
+            // changes hands, and sends the division marching sideways - which costs
+            // planning. Doing that to the whole army every time the line moved meant an AI
+            // that spent its war walking up and down its own front and never attacked.
+            // A division is only re-tasked when what is being asked of it actually changed.
+            if (army.OrderKind != order || (order == ArmyOrder.Spearhead &&
+                    army.ObjectiveStateMapIndex != war.ClaimedStateMapIndex))
+                new SetArmyOrderCommand
+                {
+                    IssuerId = nationId,
+                    ArmyId = army.Id,
+                    ObjectiveStateMapIndex = war.ClaimedStateMapIndex,
+                    Order = order
+                }.Apply(campaign);
+
+            if (army.Stance != stance)
+                new SetArmyStanceCommand { IssuerId = nationId, ArmyId = army.Id, Stance = stance }.Apply(campaign);
+
+            var execute = army.Planning >= profile.ExecutePlanningThreshold;
+            if (army.PlanActive != execute)
+                new SetArmyPlanExecutionCommand
+                {
+                    IssuerId = nationId,
+                    ArmyId = army.Id,
+                    Active = execute
+                }.Apply(campaign);
         }
     }
 }

@@ -1,29 +1,101 @@
+// Formation templates, stated the way Hearts of Iron states a division.
+//
+//   soft_attack   damage against unarmoured targets - infantry, guns, everything else
+//   hard_attack   damage against armour; nearly wasted on infantry, decisive on tanks
+//   defense       protection while holding ground
+//   breakthrough  protection while attacking - defense's offensive twin
+//   armour        above the enemy's piercing, incoming damage is halved
+//   piercing      below the enemy's armour, your own damage is halved
+//   hardness      how much of this formation counts as armour when it is shot at
+//   organisation  the will to keep fighting; men are lost slowly, organisation quickly
+//   combat_width  frontage taken in a province, against the 80 a province gives -
+//                 four infantry divisions fit, and the fifth waits its turn
+//
+// A mod may set any single field and inherit the rest.
 {
   "line_infantry": {
     "name": "Line infantry",
     "counter_symbol": "infantry",
-    "attack": 0.95,
+    "attack": 1.00,
+    "soft_attack": 1.00,
+    "hard_attack": 0.25,
     "defense": 1.10,
+    "breakthrough": 0.55,
+    "armour": 0.30,
+    "piercing": 0.55,
+    "hardness": 0.05,
+    "organisation": 1.00,
+    "recovery": 1.00,
     "speed": 1.00,
-    "combat_width": 1.80,
+    "combat_width": 20.00,
     "supply_use": 0.95
   },
   "motorized_corps": {
     "name": "Motorized corps",
     "counter_symbol": "motorized",
-    "attack": 1.08,
+    "attack": 1.00,
+    "soft_attack": 1.15,
+    "hard_attack": 0.40,
     "defense": 0.96,
+    "breakthrough": 0.95,
+    "armour": 0.45,
+    "piercing": 0.75,
+    "hardness": 0.20,
+    "organisation": 1.05,
+    "recovery": 1.05,
     "speed": 1.28,
-    "combat_width": 2.00,
+    "combat_width": 22.00,
     "supply_use": 1.18
+  },
+  "mechanized_corps": {
+    "name": "Mechanized corps",
+    "counter_symbol": "mechanized",
+    "attack": 1.00,
+    "soft_attack": 1.35,
+    "hard_attack": 0.95,
+    "defense": 1.18,
+    "breakthrough": 1.45,
+    "armour": 1.60,
+    "piercing": 1.35,
+    "hardness": 0.60,
+    "organisation": 1.00,
+    "recovery": 0.95,
+    "speed": 1.22,
+    "combat_width": 26.00,
+    "supply_use": 1.45
   },
   "armored_corps": {
     "name": "Armored corps",
     "counter_symbol": "armor",
-    "attack": 1.32,
-    "defense": 1.12,
+    "attack": 1.00,
+    "soft_attack": 1.55,
+    "hard_attack": 1.60,
+    "defense": 1.05,
+    "breakthrough": 2.40,
+    "armour": 2.60,
+    "piercing": 2.10,
+    "hardness": 0.85,
+    "organisation": 0.90,
+    "recovery": 0.90,
     "speed": 1.12,
-    "combat_width": 2.80,
-    "supply_use": 1.55
+    "combat_width": 30.00,
+    "supply_use": 1.70
+  },
+  "artillery_corps": {
+    "name": "Artillery corps",
+    "counter_symbol": "artillery",
+    "attack": 1.00,
+    "soft_attack": 1.90,
+    "hard_attack": 0.45,
+    "defense": 0.72,
+    "breakthrough": 0.40,
+    "armour": 0.10,
+    "piercing": 0.85,
+    "hardness": 0.02,
+    "organisation": 0.72,
+    "recovery": 0.88,
+    "speed": 0.82,
+    "combat_width": 24.00,
+    "supply_use": 1.30
   }
 }

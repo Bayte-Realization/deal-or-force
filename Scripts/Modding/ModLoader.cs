@@ -249,14 +249,9 @@ public sealed class ModLoader
                         package.Errors.Add($"Invalid unit type '{unit.Name}' in {Path.GetFileName(path)}");
                         continue;
                     }
-                    var value = unit.Value;
-                    string Text(string key) => value.TryGetProperty(key, out var element) &&
-                        element.ValueKind == JsonValueKind.String ? element.GetString() : null;
-                    float? Number(string key) => value.TryGetProperty(key, out var element) &&
-                        element.TryGetSingle(out var number) ? number : null;
-                    if (!UnitTypeCatalog.Override(unit.Name, Text("name"), Text("counter_symbol"),
-                            Number("attack"), Number("defense"), Number("speed"),
-                            Number("combat_width"), Number("supply_use")))
+                    // The whole object is handed over, so a mod can set any stat a template
+                    // has - including the ones added after this loader was written.
+                    if (!UnitTypeCatalog.Override(unit.Name, unit.Value))
                         package.Errors.Add($"Invalid values for unit type '{unit.Name}' in {Path.GetFileName(path)}");
                 }
             }

@@ -425,7 +425,7 @@ public static class MilitaryOperations
             {
                 if (!army.InBattle)
                 {
-                    army.Entrenchment = M.Clamp01(army.Entrenchment + MilitaryBootstrap.EntrenchmentPerDay *
+                    army.Entrenchment = M.Clamp01(army.Entrenchment + campaign.Defines.EntrenchmentPerDay *
                         MilitaryDoctrine.Entrenchment(army.Stance));
                     if (army.AssignedWarId >= 0 &&
                         (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead))
@@ -691,8 +691,6 @@ public static class MilitaryBootstrap
     public const float StrengthRecoveryPerDay = 0.012f;
     public const float OrganisationBurnPerDay = 0.16f;
     public const float MarchProgressPerDay = 0.22f;
-    public const float EntrenchmentPerDay = 0.022f;
-    public const float EntrenchmentBonus = 0.65f;
     public const float DefaultTroopShare = 0.0011f;
 
     private static readonly string[] TroopRows2024 =

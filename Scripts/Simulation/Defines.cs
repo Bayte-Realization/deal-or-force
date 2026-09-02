@@ -188,16 +188,70 @@ public sealed class Defines
 	public float NavalResponse { get; set; } = 1f;
 
 	/// <summary>Multiplier on the defender's combat power. Attacking is harder.</summary>
-	public float DefenderAdvantage { get; set; } = 1.35f;
+	public float DefenderAdvantage { get; set; } = 1.90f;
 
-	/// <summary>Total frontage available in one land engagement.</summary>
+	/// <summary>
+	/// Frontage one province gives an attack, before extra directions widen it. This is
+	/// what makes a smaller force able to hold: a province only has so much room, and the
+	/// divisions that do not fit wait their turn instead of adding their weight.
+	/// </summary>
 	public float CombatWidth { get; set; } = 80f;
 
-	/// <summary>Frontage occupied by one division.</summary>
-	public float WidthPerDivision { get; set; } = 2f;
+	/// <summary>What a fully dug-in defender adds to its own defence.</summary>
+	public float EntrenchmentBonus { get; set; } = 1.40f;
+
+	/// <summary>Entrenchment a division digs per day while it holds ground.</summary>
+	public float EntrenchmentPerDay { get; set; } = 0.030f;
+
+	/// <summary>Entrenchment divisions already hold when a campaign opens mid-war.</summary>
+	public float EntrenchmentAtScenarioStart { get; set; } = 0.85f;
+
+	/// <summary>Extra frontage each additional province an attack comes from opens up.</summary>
+	public float CombatWidthPerDirection { get; set; } = 20f;
+
+	/// <summary>How many attacking directions can widen a single battle.</summary>
+	public int MaxAttackDirections { get; set; } = 4;
+
+	/// <summary>Penalty per unit of relative over-frontage. Crowding a province costs.</summary>
+	public float OverWidthPenalty { get; set; } = 0.9f;
+
+	/// <summary>Floor on the crowding penalty, so a stack is never worse than useless.</summary>
+	public float MinCrowdingFactor { get; set; } = 0.45f;
+
+	/// <summary>Share of a full attack a defender returns while holding.</summary>
+	public float DefenderCounterFire { get; set; } = 1.00f;
+
+	/// <summary>Damage that lands when armour is entirely unpierced.</summary>
+	public float UnpiercedDamageFloor { get; set; } = 0.5f;
+
+	/// <summary>Organisation a day of even fighting costs, before the force ratio.</summary>
+	public float BaseOrganisationDamage { get; set; } = 0.048f;
+
+	public float MinOrganisationDamage { get; set; } = 0.010f;
+	public float MaxOrganisationDamage { get; set; } = 0.130f;
+
+	/// <summary>Share of a formation lost as casualties per point of organisation spent.</summary>
+	public float CasualtiesPerOrganisationPoint { get; set; } = 0.075f;
+
+	/// <summary>How much faster a formation with no organisation left bleeds.</summary>
+	public float BrokenCasualtyMultiplier { get; set; } = 2.4f;
+
+	/// <summary>Entrenchment a day of fighting costs the defender.</summary>
+	public float EntrenchmentLostPerCombatDay { get; set; } = 0.020f;
 
 	public float BattleBreakOrganisation { get; set; } = 0.055f;
-	public float UnopposedCapturePerDay { get; set; } = 0.42f;
+	public float UnopposedCapturePerDay { get; set; } = 0.10f;
+
+	/// <summary>How much each defending division in a neighbouring province slows an
+	/// advance into an empty one. Zero turns the front into a race.</summary>
+	public float ZoneOfControlResistance { get; set; } = 4.0f;
+
+	/// <summary>
+	/// Share of the covering force an advance must be worth before it may walk into an
+	/// empty province at all. Below one, a gap behind a held line cannot be exploited
+	/// until the flank covering it has been beaten.
+	/// </summary>
+	public float GapExploitAdvantage { get; set; } = 0.75f;
 	public float WartimeFrontDeploymentShare { get; set; } = 0.84f;
 	public float PeacetimeBorderDeploymentShare { get; set; } = 0.68f;
 	public float PlanningGainPerDay { get; set; } = 0.018f;
@@ -214,10 +268,16 @@ public sealed class Defines
 	public float LakeSupplyBonus { get; set; } = 0.08f;
 
 	/// <summary>Supply throughput every recognised home state provides before buildings.</summary>
-	public float BaseStateSupplyThroughput { get; set; } = 3f;
+	public float BaseStateSupplyThroughput { get; set; } = 6f;
 
 	/// <summary>Weekly supply throughput consumed by one deployed division.</summary>
 	public float SupplyThroughputPerDivision { get; set; } = 0.12f;
+
+	/// <summary>Supply throughput each level of state infrastructure adds.</summary>
+	public float SupplyPerInfrastructure { get; set; } = 2.2f;
+
+	/// <summary>Supply throughput each barracks adds.</summary>
+	public float SupplyPerBarracks { get; set; } = 0.9f;
 
 	/// <summary>Maximum number of friendly provinces a land supply network can trace from home.</summary>
 	public int SupplyTraceRange { get; set; } = 20;

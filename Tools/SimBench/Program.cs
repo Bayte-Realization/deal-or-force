@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -32,6 +33,9 @@ public static class Program
         Console.WriteLine($"Campaign created in {setup.ElapsedMilliseconds} ms: " +
                           $"{campaign.Nations.Count} nations, {campaign.States.Count} states.");
 
+        var mapped = AttachMap(campaign);
+        var frontBefore = new FrontSnapshot(campaign);
+
         var failures = 0;
         failures += Check("day-zero GDP reproduces the authored 2024 figures", CalibrationHolds(campaign));
         failures += Check("every nation has an output calibration", NationsCalibrated(campaign));
@@ -41,8 +45,18 @@ public static class Program
         Console.WriteLine($"Running {days} campaign day(s)…");
 
         campaign.IsPaused = false;
+        var ukraineTrace = new List<int>();
+        var ukraineIndex = campaign.NationByTag("UKR")?.MapIndex ?? -1;
         var run = Stopwatch.StartNew();
-        for (var day = 0; day < days; day++) campaign.Tick();
+        for (var day = 0; day < days; day++)
+        {
+            campaign.Tick();
+            // A front that ends the year where it started may still have collapsed and been
+            // pushed back in between. Sampling as it goes is what makes "stalemate" mean
+            // what it says.
+            if (day % 15 == 0 && ukraineIndex >= 0 && campaign.ProvinceController is not null)
+                ukraineTrace.Add(HeldBy(campaign, ukraineIndex));
+        }
         run.Stop();
 
         var perDay = run.Elapsed.TotalMilliseconds / days;
@@ -64,6 +78,9 @@ public static class Program
         failures += Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
         failures += Check("headline figures format the way a player reads them", FiguresReadWell());
         failures += Check("every nation on the map owns ground", EveryNationHasTerritory(campaign));
+        if (mapped)
+            failures += Check("the Russo-Ukrainian front is still a stalemate",
+                FrontIsAStalemate(campaign, frontBefore, ukraineTrace, days));
 
         Console.WriteLine();
         Console.WriteLine(failures == 0
@@ -268,6 +285,172 @@ public static class Program
         return landless.Count == 0
             ? ""
             : $"{landless.Count} nation(s) hold no state: {string.Join(", ", landless.Take(12))}";
+    }
+
+    /// <summary>
+    /// The war layer needs a province graph, and until now the bench never built one - so
+    /// warfare, logistics and combat measured zero milliseconds because they never ran.
+    /// The raster loader is engine-neutral, exactly like the rest of the simulation, so
+    /// the bench can build the same 37 807-province graph the game does and actually
+    /// exercise the half of the simulation that fights.
+    /// </summary>
+    private static bool AttachMap(Campaign campaign)
+    {
+        MapRasterCatalog.ResetCatalog();
+        HydrologyCatalog.ResetCatalog();
+        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
+                Globality.EarthData.Width, Globality.EarthData.Height, out var topology, out var message))
+        {
+            Console.WriteLine($"  province map unavailable: {message}");
+            Console.WriteLine("  warfare, logistics and combat will not be exercised by this run.");
+            return false;
+        }
+        if (MapRasterCatalog.TryLoadHydrology(Globality.EarthData.Width, Globality.EarthData.Height,
+                out var hydrology, out _))
+            topology.AttachHydrology(hydrology);
+        campaign.AttachProvinceTopology(topology);
+        Console.WriteLine($"Province graph attached: {topology.ProvinceCount:N0} provinces, " +
+                          $"{topology.EdgeCount:N0} land edges, {campaign.Armies.Count:N0} divisions deployed.");
+        return true;
+    }
+
+    /// <summary>
+    /// A snapshot of who holds what, so a run can be asked how far a front actually moved
+    /// rather than whether anything crashed.
+    /// </summary>
+    private sealed class FrontSnapshot
+    {
+        private readonly Dictionary<int, int> _provinces = new();
+
+        internal FrontSnapshot(Campaign campaign)
+        {
+            if (campaign.ProvinceController is null) return;
+            for (var province = 1; province < campaign.ProvinceController.Length; province++)
+            {
+                var owner = campaign.ProvinceController[province];
+                _provinces[owner] = _provinces.GetValueOrDefault(owner) + 1;
+            }
+        }
+
+        internal int Held(Nation nation) =>
+            nation is null ? 0 : _provinces.GetValueOrDefault(nation.MapIndex);
+    }
+
+    /// <summary>
+    /// The scenario opens in the third year of a war that has been a metre-by-metre
+    /// stalemate. If a year of hands-off simulation moves the line by hundreds of
+    /// provinces, the combat model is wrong about the war it is depicting - whichever
+    /// side is winning.
+    /// </summary>
+    private static int HeldBy(Campaign campaign, int nationMapIndex)
+    {
+        var held = 0;
+        var controllers = campaign.ProvinceController;
+        if (controllers is null) return 0;
+        for (var province = 1; province < controllers.Length; province++)
+            if (controllers[province] == (ushort)nationMapIndex) held++;
+        return held;
+    }
+
+    private static string FrontIsAStalemate(Campaign campaign, FrontSnapshot before,
+        List<int> ukraineTrace, int days)
+    {
+        var russia = campaign.NationByTag("RUS");
+        var ukraine = campaign.NationByTag("UKR");
+        if (russia is null || ukraine is null) return "RUS or UKR is missing from the scenario";
+        if (campaign.ProvinceController is null) return "";
+
+        var after = new FrontSnapshot(campaign);
+        var russianSwing = after.Held(russia) - before.Held(russia);
+        var ukrainianSwing = after.Held(ukraine) - before.Held(ukraine);
+        var years = MathF.Max(0.01f, days / 365f);
+
+        Console.WriteLine($"  Russo-Ukrainian front after {days} day(s): " +
+                          $"RUS {before.Held(russia):N0} -> {after.Held(russia):N0} ({russianSwing:+#;-#;0}), " +
+                          $"UKR {before.Held(ukraine):N0} -> {after.Held(ukraine):N0} ({ukrainianSwing:+#;-#;0}).");
+
+        // Ukraine is about 150 provinces on this map. Russia took roughly 0.7% of Ukraine
+        // in 2024 - call it one province. Eight a year is a generous ceiling for a war
+        // nobody is steering, and still an order of magnitude tighter than a front that
+        // is quietly collapsing.
+        var startedWith = before.Held(ukraine);
+        var worst = ukraineTrace.Count == 0 ? after.Held(ukraine) : ukraineTrace.Min();
+        var best = ukraineTrace.Count == 0 ? after.Held(ukraine) : ukraineTrace.Max();
+        Console.WriteLine($"  Ukrainian holding over the run: {startedWith:N0} start, " +
+                          $"{worst:N0} low, {best:N0} high, {after.Held(ukraine):N0} end.");
+
+        // Two questions, deliberately separate. The first is the one that matters for a
+        // player pressing play: the opening year has to be the war it is depicting, and a
+        // front that walks on its own is a broken model however it ends up. The second is
+        // looser on purpose - a war of attrition between an army of 77 divisions and one of
+        // 54 is allowed to grind over years. That is what attrition is.
+        var firstYear = ukraineTrace.Take(Math.Min(ukraineTrace.Count, 25)).ToList();
+        var openingLow = firstYear.Count == 0 ? startedWith : firstYear.Min();
+        var openingHigh = firstYear.Count == 0 ? startedWith : firstYear.Max();
+
+        var opening = MathF.Max(MathF.Abs(openingLow - startedWith), MathF.Abs(openingHigh - startedWith));
+        var held = after.Held(ukraine) / MathF.Max(1f, startedWith);
+
+        // A stalemate is not the same thing as a truce. If the line holds because nothing
+        // is fighting, the model is wrong in the other direction - this war is supposed to
+        // cost both sides dearly for ground neither of them gets.
+        var war = campaign.Wars.Find(candidate => candidate.Involves(russia.Id) && candidate.Involves(ukraine.Id));
+        if (war is null) return "the Russo-Ukrainian war is missing from the campaign";
+        var casualties = war.AttackerLosses + war.DefenderLosses;
+        var battles = campaign.NextBattleId;
+        var live = campaign.Battles.Count(battle => battle.WarId == war.Id && !battle.Ended);
+        var russianDivisions = campaign.Armies.Count(army => army.NationId == russia.Id && army.AssignedWarId == war.Id);
+        var ukrainianDivisions = campaign.Armies.Count(army => army.NationId == ukraine.Id && army.AssignedWarId == war.Id);
+        Console.WriteLine($"  war cost after {days} day(s): {war.AttackerLosses:N0} RUS / " +
+                          $"{war.DefenderLosses:N0} UKR casualties, war score {war.WarScore:+0.0;-0.0;0.0}.");
+        Console.WriteLine($"  engagements: {battles:N0} battles worldwide ({live:N0} live on this front), " +
+                          $"front assignment {russianDivisions:N0} RUS / {ukrainianDivisions:N0} UKR divisions, " +
+                          $"front {war.AttackerFront.Count:N0}/{war.DefenderFront.Count:N0} provinces.");
+
+        // Why the line is where it is. A stalemate produced by divisions that never got
+        // an order, never finished a plan, or never stood next to the enemy is a bug that
+        // happens to look like history; this line tells the two apart.
+        var attackers = campaign.Armies.Where(army => army.NationId == russia.Id && army.AssignedWarId == war.Id).ToList();
+        var ordered = attackers.Count(army => army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead);
+        var executing = attackers.Count(army => army.PlanActive &&
+            army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead);
+        var adjacent = campaign.ProvinceMap is null ? 0 : attackers.Count(army =>
+            army.ProvinceId > 0 && campaign.ProvinceMap.Neighbors[army.ProvinceId]
+                .Any(province => campaign.ProvinceController[province] == (ushort)ukraine.MapIndex));
+        var resting = attackers.Count(army => army.ReadyDay > campaign.ElapsedDays);
+        var supplied = attackers.Count(army => army.SupplyLevel > 0.5f);
+        Console.WriteLine($"  RUS posture: {ordered:N0}/{attackers.Count:N0} ordered forward, " +
+                          $"{executing:N0} executing, {adjacent:N0} in contact, {resting:N0} spent, " +
+                          $"{supplied:N0} supplied, average organisation " +
+                          $"{(attackers.Count == 0 ? 0f : attackers.Average(army => army.Organisation)):P0}.");
+        var outcomes = string.Join(", ", Warfare.OutcomeTally
+            .OrderByDescending(entry => entry.Value)
+            .Take(5)
+            .Select(entry => $"{entry.Key} x{entry.Value}"));
+        Console.WriteLine($"  battle outcomes worldwide: {(outcomes.Length == 0 ? "none" : outcomes)}");
+        var defenders = campaign.Armies.Where(army => army.NationId == ukraine.Id && army.AssignedWarId == war.Id).ToList();
+        if (defenders.Count > 0)
+            Console.WriteLine($"  UKR posture: {defenders.Count:N0} divisions, " +
+                              $"organisation {defenders.Average(army => army.Organisation):P0}, " +
+                              $"strength {defenders.Average(army => army.Strength):P0}, " +
+                              $"entrenchment {defenders.Average(army => army.Entrenchment):P0}, " +
+                              $"supply {defenders.Average(army => army.SupplyLevel):P0}.");
+        if (attackers.Count > 0)
+            Console.WriteLine($"  RUS supply: average level {attackers.Average(army => army.SupplyLevel):P0}, " +
+                              $"congestion {attackers.Average(army => army.SupplyCongestion):P0}, " +
+                              $"distance {attackers.Average(army => (float)army.SupplyDistance):0.#} hops, " +
+                              $"{attackers.Count(army => army.CutOff):N0} cut off, " +
+                              $"{attackers.Count(army => army.Planning >= 0.28f):N0} with a finished plan.");
+        if (war.Ended) return "the war ended on its own with nobody playing";
+        if (opening > 8f)
+            return $"the line moved by {opening:N0} provinces during the opening year " +
+                   "with nobody playing; the stalemate budget for the first year is 8";
+        if (held < 0.55f)
+            return $"Ukraine is down to {held:P0} of the ground it started with after {days} day(s) " +
+                   "of nobody playing; the war has been decided by the simulation, not by anyone";
+        if (casualties < 20_000f * years)
+            return $"only {casualties:N0} casualties in {days} day(s) - the front is frozen, not contested";
+        return "";
     }
 
     private static string GdpSane(Campaign campaign)

@@ -45,6 +45,13 @@ public sealed class LandBattle
 
 public static partial class Warfare
 {
+    /// <summary>
+    /// How land battles have ended this session, by outcome. Not campaign state and not
+    /// saved - it exists so the bench and the console can answer "is the defence holding?"
+    /// with a number instead of an impression.
+    /// </summary>
+    public static readonly Dictionary<string, int> OutcomeTally = new(StringComparer.Ordinal);
+
     public static void Tick(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;
@@ -120,8 +127,32 @@ public static partial class Warfare
             {
                 var riverAdvance = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier,
                     topology.RiverCrossingStrength(army.ProvinceId, target));
+
+                // An empty province is not open ground. The divisions holding the provinces
+                // around it cover the gap by fire, which is what keeps a front a front
+                // rather than a race: a breach has to be widened and held, not simply
+                // strolled through because nobody happened to be standing in it.
+                //
+                // A gap can only be exploited by a force worth more than what covers it.
+                // Everything else has to break the flank first - which is the difference
+                // between an offensive and a walk, and the reason the opening front does
+                // not move on its own.
+                var neighbours = topology.Neighbors[target];
+                var coveringPower = 0f;
+                var covering = 0;
+                foreach (var other in campaign.Armies)
+                {
+                    if (other.NationId != enemyId || other.Divisions < 0.1f) continue;
+                    if (!neighbours.Contains(other.ProvinceId)) continue;
+                    coveringPower += other.Power;
+                    covering++;
+                }
+                if (coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
+                var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
+
                 var progress = war.UnopposedProgress.GetValueOrDefault(target) +
-                    campaign.Defines.UnopposedCapturePerDay * M.Clamp(army.Power / 4f, 0.35f, 1f) * riverAdvance;
+                    campaign.Defines.UnopposedCapturePerDay * M.Clamp(army.Power / 4f, 0.35f, 1f) *
+                    riverAdvance * contested;
                 war.UnopposedProgress[target] = progress;
                 if (progress >= 1f) Capture(campaign, war, target, army.NationId, new[] { army }, Array.Empty<Army>());
                 continue;
@@ -173,36 +204,85 @@ public static partial class Warfare
                 continue;
             }
 
-            var combatWidth = campaign.Defines.CombatWidth;
-            var widthPerDivision = campaign.Defines.WidthPerDivision;
-            var attackerWantedWidth = attacking.Sum(army => army.Divisions *
-                UnitTypeCatalog.Get(army.TemplateId).CombatWidth * widthPerDivision / 2f);
-            var defenderWantedWidth = defending.Sum(army => army.Divisions *
-                UnitTypeCatalog.Get(army.TemplateId).CombatWidth * widthPerDivision / 2f);
-            battle.AttackerWidth = MathF.Min(combatWidth, attackerWantedWidth);
-            battle.DefenderWidth = MathF.Min(combatWidth, defenderWantedWidth);
-            var attackerEngagement = M.Clamp(battle.AttackerWidth / M.Max(0.01f, attackerWantedWidth), 0.05f, 1f);
-            var defenderEngagement = M.Clamp(battle.DefenderWidth / M.Max(0.01f, defenderWantedWidth), 0.05f, 1f);
+            // ----------------------------------------------------------------------
+            // Frontage. A province only has so much room, so numbers past the width
+            // wait their turn - which is what lets a smaller, better force hold a line
+            // against a larger one. Attacking from several provinces widens the front,
+            // the way it does in Hearts of Iron; cramming more than fits is a penalty
+            // rather than free strength.
+            // ----------------------------------------------------------------------
+            var defines = campaign.Defines;
+            var directions = attacking.Select(army => army.ProvinceId).Distinct().Count();
+            var usableWidth = defines.CombatWidth + defines.CombatWidthPerDirection *
+                M.Clamp(directions - 1, 0, M.Max(0, defines.MaxAttackDirections - 1));
+
+            var attackerWantedWidth = WantedWidth(attacking);
+            var defenderWantedWidth = WantedWidth(defending);
+            battle.AttackerWidth = MathF.Min(usableWidth, attackerWantedWidth);
+            battle.DefenderWidth = MathF.Min(defines.CombatWidth, defenderWantedWidth);
+            var attackerEngagement = Engagement(battle.AttackerWidth, attackerWantedWidth, usableWidth, defines);
+            var defenderEngagement = Engagement(battle.DefenderWidth, defenderWantedWidth, defines.CombatWidth, defines);
+
+            // ----------------------------------------------------------------------
+            // What each side is made of. Hardness decides which of an enemy's two
+            // attack values it gets to use; armour against piercing decides how much
+            // of that lands at all.
+            // ----------------------------------------------------------------------
+            var attackerHardness = Weighted(attacking, army => UnitTypeCatalog.Get(army.TemplateId).Hardness);
+            var defenderHardness = Weighted(defending, army => UnitTypeCatalog.Get(army.TemplateId).Hardness);
+            var attackerArmour = Weighted(attacking, army => UnitTypeCatalog.Get(army.TemplateId).Armour);
+            var defenderArmour = Weighted(defending, army => UnitTypeCatalog.Get(army.TemplateId).Armour);
+            var attackerPiercing = Weighted(attacking, army => UnitTypeCatalog.Get(army.TemplateId).Piercing);
+            var defenderPiercing = Weighted(defending, army => UnitTypeCatalog.Get(army.TemplateId).Piercing);
+            var attackerPierces = ArmourFactor(attackerPiercing, defenderArmour, defines);
+            var defenderPierces = ArmourFactor(defenderPiercing, attackerArmour, defines);
+
             var attackerPlanning = WeightedPlanning(attacking);
             var riverAttackMultiplier = battle.RiverCrossingStrength <= 0f ? 1f : M.Lerp(
-                campaign.Defines.RiverAttackMultiplier,
-                campaign.Defines.MajorRiverAttackMultiplier,
+                defines.RiverAttackMultiplier,
+                defines.MajorRiverAttackMultiplier,
                 M.Clamp01((battle.RiverCrossingStrength - 0.45f) / 0.45f));
-            var attackerPower = attacking.Sum(army => M.Max(0.01f, army.Power) *
-                UnitTypeCatalog.Get(army.TemplateId).Attack * DivisionRules.Attack(army) *
-                MilitaryDoctrine.Attack(army.Stance)) *
-                attackerEngagement * (1f + attackerPlanning * campaign.Defines.MaxPlanningAttackBonus) * riverAttackMultiplier;
-            var defenderPower = defending.Sum(army => M.Max(0.01f, army.Power) *
-                UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
-                MilitaryDoctrine.Defense(army.Stance)) * defenderEngagement;
+
+            // ----------------------------------------------------------------------
+            // Both sides shoot. The attacker's fire is measured against the defender's
+            // defence; the defender's return fire is measured against the attacker's
+            // breakthrough. That second half is the whole point: a division built to
+            // attack survives a counter-attack it would not survive on defence, and a
+            // dug-in division survives an assault it could never have launched.
+            // ----------------------------------------------------------------------
+            var attackerOffence = attacking.Sum(army => M.Max(0.01f, army.Power) *
+                    Offence(army, defenderHardness) * DivisionRules.Attack(army) *
+                    MilitaryDoctrine.Attack(army.Stance)) *
+                attackerEngagement * attackerPierces * riverAttackMultiplier *
+                (1f + attackerPlanning * defines.MaxPlanningAttackBonus);
+
+            var defenderOffence = defending.Sum(army => M.Max(0.01f, army.Power) *
+                    Offence(army, attackerHardness) * DivisionRules.Attack(army) *
+                    MilitaryDoctrine.Attack(army.Stance)) *
+                defenderEngagement * defenderPierces * defines.DefenderCounterFire;
+
             var dugIn = defending.Average(army => army.Entrenchment);
-            var effectiveDefence = defenderPower * campaign.Defines.DefenderAdvantage *
-                                   (1f + dugIn * MilitaryBootstrap.EntrenchmentBonus);
-            var ratio = M.Clamp(attackerPower / M.Max(0.01f, effectiveDefence), 0.08f, 12f);
-            var defenderOrgLoss = M.Clamp(0.050f * MathF.Sqrt(ratio), 0.012f, 0.13f);
-            var attackerOrgLoss = M.Clamp(0.043f / MathF.Sqrt(ratio), 0.012f, 0.13f);
-            var defenderLoss = ApplyDamage(defending, defenderOrgLoss * defenderEngagement);
-            var attackerLoss = ApplyDamage(attacking, attackerOrgLoss * attackerEngagement);
+            var defenderProtection = defending.Sum(army => M.Max(0.01f, army.Power) *
+                    UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
+                    MilitaryDoctrine.Defense(army.Stance)) *
+                defenderEngagement * defines.DefenderAdvantage *
+                (1f + dugIn * defines.EntrenchmentBonus);
+
+            var attackerProtection = attacking.Sum(army => M.Max(0.01f, army.Power) *
+                    UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
+                    MilitaryDoctrine.Defense(army.Stance)) *
+                attackerEngagement;
+
+            var pressureOnDefender = M.Clamp(attackerOffence / M.Max(0.01f, defenderProtection), 0.05f, 14f);
+            var pressureOnAttacker = M.Clamp(defenderOffence / M.Max(0.01f, attackerProtection), 0.05f, 14f);
+            var ratio = pressureOnDefender;
+
+            var defenderOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnDefender),
+                defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
+            var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker),
+                defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
+            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss);
+            var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss);
             foreach (var army in attacking)
                 army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningBurnPerCombatDay);
             battle.AttackerLosses += attackerLoss;
@@ -230,10 +310,14 @@ public static partial class Warfare
                 DefenderDamage = attackerOrgLoss,
                 AttackerLosses = attackerLoss,
                 DefenderLosses = defenderLoss,
-                AttackerPower = attackerPower,
-                DefenderPower = effectiveDefence,
+                AttackerPower = attackerOffence,
+                DefenderPower = defenderProtection,
                 AttackerPlanning = attackerPlanning,
-                Note = attackerPlanning > 0.65f ? "Prepared offensive plan committed" :
+                Note = attackerPierces < 0.99f ? "Armour is shrugging off the attack" :
+                    defenderPierces < 0.99f ? "Defenders cannot pierce the assault" :
+                    attackerWantedWidth > usableWidth * 1.35f ? "Too many divisions for the frontage" :
+                    directions > 1 ? $"Attacking from {directions} directions widens the front" :
+                    attackerPlanning > 0.65f ? "Prepared offensive plan committed" :
                     battle.RiverCrossingStrength > 0.66f ? "Major river crossing favours the defenders" :
                     battle.RiverCrossingStrength > 0f ? "River crossing slows the assault" :
                     attacking.Count(army => army.Stance == ArmyStance.Aggressive) * 2 >= attacking.Count
@@ -412,17 +496,77 @@ public static partial class Warfare
         war.WarScore = M.Clamp(war.OccupationScore + war.BattleScore + war.ObjectiveScore + war.SupportScore, -100f, 100f);
     }
 
-    private static float ApplyDamage(IReadOnlyCollection<Army> side, float organisationLoss)
+    /// <summary>Frontage a side would take if the province had unlimited room.</summary>
+    private static float WantedWidth(IReadOnlyCollection<Army> side) =>
+        side.Sum(army => army.Divisions * UnitTypeCatalog.Get(army.TemplateId).CombatWidth);
+
+    /// <summary>
+    /// How much of a side is actually in the fight. Divisions past the frontage wait their
+    /// turn, and piling far more in than fits starts to cost the ones who are fighting -
+    /// men in the way of their own guns.
+    /// </summary>
+    private static float Engagement(float committed, float wanted, float available, Defines defines)
     {
+        var share = M.Clamp(committed / M.Max(0.01f, wanted), 0.05f, 1f);
+        var over = M.Max(0f, wanted - available) / M.Max(0.01f, available);
+        var crowding = M.Clamp(1f - over * defines.OverWidthPenalty, defines.MinCrowdingFactor, 1f);
+        return share * crowding;
+    }
+
+    /// <summary>
+    /// One division's fire against a target of the given hardness. Soft attack lands on
+    /// infantry, hard attack on armour, and a mixed force gets a mixture of both.
+    /// </summary>
+    private static float Offence(Army army, float targetHardness)
+    {
+        var template = UnitTypeCatalog.Get(army.TemplateId);
+        return template.Attack * M.Lerp(template.SoftAttack, template.HardAttack, M.Clamp01(targetHardness));
+    }
+
+    /// <summary>
+    /// Armour against piercing. Enough piercing and the shot counts in full; not enough and
+    /// half of it bounces. The floor is a define so a mod can make armour decisive or
+    /// irrelevant without touching code.
+    /// </summary>
+    private static float ArmourFactor(float piercing, float armour, Defines defines)
+    {
+        if (armour <= 0.01f || piercing >= armour) return 1f;
+        return M.Lerp(defines.UnpiercedDamageFloor, 1f, M.Clamp01(piercing / armour));
+    }
+
+    /// <summary>A division-weighted average of some per-division number.</summary>
+    private static float Weighted(IReadOnlyCollection<Army> side, Func<Army, float> select)
+    {
+        var divisions = side.Sum(army => M.Max(0.01f, army.Divisions));
+        return divisions <= 0f ? 0f : side.Sum(army => select(army) * M.Max(0.01f, army.Divisions)) / divisions;
+    }
+
+    /// <summary>
+    /// Spend a day of fighting on one side. Organisation goes first and men go slowly:
+    /// a division that still has organisation is losing its willingness to press, not its
+    /// people. Once organisation is gone the same fire starts taking the formation apart,
+    /// which is why a broken unit that keeps standing bleeds so much faster than one that
+    /// withdraws in order.
+    /// </summary>
+    private static float ApplyDamage(Campaign campaign, IReadOnlyCollection<Army> side, float organisationLoss)
+    {
+        var defines = campaign.Defines;
         var totalPower = side.Sum(army => M.Max(0.01f, army.Power));
         var lost = 0f;
         foreach (var army in side)
         {
-            var loss = organisationLoss * M.Max(0.01f, army.Power) / totalPower * side.Count;
+            var template = UnitTypeCatalog.Get(army.TemplateId);
+            var share = M.Max(0.01f, army.Power) / totalPower * side.Count;
+            var loss = organisationLoss * share / M.Max(0.2f, template.Organisation);
+            var brokenExposure = M.Lerp(defines.BrokenCasualtyMultiplier, 1f,
+                M.Clamp01(army.Organisation / M.Max(0.05f, defines.BattleBreakOrganisation * 4f)));
+
             army.Organisation = M.Clamp01(army.Organisation - loss);
-            army.Entrenchment = M.Clamp01(army.Entrenchment - 0.05f);
+            army.Entrenchment = M.Clamp01(army.Entrenchment - defines.EntrenchmentLostPerCombatDay);
+
             var personnel = army.Divisions * MilitaryBootstrap.DivisionSize * army.Strength;
-            var casualties = personnel * loss * 0.018f * MilitaryDoctrine.CasualtyExposure(army.Stance);
+            var casualties = personnel * loss * defines.CasualtiesPerOrganisationPoint *
+                             brokenExposure * MilitaryDoctrine.CasualtyExposure(army.Stance);
             if (personnel > 1f) army.Strength = M.Clamp01(army.Strength - casualties / personnel);
             army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(casualties));
             army.Experience = M.Clamp01(army.Experience + loss * 0.004f);
@@ -460,6 +604,7 @@ public static partial class Warfare
 
     private static void Close(Campaign campaign, LandBattle battle, int winnerId, string outcome)
     {
+        OutcomeTally[outcome] = OutcomeTally.GetValueOrDefault(outcome) + 1;
         battle.Ended = true;
         battle.WinnerId = winnerId;
         battle.Outcome = outcome;

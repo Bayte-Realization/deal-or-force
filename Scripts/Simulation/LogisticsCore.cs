@@ -97,7 +97,12 @@ public static class LogisticsSystem
             stateById.TryGetValue(sourceState, out var state);
             var infrastructure = state?.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) ?? 0;
             var barracks = state?.Buildings.GetValueOrDefault(BuildingKind.Barracks) ?? 0;
-            var capacity = campaign.Defines.BaseStateSupplyThroughput + infrastructure * 1.35f + barracks * 0.70f;
+            // A modern state moves its army on railways and roads, not on the three
+            // divisions' worth of throughput a bare province used to allow. Infrastructure
+            // is what a player builds to widen this, so it carries the most weight.
+            var capacity = campaign.Defines.BaseStateSupplyThroughput +
+                           infrastructure * campaign.Defines.SupplyPerInfrastructure +
+                           barracks * campaign.Defines.SupplyPerBarracks;
             var demand = MathF.Max(0.01f, demandBySource.GetValueOrDefault(sourceState));
             var congestion = M.Clamp(capacity / demand, 0.08f, 1f);
             var range = Math.Max(1, campaign.Defines.SupplyTraceRange);
