@@ -283,12 +283,30 @@ public static class EconomySystem
             // calibrated share reaches the treasury; this keeps modern states near a
             // plausible balanced budget instead of banking 10-15% of GDP every year.
             nation.WeeklyTaxIncome = weeklyOutput * nation.TaxRate * 0.24f * (0.72f + nation.Stability * 0.22f);
-            nation.WeeklyExpenses = weeklyOutput * (0.030f + nation.MilitarySpending * 0.22f +
-                                                    nation.WelfareSpending * 0.18f +
-                                                    nation.EducationSpending * 0.14f +
-                                                    (1f - nation.Stability) * 0.025f);
+
+            // The budget is worked out in named pieces so the interface can show the
+            // player what it is made of. The arithmetic is the same arithmetic; it is only
+            // that the parts are kept instead of collapsed into one expression.
+            var administration = weeklyOutput * 0.030f;
+            var military = weeklyOutput * nation.MilitarySpending * 0.22f;
+            var welfare = weeklyOutput * nation.WelfareSpending * 0.18f;
+            var education = weeklyOutput * nation.EducationSpending * 0.14f;
+            var unrest = weeklyOutput * (1f - nation.Stability) * 0.025f;
+            nation.WeeklyExpenses = administration + military + welfare + education + unrest;
             nation.WeeklyBalance = nation.WeeklyTaxIncome + nation.WeeklyTariffIncome -
                                    nation.WeeklyExpenses + nation.WeeklyTradeBalance;
+
+            nation.Budget.Begin("Weekly balance", "money");
+            nation.Budget.Add($"Taxation at {nation.TaxRate:P0}", nation.WeeklyTaxIncome);
+            nation.Budget.Add("Tariffs", nation.WeeklyTariffIncome);
+            nation.Budget.Add("Trade", nation.WeeklyTradeBalance);
+            nation.Budget.Add("Administration", -administration);
+            nation.Budget.Add($"Armed forces at {nation.MilitarySpending:P0}", -military);
+            nation.Budget.Add($"Welfare at {nation.WelfareSpending:P0}", -welfare);
+            nation.Budget.Add($"Education at {nation.EducationSpending:P0}", -education);
+            nation.Budget.Add("Policing unrest", -unrest);
+            nation.Budget.Settle(nation.WeeklyBalance, "rounding");
+
             nation.Treasury += nation.WeeklyBalance;
 
             var industrialSupply = nation.Market.GetValueOrDefault(Commodity.IndustrialMaterials)?.Satisfaction ?? 1f;
@@ -362,10 +380,28 @@ public static class EconomySystem
                                      (nation.GovernmentFocus == GovernmentFocus.EducationAndScience ? 0.04f : 0f);
             nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
             var securityStability = nation.GovernmentFocus == GovernmentFocus.NationalSecurity ? 0.00012f : 0f;
-            nation.Stability = M.Clamp(nation.Stability + (nation.StandardOfLiving - 0.45f) * 0.001f +
-                securityStability, 0.10f, 0.98f);
-            if (nation.GovernmentFocus == GovernmentFocus.NationalSecurity)
-                nation.WarSupport = M.Clamp01(nation.WarSupport + 0.00010f);
+            var livingStandard = (nation.StandardOfLiving - 0.45f) * 0.001f;
+            var settledStability = M.Clamp(nation.Stability + livingStandard + securityStability, 0.10f, 0.98f);
+
+            // What is pushing stability this week, rather than only where it ended up. A
+            // player who watches it fall for a year should be able to find out why in one
+            // hover instead of by experiment.
+            nation.StabilityDrivers.Begin("Stability, weekly", "share");
+            nation.StabilityDrivers.Add(
+                nation.StandardOfLiving >= 0.45f ? "Standard of living" : "Standard of living is poor",
+                livingStandard);
+            nation.StabilityDrivers.Add("Government focus on national security", securityStability);
+            nation.StabilityDrivers.Settle(settledStability - nation.Stability,
+                settledStability >= 0.98f ? "already as settled as a country gets"
+                    : settledStability <= 0.10f ? "held up off the floor" : "rounding");
+            nation.Stability = settledStability;
+
+            var focusWarSupport = nation.GovernmentFocus == GovernmentFocus.NationalSecurity ? 0.00010f : 0f;
+            var settledWarSupport = M.Clamp01(nation.WarSupport + focusWarSupport);
+            nation.WarSupportDrivers.Begin("War support, weekly", "share");
+            nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);
+            nation.WarSupportDrivers.Settle(settledWarSupport - nation.WarSupport, "held at its limit");
+            nation.WarSupport = settledWarSupport;
         }
     }
 

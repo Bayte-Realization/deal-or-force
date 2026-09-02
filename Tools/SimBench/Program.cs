@@ -121,6 +121,8 @@ public static class Program
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
+        failures += Check("every explained number adds up to what the screen shows",
+            BreakdownsAddUp(campaign));
         failures += Check("headline figures format the way a player reads them", FiguresReadWell());
 
         if (mapped)
@@ -967,6 +969,56 @@ public static class Program
         if (share > 0.25f)
             return $"{largest.Tag} holds {share:P0} of the world's regions after {days} day(s); " +
                    "the AI is not being pushed back by anything";
+        return "";
+    }
+
+    /// <summary>
+    /// A tooltip that explains a number must add up to that number.
+    ///
+    /// This is the whole value of the thing. A player who hovers a falling budget and reads
+    /// a list that does not come to what the top bar says has been told something false,
+    /// and would have been better served by no explanation at all. Clamps and floors are
+    /// where it goes wrong: the parts are computed, then the result is limited, and the
+    /// listed parts quietly stop describing it. Every breakdown therefore has to name that
+    /// difference rather than swallow it.
+    /// </summary>
+    private static string BreakdownsAddUp(Campaign campaign)
+    {
+        var checkedNations = 0;
+        var checkedEntries = 0;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Population <= 0) continue;
+            foreach (var (breakdown, shown, what) in new[]
+                     {
+                         (nation.Budget, nation.WeeklyBalance, "the weekly balance"),
+                         (nation.StabilityDrivers, float.NaN, "stability"),
+                         (nation.WarSupportDrivers, float.NaN, "war support")
+                     })
+            {
+                if (!breakdown.HasEntries) continue;
+                checkedNations++;
+                var sum = 0f;
+                foreach (var entry in breakdown.Entries)
+                {
+                    checkedEntries++;
+                    if (string.IsNullOrWhiteSpace(entry.Source))
+                        return $"{nation.Tag} has an unnamed part in {what}";
+                    sum += entry.Value;
+                }
+                var scale = MathF.Max(1f, MathF.Abs(breakdown.Total));
+                if (MathF.Abs(sum - breakdown.Total) / scale > 0.001f)
+                    return $"{nation.Tag}: the parts of {what} come to {sum:0.####} but the total says " +
+                           $"{breakdown.Total:0.####}";
+                if (!float.IsNaN(shown) && MathF.Abs(breakdown.Total - shown) / MathF.Max(1f, MathF.Abs(shown)) > 0.001f)
+                    return $"{nation.Tag}: {what} is explained as {breakdown.Total:0.##} but the screen shows " +
+                           $"{shown:0.##}";
+            }
+        }
+        if (checkedNations == 0) return "no country explained a single number; the ledgers were never filled";
+
+        Console.WriteLine($"  explained numbers: {checkedEntries:N0} named part(s) across {checkedNations:N0} " +
+                          "ledger(s), each adding up to the figure it explains.");
         return "";
     }
 

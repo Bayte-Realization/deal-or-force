@@ -113,7 +113,8 @@ public partial class DealOrForceGame
         DetailRow("Balance", settled ? SignedMoney(player.WeeklyBalance) : "—",
             "What the week actually leaves behind. Negative for long enough and the treasury runs out, " +
             "and a bankrupt state loses stability.",
-            player.WeeklyBalance >= 0f ? "state.positive" : "state.negative");
+            player.WeeklyBalance >= 0f ? "state.positive" : "state.negative",
+            () => player.Budget);
         DetailRow("Treasury", Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
             player.Treasury < 0f ? "state.negative" : "text.bright");
 

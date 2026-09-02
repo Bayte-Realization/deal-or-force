@@ -19,6 +19,9 @@ public partial class DealOrForceGame : Control
     private Label _identity = null!;
     private Label _identityTag = null!;
     private StatReadout _treasury = null!;
+    private StatReadout _balance = null!;
+    private StatReadout _stability = null!;
+    private StatReadout _manpower = null!;
     private StatReadout _gdp = null!;
     private StatReadout _population = null!;
     private readonly Trend _treasuryTrend = new();
@@ -280,8 +283,13 @@ public partial class DealOrForceGame : Control
         stats.AddThemeConstantOverride("separation", 28);
         row.AddChild(stats);
         _treasury = Stat(stats, "TREASURY", "Cash on hand. The line below is the change over the last week of campaign time.");
+        _balance = Stat(stats, "BALANCE", "What the treasury gains or loses each week, and everything that goes into it.",
+            () => _campaign?.Player?.Budget);
         _gdp = Stat(stats, "GDP", "Annual gross domestic product, as it emerges from what your economy actually produces.");
         _population = Stat(stats, "POPULATION", "Everyone living in your states, and how that has moved over the last week.");
+        _stability = Stat(stats, "STABILITY", "How settled the country is. Unrest costs money to police and output to bear.",
+            () => _campaign?.Player?.StabilityDrivers);
+        _manpower = Stat(stats, "MANPOWER", "People left to put in uniform. A war that outruns this is a war that ends.");
 
         var clock = new VBoxContainer { CustomMinimumSize = new Vector2(276, 0) };
         clock.AddThemeConstantOverride("separation", 6);
@@ -691,6 +699,18 @@ public partial class DealOrForceGame : Control
         WriteStat(_population, Fmt.People(player.Population), Fmt.PeopleExact(player.Population),
             Fmt.PeopleDelta(_populationTrend.Delta), Fmt.Direction(_populationTrend.Delta, 1d));
 
+        // A stock without its flow is half a number: a treasury that reads the same two
+        // weeks running is a very different country depending on which way it is heading.
+        var balanced = player.Budget.HasEntries;
+        WriteStat(_balance,
+            balanced ? Fmt.MoneyDelta(player.WeeklyBalance) : "—",
+            balanced ? $"{Fmt.MoneyExact(player.WeeklyBalance)} a week" : "The first economic week has not closed yet.",
+            balanced ? "a week" : "", balanced ? Fmt.Direction(player.WeeklyBalance, 0.005d) : 0);
+        WriteStat(_stability, $"{player.Stability:P0}", $"Stability {player.Stability:P1}",
+            player.WarSupport > 0f ? $"war support {player.WarSupport:P0}" : "", 0);
+        WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
+            $"{Fmt.People(player.ReinforcementCapacity)}/day", 0);
+
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
         UpdateSpendingReadout(player);
         UpdateSpeedButtons();
@@ -715,9 +735,18 @@ public partial class DealOrForceGame : Control
         internal Label Delta = null!;
     }
 
-    private StatReadout Stat(Container parent, string caption, string tooltip)
+    private StatReadout Stat(Container parent, string caption, string tooltip,
+        System.Func<Simulation.Breakdown> explain = null)
     {
-        var box = new VBoxContainer { CustomMinimumSize = new Vector2(132, 0), TooltipText = tooltip };
+        // A figure that can be hovered for the parts it is made of, when there are parts to
+        // show; an ordinary tooltip when there are not.
+        var box = new ExplainedStat
+        {
+            CustomMinimumSize = new Vector2(126, 0),
+            TooltipText = tooltip,
+            Explain = explain,
+            Plain = explain is null ? "" : tooltip
+        };
         box.AddThemeConstantOverride("separation", 1);
         box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
@@ -791,12 +820,21 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>One caption/value row, the caption left and the value right against it.</summary>
-    private void DetailRow(string caption, string value, string tooltip = null, string valueToken = "text.bright")
+    private void DetailRow(string caption, string value, string tooltip = null, string valueToken = "text.bright",
+        System.Func<Simulation.Breakdown> explain = null)
     {
-        var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        if (!string.IsNullOrEmpty(tooltip))
+        // Every screen in the game builds its rows here, so a breakdown offered here is a
+        // breakdown offered everywhere: the figure on the right, and what it is made of
+        // under the cursor.
+        var row = new ExplainedRow
         {
-            row.TooltipText = tooltip;
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            Explain = explain,
+            Plain = tooltip ?? ""
+        };
+        if (!string.IsNullOrEmpty(tooltip) || explain is not null)
+        {
+            row.TooltipText = tooltip ?? caption;
             row.MouseFilter = MouseFilterEnum.Stop;
         }
 

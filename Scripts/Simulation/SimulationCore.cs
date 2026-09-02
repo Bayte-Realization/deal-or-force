@@ -131,6 +131,16 @@ public sealed class Nation
     public float WeeklyTaxIncome;
     public float WeeklyExpenses;
     public float WeeklyBalance;
+
+    /// <summary>
+    /// Where the week's balance came from, and where stability and war support are being
+    /// pushed. These are what the interface shows when a number is hovered, and they are
+    /// refilled each economic week rather than rebuilt - a country is not allowed to make
+    /// garbage just to explain itself.
+    /// </summary>
+    public readonly Breakdown Budget = new();
+    public readonly Breakdown StabilityDrivers = new();
+    public readonly Breakdown WarSupportDrivers = new();
     public float Productivity = 1f;
 
     /// <summary>
