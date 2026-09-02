@@ -52,6 +52,22 @@ public static partial class Warfare
     /// </summary>
     public static readonly Dictionary<string, int> OutcomeTally = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The same tally split by war. The worldwide one turned out to be no use for judging
+    /// any single front: with a hundred and forty wars running, most of them between small
+    /// states with no divisions at all, it says far more about how the rest of the world
+    /// fights than about the front anybody is looking at.
+    /// </summary>
+    public static readonly Dictionary<int, Dictionary<string, int>> OutcomeTallyByWar = new();
+
+    private static void Tally(int warId, string outcome)
+    {
+        OutcomeTally[outcome] = OutcomeTally.GetValueOrDefault(outcome) + 1;
+        if (!OutcomeTallyByWar.TryGetValue(warId, out var perWar))
+            OutcomeTallyByWar[warId] = perWar = new Dictionary<string, int>(StringComparer.Ordinal);
+        perWar[outcome] = perWar.GetValueOrDefault(outcome) + 1;
+    }
+
     public static void Tick(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;
@@ -180,16 +196,15 @@ public static partial class Warfare
                 // Everything else has to break the flank first - which is the difference
                 // between an offensive and a walk, and the reason the opening front does
                 // not move on its own.
+                // Cover reaches past the provinces that actually touch the gap, because a
+                // division holds a sector rather than the tile it is standing in. Scoring
+                // cover from the immediate neighbours alone left this front taking a
+                // quarter of its ground without a fight; reaching one province further,
+                // at less than half the weight, brings that to one province in twenty and
+                // costs nothing measurable per day.
                 var coveringPower = 0f;
-                var covering = 0;
-                foreach (var neighbour in topology.Neighbors[target])
-                foreach (var other in In(byProvince, neighbour))
-                {
-                    if (other.NationId != enemyId || other.Divisions < 0.1f) continue;
-                    coveringPower += M.Max(other.Power,
-                        other.Presence * campaign.Defines.CoveringPresenceFloor);
-                    covering++;
-                }
+                var covering = 0f;
+                Cover(campaign, topology, byProvince, target, enemyId, ref coveringPower, ref covering);
                 if (coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
                 var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
 
@@ -381,7 +396,8 @@ public static partial class Warfare
             }
             else if (attackerOrg <= campaign.Defines.BattleBreakOrganisation)
             {
-                foreach (var army in attacking) army.ReadyDay = campaign.ElapsedDays + 7;
+                foreach (var army in attacking)
+                    army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterSpentAttackDays;
                 Close(campaign, battle, battle.DefenderId, "Attack spent");
             }
         }
@@ -420,7 +436,7 @@ public static partial class Warfare
     private static void Capture(Campaign campaign, StrategicWar war, int provinceId, int winnerId,
         IReadOnlyCollection<Army> advancing, IReadOnlyCollection<Army> retreating, string how)
     {
-        OutcomeTally["capture: " + how] = OutcomeTally.GetValueOrDefault("capture: " + how) + 1;
+        Tally(war.Id, "capture: " + how);
         var winner = campaign.NationById(winnerId);
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -439,7 +455,7 @@ public static partial class Warfare
             army.Route.Clear();
             army.MoveProgress = 0f;
             army.Entrenchment = 0f;
-            army.ReadyDay = campaign.ElapsedDays + 2;
+            army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterCaptureDays;
             if (army.OrderProvinceId == provinceId)
             {
                 // A direct RMB attack ends in the selected province instead of
@@ -466,7 +482,7 @@ public static partial class Warfare
             army.Route.Clear();
             army.MoveProgress = 0f;
             army.Entrenchment = 0f;
-            army.ReadyDay = campaign.ElapsedDays + 7;
+            army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays;
         }
     }
 
@@ -646,6 +662,43 @@ public static partial class Warfare
         return lost;
     }
 
+    /// <summary>
+    /// Weigh everything the enemy has within reach of one province. Formations touching it
+    /// count in full; each further ring counts for less, out to the radius a division is
+    /// taken to hold. The tally is fractional because a division two provinces away is a
+    /// fraction of a division's worth of resistance, not none and not all of it.
+    /// </summary>
+    private static void Cover(Campaign campaign, ProvinceTopology topology,
+        Dictionary<int, List<Army>> byProvince, int target, int enemyId,
+        ref float coveringPower, ref float covering)
+    {
+        var radius = Math.Max(1, campaign.Defines.FrontCoverageRadius);
+        var falloff = M.Clamp01(campaign.Defines.FrontCoverageFalloff);
+        var seen = new HashSet<int> { target };
+        var ring = new List<int> { target };
+        var next = new List<int>();
+        var weight = 1f;
+        for (var hop = 0; hop < radius; hop++)
+        {
+            next.Clear();
+            foreach (var province in ring)
+            foreach (var neighbour in topology.Neighbors[province])
+            {
+                if (!seen.Add(neighbour)) continue;
+                next.Add(neighbour);
+                foreach (var other in In(byProvince, neighbour))
+                {
+                    if (other.NationId != enemyId || other.Divisions < 0.1f) continue;
+                    coveringPower += M.Max(other.Power,
+                        other.Presence * campaign.Defines.CoveringPresenceFloor) * weight;
+                    covering += weight;
+                }
+            }
+            (ring, next) = (next, ring);
+            weight *= falloff;
+        }
+    }
+
     private static float AverageOrganisation(IReadOnlyCollection<Army> side)
     {
         var divisions = side.Sum(army => M.Max(0.01f, army.Divisions));
@@ -674,7 +727,7 @@ public static partial class Warfare
 
     private static void Close(Campaign campaign, LandBattle battle, int winnerId, string outcome)
     {
-        OutcomeTally[outcome] = OutcomeTally.GetValueOrDefault(outcome) + 1;
+        Tally(battle.WarId, outcome);
         battle.Ended = true;
         battle.WinnerId = winnerId;
         battle.Outcome = outcome;

@@ -308,6 +308,31 @@ public sealed class Defines
 	public float CoveringPresenceFloor { get; set; } = 0.45f;
 
 	/// <summary>
+	/// Days a formation spends consolidating on a province it has just taken before it can
+	/// attack again. Two looks far too few beside the seven an attack that failed costs -
+	/// winning a battle should not be cheaper than losing one - but raising it moved the
+	/// front the wrong way, and instructively so. The pause falls on both sides, and what
+	/// holds a line here is not that assaults are rare: it is that ground taken is
+	/// immediately counter-attacked, off entrenchment the attacker has not had time to dig.
+	/// Throttling the tempo throttles the riposte, and the attacker's gains stick. Across
+	/// five seeds, ten days handed Russia between twenty-seven and sixty-three provinces
+	/// where two handed it between two and thirty-four. It stays at two, on measurement.
+	/// </summary>
+	public int RestAfterCaptureDays { get; set; } = 2;
+
+	/// <summary>Days a formation needs after an attack of its own has broken down.</summary>
+	public int RestAfterSpentAttackDays { get; set; } = 7;
+
+	/// <summary>Days a formation needs after being driven out of a province.</summary>
+	public int RestAfterRetreatDays { get; set; } = 7;
+
+	/// <summary>How many provinces out from itself a division is taken to hold ground.</summary>
+	public int FrontCoverageRadius { get; set; } = 2;
+
+	/// <summary>What each further ring of that sector is worth against the one inside it.</summary>
+	public float FrontCoverageFalloff { get; set; } = 0.45f;
+
+	/// <summary>
 	/// Share of a day's casualties who are wounded rather than lost for good, and who
 	/// rejoin their own formation once they are treated. Roughly three in four of a
 	/// modern army's casualties are wounded and most of those return to duty.

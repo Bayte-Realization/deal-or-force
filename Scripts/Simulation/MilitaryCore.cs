@@ -105,6 +105,9 @@ public sealed class Army
     public bool CutOff;
     public int BattleId = -1;
     public int ReadyDay;
+
+    /// <summary>The drawn line this formation was put on, or -1 for the war's own front.</summary>
+    public int FrontLineId = -1;
     public float LastReinforced;
     public ArmyMoveResult LastMoveResult;
     public int LastMoveResultDay = -1;
@@ -588,22 +591,41 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(IssuerId));
         var nation = campaign.NationById(IssuerId);
         if (war is null || nation is null) return;
-        var front = Order == ArmyOrder.ReserveFront
+        // A line the player drew outranks the front the war worked out for itself, and
+        // formations spread along its length rather than being scattered over it by a
+        // hash of their id - covering the line is the whole of what drawing one means.
+        var drawn = BattlePlanning.LineFor(campaign, army);
+        var front = drawn?.Provinces ?? (Order == ArmyOrder.ReserveFront
             ? FrontPlanner.ReserveLine(campaign, war, IssuerId)
-            : war.FriendlyFront(IssuerId);
+            : war.FriendlyFront(IssuerId));
         var controllers = campaign.ProvinceController ?? campaign.ProvinceMap.ProvinceToNation;
-        var orderedFront = new List<int>(front);
-        orderedFront.Sort();
-        if (Order == ArmyOrder.Spearhead)
+        var orderedFront = drawn is not null
+            ? BattlePlanning.Sequence(campaign, drawn)
+            : new List<int>(front);
+        if (drawn is null) orderedFront.Sort();
+        if (Order == ArmyOrder.Spearhead && drawn is null)
             FocusSpearhead(campaign, war, IssuerId, army, orderedFront);
         var target = PreferredProvinceId > 0 && orderedFront.Contains(PreferredProvinceId)
             ? PreferredProvinceId
-            : orderedFront.Count == 0 ? -1 : orderedFront[Math.Abs(army.Id) % orderedFront.Count];
+            : drawn is not null
+                ? BattlePlanning.PostFor(drawn, army, orderedFront)
+                : orderedFront.Count == 0 ? -1 : orderedFront[Math.Abs(army.Id) % orderedFront.Count];
         var route = target < 0
             ? Array.Empty<int>()
             : campaign.ProvinceMap.FindRoute(army.ProvinceId, target, (ushort)nation.MapIndex, controllers);
         if (route.Length == 0 && army.ProvinceId != target)
             route = campaign.ProvinceMap.FindRouteToAny(army.ProvinceId, front, (ushort)nation.MapIndex, controllers);
+        // An offensive line is drawn across ground the enemy holds, so no friendly route
+        // reaches it. The formation moves up to the edge of what it can walk and CombatCore
+        // takes it the rest of the way; the objective it is attacking towards is kept.
+        if (route.Length == 0 && drawn is { Kind: FrontLineKind.Offensive } && target > 0)
+        {
+            army.ObjectiveStateMapIndex = campaign.ProvinceMap.ProvinceToState[target];
+            army.OrderProvinceId = target;
+            army.OrderStateMapIndex = army.ObjectiveStateMapIndex;
+            army.AssignedWarId = war.Id;
+            return;
+        }
         army.AssignedWarId = war.Id;
         army.Route.AddRange(route);
         if (route.Length > 0)

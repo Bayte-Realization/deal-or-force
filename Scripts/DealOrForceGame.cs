@@ -109,6 +109,15 @@ public partial class DealOrForceGame : Control
             GetViewport().SetInputAsHandled();
             return;
         }
+        // A brush left down turns the map into a canvas and swallows ordinary clicks, so
+        // escape has to reach it before anything else that escape closes.
+        if (key.Keycode == Key.Escape && _drawingKind is not null)
+        {
+            EndDrawing();
+            SetArmyFeedback("The line was abandoned.");
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.Keycode == Key.F5) { QuickSave(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F9) { QuickLoad(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode != Key.Space && key.PhysicalKeycode != Key.Space) return;

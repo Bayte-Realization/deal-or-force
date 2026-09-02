@@ -122,22 +122,6 @@ public partial class DealOrForceGame
                 () => ShowBattleDetails(battle), "Open the battle report and focus the engagement.");
         }
 
-        AddOutlinerHeader("ARMIES");
-        var watched = armies.OrderByDescending(army => army.InBattle)
-            .ThenBy(army => army.SupplyLevel).ThenByDescending(army => army.IsMoving).Take(7).ToArray();
-        foreach (var army in watched)
-        {
-            var state = army.InBattle ? "⚔" : army.CutOff ? "CUT OFF" : army.IsMoving ? "→" :
-                army.OrderKind == ArmyOrder.DefendFront ? "DEF" : army.OrderKind == ArmyOrder.AdvanceFront ? "ADV" : "HOLD";
-            if (army.OrderKind == ArmyOrder.ReserveFront) state = "RES";
-            else if (army.OrderKind == ArmyOrder.Spearhead) state = "SPH";
-            if ((army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) && !army.PlanActive)
-                state = "PREP";
-            AddOutlinerButton($"{army.Name}  {state}  {army.Organisation:P0}", () => FocusArmy(army),
-                $"{UnitTypeCatalog.Get(army.TemplateId).Name} · {army.Divisions:0.0} divisions · " +
-                $"strength {army.Strength:P0} · supply {army.SupplyLevel:P0} · planning {army.Planning:P0} · {army.Stance}");
-        }
-
         AddOutlinerHeader("MARKET");
         var worstGood = player.Market.Values.OrderBy(quote => quote.Satisfaction).FirstOrDefault();
         if (worstGood is null) AddOutlinerHint("No market data");

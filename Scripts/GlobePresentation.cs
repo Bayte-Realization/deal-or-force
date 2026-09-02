@@ -117,6 +117,31 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private int _lastPaintedProvince = -1;
     private readonly HashSet<int> _peacePreview = new();
     private ushort _peacePreviewOwner;
+    private readonly HashSet<int> _planPreview = new();
+    private int _planPreviewKind;
+
+    /// <summary>
+    /// The stroke in progress. A drawn line only means anything if the player can see it
+    /// while they are drawing it, so the brush writes into the same overlay the committed
+    /// lines use and the map answers under the cursor rather than after an Apply.
+    /// </summary>
+    public void SetPlanPreview(IEnumerable<int> provinces, int kind)
+    {
+        _planPreview.Clear();
+        if (provinces is not null) foreach (var province in provinces) _planPreview.Add(province);
+        _planPreviewKind = kind;
+        BuildFrontPreview();
+    }
+
+    public void ClearPlanPreview()
+    {
+        if (_planPreview.Count == 0) return;
+        _planPreview.Clear();
+        BuildFrontPreview();
+    }
+
+    /// <summary>Redraw the overlay after a line was committed or dropped.</summary>
+    public void RefreshBattlePlans() => BuildFrontPreview();
 
     /// <summary>
     /// Show a demand on the map as the border it would produce. The provinces are drawn in
@@ -571,25 +596,48 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (_campaign?.ProvinceMap is null || _globeMaterial is null) return;
         _frontMesh.ClearSurfaces();
         _frontPreview.Visible = false;
-        var pixels = new byte[256 * 256 * 2];
+        var pixels = new byte[256 * 256 * 4];
         foreach (var war in _campaign.Wars)
         {
             if (war.Ended) continue;
             var warCode = (byte)(war.Id % 254 + 1);
             foreach (var province in war.AttackerFront)
             {
-                var write = province * 2;
+                var write = province * 4;
                 pixels[write] = warCode;
                 pixels[write + 1] = 85;
             }
             foreach (var province in war.DefenderFront)
             {
-                var write = province * 2;
+                var write = province * 4;
                 pixels[write] = warCode;
                 pixels[write + 1] = 170;
             }
         }
-        var image = Image.CreateFromData(256, 256, false, Image.Format.Rg8, pixels);
+
+        // The blue channel carries what the player drew: which kind of line a province
+        // belongs to, committed lines first and the stroke in progress painted over them,
+        // so correcting a line reads immediately under the brush.
+        foreach (var line in _campaign.FrontLines)
+        {
+            var code = PlanCode(line.Kind);
+            foreach (var province in line.Provinces)
+            {
+                if (province <= 0 || province >= 256 * 256) continue;
+                pixels[province * 4 + 2] = code;
+            }
+        }
+        if (_planPreview.Count > 0)
+        {
+            var code = (byte)(Mathf.Clamp(_planPreviewKind + 1, 1, 3) * 64);
+            foreach (var province in _planPreview)
+            {
+                if (province <= 0 || province >= 256 * 256) continue;
+                pixels[province * 4 + 2] = code;
+            }
+        }
+
+        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         if (_frontTexture is null)
         {
             _frontTexture = ImageTexture.CreateFromImage(image);
@@ -597,6 +645,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         else _frontTexture.Update(image);
     }
+
+    private static byte PlanCode(Simulation.FrontLineKind kind) => kind switch
+    {
+        Simulation.FrontLineKind.Defence => 64,
+        Simulation.FrontLineKind.Offensive => 128,
+        _ => 192
+    };
 
     private void UpdateRoutePreview()
     {
@@ -888,14 +943,14 @@ vec4 map_mode_color(float nation) {
     float high = floor(nation / 256.0);
     return texture(map_mode_colors, (vec2(low, high) + vec2(0.5)) / 256.0);
 }
-vec2 front_data(float province) {
+vec3 front_data(float province) {
     float low = mod(province, 256.0);
     float high = floor(province / 256.0);
-    return texture(front_membership, (vec2(low, high) + vec2(0.5)) / 256.0).rg;
+    return texture(front_membership, (vec2(low, high) + vec2(0.5)) / 256.0).rgb;
 }
-float front_crossing(float province, vec2 here, vec2 uv) {
+float front_crossing(float province, vec3 here, vec2 uv) {
     float other_province = map_id(province_ids, uv);
-    vec2 other = front_data(other_province);
+    vec3 other = front_data(other_province);
     float both = step(0.002, here.r) * step(0.002, other.r);
     float same_war = 1.0 - step(0.002, abs(here.r - other.r));
     float opposite_sides = step(0.20, abs(here.g - other.g));
@@ -936,7 +991,7 @@ void fragment() {
         step(0.5, abs(province - map_id(province_ids, UV - vec2(texel.x, 0.0))))), max(
         step(0.5, abs(province - map_id(province_ids, UV + vec2(0.0, texel.y)))),
         step(0.5, abs(province - map_id(province_ids, UV - vec2(0.0, texel.y))))));
-    vec2 front = front_data(province);
+    vec3 front = front_data(province);
     float front_edge = max(max(
         front_crossing(province, front, UV + vec2(texel.x, 0.0)),
         front_crossing(province, front, UV - vec2(texel.x, 0.0))), max(
@@ -953,6 +1008,12 @@ void fragment() {
     // Tactical borders should read as fine cartography, not dark fish-scales.
     // Selection remains strong below; the idle network stays deliberately subtle.
     base = mix(base, vec3(0.10, 0.13, 0.16), province_edge * province_detail * political.a * 0.21);
+    // A line the player drew. Blue holds it, amber takes it, grey falls back to it.
+    float plan = round(front.b * 4.0);
+    vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)
+        : (plan < 2.5 ? vec3(0.96, 0.52, 0.16) : vec3(0.70, 0.73, 0.78));
+    float plan_on = step(0.5, plan) * max(province_detail, detail_mix * 0.70);
+    base = mix(base, plan_color, plan_on * 0.40);
     base = mix(base, vec3(1.0, 0.22, 0.10), front_edge * max(province_detail, detail_mix * 0.70) * 0.94);
     base = mix(base, vec3(0.93, 0.16, 0.07), front_outer * max(province_detail, detail_mix * 0.70) * 0.38);
     base = mix(base, vec3(0.95, 0.76, 0.25), region_selected * 0.10);
@@ -960,6 +1021,7 @@ void fragment() {
     float selection_edge = max(region_edge * region_selected, province_edge * province_selected * province_detail);
     ALBEDO = mix(base, vec3(1.0, 0.84, 0.30), selection_edge * 0.92);
     EMISSION = mix(water * 0.025, vec3(0.28, 0.18, 0.025), selection_edge * 0.48) +
+        plan_color * plan_on * 0.14 +
         vec3(0.30, 0.025, 0.008) * front_edge * max(province_detail, detail_mix * 0.70) +
         vec3(0.08, 0.008, 0.002) * front_outer * max(province_detail, detail_mix * 0.70) +
         inland_water * (lake_water * 0.035 + river_water * 0.025);

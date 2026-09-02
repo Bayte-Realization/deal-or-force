@@ -186,6 +186,10 @@ public sealed partial class Campaign
     public readonly List<ArmyGroup> ArmyGroups = new();
     public readonly List<Fleet> Fleets = new();
     public readonly List<StrategicWar> Wars = new();
+
+    /// <summary>Lines the player has brushed onto the map, and who is on them.</summary>
+    public readonly List<DrawnFrontLine> FrontLines = new();
+    public int NextFrontLineId;
     public readonly List<LandBattle> Battles = new();
     public readonly List<ConstructionProject> Construction = new();
     public readonly List<PendingCampaignEvent> PendingEvents = new();

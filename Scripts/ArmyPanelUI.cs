@@ -133,6 +133,28 @@ public partial class DealOrForceGame
         autoFront.TooltipText = "Spread the selection across unique sectors of the active front.";
         execution.AddChild(autoFront);
 
+        // ---- the brush ----------------------------------------------------------------
+        // An order names a role; a drawn line says where. The three buttons pick which
+        // kind of line the brush is drawing, and pressing the same one again commits it.
+        rows.AddChild(Title("DRAW ON THE MAP", 11, Ui.Colour("text.caption")));
+        var draw = new HBoxContainer();
+        draw.AddThemeConstantOverride("separation", 4);
+        rows.AddChild(draw);
+        AddDrawButton(draw, "▬ Front", FrontLineKind.Defence, "Front line",
+            "Draw the line to hold. The selection spreads along its length and digs in.");
+        AddDrawButton(draw, "➤ Attack", FrontLineKind.Offensive, "Offensive line",
+            "Draw a line across enemy ground. The selection attacks towards it once executed.");
+        AddDrawButton(draw, "⌂ Fall back", FrontLineKind.Fallback, "Fallback line",
+            "Draw the line to hold if the one in front gives way.");
+        var dropLine = ActionButton("Erase", ClearDrawnLine, 74, 30);
+        dropLine.TooltipText = "Take the selection off its drawn line and return it to the war's own front.";
+        draw.AddChild(dropLine);
+
+        _drawFeedback = Title("Pick a line, then drag along the map. Right button rubs out.",
+            11, Ui.Colour("text.muted"));
+        _drawFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(_drawFeedback);
+
         // ---- posture and reinforcement -------------------------------------------------
         rows.AddChild(Title("POSTURE", 11, Ui.Colour("text.caption")));
         var posture = new HBoxContainer();
@@ -197,6 +219,14 @@ public partial class DealOrForceGame
         _armyOrders = rows;
     }
 
+    private void AddDrawButton(Container parent, string label, FrontLineKind kind, string name, string help)
+    {
+        var button = ActionButton(label, () => ToggleDrawing(kind), 92, 30);
+        button.TooltipText = $"{name}\n{help}";
+        _drawButtons[kind] = button;
+        parent.AddChild(button);
+    }
+
     private void AddOrderButton(Container parent, string glyph, ArmyOrder order, string name, string help)
     {
         var button = ActionButton(glyph, () => IssueArmyOrder(order), 56, 34);
@@ -216,6 +246,7 @@ public partial class DealOrForceGame
     /// <summary>Show the panel, or hide it and let the generic side panel have the space.</summary>
     private void SetArmyPanelVisible(bool visible)
     {
+        if (!visible) EndDrawing();
         if (_armyPanel is null) return;
         _armyPanel.Visible = visible;
         if (!visible) _armyRosterRows.Clear();

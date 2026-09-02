@@ -173,9 +173,7 @@ public static partial class FrontPlanner
         foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id &&
                      army.OrderKind != ArmyOrder.Manual && !army.InBattle).ToArray())
         {
-            var expected = army.OrderKind == ArmyOrder.ReserveFront
-                ? ReserveLine(campaign, war, army.NationId)
-                : war.FriendlyFront(army.NationId);
+            var expected = BattlePlanning.Posts(campaign, war, army);
             if (expected.Count == 0 || expected.Contains(army.ProvinceId) ||
                 (army.OrderProvinceId > 0 && expected.Contains(army.OrderProvinceId)))
                 continue;
