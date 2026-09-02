@@ -68,7 +68,7 @@ input, sound, drawing                <-    state snapshots + Changed event
 - `HistoryCore.cs` — ограниченные временные ряды стран для Ledger, диагностики и сохранений.
 - `SaveSystem.cs` — версионируемый снимок кампании, checksum, сжатие и атомарная замена слотов.
 - `DealOrForceGame.cs` — композиция UI и игровой цикл.
-- `GlobePresentation.cs` — 3D/2D карта, границы, подписи, армии и фронты.
+- `GlobePresentation.cs` — 3D/2D карта, границы, подписи, армии, фронты, кисть мира и свободная камера.
 - `ArmyPanelUI.cs` — панель армии: список дивизий, полосы, счётчики и боевые планы.
 - `PeaceConferenceUI.cs` — стол переговоров: кисть по карте, ведомость и предпросмотр границы.
 - `ArmyOperationsUI.cs`, `WarPeaceUI.cs`, `EconomyUI.cs` — рабочие панели.

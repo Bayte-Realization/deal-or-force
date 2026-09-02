@@ -84,6 +84,7 @@ public partial class DealOrForceGame
             _developerConsoleLayer.MoveToFront();
             _developerConsoleInput.GrabFocus();
         }
+        SyncFreeCameraPointer();
     }
 
     private void CloseDeveloperConsole()
@@ -91,6 +92,7 @@ public partial class DealOrForceGame
         if (_developerConsoleLayer is null) return;
         _developerConsoleLayer.Visible = false;
         _developerConsoleInput.ReleaseFocus();
+        SyncFreeCameraPointer();
     }
 
     private void ExecuteDeveloperCommand(string raw)
@@ -153,6 +155,18 @@ public partial class DealOrForceGame
         Bb("text.accent") + "WAR[/color]  peace - open the conference for your current war";
 
     /// <summary>Open the peace conference for whatever war the player is fighting.</summary>
+    /// <summary>
+    /// The free camera captures the pointer, and a console you cannot click is not a
+    /// console. Opening it hands the mouse back and closing it takes it again.
+    /// </summary>
+    private void SyncFreeCameraPointer()
+    {
+        if (_globe is null || !_globe.FreeCamera) return;
+        Input.MouseMode = _developerConsoleLayer is { Visible: true }
+            ? Input.MouseModeEnum.Visible
+            : Input.MouseModeEnum.Captured;
+    }
+
     private string ConsolePeaceConference()
     {
         if (_campaign?.Player is null) return "No campaign.";
@@ -305,12 +319,11 @@ public partial class DealOrForceGame
             "off" or "0" => false,
             _ => !_freeCameraMode
         };
-        _freeCameraMode = enabled;
-        if (_hudLayer is not null) _hudLayer.Visible = !enabled;
-        if (_menuLayer is not null) _menuLayer.Visible = false;
-        if (_pickerLayer is not null) _pickerLayer.Visible = false;
-        return enabled ? "Free camera enabled; HUD hidden. Reopen console and use freecam off to restore it."
-            : "Free camera disabled; campaign HUD restored.";
+        if (_globe is not null && _globe.FreeCamera != enabled) ToggleFreeCamera();
+        return enabled
+            ? "Free camera on. Mouse looks, WASD flies, Space and Ctrl climb and descend, " +
+              "Shift is faster and Alt is slower, the wheel sets the throttle. F10 or Escape lands it."
+            : "Free camera off; the campaign HUD is back.";
     }
 
     private string ConsoleMapMode(string value)

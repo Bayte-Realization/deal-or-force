@@ -99,6 +99,16 @@ public partial class DealOrForceGame : Control
             return;
         }
 
+        // The free camera is a demonstration tool, and a demonstration tool that needs a
+        // console command typed out first is one nobody reaches for. F10 flies - not F8,
+        // which the Godot editor already uses to stop the running project.
+        if (key.Keycode == Key.F10) { ToggleFreeCamera(); GetViewport().SetInputAsHandled(); return; }
+        if (key.Keycode == Key.Escape && _globe is { FreeCamera: true })
+        {
+            ToggleFreeCamera();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.Keycode == Key.F5) { QuickSave(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F9) { QuickLoad(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode != Key.Space && key.PhysicalKeycode != Key.Space) return;
@@ -574,6 +584,23 @@ public partial class DealOrForceGame : Control
         var province = pick.ProvinceId > 0 ? $"Tactical province #{pick.ProvinceId:N0}" : "Province topology loading";
         ShowCountryInteraction(pick.Nation, $"{state} · {province}");
         if (pick.State is not null) ShowRegionOverview();
+    }
+
+    /// <summary>Take the camera off its rig, or put it back and restore the interface.</summary>
+    private void ToggleFreeCamera()
+    {
+        if (_globe is null) return;
+        var enabled = !_globe.FreeCamera;
+        _freeCameraMode = enabled;
+        _globe.SetFreeCamera(enabled);
+        if (enabled && _peaceLayer is { Visible: true }) ClosePeaceConference();
+        if (_hudLayer is not null) _hudLayer.Visible = !enabled && _campaign is not null && !_menuLayer.Visible;
+        if (enabled)
+        {
+            if (_menuLayer is not null) _menuLayer.Visible = false;
+            if (_pickerLayer is not null) _pickerLayer.Visible = false;
+            CloseDeveloperConsole();
+        }
     }
 
     private void TogglePause()

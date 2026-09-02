@@ -251,32 +251,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _Process(double delta)
     {
-        var weight = 1f - Mathf.Pow(0.0008f, (float)delta);
-        _yaw = Mathf.LerpAngle(_yaw, _targetYaw, weight);
-        _pitch = Mathf.Lerp(_pitch, _targetPitch, weight);
-        _distance = Mathf.Lerp(_distance, _targetDistance, weight);
-        _flatX = Mathf.Lerp(_flatX, _targetFlatX, weight);
-        _flatY = Mathf.Lerp(_flatY, _targetFlatY, weight);
-        _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
+        if (_freeCamera) UpdateFreeCamera(delta);
+        else UpdateOrbitCamera(delta);
 
-        if (_flatMap)
-        {
-            var flatSpeed = _flatZoom * 0.62f * (float)delta;
-            if (Input.IsKeyPressed(Key.W)) _targetFlatY += flatSpeed;
-            if (Input.IsKeyPressed(Key.S)) _targetFlatY -= flatSpeed;
-            if (Input.IsKeyPressed(Key.A)) _targetFlatX -= flatSpeed;
-            if (Input.IsKeyPressed(Key.D)) _targetFlatX += flatSpeed;
-            ClampFlatCamera();
-        }
-        else
-        {
-            if (Input.IsKeyPressed(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -1.20f, 1.20f);
-            if (Input.IsKeyPressed(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -1.20f, 1.20f);
-            if (Input.IsKeyPressed(Key.A)) _targetYaw += (float)delta * 0.7f;
-            if (Input.IsKeyPressed(Key.D)) _targetYaw -= (float)delta * 0.7f;
-        }
-
-        ApplyCamera();
         var detailMix = _flatMap
             ? Mathf.Clamp((11.5f - _flatZoom) / 4.2f, 0f, 1f)
             : Mathf.Clamp((15f - _distance) / 4f, 0f, 1f);
@@ -690,6 +667,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _GuiInput(InputEvent inputEvent)
     {
+        if (_freeCamera && HandleFreeCameraInput(inputEvent)) { AcceptEvent(); return; }
         if (PaintMode && HandlePaintInput(inputEvent)) return;
 
         if (inputEvent is InputEventMouseButton button)
@@ -1035,6 +1013,167 @@ void fragment() {
         world.AddChild(node);
         return node;
     }
+
+    /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
+    private void UpdateOrbitCamera(double delta)
+    {
+        var weight = 1f - Mathf.Pow(0.0008f, (float)delta);
+        _yaw = Mathf.LerpAngle(_yaw, _targetYaw, weight);
+        _pitch = Mathf.Lerp(_pitch, _targetPitch, weight);
+        _distance = Mathf.Lerp(_distance, _targetDistance, weight);
+        _flatX = Mathf.Lerp(_flatX, _targetFlatX, weight);
+        _flatY = Mathf.Lerp(_flatY, _targetFlatY, weight);
+        _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
+
+        if (_flatMap)
+        {
+            var flatSpeed = _flatZoom * 0.62f * (float)delta;
+            if (Input.IsKeyPressed(Key.W)) _targetFlatY += flatSpeed;
+            if (Input.IsKeyPressed(Key.S)) _targetFlatY -= flatSpeed;
+            if (Input.IsKeyPressed(Key.A)) _targetFlatX -= flatSpeed;
+            if (Input.IsKeyPressed(Key.D)) _targetFlatX += flatSpeed;
+            ClampFlatCamera();
+        }
+        else
+        {
+            if (Input.IsKeyPressed(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -1.20f, 1.20f);
+            if (Input.IsKeyPressed(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -1.20f, 1.20f);
+            if (Input.IsKeyPressed(Key.A)) _targetYaw += (float)delta * 0.7f;
+            if (Input.IsKeyPressed(Key.D)) _targetYaw -= (float)delta * 0.7f;
+        }
+
+        ApplyCamera();
+    }
+
+    // ---- Free camera -----------------------------------------------------------------
+    //
+    // The console's freecam used to hide the HUD and leave the orbit rig exactly where it
+    // was, so "free" meant a clean screenshot of the same locked-down view. This is the
+    // real thing: the camera comes off the rig entirely and flies. Mouse looks, WASD moves
+    // along the direction it is looking, Space and Ctrl climb and descend, Shift is faster
+    // and Alt is slower. Nothing clamps it - it can sit on a province, fly the length of a
+    // front, or pull back until the planet is a marble, which is what makes it useful for
+    // showing the game to somebody rather than playing it.
+
+    private bool _freeCamera;
+    private Vector3 _freePosition;
+    private float _freeYaw;
+    private float _freePitch;
+    private float _freeSpeed = 4f;
+
+    /// <summary>Whether the camera has come off its rig and is flying.</summary>
+    public bool FreeCamera => _freeCamera;
+
+    /// <summary>Metres per second at the current setting, for a status line.</summary>
+    public float FreeCameraSpeed => _freeSpeed;
+
+    public void SetFreeCamera(bool enabled)
+    {
+        if (_freeCamera == enabled || !IsInstanceValid(_camera)) return;
+        _freeCamera = enabled;
+
+        if (enabled)
+        {
+            // Start exactly where the player was looking, so turning it on does not
+            // teleport them somewhere else.
+            var transform = _camera.GlobalTransform;
+            _freePosition = transform.Origin;
+            var euler = transform.Basis.GetEuler();
+            _freeYaw = euler.Y;
+            _freePitch = Mathf.Clamp(euler.X, -1.45f, 1.45f);
+            _camera.TopLevel = true;
+            Input.MouseMode = Input.MouseModeEnum.Captured;
+            ApplyFreeCamera();
+        }
+        else
+        {
+            // Land where it was flying. Without this the orbit rig snaps back to whatever
+            // angle it held before take-off, which throws the player across the planet at
+            // exactly the moment they wanted to look at what they had just flown to.
+            var direction = _freePosition.LengthSquared() > 0.0001f
+                ? _freePosition.Normalized()
+                : Vector3.Back;
+            _targetPitch = Mathf.Clamp(Mathf.Asin(direction.Y), -1.20f, 1.20f);
+            _targetYaw = Mathf.Atan2(direction.X, direction.Z);
+            _pitch = _targetPitch;
+            _yaw = _targetYaw;
+            _targetDistance = Mathf.Clamp(_freePosition.Length(), MinimumDistance, MaximumDistance);
+            _distance = _targetDistance;
+
+            _camera.TopLevel = false;
+            Input.MouseMode = Input.MouseModeEnum.Visible;
+            ApplyCamera();
+        }
+    }
+
+    /// <summary>
+    /// One frame of flight. Speed scales with height above the surface, so the same stick
+    /// deflection crawls along a front line and crosses an ocean, which is the difference
+    /// between a camera that is usable at both scales and one that is usable at neither.
+    /// </summary>
+    private void UpdateFreeCamera(double delta)
+    {
+        var forward = -new Basis(Quaternion.FromEuler(new Vector3(_freePitch, _freeYaw, 0f))).Z;
+        var right = new Basis(Quaternion.FromEuler(new Vector3(0f, _freeYaw, 0f))).X;
+
+        var move = Vector3.Zero;
+        if (Input.IsKeyPressed(Key.W)) move += forward;
+        if (Input.IsKeyPressed(Key.S)) move -= forward;
+        if (Input.IsKeyPressed(Key.D)) move += right;
+        if (Input.IsKeyPressed(Key.A)) move -= right;
+        if (Input.IsKeyPressed(Key.Space)) move += Vector3.Up;
+        if (Input.IsKeyPressed(Key.Ctrl)) move -= Vector3.Up;
+
+        var altitude = Mathf.Max(0.35f, _freePosition.Length() - GlobeRadius);
+        var speed = _freeSpeed * Mathf.Clamp(altitude / 6f, 0.10f, 6f);
+        if (Input.IsKeyPressed(Key.Shift)) speed *= 4.5f;
+        if (Input.IsKeyPressed(Key.Alt)) speed *= 0.22f;
+
+        if (move.LengthSquared() > 0.0001f)
+            _freePosition += move.Normalized() * speed * (float)delta;
+
+        // Everything downstream sizes labels, markers and province detail by _distance.
+        // Feeding it the flying camera's own height keeps the map behaving the way it
+        // does under the orbit rig instead of freezing at whatever zoom it left.
+        _distance = _freePosition.Length();
+        _targetDistance = _distance;
+        ApplyFreeCamera();
+    }
+
+    private void ApplyFreeCamera()
+    {
+        if (!IsInstanceValid(_camera)) return;
+        _camera.Projection = Camera3D.ProjectionType.Perspective;
+        _camera.GlobalTransform = new Transform3D(
+            new Basis(Quaternion.FromEuler(new Vector3(_freePitch, _freeYaw, 0f))), _freePosition);
+    }
+
+    /// <summary>
+    /// Look and throttle. Returns true when the event belonged to the free camera, so
+    /// picking, box-select and orbit dragging stay out of the way while it is flying.
+    /// </summary>
+    private bool HandleFreeCameraInput(InputEvent inputEvent)
+    {
+        if (inputEvent is InputEventMouseMotion look && Input.MouseMode == Input.MouseModeEnum.Captured)
+        {
+            _freeYaw -= look.Relative.X * FreeLookSensitivity;
+            _freePitch = Mathf.Clamp(_freePitch - look.Relative.Y * FreeLookSensitivity, -1.45f, 1.45f);
+            ApplyFreeCamera();
+            return true;
+        }
+
+        if (inputEvent is InputEventMouseButton wheel && wheel.Pressed &&
+            wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
+        {
+            var step = wheel.ButtonIndex == MouseButton.WheelUp ? 1.22f : 1f / 1.22f;
+            _freeSpeed = Mathf.Clamp(_freeSpeed * step, 0.4f, 90f);
+            return true;
+        }
+
+        return false;
+    }
+
+    private const float FreeLookSensitivity = 0.0032f;
 
     private void ApplyCamera()
     {
