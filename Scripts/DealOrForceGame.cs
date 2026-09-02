@@ -358,7 +358,7 @@ public partial class DealOrForceGame : Control
         _sideDetail.AddThemeConstantOverride("separation", 3);
         sideRows.AddChild(_sideDetail);
 
-        BuildArmyOrderControls(sideRows);
+        
         BuildCountryActionControls(sideRows);
         BuildRegionInteractionControls(sideRows);
         BuildEconomyControls(sideRows);
@@ -382,6 +382,7 @@ public partial class DealOrForceGame : Control
         _militarySpendingReadout.Visible = false;
         sideRows.AddChild(_militarySpendingReadout);
 
+        BuildArmyPanel();
         BuildLedgerInterface();
         BuildMapControls();
         BuildStrategicHud();
@@ -431,7 +432,7 @@ public partial class DealOrForceGame : Control
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _openScreen = screen;
         _sidePanel.Visible = true;
-        _armyOrders.Visible = false;
+        SetArmyPanelVisible(false);
         _countryActions.Visible = false;
         HideRegionInteractionControls();
         _economyControls.Visible = screen == "Economy";
@@ -557,7 +558,7 @@ public partial class DealOrForceGame : Control
         _globe.SelectArmy(-1);
         _openScreen = "";
         _sidePanel.Visible = true;
-        _armyOrders.Visible = false;
+        SetArmyPanelVisible(false);
         _countryActions.Visible = pick.Nation != _campaign.Player;
         _regionControls.Visible = pick.State is not null;
         _economyControls.Visible = false;
@@ -644,7 +645,7 @@ public partial class DealOrForceGame : Control
         RefreshEventInterface();
         RefreshStrategicHud();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
-        if (_selectedArmy is not null && _armyOrders.Visible) ShowSelectedArmies();
+        if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
         else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation")
             OpenScreen(_openScreen);
     }

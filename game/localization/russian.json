@@ -271,5 +271,20 @@
   "The world as it stands in 2024 — its borders, its people and its economy.": "Мир таким, каков он в 2024 году — его границы, его люди и его экономика.",
   "No external mods loaded · open user://mods or res://Mods": "Внешние моды не загружены · откройте user://mods или res://Mods",
   "Development mods: res://Mods · installed mods: user://mods": "Моды разработчика: res://Mods · установленные моды: user://mods",
-  "Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.": "Переключение языка интерфейса. Моды добавляют свой язык файлом localization/<язык>.json в папке мода."
+  "Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.": "Переключение языка интерфейса. Моды добавляют свой язык файлом localization/<язык>.json в папке мода.",
+  "BATTLE PLANS": "БОЕВЫЕ ПЛАНЫ",
+  "POSTURE": "МАНЕРА БОЯ",
+  "ARMY": "АРМИЯ",
+  "Prepare": "Готовить",
+  "Execute ▶": "Исполнять ▶",
+  "Auto-deploy": "Развернуть",
+  "New HQ": "Новый штаб",
+  "Detach": "Открепить",
+  "Whole HQ": "Весь штаб",
+  "Every division": "Все дивизии",
+  "Drop lead": "Убрать ведущую",
+  "Region": "Регион",
+  "Army": "Армия",
+  "Click a division to command it alone · Ctrl+click to add or remove · double-click to take every division of the same template": "Клик по дивизии — командовать ей одной · Ctrl+клик — добавить или убрать · двойной клик — взять все дивизии того же типа",
+  "Right-click to march or attack · Shift+right-click queues a waypoint": "ПКМ — марш или атака · Shift+ПКМ — добавить путевую точку"
 }

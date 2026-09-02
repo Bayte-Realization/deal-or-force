@@ -69,6 +69,7 @@ input, sound, drawing                <-    state snapshots + Changed event
 - `SaveSystem.cs` — версионируемый снимок кампании, checksum, сжатие и атомарная замена слотов.
 - `DealOrForceGame.cs` — композиция UI и игровой цикл.
 - `GlobePresentation.cs` — 3D/2D карта, границы, подписи, армии и фронты.
+- `ArmyPanelUI.cs` — панель армии: список дивизий, полосы, счётчики и боевые планы.
 - `ArmyOperationsUI.cs`, `WarPeaceUI.cs`, `EconomyUI.cs` — рабочие панели.
 - `LedgerUI.cs`, `StrategicCharts.cs` — интерактивная аналитика без собственной игровой истины.
 - `InterfaceSkin.cs`, `UiTheme.cs` — именованные цветовые токены интерфейса и их привязка к Godot.

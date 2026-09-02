@@ -258,7 +258,7 @@ public partial class DealOrForceGame
         _selectedBattleId = battle.Id;
         _openScreen = "";
         _sidePanel.Visible = true;
-        _armyOrders.Visible = false;
+        SetArmyPanelVisible(false);
         _countryActions.Visible = false;
         HideRegionInteractionControls();
         _economyControls.Visible = false;

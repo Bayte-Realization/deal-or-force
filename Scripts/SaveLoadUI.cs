@@ -147,7 +147,7 @@ public partial class DealOrForceGame
         if (_eventLayer is not null) _eventLayer.Visible = false;
         _hudLayer.Visible = true;
         _sidePanel.Visible = false;
-        _armyOrders.Visible = false;
+        SetArmyPanelVisible(false);
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
         StyleButton(_pause, _campaign.IsPaused);
         _saveStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? "Campaign restored." : result.Warning;
