@@ -161,6 +161,128 @@ public static class InterfaceSkin
         ("panel.texture_margin", 16f),
     };
 
+    /// <summary>
+    /// Where a panel sits, in Godot's own terms: four anchors as fractions of the screen
+    /// and four offsets in pixels from them. Left, top, right, bottom, in that order.
+    /// </summary>
+    public readonly record struct PanelRect(
+        float AnchorLeft, float AnchorTop, float AnchorRight, float AnchorBottom,
+        float OffsetLeft, float OffsetTop, float OffsetRight, float OffsetBottom);
+
+    private static readonly Dictionary<string, PanelRect> Layouts = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Where every panel the game builds sits.
+    ///
+    /// This is the second half of the gui folder. Colour was already data; geometry was
+    /// sixty-four anchor and offset assignments spread across a dozen files, so a mod that
+    /// wanted a wider ledger or the army list on the right had to fork the interface. A
+    /// panel is a name and a rectangle now, and a mod overrides the rectangle.
+    ///
+    /// Only placement is data. What goes inside a panel is still code - a layout file
+    /// cannot invent a new screen - but everything the base game builds can be moved,
+    /// resized or pushed to the other side of the map without touching it.
+    /// </summary>
+    private static readonly (string Key, PanelRect Rect)[] DefaultLayouts =
+    {
+        // The campaign HUD
+        ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,      14f, 12f, -14f, 104f)),
+        ("hud.navigation",     new PanelRect(0.5f, 1f, 0.5f, 1f, -475f, -97f, 475f, -10f)),
+        ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      20f, 140f, 404f, -170f)),
+        ("hud.map_controls",   new PanelRect(0f, 1f, 0f, 1f,      14f, -154f, 660f, -106f)),
+        ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 154f)),
+        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 1f,    -334f, 116f, -14f, -112f)),
+        ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      14f, 140f, 500f, -190f)),
+        ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
+        ("hud.hotseat",        new PanelRect(0f, 0f, 0f, 0f,      14f, 146f, 294f, 224f)),
+        ("hud.network",        new PanelRect(0f, 0f, 0f, 0f,      14f, 146f, 350f, 208f)),
+
+        // Full-screen and modal panels
+        ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -230f, -315f, 230f, 315f)),
+        ("picker.heading",     new PanelRect(0f, 0f, 0f, 0f,      18f, 18f, 455f, 106f)),
+        ("picker.country",     new PanelRect(1f, 0.5f, 1f, 0.5f, -420f, -338f, -18f, 338f)),
+        ("picker.actions",     new PanelRect(0f, 1f, 0f, 1f,      18f, -82f, 486f, -18f)),
+        ("modal.pause",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -210f, -245f, 210f, 245f)),
+        ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -225f, 310f, 225f)),
+        ("modal.save_load",    new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -420f, -360f, 420f, 360f)),
+        ("modal.handover",     new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -250f, -160f, 250f, 160f)),
+        ("modal.multiplayer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -285f, -340f, 285f, 340f)),
+        ("modal.ledger",       new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+    };
+
+    /// <summary>A panel's rectangle, or a sane full-screen one if the name is unknown.</summary>
+    public static PanelRect Layout(string key) =>
+        key is not null && Layouts.TryGetValue(key, out var rect)
+            ? rect
+            : new PanelRect(0f, 0f, 1f, 1f, 40f, 40f, -40f, -40f);
+
+    public static bool HasLayout(string key) => key is not null && Layouts.ContainsKey(key);
+
+    /// <summary>Every panel name and its rectangle, for the console and for a drift check.</summary>
+    public static IEnumerable<(string Key, PanelRect Rect)> Panels =>
+        Layouts.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (pair.Key, pair.Value));
+
+    /// <summary>Panels whose rectangle a mod has moved off the shipped one.</summary>
+    public static IReadOnlyList<string> MovedPanels
+    {
+        get
+        {
+            var defaults = DefaultLayouts.ToDictionary(entry => entry.Key, entry => entry.Rect,
+                StringComparer.OrdinalIgnoreCase);
+            return Layouts
+                .Where(pair => !defaults.TryGetValue(pair.Key, out var shipped) || !shipped.Equals(pair.Value))
+                .Select(pair => pair.Key)
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Merge one layout section. Anchors and offsets are independent, so a mod that only
+    /// wants a panel forty pixels wider writes the offsets and inherits the anchors.
+    /// </summary>
+    private static void MergeLayouts(JsonElement element, string context, List<string> errors)
+    {
+        foreach (var entry in element.EnumerateObject())
+        {
+            if (IsComment(entry.Name)) continue;
+            if (entry.Value.ValueKind != JsonValueKind.Object)
+            {
+                errors?.Add($"{context}: panel '{entry.Name}' must be an object with anchors and offsets.");
+                continue;
+            }
+
+            var current = Layout(entry.Name);
+            var anchors = Numbers(entry.Value, "anchors");
+            var offsets = Numbers(entry.Value, "offsets");
+            if (anchors is null && offsets is null)
+            {
+                errors?.Add($"{context}: panel '{entry.Name}' sets neither anchors nor offsets.");
+                continue;
+            }
+
+            Layouts[entry.Name] = new PanelRect(
+                anchors?[0] ?? current.AnchorLeft, anchors?[1] ?? current.AnchorTop,
+                anchors?[2] ?? current.AnchorRight, anchors?[3] ?? current.AnchorBottom,
+                offsets?[0] ?? current.OffsetLeft, offsets?[1] ?? current.OffsetTop,
+                offsets?[2] ?? current.OffsetRight, offsets?[3] ?? current.OffsetBottom);
+        }
+    }
+
+    /// <summary>Four numbers, or nothing. A partial rectangle is a mistake, not a shorthand.</summary>
+    private static float[] Numbers(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var array) || array.ValueKind != JsonValueKind.Array) return null;
+        var values = new float[4];
+        var index = 0;
+        foreach (var item in array.EnumerateArray())
+        {
+            if (index >= 4 || !item.TryGetSingle(out var number)) return null;
+            values[index++] = number;
+        }
+        return index == 4 ? values : null;
+    }
+
     /// <summary>Reload the base-game skin. Mods layer on top afterwards via <see cref="Merge"/>.</summary>
     public static void ResetCatalog()
     {
@@ -168,6 +290,8 @@ public static class InterfaceSkin
         Metrics.Clear();
         foreach (var (key, value) in DefaultColours) Colours[key] = value;
         foreach (var (key, value) in DefaultMetrics) Metrics[key] = value;
+        Layouts.Clear();
+        foreach (var (key, rect) in DefaultLayouts) Layouts[key] = rect;
 
         var root = FindSkinRoot();
         if (root is not null) LoadDirectory(root, null);
@@ -222,6 +346,12 @@ public static class InterfaceSkin
         {
             sectioned = true;
             MergeMetrics(metrics, context, errors);
+        }
+
+        if (root.TryGetProperty("layout", out var layout) && layout.ValueKind == JsonValueKind.Object)
+        {
+            sectioned = true;
+            MergeLayouts(layout, context, errors);
         }
 
         if (!sectioned) MergeColours(root, context, errors);

@@ -30,10 +30,7 @@ public partial class DealOrForceGame
         _saveLoadLayer.AddChild(veil);
 
         var panel = TexturedPanel(_saveLoadLayer);
-        panel.AnchorLeft = 0.5f; panel.AnchorRight = 0.5f;
-        panel.AnchorTop = 0.5f; panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -420; panel.OffsetRight = 420;
-        panel.OffsetTop = -360; panel.OffsetBottom = 360;
+        Ui.Place(panel, "modal.save_load");
         var rows = PanelRows(panel, 28, 24, 10);
         rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, Ui.Colour("text.accent")));
         rows.AddChild(Title("Atomic compressed saves · scenario/mod compatibility checks · F5 quicksave / F9 quickload",

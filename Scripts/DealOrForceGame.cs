@@ -208,14 +208,7 @@ public partial class DealOrForceGame : Control
         // Runtime-created Controls need explicit anchors and offsets. Setting
         // Position after a preset leaves them relative to (0, 0) on some
         // Godot 4.x builds, which pushed this panel off-screen.
-        panel.AnchorLeft = 0.5f;
-        panel.AnchorRight = 0.5f;
-        panel.AnchorTop = 0.5f;
-        panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -230;
-        panel.OffsetRight = 230;
-        panel.OffsetTop = -315;
-        panel.OffsetBottom = 315;
+        Ui.Place(panel, "menu.main");
 
         var rows = PanelRows(panel, 28, 24, 16);
         rows.AddChild(Title("DEAL OR FORCE", 34, Ui.Colour("text.accent")));
@@ -259,14 +252,7 @@ public partial class DealOrForceGame : Control
         AddChild(_hudLayer);
 
         var top = TexturedPanel(_hudLayer);
-        top.AnchorLeft = 0;
-        top.AnchorRight = 1;
-        top.AnchorTop = 0;
-        top.AnchorBottom = 0;
-        top.OffsetLeft = 14;
-        top.OffsetRight = -14;
-        top.OffsetTop = 12;
-        top.OffsetBottom = 104;
+        Ui.Place(top, "hud.top");
 
         var margin = Margin(top, 18, 12);
         var row = new HBoxContainer();
@@ -316,16 +302,7 @@ public partial class DealOrForceGame : Control
         UpdateSpeedButtons();
 
         var navigation = TexturedPanel(_hudLayer);
-        navigation.AnchorLeft = 0.5f;
-        navigation.AnchorRight = 0.5f;
-        navigation.AnchorTop = 1;
-        navigation.AnchorBottom = 1;
-        navigation.OffsetLeft = -475;
-        navigation.OffsetRight = 475;
-        // The panel texture contributes 29 px of minimum vertical chrome.
-        // Reserve its real 87 px height so the last row is never clipped.
-        navigation.OffsetTop = -97;
-        navigation.OffsetBottom = -10;
+        Ui.Place(navigation, "hud.navigation");
         var navMargin = Margin(navigation, 10, 8);
         var nav = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         nav.AddThemeConstantOverride("separation", 8);
@@ -356,14 +333,7 @@ public partial class DealOrForceGame : Control
         UpdateScreenButtons();
 
         _sidePanel = TexturedPanel(_hudLayer);
-        _sidePanel.AnchorLeft = 0;
-        _sidePanel.AnchorRight = 0;
-        _sidePanel.AnchorTop = 0;
-        _sidePanel.AnchorBottom = 1;
-        _sidePanel.OffsetLeft = 20;
-        _sidePanel.OffsetRight = 404;
-        _sidePanel.OffsetTop = 140;
-        _sidePanel.OffsetBottom = -170;
+        Ui.Place(_sidePanel, "hud.side_panel");
         _sidePanel.Visible = false;
 
         var sideRows = ScrollablePanelRows(_sidePanel, 24, 20, 12);

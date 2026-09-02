@@ -22,14 +22,7 @@ public partial class DealOrForceGame
         _pauseMenuLayer.AddChild(veil);
 
         var panel = TexturedPanel(_pauseMenuLayer);
-        panel.AnchorLeft = 0.5f;
-        panel.AnchorRight = 0.5f;
-        panel.AnchorTop = 0.5f;
-        panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -210;
-        panel.OffsetRight = 210;
-        panel.OffsetTop = -245;
-        panel.OffsetBottom = 245;
+        Ui.Place(panel, "modal.pause");
 
         var rows = PanelRows(panel, 30, 26, 12);
         rows.AddChild(Title("CAMPAIGN PAUSED", 28, Ui.Colour("text.accent")));

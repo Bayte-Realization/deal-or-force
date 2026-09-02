@@ -23,10 +23,7 @@ public partial class DealOrForceGame
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _eventLayer.AddChild(veil);
         var panel = TexturedPanel(_eventLayer);
-        panel.AnchorLeft = panel.AnchorRight = 0.5f;
-        panel.AnchorTop = panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -310; panel.OffsetRight = 310;
-        panel.OffsetTop = -225; panel.OffsetBottom = 225;
+        Ui.Place(panel, "modal.event");
         var rows = PanelRows(panel, 34, 30, 14);
         rows.AddChild(Title("EVENT", 12, Ui.Colour("text.caption")));
         _eventTitle = Title("", 28, Ui.Colour("text.accent"));

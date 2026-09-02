@@ -37,14 +37,7 @@ public partial class DealOrForceGame
     private void BuildNetworkMultiplayerInterface()
     {
         _networkHud = TexturedPanel(_hudLayer);
-        _networkHud.AnchorLeft = 0;
-        _networkHud.AnchorRight = 0;
-        _networkHud.AnchorTop = 0;
-        _networkHud.AnchorBottom = 0;
-        _networkHud.OffsetLeft = 14;
-        _networkHud.OffsetRight = 350;
-        _networkHud.OffsetTop = 146;
-        _networkHud.OffsetBottom = 208;
+        Ui.Place(_networkHud, "hud.network");
         _networkHud.Visible = false;
         var hudRows = PanelRows(_networkHud, 10, 7, 2);
         _networkHudStatus = Title("NETWORK", 11, Ui.Colour("state.info"));
@@ -58,14 +51,7 @@ public partial class DealOrForceGame
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _networkLayer.AddChild(shade);
         var panel = TexturedPanel(_networkLayer);
-        panel.AnchorLeft = 0.5f;
-        panel.AnchorRight = 0.5f;
-        panel.AnchorTop = 0.5f;
-        panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -285;
-        panel.OffsetRight = 285;
-        panel.OffsetTop = -340;
-        panel.OffsetBottom = 340;
+        Ui.Place(panel, "modal.multiplayer");
         var rows = PanelRows(panel, 26, 22, 10);
         rows.AddChild(Title("MULTIPLAYER · LAN / DIRECT IP", 26, Ui.Colour("text.accent")));
         var explanation = Title("Host an authoritative campaign or join by IPv4 address. Radmin/Hamachi work as a virtual LAN: enter the host's VPN IPv4 address.", 13, Ui.Colour("text.muted"));

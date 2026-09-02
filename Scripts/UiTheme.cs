@@ -38,6 +38,25 @@ internal static class Ui
 
     internal static float Metric(string token, float fallback) => InterfaceSkin.Metric(token, fallback);
 
+    /// <summary>
+    /// Put a panel where the layout says it goes. Sixty-four anchor and offset assignments
+    /// used to be spread across a dozen files; a panel is a name now, and the rectangle
+    /// behind the name is data a mod can move.
+    /// </summary>
+    internal static T Place<T>(T control, string key) where T : Control
+    {
+        var rect = InterfaceSkin.Layout(key);
+        control.AnchorLeft = rect.AnchorLeft;
+        control.AnchorTop = rect.AnchorTop;
+        control.AnchorRight = rect.AnchorRight;
+        control.AnchorBottom = rect.AnchorBottom;
+        control.OffsetLeft = rect.OffsetLeft;
+        control.OffsetTop = rect.OffsetTop;
+        control.OffsetRight = rect.OffsetRight;
+        control.OffsetBottom = rect.OffsetBottom;
+        return control;
+    }
+
     /// <summary>Drop every cached brush. Called automatically when a mod reloads the skin.</summary>
     internal static void Invalidate() => Cache.Clear();
 }

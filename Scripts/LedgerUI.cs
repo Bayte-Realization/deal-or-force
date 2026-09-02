@@ -56,11 +56,7 @@ public partial class DealOrForceGame
         _ledgerLayer.AddChild(shade);
 
         var panel = TexturedPanel(_ledgerLayer);
-        panel.AnchorLeft = 0.055f;
-        panel.AnchorRight = 0.945f;
-        panel.AnchorTop = 0.115f;
-        panel.AnchorBottom = 0.90f;
-        panel.OffsetLeft = panel.OffsetTop = panel.OffsetRight = panel.OffsetBottom = 0;
+        Ui.Place(panel, "modal.ledger");
 
         var rows = PanelRows(panel, 22, 16, 9);
         var header = new HBoxContainer();

@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://djgy710yk8giu"
+
+[deps]
+
+source_file="res://Mods/_templates/border_redraw/history/provinces/claims.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

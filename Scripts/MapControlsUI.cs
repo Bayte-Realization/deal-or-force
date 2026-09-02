@@ -13,14 +13,7 @@ public partial class DealOrForceGame
     {
         var panel = TexturedPanel(_hudLayer);
         panel.Name = "MapControls";
-        panel.AnchorLeft = 0f;
-        panel.AnchorRight = 0f;
-        panel.AnchorTop = 1f;
-        panel.AnchorBottom = 1f;
-        panel.OffsetLeft = 14f;
-        panel.OffsetRight = 660f;
-        panel.OffsetTop = -154f;
-        panel.OffsetBottom = -106f;
+        Ui.Place(panel, "hud.map_controls");
 
         var margin = Margin(panel, 8, 6);
         var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Begin };

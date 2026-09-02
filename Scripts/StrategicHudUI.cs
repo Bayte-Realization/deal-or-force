@@ -21,14 +21,7 @@ public partial class DealOrForceGame
     {
         var alerts = TexturedPanel(_hudLayer);
         alerts.Name = "StrategicAlerts";
-        alerts.AnchorLeft = 0.5f;
-        alerts.AnchorRight = 0.5f;
-        alerts.AnchorTop = 0f;
-        alerts.AnchorBottom = 0f;
-        alerts.OffsetLeft = -390f;
-        alerts.OffsetRight = 390f;
-        alerts.OffsetTop = 110f;
-        alerts.OffsetBottom = 154f;
+        Ui.Place(alerts, "hud.alerts");
         var alertMargin = Margin(alerts, 8, 5);
         _alertRows = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         _alertRows.AddThemeConstantOverride("separation", 5);
@@ -36,14 +29,7 @@ public partial class DealOrForceGame
 
         _outliner = TexturedPanel(_hudLayer);
         _outliner.Name = "StrategicOutliner";
-        _outliner.AnchorLeft = 1f;
-        _outliner.AnchorRight = 1f;
-        _outliner.AnchorTop = 0f;
-        _outliner.AnchorBottom = 1f;
-        _outliner.OffsetLeft = -334f;
-        _outliner.OffsetRight = -14f;
-        _outliner.OffsetTop = 116f;
-        _outliner.OffsetBottom = -112f;
+        Ui.Place(_outliner, "hud.outliner");
         var outer = Margin(_outliner, 10, 8);
         var column = new VBoxContainer();
         column.AddThemeConstantOverride("separation", 6);

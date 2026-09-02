@@ -40,5 +40,17 @@
     "map.allied":   "#3f6b98",
     "map.friendly": "#4b8a80",
     "map.rival":    "#b06a2c"
+  },
+
+  // Where panels sit. Four anchors as fractions of the screen, then four offsets in
+  // pixels: left, top, right, bottom. Anchors and offsets are independent, so a panel
+  // that only needs to be wider lists the offsets and inherits the anchors.
+  //
+  // The full set of panel names, with the rectangles the base game gives them, is in
+  // game/interface/skin.json. In game, `skin hud.` lists them with their current values.
+  "layout": {
+    // A wider ledger, and the army roster moved to the right-hand side.
+    "modal.ledger":    { "anchors": [0.03, 0.08, 0.97, 0.94] },
+    "hud.army_panel":  { "anchors": [1, 0, 1, 1], "offsets": [-500, 140, -14, -190] }
   }
 }

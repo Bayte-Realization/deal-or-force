@@ -13,14 +13,7 @@ public partial class DealOrForceGame
     private void BuildHotseatInterface()
     {
         _hotseatHud = TexturedPanel(_hudLayer);
-        _hotseatHud.AnchorLeft = 0;
-        _hotseatHud.AnchorRight = 0;
-        _hotseatHud.AnchorTop = 0;
-        _hotseatHud.AnchorBottom = 0;
-        _hotseatHud.OffsetLeft = 14;
-        _hotseatHud.OffsetRight = 294;
-        _hotseatHud.OffsetTop = 146;
-        _hotseatHud.OffsetBottom = 224;
+        Ui.Place(_hotseatHud, "hud.hotseat");
         _hotseatHud.Visible = false;
         var hudRows = PanelRows(_hotseatHud, 12, 8, 3);
         _hotseatStatus = Title("PLAYER 1 / 2", 12, Ui.Colour("text.accent"));
@@ -39,14 +32,7 @@ public partial class DealOrForceGame
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _handoverLayer.AddChild(veil);
         var panel = TexturedPanel(_handoverLayer);
-        panel.AnchorLeft = 0.5f;
-        panel.AnchorRight = 0.5f;
-        panel.AnchorTop = 0.5f;
-        panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -250;
-        panel.OffsetRight = 250;
-        panel.OffsetTop = -160;
-        panel.OffsetBottom = 160;
+        Ui.Place(panel, "modal.handover");
         var rows = PanelRows(panel, 30, 26, 14);
         rows.AddChild(Title("PRIVATE HANDOVER", 15, Ui.Colour("text.caption")));
         _handoverTitle = Title("PLAYER 1", 34, Ui.Colour("text.accent"));

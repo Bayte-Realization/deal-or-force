@@ -29,14 +29,7 @@ public partial class DealOrForceGame
         AddChild(_pickerLayer);
 
         var heading = TexturedPanel(_pickerLayer);
-        heading.AnchorLeft = 0;
-        heading.AnchorRight = 0;
-        heading.AnchorTop = 0;
-        heading.AnchorBottom = 0;
-        heading.OffsetLeft = 18;
-        heading.OffsetRight = 455;
-        heading.OffsetTop = 18;
-        heading.OffsetBottom = 106;
+        Ui.Place(heading, "picker.heading");
         var headingRows = PanelRows(heading, 18, 10, 2);
         _pickerHeading = Title("SELECT A COUNTRY", 26, Ui.Colour("text.accent"));
         headingRows.AddChild(_pickerHeading);
@@ -44,14 +37,7 @@ public partial class DealOrForceGame
         headingRows.AddChild(_pickerSubheading);
 
         var panel = TexturedPanel(_pickerLayer);
-        panel.AnchorLeft = 1;
-        panel.AnchorRight = 1;
-        panel.AnchorTop = 0.5f;
-        panel.AnchorBottom = 0.5f;
-        panel.OffsetLeft = -420;
-        panel.OffsetRight = -18;
-        panel.OffsetTop = -338;
-        panel.OffsetBottom = 338;
+        Ui.Place(panel, "picker.country");
         var rows = PanelRows(panel, 20, 16, 8);
 
         rows.AddChild(Title("THE WORLD IN 2024", 13, Ui.Colour("text.caption")));
@@ -91,14 +77,7 @@ public partial class DealOrForceGame
         rows.AddChild(_pickerBegin);
 
         var actions = TexturedPanel(_pickerLayer);
-        actions.AnchorLeft = 0;
-        actions.AnchorRight = 0;
-        actions.AnchorTop = 1;
-        actions.AnchorBottom = 1;
-        actions.OffsetLeft = 18;
-        actions.OffsetRight = 486;
-        actions.OffsetTop = -82;
-        actions.OffsetBottom = -18;
+        Ui.Place(actions, "picker.actions");
         var actionMargin = Margin(actions, 10, 8);
         var actionRow = new HBoxContainer();
         actionRow.AddThemeConstantOverride("separation", 8);

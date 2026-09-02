@@ -39,14 +39,7 @@ public partial class DealOrForceGame
         AddChild(_peaceLayer);
 
         var panel = TexturedPanel(_peaceLayer);
-        panel.AnchorLeft = 1;
-        panel.AnchorRight = 1;
-        panel.AnchorTop = 0;
-        panel.AnchorBottom = 1;
-        panel.OffsetLeft = -470;
-        panel.OffsetRight = -18;
-        panel.OffsetTop = 100;
-        panel.OffsetBottom = -100;
+        Ui.Place(panel, "hud.peace_panel");
 
         var rows = PanelRows(panel, 20, 16, 8);
         _peaceTitle = Title("PEACE CONFERENCE", 22, Ui.Colour("text.accent"));

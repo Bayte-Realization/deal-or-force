@@ -53,14 +53,7 @@ public partial class DealOrForceGame
     private void BuildArmyPanel()
     {
         _armyPanel = TexturedPanel(_hudLayer);
-        _armyPanel.AnchorLeft = 0;
-        _armyPanel.AnchorRight = 0;
-        _armyPanel.AnchorTop = 0;
-        _armyPanel.AnchorBottom = 1;
-        _armyPanel.OffsetLeft = 14;
-        _armyPanel.OffsetRight = 500;
-        _armyPanel.OffsetTop = 140;
-        _armyPanel.OffsetBottom = -190;
+        Ui.Place(_armyPanel, "hud.army_panel");
         _armyPanel.Visible = false;
 
         var rows = PanelRows(_armyPanel, 16, 12, 6);

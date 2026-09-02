@@ -151,7 +151,7 @@ public partial class DealOrForceGame
         Bb("text.accent") + "MAP[/color]  mapmode pol/dip/war/pop/gdp · focus LAT LON · teleport PROVINCE\n" +
         Bb("text.accent") + "STATE[/color]  money AMOUNT · manpower AMOUNT · stability 0-100\n" +
         Bb("text.accent") + "DEBUG[/color]  fps · sim · armies · fronts · province · date · clear\n" +
-        Bb("text.accent") + "CONTENT[/color]  economy · effects · loc [language] · skin [token]\n" +
+        Bb("text.accent") + "CONTENT[/color]  economy · effects · loc [language] · skin [token or panel]\n" +
         Bb("text.accent") + "WAR[/color]  peace - open the conference for your current war";
 
     /// <summary>Open the peace conference for whatever war the player is fighting.</summary>
@@ -193,8 +193,15 @@ public partial class DealOrForceGame
                 .Take(40)
                 .Select(entry => $"  {Bb(entry.Token)}■[/color] {entry.Token} = {entry.Value}")
                 .ToList();
+            matches.AddRange(Simulation.InterfaceSkin.Panels
+                .Where(entry => entry.Key.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                .Take(24)
+                .Select(entry => $"  {entry.Key}  anchors [{entry.Rect.AnchorLeft:0.##}, " +
+                                 $"{entry.Rect.AnchorTop:0.##}, {entry.Rect.AnchorRight:0.##}, " +
+                                 $"{entry.Rect.AnchorBottom:0.##}]  offsets [{entry.Rect.OffsetLeft:0}, " +
+                                 $"{entry.Rect.OffsetTop:0}, {entry.Rect.OffsetRight:0}, {entry.Rect.OffsetBottom:0}]"));
             return matches.Count == 0
-                ? $"No interface token matches '{filter}'."
+                ? $"Nothing in the interface matches '{filter}'."
                 : string.Join("\n", matches);
         }
 

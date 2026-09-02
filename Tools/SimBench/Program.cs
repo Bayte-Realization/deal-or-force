@@ -228,6 +228,26 @@ public static class Program
             return "game/interface/skin.json disagrees with the compiled defaults for: " +
                    string.Join(", ", overridden.Take(8));
 
+        // The layout half of the same file. Colour drifting was bad enough; geometry
+        // drifting would move panels off the screen edge with nothing to say why.
+        var panels = InterfaceSkin.Panels.Count();
+        if (panels < 15) return $"only {panels} panels have a layout";
+        var moved = InterfaceSkin.MovedPanels;
+        if (moved.Count > 0)
+            return "the shipped layout disagrees with the compiled one for: " +
+                   string.Join(", ", moved.Take(8));
+
+        // A mod's layout override has to take, and must not need to restate the anchors.
+        InterfaceSkin.Merge("{\"layout\":{\"hud.top\":{\"offsets\":[1,2,3,4]}}}", "bench", null);
+        var moving = InterfaceSkin.Layout("hud.top");
+        if (Math.Abs(moving.OffsetLeft - 1f) > 0.001f || Math.Abs(moving.OffsetBottom - 4f) > 0.001f)
+            return "a layout override did not apply";
+        if (Math.Abs(moving.AnchorRight - 1f) > 0.001f)
+            return "a layout override that only set offsets also lost the anchors";
+        InterfaceSkin.ResetCatalog();
+        if (Math.Abs(InterfaceSkin.Layout("hud.top").OffsetLeft - 14f) > 0.001f)
+            return "resetting the skin did not undo a layout override";
+
         foreach (var (token, value) in tokens)
         {
             if (string.IsNullOrEmpty(value) || value[0] != '#')
