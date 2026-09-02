@@ -24,7 +24,13 @@ public static class GameDataLoader
 
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(file));
+            // The shipped file documents itself with comments, and every other loader in
+            // the project already accepts them.
+            using var document = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
             var properties = typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
                 .Where(property => property.CanWrite)
                 .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);

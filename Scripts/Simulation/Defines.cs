@@ -188,7 +188,7 @@ public sealed class Defines
 	public float NavalResponse { get; set; } = 1f;
 
 	/// <summary>Multiplier on the defender's combat power. Attacking is harder.</summary>
-	public float DefenderAdvantage { get; set; } = 1.90f;
+	public float DefenderAdvantage { get; set; } = 2.30f;
 
 	/// <summary>
 	/// Frontage one province gives an attack, before extra directions widen it. This is
@@ -198,7 +198,7 @@ public sealed class Defines
 	public float CombatWidth { get; set; } = 80f;
 
 	/// <summary>What a fully dug-in defender adds to its own defence.</summary>
-	public float EntrenchmentBonus { get; set; } = 1.40f;
+	public float EntrenchmentBonus { get; set; } = 1.80f;
 
 	/// <summary>Entrenchment a division digs per day while it holds ground.</summary>
 	public float EntrenchmentPerDay { get; set; } = 0.030f;
@@ -236,22 +236,35 @@ public sealed class Defines
 	/// <summary>How much faster a formation with no organisation left bleeds.</summary>
 	public float BrokenCasualtyMultiplier { get; set; } = 2.4f;
 
+	/// <summary>
+	/// How much more the assaulting side loses for the same day of fighting. Assaulting a
+	/// prepared position has never cost what holding one does, and without this an
+	/// attrition war is won by whoever simply has more men.
+	/// </summary>
+	public float AttackerCasualtyMultiplier { get; set; } = 2.4f;
+
 	/// <summary>Entrenchment a day of fighting costs the defender.</summary>
 	public float EntrenchmentLostPerCombatDay { get; set; } = 0.020f;
+
+	/// <summary>
+	/// Share of a day's digging a division still manages while it is under attack. A
+	/// prepared line does not stop being prepared because somebody is shooting at it.
+	/// </summary>
+	public float EntrenchmentUnderFireShare { get; set; } = 0.75f;
 
 	public float BattleBreakOrganisation { get; set; } = 0.055f;
 	public float UnopposedCapturePerDay { get; set; } = 0.10f;
 
 	/// <summary>How much each defending division in a neighbouring province slows an
 	/// advance into an empty one. Zero turns the front into a race.</summary>
-	public float ZoneOfControlResistance { get; set; } = 4.0f;
+	public float ZoneOfControlResistance { get; set; } = 6.0f;
 
 	/// <summary>
 	/// Share of the covering force an advance must be worth before it may walk into an
 	/// empty province at all. Below one, a gap behind a held line cannot be exploited
 	/// until the flank covering it has been beaten.
 	/// </summary>
-	public float GapExploitAdvantage { get; set; } = 0.75f;
+	public float GapExploitAdvantage { get; set; } = 1.60f;
 	public float WartimeFrontDeploymentShare { get; set; } = 0.84f;
 	public float PeacetimeBorderDeploymentShare { get; set; } = 0.68f;
 	public float PlanningGainPerDay { get; set; } = 0.018f;
@@ -327,7 +340,92 @@ public sealed class Defines
 	public float WarSupportForCapitulation { get; set; } = 0.18f;
 
 	/// <summary>Chance per day that an AI country with a claim starts a war over it.</summary>
-	public float AiWarChance { get; set; } = 0.00012f;
+	/// <summary>
+	/// Daily chance a country that wants a war actually starts one, multiplied by how
+	/// badly it wants it. Small on purpose: the point is that wars happen, not that the
+	/// map lurches every time a balance of power tips.
+	/// </summary>
+	public float AiWarChance { get; set; } = 0.012f;
+
+	/// <summary>Whether countries start wars of their own at all.</summary>
+	public bool AiMayDeclareWar { get; set; } = true;
+
+	// ---- Diplomacy: where a relationship naturally settles, and what moves it ----
+
+	/// <summary>Opinion a shared border is worth on its own. Neighbours are friction.</summary>
+	public float AiBorderFriction { get; set; } = -6f;
+
+	public float AiTradeWarmth { get; set; } = 28f;
+	public float AiPactWarmth { get; set; } = 22f;
+	public float AiAllianceWarmth { get; set; } = 34f;
+
+	/// <summary>How much a stronger neighbour is resented per unit of advantage.</summary>
+	public float AiFearOfStrength { get; set; } = 16f;
+
+	/// <summary>How fast opinion moves toward where the relationship actually sits.</summary>
+	public float AiOpinionDrift { get; set; } = 0.10f;
+
+	/// <summary>Opinion a week of courting a neighbour is worth, against that drift.</summary>
+	public float AiCourtshipStep { get; set; } = 6f;
+
+	public float AiFriendshipThreshold { get; set; } = 10f;
+	public float AiTradeThreshold { get; set; } = 18f;
+	public float AiPactThreshold { get; set; } = 42f;
+	public float AiAllianceThreshold { get; set; } = 66f;
+	public float AiRivalryThreshold { get; set; } = -30f;
+
+	// ---- Economy: how a country governs itself between crises ----
+
+	public float AiTreasuryFloor { get; set; } = 0.02f;
+	public float AiTreasuryComfort { get; set; } = 0.12f;
+	public float AiTaxStep { get; set; } = 0.012f;
+	public float AiMinimumTaxRate { get; set; } = 0.08f;
+	public float AiMaximumTaxRate { get; set; } = 0.46f;
+	public float AiWartimeMilitarySpending { get; set; } = 0.16f;
+	public float AiTenseMilitarySpending { get; set; } = 0.09f;
+	public float AiPeacetimeMilitarySpending { get; set; } = 0.045f;
+	public float AiStabilityConcern { get; set; } = 0.52f;
+	public float AiSocialStep { get; set; } = 0.006f;
+	public float AiBuildTreasuryFloor { get; set; } = 0.03f;
+	public int AiMaxConcurrentProjects { get; set; } = 4;
+
+	/// <summary>How much each existing building of a kind discourages another one there.</summary>
+	public float AiBuildSaturation { get; set; } = 2.5f;
+
+	// ---- War and peace: when a country reaches for one, and when it puts it down ----
+
+	/// <summary>Share of a nation's GDP that counts as latent military strength.</summary>
+	public float AiEconomicWeight { get; set; } = 0.004f;
+
+	/// <summary>Strength ratio below which no war is worth thinking about.</summary>
+	public float AiWarMinimumAdvantage { get; set; } = 1.45f;
+
+	public float AiHostilityAppetite { get; set; } = 1.2f;
+	public float AiRivalryAppetite { get; set; } = 0.8f;
+	public float AiOpportunismAppetite { get; set; } = 1.1f;
+	public float AiWarDesireThreshold { get; set; } = 0.55f;
+	public float AiWarSupportFloor { get; set; } = 0.45f;
+	public float AiWarStabilityFloor { get; set; } = 0.35f;
+
+	public int AiMinimumWarDays { get; set; } = 240;
+
+	/// <summary>
+	/// How long the AI refuses to negotiate a war the scenario opens with. A war already
+	/// in its third year is one both sides have declined to end; the ordinary appetite for
+	/// peace does not describe it.
+	/// </summary>
+	public int ScenarioWarNegotiationLockDays { get; set; } = 1095;
+	public int AiPeaceProposalInterval { get; set; } = 45;
+	public float AiPeaceMinimumBudget { get; set; } = 35f;
+
+	/// <summary>War score a country needs before an indemnity is worth ending a war for.</summary>
+	public float AiPeaceIndemnityBudget { get; set; } = 55f;
+
+	/// <summary>War support at which a country gives up a war it is not winning.</summary>
+	public float AiCapitulationWarSupport { get; set; } = 0.30f;
+
+	/// <summary>How much of its war score a winning country spends at the table.</summary>
+	public float AiPeaceBudgetShare { get; set; } = 0.85f;
 
 	/// <summary>Whether the AI is allowed to declare war on the player.</summary>
 	public bool AiMayAttackPlayer { get; set; } = true;

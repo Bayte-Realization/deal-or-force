@@ -28,6 +28,15 @@ public sealed class StrategicWar
     /// <summary>Regions the new border cut in two, and so brought into existence.</summary>
     public int CreatedStates;
     public int ClaimedStateMapIndex = -1;
+
+    /// <summary>
+    /// The day before which neither AI belligerent will sit down. A war a scenario opens
+    /// with is a war both governments have already refused to end; leaving that to the
+    /// ordinary appetite for peace let the third year of the Russo-Ukrainian war be settled
+    /// in its first campaign month by whichever side happened to be marginally ahead.
+    /// A player may always propose; this only governs what the AI is willing to offer.
+    /// </summary>
+    public int AiNegotiationUnlockDay;
     public bool Ended;
     public bool FrontDirty = true;
     public int LastFrontDay = -1;
@@ -62,6 +71,7 @@ public static class WarBootstrap
             AttackerId = russia.Id,
             DefenderId = ukraine.Id,
             StartedDay = campaign.ElapsedDays,
+            AiNegotiationUnlockDay = campaign.ElapsedDays + campaign.Defines.ScenarioWarNegotiationLockDays,
             ClaimedStateMapIndex = campaign.States.FirstOrDefault(state =>
                 state.NationMapIndex == ukraine.MapIndex &&
                 state.Name.Contains("Kyiv", StringComparison.OrdinalIgnoreCase))?.MapIndex ??
@@ -76,11 +86,25 @@ public static class WarBootstrap
 
 public static partial class Warfare
 {
+    /// <summary>
+    /// Rebuild every front in one pass over the map.
+    ///
+    /// It used to walk all 37 807 provinces and their neighbours once per war. With a
+    /// single scripted war that was invisible; once countries started declaring their own
+    /// and seventy were running at a time it became two and a half million province visits
+    /// per rebuild and the largest cost in the simulation. The map is walked once, and each
+    /// pair of hostile neighbours is filed against whichever wars those two countries are
+    /// fighting each other in.
+    /// </summary>
     public static void RebuildFronts(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController ?? topology?.ProvinceToNation;
         if (topology is null || controllers is null) return;
+
+        // Which war, if any, two countries are fighting each other in.
+        var byPair = new Dictionary<long, StrategicWar>();
+        var belligerents = new HashSet<ushort>();
         foreach (var war in campaign.Wars)
         {
             war.AttackerFront.Clear();
@@ -91,30 +115,40 @@ public static partial class Warfare
             var attacker = campaign.NationById(war.AttackerId);
             var defender = campaign.NationById(war.DefenderId);
             if (attacker is null || defender is null) continue;
-            var attackerMap = (ushort)attacker.MapIndex;
-            var defenderMap = (ushort)defender.MapIndex;
+            byPair[PairKey(attacker.MapIndex, defender.MapIndex)] = war;
+            belligerents.Add((ushort)attacker.MapIndex);
+            belligerents.Add((ushort)defender.MapIndex);
+        }
+        if (byPair.Count == 0) return;
 
-            for (var province = 1; province <= topology.ProvinceCount; province++)
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var owner = controllers[province];
+            if (owner == 0 || !belligerents.Contains(owner)) continue;
+            foreach (var neighbour in topology.Neighbors[province])
             {
-                var owner = controllers[province];
-                if (owner != attackerMap && owner != defenderMap) continue;
-                foreach (var neighbor in topology.Neighbors[province])
+                var other = controllers[neighbour];
+                if (other == 0 || other == owner || !belligerents.Contains(other)) continue;
+                if (!byPair.TryGetValue(PairKey(owner, other), out var war)) continue;
+
+                var attackerMap = campaign.NationById(war.AttackerId)?.MapIndex ?? -1;
+                if (owner == attackerMap)
                 {
-                    var other = controllers[neighbor];
-                    if (owner == attackerMap && other == defenderMap)
-                    {
-                        war.AttackerFront.Add(province);
-                        war.DefenderFront.Add(neighbor);
-                    }
-                    else if (owner == defenderMap && other == attackerMap)
-                    {
-                        war.DefenderFront.Add(province);
-                        war.AttackerFront.Add(neighbor);
-                    }
+                    war.AttackerFront.Add(province);
+                    war.DefenderFront.Add(neighbour);
+                }
+                else
+                {
+                    war.DefenderFront.Add(province);
+                    war.AttackerFront.Add(neighbour);
                 }
             }
         }
     }
+
+    /// <summary>Order-independent key for a pair of countries.</summary>
+    private static long PairKey(int a, int b) =>
+        a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
 }
 
 public static partial class FrontPlanner

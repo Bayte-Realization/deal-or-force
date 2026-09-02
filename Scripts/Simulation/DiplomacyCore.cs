@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -99,18 +100,45 @@ public static class CampaignDiplomacy
             .FirstOrDefault()?.MapIndex ?? -1;
     }
 
-    public static bool SharesLandBorder(Campaign campaign, int mapA, int mapB)
+    // Who borders whom. This used to be answered by walking all 37 807 provinces and
+    // their neighbours for every question, which is fine when a player asks it once and
+    // ruinous when an AI asks it twelve thousand times a year. It is built once per change
+    // to the map and read from there.
+    private static Dictionary<int, HashSet<int>> _borders;
+    private static int _borderRevision = -1;
+
+    public static bool SharesLandBorder(Campaign campaign, int mapA, int mapB) =>
+        Borders(campaign).TryGetValue(mapA, out var set) && set.Contains(mapB);
+
+    /// <summary>Every country each country can walk to.</summary>
+    public static IReadOnlyCollection<int> Neighbours(Campaign campaign, int mapIndex) =>
+        Borders(campaign).TryGetValue(mapIndex, out var set)
+            ? set
+            : (IReadOnlyCollection<int>)Array.Empty<int>();
+
+    private static Dictionary<int, HashSet<int>> Borders(Campaign campaign)
     {
+        if (_borders is not null && _borderRevision == campaign.MapRevision) return _borders;
+        _borders = new Dictionary<int, HashSet<int>>();
+        _borderRevision = campaign.MapRevision;
+
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        if (topology is null || controllers is null) return false;
+        if (topology is null || controllers is null) return _borders;
+
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
-            if (controllers[province] != mapA) continue;
-            foreach (var neighbor in topology.Neighbors[province])
-                if (controllers[neighbor] == mapB) return true;
+            var owner = controllers[province];
+            if (owner == 0) continue;
+            foreach (var neighbour in topology.Neighbors[province])
+            {
+                var other = controllers[neighbour];
+                if (other == 0 || other == owner) continue;
+                if (!_borders.TryGetValue(owner, out var set)) _borders[owner] = set = new HashSet<int>();
+                set.Add(other);
+            }
         }
-        return false;
+        return _borders;
     }
 }
 

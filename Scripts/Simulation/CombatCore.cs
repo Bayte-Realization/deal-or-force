@@ -58,22 +58,57 @@ public static partial class Warfare
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
 
+        // RebuildFronts redraws every front in the world, so asking for it from inside the
+        // per-war loop walked the whole map once per stale war. With one scripted war that
+        // was one pass; with seventy it was seventy, and it made warfare the most expensive
+        // system in the simulation. Decide once whether the map needs redrawing, redraw it
+        // once, and then let each war do its own follow-up.
+        var stale = new List<StrategicWar>();
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
             if (war.FrontDirty || war.LastFrontDay < 0 || campaign.ElapsedDays - war.LastFrontDay >= 5)
+                stale.Add(war);
+        }
+
+        if (stale.Count > 0)
+        {
+            var moved = new HashSet<int>();
+            foreach (var war in stale) if (war.FrontDirty) moved.Add(war.Id);
+            RebuildFronts(campaign);
+            foreach (var war in stale)
             {
-                var moved = war.FrontDirty;
-                RebuildFronts(campaign);
                 UpdateWarMetrics(campaign, war);
-                if (moved)
-                {
-                    FrontPlanner.RefreshAssignments(campaign, war);
-                    FrontPlanner.ReassignAi(campaign, war);
-                }
+                if (!moved.Contains(war.Id)) continue;
+                FrontPlanner.RefreshAssignments(campaign, war);
+                FrontPlanner.ReassignAi(campaign, war);
             }
+        }
+
+        // Two indexes, built once. ResolveAdvances used to walk every division in the world
+        // for every war - seventy wars against fourteen hundred divisions - and then walk
+        // them again for each province it was weighing up. Both questions are lookups now.
+        var byProvince = new Dictionary<int, List<Army>>();
+        var byWar = new Dictionary<int, List<Army>>();
+        foreach (var army in campaign.Armies)
+        {
+            if (army.ProvinceId > 0)
+            {
+                if (!byProvince.TryGetValue(army.ProvinceId, out var here))
+                    byProvince[army.ProvinceId] = here = new List<Army>();
+                here.Add(army);
+            }
+            if (army.AssignedWarId < 0) continue;
+            if (!byWar.TryGetValue(army.AssignedWarId, out var fighting))
+                byWar[army.AssignedWarId] = fighting = new List<Army>();
+            fighting.Add(army);
+        }
+
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended) continue;
             FrontPlanner.UpdateAiExecution(campaign, war);
-            ResolveAdvances(campaign, war);
+            ResolveAdvances(campaign, war, byProvince, byWar);
         }
 
         ResolveBattles(campaign);
@@ -81,16 +116,21 @@ public static partial class Warfare
         campaign.Battles.RemoveAll(battle => battle.Ended && campaign.ElapsedDays - battle.StartedDay > 180);
     }
 
-    private static void ResolveAdvances(Campaign campaign, StrategicWar war)
+    private static readonly List<Army> NoArmies = new();
+
+    private static List<Army> In(Dictionary<int, List<Army>> index, int key) =>
+        index.TryGetValue(key, out var list) ? list : NoArmies;
+
+    private static void ResolveAdvances(Campaign campaign, StrategicWar war,
+        Dictionary<int, List<Army>> byProvince, Dictionary<int, List<Army>> byWar)
     {
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
 
-        foreach (var army in campaign.Armies)
+        foreach (var army in In(byWar, war.Id))
         {
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
-                army.AssignedWarId != war.Id ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
                 (army.NationId != war.AttackerId && army.NationId != war.DefenderId))
                 continue;
@@ -115,15 +155,18 @@ public static partial class Warfare
             var terrainWeight = army.OrderKind == ArmyOrder.Spearhead ? 0.38f : 1f;
             var target = candidates
                 .OrderBy(province => topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight +
-                    campaign.Armies
-                        .Where(other => other.NationId == enemyId && other.ProvinceId == province && !other.InBattle)
-                        .Sum(other => other.Power) * 0.018f)
+                    Power(In(byProvince, province), enemyId) * 0.018f)
                 .ThenBy(province => province)
                 .First();
-            var defenders = campaign.Armies.Where(other =>
-                other.NationId == enemyId && other.ProvinceId == target && !other.InBattle && other.Divisions >= 0.1f).ToArray();
+            // Everyone standing in the target province, including anyone already fighting
+            // there. Excluding divisions that were in a battle meant a province being
+            // actively defended looked empty to the next attacker, which walked into it
+            // unopposed while the defenders were busy holding it. Ten province captures in
+            // eleven came through that hole rather than through winning anything.
+            var present = In(byProvince, target)
+                .Where(other => other.NationId == enemyId && other.Divisions >= 0.1f).ToArray();
 
-            if (defenders.Length == 0)
+            if (present.Length == 0)
             {
                 var riverAdvance = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier,
                     topology.RiverCrossingStrength(army.ProvinceId, target));
@@ -137,13 +180,12 @@ public static partial class Warfare
                 // Everything else has to break the flank first - which is the difference
                 // between an offensive and a walk, and the reason the opening front does
                 // not move on its own.
-                var neighbours = topology.Neighbors[target];
                 var coveringPower = 0f;
                 var covering = 0;
-                foreach (var other in campaign.Armies)
+                foreach (var neighbour in topology.Neighbors[target])
+                foreach (var other in In(byProvince, neighbour))
                 {
                     if (other.NationId != enemyId || other.Divisions < 0.1f) continue;
-                    if (!neighbours.Contains(other.ProvinceId)) continue;
                     coveringPower += other.Power;
                     covering++;
                 }
@@ -154,7 +196,7 @@ public static partial class Warfare
                     campaign.Defines.UnopposedCapturePerDay * M.Clamp(army.Power / 4f, 0.35f, 1f) *
                     riverAdvance * contested;
                 war.UnopposedProgress[target] = progress;
-                if (progress >= 1f) Capture(campaign, war, target, army.NationId, new[] { army }, Array.Empty<Army>());
+                if (progress >= 1f) Capture(campaign, war, target, army.NationId, new[] { army }, Array.Empty<Army>(), "walked into a gap");
                 continue;
             }
 
@@ -173,7 +215,7 @@ public static partial class Warfare
                     RiverCrossingStrength = topology.RiverCrossingStrength(army.ProvinceId, target)
                 };
                 campaign.Battles.Add(battle);
-                foreach (var defending in defenders) Join(battle, defending, false);
+                foreach (var defending in present) Join(battle, defending, false);
             }
             Join(battle, army, true);
         }
@@ -199,7 +241,8 @@ public static partial class Warfare
             if (attacking.Count == 0) { Close(campaign, battle, battle.DefenderId, "Attackers withdrew"); continue; }
             if (defending.Count == 0)
             {
-                Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending);
+                Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
+                    "defenders left the province");
                 Close(campaign, battle, battle.AttackerId, "Province taken unopposed");
                 continue;
             }
@@ -281,8 +324,9 @@ public static partial class Warfare
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
             var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker),
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
-            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss);
-            var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss);
+            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss, 1f);
+            var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss,
+                defines.AttackerCasualtyMultiplier);
             foreach (var army in attacking)
                 army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningBurnPerCombatDay);
             battle.AttackerLosses += attackerLoss;
@@ -330,7 +374,8 @@ public static partial class Warfare
 
             if (defenderOrg <= campaign.Defines.BattleBreakOrganisation)
             {
-                Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending);
+                Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
+                    "won the battle");
                 Close(campaign, battle, battle.AttackerId, "Defenders broke");
             }
             else if (attackerOrg <= campaign.Defines.BattleBreakOrganisation)
@@ -372,8 +417,9 @@ public static partial class Warfare
     }
 
     private static void Capture(Campaign campaign, StrategicWar war, int provinceId, int winnerId,
-        IReadOnlyCollection<Army> advancing, IReadOnlyCollection<Army> retreating)
+        IReadOnlyCollection<Army> advancing, IReadOnlyCollection<Army> retreating, string how)
     {
+        OutcomeTally["capture: " + how] = OutcomeTally.GetValueOrDefault("capture: " + how) + 1;
         var winner = campaign.NationById(winnerId);
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -497,6 +543,14 @@ public static partial class Warfare
     }
 
     /// <summary>Frontage a side would take if the province had unlimited room.</summary>
+    /// <summary>Combined power of one country's divisions in a list of what is standing there.</summary>
+    private static float Power(List<Army> present, int nationId)
+    {
+        var total = 0f;
+        foreach (var army in present) if (army.NationId == nationId) total += army.Power;
+        return total;
+    }
+
     private static float WantedWidth(IReadOnlyCollection<Army> side) =>
         side.Sum(army => army.Divisions * UnitTypeCatalog.Get(army.TemplateId).CombatWidth);
 
@@ -547,8 +601,13 @@ public static partial class Warfare
     /// people. Once organisation is gone the same fire starts taking the formation apart,
     /// which is why a broken unit that keeps standing bleeds so much faster than one that
     /// withdraws in order.
+    ///
+    /// The side doing the assaulting pays more for the same day. That asymmetry is what
+    /// makes an attrition war grind down the attacker rather than whoever has fewer men:
+    /// crossing open ground into a prepared position has never cost what holding one does.
     /// </summary>
-    private static float ApplyDamage(Campaign campaign, IReadOnlyCollection<Army> side, float organisationLoss)
+    private static float ApplyDamage(Campaign campaign, IReadOnlyCollection<Army> side,
+        float organisationLoss, float casualtyScale)
     {
         var defines = campaign.Defines;
         var totalPower = side.Sum(army => M.Max(0.01f, army.Power));
@@ -562,11 +621,20 @@ public static partial class Warfare
                 M.Clamp01(army.Organisation / M.Max(0.05f, defines.BattleBreakOrganisation * 4f)));
 
             army.Organisation = M.Clamp01(army.Organisation - loss);
-            army.Entrenchment = M.Clamp01(army.Entrenchment - defines.EntrenchmentLostPerCombatDay);
+
+            // A division that holds the same ground goes on digging even while it is being
+            // shelled - that is what a prepared line is. Shelling costs it a little more
+            // than a day of work is worth only when the fighting is heavy; otherwise the
+            // position slowly deepens. Advancing throws all of it away, which is the price
+            // of an offensive and the reason a static front is so expensive to move.
+            army.Entrenchment = M.Clamp01(army.Entrenchment
+                - defines.EntrenchmentLostPerCombatDay
+                + defines.EntrenchmentPerDay * defines.EntrenchmentUnderFireShare);
 
             var personnel = army.Divisions * MilitaryBootstrap.DivisionSize * army.Strength;
             var casualties = personnel * loss * defines.CasualtiesPerOrganisationPoint *
-                             brokenExposure * MilitaryDoctrine.CasualtyExposure(army.Stance);
+                             brokenExposure * casualtyScale *
+                             MilitaryDoctrine.CasualtyExposure(army.Stance);
             if (personnel > 1f) army.Strength = M.Clamp01(army.Strength - casualties / personnel);
             army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(casualties));
             army.Experience = M.Clamp01(army.Experience + loss * 0.004f);
