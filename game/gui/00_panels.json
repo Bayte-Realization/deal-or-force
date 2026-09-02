@@ -1,0 +1,297 @@
+// Deal or Force - where the panels sit.
+//
+// Four anchors as fractions of the screen and four offsets in pixels from them, in Godot's
+// own terms: left, top, right, bottom. Anchors and offsets are independent, so a mod that
+// only wants the army panel forty pixels wider writes `offsets` and inherits `anchors`.
+//
+// This is the half of the interface a layout mod wants and the reason it is not in
+// `interface/`: colour and position are edited by different people for different reasons.
+// Every file in this folder is read in name order and later files win.
+//
+// Only placement is data. What goes inside a panel is still code - a layout file cannot
+// invent a new screen - but everything the base game builds can be moved, resized or
+// pushed to the other side of the map without touching it.
+{
+  "layout": {
+    "hud.top": {
+      "anchors": [
+        0,
+        0,
+        1,
+        0
+      ],
+      "offsets": [
+        14,
+        12,
+        -14,
+        104
+      ]
+    },
+    "hud.navigation": {
+      "anchors": [
+        0.5,
+        1,
+        0.5,
+        1
+      ],
+      "offsets": [
+        -475,
+        -97,
+        475,
+        -10
+      ]
+    },
+    "hud.side_panel": {
+      "anchors": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "offsets": [
+        20,
+        140,
+        404,
+        -170
+      ]
+    },
+    "hud.map_controls": {
+      "anchors": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "offsets": [
+        14,
+        -154,
+        660,
+        -106
+      ]
+    },
+    "hud.alerts": {
+      "anchors": [
+        0.5,
+        0,
+        0.5,
+        0
+      ],
+      "offsets": [
+        -390,
+        110,
+        390,
+        154
+      ]
+    },
+    "hud.outliner": {
+      "anchors": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "offsets": [
+        -334,
+        116,
+        -14,
+        -112
+      ]
+    },
+    "hud.army_panel": {
+      "anchors": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "offsets": [
+        14,
+        140,
+        500,
+        -190
+      ]
+    },
+    "hud.peace_panel": {
+      "anchors": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "offsets": [
+        -470,
+        100,
+        -18,
+        -100
+      ]
+    },
+    "hud.hotseat": {
+      "anchors": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "offsets": [
+        14,
+        146,
+        294,
+        224
+      ]
+    },
+    "hud.network": {
+      "anchors": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "offsets": [
+        14,
+        146,
+        350,
+        208
+      ]
+    },
+    "menu.main": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -230,
+        -315,
+        230,
+        315
+      ]
+    },
+    "picker.heading": {
+      "anchors": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "offsets": [
+        18,
+        18,
+        455,
+        106
+      ]
+    },
+    "picker.country": {
+      "anchors": [
+        1,
+        0.5,
+        1,
+        0.5
+      ],
+      "offsets": [
+        -420,
+        -338,
+        -18,
+        338
+      ]
+    },
+    "picker.actions": {
+      "anchors": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "offsets": [
+        18,
+        -82,
+        486,
+        -18
+      ]
+    },
+    "modal.pause": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -210,
+        -245,
+        210,
+        245
+      ]
+    },
+    "modal.event": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -310,
+        -225,
+        310,
+        225
+      ]
+    },
+    "modal.save_load": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -420,
+        -360,
+        420,
+        360
+      ]
+    },
+    "modal.handover": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -250,
+        -160,
+        250,
+        160
+      ]
+    },
+    "modal.multiplayer": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -285,
+        -340,
+        285,
+        340
+      ]
+    },
+    "modal.ledger": {
+      "anchors": [
+        0.055,
+        0.115,
+        0.945,
+        0.9
+      ],
+      "offsets": [
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  }
+}

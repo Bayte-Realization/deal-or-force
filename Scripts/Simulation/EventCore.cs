@@ -212,10 +212,11 @@ public static class EventCatalog
     {
         Definitions.Clear();
         Definitions.AddRange(Defaults());
-        var file = GameDataLoader.FindDataFile("events", "core_events.json");
-        if (file is null) return;
-        try { Load(File.ReadAllText(file), null); }
-        catch { /* Compiled defaults deliberately remain bootable. */ }
+        foreach (var file in GameDataLoader.DataFiles("events"))
+        {
+            try { Load(File.ReadAllText(file), null); }
+            catch { /* One unreadable file costs that file, not the whole category. */ }
+        }
     }
 
     public static IReadOnlyList<CampaignEventDefinition> All => Definitions;

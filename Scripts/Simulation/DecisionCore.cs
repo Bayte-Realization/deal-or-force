@@ -46,15 +46,8 @@ public static class DecisionCatalog
     {
         Definitions.Clear();
         Definitions.AddRange(Defaults);
-        var file = GameDataLoader.FindDataFile("common", "decisions", "decisions.json");
-        if (file is null) return;
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions
-            {
-                AllowTrailingCommas = true,
-                CommentHandling = JsonCommentHandling.Skip
-            });
+        foreach (var document in GameDataLoader.DataDocuments("common", "decisions"))
+            using (document)
             foreach (var entry in document.RootElement.EnumerateObject())
             {
                 var value = entry.Value;
@@ -67,8 +60,6 @@ public static class DecisionCatalog
                     value.TryGetProperty("gdp_cost_share", out var cost) && cost.TryGetSingle(out var share) ? share : null,
                     kind);
             }
-        }
-        catch { /* Compiled defaults deliberately remain bootable. */ }
     }
 
     public static IReadOnlyList<DecisionDefinition> All => Definitions;

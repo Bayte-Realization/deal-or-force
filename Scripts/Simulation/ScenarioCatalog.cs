@@ -189,6 +189,7 @@ public static class ScenarioCatalog
 
         campaign.InvalidateStateIndex();
         EconomySystem.Seed(campaign);
+        CountryDefinitions.Apply(campaign);
         HistoryDataLoader.ApplyBase(campaign);
         campaign.SetPlayer(southKorea.Id);
         MilitaryBootstrap.Seed(campaign);

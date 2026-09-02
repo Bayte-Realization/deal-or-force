@@ -1,0 +1,65 @@
+// Deal or Force - Country, economy and nationality.
+//
+// Every key here overrides the value compiled into Defines.cs. A key no file mentions
+// keeps its compiled value, so a balance mod only lists what it changes.
+//
+// This whole folder is read, in file-name order, and later files win. That is why the
+// base game's own files are numbered: a mod drops `50_my_balance.json` in beside them,
+// changes three numbers, and inherits everything else. It never has to fork this file.
+//
+// SimBench checks that what ships here still agrees with the compiled defaults - a stale
+// data file silently undid an entire combat rebalance once, because data wins over code
+// by design and nothing was watching.
+{
+
+  // Everything else
+  "EconomyTickDays": 7,
+  "PopulationTickDays": 30,
+  "AutosaveIntervalDays": 30,
+  "SecondsPerDay": 0.55,
+  "GlobeRadius": 2600,
+  "LandRelief": 26,
+  "ReliefScale": 1.6,
+  "OceanReliefEnabled": false,
+  "OceanTilesX": 48,
+  "OceanTilesY": 24,
+  "OceanSurfaceOffset": 2.5,
+  "MapBrightness": 0.92,
+  "MapSaturation": 1.35,
+  "MapCountryBorder": 0.66,
+  "MapStateBorder": 0.30,
+  "PopulationPerAreaUnit": 320000,
+  "PriceAdjustSpeed": 0.25,
+  "WorldMarketAccess": 0.80,
+  "ImportMarkup": 1.06,
+  "MarketTreasuryTradeShare": 0.08,
+  "ShortageAnnualGrowthPenalty": 0.08,
+  "GdpConvergenceRate": 0.10,
+  "ShortageSolWeeklyPenalty": 0.004,
+  "DebtInterest": 0.0008,
+  "DebtRepayment": 0.15,
+  "BankruptcyUnrest": 0.02,
+  "WageShare": 0.62,
+  "SubsistenceWage": 60,
+  "SubsistenceIncome": 25,
+  "MaxStandardOfLiving": 28,
+  "MaxMonthlyGrowth": 0.006,
+  "MaxMonthlyDecline": 0.004,
+  "MobilityRate": 0.035,
+  "RadicalismGain": 0.05,
+  "RadicalismDecay": 0.03,
+  "StartingTreasury": 5000000000,
+  "DefaultTaxRate": 0.21,
+  "BuildingUpkeep": 18000,
+  "ConstructionRate": 0.008,
+  "MilitaryEligibleShare": 0.42,
+  "WorkingAgeShare": 0.63,
+  "DivisionUpkeep": 2600000,
+  "HullUpkeep": 1100000,
+  "BaselineMilitarySpending": 0.06,
+  "NavalResponse": 1,
+
+  // Nationality: what a moved border leaves behind
+  "MinorityRadicalismPerWeek": 0.0012,
+  "AssimilationPerWeek": 0.0009
+}

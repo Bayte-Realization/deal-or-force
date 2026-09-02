@@ -14,8 +14,12 @@ public static class HistoryDataLoader
 {
     public static void ApplyBase(Campaign campaign)
     {
-        ApplyOptional(campaign, GameDataLoader.FindDataFile("history", "countries", "2024", "countries.json"), true, null);
-        ApplyOptional(campaign, GameDataLoader.FindDataFile("history", "states", "2024", "states.json"), false, null);
+        // A bookmark is a folder, so a mod that adds a hundred countries to 2024 adds a
+        // file beside the base game's rather than editing it.
+        foreach (var file in GameDataLoader.DataFiles("history", "countries", "2024"))
+            ApplyOptional(campaign, file, true, null);
+        foreach (var file in GameDataLoader.DataFiles("history", "states", "2024"))
+            ApplyOptional(campaign, file, false, null);
     }
 
     public static void ApplyCountries(Campaign campaign, string json, List<string> errors)

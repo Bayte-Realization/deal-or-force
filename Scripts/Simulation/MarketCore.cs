@@ -93,15 +93,8 @@ public static class CommodityCatalog
         foreach (var entry in Defaults)
             Definitions[entry.Key] = new CommodityDefinition(entry.Value.Name, entry.Value.Icon,
                 entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description);
-        var file = GameDataLoader.FindDataFile("common", "goods", "goods.json");
-        if (file is null) return;
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions
-            {
-                AllowTrailingCommas = true,
-                CommentHandling = JsonCommentHandling.Skip
-            });
+        foreach (var document in GameDataLoader.DataDocuments("common", "goods"))
+            using (document)
             foreach (var entry in document.RootElement.EnumerateObject())
             {
                 if (!entry.Value.TryGetProperty("name", out var name)) name = default;
@@ -114,8 +107,6 @@ public static class CommodityCatalog
                     entry.Value.TryGetProperty("essential_weight", out var weight) && weight.TryGetSingle(out var essential) ? essential : null,
                     description.ValueKind == JsonValueKind.String ? description.GetString() : null);
             }
-        }
-        catch { /* Compiled defaults deliberately remain bootable. */ }
     }
 
     public static bool TryParse(string id, out Commodity commodity) =>

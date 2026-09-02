@@ -879,7 +879,7 @@ public static class MilitaryBootstrap
 
     private static Dictionary<string, float> ParsePersonnel()
     {
-        var data = GameDataLoader.LoadNumberMap("history", "units", "2024", "active_personnel.json");
+        var data = GameDataLoader.LoadNumberMap("history", "units", "2024");
         if (data.Count > 0) return data;
 
         // Compiled fallback keeps headless tests and incomplete mod workspaces bootable.

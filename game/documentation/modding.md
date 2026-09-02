@@ -1,0 +1,99 @@
+# Modding Deal or Force
+
+The layout follows Paradox titles, because that is the layout people who mod this kind of
+game already know. One rule underlies all of it:
+
+> **A category is a folder. Every file in it is read, in file-name order. Later files win.**
+
+That is why the base game's own files are numbered — `00_combat.json`, `00_goods.json`.
+A mod drops `50_my_balance.json` in beside them, writes only what it changes, and inherits
+everything else. It never copies a base-game file, so it never goes stale when the next
+patch edits one.
+
+The base game is not a special case. It is simply the first entry in the load order, and it
+is arranged exactly the way it asks a mod to arrange itself. SimBench enforces this: it
+writes a file into a real category folder, checks it wins, and takes it away again.
+
+A file that will not parse is skipped and reported. One typo costs that file, not the
+category, and never the executable.
+
+## Where things live
+
+    game/
+      common/            what may exist - the rules and the catalogues
+        ai_strategy/     how the AI weighs war, courtship and its budget
+        buildings/       what can be built, what it costs, what it gives
+        countries/       what a country IS: name, map colour, capital
+        decisions/       the buttons a government may press
+        defines/         every tuning number in the simulation
+        goods/           the commodities the market trades
+        modifiers/       timed effects that can be granted to a country or region
+        units/           division templates: attack, armour, width, supply use
+      events/            scripted events and their outcomes
+      gui/               where the panels sit - anchors and offsets
+      interface/         what the game is made of - the colour palette and its metrics
+      history/           what was true when the bookmark opens
+        countries/2024/  money, people, armies, stability, war support
+        provinces/       the political map: one line per province
+        states/          regional starting values
+        units/           standing army sizes
+      localization/      one folder per language, as many files as you like
+        english/
+        russian/
+      map_data/          the map itself
+        state_regions/   corrections to the region layer, applied over the source map
+        hydrography/     rivers and lakes
+      documentation/     this file
+
+`common/` says what may exist; `history/` says what was true in 2024. A total conversion
+usually wants one without the other, which is why they are apart.
+
+`interface/` and `gui/` are apart for the same reason: colour and position are edited by
+different people. A reskin never opens `gui/`; a layout mod never opens `interface/`.
+
+## The pieces you are most likely to want
+
+**Rename a country, or repaint the map.** `common/countries/50_my_names.json`:
+
+    {
+      "FRA": { "name": "The French Republic", "color": "#2a4f8f" },
+      "DEU": { "capital_name": "Frankfurt" }
+    }
+
+**Change the balance.** `common/defines/50_my_balance.json`. Any key from the shipped
+files; anything you leave out keeps its value.
+
+    { "DefenderAdvantage": 2.8, "AttackerCasualtyMultiplier": 2.0 }
+
+**Move a panel.** `gui/50_my_layout.json`. Anchors are fractions of the screen, offsets are
+pixels from them, in the order left, top, right, bottom. Write one and inherit the other.
+
+    { "layout": { "hud.army_panel": { "offsets": [14, 140, 560, -190] } } }
+
+**Translate the game.** `localization/<language>/50_my_strings.json`. The base game is
+written in English, and any caption the interface passes through is looked up by its own
+English text, so an untranslated string renders as itself.
+
+**Redraw a border.** `history/provinces/50_my_borders.csv`, one line per province you
+change — `province;owner;controller`, with the controller left off when the owner holds it.
+Provinces you do not mention keep what the map gave them.
+
+## What is still code
+
+Region membership is geometric: a province is grown inside one region and never crosses its
+border, so which region it belongs to is a fact about its shape rather than about its
+politics. `map_data/state_regions/` corrects the region layer itself; it cannot hand a
+province to a region it does not touch.
+
+What goes *inside* a panel is code. A layout file can move, resize and re-anchor every
+panel the game builds, but it cannot invent a new screen.
+
+## Checking your work
+
+`Tools/SimBench` runs the whole simulation headless and prints what it finds. It will tell
+you if the shipped data has drifted from the compiled defaults, if a category stopped
+loading, or if the world stopped governing itself:
+
+    dotnet run --project Tools/SimBench/SimBench.csproj -c Release -- 730
+
+A second argument reseeds the world, which is how to tell a real change from a lucky run.

@@ -293,8 +293,14 @@ public static class InterfaceSkin
         Layouts.Clear();
         foreach (var (key, rect) in DefaultLayouts) Layouts[key] = rect;
 
-        var root = FindSkinRoot();
-        if (root is not null) LoadDirectory(root, null);
+        // Colour lives in interface/, placement lives in gui/, the way a Paradox title
+        // splits them - but both are the same kind of file and both are read the same way,
+        // so a mod may put either in either and nothing breaks.
+        foreach (var folder in new[] { "interface", "gui" })
+        {
+            var root = FindSkinRoot(folder);
+            if (root is not null) LoadDirectory(root, null);
+        }
 
         Changed?.Invoke();
     }
@@ -447,11 +453,11 @@ public static class InterfaceSkin
         return true;
     }
 
-    private static string FindSkinRoot()
+    private static string FindSkinRoot(string folder = "interface")
     {
         foreach (var root in CandidateRoots())
         {
-            var directory = Path.Combine(root, "game", "interface");
+            var directory = Path.Combine(root, "game", folder);
             if (Directory.Exists(directory)) return directory;
         }
         return null;

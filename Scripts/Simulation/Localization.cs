@@ -68,7 +68,17 @@ public static class Loc
         if (!Tables.ContainsKey(DefaultLanguage)) Tables[DefaultLanguage] = new Dictionary<string, string>(StringComparer.Ordinal);
     }
 
-    /// <summary>Layer one directory of `&lt;language&gt;.json` files over what is already loaded.</summary>
+    /// <summary>
+    /// Layer one `localization` directory over what is already loaded.
+    ///
+    /// The shape is Paradox's: a folder per language, holding as many files as the
+    /// translation wants to split itself into, read in file-name order. A translation that
+    /// only fixes twenty strings ships one small file rather than a copy of the whole
+    /// table, and it does not go stale when the base game adds a line to its own.
+    ///
+    /// A flat `&lt;language&gt;.json` beside those folders still works, because that is what
+    /// the game shipped before and existing translations use it.
+    /// </summary>
     public static void LoadDirectory(string directory, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
@@ -79,6 +89,21 @@ public static class Loc
             var language = Path.GetFileNameWithoutExtension(file);
             try { Merge(language, File.ReadAllText(file), errors); }
             catch (Exception exception) { errors?.Add($"localization/{Path.GetFileName(file)}: {exception.Message}"); }
+        }
+
+        foreach (var folder in Directory.EnumerateDirectories(directory)
+                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            var language = Path.GetFileName(folder);
+            foreach (var file in Directory.EnumerateFiles(folder, "*.json", SearchOption.TopDirectoryOnly)
+                         .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            {
+                try { Merge(language, File.ReadAllText(file), errors); }
+                catch (Exception exception)
+                {
+                    errors?.Add($"localization/{language}/{Path.GetFileName(file)}: {exception.Message}");
+                }
+            }
         }
     }
 

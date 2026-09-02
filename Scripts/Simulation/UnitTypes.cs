@@ -160,27 +160,18 @@ public static class UnitTypeCatalog
     private static Dictionary<string, UnitTypeDefinition> Load()
     {
         var result = new Dictionary<string, UnitTypeDefinition>(StringComparer.OrdinalIgnoreCase);
-        var file = GameDataLoader.FindDataFile("common", "units", "unit_types.json");
-        if (file is not null)
-        {
-            try
+        foreach (var document in GameDataLoader.DataDocuments("common", "units"))
+            using (document)
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions
-                {
-                    AllowTrailingCommas = true,
-                    CommentHandling = JsonCommentHandling.Skip
-                });
                 foreach (var row in document.RootElement.EnumerateObject())
                 {
-                    var definition = Read(row.Name, row.Value, Fallback(row.Name));
+                    // A later file may extend an earlier one's template rather than replace
+                    // it, so the fallback for a name already loaded is that loaded value.
+                    var previous = result.TryGetValue(row.Name, out var loaded) ? loaded : Fallback(row.Name);
+                    var definition = Read(row.Name, row.Value, previous);
                     if (definition is not null) result[row.Name] = definition;
                 }
             }
-            catch
-            {
-                result.Clear();
-            }
-        }
 
         // Compiled fallbacks, so the game is playable with no data files at all. These are
         // the same numbers game/common/units/unit_types.json ships.

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -10,66 +9,122 @@ using System.Text.Json;
 namespace DealOrForce.Simulation;
 
 /// <summary>
-/// Loads human-editable common/ data before a campaign is created. The layout mirrors
-/// Paradox titles, while the values still end in a typed C# Defines object used by the
-/// deterministic simulation. Invalid keys are ignored and invalid values keep their
-/// compiled fallback, so a balancing mod cannot make the executable unbootable.
+/// Reads the game's own data out of `game/`, laid out the way a Paradox title lays it out.
+///
+/// The important part is not which folders exist, it is the rule they follow: a category is
+/// a *folder*, everything in it is read in file-name order, and later files win. That is
+/// what makes a mod cheap. A balance mod drops `50_my_numbers.json` into
+/// `common/defines/` beside the base game's `00_combat.json`, changes three values, and
+/// inherits the other hundred and fifty; it never forks a file, so it does not go stale
+/// when the base game edits the same file next patch.
+///
+/// This loader used to ask for one exact file name per category - `common/units/
+/// unit_types.json` and nothing else - which meant the base game was arranged in a way no
+/// mod could imitate: a mod could only replace that file wholesale. The mod loader already
+/// read whole folders. Now both sides read the same way, and the base game is simply the
+/// first entry in the load order rather than a special case.
+///
+/// Values still land in typed C# objects, and anything unreadable is skipped rather than
+/// fatal: one broken file in a category cannot take the category down with it, and a
+/// balancing mod cannot make the executable unbootable.
 /// </summary>
 public static class GameDataLoader
 {
-    public static void ApplyDefines(Defines defines)
+    /// <summary>
+    /// Every `*.json` in one category folder, in file-name order. Numbered prefixes are the
+    /// convention for the same reason Paradox uses them: they make the load order visible.
+    /// </summary>
+    public static IReadOnlyList<string> DataFiles(params string[] relativeFolder)
     {
-        var file = FindDataFile("common", "defines", "military.json");
-        if (file is null) return;
-
+        var folder = DataFolder(relativeFolder);
+        if (folder is null) return Array.Empty<string>();
         try
         {
-            // The shipped file documents itself with comments, and every other loader in
-            // the project already accepts them.
-            using var document = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions
-            {
-                AllowTrailingCommas = true,
-                CommentHandling = JsonCommentHandling.Skip
-            });
-            var properties = typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                .Where(property => property.CanWrite)
-                .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
-            foreach (var entry in document.RootElement.EnumerateObject())
-            {
-                if (!properties.TryGetValue(entry.Name, out var property)) continue;
-                var value = ConvertValue(entry.Value, property.PropertyType);
-                if (value is not null) property.SetValue(defines, value);
-            }
+            return Directory.EnumerateFiles(folder, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"[dof] common defines ignored: {exception.Message}");
+            Debug.WriteLine($"[dof] {Path.Combine(relativeFolder)} unreadable: {exception.Message}");
+            return Array.Empty<string>();
         }
     }
 
-    public static Dictionary<string, float> LoadNumberMap(params string[] relativePath)
+    /// <summary>
+    /// The same files, parsed. A file that will not parse is reported and skipped, so a
+    /// single typo in a mod costs that file rather than every building in the game.
+    /// </summary>
+    public static IEnumerable<JsonDocument> DataDocuments(params string[] relativeFolder)
     {
-        var suffix = Path.Combine(relativePath);
-        var file = FindDataFile(relativePath);
+        foreach (var file in DataFiles(relativeFolder))
+        {
+            JsonDocument document;
+            try
+            {
+                document = JsonDocument.Parse(File.ReadAllText(file), ForgivingJson);
+            }
+            catch (Exception exception)
+            {
+                Debug.WriteLine($"[dof] {Path.GetFileName(file)} ignored: {exception.Message}");
+                continue;
+            }
+            yield return document;
+        }
+    }
+
+    /// <summary>The shipped data documents itself with comments, so every reader allows them.</summary>
+    public static readonly JsonDocumentOptions ForgivingJson = new()
+    {
+        AllowTrailingCommas = true,
+        CommentHandling = JsonCommentHandling.Skip
+    };
+
+    public static void ApplyDefines(Defines defines)
+    {
+        var properties = typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(property => property.CanWrite)
+            .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var document in DataDocuments("common", "defines"))
+            using (document)
+            {
+                if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
+                foreach (var entry in document.RootElement.EnumerateObject())
+                {
+                    if (!properties.TryGetValue(entry.Name, out var property)) continue;
+                    var value = ConvertValue(entry.Value, property.PropertyType);
+                    if (value is not null) property.SetValue(defines, value);
+                }
+            }
+    }
+
+    /// <summary>Merge every `name: number` table in one category folder.</summary>
+    public static Dictionary<string, float> LoadNumberMap(params string[] relativeFolder)
+    {
         var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        if (file is null) return result;
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(file));
-            foreach (var entry in document.RootElement.EnumerateObject())
-                if (entry.Value.TryGetSingle(out var number)) result[entry.Name] = number;
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"[dof] data table {suffix} ignored: {exception.Message}");
-        }
+        foreach (var document in DataDocuments(relativeFolder))
+            using (document)
+            {
+                if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
+                foreach (var entry in document.RootElement.EnumerateObject())
+                    if (entry.Value.TryGetSingle(out var number)) result[entry.Name] = number;
+            }
         return result;
     }
 
+    /// <summary>One named asset - a raster, a descriptor - rather than a category folder.</summary>
     public static string FindDataFile(params string[] relativePath)
     {
         var suffix = Path.Combine(relativePath);
         return CandidateRoots().Select(root => Path.Combine(root, "game", suffix)).FirstOrDefault(File.Exists);
+    }
+
+    public static string DataFolder(params string[] relativeFolder)
+    {
+        var suffix = Path.Combine(relativeFolder);
+        return CandidateRoots().Select(root => Path.Combine(root, "game", suffix))
+            .FirstOrDefault(Directory.Exists);
     }
 
     private static object ConvertValue(JsonElement value, Type type)

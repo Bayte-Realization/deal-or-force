@@ -45,8 +45,14 @@ Directory.CreateDirectory(history);
 var ownership = ProvinceOwnership.Export(campaign, provinces, out var ownedProvinces);
 File.WriteAllText(Path.Combine(history, "ownership.csv"), ownership);
 
+var countryFolder = Path.Combine(projectRoot, "game", "common", "countries");
+Directory.CreateDirectory(countryFolder);
+var countries = CountryDefinitions.Export(campaign, out var writtenCountries);
+File.WriteAllText(Path.Combine(countryFolder, "00_countries.json"), countries);
+
 Console.WriteLine($"Wrote {provinces.ProvinceCount:N0} provinces ({provinces.EdgeCount:N0} edges) to {output}");
 Console.WriteLine($"Wrote the political map: {ownedProvinces:N0} owned provinces to {history}");
+Console.WriteLine($"Wrote {writtenCountries:N0} country definitions to {countryFolder}");
 Console.WriteLine($"Hydrology: {HydrologyCatalog.RiverFeatures.Count:N0} rivers, {HydrologyCatalog.LakeFeatures.Count:N0} lakes");
 Console.WriteLine($"PNG round trip: exact province IDs/adjacency, {rasterWetCells:N0} hydrology cells");
 foreach (var repair in repairs.Where(item => item.ConnectedComponents > 0 || item.ClippedAway.Length > 0))

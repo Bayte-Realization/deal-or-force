@@ -41,10 +41,11 @@ public static class AiStrategyCatalog
         Definitions.Clear();
         foreach (var entry in Defaults) Definitions[entry.Key] = entry.Value;
         CountryProfiles.Clear();
-        var file = GameDataLoader.FindDataFile("common", "ai_strategy", "strategies.json");
-        if (file is null) return;
-        try { Load(File.ReadAllText(file), null); }
-        catch { /* Compiled defaults deliberately remain bootable. */ }
+        foreach (var file in GameDataLoader.DataFiles("common", "ai_strategy"))
+        {
+            try { Load(File.ReadAllText(file), null); }
+            catch { /* One unreadable file costs that file, not the whole category. */ }
+        }
     }
 
     public static void Load(string json, List<string> errors)

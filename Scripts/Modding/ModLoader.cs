@@ -219,7 +219,11 @@ public sealed class ModLoader
     /// </summary>
     private void ApplySkin(ModPackage package)
     {
-        try { InterfaceSkin.LoadDirectory(Path.Combine(package.PhysicalRoot, "interface"), package.Errors); }
+        try
+        {
+            InterfaceSkin.LoadDirectory(Path.Combine(package.PhysicalRoot, "interface"), package.Errors);
+            InterfaceSkin.LoadDirectory(Path.Combine(package.PhysicalRoot, "gui"), package.Errors);
+        }
         catch (Exception exception) { package.Errors.Add($"interface: {exception.Message}"); }
     }
 

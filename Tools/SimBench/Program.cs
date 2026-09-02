@@ -114,6 +114,10 @@ public static class Program
         failures += Check("modifiers grant, tick and expire", ModifiersWork(campaign));
         failures += Check("no nation ran to a nonsense GDP", GdpSane(campaign));
         failures += Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
+        failures += Check("the shipped country definitions describe the world the game starts in",
+            ShippedCountriesMatchTheScenario(campaign));
+        failures += Check("a category folder is read whole and later files win",
+            ACategoryFolderIsReadWhole());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
@@ -967,6 +971,108 @@ public static class Program
     }
 
     /// <summary>
+    /// Names, map colours and capitals are the most-modded thing in any game of this kind,
+    /// and they were compiled constants until they were exported into
+    /// `common/countries/`. Exported data has one failure mode, and it is the one the
+    /// shipped defines already had once: the file and the game drift apart, and a modder
+    /// edits one world while playing another. So every country the scenario creates must
+    /// have a definition, and the definition must say what the game says.
+    /// </summary>
+    private static string ShippedCountriesMatchTheScenario(Campaign campaign)
+    {
+        var shipped = new Dictionary<string, (string Name, string Color, string Capital)>(StringComparer.Ordinal);
+        foreach (var document in GameDataLoader.DataDocuments("common", "countries"))
+            using (document)
+            {
+                if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                foreach (var entry in document.RootElement.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    shipped[entry.Name] = (
+                        Text(entry.Value, "name"), Text(entry.Value, "color"), Text(entry.Value, "capital_name"));
+                }
+            }
+        if (shipped.Count == 0)
+            return "no country definitions ship at all; common/countries is missing or empty";
+
+        var missing = new List<string>();
+        var drifted = new List<string>();
+        foreach (var nation in campaign.Nations)
+        {
+            if (string.IsNullOrWhiteSpace(nation.Tag)) continue;
+            if (!shipped.TryGetValue(nation.Tag, out var entry)) { missing.Add(nation.Tag); continue; }
+            if (!string.Equals(entry.Name, nation.Name, StringComparison.Ordinal))
+                drifted.Add($"{nation.Tag} name: file '{entry.Name}', game '{nation.Name}'");
+            else if (!string.Equals(entry.Color, nation.Color, StringComparison.OrdinalIgnoreCase))
+                drifted.Add($"{nation.Tag} colour: file '{entry.Color}', game '{nation.Color}'");
+        }
+        if (missing.Count > 0)
+            return $"{missing.Count:N0} country(ies) the scenario creates have no definition: " +
+                   string.Join(", ", missing.Take(6));
+        if (drifted.Count > 0)
+            return $"{drifted.Count:N0} definition(s) have drifted from the game: " +
+                   string.Join("; ", drifted.Take(3));
+
+        Console.WriteLine($"  countries: {shipped.Count:N0} definitions in common/countries describe every " +
+                          "nation the scenario creates, name and colour for name and colour.");
+        return "";
+    }
+
+    private static string Text(System.Text.Json.JsonElement value, string key) =>
+        value.TryGetProperty(key, out var field) && field.ValueKind == System.Text.Json.JsonValueKind.String
+            ? field.GetString() ?? ""
+            : "";
+
+    /// <summary>
+    /// The contract the whole data layout rests on: a category is a folder, everything in
+    /// it is read in file-name order, and a later file wins.
+    ///
+    /// This is what makes a mod cheap - it drops a file in beside the base game's instead
+    /// of forking one - and it is easy to break by accident, because breaking it is silent.
+    /// Renaming the shipped files to numbered ones broke three loaders that were still
+    /// asking for the old names, and the game booted, and history simply did not load.
+    /// So the check writes a file into a real category folder, reloads, and takes it away
+    /// again.
+    /// </summary>
+    private static string ACategoryFolderIsReadWhole()
+    {
+        var folder = GameDataLoader.DataFolder("common", "defines");
+        if (folder is null) return "common/defines does not exist";
+        var shipped = GameDataLoader.DataFiles("common", "defines");
+        if (shipped.Count < 2)
+            return $"common/defines ships {shipped.Count} file(s); the base game should be laid " +
+                   "out the way it asks mods to lay themselves out";
+
+        var probe = System.IO.Path.Combine(folder, "99_zz_bench_probe.json");
+        try
+        {
+            System.IO.File.WriteAllText(probe, "{ \"DefenderAdvantage\": 7.25 }");
+            var probed = new Defines();
+            GameDataLoader.ApplyDefines(probed);
+            if (MathF.Abs(probed.DefenderAdvantage - 7.25f) > 0.0001f)
+                return $"a file added to common/defines was ignored; defender advantage stayed " +
+                       $"{probed.DefenderAdvantage:0.##} instead of taking the 7.25 the new file asked for";
+        }
+        catch (Exception exception)
+        {
+            return $"could not write into common/defines to test the load order: {exception.Message}";
+        }
+        finally
+        {
+            if (System.IO.File.Exists(probe)) System.IO.File.Delete(probe);
+        }
+
+        var restored = new Defines();
+        GameDataLoader.ApplyDefines(restored);
+        if (MathF.Abs(restored.DefenderAdvantage - new Defines().DefenderAdvantage) > 0.0001f)
+            return "taking the added file away did not restore the shipped value";
+
+        Console.WriteLine($"  data layout: common/defines ships {shipped.Count} file(s), read in name " +
+                          "order, and a file dropped in beside them overrides them.");
+        return "";
+    }
+
+    /// <summary>
     /// The shipped defines file must still say what the code says.
     ///
     /// It did not, and nothing noticed: game/common/defines/military.json had been left
@@ -977,8 +1083,8 @@ public static class Program
     /// </summary>
     private static string ShippedDefinesMatchTheCode()
     {
-        var file = GameDataLoader.FindDataFile("common", "defines", "military.json");
-        if (file is null) return "";
+        var files = GameDataLoader.DataFiles("common", "defines");
+        if (files.Count == 0) return "no defines are shipped at all; common/defines is missing or empty";
 
         var compiled = new Defines();
         var properties = typeof(Defines)
@@ -986,15 +1092,10 @@ public static class Program
             .Where(property => property.CanWrite)
             .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
 
-        using var document = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(file),
-            new System.Text.Json.JsonDocumentOptions
-            {
-                AllowTrailingCommas = true,
-                CommentHandling = System.Text.Json.JsonCommentHandling.Skip
-            });
-
         var drifted = new List<string>();
         var checkedKeys = 0;
+        foreach (var document in GameDataLoader.DataDocuments("common", "defines"))
+        using (document)
         foreach (var entry in document.RootElement.EnumerateObject())
         {
             if (!properties.TryGetValue(entry.Name, out var property)) continue;

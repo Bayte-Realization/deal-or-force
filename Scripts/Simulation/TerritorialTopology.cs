@@ -218,7 +218,7 @@ public static class TerritorialTopology
         BaseRules.AddRange(DefaultAdjacencyRules);
         RegionRules.Clear();
         RegionRules.AddRange(DefaultRegionRules);
-        var file = GameDataLoader.FindDataFile("map_data", "region_overrides.json");
+        var file = GameDataLoader.DataFiles("map_data", "state_regions").FirstOrDefault();
         if (file is null) return;
         try { LoadOverrides(File.ReadAllText(file), null); }
         catch { /* Compiled corrections deliberately remain bootable. */ }

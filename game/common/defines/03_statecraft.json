@@ -1,0 +1,59 @@
+// Deal or Force - Statecraft and the AI.
+//
+// Every key here overrides the value compiled into Defines.cs. A key no file mentions
+// keeps its compiled value, so a balance mod only lists what it changes.
+//
+// This whole folder is read, in file-name order, and later files win. That is why the
+// base game's own files are numbered: a mod drops `50_my_balance.json` in beside them,
+// changes three numbers, and inherits everything else. It never has to fork this file.
+//
+// SimBench checks that what ships here still agrees with the compiled defaults - a stale
+// data file silently undid an entire combat rebalance once, because data wins over code
+// by design and nothing was watching.
+{
+
+  // Statecraft: how a country governs itself and reads its neighbours
+  "AiWarChance": 0.012,
+  "AiMayDeclareWar": true,
+  "AiBorderFriction": -6,
+  "AiTradeWarmth": 28,
+  "AiPactWarmth": 22,
+  "AiAllianceWarmth": 34,
+  "AiFearOfStrength": 16,
+  "AiOpinionDrift": 0.10,
+  "AiCourtshipStep": 6,
+  "AiFriendshipThreshold": 10,
+  "AiTradeThreshold": 18,
+  "AiPactThreshold": 42,
+  "AiAllianceThreshold": 66,
+  "AiRivalryThreshold": -30,
+  "AiTreasuryFloor": 0.02,
+  "AiTreasuryComfort": 0.12,
+  "AiTaxStep": 0.012,
+  "AiMinimumTaxRate": 0.08,
+  "AiMaximumTaxRate": 0.46,
+  "AiWartimeMilitarySpending": 0.16,
+  "AiTenseMilitarySpending": 0.09,
+  "AiPeacetimeMilitarySpending": 0.045,
+  "AiStabilityConcern": 0.52,
+  "AiSocialStep": 0.006,
+  "AiBuildTreasuryFloor": 0.03,
+  "AiMaxConcurrentProjects": 4,
+  "AiBuildSaturation": 2.5,
+  "AiEconomicWeight": 0.004,
+  "AiWarMinimumAdvantage": 1.45,
+  "AiHostilityAppetite": 1.2,
+  "AiRivalryAppetite": 0.8,
+  "AiOpportunismAppetite": 1.1,
+  "AiWarDesireThreshold": 0.55,
+  "AiWarSupportFloor": 0.45,
+  "AiWarStabilityFloor": 0.35,
+  "AiMinimumWarDays": 240,
+  "ScenarioWarNegotiationLockDays": 1095,
+  "AiPeaceProposalInterval": 45,
+  "AiPeaceMinimumBudget": 35,
+  "AiPeaceIndemnityBudget": 55,
+  "AiCapitulationWarSupport": 0.30,
+  "AiPeaceBudgetShare": 0.85,
+  "AiMayAttackPlayer": true
+}

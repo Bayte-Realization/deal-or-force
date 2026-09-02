@@ -71,10 +71,11 @@ public static class ModifierCatalog
         Definitions.Clear();
         foreach (var definition in Defaults()) Definitions[definition.Id] = definition;
 
-        var file = GameDataLoader.FindDataFile("common", "modifiers", "modifiers.json");
-        if (file is null) return;
-        try { Load(File.ReadAllText(file), null); }
-        catch { /* Compiled defaults deliberately remain bootable. */ }
+        foreach (var file in GameDataLoader.DataFiles("common", "modifiers"))
+        {
+            try { Load(File.ReadAllText(file), null); }
+            catch { /* One unreadable file costs that file, not the whole category. */ }
+        }
     }
 
     private static IEnumerable<ModifierDefinition> Defaults() => new[]

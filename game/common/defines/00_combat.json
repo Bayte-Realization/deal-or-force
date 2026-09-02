@@ -1,0 +1,67 @@
+// Deal or Force - Combat.
+//
+// Every key here overrides the value compiled into Defines.cs. A key no file mentions
+// keeps its compiled value, so a balance mod only lists what it changes.
+//
+// This whole folder is read, in file-name order, and later files win. That is why the
+// base game's own files are numbered: a mod drops `50_my_balance.json` in beside them,
+// changes three numbers, and inherits everything else. It never has to fork this file.
+//
+// SimBench checks that what ships here still agrees with the compiled defaults - a stale
+// data file silently undid an entire combat rebalance once, because data wins over code
+// by design and nothing was watching.
+{
+
+  // Combat
+  "DefenderAdvantage": 2.30,
+  "CombatWidth": 80,
+  "CombatWidthPerDirection": 20,
+  "MaxAttackDirections": 4,
+  "OverWidthPenalty": 0.9,
+  "MinCrowdingFactor": 0.45,
+  "DefenderCounterFire": 1.00,
+  "UnpiercedDamageFloor": 0.5,
+  "BaseOrganisationDamage": 0.048,
+  "MinOrganisationDamage": 0.010,
+  "MaxOrganisationDamage": 0.130,
+  "CasualtiesPerOrganisationPoint": 0.075,
+  "BrokenCasualtyMultiplier": 2.4,
+  "AttackerCasualtyMultiplier": 2.4,
+  "EntrenchmentBonus": 1.80,
+  "EntrenchmentPerDay": 0.030,
+  "EntrenchmentAtScenarioStart": 0.85,
+  "EntrenchmentLostPerCombatDay": 0.020,
+  "EntrenchmentUnderFireShare": 0.75,
+  "BattleBreakOrganisation": 0.055,
+
+  // Movement, ground and fronts
+  "MobilisationBaseShare": 0.060,
+  "ManpowerReserveFloorShare": 0.15,
+  "ReinforcementCapacityShare": 0.0010,
+
+  "UnopposedCapturePerDay": 0.10,
+  "ZoneOfControlResistance": 6.0,
+  "GapExploitAdvantage": 1.60,
+  "CoveringPresenceFloor": 0.45,
+  "RestAfterCaptureDays": 2,
+  "RestAfterSpentAttackDays": 7,
+  "RestAfterRetreatDays": 7,
+  "FrontCoverageRadius": 2,
+  "FrontCoverageFalloff": 0.45,
+  "WoundedReturningShare": 0.55,
+  "WoundedReturnPerDay": 0.020,
+  "WoundedReturnMinimumSupply": 0.22,
+  "WoundedLostWhenUnsuppliedPerDay": 0.030,
+  "WartimeFrontDeploymentShare": 0.84,
+  "PeacetimeBorderDeploymentShare": 0.68,
+  "RiverMovementMultiplier": 0.78,
+  "RiverAttackMultiplier": 0.82,
+  "MajorRiverAttackMultiplier": 0.70,
+  "LakeSupplyBonus": 0.08,
+
+  // Planning
+  "PlanningGainPerDay": 0.018,
+  "PlanningLossPerProvince": 0.025,
+  "PlanningBurnPerCombatDay": 0.055,
+  "MaxPlanningAttackBonus": 0.30
+}

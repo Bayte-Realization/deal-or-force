@@ -83,15 +83,8 @@ public static class BuildingCatalog
     {
         Definitions.Clear();
         foreach (var entry in Defaults) Definitions[entry.Key] = entry.Value;
-        var file = GameDataLoader.FindDataFile("common", "buildings", "buildings.json");
-        if (file is null) return;
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(file), new JsonDocumentOptions
-            {
-                AllowTrailingCommas = true,
-                CommentHandling = JsonCommentHandling.Skip
-            });
+        foreach (var document in GameDataLoader.DataDocuments("common", "buildings"))
+            using (document)
             foreach (var entry in document.RootElement.EnumerateObject())
             {
                 if (!Enum.TryParse<BuildingKind>(entry.Name, true, out var kind) || entry.Value.ValueKind != JsonValueKind.Object)
@@ -105,8 +98,6 @@ public static class BuildingCatalog
                 Number(value, "capacity_gain", out var capacity);
                 Override(kind, name, cost, days, gdp, capacity, description);
             }
-        }
-        catch { /* Compiled defaults deliberately remain bootable. */ }
     }
 
     public static bool Override(BuildingKind kind, string name, float? cost, int? days,
