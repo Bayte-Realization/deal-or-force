@@ -21,6 +21,12 @@ public sealed class StrategicWar
     public float SupportScore;
     public float WarScore;
     public float Reparations;
+
+    /// <summary>Provinces that changed owner - not merely occupier - when this war ended.</summary>
+    public int AnnexedProvinces;
+
+    /// <summary>Regions the new border cut in two, and so brought into existence.</summary>
+    public int CreatedStates;
     public int ClaimedStateMapIndex = -1;
     public bool Ended;
     public bool FrontDirty = true;

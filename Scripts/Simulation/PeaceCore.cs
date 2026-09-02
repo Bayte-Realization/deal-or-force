@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -132,24 +133,34 @@ public static class PeaceNegotiation
             if (winner is not null) winner.WarSupport = MathF.Min(1f, winner.WarSupport + 0.04f);
         }
 
-        if (terms == PeaceTerms.EnforceWarGoal && campaign.ProvinceController is not null &&
-            campaign.ProvinceOccupation is not null)
+        // A peace that keeps ground has to keep it properly. Holding a province used to
+        // mean occupying it forever while the loser's economy went on counting everyone in
+        // it; kept provinces now change owner, and any region the new border runs through
+        // is split into the regions the border actually left behind.
+        if (terms is PeaceTerms.EnforceWarGoal or PeaceTerms.EnforceDemands or PeaceTerms.Capitulate &&
+            campaign.ProvinceController is not null && campaign.ProvinceOccupation is not null)
         {
-            foreach (var pair in war.OriginalController)
-            {
-                var inGoal = campaign.ProvinceMap?.ProvinceToState[pair.Key] == war.ClaimedStateMapIndex;
-                var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
-                if (!inGoal || !secured) campaign.SetProvinceController(pair.Key, pair.Value);
-            }
-        }
+            var winnerId = terms == PeaceTerms.Capitulate
+                ? (proposerId == war.AttackerId ? war.DefenderId : war.AttackerId)
+                : proposerId;
+            var winner = campaign.NationById(winnerId);
+            var kept = new List<int>();
 
-        if (terms == PeaceTerms.EnforceDemands && campaign.ProvinceController is not null &&
-            campaign.ProvinceOccupation is not null)
-        {
             foreach (var pair in war.OriginalController)
             {
                 var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
-                if (!secured) campaign.SetProvinceController(pair.Key, pair.Value);
+                var inGoal = terms != PeaceTerms.EnforceWarGoal ||
+                             campaign.ProvinceMap?.ProvinceToState[pair.Key] == war.ClaimedStateMapIndex;
+                var held = campaign.ProvinceController[pair.Key] == (ushort)(winner?.MapIndex ?? -1);
+                if (secured && inGoal && held) kept.Add(pair.Key);
+                else campaign.SetProvinceController(pair.Key, pair.Value);
+            }
+
+            if (winner is not null && kept.Count > 0)
+            {
+                var created = StatePartition.Annex(campaign, kept, winner);
+                war.AnnexedProvinces = kept.Count;
+                war.CreatedStates = created.Count;
             }
         }
 

@@ -266,6 +266,12 @@ public static class SaveSystem
         public ushort[] ProvinceController = Array.Empty<ushort>();
         public float[] ProvinceOccupation = Array.Empty<float>();
 
+        /// <summary>Who owns each province, which a peace can redraw and the raster cannot know.</summary>
+        public ushort[] ProvinceOwner = Array.Empty<ushort>();
+
+        /// <summary>Which region each province belongs to, after any the border split.</summary>
+        public ushort[] ProvinceState = Array.Empty<ushort>();
+
         public static CampaignSave Capture(Campaign campaign, string modFingerprint) => new()
         {
             ModFingerprint = modFingerprint ?? "",
@@ -294,7 +300,9 @@ public static class SaveSystem
             Relations = new Dictionary<long, DiplomaticRelation>(campaign.Relations),
             History = campaign.History.Export(),
             ProvinceController = campaign.ProvinceController is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceController.Clone(),
-            ProvinceOccupation = campaign.ProvinceOccupation is null ? Array.Empty<float>() : (float[])campaign.ProvinceOccupation.Clone()
+            ProvinceOccupation = campaign.ProvinceOccupation is null ? Array.Empty<float>() : (float[])campaign.ProvinceOccupation.Clone(),
+            ProvinceOwner = campaign.ProvinceMap is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceMap.ProvinceToNation.Clone(),
+            ProvinceState = campaign.ProvinceMap is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceMap.ProvinceToState.Clone()
         };
 
         public Campaign Restore()
@@ -314,7 +322,7 @@ public static class SaveSystem
             campaign.History.Restore(History);
             campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
                 HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
-                ProvinceController, ProvinceOccupation);
+                ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState);
 
             // The state list was just replaced wholesale, so the ownership index built
             // against the bootstrap campaign no longer describes it.

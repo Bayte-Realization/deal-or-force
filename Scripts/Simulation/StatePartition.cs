@@ -1,0 +1,326 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace DealOrForce.Simulation;
+
+/// <summary>
+/// What happens to a region when a border is redrawn through the middle of it.
+///
+/// Until now nothing did. A peace treaty moved province *control* and left ownership
+/// alone, so a country could hold half of an enemy region for a decade while the enemy's
+/// economy went on counting every person in it. Annexation is the missing half: provinces
+/// change owner permanently, and any region the new border cuts through stops being one
+/// region and becomes as many as the border left behind.
+///
+/// A split region is not a label. Each piece is a full region with its own population,
+/// its own buildings, its own social classes and its own deposits, divided by how much of
+/// the old region it holds - so half of an industrial region is half its industry, and the
+/// two halves develop apart from that day on. The largest piece keeps the original
+/// identity, which is what lets saves, history and war goals written before the split
+/// still mean something afterwards.
+///
+/// Pieces are also split by connectivity, not only by owner: a region cut into two
+/// separate pockets under the same flag becomes two regions, because two pockets that
+/// cannot reach each other are not one place.
+/// </summary>
+public static class StatePartition
+{
+    /// <summary>
+    /// Map indices for regions the campaign creates. The authored table ends below this,
+    /// so a dynamic region can never collide with one a mod or the scenario declared.
+    /// </summary>
+    public const int FirstDynamicMapIndex = 4000;
+
+    /// <summary>
+    /// Move permanent ownership of provinces to a nation, then repartition every region
+    /// the new border touched. Returns the regions that now exist because of it.
+    /// </summary>
+    public static IReadOnlyList<ScenarioState> Annex(Campaign campaign, IEnumerable<int> provinces, Nation newOwner)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null || newOwner is null || provinces is null) return Array.Empty<ScenarioState>();
+
+        var touched = new HashSet<int>();
+        var moved = 0;
+        foreach (var province in provinces)
+        {
+            if (province <= 0 || province > topology.ProvinceCount) continue;
+            if (topology.ProvinceToNation[province] == (ushort)newOwner.MapIndex) continue;
+            touched.Add(topology.ProvinceToState[province]);
+            topology.ProvinceToNation[province] = (ushort)newOwner.MapIndex;
+            campaign.SetProvinceController(province, (ushort)newOwner.MapIndex);
+            moved++;
+        }
+        if (moved == 0) return Array.Empty<ScenarioState>();
+
+        var created = new List<ScenarioState>();
+        foreach (var stateMapIndex in touched)
+        {
+            var state = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
+            if (state is not null) created.AddRange(Repartition(campaign, state));
+        }
+
+        campaign.InvalidateStateIndex();
+        campaign.MarkStrategicChange();
+        return created;
+    }
+
+    /// <summary>
+    /// Split one region so that every connected group of its provinces under a single
+    /// owner is its own region. Returns the regions this created; an empty list means the
+    /// region was already whole and only its owner may have changed.
+    /// </summary>
+    public static IReadOnlyList<ScenarioState> Repartition(Campaign campaign, ScenarioState state)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null || state is null) return Array.Empty<ScenarioState>();
+
+        var provinces = new List<int>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (topology.ProvinceToState[province] == (ushort)state.MapIndex)
+                provinces.Add(province);
+
+        // A region with no ground left keeps its identity and its zero. Deleting it would
+        // break every save, war goal and history entry that names it.
+        if (provinces.Count == 0) return Array.Empty<ScenarioState>();
+
+        var pieces = Components(topology, provinces);
+        if (pieces.Count <= 1)
+        {
+            // Whole, but possibly under a new flag.
+            var owner = topology.ProvinceToNation[provinces[0]];
+            if (state.NationMapIndex != owner)
+            {
+                state.NationMapIndex = owner;
+                state.NationId = campaign.Nations.Find(nation => nation.MapIndex == owner)?.Tag ?? state.NationId;
+            }
+            return Array.Empty<ScenarioState>();
+        }
+
+        // Which piece keeps the region's name matters. The one that stayed with the country
+        // that owned it keeps it - the way a seceding half gets the new name and the rump
+        // keeps the old one. If the whole region changed hands in pieces, the largest one
+        // inherits instead, so the identity is never simply lost.
+        pieces.Sort((left, right) => right.Count.CompareTo(left.Count));
+        var originalOwner = (ushort)state.NationMapIndex;
+        var parentIndex = pieces.FindIndex(piece => topology.ProvinceToNation[piece[0]] == originalOwner);
+        if (parentIndex < 0) parentIndex = 0;
+
+        var total = provinces.Count;
+        var parentCentre = Centre(topology, provinces);
+        var created = new List<ScenarioState>();
+
+        for (var index = 0; index < pieces.Count; index++)
+        {
+            if (index == parentIndex) continue;
+            var piece = pieces[index];
+            var share = piece.Count / (float)total;
+            var owner = topology.ProvinceToNation[piece[0]];
+            var carved = Carve(campaign, state, piece, share, owner,
+                Unique(campaign, Name(state.Name, Centre(topology, piece), parentCentre, index)));
+            campaign.States.Add(carved);
+            created.Add(carved);
+        }
+
+        // The parent keeps its piece and whatever flag flies over it.
+        var parentOwner = topology.ProvinceToNation[pieces[parentIndex][0]];
+        if (state.NationMapIndex != parentOwner)
+        {
+            state.NationMapIndex = parentOwner;
+            state.NationId = campaign.Nations.Find(nation => nation.MapIndex == parentOwner)?.Tag ?? state.NationId;
+        }
+
+        RebindArmies(campaign, topology);
+        campaign.InvalidateStateIndex();
+        return created;
+    }
+
+    /// <summary>
+    /// Connected groups of provinces that share an owner. Two pockets of the same country
+    /// that cannot walk to each other are two places, not one.
+    /// </summary>
+    private static List<List<int>> Components(ProvinceTopology topology, List<int> provinces)
+    {
+        var members = new HashSet<int>(provinces);
+        var seen = new HashSet<int>();
+        var components = new List<List<int>>();
+        var queue = new Queue<int>();
+
+        foreach (var start in provinces)
+        {
+            if (!seen.Add(start)) continue;
+            var owner = topology.ProvinceToNation[start];
+            var component = new List<int> { start };
+            queue.Clear();
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var province = queue.Dequeue();
+                foreach (var neighbour in topology.Neighbors[province])
+                {
+                    if (!members.Contains(neighbour) || topology.ProvinceToNation[neighbour] != owner) continue;
+                    if (!seen.Add(neighbour)) continue;
+                    component.Add(neighbour);
+                    queue.Enqueue(neighbour);
+                }
+            }
+            components.Add(component);
+        }
+        return components;
+    }
+
+    /// <summary>
+    /// Cut one piece out of a region. Everything countable moves across in proportion to
+    /// how much of the region the piece is; everything that is a rate rather than a count -
+    /// literacy, living standards, radicalism - is carried over unchanged, because a border
+    /// does not make the people on one side of it suddenly better read.
+    /// </summary>
+    private static ScenarioState Carve(Campaign campaign, ScenarioState parent, List<int> piece,
+        float share, ushort owner, string name)
+    {
+        var mapIndex = NextMapIndex(campaign);
+        var nation = campaign.Nations.Find(candidate => candidate.MapIndex == owner);
+        var carved = new ScenarioState
+        {
+            MapIndex = mapIndex,
+            NationMapIndex = owner,
+            NationId = nation?.Tag ?? parent.NationId,
+            Id = $"{parent.Id}_{mapIndex}",
+            Name = name,
+            Iso = $"{parent.Iso}-{mapIndex}",
+            Kind = parent.Kind,
+            Literacy = parent.Literacy,
+            StandardOfLiving = parent.StandardOfLiving,
+            Radicalism = parent.Radicalism,
+            Urbanization = parent.Urbanization
+        };
+
+        var population = (long)MathF.Round(parent.Population * share);
+        carved.Population = Math.Min(population, parent.Population);
+        parent.Population -= carved.Population;
+
+        foreach (var group in parent.PopulationGroups)
+        {
+            var size = (long)MathF.Round(group.Size * share);
+            if (size <= 0) continue;
+            size = Math.Min(size, group.Size);
+            group.Size -= size;
+            carved.PopulationGroups.Add(new PopulationGroup
+            {
+                Class = group.Class,
+                Nationality = group.Nationality,
+                Size = size,
+                Employment = group.Employment,
+                Wealth = group.Wealth,
+                StandardOfLiving = group.StandardOfLiving,
+                Radicalism = group.Radicalism
+            });
+        }
+
+        foreach (var building in parent.Buildings.Keys.ToArray())
+        {
+            var count = parent.Buildings[building];
+            if (count <= 0) continue;
+            var moved = (int)MathF.Round(count * share);
+            if (moved <= 0) continue;
+            moved = Math.Min(moved, count);
+            parent.Buildings[building] = count - moved;
+            carved.Buildings[building] = moved;
+        }
+
+        foreach (var deposit in parent.ResourceDeposits.Keys.ToArray())
+        {
+            var amount = parent.ResourceDeposits[deposit];
+            if (amount <= 0f) continue;
+            var moved = amount * share;
+            parent.ResourceDeposits[deposit] = amount - moved;
+            carved.ResourceDeposits[deposit] = moved;
+        }
+
+        var topology = campaign.ProvinceMap;
+        foreach (var province in piece) topology.ProvinceToState[province] = (ushort)mapIndex;
+        return carved;
+    }
+
+    /// <summary>
+    /// A name a player can find on a map. The piece is named for where it lies against the
+    /// region it came from, which is how these places tend to get named for real -
+    /// Northern Ireland, West Bengal, South Ossetia.
+    /// </summary>
+    private static string Name(string parentName, (float Latitude, float Longitude) centre,
+        (float Latitude, float Longitude) parentCentre, int ordinal)
+    {
+        var north = centre.Latitude - parentCentre.Latitude;
+        var east = centre.Longitude - parentCentre.Longitude;
+        var stem = StripDirection(parentName);
+
+        if (MathF.Abs(north) < 0.05f && MathF.Abs(east) < 0.05f)
+            return $"{stem} ({ordinal + 1})";
+
+        var direction = MathF.Abs(north) >= MathF.Abs(east)
+            ? north > 0f ? "Northern" : "Southern"
+            : east > 0f ? "Eastern" : "Western";
+        return $"{direction} {stem}";
+    }
+
+    /// <summary>
+    /// Two pockets on the same side of a region get the same compass direction, and a
+    /// player cannot act on two regions with one name. The first keeps the plain name and
+    /// the rest are numbered, the way a map legend would do it.
+    /// </summary>
+    private static string Unique(Campaign campaign, string name)
+    {
+        if (campaign.States.All(state => !string.Equals(state.Name, name, StringComparison.Ordinal)))
+            return name;
+        for (var suffix = 2; suffix < 100; suffix++)
+        {
+            var candidate = $"{name} {suffix}";
+            if (campaign.States.All(state => !string.Equals(state.Name, candidate, StringComparison.Ordinal)))
+                return candidate;
+        }
+        return name;
+    }
+
+    /// <summary>Keep a region split twice from becoming "Northern Northern Kyiv".</summary>
+    private static string StripDirection(string name)
+    {
+        foreach (var prefix in new[] { "Northern ", "Southern ", "Eastern ", "Western " })
+            if (name.StartsWith(prefix, StringComparison.Ordinal))
+                return name[prefix.Length..];
+        return name;
+    }
+
+    private static (float Latitude, float Longitude) Centre(ProvinceTopology topology, List<int> provinces)
+    {
+        if (provinces.Count == 0) return (0f, 0f);
+        var latitude = 0f;
+        var longitude = 0f;
+        foreach (var province in provinces)
+        {
+            var centre = topology.CenterOf(province);
+            latitude += centre.Latitude;
+            longitude += centre.Longitude;
+        }
+        return (latitude / provinces.Count, longitude / provinces.Count);
+    }
+
+    private static int NextMapIndex(Campaign campaign)
+    {
+        var highest = FirstDynamicMapIndex - 1;
+        foreach (var state in campaign.States)
+            if (state.MapIndex > highest) highest = state.MapIndex;
+        return highest + 1;
+    }
+
+    /// <summary>
+    /// Divisions remember which region they are standing in. After a split, half of them
+    /// are standing somewhere that has a different name than it did this morning.
+    /// </summary>
+    private static void RebindArmies(Campaign campaign, ProvinceTopology topology)
+    {
+        foreach (var army in campaign.Armies)
+            if (army.ProvinceId > 0 && army.ProvinceId <= topology.ProvinceCount)
+                army.StateMapIndex = topology.ProvinceToState[army.ProvinceId];
+    }
+}

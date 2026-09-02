@@ -408,6 +408,17 @@ public sealed partial class Campaign
         }
         _pendingProvinceController = null;
         _pendingProvinceOccupation = null;
+
+        // Borders a peace redrew are campaign state, not map data. The raster on disk still
+        // says who owned what in 2024; a save that annexed provinces and split regions has
+        // to put its own political layer back over it, or loading would quietly hand every
+        // conquest back and leave the region list describing a map that no longer exists.
+        if (_pendingProvinceOwner is not null && _pendingProvinceOwner.Length == topology.ProvinceToNation.Length)
+            Array.Copy(_pendingProvinceOwner, topology.ProvinceToNation, _pendingProvinceOwner.Length);
+        if (_pendingProvinceState is not null && _pendingProvinceState.Length == topology.ProvinceToState.Length)
+            Array.Copy(_pendingProvinceState, topology.ProvinceToState, _pendingProvinceState.Length);
+        _pendingProvinceOwner = null;
+        _pendingProvinceState = null;
         MapRevision++;
         Warfare.RebuildFronts(this);
         if (!InitialDeploymentCompleted)
@@ -419,9 +430,12 @@ public sealed partial class Campaign
         Changed?.Invoke();
     }
 
+    private ushort[] _pendingProvinceOwner;
+    private ushort[] _pendingProvinceState;
+
     internal void RestoreRuntimeState(GameDate date, int elapsedDays, bool paused, uint randomState,
         int playerId, IReadOnlyList<int> humanSeats, int activeSeat, int nextBattleId,
-        int mapRevision, bool initialDeploymentCompleted, ushort[] controllers, float[] occupation)
+        int mapRevision, bool initialDeploymentCompleted, ushort[] controllers, float[] occupation, ushort[] owners, ushort[] states)
     {
         Date = date;
         ElapsedDays = Math.Max(0, elapsedDays);
@@ -445,6 +459,8 @@ public sealed partial class Campaign
         if (Player is not null) Player.IsPlayer = true;
         _pendingProvinceController = controllers;
         _pendingProvinceOccupation = occupation;
+        _pendingProvinceOwner = owners;
+        _pendingProvinceState = states;
     }
 
     public bool SetProvinceController(int provinceId, ushort controller)

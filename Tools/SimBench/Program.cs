@@ -82,6 +82,13 @@ public static class Program
             failures += Check("the Russo-Ukrainian front is still a stalemate",
                 FrontIsAStalemate(campaign, frontBefore, ukraineTrace, days));
 
+        // Deliberately last: it redraws the map, so nothing measured above is disturbed.
+        if (mapped)
+            failures += Check("a region cut by a new border becomes two regions",
+                RegionsSplitAlongNewBorders(campaign));
+        if (mapped)
+            failures += Check("a redrawn border survives a save", BordersSurviveASave(campaign));
+
         Console.WriteLine();
         Console.WriteLine(failures == 0
             ? "All checks passed."
@@ -450,6 +457,149 @@ public static class Program
                    "of nobody playing; the war has been decided by the simulation, not by anyone";
         if (casualties < 20_000f * years)
             return $"only {casualties:N0} casualties in {days} day(s) - the front is frozen, not contested";
+        return "";
+    }
+
+    /// <summary>
+    /// Redraw a border through the middle of a region and check the region actually
+    /// becomes two. This is the invariant the whole partition rests on: a region cut in
+    /// half is two regions with two populations and two sets of buildings, not one region
+    /// with a note attached - and the arithmetic has to add back up to what it started as.
+    /// </summary>
+    private static string RegionsSplitAlongNewBorders(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        // A region with enough provinces to be worth cutting, held whole by one owner.
+        ScenarioState subject = null;
+        List<int> provinces = null;
+        foreach (var candidate in campaign.States.OrderByDescending(state => state.Population))
+        {
+            var owned = new List<int>();
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+                if (topology.ProvinceToState[province] == (ushort)candidate.MapIndex)
+                    owned.Add(province);
+            if (owned.Count < 6) continue;
+            if (owned.Any(province => topology.ProvinceToNation[province] != (ushort)candidate.NationMapIndex)) continue;
+            subject = candidate;
+            provinces = owned;
+            break;
+        }
+        if (subject is null) return "no region large enough to test a split against";
+
+        var taker = campaign.Nations.FirstOrDefault(nation =>
+            nation.MapIndex != subject.NationMapIndex && nation.Population > 0);
+        if (taker is null) return "no nation to hand the ground to";
+
+        var populationBefore = subject.Population;
+        var industryBefore = subject.Buildings.Values.Sum();
+        var statesBefore = campaign.States.Count;
+        var half = provinces.Take(provinces.Count / 2).ToList();
+
+        var created = StatePartition.Annex(campaign, half, taker);
+
+        if (created.Count == 0)
+            return $"annexing {half.Count} of {subject.Name}'s {provinces.Count} provinces created no new region";
+        if (campaign.States.Count != statesBefore + created.Count)
+            return "the region list does not account for the regions the split created";
+
+        var pieces = created.Append(subject).ToList();
+        var populationAfter = pieces.Sum(state => state.Population);
+        var industryAfter = pieces.Sum(state => state.Buildings.Values.Sum());
+        if (Math.Abs(populationAfter - populationBefore) > Math.Max(4L, populationBefore / 1000L))
+            return $"population does not add up: {populationBefore:N0} before, {populationAfter:N0} after";
+        if (Math.Abs(industryAfter - industryBefore) > pieces.Count)
+            return $"buildings do not add up: {industryBefore:N0} before, {industryAfter:N0} after";
+
+        var originalOwner = subject.NationMapIndex;
+        foreach (var piece in created)
+        {
+            if (piece.MapIndex < StatePartition.FirstDynamicMapIndex)
+                return $"'{piece.Name}' took an authored map index ({piece.MapIndex})";
+            // A new region belongs either to whoever took the ground, or to the country it
+            // was cut away from - taking a slice out of the middle can leave the remainder
+            // in two pockets that cannot reach each other, and those are regions too.
+            if (piece.NationMapIndex != taker.MapIndex && piece.NationMapIndex != originalOwner)
+                return $"'{piece.Name}' ended up under neither the taker nor the original owner";
+            if (string.Equals(piece.Name, subject.Name, StringComparison.Ordinal))
+                return "the new region reuses its parent's name, so a player cannot tell them apart";
+        }
+        if (created.All(piece => piece.NationMapIndex != taker.MapIndex))
+            return $"{taker.Tag} took ground from {subject.Name} but owns none of the regions it became";
+        if (subject.NationMapIndex != originalOwner)
+            return $"'{subject.Name}' kept its name but changed owner; the seceding half should carry the new name";
+
+        // Every province still has to belong to exactly one region, and every region the
+        // split produced has to be one the campaign knows about.
+        var known = campaign.States.Select(state => (ushort)state.MapIndex).ToHashSet();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (!known.Contains(topology.ProvinceToState[province]))
+                return $"province {province} belongs to region {topology.ProvinceToState[province]}, which does not exist";
+
+        var names = pieces.Select(piece => piece.Name).ToList();
+        if (names.Distinct(StringComparer.Ordinal).Count() != names.Count)
+            return "two of the regions the split produced share a name: " + string.Join(", ", names);
+
+        Console.WriteLine($"  partition: {subject.Name} lost {half.Count} of {provinces.Count} provinces to " +
+                          $"{taker.Tag} and became {created.Count + 1} regions - " +
+                          string.Join(", ", pieces.Select(piece =>
+                          {
+                              var owner = campaign.Nations.Find(nation => nation.MapIndex == piece.NationMapIndex);
+                              return $"{piece.Name} ({owner?.Tag ?? "?"}, {piece.Population:N0} people)";
+                          })) + ".");
+        return "";
+    }
+
+    /// <summary>
+    /// A redrawn border has to survive being saved. The province raster on disk still shows
+    /// the world of 2024; if a save does not carry its own political layer, loading hands
+    /// every conquest back and leaves the region list describing a map that no longer
+    /// exists. Run after the partition test, on a campaign whose borders have moved.
+    /// </summary>
+    private static string BordersSurviveASave(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        var states = campaign.States.Count;
+        var dynamic = campaign.States.Count(state => state.MapIndex >= StatePartition.FirstDynamicMapIndex);
+        if (dynamic == 0) return "nothing was split, so there is nothing to round-trip";
+
+        var owners = (ushort[])topology.ProvinceToNation.Clone();
+        var regions = (ushort[])topology.ProvinceToState.Clone();
+
+        var bytes = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
+        if (bytes.Length == 0) return "the campaign refused to serialise";
+        var result = SaveSystem.ImportNetworkSnapshot(bytes, "bench");
+        var restored = result.Campaign;
+        if (restored is null) return $"the save did not load back: {result.Warning}";
+
+        // The restored campaign has no province graph until one is attached, exactly as in
+        // the game. Attaching it is what replays the saved political layer.
+        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
+                Globality.EarthData.Width, Globality.EarthData.Height, out var freshTopology, out var message))
+            return $"could not rebuild the province graph: {message}";
+        restored.AttachProvinceTopology(freshTopology);
+
+        if (restored.States.Count != states)
+            return $"{states} regions were saved and {restored.States.Count} came back";
+        var restoredDynamic = restored.States.Count(state => state.MapIndex >= StatePartition.FirstDynamicMapIndex);
+        if (restoredDynamic != dynamic)
+            return $"{dynamic} split regions were saved and {restoredDynamic} came back";
+
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            if (restored.ProvinceMap.ProvinceToNation[province] != owners[province])
+                return $"province {province} came back owned by {restored.ProvinceMap.ProvinceToNation[province]} " +
+                       $"instead of {owners[province]} - the save handed a conquest back";
+            if (restored.ProvinceMap.ProvinceToState[province] != regions[province])
+                return $"province {province} came back in region {restored.ProvinceMap.ProvinceToState[province]} " +
+                       $"instead of {regions[province]} - the split did not survive";
+        }
+
+        Console.WriteLine($"  save round trip: {states:N0} regions including {dynamic:N0} created by a border, " +
+                          $"and every province came back where the peace left it.");
         return "";
     }
 
