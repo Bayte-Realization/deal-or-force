@@ -186,7 +186,8 @@ public static partial class Warfare
                 foreach (var other in In(byProvince, neighbour))
                 {
                     if (other.NationId != enemyId || other.Divisions < 0.1f) continue;
-                    coveringPower += other.Power;
+                    coveringPower += M.Max(other.Power,
+                        other.Presence * campaign.Defines.CoveringPresenceFloor);
                     covering++;
                 }
                 if (coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
@@ -637,6 +638,7 @@ public static partial class Warfare
                              MilitaryDoctrine.CasualtyExposure(army.Stance);
             if (personnel > 1f) army.Strength = M.Clamp01(army.Strength - casualties / personnel);
             army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(casualties));
+            army.Recovering += casualties * defines.WoundedReturningShare;
             army.Experience = M.Clamp01(army.Experience + loss * 0.004f);
             army.Cohesion = M.Clamp01(army.Cohesion - loss * 0.08f);
             lost += casualties;

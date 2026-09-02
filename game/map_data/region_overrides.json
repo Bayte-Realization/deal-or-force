@@ -166,10 +166,21 @@
       "iso": "AZ-NX",
       "kind": "Autonomous Republic",
       "population": 462500,
-      "min_longitude": 44.7,
-      "max_longitude": 46.2,
-      "min_latitude": 38.8,
-      "max_latitude": 39.85
+      "min_longitude": 44.62,
+      "max_longitude": 46.26,
+      "min_latitude": 38.74,
+      "max_latitude": 39.85,
+      "boundary_source": "Nakhchivan-Armenia border, traced to source-raster resolution",
+      "polygon": [
+        [44.7, 39.85],
+        [45.42, 39.72],
+        [46.2, 38.94],
+        [46.26, 38.86],
+        [45.6, 38.74],
+        [45.0, 38.9],
+        [44.62, 39.28],
+        [44.7, 39.85]
+      ]
     }
   ],
   "adjacency_repairs": [

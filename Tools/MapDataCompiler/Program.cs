@@ -49,5 +49,9 @@ Console.WriteLine($"Wrote {provinces.ProvinceCount:N0} provinces ({provinces.Edg
 Console.WriteLine($"Wrote the political map: {ownedProvinces:N0} owned provinces to {history}");
 Console.WriteLine($"Hydrology: {HydrologyCatalog.RiverFeatures.Count:N0} rivers, {HydrologyCatalog.LakeFeatures.Count:N0} lakes");
 Console.WriteLine($"PNG round trip: exact province IDs/adjacency, {rasterWetCells:N0} hydrology cells");
-foreach (var repair in repairs.Where(item => item.ConnectedComponents > 0))
+foreach (var repair in repairs.Where(item => item.ConnectedComponents > 0 || item.ClippedAway.Length > 0))
+{
     Console.WriteLine($"{repair.SubjectTag}: {repair.ConnectedComponents} connected component(s)");
+    if (repair.ClippedAway.Length > 0)
+        Console.WriteLine($"  its boundary left out {repair.ClippedAway}");
+}

@@ -86,6 +86,15 @@ public sealed class Army
     public float Divisions;
     public float Organisation = 1f;
     public float Strength = 1f;
+
+    /// <summary>
+    /// Wounded who are expected back. Casualties in this model were all permanent, so a
+    /// formation could only ever get thinner and an attacker - who pays more than twice
+    /// what it inflicts - ground itself to nothing in about a year whatever it achieved.
+    /// Most of the people a division loses in a day are hurt rather than gone, and they
+    /// come back to their own unit rather than through the recruit depot.
+    /// </summary>
+    public float Recovering;
     public string Name = "";
     public string TemplateId = "line_infantry";
     public float Entrenchment;
@@ -108,6 +117,20 @@ public sealed class Army
     public float Power => Divisions * Strength * Organisation * SupplyLevel *
                           (0.62f + Equipment * 0.38f) * (0.78f + Experience * 0.32f) *
                           (0.82f + Cohesion * 0.25f);
+
+    /// <summary>
+    /// What a formation is worth for denying ground rather than for winning a fight.
+    ///
+    /// Power falls to nothing as a division is worn down, which is right for combat and
+    /// wrong for holding a line: a battered division still occupies the province it is
+    /// standing in and still covers the ground beside it. Scoring cover by Power alone
+    /// meant that once a side's strength collapsed its whole front became walkable, so a
+    /// bad fortnight turned into a rout and the war was decided by whichever side happened
+    /// to be on the down-swing - which moved with the map's province numbering rather than
+    /// with anything either side did.
+    /// </summary>
+    public float Presence => Divisions * (0.62f + Equipment * 0.38f) *
+                             (0.78f + Experience * 0.32f) * (0.82f + Cohesion * 0.25f);
 }
 
 public static class DivisionRules
@@ -397,13 +420,23 @@ public static class MilitaryOperations
     public static void Tick(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;
+        // A nation's daily replacement capacity is shared out by priority - but only among
+        // the formations that can actually take replacements. Counting every division in
+        // the army, full-strength ones included, handed a third of the capacity to units
+        // that returned it unused and quietly threw it away: Russia could field six million
+        // reservists and still watch its line fall to 6 % strength, because most of what it
+        // could move each day was allotted to divisions that were already full.
         var reinforcementWeights = new Dictionary<int, float>();
         foreach (var formation in campaign.Armies)
+        {
+            if (!CanTakeReplacements(formation)) continue;
             reinforcementWeights[formation.NationId] = reinforcementWeights.GetValueOrDefault(formation.NationId) +
                                                        ReinforcementDoctrine.Weight(formation.ReinforcementPriority);
+        }
         foreach (var army in campaign.Armies)
         {
             army.LastReinforced = 0f;
+            ReturnWounded(campaign, army);
             if (!army.InBattle)
             {
                 var recovery = MilitaryBootstrap.OrganisationRecoveryPerDay * MilitaryDoctrine.Recovery(army.Stance) *
@@ -476,9 +509,40 @@ public static class MilitaryOperations
         }
     }
 
+    /// <summary>
+    /// Walk the day's share of a formation's wounded back into its ranks. This is not the
+    /// national replacement pipeline and is not rationed by it: these people are already
+    /// in the division's own aid posts, so all it takes is that the division is being
+    /// supplied at all. A formation cut off keeps its wounded and gets none of them back.
+    /// </summary>
+    private static void ReturnWounded(Campaign campaign, Army army)
+    {
+        if (army.Recovering <= 0f || army.Divisions <= 0f) return;
+        if (army.SupplyLevel < campaign.Defines.WoundedReturnMinimumSupply)
+        {
+            // Untreated, they stop being wounded and start being losses.
+            army.Recovering *= 1f - campaign.Defines.WoundedLostWhenUnsuppliedPerDay;
+            return;
+        }
+        var capacity = army.Divisions * MilitaryBootstrap.DivisionSize;
+        var returning = MathF.Min(army.Recovering * campaign.Defines.WoundedReturnPerDay,
+            MathF.Max(0f, capacity * (1f - army.Strength)));
+        if (returning <= 0f) return;
+        army.Recovering -= returning;
+        army.Strength = M.Clamp01(army.Strength + returning / MathF.Max(1f, capacity));
+        army.Personnel = Math.Min(army.MaxPersonnel, army.Personnel + (int)MathF.Round(returning));
+    }
+
+    /// <summary>
+    /// Whether a formation is in a state to receive replacements at all. The weighting and
+    /// the payout have to agree on this, or capacity is allotted where it cannot be spent.
+    /// </summary>
+    private static bool CanTakeReplacements(Army army) =>
+        !army.InBattle && army.Divisions > 0f && army.Strength < 0.9999f && army.SupplyLevel >= 0.22f;
+
     private static void Reinforce(Campaign campaign, Army army, float totalWeight)
     {
-        if (army.Strength >= 0.9999f || army.SupplyLevel < 0.22f || army.Divisions <= 0f) return;
+        if (!CanTakeReplacements(army)) return;
         var nation = campaign.NationById(army.NationId);
         if (nation is null || nation.ManpowerReserve < 1f || nation.ReinforcementCapacity < 1f) return;
         var need = army.Divisions * MilitaryBootstrap.DivisionSize * (1f - army.Strength);
@@ -732,9 +796,10 @@ public static class MilitaryBootstrap
         foreach (var nation in campaign.Nations)
         {
             var personnel = Personnel(nation.Tag, nation.Population);
-            nation.ManpowerReserve = MathF.Max(personnel * 0.15f,
-                nation.Population * 0.025f - personnel);
-            nation.ReinforcementCapacity = MathF.Max(80f, personnel * 0.0010f);
+            nation.ManpowerReserve = MathF.Max(personnel * campaign.Defines.ManpowerReserveFloorShare,
+                nation.Population * campaign.Defines.MobilisationBaseShare - personnel);
+            nation.ReinforcementCapacity =
+                MathF.Max(80f, personnel * campaign.Defines.ReinforcementCapacityShare);
             if (personnel < 1_000f || string.IsNullOrWhiteSpace(nation.CapitalName)) continue;
             var divisionCount = Math.Max(1, (int)Math.Ceiling(personnel / DivisionSize));
             var remainingPersonnel = (int)MathF.Round(personnel);

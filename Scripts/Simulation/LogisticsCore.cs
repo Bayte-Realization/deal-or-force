@@ -119,7 +119,8 @@ public static class LogisticsSystem
         var barracksTotal = stateById.Values.Sum(state => state.Buildings.GetValueOrDefault(BuildingKind.Barracks));
         var spendingFactor = M.Clamp(nation.MilitarySpending /
             MathF.Max(0.01f, campaign.Defines.BaselineMilitarySpending), 0.25f, 2.5f);
-        nation.ReinforcementCapacity = (MathF.Max(80f, MilitaryBootstrap.Personnel(nation.Tag, nation.Population) * 0.001f) +
+        nation.ReinforcementCapacity = (MathF.Max(80f, MilitaryBootstrap.Personnel(nation.Tag, nation.Population) *
+                                            campaign.Defines.ReinforcementCapacityShare) +
                                         barracksTotal * 120f) * spendingFactor;
         if (campaign.ElapsedDays % 7 == 0) nation.ReinforcedLastWeek = 0f;
     }

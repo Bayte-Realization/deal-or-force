@@ -31,9 +31,18 @@
   "BattleBreakOrganisation": 0.055,
 
   // Movement, ground and fronts
+  "MobilisationBaseShare": 0.060,
+  "ManpowerReserveFloorShare": 0.15,
+  "ReinforcementCapacityShare": 0.0010,
+
   "UnopposedCapturePerDay": 0.10,
   "ZoneOfControlResistance": 6.0,
   "GapExploitAdvantage": 1.60,
+  "CoveringPresenceFloor": 0.45,
+  "WoundedReturningShare": 0.55,
+  "WoundedReturnPerDay": 0.020,
+  "WoundedReturnMinimumSupply": 0.22,
+  "WoundedLostWhenUnsuppliedPerDay": 0.030,
   "WartimeFrontDeploymentShare": 0.84,
   "PeacetimeBorderDeploymentShare": 0.68,
   "RiverMovementMultiplier": 0.78,

@@ -258,6 +258,34 @@ public sealed class Defines
 	/// </summary>
 	public float EntrenchmentUnderFireShare { get; set; } = 0.75f;
 
+	/// <summary>
+	/// Share of a nation's people it can eventually put in uniform over a long war,
+	/// standing army included. The reserve is what is left of that after the peacetime
+	/// army is subtracted, so this is the ceiling on a war of attrition rather than a
+	/// pool anyone can draw at once.
+	///
+	/// It used to be 2.5 %, which punished exactly the countries that had already
+	/// mobilised: Ukraine, whose army is large against its population, was left with a
+	/// reserve of 135 000 against two years of fighting that cost it 656 000, ran dry
+	/// inside five months and then dissolved - while Russia, subtracting the same army
+	/// from four times the people, kept 2.3 million. The Russo-Ukrainian front was not
+	/// being decided by the combat model at all; it was a countdown on who emptied first,
+	/// and which side that was moved with the seed.
+	/// </summary>
+	public float MobilisationBaseShare { get; set; } = 0.060f;
+
+	/// <summary>
+	/// Floor on the reserve, as a share of the standing army, for a nation whose army is
+	/// already larger than its mobilisation base would suggest.
+	/// </summary>
+	public float ManpowerReserveFloorShare { get; set; } = 0.15f;
+
+	/// <summary>
+	/// Replacements a nation can move into the line each day, as a share of its standing
+	/// army, before barracks and military spending are counted.
+	/// </summary>
+	public float ReinforcementCapacityShare { get; set; } = 0.0010f;
+
 	public float BattleBreakOrganisation { get; set; } = 0.055f;
 	public float UnopposedCapturePerDay { get; set; } = 0.10f;
 
@@ -271,6 +299,29 @@ public sealed class Defines
 	/// until the flank covering it has been beaten.
 	/// </summary>
 	public float GapExploitAdvantage { get; set; } = 1.60f;
+
+	/// <summary>
+	/// Share of its fresh worth a formation still contributes to covering the ground
+	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side
+	/// has a bad month; one makes casualties irrelevant to where the line sits.
+	/// </summary>
+	public float CoveringPresenceFloor { get; set; } = 0.45f;
+
+	/// <summary>
+	/// Share of a day's casualties who are wounded rather than lost for good, and who
+	/// rejoin their own formation once they are treated. Roughly three in four of a
+	/// modern army's casualties are wounded and most of those return to duty.
+	/// </summary>
+	public float WoundedReturningShare { get; set; } = 0.55f;
+
+	/// <summary>Share of a formation's wounded who return to it each day.</summary>
+	public float WoundedReturnPerDay { get; set; } = 0.020f;
+
+	/// <summary>Supply a formation needs before its wounded can be treated at all.</summary>
+	public float WoundedReturnMinimumSupply { get; set; } = 0.22f;
+
+	/// <summary>Share of the untreated wounded a cut-off formation loses each day.</summary>
+	public float WoundedLostWhenUnsuppliedPerDay { get; set; } = 0.030f;
 	public float WartimeFrontDeploymentShare { get; set; } = 0.84f;
 	public float PeacetimeBorderDeploymentShare { get; set; } = 0.68f;
 	public float PlanningGainPerDay { get; set; } = 0.018f;

@@ -19,7 +19,8 @@ public static class TerritorialTopology
         string SubjectTag,
         string NeighborTag,
         int ChangedCells,
-        int ConnectedComponents = 0);
+        int ConnectedComponents = 0,
+        string ClippedAway = "");
 
     private readonly record struct AdjacencyRule(
         string SubjectTag,
@@ -98,6 +99,26 @@ public static class TerritorialTopology
         new(34.95f, 35.95f), new(32.20f, 35.95f), new(32.20f, 35.10f)
     };
 
+
+    // Nakhchivan. Its border with Armenia runs diagonally from Sadarak in the north-west
+    // down to the Aras at Ordubad, so a bounding box cannot describe it: one wide enough
+    // to reach Ordubad in the south-east also reaches over Armenia and picks up Azerbaijani
+    // ground on the far side. The line below follows the border instead; the southern side
+    // is drawn a little into the Aras, which costs nothing because only cells Azerbaijan
+    // already holds are ever taken.
+    // Nakhchivan. Its border with Armenia runs diagonally from Sadarak in the north-west
+    // down to the Aras at Ordubad, so a bounding box cannot describe it: one wide enough to
+    // reach Ordubad in the south-east also reaches over Armenia and takes a detached piece
+    // of Azerbaijani ground at 46.0-46.2E, 39.6-39.8N that is not Nakhchivan at all. The
+    // north-eastern side below follows the border itself and passes some seven cells
+    // south-west of that piece. The southern side is drawn out into the Aras, which costs
+    // nothing because only cells Azerbaijan already holds are ever taken.
+    private static readonly GeoPoint[] NakhchivanBoundary =
+    {
+        new(44.70f, 39.85f), new(45.42f, 39.72f), new(46.20f, 38.94f), new(46.26f, 38.86f),
+        new(45.60f, 38.74f), new(45.00f, 38.90f), new(44.62f, 39.28f), new(44.70f, 39.85f)
+    };
+
     // Stable post-source IDs. These corrections are authoritative state identities,
     // not display aliases: construction, demographics, war goals and province picking
     // all consume the same repaired state raster.
@@ -150,10 +171,10 @@ public static class TerritorialTopology
         // it had been swept into whichever of them the raster happened to reach it with.
         // A region you cannot walk to from the rest of its own region is not one region.
         //
-        // The box is drawn wide on purpose: only cells Azerbaijan already holds are taken,
-        // and the nearest other Azerbaijani ground is beyond Armenia and east of 46.2E.
+        // A box wide enough to reach Ordubad in the south-east also reached over Armenia
+        // and swept in Azerbaijani ground on the far side, so the border is traced instead.
         new(1720, "AZE", "AZE", "Nakhchivan", "AZ-NX", "Autonomous Republic", "", 462_500,
-            44.70f, 46.20f, 38.80f, 39.85f, Array.Empty<GeoPoint>(), Array.Empty<RegionSeed>()),
+            44.62f, 46.26f, 38.74f, 39.85f, NakhchivanBoundary, Array.Empty<RegionSeed>()),
 
         // Gibraltar. Same story at 6.8 km2: a seed cell taken from Cadiz, over-large for
         // the same reason Vatican City is.
@@ -294,8 +315,9 @@ public static class TerritorialTopology
                 EconomySystem.SeedState(state, nation, rule.Population);
             }
             var changed = PaintRegion(control, states, width, height, (ushort)nation.MapIndex,
-                (ushort)sourceNation.MapIndex, (ushort)rule.MapIndex, rule, out var connectedComponents);
-            summaries.Add(new RepairSummary(rule.NationTag, "REGION", changed, connectedComponents));
+                (ushort)sourceNation.MapIndex, (ushort)rule.MapIndex, rule, out var connectedComponents,
+                out var clipped);
+            summaries.Add(new RepairSummary(rule.Name, "REGION", changed, connectedComponents, clipped));
         }
 
         var applied = AppliedRules.GetValue(control, _ => new HashSet<string>(StringComparer.Ordinal));
@@ -380,8 +402,14 @@ public static class TerritorialTopology
         ushort sourceNation,
         ushort state,
         RegionRule rule,
-        out int connectedComponents)
+        out int connectedComponents,
+        out string clippedAway)
     {
+        // Ground the boundary rejected that the bounding box would have taken. A traced
+        // border is only right if what it leaves out is the ground that is not the region:
+        // reporting the leftovers as separate pieces with their coordinates is the
+        // difference between drawing a border and guessing at one.
+        var rejected = new HashSet<int>();
         var minX = LongitudeToX(rule.MinLongitude, width);
         var maxX = LongitudeToX(rule.MaxLongitude, width);
         var minY = LatitudeToY(rule.MaxLatitude, height);
@@ -393,7 +421,11 @@ public static class TerritorialTopology
             var cell = y * width + x;
             if ((control[cell] != sourceNation && control[cell] != nation) || states[cell] == state) continue;
             if (rule.Polygon.Length >= 3 && !Contains(rule.Polygon,
-                    XToLongitude(x, width), YToLatitude(y, height))) continue;
+                    XToLongitude(x, width), YToLatitude(y, height)))
+            {
+                rejected.Add(cell);
+                continue;
+            }
             control[cell] = nation;
             states[cell] = state;
             changed++;
@@ -405,7 +437,53 @@ public static class TerritorialTopology
         connectedComponents = rule.Polygon.Length >= 3
             ? RegionComponents(states, width, height, state, minX, maxX, minY, maxY).Count
             : 0;
+        rejected.RemoveWhere(cell => states[cell] == state);
+        clippedAway = Describe(rejected, width, height);
         return changed;
+    }
+
+    /// <summary>
+    /// Break a loose set of cells into touching pieces and name each one by its size and
+    /// the box it occupies, so a border can be judged against what it excluded.
+    /// </summary>
+    private static string Describe(HashSet<int> cells, int width, int height)
+    {
+        if (cells.Count == 0) return "";
+        var seen = new HashSet<int>();
+        var pieces = new List<(int Count, float West, float East, float South, float North)>();
+        var queue = new Queue<int>();
+        foreach (var start in cells)
+        {
+            if (!seen.Add(start)) continue;
+            queue.Clear();
+            queue.Enqueue(start);
+            var count = 0;
+            float west = 999f, east = -999f, south = 999f, north = -999f;
+            while (queue.Count > 0)
+            {
+                var cell = queue.Dequeue();
+                count++;
+                var longitude = XToLongitude(cell % width, width);
+                var latitude = YToLatitude(cell / width, height);
+                west = MathF.Min(west, longitude);
+                east = MathF.Max(east, longitude);
+                south = MathF.Min(south, latitude);
+                north = MathF.Max(north, latitude);
+                for (var dy = -1; dy <= 1; dy++)
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    var y = cell / width + dy;
+                    if (y < 0 || y >= height) continue;
+                    var neighbour = y * width + (cell % width + dx + width) % width;
+                    if (cells.Contains(neighbour) && seen.Add(neighbour)) queue.Enqueue(neighbour);
+                }
+            }
+            pieces.Add((count, west, east, south, north));
+        }
+        pieces.Sort((a, b) => b.Count.CompareTo(a.Count));
+        return string.Join(", ", pieces.Take(6).Select(piece =>
+            $"{piece.Count} cell(s) at {piece.West:0.00}-{piece.East:0.00}E {piece.South:0.00}-{piece.North:0.00}N"));
     }
 
     private static int PaintSeeds(ushort[] control, ushort[] states, int width, int height,
