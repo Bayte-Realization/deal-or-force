@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -24,21 +25,74 @@ public static class FleetHistory
     {
         foreach (var document in GameDataLoader.DataDocuments("history", "units", "2024"))
             using (document)
-            {
-                if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
-                if (!document.RootElement.TryGetProperty("fleets", out var fleets) ||
-                    fleets.ValueKind != JsonValueKind.Object) continue;
-
-                foreach (var entry in fleets.EnumerateObject())
-                {
-                    var nation = campaign.NationByTag(entry.Name);
-                    if (nation is null || entry.Value.ValueKind != JsonValueKind.Array) continue;
-                    campaign.Fleets.RemoveAll(fleet => fleet.NationId == nation.Id);
-                    foreach (var row in entry.Value.EnumerateArray()) Read(campaign, nation, row);
-                }
-            }
+                ReadFleets(campaign, document.RootElement);
 
         AssignHomePorts(campaign);
+    }
+
+    /// <summary>
+    /// Layer one package's own navies over what is already there.
+    ///
+    /// A country's fleets are replaced whole rather than merged, because a navy is a list
+    /// and there is no sensible way to half-override a list: a mod that names Britain's
+    /// fleets means those and not those plus the base game's. Every other country is left
+    /// alone, so giving one nation a navy of your own costs one entry.
+    ///
+    /// The whole `history/units` tree is read, so a mod mirrors the base game's bookmark
+    /// folder - `history/units/2024/` - and its files are found without it having to know
+    /// what the folder is called.
+    /// </summary>
+    public static void ApplyDirectory(Campaign campaign, string directory, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !System.IO.Directory.Exists(directory)) return;
+
+        string[] files;
+        try
+        {
+            files = System.IO.Directory
+                .EnumerateFiles(directory, "*.json", System.IO.SearchOption.AllDirectories)
+                .ToArray();
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception exception)
+        {
+            errors?.Add($"history/units: {exception.Message}");
+            return;
+        }
+
+        var touched = false;
+        foreach (var file in files)
+        {
+            var origin = $"history/units/{System.IO.Path.GetFileName(file)}";
+            try
+            {
+                using var document = JsonDocument.Parse(System.IO.File.ReadAllText(file),
+                    GameDataLoader.ForgivingJson);
+                touched |= ReadFleets(campaign, document.RootElement);
+            }
+            catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
+        }
+
+        if (touched) AssignHomePorts(campaign);
+    }
+
+    /// <summary>The `fleets` table of one document, if it has one. True when it did.</summary>
+    private static bool ReadFleets(Campaign campaign, JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return false;
+        if (!root.TryGetProperty("fleets", out var fleets) ||
+            fleets.ValueKind != JsonValueKind.Object) return false;
+
+        var touched = false;
+        foreach (var entry in fleets.EnumerateObject())
+        {
+            var nation = campaign.NationByTag(entry.Name);
+            if (nation is null || entry.Value.ValueKind != JsonValueKind.Array) continue;
+            campaign.Fleets.RemoveAll(fleet => fleet.NationId == nation.Id);
+            foreach (var row in entry.Value.EnumerateArray()) Read(campaign, nation, row);
+            touched = true;
+        }
+        return touched;
     }
 
     private static void Read(Campaign campaign, Nation nation, JsonElement row)

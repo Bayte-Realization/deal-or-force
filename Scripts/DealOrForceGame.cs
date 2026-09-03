@@ -53,6 +53,8 @@ public partial class DealOrForceGame : Control
         Simulation.SpriteCatalog.Load();
         Simulation.SoundCatalog.Load();
         Simulation.MusicCatalog.Load();
+        Simulation.FontCatalog.Load();
+        ApplyDeclaredFont();
         BuildInterface();
         StartCampaign();
     }
@@ -1111,6 +1113,27 @@ public partial class DealOrForceGame : Control
         label.AddThemeFontSizeOverride("font_size", size);
         label.AddThemeColorOverride("font_color", color);
         return label;
+    }
+
+    /// <summary>
+    /// Set the interface in whatever face `fonts/` declares, if it declares one.
+    ///
+    /// Nothing is declared by default and the engine's own face is used. A theme override
+    /// on the root Control reaches every label and button under it, which is the whole
+    /// interface, so one declaration is enough to make a script the game does not ship
+    /// support legible.
+    /// </summary>
+    private void ApplyDeclaredFont()
+    {
+        var file = Simulation.FontCatalog.FileOf("ui.default");
+        if (string.IsNullOrEmpty(file)) return;
+        if (!ResourceLoader.Exists(file))
+        {
+            GD.PushWarning($"[dof] fonts declare ui.default as {file}, which is not there");
+            return;
+        }
+        var face = GD.Load<Font>(file);
+        if (face is not null) AddThemeFontOverride("font", face);
     }
 
     /// <summary>

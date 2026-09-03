@@ -166,6 +166,8 @@ public static class Program
                     MarinesLandBetter(sandbox));
                 failures += Check("a drawn line moves the formations put on it",
                     ADrawnLineCommandsTheFormationsOnIt(sandbox));
+                failures += Check("a mod can rewrite a country's army, navy and typeface",
+                    TheOrderOfBattleIsAModsToRewrite(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
                     APeaceCanBeWritten(sandbox));
                 failures += Check("a moved border leaves a national minority behind",
@@ -1721,6 +1723,83 @@ public static class Program
         Console.WriteLine($"  audio: {SoundCatalog.Count:N0} declared cue(s) across " +
                           $"{SoundCatalog.AllChannels.Count():N0} channel(s), every file present, " +
                           $"{MusicCatalog.Count:N0} shipped track(s) and a mod can add its own.");
+        return "";
+    }
+
+    /// <summary>
+    /// A total conversion may redraw the world; it must not be fought by the armies of 2024.
+    ///
+    /// `history/units` was the one history folder the mod loader never read. A mod could
+    /// move every border, rename every country and rewrite every economy, and the
+    /// standing armies and the navies would still be the base game's - which is exactly
+    /// the kind of hole that only shows up once somebody tries to build the mod.
+    ///
+    /// `fonts/` is checked alongside it because it is the same class of hole: a mod can
+    /// translate every string in the game and render a screen of empty boxes, since the
+    /// face the interface is set in was the engine's and nothing could say otherwise.
+    /// </summary>
+    private static string TheOrderOfBattleIsAModsToRewrite(Campaign campaign)
+    {
+        var britain = campaign.NationByTag("GBR");
+        if (britain is null) return "GBR is missing from the scenario";
+
+        var shippedPersonnel = MilitaryBootstrap.Personnel("GBR", britain.Population);
+        var shippedFleets = campaign.Fleets.Count(fleet => fleet.NationId == britain.Id);
+        if (shippedFleets == 0) return "GBR ships without a navy, so the check proves nothing";
+
+        var sandbox = Path.Combine(Path.GetTempPath(), "dof_bench_mod", "history", "units", "2024");
+        try
+        {
+            Directory.CreateDirectory(sandbox);
+            File.WriteAllText(Path.Combine(sandbox, "50_test.json"),
+                "{ \"GBR\": 4242, \"fleets\": { \"GBR\": [ " +
+                "{ \"name\": \"Bench Squadron\", \"hulls\": 3, " +
+                "\"latitude\": 50.2, \"longitude\": -4.1 } ] } }");
+
+            var root = Path.Combine(Path.GetTempPath(), "dof_bench_mod", "history", "units");
+            MilitaryBootstrap.MergePersonnel(root, null);
+            FleetHistory.ApplyDirectory(campaign, root, null);
+
+            if (Math.Abs(MilitaryBootstrap.Personnel("GBR", britain.Population) - 4242f) > 0.5f)
+                return "a mod could not change how many soldiers a country keeps";
+
+            var navy = campaign.Fleets.Where(fleet => fleet.NationId == britain.Id).ToList();
+            if (navy.Count != 1 || navy[0].Name != "Bench Squadron")
+                return $"a mod's navy did not replace the shipped one: {navy.Count:N0} fleet(s) " +
+                       $"named {string.Join(", ", navy.Take(3).Select(fleet => fleet.Name))}";
+            if (navy[0].HomeProvinceId <= 0)
+                return "a mod's fleet was given no home port";
+
+            // Every other country keeps what it had: replacing a list means that country's
+            // list, not the whole world's.
+            if (campaign.Fleets.Count(fleet => fleet.NationId != britain.Id) == 0)
+                return "one country's navy replaced everybody's";
+        }
+        finally
+        {
+            try { Directory.Delete(Path.Combine(Path.GetTempPath(), "dof_bench_mod"), true); }
+            catch (Exception) { /* a leftover temp folder is not worth failing a run over */ }
+            MilitaryBootstrap.ResetPersonnel();
+            FleetHistory.Apply(campaign);
+        }
+
+        var restored = campaign.Fleets.Count(fleet => fleet.NationId == britain.Id);
+        if (restored != shippedFleets)
+            return $"the shipped navy did not come back: {restored:N0} of {shippedFleets:N0}";
+        if (Math.Abs(MilitaryBootstrap.Personnel("GBR", britain.Population) - shippedPersonnel) > 0.5f)
+            return "the shipped army did not come back";
+
+        FontCatalog.Load();
+        var shippedFaces = FontCatalog.Count;
+        FontCatalog.Merge("{ \"fonts\": { \"ui.default\": \"fonts/mine.ttf\" } }",
+            "user://mods/example", "test", null);
+        var declared = FontCatalog.FileOf("ui.default");
+        FontCatalog.Load();
+        if (declared != "user://mods/example/fonts/mine.ttf")
+            return $"a mod's typeface resolved to '{declared}' instead of inside the mod folder";
+
+        Console.WriteLine($"  order of battle: a mod can replace one country's army and navy and " +
+                          $"leave the rest alone; fonts ship {shippedFaces:N0} face(s) and a mod can add one.");
         return "";
     }
 

@@ -98,6 +98,7 @@ public sealed class ModLoader
         SpriteCatalog.Load();
         SoundCatalog.Load();
         MusicCatalog.Load();
+        FontCatalog.Load();
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
@@ -105,6 +106,7 @@ public sealed class ModLoader
         EventCatalog.ResetCatalog();
         ModifierCatalog.ResetCatalog();
         AiStrategyCatalog.ResetCatalog();
+        MilitaryBootstrap.ResetPersonnel();
         foreach (var package in _packages)
         {
             ApplyDefines(package, campaign.Defines);
@@ -261,6 +263,8 @@ public sealed class ModLoader
                 package.VirtualRoot, package.Errors);
             MusicCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "music"),
                 package.VirtualRoot, package.Errors);
+            FontCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "fonts"),
+                package.VirtualRoot, package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"sound: {exception.Message}"); }
     }
@@ -284,6 +288,16 @@ public sealed class ModLoader
         foreach (var path in JsonFiles(package, "history", "states"))
         try { HistoryDataLoader.ApplyStates(campaign, File.ReadAllText(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+
+        // The order of battle: how many soldiers a country keeps, and the ships it starts
+        // the bookmark with. Both were readable only from the base game's own folder, so a
+        // total conversion could redraw the whole map and still be fought by the armies and
+        // navies of 2024.
+        var orderOfBattle = Path.Combine(package.PhysicalRoot, "history", "units");
+        try { MilitaryBootstrap.MergePersonnel(orderOfBattle, package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"history/units: {exception.Message}"); }
+        try { FleetHistory.ApplyDirectory(campaign, orderOfBattle, package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"history/units: {exception.Message}"); }
     }
 
     private void ApplyUnits(ModPackage package)

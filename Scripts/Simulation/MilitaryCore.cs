@@ -881,6 +881,56 @@ public static class MilitaryBootstrap
         }
     }
 
+    /// <summary>
+    /// Drop the cached order of battle so the next reader builds it again.
+    ///
+    /// The numbers are read once and kept, because they are asked for every day by the
+    /// replacement pipeline. A mod that changes how many soldiers a country has must
+    /// therefore be able to make the game forget - otherwise its file is read and the
+    /// answer comes from a table built before it was loaded.
+    /// </summary>
+    public static void ResetPersonnel() => _personnel = null;
+
+    /// <summary>
+    /// Layer one package's own standing-army numbers over what is loaded. Later packages
+    /// win per country, so a mod that doubles one army inherits the other two hundred and
+    /// sixty rather than having to restate them.
+    /// </summary>
+    public static void MergePersonnel(string directory, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !System.IO.Directory.Exists(directory)) return;
+        _personnel ??= ParsePersonnel();
+
+        string[] files;
+        try
+        {
+            files = System.IO.Directory
+                .EnumerateFiles(directory, "*.json", System.IO.SearchOption.AllDirectories)
+                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception exception)
+        {
+            errors?.Add($"history/units: {exception.Message}");
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            var origin = $"history/units/{System.IO.Path.GetFileName(file)}";
+            try
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(
+                    System.IO.File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                foreach (var entry in document.RootElement.EnumerateObject())
+                    if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.Number &&
+                        entry.Value.TryGetSingle(out var number)) _personnel[entry.Name] = number;
+            }
+            catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
+        }
+    }
+
     public static float Personnel(string tag, long population)
     {
         _personnel ??= ParsePersonnel();

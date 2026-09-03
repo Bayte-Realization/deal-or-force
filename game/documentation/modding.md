@@ -39,7 +39,8 @@ category, and never the executable.
         countries/2024/  money, people, armies, stability, war support
         provinces/       the political map: one line per province
         states/          regional starting values
-        units/           standing army sizes, and the navies of the bookmark
+        units/2024/      standing army sizes, and the navies of the bookmark
+      fonts/             the typeface the interface is set in - the engine's by default
       music/             the soundtrack - empty in the base game, yours to fill
       sound/             what each moment sounds like, and how the channels behave
       localization/      one folder per language, as many files as you like
@@ -143,6 +144,32 @@ they interrupt each other in `00_channels.json`.
 
 `when` is `menu`, `campaign` or `any`; `weight` is how often a track comes round against
 the others.
+
+**Give a country a different army and navy.** `history/units/2024/50_my_forces.json`:
+
+    {
+      "GBR": 400000,
+      "fleets": {
+        "GBR": [
+          { "name": "Grand Fleet", "hulls": 60, "latitude": 50.2, "longitude": -4.1 }
+        ]
+      }
+    }
+
+The number is soldiers under arms; listing a country under `fleets` replaces that
+country's navy and leaves everybody else's alone. A fleet is hulls at a place - its home
+port is worked out from the coordinates, so you write something you can read off a map
+rather than a province id that moves when the map is recompiled.
+
+**Ship a font.** The engine's own face covers English and Russian. A language it has no
+glyphs for needs one of yours, or every string you translated renders as empty boxes.
+`fonts/50_my_font.json`:
+
+    {
+      "fonts": {
+        "ui.default": "fonts/NotoSansSC-Regular.ttf"
+      }
+    }
 
 ## What is still code
 

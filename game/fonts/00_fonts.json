@@ -1,0 +1,17 @@
+// The typeface the interface is set in.
+//
+// Empty in the base game: the engine's own face covers English and Russian, which is what
+// Deal or Force ships. This folder exists for the language it does not ship in - a mod can
+// translate every string in the game and still render a screen of empty boxes if the
+// default face has no glyphs for the script.
+//
+//   {
+//     "fonts": {
+//       "ui.default": "fonts/NotoSansSC-Regular.ttf"
+//     }
+//   }
+//
+// One role today. A second appears here when the interface has a second thing to ask for.
+{
+  "fonts": {}
+}
