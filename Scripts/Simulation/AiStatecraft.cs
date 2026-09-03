@@ -81,6 +81,47 @@ public static class AiStatecraft
     public static IReadOnlyCollection<int> NeighboursOf(Campaign campaign, int nationMapIndex) =>
         CampaignDiplomacy.Neighbours(campaign, nationMapIndex);
 
+    private static readonly List<int> ReachableTargets = new();
+
+    /// <summary>
+    /// Countries this one could actually fight: everyone it can walk to, and - if it has a
+    /// navy and its enemies' shores are within that navy's reach - the ones it could sail
+    /// to as well.
+    ///
+    /// The overseas half is new, and it is the whole reason the naval invasion exists. It
+    /// is bounded on purpose: a country will not declare on the far side of the planet
+    /// because it owns a frigate, and the reach is the same one its admiralty will use when
+    /// it looks for a beach - so a war it declares is a war it can prosecute.
+    /// </summary>
+    private static IReadOnlyList<int> Reachable(Campaign campaign, Nation nation)
+    {
+        ReachableTargets.Clear();
+        foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
+            ReachableTargets.Add(mapIndex);
+
+        var hulls = 0;
+        var fromLatitude = 0f;
+        var fromLongitude = 0f;
+        foreach (var fleet in campaign.Fleets)
+        {
+            if (fleet.NationId != nation.Id || fleet.Hulls <= 0) continue;
+            if (hulls == 0) { fromLatitude = fleet.HomeLatitude; fromLongitude = fleet.HomeLongitude; }
+            hulls += fleet.Hulls;
+        }
+        if (hulls < campaign.Defines.AiInvasionMinimumHulls) return ReachableTargets;
+
+        var reach = campaign.Defines.AiInvasionSearchDegrees;
+        foreach (var other in campaign.Nations)
+        {
+            if (other.Id == nation.Id || other.Population <= 0) continue;
+            if (ReachableTargets.Contains(other.MapIndex)) continue;
+            if (NavalOperations.Distance(fromLatitude, fromLongitude,
+                    other.CapitalLatitude, other.CapitalLongitude) > reach) continue;
+            ReachableTargets.Add(other.MapIndex);
+        }
+        return ReachableTargets;
+    }
+
     // --------------------------------------------------------------- diplomacy ---------
 
     /// <summary>
@@ -282,7 +323,7 @@ public static class AiStatecraft
 
         Nation target = null;
         var bestDesire = defines.AiWarDesireThreshold;
-        foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex))
+        foreach (var mapIndex in Reachable(campaign, nation))
         {
             var other = ByMapIndex(mapIndex);
             if (other is null || other.Id == nation.Id) continue;
@@ -291,6 +332,8 @@ public static class AiStatecraft
             if (!CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, other.Id, out _)) { Count("blocked"); continue; }
 
             var desire = WarDesire(campaign, nation, other);
+            if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, other.MapIndex))
+                desire *= campaign.Defines.AiOverseasWarAppetite;
             if (desire > 0f) Count("wanted");
             if (desire <= bestDesire) continue;
             bestDesire = desire;

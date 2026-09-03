@@ -109,6 +109,9 @@ public sealed class Fleet
                           (0.55f + Supply * 0.45f) * (0.80f + Experience * 0.30f) *
                           (0.60f + Readiness * 0.40f);
 
+    /// <summary>Whether this fleet is a convoy rather than a battle line at the moment.</summary>
+    public bool IsLoaded => Carried.Count > 0;
+
     /// <summary>
     /// What it is worth for simply being somewhere - blockading, escorting, being a threat.
     /// A battered fleet still closes a sea lane, the way a battered division still holds
@@ -242,10 +245,16 @@ public static class NavalOperations
         left.InAction = true;
         right.InAction = true;
 
-        var leftPower = MathF.Max(0.01f, left.Power);
-        var rightPower = MathF.Max(0.01f, right.Power);
+        // A fleet with an army aboard is a convoy: its decks are full, it is not free to
+        // manoeuvre, and it is trying to get somewhere rather than to win. Catching one is
+        // the whole reason a country keeps ships in its own waters, so it fights at a
+        // penalty and what it is carrying is what it stands to lose.
+        var leftPower = MathF.Max(0.01f, left.Power * (left.IsLoaded ? defines.FleetConvoyCombatPenalty : 1f));
+        var rightPower = MathF.Max(0.01f, right.Power * (right.IsLoaded ? defines.FleetConvoyCombatPenalty : 1f));
         Damage(campaign, left, rightPower / leftPower);
         Damage(campaign, right, leftPower / rightPower);
+        DrownPassengers(campaign, left, rightPower / leftPower);
+        DrownPassengers(campaign, right, leftPower / rightPower);
 
         // Whoever's cohesion gives way breaks off and runs for home. Nothing is sunk
         // outright: a beaten fleet is a fleet that has to be repaired, which is a cost the
@@ -264,9 +273,30 @@ public static class NavalOperations
         fleet.Experience = M.Clamp01(fleet.Experience + defines.FleetExperiencePerAction);
     }
 
+    /// <summary>
+    /// Men go into the sea with the transports. An invasion caught on the water arrives
+    /// weaker than it left, or does not arrive at all - which is what makes escorting a
+    /// convoy worth a player's attention rather than a chore.
+    /// </summary>
+    private static void DrownPassengers(Campaign campaign, Fleet fleet, float pressure)
+    {
+        if (!fleet.IsLoaded) return;
+        var lost = campaign.Defines.InvasionLossesPerActionAtSea * M.Clamp(pressure, 0.25f, 4f);
+        if (lost <= 0f) return;
+        foreach (var id in fleet.Carried)
+        {
+            var army = campaign.Armies.Find(candidate => candidate.Id == id);
+            if (army is null) continue;
+            army.Strength = M.Clamp01(army.Strength - lost);
+            army.Organisation = M.Clamp01(army.Organisation - lost);
+        }
+    }
+
     private static void Withdraw(Campaign campaign, Fleet fleet, Fleet enemy)
     {
         if (fleet.Organisation > campaign.Defines.FleetBreakOrganisation) return;
+        // An invasion that is broken at sea turns back with what is left of it.
+        fleet.TargetProvinceId = -1;
         fleet.Mission = FleetMission.Anchored;
         fleet.HasOrder = true;
         fleet.OrderLatitude = fleet.HomeLatitude;

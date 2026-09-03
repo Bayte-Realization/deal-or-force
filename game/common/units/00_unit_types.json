@@ -10,9 +10,30 @@
 //   organisation  the will to keep fighting; men are lost slowly, organisation quickly
 //   combat_width  frontage taken in a province, against the 80 a province gives -
 //                 four infantry divisions fit, and the fifth waits its turn
+//   amphibious    how much of a landing this formation is trained for: 0 is a line
+//                 division doing something it was never meant to, 1 is troops for whom
+//                 a defended beach is the ordinary way to arrive
 //
 // A mod may set any single field and inherit the rest.
 {
+  "marine_brigade": {
+    "name": "Marine brigade",
+    "counter_symbol": "infantry",
+    "attack": 0.94,
+    "soft_attack": 0.96,
+    "hard_attack": 0.22,
+    "defense": 0.92,
+    "breakthrough": 0.62,
+    "armour": 0.24,
+    "piercing": 0.48,
+    "hardness": 0.04,
+    "organisation": 0.92,
+    "recovery": 1.05,
+    "speed": 1.00,
+    "combat_width": 16.00,
+    "supply_use": 0.95,
+    "amphibious": 0.85
+  },
   "line_infantry": {
     "name": "Line infantry",
     "counter_symbol": "infantry",

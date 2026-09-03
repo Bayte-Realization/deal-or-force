@@ -46,6 +46,16 @@ public sealed record UnitTypeDefinition(
     /// <summary>Organisation ceiling. Organisation is the will to keep fighting, not the men.</summary>
     public float Organisation { get; init; } = 1f;
 
+    /// <summary>
+    /// How much of a landing this formation is trained for. Zero is a line division being
+    /// asked to do something it was never meant to do; one is troops for whom coming off a
+    /// ship onto a defended beach is the ordinary way to arrive.
+    ///
+    /// It is a share of the landing penalty rather than a separate unit type, so a mod that
+    /// wants half-trained amphibious infantry writes 0.5 instead of copying a template.
+    /// </summary>
+    public float Amphibious { get; init; }
+
     /// <summary>Organisation regained per day out of combat, as a multiplier of the base rate.</summary>
     public float Recovery { get; init; } = 1f;
 }
@@ -153,7 +163,8 @@ public static class UnitTypeCatalog
             Piercing = MathF.Max(0f, Number("piercing", current.Piercing)),
             Hardness = Math.Clamp(Number("hardness", current.Hardness), 0f, 1f),
             Organisation = organisation,
-            Recovery = MathF.Max(0.05f, Number("recovery", current.Recovery))
+            Recovery = MathF.Max(0.05f, Number("recovery", current.Recovery)),
+            Amphibious = Math.Clamp(Number("amphibious", current.Amphibious), 0f, 1f)
         };
     }
 

@@ -29,5 +29,13 @@
   "FleetDivisionsPerHull": 0.062,
   "FleetEmbarkRangeDegrees": 5.0,
   "InvasionLandingOrganisationCost": 0.45,
-  "InvasionRestAfterLandingDays": 3
+  "InvasionRestAfterLandingDays": 3,
+  "FleetConvoyCombatPenalty": 0.55,
+  "InvasionLossesPerActionAtSea": 0.09,
+  "AiFleetDecisionInterval": 9,
+  "AiFleetOffensiveRatio": 1.35,
+  "AiInvasionMaxFormations": 3,
+  "AiInvasionSearchDegrees": 60.0,
+  "AiInvasionMinimumHulls": 30,
+  "AiOverseasWarAppetite": 0.45
 }

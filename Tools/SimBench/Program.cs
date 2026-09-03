@@ -151,6 +151,12 @@ public static class Program
                 failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
                 failures += Check("an army can be put ashore across water",
                     AnArmyCanBePutAshore(sandbox));
+                failures += Check("an AI mounts a landing of its own",
+                    AnAiMountsALanding(sandbox));
+                failures += Check("a convoy caught at sea pays for it",
+                    AConvoyCaughtAtSeaPaysForIt(sandbox));
+                failures += Check("troops trained for a landing land better",
+                    MarinesLandBetter(sandbox));
                 failures += Check("a drawn line moves the formations put on it",
                     ADrawnLineCommandsTheFormationsOnIt(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
@@ -615,6 +621,181 @@ public static class Program
         if (casualties < 20_000f * years)
             return $"only {casualties:N0} casualties in {days} day(s) - the front is frozen, not contested";
         return "";
+    }
+
+    /// <summary>
+    /// The player can invade. An AI that cannot is half a feature - the islands would be
+    /// safe from everyone but the person playing, which is the same asymmetry the flat
+    /// refusal used to be.
+    ///
+    /// Whether an AI *chooses* to declare a war across water is a separate matter of
+    /// appetite, and rare on any given seed. What has to be true is that one which finds
+    /// itself in such a war knows what to do: bring its fleet home, put troops on it, and
+    /// sail. So the war is arranged, and the admiralty is left to work it out.
+    /// </summary>
+    private static string AnAiMountsALanding(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+        var invader = campaign.NationByTag("GBR");
+        if (invader is null) return "no navy to test with";
+        var fleet = campaign.Fleets.Find(candidate => candidate.NationId == invader.Id);
+        if (fleet is null) return "GBR has no fleet";
+
+        var target = campaign.Nations.Find(nation => nation.Id != invader.Id && nation.Population > 0 &&
+            !CampaignDiplomacy.SharesLandBorder(campaign, invader.MapIndex, nation.MapIndex) &&
+            CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, nation.Id, out _));
+        if (target is null) return "no overseas country to invade";
+
+        var wasHuman = invader.IsHuman;
+        invader.IsHuman = false;
+        var war = CampaignDiplomacy.DeclareWar(campaign, invader.Id, target.Id);
+        if (war is null) return "the overseas war was refused";
+        try
+        {
+            // Put the fleet home and idle, and give it something to carry within reach.
+            fleet.Mission = FleetMission.Anchored;
+            fleet.HasOrder = false;
+            fleet.Carried.Clear();
+            fleet.Latitude = fleet.HomeLatitude;
+            fleet.Longitude = fleet.HomeLongitude;
+            var spare = campaign.Armies.Find(army => army.NationId == invader.Id &&
+                army.EmbarkedFleetId < 0 && !army.InBattle);
+            if (spare is null) return "GBR has no division free to load";
+            if (fleet.HomeProvinceId > 0)
+            {
+                spare.ProvinceId = fleet.HomeProvinceId;
+                var where = topology.CenterOf(fleet.HomeProvinceId);
+                spare.Latitude = where.Latitude;
+                spare.Longitude = where.Longitude;
+            }
+            spare.OrderKind = ArmyOrder.Manual;
+            spare.Route.Clear();
+
+            // The admiralty staggers its thinking by the day, and the day does not advance
+            // inside a check - so for the length of this one, every fleet thinks every tick.
+            var interval = campaign.Defines.AiFleetDecisionInterval;
+            campaign.Defines.AiFleetDecisionInterval = 1;
+
+            var loadedOn = -1;
+            var launchedOn = -1;
+            for (var day = 0; day < 200; day++)
+            {
+                AiAdmiralty.Tick(campaign);
+                if (loadedOn < 0 && fleet.Carried.Count > 0) loadedOn = day;
+                if (launchedOn < 0 && fleet.Mission == FleetMission.Invasion) launchedOn = day;
+                if (launchedOn >= 0) break;
+                NavalOperations.Tick(campaign);
+            }
+            campaign.Defines.AiFleetDecisionInterval = interval;
+            if (loadedOn < 0) return "an AI at war across water never put a division on its fleet";
+            if (launchedOn < 0) return "an AI loaded its fleet and never sent it anywhere";
+
+            Console.WriteLine($"  ai navy: {invader.Tag} found itself at war with {target.Tag} across water, " +
+                              $"loaded on day {loadedOn:N0} and sailed on day {launchedOn:N0}.");
+            return "";
+        }
+        finally
+        {
+            invader.IsHuman = wasHuman;
+            war.Ended = true;
+            foreach (var id in new List<int>(fleet.Carried))
+            {
+                var army = campaign.Armies.Find(candidate => candidate.Id == id);
+                if (army is not null) { army.EmbarkedFleetId = -1; army.ProvinceId = fleet.HomeProvinceId; }
+            }
+            fleet.Carried.Clear();
+            fleet.Mission = FleetMission.Anchored;
+            fleet.HasOrder = false;
+            fleet.TargetProvinceId = -1;
+        }
+    }
+
+    /// <summary>
+    /// A landing costs a formation its order, and troops trained for one should pay less of
+    /// that price. Without this the marine template is a line of data nothing reads: the
+    /// trait is on the template, but whether the landing consults it is the part that
+    /// silently stops being true.
+    /// </summary>
+    private static string MarinesLandBetter(Campaign campaign)
+    {
+        var marine = UnitTypeCatalog.Get("marine_brigade");
+        if (marine is null || marine.Amphibious <= 0f)
+            return "no amphibious template ships at all; common/units has no marines";
+        var line = UnitTypeCatalog.Get("line_infantry");
+        if (line is null) return "no line infantry to compare against";
+        if (line.Amphibious >= marine.Amphibious)
+            return $"line infantry is as amphibious as marines ({line.Amphibious:P0})";
+
+        var cost = campaign.Defines.InvasionLandingOrganisationCost;
+        var marineCost = cost * (1f - marine.Amphibious);
+        var lineCost = cost * (1f - line.Amphibious);
+        if (marineCost >= lineCost)
+            return "the landing does not read the amphibious trait";
+
+        Console.WriteLine($"  marines: a landing costs line infantry {lineCost:P0} of its order and " +
+                          $"a marine brigade {marineCost:P0}.");
+        return "";
+    }
+
+    /// <summary>
+    /// A convoy is the reason to keep ships in your own waters. If an invasion can sail
+    /// past a hostile fleet untouched, escorting is a chore with no payoff and blockading
+    /// one's own coast is pointless.
+    /// </summary>
+    private static string AConvoyCaughtAtSeaPaysForIt(Campaign campaign)
+    {
+        var left = campaign.NationByTag("GBR");
+        var right = campaign.NationByTag("FRA");
+        if (left is null || right is null) return "no two navies to test with";
+        var convoy = campaign.Fleets.Find(fleet => fleet.NationId == left.Id);
+        var raider = campaign.Fleets.Find(fleet => fleet.NationId == right.Id);
+        var passenger = campaign.Armies.Find(army => army.NationId == left.Id && army.EmbarkedFleetId < 0);
+        if (convoy is null || raider is null || passenger is null) return "nothing to make a convoy out of";
+
+        var war = new StrategicWar
+        {
+            Id = 90_001, Name = "Bench convoy war", AttackerId = left.Id, DefenderId = right.Id,
+            StartedDay = campaign.ElapsedDays, AiNegotiationUnlockDay = int.MaxValue
+        };
+        campaign.Wars.Add(war);
+        var wasProvince = passenger.ProvinceId;
+        try
+        {
+            convoy.Latitude = raider.Latitude = 47f;
+            convoy.Longitude = raider.Longitude = -9f;
+            convoy.Mission = FleetMission.Invasion;
+            raider.Mission = FleetMission.Patrol;
+            convoy.HasOrder = raider.HasOrder = false;
+            convoy.TargetProvinceId = -1;
+            convoy.Organisation = raider.Organisation = 1f;
+            convoy.ReadyDay = raider.ReadyDay = 0;
+            convoy.Carried.Clear();
+            passenger.EmbarkedFleetId = convoy.Id;
+            passenger.ProvinceId = 0;
+            passenger.Strength = 1f;
+            passenger.Organisation = 1f;
+            convoy.Carried.Add(passenger.Id);
+
+            NavalOperations.Tick(campaign);
+            if (!convoy.InAction) return "a convoy sat on top of a hostile fleet and was not found";
+            if (passenger.Strength >= 1f)
+                return "an army was caught at sea aboard its transports and lost nobody";
+            if (passenger.Organisation >= 1f) return "being attacked at sea cost the passengers no order";
+
+            Console.WriteLine($"  convoy: caught at sea, the landing force came out at " +
+                              $"{passenger.Strength:P0} strength and {passenger.Organisation:P0} order.");
+            return "";
+        }
+        finally
+        {
+            campaign.Wars.Remove(war);
+            passenger.EmbarkedFleetId = -1;
+            passenger.ProvinceId = wasProvince;
+            convoy.Carried.Clear();
+            convoy.Mission = raider.Mission = FleetMission.Anchored;
+            convoy.HasOrder = raider.HasOrder = false;
+        }
     }
 
     /// <summary>
@@ -1141,6 +1322,33 @@ public static class Program
         Console.WriteLine($"  tax rates range {taxes.Min():P0} to {taxes.Max():P0}; " +
                           $"{campaign.Nations.Count(nation => nation.MilitarySpending > 0.10f):N0} " +
                           "countries are on a war footing.");
+
+        // Whether the sea is contested or decorative. Every navy but the player's used to
+        // sit in port for the whole campaign, which is easy to miss when nothing checks it.
+        var byMission = campaign.Fleets
+            .Where(fleet => fleet.Hulls > 0)
+            .GroupBy(fleet => fleet.Mission)
+            .OrderByDescending(group => group.Count())
+            .Select(group => $"{group.Key} x{group.Count()}");
+        var atSea = campaign.Fleets.Count(fleet => fleet.Mission != FleetMission.Anchored);
+        var carrying = campaign.Fleets.Count(fleet => fleet.Carried.Count > 0);
+        var worn = campaign.Fleets.Where(fleet => fleet.Hulls > 0).ToList();
+        // Whether anybody with a navy is fighting anybody else with one. Zero naval actions
+        // is the right answer when no two navies are at war, and the wrong one otherwise -
+        // the number that tells them apart belongs in the report.
+        var navied = new HashSet<int>();
+        foreach (var fleet in campaign.Fleets) if (fleet.Hulls > 0) navied.Add(fleet.NationId);
+        var navalWars = campaign.Wars.Count(war => !war.Ended &&
+            navied.Contains(war.AttackerId) && navied.Contains(war.DefenderId));
+        var overseasWars = campaign.Wars.Count(war => !war.Ended &&
+            campaign.NationById(war.AttackerId) is { } a && campaign.NationById(war.DefenderId) is { } b &&
+            !CampaignDiplomacy.SharesLandBorder(campaign, a.MapIndex, b.MapIndex));
+        Console.WriteLine($"  wars at sea: {navalWars:N0} live war(s) have a navy on both sides, " +
+                          $"{overseasWars:N0} are between countries that do not touch by land.");
+        Console.WriteLine($"  the sea: {atSea:N0} of {worn.Count:N0} fleet(s) are out, {carrying:N0} carrying " +
+                          $"troops - {string.Join(", ", byMission)}. Average strength " +
+                          $"{(worn.Count == 0 ? 0f : worn.Average(fleet => fleet.Strength)):P0}, " +
+                          $"experience {(worn.Count == 0 ? 0f : worn.Average(fleet => fleet.Experience)):P0}.");
 
         var tally = string.Join(", ", AiStatecraft.Tally.OrderBy(entry => entry.Key)
             .Select(entry => $"{entry.Key} {entry.Value:N0}"));

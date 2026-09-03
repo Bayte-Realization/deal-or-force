@@ -301,7 +301,11 @@ public sealed partial class Campaign
         // leaving "the simulation is slow" as the whole diagnosis.
         using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
         using (SimProfiler.Measure("military")) MilitaryOperations.Tick(this);
-        using (SimProfiler.Measure("naval")) NavalOperations.Tick(this);
+        using (SimProfiler.Measure("naval"))
+        {
+            AiAdmiralty.Tick(this);
+            NavalOperations.Tick(this);
+        }
         using (SimProfiler.Measure("warfare")) Warfare.Tick(this);
         using (SimProfiler.Measure("construction")) ConstructionSystem.Tick(this);
         using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);

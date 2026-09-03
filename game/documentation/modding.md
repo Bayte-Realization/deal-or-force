@@ -78,6 +78,13 @@ country replaces its fleets and leaves everyone else's alone.
     { "fleets": { "ARG": [ { "name": "Fleet of the South Atlantic",
                              "hulls": 24, "latitude": -38.1, "longitude": -57.4 } ] } }
 
+**Train troops for a landing.** `common/units/50_my_templates.json`. `amphibious` is the
+share of a landing's cost a template is trained out of — 0 is a line division doing
+something it was never meant to, 1 is troops for whom a defended beach is the ordinary way
+to arrive. A mod may set one field and inherit the rest.
+
+    { "mountain_rangers": { "name": "Mountain rangers", "amphibious": 0.4 } }
+
 **Translate the game.** `localization/<language>/50_my_strings.json`. The base game is
 written in English, and any caption the interface passes through is looked up by its own
 English text, so an untranslated string renders as itself.

@@ -369,6 +369,30 @@ public sealed class Defines
 	/// <summary>Days a formation needs ashore before it can attack out of its beachhead.</summary>
 	public int InvasionRestAfterLandingDays { get; set; } = 3;
 
+	/// <summary>How well a fleet fights with an army on its decks. Below one, badly.</summary>
+	public float FleetConvoyCombatPenalty { get; set; } = 0.55f;
+
+	/// <summary>What a day of action at sea costs the troops in the holds.</summary>
+	public float InvasionLossesPerActionAtSea { get; set; } = 0.09f;
+
+	/// <summary>Days between one AI fleet reconsidering what it is doing.</summary>
+	public int AiFleetDecisionInterval { get; set; } = 9;
+
+	/// <summary>How much stronger a navy must be than its enemy's before it blockades.</summary>
+	public float AiFleetOffensiveRatio { get; set; } = 1.35f;
+
+	/// <summary>Formations an AI will put aboard one fleet for a landing.</summary>
+	public int AiInvasionMaxFormations { get; set; } = 3;
+
+	/// <summary>How far an AI will look for a beach. The map is the whole planet.</summary>
+	public float AiInvasionSearchDegrees { get; set; } = 60f;
+
+	/// <summary>Hulls a country needs before it will contemplate a war across water.</summary>
+	public int AiInvasionMinimumHulls { get; set; } = 30;
+
+	/// <summary>How much less a country wants a war it would have to sail to.</summary>
+	public float AiOverseasWarAppetite { get; set; } = 0.45f;
+
 
 	/// <summary>
 	/// Days a formation spends consolidating on a province it has just taken before it can

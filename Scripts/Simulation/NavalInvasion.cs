@@ -149,11 +149,15 @@ public static class NavalInvasion
         Disembark(campaign, fleet, provinceId);
         foreach (var army in landed)
         {
-            // Coming off a ship costs order, and a beachhead is not dug in.
-            army.Organisation = M.Clamp01(army.Organisation - campaign.Defines.InvasionLandingOrganisationCost);
+            // Coming off a ship costs order, and a beachhead is not dug in - but troops
+            // trained for it pay most of that price in training instead.
+            var trained = UnitTypeCatalog.Get(army.TemplateId).Amphibious;
+            army.Organisation = M.Clamp01(army.Organisation -
+                campaign.Defines.InvasionLandingOrganisationCost * (1f - trained));
             army.Entrenchment = 0f;
             army.Planning = 0f;
-            army.ReadyDay = campaign.ElapsedDays + campaign.Defines.InvasionRestAfterLandingDays;
+            army.ReadyDay = campaign.ElapsedDays +
+                (int)MathF.Round(campaign.Defines.InvasionRestAfterLandingDays * (1f - trained));
             if (war is not null) army.AssignedWarId = war.Id;
         }
 
