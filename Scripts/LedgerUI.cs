@@ -18,6 +18,14 @@ public partial class DealOrForceGame
     private HBoxContainer _ledgerGovernmentControls = null!;
     private HBoxContainer _ledgerSocialControls = null!;
     private HSlider _ledgerTaxRate = null!;
+    private HSlider _ledgerMilitarySpending = null!;
+    private Label _ledgerTaxReading = null!;
+    private Label _ledgerMilitaryReading = null!;
+    private Label _ledgerBudgetLine = null!;
+    private OptionButton _ledgerBuildingPicker = null!;
+    private OptionButton _ledgerStatePicker = null!;
+    private Label _ledgerConstructionQueue = null!;
+    private int _ledgerStateListNationId = -1;
     private HSlider _ledgerWelfareSpending = null!;
     private HSlider _ledgerEducationSpending = null!;
     private Label _ledgerGovernanceFeedback = null!;
@@ -132,36 +140,119 @@ public partial class DealOrForceGame
         grid.AddChild(_ledgerBarsB);
     }
 
-    private void BuildLedgerPolicyControls(VBoxContainer rows)
+    /// <summary>
+    /// A label for a horizontal row, which must not wrap.
+    ///
+    /// <see cref="Title"/> wraps by word, which is right in a column and catastrophic in a
+    /// row: an HBoxContainer offers a label no width, so the label takes one character per
+    /// line, becomes a thousand pixels tall, and drags the whole row down the screen with
+    /// it. That is what the economy panel was doing - a sentence of hint text set
+    /// vertically down the middle of the page, with the charts squeezed out below it.
+    /// </summary>
+    private static Label RowLabel(string text, int size, Color colour, float minimumWidth = 0f)
     {
-        _ledgerFiscalControls = new HBoxContainer
-        {
-            Visible = false,
-            CustomMinimumSize = new Vector2(0, 38),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter
-        };
-        _ledgerFiscalControls.AddThemeConstantOverride("separation", 10);
+        var label = Title(text, size, colour);
+        label.AutowrapMode = TextServer.AutowrapMode.Off;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        if (minimumWidth > 0f) label.CustomMinimumSize = new Vector2(minimumWidth, 0);
+        return label;
+    }
+
+    /// <summary>A caption, a slider, and a live reading of what moving it would do.</summary>
+    private static HBoxContainer SliderRow(string caption, HSlider slider, out Label reading)
+    {
+        var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        row.AddThemeConstantOverride("separation", 9);
+        row.AddChild(RowLabel(caption, 12, Ui.Colour("text.caption"), 104));
+        slider.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        slider.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+        row.AddChild(slider);
+        reading = RowLabel("", 12, Ui.Colour("text.body"), 172);
+        reading.HorizontalAlignment = HorizontalAlignment.Right;
+        row.AddChild(reading);
+        return row;
+    }
+
+    /// <summary>
+    /// The economy screen: what the state takes, what it spends, and what it is building.
+    ///
+    /// It held one slider and a wrapped sentence before. The construction half is the part
+    /// the game was already promising - the strategic outliner says "open Economy to queue
+    /// a project" and there was nothing on the screen to queue one with.
+    /// </summary>
+    private void BuildLedgerEconomyControls(VBoxContainer rows)
+    {
+        _ledgerFiscalControls = new HBoxContainer { Visible = false };
+        _ledgerFiscalControls.AddThemeConstantOverride("separation", 22);
         rows.AddChild(_ledgerFiscalControls);
-        var fiscalCaption = Title("TAX RATE", 12, Ui.Colour("text.caption"));
-        fiscalCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-        fiscalCaption.CustomMinimumSize = new Vector2(78, 0);
-        fiscalCaption.VerticalAlignment = VerticalAlignment.Center;
-        _ledgerFiscalControls.AddChild(fiscalCaption);
+
+        // ------------------------------------------------------------------ the budget
+        var budget = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        budget.AddThemeConstantOverride("separation", 4);
+        _ledgerFiscalControls.AddChild(budget);
+        budget.AddChild(RowLabel("BUDGET", 12, Ui.Colour("text.accent")));
+
         _ledgerTaxRate = new HSlider
         {
             MinValue = 0.05,
             MaxValue = 0.55,
             Step = 0.01,
-            CustomMinimumSize = new Vector2(260, 28),
-            TooltipText = "Higher taxes increase weekly revenue but slowly reduce living standards and private growth."
+            CustomMinimumSize = new Vector2(190, 26),
+            TooltipText = "Higher taxes raise weekly revenue but slowly reduce living standards and private growth."
         };
         _ledgerTaxRate.ValueChanged += OnLedgerTaxChanged;
-        _ledgerFiscalControls.AddChild(_ledgerTaxRate);
-        _ledgerFiscalControls.AddChild(Title("Changes enter the deterministic command queue immediately.", 11,
-            Ui.Colour("text.hint")));
-        _ledgerFiscalFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
-        _ledgerFiscalFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _ledgerFiscalControls.AddChild(_ledgerFiscalFeedback);
+        budget.AddChild(SliderRow("TAXATION", _ledgerTaxRate, out _ledgerTaxReading));
+
+        _ledgerMilitarySpending = new HSlider
+        {
+            MinValue = 0.0,
+            MaxValue = 0.30,
+            Step = 0.005,
+            CustomMinimumSize = new Vector2(190, 26),
+            TooltipText = "The share of output spent on the armed forces: reinforcement rate and readiness, " +
+                          "against everything else the money could have done."
+        };
+        _ledgerMilitarySpending.ValueChanged += OnLedgerMilitaryChanged;
+        budget.AddChild(SliderRow("ARMED FORCES", _ledgerMilitarySpending, out _ledgerMilitaryReading));
+
+        _ledgerBudgetLine = RowLabel("", 12, Ui.Colour("text.body_soft"));
+        budget.AddChild(_ledgerBudgetLine);
+        _ledgerFiscalFeedback = RowLabel("", 11, Ui.Colour("text.accent_dim"));
+        budget.AddChild(_ledgerFiscalFeedback);
+
+        // ------------------------------------------------------------ what is being built
+        var construction = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        construction.AddThemeConstantOverride("separation", 4);
+        _ledgerFiscalControls.AddChild(construction);
+        construction.AddChild(RowLabel("CONSTRUCTION", 12, Ui.Colour("text.accent")));
+
+        var order = new HBoxContainer();
+        order.AddThemeConstantOverride("separation", 7);
+        construction.AddChild(order);
+
+        _ledgerBuildingPicker = new OptionButton { CustomMinimumSize = new Vector2(230, 30) };
+        foreach (var kind in BuildingCatalog.All)
+        {
+            var definition = BuildingCatalog.Get(kind);
+            _ledgerBuildingPicker.AddItem($"{definition.Name} · {Fmt.Money(definition.Cost)}");
+            _ledgerBuildingPicker.SetItemMetadata(_ledgerBuildingPicker.ItemCount - 1, (int)kind);
+            _ledgerBuildingPicker.SetItemTooltip(_ledgerBuildingPicker.ItemCount - 1, definition.Description);
+        }
+        order.AddChild(_ledgerBuildingPicker);
+
+        _ledgerStatePicker = new OptionButton { CustomMinimumSize = new Vector2(180, 30) };
+        order.AddChild(_ledgerStatePicker);
+
+        order.AddChild(ActionButton("Queue", OnLedgerQueueConstruction, 88, 30));
+
+        _ledgerConstructionQueue = Title("", 11, Ui.Colour("text.body_soft"));
+        _ledgerConstructionQueue.CustomMinimumSize = new Vector2(0, 36);
+        construction.AddChild(_ledgerConstructionQueue);
+    }
+
+    private void BuildLedgerPolicyControls(VBoxContainer rows)
+    {
+        BuildLedgerEconomyControls(rows);
 
         _ledgerTradeControls = new HBoxContainer
         {
@@ -286,6 +377,133 @@ public partial class DealOrForceGame
         RefreshLedger();
     }
 
+    private void OnLedgerMilitaryChanged(double value)
+    {
+        if (_updatingLedger || _campaign?.Player is null || ViewedLedgerNation()?.Id != _campaign.Player.Id) return;
+        _campaign.Commands.Enqueue(new SetMilitarySpendingCommand
+        {
+            IssuerId = _campaign.Player.Id, Value = (float)value
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        _ledgerFiscalFeedback.Text = $"Armed forces set to {value:P1} of output. " +
+                                     "Reinforcement and readiness follow from the next economic week.";
+        RefreshLedger();
+    }
+
+    /// <summary>
+    /// Order a building, and say why when it cannot be ordered.
+    ///
+    /// The command refuses silently on both of its conditions, which is right for the AI
+    /// giving it eight times a day and wrong for a button: a control that does nothing and
+    /// says nothing reads as broken. So the two refusals are spoken here.
+    /// </summary>
+    private void OnLedgerQueueConstruction()
+    {
+        var nation = _campaign?.Player;
+        if (nation is null || ViewedLedgerNation()?.Id != nation.Id) return;
+        if (_ledgerBuildingPicker.Selected < 0 || _ledgerStatePicker.Selected < 0)
+        {
+            _ledgerFiscalFeedback.Text = "Choose what to build and where.";
+            return;
+        }
+
+        var kind = (BuildingKind)(int)_ledgerBuildingPicker.GetItemMetadata(_ledgerBuildingPicker.Selected);
+        var stateMapIndex = (int)_ledgerStatePicker.GetItemMetadata(_ledgerStatePicker.Selected);
+        var definition = BuildingCatalog.Get(kind);
+
+        var running = _campaign.Construction.Count(project => project.NationId == nation.Id);
+        if (running >= 12)
+        {
+            _ledgerFiscalFeedback.Text = $"Twelve projects are already under way. " +
+                                         "Something has to finish before anything else starts.";
+            return;
+        }
+        if (nation.Treasury < MathF.Min(0.05f, definition.Cost))
+        {
+            _ledgerFiscalFeedback.Text = $"The treasury holds {Fmt.Money(nation.Treasury)} and cannot open " +
+                                         $"a {Fmt.Money(definition.Cost)} site.";
+            return;
+        }
+
+        _campaign.Commands.Enqueue(new QueueConstructionCommand
+        {
+            IssuerId = nation.Id, StateMapIndex = stateMapIndex, Building = kind
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        _ledgerFiscalFeedback.Text = $"{definition.Name} begun in " +
+                                     $"{_ledgerStatePicker.GetItemText(_ledgerStatePicker.Selected)} · " +
+                                     $"{Fmt.Money(definition.Cost)} over {definition.Days} days.";
+        RefreshLedger();
+    }
+
+    /// <summary>
+    /// The live half of the economy screen: what the sliders are worth, what the week
+    /// costs, where the money can go and what is already being built.
+    ///
+    /// The readings come off the sliders rather than off the country, so dragging one
+    /// answers immediately - the country itself only changes on the next economic week,
+    /// and a control that shows last week's number while you move it is a control nobody
+    /// trusts. The figures themselves are the simulation's own, not a second copy.
+    /// </summary>
+    private void RefreshLedgerEconomyControls(Nation nation)
+    {
+        var tax = (float)_ledgerTaxRate.Value;
+        var military = (float)_ledgerMilitarySpending.Value;
+        _ledgerTaxReading.Text = $"{tax:P0} · {Fmt.Money(EconomySystem.WeeklyTaxAt(nation, tax))} a week";
+        _ledgerMilitaryReading.Text = $"{military:P1} · " +
+                                      $"−{Fmt.Money(EconomySystem.WeeklyMilitaryAt(nation, military))} a week";
+
+        // The budget is settled once an economic week, so on day zero there is no week to
+        // report. Printing its zeroes as "balance +$0, outgoings $0" is a country with no
+        // expenses, which is a stranger claim than saying nothing has happened yet.
+        var balance = nation.WeeklyBalance;
+        if (nation.WeeklyExpenses <= 0f)
+        {
+            _ledgerBudgetLine.Text = $"Treasury {Fmt.Money(nation.Treasury)}  ·  " +
+                                     "no economic week has closed yet";
+            _ledgerBudgetLine.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
+        }
+        else
+        {
+            _ledgerBudgetLine.Text = $"Treasury {Fmt.Money(nation.Treasury)}  ·  balance " +
+                                     $"{(balance < 0f ? "−" : "+")}{Fmt.Money(MathF.Abs(balance))} a week  ·  " +
+                                     $"income {Fmt.Money(nation.WeeklyTaxIncome + nation.WeeklyTariffIncome)}  ·  " +
+                                     $"outgoings {Fmt.Money(nation.WeeklyExpenses)}";
+            _ledgerBudgetLine.AddThemeColorOverride("font_color",
+                balance < 0f ? Ui.Colour("state.negative") : Ui.Colour("state.positive"));
+        }
+
+        // The list of places only changes when the country does, and rebuilding a dropdown
+        // under the player's cursor would throw away what they had picked.
+        if (_ledgerStateListNationId != nation.Id)
+        {
+            _ledgerStateListNationId = nation.Id;
+            _ledgerStatePicker.Clear();
+            foreach (var state in _campaign.StatesOf(nation).OrderBy(state => state.Name, StringComparer.CurrentCulture))
+            {
+                _ledgerStatePicker.AddItem(state.Name);
+                _ledgerStatePicker.SetItemMetadata(_ledgerStatePicker.ItemCount - 1, state.MapIndex);
+            }
+            if (_ledgerStatePicker.ItemCount > 0) _ledgerStatePicker.Selected = 0;
+        }
+
+        var projects = _campaign.Construction.Where(project => project.NationId == nation.Id).ToList();
+        if (projects.Count == 0)
+        {
+            _ledgerConstructionQueue.Text = "Nothing under construction. Twelve sites may run at once.";
+            return;
+        }
+        _ledgerConstructionQueue.Text = $"{projects.Count} of 12 sites running · " +
+            string.Join("  ·  ", projects
+                .OrderByDescending(project => project.Progress)
+                .Take(4)
+                .Select(project =>
+                {
+                    var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);
+                    return $"{BuildingCatalog.Get(project.Building).Name} in {place?.Name ?? "?"} {project.Progress:P0}";
+                }));
+    }
+
     private void SetLedgerTradePolicy(TradePolicy policy)
     {
         if (_campaign?.Player is null || ViewedLedgerNation()?.Id != _campaign.Player.Id) return;
@@ -370,9 +588,11 @@ public partial class DealOrForceGame
         _ledgerSocialControls.Visible = _ledgerTab == "Government" && canChangePolicy;
         _updatingLedger = true;
         _ledgerTaxRate.SetValueNoSignal(nation.TaxRate);
+        _ledgerMilitarySpending.SetValueNoSignal(nation.MilitarySpending);
         _ledgerWelfareSpending.SetValueNoSignal(nation.WelfareSpending);
         _ledgerEducationSpending.SetValueNoSignal(nation.EducationSpending);
         _updatingLedger = false;
+        if (_ledgerTab == "Economy") RefreshLedgerEconomyControls(nation);
         foreach (var (tab, button) in _ledgerTabButtons)
             ApplyLedgerButtonState(button, tab == _ledgerTab);
         foreach (var (policy, button) in _ledgerTradeButtons)

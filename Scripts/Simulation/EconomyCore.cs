@@ -286,6 +286,21 @@ public static class EconomySystem
         return string.Join(Environment.NewLine, lines);
     }
 
+    /// <summary>
+    /// What a rate of taxation is worth to this country in a week.
+    ///
+    /// The interface offers a slider and has to say what moving it would do, and the only
+    /// honest way to answer is with the expression the weekly tick actually uses. Two
+    /// copies of a formula are two formulas: the second one is right until somebody edits
+    /// the first, and then the panel quietly lies about the country's finances.
+    /// </summary>
+    public static float WeeklyTaxAt(Nation nation, float rate) =>
+        nation.Gdp / 52f * rate * 0.24f * (0.72f + nation.Stability * 0.22f);
+
+    /// <summary>What a share of output spent on the armed forces costs in a week.</summary>
+    public static float WeeklyMilitaryAt(Nation nation, float share) =>
+        nation.Gdp / 52f * share * 0.22f;
+
     public static void Tick(Campaign campaign)
     {
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
@@ -297,13 +312,13 @@ public static class EconomySystem
             // GDP is total economic activity, not the taxable budget base. Only a
             // calibrated share reaches the treasury; this keeps modern states near a
             // plausible balanced budget instead of banking 10-15% of GDP every year.
-            nation.WeeklyTaxIncome = weeklyOutput * nation.TaxRate * 0.24f * (0.72f + nation.Stability * 0.22f);
+            nation.WeeklyTaxIncome = WeeklyTaxAt(nation, nation.TaxRate);
 
             // The budget is worked out in named pieces so the interface can show the
             // player what it is made of. The arithmetic is the same arithmetic; it is only
             // that the parts are kept instead of collapsed into one expression.
             var administration = weeklyOutput * 0.030f;
-            var military = weeklyOutput * nation.MilitarySpending * 0.22f;
+            var military = WeeklyMilitaryAt(nation, nation.MilitarySpending);
             var welfare = weeklyOutput * nation.WelfareSpending * 0.18f;
             var education = weeklyOutput * nation.EducationSpending * 0.14f;
             var unrest = weeklyOutput * (1f - nation.Stability) * 0.025f;
