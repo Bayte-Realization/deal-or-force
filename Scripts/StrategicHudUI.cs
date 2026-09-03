@@ -19,7 +19,7 @@ public partial class DealOrForceGame
 
     private void BuildStrategicHud()
     {
-        var alerts = TexturedPanel(_hudLayer, PanelSurface.Command);
+        var alerts = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
         alerts.Name = "StrategicAlerts";
         Ui.Place(alerts, "hud.alerts");
         var alertMargin = Margin(alerts, 8, 5);
@@ -30,18 +30,41 @@ public partial class DealOrForceGame
         _outliner = TexturedPanel(_hudLayer, PanelSurface.Command);
         _outliner.Name = "StrategicOutliner";
         Ui.Place(_outliner, "hud.outliner");
-        var outer = Margin(_outliner, 10, 8);
-        var column = new VBoxContainer();
+        // The actual visible inner rail of panel_command_frame.png is substantially
+        // narrower than the Control rectangle. Keep every dynamic row inside that rail;
+        // the outer PanelContainer's ClipContents remains a final safety net only.
+        var outer = Margin(_outliner, 24, 14);
+        outer.ClipContents = true;
+        var column = new VBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            ClipContents = true
+        };
         column.AddThemeConstantOverride("separation", 6);
         outer.AddChild(column);
         var toggle = ActionButton("STRATEGIC OUTLINER  −", ToggleOutliner, 0, 32, true);
         toggle.Name = "OutlinerToggle";
         toggle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        toggle.ClipText = true;
         column.AddChild(toggle);
-        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        var scroll = new ScrollContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            FollowFocus = true,
+            ClipContents = true
+        };
         scroll.Name = "OutlinerScroll";
         column.AddChild(scroll);
-        _outlinerRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _outlinerRows = new VBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = Vector2.Zero,
+            ClipContents = true
+        };
         _outlinerRows.AddThemeConstantOverride("separation", 4);
         scroll.AddChild(_outlinerRows);
     }
@@ -50,8 +73,9 @@ public partial class DealOrForceGame
     {
         _outlinerCollapsed = !_outlinerCollapsed;
         _outlinerRows.Visible = !_outlinerCollapsed;
-        _outliner.OffsetLeft = _outlinerCollapsed ? -226f : -334f;
-        _outliner.OffsetBottom = _outlinerCollapsed ? 158f : -112f;
+        var expanded = InterfaceSkin.Layout("hud.outliner");
+        _outliner.OffsetLeft = _outlinerCollapsed ? -226f : expanded.OffsetLeft;
+        _outliner.OffsetBottom = _outlinerCollapsed ? 158f : expanded.OffsetBottom;
         var toggle = _outliner.FindChild("OutlinerToggle", true, false) as Button;
         if (toggle is not null) toggle.Text = _outlinerCollapsed ? "STRATEGIC OUTLINER  +" : "STRATEGIC OUTLINER  −";
     }
@@ -176,17 +200,33 @@ public partial class DealOrForceGame
         _alertRows.AddChild(button);
     }
 
-    private void AddOutlinerHeader(string text) =>
-        _outlinerRows.AddChild(Title(text, 11, Ui.Colour("text.accent_dim")));
+    private void AddOutlinerHeader(string text)
+    {
+        var label = Title(text, 11, Ui.Colour("text.accent_dim"));
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        label.ClipText = true;
+        label.CustomMinimumSize = new Vector2(0, 16);
+        _outlinerRows.AddChild(label);
+    }
 
-    private void AddOutlinerHint(string text) =>
-        _outlinerRows.AddChild(Title(text, 12, Ui.Colour("text.hint")));
+    private void AddOutlinerHint(string text)
+    {
+        var label = Title(text, 12, Ui.Colour("text.hint"));
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.ClipText = true;
+        label.MaxLinesVisible = 2;
+        label.CustomMinimumSize = new Vector2(0, 18);
+        _outlinerRows.AddChild(label);
+    }
 
     private void AddOutlinerButton(string text, Action action, string tooltip)
     {
         var button = ActionButton(text, action, 0, 29);
         button.Alignment = HorizontalAlignment.Left;
         button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        button.CustomMinimumSize = new Vector2(0, 29);
+        button.ClipText = true;
         button.TooltipText = tooltip;
         _outlinerRows.AddChild(button);
     }

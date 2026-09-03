@@ -226,7 +226,7 @@ public partial class DealOrForceGame
 
     private void BuildFleetPanel(Control parent)
     {
-        var panel = new PanelContainer { Name = "FleetPanel", Visible = false };
+        var panel = new PanelContainer { Name = "FleetPanel", Visible = false, ClipContents = true };
         panel.AddThemeStyleboxOverride("panel", PanelStyle(PanelSurface.Command));
         Ui.Place(panel, "hud.fleet_panel");
         parent.AddChild(panel);

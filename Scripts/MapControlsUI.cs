@@ -11,12 +11,21 @@ public partial class DealOrForceGame
 
     private void BuildMapControls()
     {
-        var panel = TexturedPanel(_hudLayer, PanelSurface.Command);
+        var panel = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
         panel.Name = "MapControls";
         Ui.Place(panel, "hud.map_controls");
 
-        var margin = Margin(panel, 8, 6);
-        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Begin };
+        // The strip artwork has a transparent bevel before its visible inner rail.
+        // Eight pixels kept the controls inside the Control rectangle, but not inside
+        // the rail the player actually reads as the panel boundary. Keep the whole
+        // toolbar clear of that bevel, especially the projection button on the left.
+        var margin = Margin(panel, 24, 6);
+        margin.ClipContents = true;
+        var row = new HBoxContainer
+        {
+            Alignment = BoxContainer.AlignmentMode.Begin,
+            ClipContents = true
+        };
         row.AddThemeConstantOverride("separation", 5);
         margin.AddChild(row);
 
