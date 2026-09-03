@@ -42,6 +42,20 @@ public static class ProvinceOwnership
 
     public static int Count => Entries.Count;
 
+    /// <summary>
+    /// Forget the political map entirely.
+    ///
+    /// The map compiler needs this. It builds the province map from the vector sources and
+    /// then exports the political map from the result - but attaching a topology applies
+    /// whatever ownership file is already on disk, which was written against the *previous*
+    /// numbering. Recompiling after any change to the province count therefore laid the old
+    /// map over the new provinces, scrambled every border, and wrote the scrambling back
+    /// out. Three recompiles in, half the world's provinces belonged to the wrong country:
+    /// Kentucky was Chinese, Ashgabat was American, and the interface faithfully reported
+    /// it. Existing outputs are outputs, not inputs.
+    /// </summary>
+    public static void Clear() => Entries.Clear();
+
     /// <summary>Reload the base-game political map. Mods layer on top afterwards.</summary>
     public static void ResetCatalog()
     {

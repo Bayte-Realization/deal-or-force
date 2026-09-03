@@ -39,6 +39,13 @@ if (sourceWetCells != rasterWetCells) throw new InvalidDataException("Hydrology 
 // The political map is data too, and the file a modder edits has to be the one the game
 // actually runs on rather than a hand-made approximation of it. It is written from the
 // same topology that was just compiled, so the two can never describe different worlds.
+//
+// The existing file is dropped first. Attaching a topology applies whatever ownership is
+// on disk, and that file was written against the previous province numbering - so keeping
+// it here meant laying the old world over the new provinces and then exporting the result
+// as if it were the truth. The provinces the compiler just built already know who owns
+// them, because they were grown out of the source control raster one owner at a time.
+ProvinceOwnership.Clear();
 campaign.AttachProvinceTopology(provinces);
 var history = Path.Combine(projectRoot, "game", "history", "provinces");
 Directory.CreateDirectory(history);

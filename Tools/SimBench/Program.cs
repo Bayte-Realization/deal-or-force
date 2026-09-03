@@ -52,6 +52,8 @@ public static class Program
         // Asked at day zero, before any conquest: the scenario has to put every
         // populated country on the map. After a year of AI wars some of them have
         // been annexed, which is the point rather than a fault.
+        failures += Check("every province belongs to the country whose ground it is on",
+            ProvincesSitWhereTheirOwnerIs(campaign));
         failures += Check("every nation starts the scenario owning ground", EveryNationHasTerritory(campaign));
         if (mapped)
             failures += Check("every authored region correction exists on the map",
@@ -642,15 +644,50 @@ public static class Program
         var fleet = campaign.Fleets.Find(candidate => candidate.NationId == invader.Id);
         if (fleet is null) return "GBR has no fleet";
 
-        var target = campaign.Nations.Find(nation => nation.Id != invader.Id && nation.Population > 0 &&
-            !CampaignDiplomacy.SharesLandBorder(campaign, invader.MapIndex, nation.MapIndex) &&
-            CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, nation.Id, out _));
-        if (target is null) return "no overseas country to invade";
+        // The enemy has to be one this fleet could plausibly sail to. Taking the first
+        // country Britain shares no land border with picks Indonesia as readily as France,
+        // and an admiralty that refuses to carry one division a third of the way round the
+        // planet is behaving correctly - the check would then be failing the AI for being
+        // sensible. So the target is the nearest overseas neighbour, found the same way the
+        // AI looks for a beach: by distance from the fleet's own harbour.
+        Nation target = null;
+        var controllers = campaign.ProvinceController;
+        var nearest = campaign.Defines.AiInvasionSearchDegrees;
+        for (var province = 1; controllers is not null && province <= topology.ProvinceCount; province++)
+        {
+            var owner = controllers[province];
+            if (owner == 0 || owner == (ushort)invader.MapIndex) continue;
+            var centre = topology.CenterOf(province);
+            var distance = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude,
+                centre.Latitude, centre.Longitude);
+            if (distance >= nearest) continue;
+            var candidate = campaign.Nations.Find(nation => nation.MapIndex == owner);
+            if (candidate is null || candidate.Id == invader.Id || candidate.Population <= 0) continue;
+            if (CampaignDiplomacy.SharesLandBorder(campaign, invader.MapIndex, candidate.MapIndex)) continue;
+            if (!CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, candidate.Id, out _)) continue;
+            nearest = distance;
+            target = candidate;
+        }
+        if (target is null) return "no overseas country within reach to invade";
 
         var wasHuman = invader.IsHuman;
         invader.IsHuman = false;
+
+        // Two hundred and twenty days in, Britain is usually fighting somebody it can walk
+        // to as well, and this check is not about how a navy chooses between wars - it is
+        // about whether one that finds itself in an overseas war knows what to do. So the
+        // others are set aside for the length of it.
+        var suspended = campaign.Wars
+            .Where(candidate => !candidate.Ended && candidate.Involves(invader.Id)).ToList();
+        foreach (var other in suspended) other.Ended = true;
+
         var war = CampaignDiplomacy.DeclareWar(campaign, invader.Id, target.Id);
-        if (war is null) return "the overseas war was refused";
+        if (war is null)
+        {
+            foreach (var other in suspended) other.Ended = false;
+            invader.IsHuman = wasHuman;
+            return "the overseas war was refused";
+        }
         try
         {
             // Put the fleet home and idle, and give it something to carry within reach.
@@ -688,7 +725,12 @@ public static class Program
                 NavalOperations.Tick(campaign);
             }
             campaign.Defines.AiFleetDecisionInterval = interval;
-            if (loadedOn < 0) return "an AI at war across water never put a division on its fleet";
+            if (loadedOn < 0)
+            {
+                NavalInvasion.CanEmbark(campaign, fleet, spare, out var refused);
+                return $"an AI at war with {target.Tag} across water never put a division on its " +
+                       $"fleet: {refused}";
+            }
             if (launchedOn < 0) return "an AI loaded its fleet and never sent it anywhere";
 
             Console.WriteLine($"  ai navy: {invader.Tag} found itself at war with {target.Tag} across water, " +
@@ -699,6 +741,7 @@ public static class Program
         {
             invader.IsHuman = wasHuman;
             war.Ended = true;
+            foreach (var other in suspended) other.Ended = false;
             foreach (var id in new List<int>(fleet.Carried))
             {
                 var army = campaign.Armies.Find(candidate => candidate.Id == id);
@@ -1420,6 +1463,55 @@ public static class Program
 
         Console.WriteLine($"  explained numbers: {checkedEntries:N0} named part(s) across {checkedNations:N0} " +
                           "ledger(s), each adding up to the figure it explains.");
+        return "";
+    }
+
+    /// <summary>
+    /// A province must belong to the country whose ground its own pixels are on.
+    ///
+    /// This is the most basic thing that can be true of a political map, and it was quietly
+    /// false for half the world. The map compiler builds the provinces from the source
+    /// raster and then exports the political map from the result - but attaching a topology
+    /// applies whatever ownership file is already on disk, and that file was written against
+    /// the *previous* province numbering. So each recompile that changed the province count
+    /// laid the old world over the new provinces and wrote the wreckage back out as truth.
+    /// Kentucky was Chinese. Ashgabat was American. Every screen in the game reported it
+    /// faithfully, every existing check passed, and the front lines were drawn across three
+    /// continents because half the planet was suddenly at war with itself.
+    ///
+    /// Nothing caught it because nothing compared the map against the ground it is drawn on.
+    /// </summary>
+    private static string ProvincesSitWhereTheirOwnerIs(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        var checkedProvinces = 0;
+        var wrong = new List<string>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var cell = topology.ProvinceCenterCell[province];
+            if (cell < 0 || cell >= Globality.EarthData.Control.Length) continue;
+            var ground = Globality.EarthData.Control[cell];
+            if (ground == 0) continue;
+            checkedProvinces++;
+            var owner = topology.ProvinceToNation[province];
+            if (owner == ground) continue;
+            if (wrong.Count < 4)
+            {
+                string Tag(int mapIndex) =>
+                    campaign.Nations.Find(nation => nation.MapIndex == mapIndex)?.Tag ?? $"#{mapIndex}";
+                wrong.Add($"province {province:N0} stands on {Tag(ground)} ground and belongs to {Tag(owner)}");
+            }
+            else wrong.Add("");
+        }
+
+        if (wrong.Count > 0)
+            return $"{wrong.Count:N0} of {checkedProvinces:N0} provinces belong to somebody other than the " +
+                   $"country they are standing on: {string.Join("; ", wrong.Where(entry => entry.Length > 0))}";
+
+        Console.WriteLine($"  geography: all {checkedProvinces:N0} provinces belong to the country whose " +
+                          "ground they are drawn on.");
         return "";
     }
 
