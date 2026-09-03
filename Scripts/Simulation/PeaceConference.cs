@@ -194,7 +194,7 @@ public static class PeaceConference
             battle.Outcome = "Peace agreement";
         }
 
-        campaign.MarkStrategicChange();
+        campaign.MarkMapChanged();
         return true;
     }
 

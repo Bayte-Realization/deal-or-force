@@ -115,6 +115,7 @@ public static class CampaignDiplomacy
     // to the map and read from there.
     private static Dictionary<int, HashSet<int>> _borders;
     private static int _borderRevision = -1;
+    private static int _borderDay = -1;
 
     public static bool SharesLandBorder(Campaign campaign, int mapA, int mapB) =>
         Borders(campaign).TryGetValue(mapA, out var set) && set.Contains(mapB);
@@ -125,16 +126,37 @@ public static class CampaignDiplomacy
             ? set
             : (IReadOnlyCollection<int>)Array.Empty<int>();
 
+    /// <summary>How many times the border table has been rebuilt. Diagnostic only.</summary>
+    public static int Rebuilds;
+
     private static Dictionary<int, HashSet<int>> Borders(Campaign campaign)
     {
-        if (_borders is not null && _borderRevision == campaign.MapRevision) return _borders;
-        // Rebuilt whenever a province changes hands, which is most days - so the table and
-        // its sets are emptied and refilled rather than thrown away and built again. The
-        // scan has to happen; handing the collector a dictionary of two hundred and sixty
-        // fresh hash sets every time it does was the AI's whole allocation cost.
+        // At most once a day, and only if the map actually moved.
+        //
+        // This was keyed on the map revision alone, and the map revision changes every time
+        // a province changes hands - seven or eight times a day in a world at war. So every
+        // AI heuristic that asks who it borders was paying for a walk of all thirty-eight
+        // thousand provinces, several times a day each. Measured in the running game that
+        // was forty-five of the fifty milliseconds a campaign day cost, and it is why
+        // pressing play gave five days a second instead of the thirty asked for.
+        //
+        // Nothing needs it fresher. Which countries a country touches is an input to
+        // decisions it takes weekly and monthly; a day out of date cannot change one.
+        if (_borders is not null && _borderDay == campaign.ElapsedDays) return _borders;
+        if (_borders is not null && _borderRevision == campaign.MapRevision)
+        {
+            _borderDay = campaign.ElapsedDays;
+            return _borders;
+        }
+
+        // The table and its sets are emptied and refilled rather than thrown away and
+        // rebuilt: handing the collector a dictionary of two hundred and sixty fresh hash
+        // sets each time was the AI's whole allocation cost.
+        Rebuilds++;
         _borders ??= new Dictionary<int, HashSet<int>>();
         foreach (var set in _borders.Values) set.Clear();
         _borderRevision = campaign.MapRevision;
+        _borderDay = campaign.ElapsedDays;
 
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;

@@ -5,6 +5,21 @@
     <RootNamespace>DealOrForce</RootNamespace>
     <AssemblyName>Deal or Force</AssemblyName>
   </PropertyGroup>
+  <!--
+    The editor plays the Debug build, and Debug means the optimiser is switched off. For a
+    game whose main loop is a simulation of a hundred and forty wars across thirty-eight
+    thousand provinces, that is not a detail: the same campaign day measured 7.8 ms in an
+    optimised build and 13 ms without, before the editor's own debugger is even attached.
+    The person playing from the editor is the person who has to live with it, so the
+    optimiser stays on in Debug too. Symbols and line numbers are kept, which is what a
+    stack trace actually needs; what is lost is the guarantee that every local survives to
+    be inspected in a step-through, and that is a fair price.
+  -->
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <Optimize>true</Optimize>
+    <DebugType>portable</DebugType>
+    <TieredPGO>true</TieredPGO>
+  </PropertyGroup>
   <!-- Mod source projects live below Mods but are compiled into their own DLLs. -->
   <ItemGroup>
     <Compile Remove="Mods\**\*.cs" />

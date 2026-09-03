@@ -30,6 +30,16 @@ public sealed class Defines
 	/// <summary>Real seconds per in-game day at speed 1.</summary>
 	public float SecondsPerDay { get; set; } = 0.55f;
 
+	/// <summary>
+	/// Milliseconds of a frame the simulation may spend catching up on days. One day is
+	/// always run so time never stops; beyond that the budget decides. Lower means a
+	/// steadier frame rate and slower time, higher the reverse.
+	/// </summary>
+	public float FrameSimulationBudgetMs { get; set; } = 9f;
+
+	/// <summary>Days a single frame may advance however cheap they turn out to be.</summary>
+	public int MaxDaysPerFrame { get; set; } = 12;
+
 	/// <summary>Multipliers applied to <see cref="SecondsPerDay"/> for speeds 1..5.</summary>
 	public List<float> SpeedFactors { get; set; } = new() { 1f, 0.55f, 0.3f, 0.15f, 0.06f };
 
@@ -392,6 +402,9 @@ public sealed class Defines
 
 	/// <summary>How much less a country wants a war it would have to sail to.</summary>
 	public float AiOverseasWarAppetite { get; set; } = 0.45f;
+
+	/// <summary>How many overseas neighbours a country weighs up. The nearest few, not all.</summary>
+	public int AiOverseasTargetsConsidered { get; set; } = 6;
 
 
 	/// <summary>

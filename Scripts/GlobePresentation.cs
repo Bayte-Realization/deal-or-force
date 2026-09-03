@@ -50,6 +50,32 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private int _fleetRosterFingerprint = int.MinValue;
     private int _selectedFleetId = -1;
     private readonly Dictionary<Node3D, IReadOnlyList<Simulation.Army>> _armyByMarker = new();
+
+    /// <summary>
+    /// One counter on the map, and the handles into it.
+    ///
+    /// The node references are kept rather than looked up by name every frame: with a
+    /// thousand counters on the map, three GetNodeOrNull calls each was three thousand
+    /// string path resolutions a frame to write numbers that had usually not changed.
+    /// </summary>
+    private sealed class ArmyStackMarker
+    {
+        public Node3D Node;
+        public Sprite3D Plate;
+        public Label3D Count;
+        public Label3D Status;
+        public readonly List<Simulation.Army> Stack = new();
+        public Vector3 Normal;
+        public int NationId = -1;
+        public string TemplateId = "";
+        public string CountText = "";
+        public string StatusText = "";
+        public bool Seen;
+    }
+
+    private readonly Dictionary<(int, int, int, int), ArmyStackMarker> _armyStacks = new();
+    private readonly List<(int, int, int, int)> _vanishedStacks = new();
+    private readonly Dictionary<string, int> _templateVotes = new();
     private readonly HashSet<int> _selectedArmyIds = new();
     private readonly Dictionary<(int Nation, string Template), Texture2D> _armyCounterTextures = new();
     private readonly List<(Node3D Node, Vector3 Normal, int Cells)> _countryLabels = new();
@@ -209,7 +235,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _stateByMapIndex[state.MapIndex] = state;
 
         BuildCapitalMarkers(campaign);
-        BuildArmyMarkers(campaign);
+        ReconcileArmyMarkers(campaign);
         BuildFleetMarkers(campaign);
         if (campaign.Player is { } player && !string.IsNullOrWhiteSpace(player.CapitalName))
             FocusOn(player.CapitalLatitude, player.CapitalLongitude, 15.8f);
@@ -315,18 +341,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (_mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
         {
             _militaryVisualAccumulator = 0;
-            SyncArmyMarkers();
-            UpdateArmyMarkerPositions();
-            UpdateMilitaryPresentation();
+            using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
+            using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation();
         }
-        UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod);
-        UpdateFleetMarkers();
+        using (Simulation.SimProfiler.Measure("f:army vis"))
+            UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod);
+        using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
         UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, _distance <= 13.5f);
-        UpdateRoutePreview();
+        using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
-            RefreshProvinceControllers();
+            using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
         if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = false;
-        UpdateCountryLabelVisibility();
+        using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
         if (_flatMap) UpdateFlatWorldPositions();
         UpdateMapModePaletteIfNeeded();
 
@@ -389,7 +415,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 else GD.PushWarning($"[dof] province data map fallback: {result.ProvinceSource}");
                 GD.Print($"[dof] hydrology data source: {result.HydrologySource}");
                 BindArmyTopology();
-                BuildArmyMarkers(_campaign);
+                ReconcileArmyMarkers(_campaign);
                 BuildCountryLabels(result.LabelAnchors);
                 BuildFrontPreview();
                 RefreshProvinceControllers();
@@ -1303,34 +1329,130 @@ void fragment() {
                 marker.Node.Visible = marker.Normal.Dot(viewNormal) > 0.18f;
     }
 
-    private void BuildArmyMarkers(Simulation.Campaign campaign)
+    /// <summary>
+    /// Bring the counters on the map in line with where the armies are.
+    ///
+    /// This used to be a full teardown: a fingerprint over every division in the world was
+    /// compared against the last one, and if any single division had moved to another
+    /// province - which, with fourteen hundred of them at speed five, is every time - every
+    /// counter was freed and rebuilt. That is four thousand nodes destroyed and created
+    /// eight times a second, and it is the whole of why starting time made the game stutter.
+    ///
+    /// Now the counters persist. A stack that is still there is updated in place, a new one
+    /// is built, and one whose armies have all left is freed. In a normal second that is a
+    /// handful of nodes rather than four thousand.
+    /// </summary>
+    private void ReconcileArmyMarkers(Simulation.Campaign campaign)
     {
         if (!IsInstanceValid(_armyRoot) || _divisionTexture is null) return;
 
-        foreach (var child in _armyRoot.GetChildren())
-            child.QueueFree();
+        foreach (var marker in _armyStacks.Values)
+        {
+            marker.Seen = false;
+            marker.Stack.Clear();
+        }
+
+        foreach (var army in campaign.Armies)
+        {
+            var bucket = ArmyPresentationBucket(campaign, army);
+            if (!_armyStacks.TryGetValue(bucket, out var marker))
+            {
+                marker = new ArmyStackMarker();
+                _armyStacks[bucket] = marker;
+            }
+            marker.Seen = true;
+            marker.Stack.Add(army);
+        }
+
+        _vanishedStacks.Clear();
+        foreach (var (bucket, marker) in _armyStacks)
+            if (!marker.Seen || marker.Stack.Count == 0) _vanishedStacks.Add(bucket);
+        foreach (var bucket in _vanishedStacks)
+        {
+            var marker = _armyStacks[bucket];
+            if (marker.Node is not null && IsInstanceValid(marker.Node)) marker.Node.QueueFree();
+            _armyStacks.Remove(bucket);
+        }
+
         _armyMarkers.Clear();
         _armyByMarker.Clear();
+        foreach (var marker in _armyStacks.Values)
+        {
+            var lead = marker.Stack[0];
+            var nation = campaign.NationById(lead.NationId);
+            if (nation is null) continue;
+
+            // The counter shows the template most of the stack is made of.
+            _templateVotes.Clear();
+            foreach (var army in marker.Stack)
+            {
+                var id = army.TemplateId ?? "";
+                _templateVotes[id] = _templateVotes.GetValueOrDefault(id) + 1;
+            }
+            var templateId = lead.TemplateId ?? "";
+            var votes = -1;
+            foreach (var (id, count) in _templateVotes)
+                if (count > votes || (count == votes && string.CompareOrdinal(id, templateId) < 0))
+                {
+                    votes = count;
+                    templateId = id;
+                }
+
+            if (marker.Node is null || !IsInstanceValid(marker.Node))
+                CreateArmyStackMarker(marker, nation, lead, templateId);
+            else if (marker.NationId != nation.Id ||
+                     !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal))
+            {
+                marker.Plate.Texture = ArmyCounterTexture(nation, templateId);
+                marker.NationId = nation.Id;
+                marker.TemplateId = templateId;
+            }
+            if (marker.Node is null) continue;
+
+            var location = AverageArmyLocation(marker.Stack);
+            marker.Node.Position = PresentationPoint(location.Latitude, location.Longitude, SurfaceMarkerRadius);
+            marker.Normal = marker.Node.Position.Normalized();
+
+            var divisions = 0f;
+            var personnel = 0f;
+            foreach (var army in marker.Stack)
+            {
+                divisions += army.Divisions;
+                personnel += DivisionPersonnel(army);
+            }
+            var countText = Mathf.CeilToInt(divisions).ToString();
+            if (!string.Equals(marker.CountText, countText, StringComparison.Ordinal))
+            {
+                marker.Count.Text = countText;
+                marker.CountText = countText;
+            }
+            var statusText = $"{personnel / 1000f:0.#}k";
+            if (!string.Equals(marker.StatusText, statusText, StringComparison.Ordinal))
+            {
+                marker.Status.Text = statusText;
+                marker.StatusText = statusText;
+            }
+
+            _armyMarkers.Add((marker.Node, marker.Normal));
+            _armyByMarker[marker.Node] = marker.Stack;
+        }
+    }
+
+    private void CreateArmyStackMarker(ArmyStackMarker marker, Simulation.Nation nation,
+        Simulation.Army lead, string templateId)
+    {
 
         // Divisions are independent simulation entities. Presentation is deliberately
         // coarser for foreign forces: otherwise modern active-personnel totals create
         // thousands of Label3D/material instances and exhaust the renderer descriptor
         // heap. The player's divisions retain province precision for direct control;
         // foreign divisions form one readable operational stack per state.
-        var stacks = campaign.Armies.GroupBy(army => ArmyPresentationBucket(campaign, army));
-        foreach (var grouped in stacks)
         {
-            var stack = grouped.OrderBy(army => army.Id).ToArray();
-            var lead = stack[0];
-            var nation = campaign.NationById(lead.NationId);
-            if (nation is null) continue;
-            var location = AverageArmyLocation(stack);
-            var templateId = stack.GroupBy(army => army.TemplateId)
-                .OrderByDescending(group => group.Count()).ThenBy(group => group.Key).First().Key;
-
-            var marker = new Node3D { Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}" };
-            marker.Position = PresentationPoint(location.Latitude, location.Longitude, SurfaceMarkerRadius);
-            _armyRoot.AddChild(marker);
+            var node = new Node3D { Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}" };
+            _armyRoot.AddChild(node);
+            marker.Node = node;
+            marker.NationId = nation.Id;
+            marker.TemplateId = templateId;
 
             var plate = new Sprite3D
             {
@@ -1342,12 +1464,13 @@ void fragment() {
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Modulate = Colors.White
             };
-            marker.AddChild(plate);
+            node.AddChild(plate);
+            marker.Plate = plate;
 
             var divisions = new Label3D
             {
                 Name = "DivisionCount",
-                Text = Mathf.CeilToInt(stack.Sum(army => army.Divisions)).ToString(),
+                Text = "",
                 FontSize = 31,
                 PixelSize = 0.00030f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
@@ -1358,12 +1481,13 @@ void fragment() {
                 Position = new Vector3(0f, 0f, 0.004f),
                 NoDepthTest = true
             };
-            marker.AddChild(divisions);
+            node.AddChild(divisions);
+            marker.Count = divisions;
 
             var status = new Label3D
             {
                 Name = "OperationalStatus",
-                Text = $"{stack.Sum(DivisionPersonnel) / 1000f:0.#}k",
+                Text = "",
                 FontSize = 18,
                 PixelSize = 0.00023f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
@@ -1374,11 +1498,9 @@ void fragment() {
                 Position = new Vector3(0f, -0.025f, 0.005f),
                 NoDepthTest = true
             };
-            marker.AddChild(status);
-            _armyMarkers.Add((marker, marker.Position.Normalized()));
-            _armyByMarker[marker] = stack;
+            node.AddChild(status);
+            marker.Status = status;
         }
-        _armyStructureFingerprint = ArmyStructureFingerprint(campaign);
     }
 
     private static (int NationId, int LocationId, int FallbackLatitude, int FallbackLongitude)
@@ -1397,19 +1519,34 @@ void fragment() {
     private static (float Latitude, float Longitude) AverageArmyLocation(IReadOnlyList<Simulation.Army> stack)
     {
         if (stack.Count == 0) return (0f, 0f);
-        var latitude = stack.Average(division => division.Latitude);
-        var longitudeSin = stack.Average(division => MathF.Sin(Mathf.DegToRad(division.Longitude)));
-        var longitudeCos = stack.Average(division => MathF.Cos(Mathf.DegToRad(division.Longitude)));
-        return ((float)latitude, Mathf.RadToDeg(MathF.Atan2((float)longitudeSin, (float)longitudeCos)));
+        var latitude = 0f;
+        var sin = 0f;
+        var cos = 0f;
+        for (var index = 0; index < stack.Count; index++)
+        {
+            var division = stack[index];
+            latitude += division.Latitude;
+            var radians = Mathf.DegToRad(division.Longitude);
+            sin += MathF.Sin(radians);
+            cos += MathF.Cos(radians);
+        }
+        return (latitude / stack.Count, Mathf.RadToDeg(MathF.Atan2(sin, cos)));
     }
 
     private void SyncArmyMarkers()
     {
-        var fingerprint = ArmyStructureFingerprint(_campaign);
-        if (fingerprint == _armyStructureFingerprint) return;
-        _selectedArmyIds.RemoveWhere(id => _campaign.Armies.All(army => army.Id != id));
-        BuildArmyMarkers(_campaign);
+        // Dropping a selection whose division no longer exists. All() over the army list
+        // per selected id was quadratic in the size of a box selection.
+        if (_selectedArmyIds.Count > 0)
+        {
+            _liveArmyIds.Clear();
+            foreach (var army in _campaign.Armies) _liveArmyIds.Add(army.Id);
+            _selectedArmyIds.RemoveWhere(id => !_liveArmyIds.Contains(id));
+        }
+        ReconcileArmyMarkers(_campaign);
     }
+
+    private readonly HashSet<int> _liveArmyIds = new();
 
     private static int ArmyStructureFingerprint(Simulation.Campaign campaign)
     {
@@ -1629,21 +1766,8 @@ void fragment() {
         _frontRevision = _controlRevision;
     }
 
-    private void UpdateArmyMarkerPositions()
-    {
-        foreach (var (marker, armies) in _armyByMarker)
-        {
-            if (!IsInstanceValid(marker) || armies.Count == 0) continue;
-            var count = marker.GetNodeOrNull<Label3D>("DivisionCount");
-            var personnel = marker.GetNodeOrNull<Label3D>("OperationalStatus");
-            var location = AverageArmyLocation(armies);
-            marker.Position = PresentationPoint(location.Latitude, location.Longitude, SurfaceMarkerRadius);
-            var countText = armies.Count.ToString();
-            var personnelText = $"{armies.Sum(DivisionPersonnel) / 1000f:0.#}k";
-            if (count is not null && count.Text != countText) count.Text = countText;
-            if (personnel is not null && personnel.Text != personnelText) personnel.Text = personnelText;
-        }
-    }
+    // Positions and labels are written by the reconcile itself now, off the node handles it
+    // already holds - there is nothing left for a second pass to do.
 
     private static int DivisionPersonnel(Simulation.Army division) => division.Divisions > 1.01f
         ? (int)MathF.Round(division.Divisions * Simulation.MilitaryBootstrap.DivisionSize * division.Strength)

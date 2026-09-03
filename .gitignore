@@ -25,3 +25,4 @@ demo/
 .DS_Store
 Thumbs.db
 desktop.ini
+perf.log

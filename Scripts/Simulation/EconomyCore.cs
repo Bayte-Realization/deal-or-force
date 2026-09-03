@@ -146,14 +146,29 @@ public sealed class QueueConstructionCommand : ICampaignCommand
     public void Apply(Campaign campaign)
     {
         var nation = campaign.NationById(IssuerId);
-        var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == StateMapIndex);
-        if (nation is null || state is null || state.NationMapIndex != nation.MapIndex) return;
-        if (campaign.Construction.Count(project => project.NationId == nation.Id) >= 12) return;
+        if (nation is null) return;
+
+        // Three full scans with three closures, for an order the AI gives eight times a
+        // day: the state by map index over seventeen hundred, the country's projects over
+        // six hundred, and the highest id over the same six hundred again.
+        ScenarioState state = null;
+        foreach (var candidate in campaign.States)
+            if (candidate.MapIndex == StateMapIndex) { state = candidate; break; }
+        if (state is null || state.NationMapIndex != nation.MapIndex) return;
+
+        var running = 0;
+        var highest = 0;
+        foreach (var project in campaign.Construction)
+        {
+            if (project.Id > highest) highest = project.Id;
+            if (project.NationId == nation.Id && ++running >= 12) return;
+        }
+
         var definition = BuildingCatalog.Get(Building);
         if (nation.Treasury < Math.Min(0.05f, definition.Cost)) return;
         campaign.Construction.Add(new ConstructionProject
         {
-            Id = campaign.Construction.Count == 0 ? 1 : campaign.Construction.Max(project => project.Id) + 1,
+            Id = highest + 1,
             NationId = nation.Id,
             StateMapIndex = state.MapIndex,
             Building = Building,

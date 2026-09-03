@@ -82,6 +82,15 @@ public static class AiStatecraft
         CampaignDiplomacy.Neighbours(campaign, nationMapIndex);
 
     private static readonly List<int> ReachableTargets = new();
+    private static readonly HashSet<int> ReachableSeen = new();
+    private static readonly Dictionary<int, float> OverseasDistance = new();
+
+    // The overseas half of the candidate list only changes when the map does, or when a
+    // navy is built or sunk. Working it out afresh for every country every eleven days -
+    // two hundred and sixty distance tests and a linear search of a list of the same
+    // length for each of them - was measured at a millisecond and a quarter per country in
+    // the running game, which is most of what a campaign day cost.
+    private static readonly Dictionary<int, (int Hulls, List<int> Targets)> OverseasCache = new();
 
     /// <summary>
     /// Countries this one could actually fight: everyone it can walk to, and - if it has a
@@ -96,8 +105,9 @@ public static class AiStatecraft
     private static IReadOnlyList<int> Reachable(Campaign campaign, Nation nation)
     {
         ReachableTargets.Clear();
+        ReachableSeen.Clear();
         foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
-            ReachableTargets.Add(mapIndex);
+            if (ReachableSeen.Add(mapIndex)) ReachableTargets.Add(mapIndex);
 
         var hulls = 0;
         var fromLatitude = 0f;
@@ -110,15 +120,46 @@ public static class AiStatecraft
         }
         if (hulls < campaign.Defines.AiInvasionMinimumHulls) return ReachableTargets;
 
-        var reach = campaign.Defines.AiInvasionSearchDegrees;
-        foreach (var other in campaign.Nations)
+        // Which shores are within reach is a fact about where the capitals and the home
+        // port are, not about today's borders, so it is worked out once and kept until the
+        // fleet itself changes size.
+        //
+        // And it is the nearest handful rather than everything inside the radius. Offering
+        // two hundred and fifty candidates meant two hundred and fifty CanDeclareWar calls
+        // and two hundred and fifty appraisals of desire, per country, every eleven days -
+        // and CanDeclareWar creates a diplomatic relation for any pair that has never had
+        // one, so merely thinking about the world was allocating a relation with all of it.
+        // A country contemplates its nearest overseas neighbours, which is also all its
+        // navy could reach in a reasonable time.
+        if (!OverseasCache.TryGetValue(nation.Id, out var cached) || cached.Hulls != hulls)
         {
-            if (other.Id == nation.Id || other.Population <= 0) continue;
-            if (ReachableTargets.Contains(other.MapIndex)) continue;
-            if (NavalOperations.Distance(fromLatitude, fromLongitude,
-                    other.CapitalLatitude, other.CapitalLongitude) > reach) continue;
-            ReachableTargets.Add(other.MapIndex);
+            var targets = cached.Targets ?? new List<int>();
+            targets.Clear();
+            var reach = campaign.Defines.AiInvasionSearchDegrees;
+            var wanted = Math.Max(1, campaign.Defines.AiOverseasTargetsConsidered);
+            foreach (var other in campaign.Nations)
+            {
+                if (other.Id == nation.Id || other.Population <= 0) continue;
+                var distance = NavalOperations.Distance(fromLatitude, fromLongitude,
+                    other.CapitalLatitude, other.CapitalLongitude);
+                if (distance > reach) continue;
+                targets.Add(other.MapIndex);
+                OverseasDistance[other.MapIndex] = distance;
+            }
+            targets.Sort((left, right) =>
+            {
+                var order = OverseasDistance.GetValueOrDefault(left, float.MaxValue)
+                    .CompareTo(OverseasDistance.GetValueOrDefault(right, float.MaxValue));
+                return order != 0 ? order : left.CompareTo(right);
+            });
+            if (targets.Count > wanted) targets.RemoveRange(wanted, targets.Count - wanted);
+            OverseasDistance.Clear();
+            cached = (hulls, targets);
+            OverseasCache[nation.Id] = cached;
         }
+
+        foreach (var mapIndex in cached.Targets)
+            if (ReachableSeen.Add(mapIndex)) ReachableTargets.Add(mapIndex);
         return ReachableTargets;
     }
 
@@ -229,7 +270,11 @@ public static class AiStatecraft
     private static void Economy(Campaign campaign, Nation nation)
     {
         var defines = campaign.Defines;
-        var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+        // Any() with a closure over the nation, on a list of a hundred and forty wars,
+        // for every country that thinks about its budget.
+        var atWar = false;
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
         var reserves = nation.Gdp <= 0f ? 0f : nation.Treasury / nation.Gdp;
 
         // Tax. Broke countries tax more; comfortable ones with an unhappy population tax
@@ -240,9 +285,11 @@ public static class AiStatecraft
         nation.TaxRate = M.Clamp(taxTarget, defines.AiMinimumTaxRate, defines.AiMaximumTaxRate);
 
         // The army costs what the situation is worth.
+        bool threatened;
+        using (SimProfiler.Measure("    eco:threat")) threatened = !atWar && Threatened(campaign, nation);
         var militaryTarget = atWar
             ? defines.AiWartimeMilitarySpending
-            : Threatened(campaign, nation) ? defines.AiTenseMilitarySpending : defines.AiPeacetimeMilitarySpending;
+            : threatened ? defines.AiTenseMilitarySpending : defines.AiPeacetimeMilitarySpending;
         nation.MilitarySpending = M.Lerp(nation.MilitarySpending, militaryTarget, 0.35f);
 
         // An unhappy country buys quiet, when it can afford it.
@@ -256,7 +303,7 @@ public static class AiStatecraft
             nation.WelfareSpending = M.Clamp(nation.WelfareSpending - defines.AiSocialStep, 0.01f, 0.20f);
         }
 
-        Build(campaign, nation, atWar, reserves);
+        using (SimProfiler.Measure("    eco:build")) Build(campaign, nation, atWar, reserves);
     }
 
     /// <summary>
@@ -269,13 +316,16 @@ public static class AiStatecraft
     {
         var defines = campaign.Defines;
         if (reserves < defines.AiBuildTreasuryFloor) return;
-        if (campaign.Construction.Count(project => project.NationId == nation.Id) >= defines.AiMaxConcurrentProjects)
-            return;
+        var running = 0;
+        foreach (var project in campaign.Construction)
+            if (project.NationId == nation.Id && ++running >= defines.AiMaxConcurrentProjects) return;
 
         var states = campaign.StatesOf(nation);
         if (states.Length == 0) return;
 
-        var congested = campaign.Armies.Any(army => army.NationId == nation.Id && army.SupplyCongestion < 0.75f);
+        var congested = false;
+        foreach (var army in campaign.Armies)
+            if (army.NationId == nation.Id && army.SupplyCongestion < 0.75f) { congested = true; break; }
         var wanted =
             congested ? BuildingKind.Infrastructure :
             atWar ? BuildingKind.ArmsIndustry :
@@ -482,7 +532,8 @@ public static class AiStatecraft
         {
             var other = ByMapIndex(mapIndex);
             if (other is null) continue;
-            if (campaign.Wars.Any(war => !war.Ended && war.Involves(other.Id))) return true;
+            foreach (var war in campaign.Wars)
+                if (!war.Ended && war.Involves(other.Id)) return true;
             if (CampaignDiplomacy.Get(campaign, nation.Id, other.Id).Stance == DiplomaticStance.Rival) return true;
         }
         return false;

@@ -37,5 +37,6 @@
   "AiInvasionMaxFormations": 3,
   "AiInvasionSearchDegrees": 60.0,
   "AiInvasionMinimumHulls": 30,
-  "AiOverseasWarAppetite": 0.45
+  "AiOverseasWarAppetite": 0.45,
+  "AiOverseasTargetsConsidered": 6
 }

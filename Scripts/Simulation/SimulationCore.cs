@@ -505,9 +505,36 @@ public sealed partial class Campaign
         return true;
     }
 
-    public void MarkStrategicChange()
+    /// <summary>
+    /// Something happened that the interface should redraw for.
+    ///
+    /// This used to bump the map revision and fire Changed on the spot, and it is called by
+    /// nearly every action any country takes: improving relations, queuing a building,
+    /// raising a division, taking a decision, resolving an event. In a world of two hundred
+    /// and sixty countries that is eight or nine times a campaign day - so every one of
+    /// them rebuilt the player's whole interface, and invalidated the border table that
+    /// every AI heuristic reads, for something that had not touched the map at all.
+    ///
+    /// It sets a flag now. The game flushes it once a frame, so ten changes in one day cost
+    /// one redraw instead of ten, and none of them costs a walk of the province map.
+    /// </summary>
+    public void MarkStrategicChange() => InterfaceDirty = true;
+
+    /// <summary>Something moved a border. This is what invalidates map-derived caches.</summary>
+    public void MarkMapChanged()
     {
         MapRevision++;
+        InterfaceDirty = true;
+    }
+
+    /// <summary>Whether anything has happened that the interface has not drawn yet.</summary>
+    public bool InterfaceDirty { get; private set; }
+
+    /// <summary>Redraw once for everything that has happened since the last frame.</summary>
+    public void FlushInterfaceChanges()
+    {
+        if (!InterfaceDirty) return;
+        InterfaceDirty = false;
         Changed?.Invoke();
     }
 
@@ -571,6 +598,15 @@ public static class SimProfiler
         /// turns into a stutter every time the collector has to catch up.
         /// </summary>
         public long AllocatedBytes;
+
+        /// <summary>
+        /// Total time, so a mean can be taken. The exponential average above is what a live
+        /// readout wants; it is useless for comparing two runs, because it depends on which
+        /// calls happened last.
+        /// </summary>
+        public double TotalMilliseconds;
+
+        public double MeanMilliseconds => Runs == 0 ? 0 : TotalMilliseconds / Runs;
     }
 
     private static readonly Dictionary<string, Sample> Samples = new();
@@ -603,6 +639,7 @@ public static class SimProfiler
             }
 
             sample.AllocatedBytes += allocated;
+            sample.TotalMilliseconds += elapsed;
             sample.LastMilliseconds = elapsed;
             sample.AverageMilliseconds = sample.Runs == 0
                 ? elapsed

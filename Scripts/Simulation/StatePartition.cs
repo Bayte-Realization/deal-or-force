@@ -62,7 +62,7 @@ public static class StatePartition
         }
 
         campaign.InvalidateStateIndex();
-        campaign.MarkStrategicChange();
+        campaign.MarkMapChanged();
         return created;
     }
 

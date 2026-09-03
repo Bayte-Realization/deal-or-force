@@ -19,7 +19,16 @@ public sealed class ProvinceTopology
     public const int CellsPerProvince = 162;
     public const int DisputedCellsPerProvince = 54;
 
-    public int[] CellToProvince { get; }
+    /// <summary>
+    /// Which province each cell of the source raster belongs to.
+    ///
+    /// Sixteen and a half million cells, so the element type is the whole cost: as an int
+    /// this array was sixty-six megabytes of the game's heap, which on a phone is most of
+    /// the budget for everything. There are thirty-seven thousand provinces and the
+    /// largest id will not pass sixty-five thousand for as long as the map is a raster of
+    /// this size, so a ushort holds it and the array is thirty-three.
+    /// </summary>
+    public ushort[] CellToProvince { get; }
     public ushort[] ProvinceToState { get; }
     public ushort[] ProvinceToNation { get; }
     public int[] ProvinceCenterCell { get; }
@@ -34,7 +43,7 @@ public sealed class ProvinceTopology
     private readonly Dictionary<long, byte> _riverCrossings = new();
 
     private ProvinceTopology(
-        int[] cellToProvince,
+        ushort[] cellToProvince,
         ushort[] provinceToState,
         ushort[] provinceToNation,
         int[] provinceCenterCell,
@@ -158,7 +167,7 @@ public sealed class ProvinceTopology
 
         BuildGraph(cellToProvince, provinceToState.Count, width, height, out var centers, out var neighbors);
         return new ProvinceTopology(
-            cellToProvince,
+            Pack(cellToProvince),
             provinceToState.ToArray(),
             provinceToNation.ToArray(),
             centers,
@@ -214,7 +223,8 @@ public sealed class ProvinceTopology
             if (!seen[province]) throw new InvalidDataException($"Province {province} from definition.csv has no pixels.");
 
         BuildGraph(cellToProvince, maxProvince + 1, width, height, out var centers, out var neighbors);
-        return new ProvinceTopology(cellToProvince, provinceToState, provinceToNation, centers, neighbors, width, height);
+        return new ProvinceTopology(Pack(cellToProvince), provinceToState, provinceToNation,
+            centers, neighbors, width, height);
     }
 
     /// <summary>
@@ -230,6 +240,30 @@ public sealed class ProvinceTopology
         new(CellToProvince, (ushort[])ProvinceToState.Clone(), (ushort[])ProvinceToNation.Clone(),
             ProvinceCenterCell, Neighbors, Width, Height);
 
+    /// <summary>
+    /// The growth and relaxation algorithms need a sentinel for "not assigned yet" and use
+    /// -1 for it, so they work in int and the result is packed on the way out. The wide
+    /// array exists only while the map is being compiled; what the game keeps is the
+    /// narrow one.
+    /// </summary>
+    private static ushort[] Pack(int[] cells)
+    {
+        var packed = new ushort[cells.Length];
+        for (var cell = 0; cell < cells.Length; cell++)
+        {
+            var province = cells[cell];
+            packed[cell] = province <= 0 || province > ushort.MaxValue ? (ushort)0 : (ushort)province;
+        }
+        return packed;
+    }
+
+    private static int[] Unpack(ushort[] cells)
+    {
+        var wide = new int[cells.Length];
+        for (var cell = 0; cell < cells.Length; cell++) wide[cell] = cells[cell];
+        return wide;
+    }
+
     public ProvinceTopology RelaxShapes(ushort[] states, ushort[] control, int iterations = 3)
     {
         if (states.Length != CellToProvince.Length || control.Length != states.Length)
@@ -237,7 +271,7 @@ public sealed class ProvinceTopology
         iterations = Math.Clamp(iterations, 0, 16);
         if (iterations == 0) return this;
 
-        var current = (int[])CellToProvince.Clone();
+        var current = Unpack(CellToProvince);
         var next = new int[current.Length];
         var cosines = new float[ProvinceCount + 1];
         var sines = new float[ProvinceCount + 1];
@@ -304,7 +338,7 @@ public sealed class ProvinceTopology
         BuildGraph(current, ProvinceCount + 1, Width, Height, out var centers, out var neighbors);
         for (var province = 1; province <= ProvinceCount; province++)
             if (centers[province] < 0) throw new InvalidDataException($"Province {province} vanished during shape relaxation.");
-        return new ProvinceTopology(current, (ushort[])ProvinceToState.Clone(), (ushort[])ProvinceToNation.Clone(),
+        return new ProvinceTopology(Pack(current), (ushort[])ProvinceToState.Clone(), (ushort[])ProvinceToNation.Clone(),
             centers, neighbors, Width, Height);
     }
 

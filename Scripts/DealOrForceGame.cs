@@ -56,12 +56,36 @@ public partial class DealOrForceGame : Control
     {
         NetworkProcess(delta);
         if (IsNetworkClient) return;
-        if (_campaign is null || _campaign.IsPaused) return;
+        if (_campaign is null) return;
+        // Everything that happened since the last frame, drawn once.
+        _campaign.FlushInterfaceChanges();
+        // Reported whether or not time is running: a measurement that only arrives when
+        // everything is already going well is no use for finding out why it is not.
+        ReportFrameCost(delta);
+        if (_campaign.IsPaused) return;
 
         _dayAccumulator += delta;
         var secondsPerDay = _campaign.Defines.SecondsForSpeed(_speed);
         var days = 0;
-        while (_dayAccumulator >= secondsPerDay && days < 4)
+
+        // Time is given a slice of the frame rather than a number of days.
+        //
+        // The loop used to run up to four days whatever they cost. A campaign day is
+        // fourteen milliseconds in a world with a hundred wars in it, and the first few
+        // days of a session are far worse because every path in the simulation is being
+        // compiled as it is first walked - so pressing play produced a stall of two hundred
+        // milliseconds and several more after it, which is exactly what "it lags when you
+        // start time" means.
+        //
+        // A budget converts that into the right failure: the frame stays inside its
+        // sixteen milliseconds and time runs as fast as it can rather than the frame rate
+        // collapsing to keep a promise about days. A speed the machine cannot reach becomes
+        // a slower campaign instead of an unresponsive one.
+        var budget = System.Diagnostics.Stopwatch.StartNew();
+        var slice = _campaign.Defines.FrameSimulationBudgetMs;
+        var cap = _campaign.Defines.MaxDaysPerFrame;
+        while (_dayAccumulator >= secondsPerDay && days < cap &&
+               (days == 0 || budget.Elapsed.TotalMilliseconds < slice))
         {
             _dayAccumulator -= secondsPerDay;
             if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
@@ -76,6 +100,66 @@ public partial class DealOrForceGame : Control
             MaybeAutosave();
             days++;
         }
+    }
+
+    private double _frameReportAccumulator;
+    private int _frameReportFrames;
+    private int _frameReportDay;
+    private int _frameReportRebuilds;
+    private int _frameReportRevision;
+
+    /// <summary>
+    /// What a frame actually costs, printed to the log every few seconds while time is
+    /// running. The headless bench measures the simulation and says a campaign day costs
+    /// eight milliseconds; a player reporting that the game is unplayable is reporting
+    /// something the bench cannot see, and guessing at which half is at fault is how an
+    /// afternoon disappears.
+    /// </summary>
+    private void ReportFrameCost(double delta)
+    {
+        _frameReportFrames++;
+        _frameReportAccumulator += delta;
+        if (_frameReportAccumulator < 5.0) return;
+        _frameReportAccumulator = 0;
+        var frames = _frameReportFrames;
+        _frameReportFrames = 0;
+
+        var days = _campaign.ElapsedDays - _frameReportDay;
+        _frameReportDay = _campaign.ElapsedDays;
+        var wanted = 5.0 / System.Math.Max(0.0001f, _campaign.Defines.SecondsForSpeed(_speed));
+
+        var line = new System.Text.StringBuilder();
+        line.Append($"[perf] {(_campaign.IsPaused ? "PAUSED" : "running")} " +
+                    $"{Engine.GetFramesPerSecond():0.#} fps, speed {_speed}: " +
+                    $"{days / 5.0:0.#} days/s against {wanted / 5.0:0.#} asked for " +
+                    $"({days:N0} day(s) in {frames:N0} frame(s)), day {_campaign.ElapsedDays:N0}. " +
+                    $"Memory {OS.GetStaticMemoryUsage() / 1_048_576:N0} MB engine, " +
+                    $"{System.GC.GetTotalMemory(false) / 1_048_576:N0} MB heap, " +
+                    $"{System.GC.GetTotalMemory(true) / 1_048_576:N0} MB live, " +
+                    $"{System.GC.CollectionCount(0)}/{System.GC.CollectionCount(1)}/" +
+                    $"{System.GC.CollectionCount(2)} collections, " +
+                    $"{Simulation.CampaignDiplomacy.Rebuilds - _frameReportRebuilds} border rebuild(s), " +
+                    $"map revision +{_campaign.MapRevision - _frameReportRevision}");
+        _frameReportRebuilds = Simulation.CampaignDiplomacy.Rebuilds;
+        _frameReportRevision = _campaign.MapRevision;
+        foreach (var sample in Simulation.SimProfiler.All
+                     .OrderByDescending(entry => entry.TotalMilliseconds)
+                     .Take(16))
+        {
+            line.AppendLine();
+            line.Append($"         {sample.Name,-14} {sample.MeanMilliseconds,7:0.###} ms" +
+                        $" x{sample.Runs,-6:N0} = {sample.TotalMilliseconds / 1000.0,6:0.##} s");
+        }
+        GD.Print(line.ToString());
+        // The log bridge does not always carry these through, and a measurement that does
+        // not arrive is not a measurement.
+        if (!OS.HasFeature("editor")) return;
+        try
+        {
+            System.IO.File.AppendAllText(ProjectSettings.GlobalizePath("res://perf.log"),
+                line.ToString() + System.Environment.NewLine);
+        }
+        catch { /* A read-only export directory is not worth a crash. */ }
     }
 
     public override void _Input(InputEvent inputEvent)
@@ -328,7 +412,7 @@ public partial class DealOrForceGame : Control
         }
         UpdateSpeedButtons();
 
-        var navigation = TexturedPanel(_hudLayer, PanelSurface.Command);
+        var navigation = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
         Ui.Place(navigation, "hud.navigation");
         var navMargin = Margin(navigation, 10, 8);
         var nav = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
@@ -928,12 +1012,23 @@ public partial class DealOrForceGame : Control
     private enum PanelSurface
     {
         Dossier,
-        Command
+        Command,
+        // Horizontal HUD bars use the same artwork as command panels, but need a
+        // much smaller nine-slice border. The full 48 px frame cannot fit into a
+        // 44-84 px strip and collapses its centre/background.
+        CommandStrip
     }
 
     private PanelContainer TexturedPanel(Node parent, PanelSurface surface = PanelSurface.Dossier)
     {
-        var panel = new PanelContainer();
+        var panel = new PanelContainer
+        {
+            // A panel is a hard layout boundary. This is deliberately enabled in
+            // addition to the safe content inset below: if a future mod or dynamic
+            // label grows unexpectedly, it can scroll/wrap inside its window but it
+            // cannot paint over the map outside the ornamental frame.
+            ClipContents = true
+        };
         panel.AddThemeStyleboxOverride("panel", PanelStyle(surface));
         parent.AddChild(panel);
         return panel;
@@ -1172,25 +1267,35 @@ public partial class DealOrForceGame : Control
 
     private StyleBox PanelStyle(PanelSurface surface)
     {
-        var command = surface == PanelSurface.Command;
+        var command = surface != PanelSurface.Dossier;
+        var strip = surface == PanelSurface.CommandStrip;
+        var textureMargin = strip ? 20f : command ? 48f : 28f;
+        // The tall command artwork draws its visible inner rail about 30 px from
+        // the outer edge. Keep controls on the inside of that rail. Callers add a
+        // further 8-16 px semantic margin, so 22 px lands text and buttons safely
+        // inside the frame without sacrificing the useful width of narrow panels.
+        var contentHorizontal = strip ? 6f : command ? 28f : 6f;
+        var contentVertical = strip ? 4f : command ? 22f : 4f;
         return new StyleBoxTexture
         {
-            Texture = GD.Load<Texture2D>(command
-                ? "res://Assets/Textures/UI/Modern/panel_command_frame.png"
-                : "res://Assets/Textures/UI/Modern/panel_dossier.png"),
-            TextureMarginLeft = command ? 48 : 28,
-            TextureMarginTop = command ? 48 : 28,
-            TextureMarginRight = command ? 48 : 28,
-            TextureMarginBottom = command ? 48 : 28,
+            Texture = GD.Load<Texture2D>(strip
+                ? "res://Assets/Textures/UI/Modern/panel_command_strip.png"
+                : command
+                    ? "res://Assets/Textures/UI/Modern/panel_command_frame.png"
+                    : "res://Assets/Textures/UI/Modern/panel_dossier.png"),
+            TextureMarginLeft = textureMargin,
+            TextureMarginTop = textureMargin,
+            TextureMarginRight = textureMargin,
+            TextureMarginBottom = textureMargin,
             // Texture margins describe the nine-slice artwork, not layout padding.
-            // Leaving these margins implicit makes PanelContainer add another 56/96 px
-            // to its minimum size. Tall panels then ignore their data-driven rectangle
-            // and collide with the map-mode and navigation bands. Every panel already
-            // owns an explicit MarginContainer, so the style must not reserve space too.
-            ContentMarginLeft = 0,
-            ContentMarginTop = 0,
-            ContentMarginRight = 0,
-            ContentMarginBottom = 0,
+            // Letting Godot derive content margins from them adds 56/96 px to a panel's
+            // minimum size, while zero on every surface makes shallow frames collapse.
+            // These small explicit values keep the visual frame intact; callers still
+            // own the semantic padding through MarginContainer.
+            ContentMarginLeft = contentHorizontal,
+            ContentMarginTop = contentVertical,
+            ContentMarginRight = contentHorizontal,
+            ContentMarginBottom = contentVertical,
             ModulateColor = command
                 ? new Color(0.88f, 0.92f, 0.98f, 0.985f)
                 : new Color(0.9f, 0.94f, 1f, 0.98f)

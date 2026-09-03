@@ -201,7 +201,7 @@ public static class PeaceNegotiation
             battle.Ended = true;
             battle.Outcome = "Peace agreement";
         }
-        campaign.MarkStrategicChange();
+        campaign.MarkMapChanged();
     }
 }
 
