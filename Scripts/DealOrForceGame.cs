@@ -51,6 +51,8 @@ public partial class DealOrForceGame : Control
         // The interface is built next and asks for its pictures by name, so the names have
         // to mean something first. Mods layer their own over these when a campaign starts.
         Simulation.SpriteCatalog.Load();
+        Simulation.SoundCatalog.Load();
+        Simulation.MusicCatalog.Load();
         BuildInterface();
         StartCampaign();
     }

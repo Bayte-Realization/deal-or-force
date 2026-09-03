@@ -144,6 +144,26 @@ public static class GameDataLoader
         return null;
     }
 
+    /// <summary>
+    /// One asset path against the package that declared it.
+    ///
+    /// A mod names its own files relative to itself, because it cannot know where the
+    /// player installed it; the base game names its own with an absolute engine path,
+    /// because all of its art and audio already lives outside the data folders. Both are
+    /// accepted, and every catalogue that points at a file resolves it the same way.
+    /// </summary>
+    public static string ResolveAssetPath(string path, string assetRoot)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "";
+        path = path.Trim().Replace('\\', '/');
+        if (path.Contains("://")) return path;
+        if (string.IsNullOrWhiteSpace(assetRoot)) return path;
+
+        var root = assetRoot.Replace('\\', '/');
+        if (!root.EndsWith("/", StringComparison.Ordinal)) root += "/";
+        return root + path.TrimStart('/');
+    }
+
     private static IEnumerable<string> CandidateRoots()
     {
         yield return Directory.GetCurrentDirectory();

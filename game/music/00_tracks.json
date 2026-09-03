@@ -1,0 +1,17 @@
+// The soundtrack.
+//
+// Deal or Force ships without music, which makes this the shortest list in the game and
+// the easiest thing in it to change: a mod drops its own files in and names them here.
+//
+//   {
+//     "tracks": {
+//       "menu_theme": { "file": "audio/theme.ogg", "weight": 2, "when": "menu" },
+//       "cold_front": { "file": "audio/front.ogg", "when": "campaign" }
+//     }
+//   }
+//
+// when    - "menu", "campaign", or "any" (the default).
+// weight  - how often it comes round relative to the others. One by default.
+{
+  "tracks": {}
+}

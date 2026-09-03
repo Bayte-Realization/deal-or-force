@@ -40,6 +40,8 @@ category, and never the executable.
         provinces/       the political map: one line per province
         states/          regional starting values
         units/           standing army sizes, and the navies of the bookmark
+      music/             the soundtrack - empty in the base game, yours to fill
+      sound/             what each moment sounds like, and how the channels behave
       localization/      one folder per language, as many files as you like
         english/
         russian/
@@ -116,6 +118,31 @@ alone, which is how the base game points at its own `Assets/` tree.
 
 List only the sprites you are replacing: the other thirty are inherited. `game/gfx/` is
 the full set of names, and it is the only place they are written down.
+
+**Change what the game sounds like.** The code names the moment - a war was declared, a
+battle was lost - and `sound/` says what that is. `sound/50_my_audio.json`:
+
+    {
+      "cues": {
+        "war_declared": "audio/mine.wav",
+        "battle_won": { "cooldown_ms": 12000 }
+      }
+    }
+
+A bare path replaces the file and keeps the timing; a declaration changes only the fields
+it names. The six moments are in `game/sound/01_cues.json`, the three channels and how
+they interrupt each other in `00_channels.json`.
+
+**Add a soundtrack.** The base game ships none, so `music/` is usually a mod's list alone:
+
+    {
+      "tracks": {
+        "cold_front": { "file": "audio/front.ogg", "when": "campaign", "weight": 2 }
+      }
+    }
+
+`when` is `menu`, `campaign` or `any`; `weight` is how often a track comes round against
+the others.
 
 ## What is still code
 

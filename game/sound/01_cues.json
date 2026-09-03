@@ -1,0 +1,46 @@
+// Every moment the game has a sound for.
+//
+// The code names the moment; this file says what it sounds like and how it behaves. A
+// mod replacing one sound writes `"war_declared": "audio/mine.wav"` and inherits the
+// timing; a mod that wants the battle report to come round twice as often changes
+// cooldown_ms and inherits the file.
+//
+// cooldown_ms  - how long before this cue may sound again.
+// yields_to_anything_playing - true for cues that arrive in batches, so a hundred
+//                              resolved battles never talk over a peace being signed.
+{
+  "cues": {
+    "war_declared": {
+      "file": "Assets/Audio/Modern/war_declared.wav",
+      "channel": "strategic",
+      "cooldown_ms": 900
+    },
+    "peace_signed": {
+      "file": "Assets/Audio/Modern/peace_signed.wav",
+      "channel": "strategic",
+      "cooldown_ms": 900
+    },
+    "event_alert": {
+      "file": "Assets/Audio/Modern/event_alert.wav",
+      "channel": "strategic",
+      "cooldown_ms": 900
+    },
+    "battle_won": {
+      "file": "Assets/Audio/Modern/battle_won.wav",
+      "channel": "battle",
+      "cooldown_ms": 4500,
+      "yields_to_anything_playing": true
+    },
+    "battle_lost": {
+      "file": "Assets/Audio/Modern/battle_lost.wav",
+      "channel": "battle",
+      "cooldown_ms": 4500,
+      "yields_to_anything_playing": true
+    },
+    "ui_select": {
+      "file": "Assets/Audio/Modern/ui_select.wav",
+      "channel": "interface",
+      "cooldown_ms": 80
+    }
+  }
+}

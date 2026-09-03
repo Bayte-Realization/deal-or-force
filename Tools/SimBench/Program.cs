@@ -124,6 +124,8 @@ public static class Program
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
         failures += Check("every picture the interface asks for has a name a mod can rebind",
             ArtworkIsNamedRatherThanSpelledOut());
+        failures += Check("every sound the game makes is declared where a mod can reach it",
+            AudioIsDeclaredRatherThanWiredIn());
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
         failures += Check("every explained number adds up to what the screen shows",
@@ -1639,6 +1641,86 @@ public static class Program
 
         Console.WriteLine($"  artwork: {SpriteCatalog.Count:N0} named sprite(s) in gfx/, every path present, " +
                           "and a later file wins.");
+        return "";
+    }
+
+    /// <summary>
+    /// The moments belong to the code; what they sound like belongs to the data.
+    ///
+    /// Every part of a cue used to be a constant in the interface: the file, which of the
+    /// three players it went to, how loud, and how long before it could sound again - that
+    /// last one a `switch` on the cue's own name, which is the least reachable place a
+    /// modder could look. The check holds the two halves apart: the six moments the code
+    /// raises must all be declared, and the declaration has to be the thing that decides.
+    /// </summary>
+    private static string AudioIsDeclaredRatherThanWiredIn()
+    {
+        SoundCatalog.Load();
+        MusicCatalog.Load();
+        if (SoundCatalog.Count == 0) return "sound/ declares no cues at all";
+
+        // The moments the interface raises by name.
+        var raised = new[]
+        {
+            "war_declared", "peace_signed", "event_alert",
+            "battle_won", "battle_lost", "ui_select"
+        };
+        var missing = raised.Where(name => !SoundCatalog.Has(name)).ToList();
+        if (missing.Count > 0)
+            return $"sound/ declares nothing for {string.Join(", ", missing)}";
+
+        var root = GameDataLoader.DataFolder("sound");
+        var projectRoot = root is null ? null : Directory.GetParent(root)?.Parent?.FullName;
+        var problems = new List<string>();
+        foreach (var cue in SoundCatalog.All)
+        {
+            // A cue routed to a channel nobody declares would play at full volume through
+            // whatever player happened to exist, which is how a click becomes a klaxon.
+            if (!SoundCatalog.AllChannels.Any(channel =>
+                    string.Equals(channel.Name, cue.Channel, StringComparison.OrdinalIgnoreCase)))
+                problems.Add($"{cue.Name} plays on undeclared channel '{cue.Channel}'");
+
+            if (projectRoot is null || !cue.File.StartsWith("res://", StringComparison.Ordinal)) continue;
+            var relative = cue.File.Substring("res://".Length).Replace('/', Path.DirectorySeparatorChar);
+            if (!File.Exists(Path.Combine(projectRoot, relative)))
+                problems.Add($"{cue.Name} -> {cue.File} is not there");
+        }
+        if (problems.Count > 0)
+            return $"{problems.Count:N0} broken cue(s): {string.Join("; ", problems.Take(3))}";
+
+        // A mod retiming one cue must keep everything else about it, because restating a
+        // whole declaration to change one number is how a mod goes stale next patch.
+        var before = SoundCatalog.Get("battle_won");
+        SoundCatalog.Merge("{ \"cues\": { \"battle_won\": { \"cooldown_ms\": 250 } } }",
+            "user://mods/example", "test", null);
+        var after = SoundCatalog.Get("battle_won");
+        if (after.CooldownMs != 250) return "a mod could not retime a cue";
+        if (after.File != before.File || after.Channel != before.Channel)
+            return "retiming a cue lost the rest of its declaration";
+
+        // And a mod's own audio resolves inside the mod's own folder.
+        SoundCatalog.Merge("{ \"cues\": { \"battle_won\": \"audio/mine.wav\" } }",
+            "user://mods/example", "test", null);
+        var replaced = SoundCatalog.Get("battle_won");
+        if (replaced.File != "user://mods/example/audio/mine.wav")
+            return $"a mod's own sound resolved to '{replaced.File}' instead of inside the mod folder";
+        if (replaced.CooldownMs != 250)
+            return "replacing a cue's file discarded how the cue behaves";
+
+        MusicCatalog.Merge("{ \"tracks\": { \"theme\": { \"file\": \"audio/theme.ogg\", \"when\": \"menu\" } } }",
+            "user://mods/example", "test", null);
+        var menu = MusicCatalog.For(MusicCatalog.Moment.Menu);
+        var campaign = MusicCatalog.For(MusicCatalog.Moment.Campaign);
+        if (menu.Count != 1 || menu[0].File != "user://mods/example/audio/theme.ogg")
+            return "a mod could not add a track of its own";
+        if (campaign.Count != 0)
+            return "a menu track was offered to the campaign as well";
+
+        SoundCatalog.Load();
+        MusicCatalog.Load();
+        Console.WriteLine($"  audio: {SoundCatalog.Count:N0} declared cue(s) across " +
+                          $"{SoundCatalog.AllChannels.Count():N0} channel(s), every file present, " +
+                          $"{MusicCatalog.Count:N0} shipped track(s) and a mod can add its own.");
         return "";
     }
 

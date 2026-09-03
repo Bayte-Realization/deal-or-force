@@ -1,93 +1,121 @@
 using System.Collections.Generic;
 using System.Linq;
+using DealOrForce.Simulation;
 using Godot;
 
 namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
-    private AudioStreamPlayer _strategicAudio = null!;
-    private AudioStreamPlayer _battleAudio = null!;
-    private AudioStreamPlayer _uiAudio = null!;
+    private readonly Dictionary<string, AudioStreamPlayer> _audioChannels = new();
     private readonly Dictionary<string, AudioStream> _strategicCues = new();
     private readonly HashSet<int> _knownEndedBattles = new();
     private readonly Queue<string> _strategicAudioQueue = new();
     private readonly Dictionary<string, ulong> _lastCueAt = new();
-    private ulong _lastBattleCueAt;
+    private AudioStreamPlayer _musicPlayer;
+    private readonly System.Random _musicOrder = new();
 
+    /// <summary>
+    /// The channels and the cues both come out of `sound/`. The code below knows that a
+    /// cue has a channel, a level, a cooldown and a manner; it does not know that there
+    /// are three channels, or that a battle report waits four and a half seconds. Those
+    /// were constants in this file and are declarations now.
+    /// </summary>
     private void BuildStrategicAudio()
     {
-        _strategicAudio = new AudioStreamPlayer { Name = "StrategicAudio", VolumeDb = -7f };
-        _battleAudio = new AudioStreamPlayer { Name = "BattleAudio", VolumeDb = -10f };
-        _uiAudio = new AudioStreamPlayer { Name = "InterfaceAudio", VolumeDb = -15f };
-        AddChild(_strategicAudio);
-        AddChild(_battleAudio);
-        AddChild(_uiAudio);
-        _strategicAudio.Finished += PlayNextStrategicCue;
-        LoadCue("war_declared");
-        LoadCue("peace_signed");
-        LoadCue("battle_won");
-        LoadCue("battle_lost");
-        LoadCue("event_alert");
-        LoadCue("ui_select");
+        foreach (var channel in SoundCatalog.AllChannels)
+        {
+            var player = new AudioStreamPlayer
+            {
+                Name = $"Audio_{channel.Name}",
+                VolumeDb = channel.VolumeDb
+            };
+            AddChild(player);
+            _audioChannels[channel.Name] = player;
+            // Only a queueing channel needs to know when it has finished.
+            if (!channel.Independent) player.Finished += PlayNextStrategicCue;
+        }
+
+        _musicPlayer = new AudioStreamPlayer { Name = "Music", VolumeDb = SoundCatalog.GetChannel("music").VolumeDb };
+        AddChild(_musicPlayer);
+        _musicPlayer.Finished += PlayNextTrack;
+        PlayNextTrack();
+
+        foreach (var cue in SoundCatalog.All)
+        {
+            if (!ResourceLoader.Exists(cue.File))
+            {
+                GD.PushWarning($"[dof] sound cue '{cue.Name}' points at {cue.File}, which is not there");
+                continue;
+            }
+            var stream = GD.Load<AudioStream>(cue.File);
+            if (stream is not null) _strategicCues[cue.Name] = stream;
+        }
     }
 
-    private void LoadCue(string name)
-    {
-        var modernPath = $"res://Assets/Audio/Modern/{name}.wav";
-        var stream = ResourceLoader.Exists(modernPath)
-            ? GD.Load<AudioStream>(modernPath)
-            : GD.Load<AudioStream>($"res://Assets/Audio/{name}.wav");
-        if (stream is not null) _strategicCues[name] = stream;
-    }
-
+    /// <summary>
+    /// Whether a cue may be heard, and at whose expense.
+    ///
+    /// Three rules, all of them from the data: a cue waits out its own cooldown; a
+    /// yielding cue stays quiet while anything that can be interrupted is speaking; and a
+    /// cue that does sound silences every lower-priority channel and queues behind its own.
+    /// </summary>
     private void PlayStrategicCue(string name)
     {
         if (!_strategicCues.TryGetValue(name, out var stream)) return;
+        var cue = SoundCatalog.Get(name);
+        var channel = SoundCatalog.GetChannel(cue.Channel);
+        if (!_audioChannels.TryGetValue(cue.Channel, out var player)) return;
 
         var now = Time.GetTicksMsec();
-        var cooldown = name switch
-        {
-            "ui_select" => 80UL,
-            "battle_won" or "battle_lost" => 4500UL,
-            _ => 900UL
-        };
-        if (_lastCueAt.TryGetValue(name, out var previous) && now - previous < cooldown) return;
+        if (_lastCueAt.TryGetValue(name, out var previous) && now - previous < (ulong)cue.CooldownMs) return;
 
-        if (name == "ui_select")
+        if (channel.Independent)
         {
             _lastCueAt[name] = now;
-            _uiAudio.Stream = stream;
-            _uiAudio.Play();
+            Speak(player, cue, stream);
             return;
         }
 
-        if (name is "battle_won" or "battle_lost")
-        {
-            // Battles can resolve in batches. One concise report is enough; it must never
-            // interrupt a declaration, event or peace notification.
-            if (_battleAudio.Playing || _strategicAudio.Playing || now - _lastBattleCueAt < 4500UL) return;
-            _lastCueAt[name] = now;
-            _lastBattleCueAt = now;
-            _battleAudio.Stream = stream;
-            _battleAudio.Play();
-            return;
-        }
+        // Anything that arrives in batches gives way rather than queueing: a hundred
+        // resolved battles must not become a hundred reports waiting their turn.
+        if (cue.Yielding && Occupied(0)) return;
 
-        if (_strategicAudio.Playing)
+        if (player.Playing)
         {
             if (_strategicAudioQueue.Count < 3 && !_strategicAudioQueue.Contains(name))
                 _strategicAudioQueue.Enqueue(name);
             return;
         }
 
+        foreach (var (other, speaking) in _audioChannels)
+        {
+            var declaration = SoundCatalog.GetChannel(other);
+            if (declaration.Independent || declaration.Priority >= channel.Priority) continue;
+            if (speaking.Playing) speaking.Stop();
+        }
+
         _lastCueAt[name] = now;
-        // Important state changes take precedence over a disposable battle report.
-        // Stopping the lower-priority channel avoids two unrelated stingers talking over
-        // one another while keeping interface feedback independent and responsive.
-        if (_battleAudio.Playing) _battleAudio.Stop();
-        _strategicAudio.Stream = stream;
-        _strategicAudio.Play();
+        Speak(player, cue, stream);
+    }
+
+    /// <summary>Whether any interruptible channel at or above a priority is speaking.</summary>
+    private bool Occupied(int fromPriority)
+    {
+        foreach (var (name, player) in _audioChannels)
+        {
+            var channel = SoundCatalog.GetChannel(name);
+            if (channel.Independent || channel.Priority < fromPriority) continue;
+            if (player.Playing) return true;
+        }
+        return false;
+    }
+
+    private static void Speak(AudioStreamPlayer player, SoundCatalog.Cue cue, AudioStream stream)
+    {
+        player.VolumeDb = SoundCatalog.GetChannel(cue.Channel).VolumeDb + cue.VolumeDb;
+        player.Stream = stream;
+        player.Play();
     }
 
     private void PlayNextStrategicCue()
@@ -95,19 +123,51 @@ public partial class DealOrForceGame
         if (_strategicAudioQueue.Count == 0) return;
         var name = _strategicAudioQueue.Dequeue();
         if (!_strategicCues.TryGetValue(name, out var stream)) return;
+        var cue = SoundCatalog.Get(name);
+        if (!_audioChannels.TryGetValue(cue.Channel, out var player)) return;
         _lastCueAt[name] = Time.GetTicksMsec();
-        _strategicAudio.Stream = stream;
-        _strategicAudio.Play();
+        Speak(player, cue, stream);
+    }
+
+    /// <summary>
+    /// The next track, weighted, from whatever is declared for where the player is.
+    ///
+    /// The base game declares nothing, so this does nothing - which is the point. A game
+    /// that only plays music its own code names is a game no mod can score, and the whole
+    /// `music/` folder exists so that the list is somebody else's to write.
+    /// </summary>
+    private void PlayNextTrack()
+    {
+        if (_musicPlayer is null) return;
+        var moment = _hudLayer is not null && _hudLayer.Visible
+            ? MusicCatalog.Moment.Campaign
+            : MusicCatalog.Moment.Menu;
+        var tracks = MusicCatalog.For(moment);
+        if (tracks.Count == 0) return;
+
+        var total = 0f;
+        foreach (var track in tracks) total += track.Weight;
+        var roll = (float)_musicOrder.NextDouble() * total;
+        foreach (var track in tracks)
+        {
+            roll -= track.Weight;
+            if (roll > 0f) continue;
+            if (!ResourceLoader.Exists(track.File))
+            {
+                GD.PushWarning($"[dof] music track '{track.Name}' points at {track.File}, which is not there");
+                return;
+            }
+            _musicPlayer.Stream = GD.Load<AudioStream>(track.File);
+            _musicPlayer.Play();
+            return;
+        }
     }
 
     private void ResetStrategicAudioState()
     {
-        _strategicAudio.Stop();
-        _battleAudio.Stop();
-        _uiAudio.Stop();
+        foreach (var player in _audioChannels.Values) player.Stop();
         _strategicAudioQueue.Clear();
         _lastCueAt.Clear();
-        _lastBattleCueAt = 0;
         _knownEndedBattles.Clear();
         foreach (var battle in _campaign.Battles.Where(battle => battle.Ended))
             _knownEndedBattles.Add(battle.Id);

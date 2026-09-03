@@ -1,0 +1,16 @@
+// The three things the game can be saying at once, and how they behave together.
+//
+// A channel plays one sound at a time, which is the whole reason there are three.
+//
+// priority     - a cue silences any channel below its own, so a declaration of war cuts
+//                off a battle report and never the other way round.
+// independent  - a channel that neither waits for the others nor makes them wait. The
+//                interface click is why this exists: it is feedback for something the
+//                player just did, and feedback that arrives late is worse than none.
+{
+  "channels": {
+    "strategic": { "volume_db": -7, "priority": 2 },
+    "battle": { "volume_db": -10, "priority": 1 },
+    "interface": { "volume_db": -15, "priority": 0, "independent": true }
+  }
+}

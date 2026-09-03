@@ -146,7 +146,7 @@ public static class SpriteCatalog
             switch (declaration.Value.ValueKind)
             {
                 case JsonValueKind.String:
-                    Sprites[name] = new Sprite(Resolve(declaration.Value.GetString(), assetRoot), "", 1);
+                    Sprites[name] = new Sprite(GameDataLoader.ResolveAssetPath(declaration.Value.GetString(), assetRoot), "", 1);
                     break;
 
                 case JsonValueKind.Object:
@@ -174,7 +174,7 @@ public static class SpriteCatalog
                                  counted.TryGetInt32(out var parsed)
                         ? parsed
                         : 1;
-                    Sprites[name] = new Sprite(Resolve(texture, assetRoot), tint, frames);
+                    Sprites[name] = new Sprite(GameDataLoader.ResolveAssetPath(texture, assetRoot), tint, frames);
                     break;
                 }
 
@@ -185,20 +185,4 @@ public static class SpriteCatalog
         }
     }
 
-    /// <summary>
-    /// A texture path against the package that declared it. An absolute engine path is left
-    /// alone so the base game can point at art outside `gfx/`, which is where all of it
-    /// already lives; anything else belongs to the package and is found beside it.
-    /// </summary>
-    private static string Resolve(string texture, string assetRoot)
-    {
-        if (string.IsNullOrWhiteSpace(texture)) return "";
-        texture = texture.Trim().Replace('\\', '/');
-        if (texture.Contains("://")) return texture;
-        if (string.IsNullOrWhiteSpace(assetRoot)) return texture;
-
-        var root = assetRoot.Replace('\\', '/');
-        if (!root.EndsWith("/", StringComparison.Ordinal)) root += "/";
-        return root + texture.TrimStart('/');
-    }
 }

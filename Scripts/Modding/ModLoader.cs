@@ -96,6 +96,8 @@ public sealed class ModLoader
         Loc.ResetCatalog();
         InterfaceSkin.ResetCatalog();
         SpriteCatalog.Load();
+        SoundCatalog.Load();
+        MusicCatalog.Load();
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
@@ -117,6 +119,7 @@ public sealed class ModLoader
             ApplyLocalization(package);
             ApplySkin(package);
             ApplySprites(package);
+            ApplyAudio(package);
             ApplyCountries(package, campaign);
             ApplyProvinceOwnership(package);
             ApplyHistory(package, campaign);
@@ -243,6 +246,23 @@ public sealed class ModLoader
                 package.VirtualRoot, package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"gfx: {exception.Message}"); }
+    }
+
+    /// <summary>
+    /// A mod's own sound and its own soundtrack, layered like everything else. Music is
+    /// the one category where the base game declares nothing at all, so a mod's list is
+    /// usually the only list there is.
+    /// </summary>
+    private void ApplyAudio(ModPackage package)
+    {
+        try
+        {
+            SoundCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "sound"),
+                package.VirtualRoot, package.Errors);
+            MusicCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "music"),
+                package.VirtualRoot, package.Errors);
+        }
+        catch (Exception exception) { package.Errors.Add($"sound: {exception.Message}"); }
     }
 
     /// <summary>
