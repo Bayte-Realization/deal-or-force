@@ -121,7 +121,6 @@ public sealed partial class GlobePresentation
             var supply = supplySum / stack.Count;
             var plate = marker.GetChildOrNull<Sprite3D>(0);
             var count = marker.GetNodeOrNull<Label3D>("DivisionCount");
-            var status = marker.GetNodeOrNull<Label3D>("OperationalStatus");
             if (plate is not null)
             {
                 plate.Modulate = anySelected
@@ -132,17 +131,17 @@ public sealed partial class GlobePresentation
             }
             if (count is not null)
             {
-                var countText = stack.Count.ToString();
-                if (count.Text != countText) count.Text = countText;
-            }
-            if (status is not null)
-            {
-                // The lower line is reserved for actual personnel. Order, stance,
-                // organisation and planning remain available in the selection panel.
-                status.Modulate = supply < 0.45 || cutOff
+                // The text belongs to the reconcile pass, which knows the real division
+                // and personnel totals; this pass owns only the colour. Both used to write
+                // the text, with different numbers, and whichever ran last won.
+                //
+                // The condition now colours the whole counter rather than the small lower
+                // line, so a formation out of supply reads at a glance instead of on
+                // inspection. Order, stance and planning remain in the selection panel.
+                count.Modulate = supply < 0.45f || cutOff
                     ? Ui.Colour("military.routed")
-                    : organisation < 0.35 ? Ui.Colour("military.shaken")
-                    : planning > 0.70 ? Ui.Colour("military.planning") : Ui.Colour("military.ready");
+                    : organisation < 0.35f ? Ui.Colour("military.shaken")
+                    : planning > 0.70f ? Ui.Colour("military.planning") : Ui.Colour("military.ready");
             }
         }
         UpdateBattleMarkers();

@@ -63,13 +63,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public Node3D Node;
         public Sprite3D Plate;
         public Label3D Count;
-        public Label3D Status;
         public readonly List<Simulation.Army> Stack = new();
         public Vector3 Normal;
         public int NationId = -1;
         public string TemplateId = "";
         public string CountText = "";
-        public string StatusText = "";
         public bool Seen;
     }
 
@@ -1424,17 +1422,15 @@ void fragment() {
                 divisions += army.Divisions;
                 personnel += DivisionPersonnel(army);
             }
-            var countText = Mathf.CeilToInt(divisions).ToString();
+            // Divisions over men, on one label rather than two. Every counter used to carry
+            // a second Label3D for the personnel line, and a Label3D is some sixty kilobytes
+            // of mesh and material - affordable at two hundred counters, fifty megabytes at
+            // twelve hundred. The line below is the same two numbers in the same order.
+            var countText = $"{Mathf.CeilToInt(divisions)}\n{personnel / 1000f:0.#}k";
             if (!string.Equals(marker.CountText, countText, StringComparison.Ordinal))
             {
                 marker.Count.Text = countText;
                 marker.CountText = countText;
-            }
-            var statusText = $"{personnel / 1000f:0.#}k";
-            if (!string.Equals(marker.StatusText, statusText, StringComparison.Ordinal))
-            {
-                marker.Status.Text = statusText;
-                marker.StatusText = statusText;
             }
 
             _armyMarkers.Add((marker.Node, marker.Normal));
@@ -1446,11 +1442,6 @@ void fragment() {
         Simulation.Army lead, string templateId)
     {
 
-        // Divisions are independent simulation entities. Presentation is deliberately
-        // coarser for foreign forces: otherwise modern active-personnel totals create
-        // thousands of Label3D/material instances and exhaust the renderer descriptor
-        // heap. The player's divisions retain province precision for direct control;
-        // foreign divisions form one readable operational stack per state.
         {
             var node = new Node3D { Name = $"DivisionStack_{nation.Tag}_{lead.ProvinceId}_{lead.Id}" };
             _armyRoot.AddChild(node);
@@ -1475,47 +1466,40 @@ void fragment() {
             {
                 Name = "DivisionCount",
                 Text = "",
-                FontSize = 31,
+                FontSize = 27,
                 PixelSize = 0.00030f,
+                LineSpacing = -6f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 FixedSize = true,
                 OutlineSize = 8,
-                Modulate = Ui.Colour("globe.label"),
+                Modulate = Ui.Colour("military.ready"),
                 OutlineModulate = Ui.Colour("globe.label_outline"),
-                Position = new Vector3(0f, 0f, 0.004f),
+                Position = new Vector3(0f, -0.004f, 0.004f),
                 NoDepthTest = true
             };
             node.AddChild(divisions);
             marker.Count = divisions;
 
-            var status = new Label3D
-            {
-                Name = "OperationalStatus",
-                Text = "",
-                FontSize = 18,
-                PixelSize = 0.00023f,
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-                FixedSize = true,
-                OutlineSize = 6,
-                Modulate = Ui.Colour("globe.label_minor"),
-                OutlineModulate = Ui.Colour("globe.label_minor_outline"),
-                Position = new Vector3(0f, -0.025f, 0.005f),
-                NoDepthTest = true
-            };
-            node.AddChild(status);
-            marker.Status = status;
         }
     }
 
+    /// <summary>
+    /// Which counter a division belongs to: its country and the province it stands in.
+    ///
+    /// One rule for everybody. The player's own divisions were bucketed by province and
+    /// everybody else's by army group or by whole state, so a foreign army spread across
+    /// thirty provinces of front drew as a single counter reading x122 somewhere in the
+    /// middle of the country. The map was telling the player something that was not true:
+    /// those divisions were on the line, in a line, and the map said they were in a heap.
+    ///
+    /// A division with no province falls back to its own position rounded to a twentieth
+    /// of a degree, which is fine ground - two divisions merge only if they are within a
+    /// few kilometres of each other, and they have nowhere else to be drawn anyway.
+    /// </summary>
     private static (int NationId, int LocationId, int FallbackLatitude, int FallbackLongitude)
         ArmyPresentationBucket(Simulation.Campaign campaign, Simulation.Army division)
     {
-        if (division.NationId == campaign.Player?.Id && division.ProvinceId > 0)
-            return (division.NationId, division.ProvinceId, 0, 0);
-        if (division.ArmyGroupId >= 0)
-            return (division.NationId, -2_000_000 - division.ArmyGroupId, 0, 0);
-        if (division.StateMapIndex >= 0)
-            return (division.NationId, -(division.StateMapIndex + 1), 0, 0);
+        if (division.ProvinceId > 0) return (division.NationId, division.ProvinceId, 0, 0);
         return (division.NationId, 0, Mathf.RoundToInt(division.Latitude * 20f),
             Mathf.RoundToInt(division.Longitude * 20f));
     }
