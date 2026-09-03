@@ -19,8 +19,30 @@ public sealed partial class GlobePresentation
 {
     private const float FlatMapWidth = 20f;
     private const float FlatMapHeight = 10f;
-    private const float MinimumFlatZoom = 2.2f;
+    /// <summary>
+    /// The vertical extent of the flat map in world units. Its floor is the same decision
+    /// as <c>MinimumDistance</c>: close enough to give an order to one division standing
+    /// in one province.
+    /// </summary>
+    private const float MinimumFlatZoom = 0.6f;
     private const float MaximumFlatZoom = 11.5f;
+
+    /// <summary>
+    /// The same altitude expressed the other way, so switching projection keeps the view.
+    ///
+    /// This conversion used to be spelled out at three call sites with a pair of magic
+    /// numbers - times eight plus two point four, and its inverse - which encoded the zoom
+    /// limits of the day. Moving either limit silently broke every one of them.
+    /// </summary>
+    private static float FlatZoomForDistance(float distance) => Mathf.Clamp(
+        Mathf.Lerp(MinimumFlatZoom, MaximumFlatZoom,
+            Mathf.InverseLerp(MinimumDistance, MaximumDistance, distance)),
+        MinimumFlatZoom, MaximumFlatZoom);
+
+    private static float DistanceForFlatZoom(float flatZoom) => Mathf.Clamp(
+        Mathf.Lerp(MinimumDistance, MaximumDistance,
+            Mathf.InverseLerp(MinimumFlatZoom, MaximumFlatZoom, flatZoom)),
+        MinimumDistance, MaximumDistance);
 
     private MeshInstance3D _globeNode = null!;
     private Node3D _spaceNode = null!;
@@ -75,9 +97,7 @@ public sealed partial class GlobePresentation
             while (longitude > 180f) longitude -= 360f;
             _targetFlatX = _flatX = longitude / 18f;
             _targetFlatY = _flatY = -Mathf.RadToDeg(_targetPitch) / 18f;
-            _targetFlatZoom = _flatZoom = Mathf.Clamp(
-                (_targetDistance - MinimumDistance) / (MaximumDistance - MinimumDistance) * 8f + 2.4f,
-                MinimumFlatZoom, MaximumFlatZoom);
+            _targetFlatZoom = _flatZoom = FlatZoomForDistance(_targetDistance);
         }
         else
         {
@@ -85,9 +105,7 @@ public sealed partial class GlobePresentation
             var latitude = _flatY / FlatMapHeight * 180f;
             _targetYaw = _yaw = Mathf.DegToRad(longitude + 180f);
             _targetPitch = _pitch = Mathf.Clamp(-Mathf.DegToRad(latitude), -1.20f, 1.20f);
-            _targetDistance = _distance = Mathf.Clamp(
-                (_flatZoom - 2.4f) / 8f * (MaximumDistance - MinimumDistance) + MinimumDistance,
-                MinimumDistance, MaximumDistance);
+            _targetDistance = _distance = DistanceForFlatZoom(_flatZoom);
         }
 
         _flatMap = enabled;

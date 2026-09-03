@@ -36,8 +36,34 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private const float FlatLineZ = 0.004f;
     private const float FlatMarkerZ = 0.007f;
     private const float FlatTextZ = 0.009f;
-    private const float MinimumDistance = 6.2f;
+    /// <summary>
+    /// How close the camera may come to a globe whose radius is five.
+    ///
+    /// Six point two left it a fifth of the planet's radius above the ground, which is
+    /// fine for looking at a war and useless for conducting one: a province was a few
+    /// pixels across and the counter standing on it covered its neighbours. A quarter of a
+    /// unit is close enough that a province is a place rather than a dot, and the near
+    /// plane is five hundredths, so there is room to spare.
+    /// </summary>
+    private const float MinimumDistance = 5.25f;
     private const float MaximumDistance = 24f;
+
+    /// <summary>
+    /// How big a division counter is drawn, and how that changes with the altitude.
+    ///
+    /// Counters are fixed-size: they hold the same number of pixels however far away the
+    /// ground is. That is right for reading a map and wrong for working one - at
+    /// operational altitude the counter is about the width of two provinces, which is fine
+    /// because the provinces are dots, and at the new close zoom a province is three
+    /// hundred pixels tall and the counter is still a thumbnail.
+    ///
+    /// So the size follows the camera down: full size where the player is moving single
+    /// divisions, unchanged where making it bigger would only bury the neighbours.
+    /// </summary>
+    private const float CounterPlatePixelSize = 0.000115f;
+    private const float CounterTextPixelSize = 0.00030f;
+    private const int CounterOutlineSize = 8;
+    private const float CounterCloseScale = 1.8f;
 
     private readonly Dictionary<int, uint> _colorByMapIndex = new();
     private readonly Dictionary<int, Simulation.Nation> _nationByMapIndex = new();
@@ -109,9 +135,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private byte[] _frontPixels;
     private Image _controlImage;
     private Image _frontImage;
-    private int _selectedArmyId = -1;
     private int _armyStructureFingerprint = int.MinValue;
     private int _routeFingerprint = int.MinValue;
+    private readonly List<Vector3> _routePoints = new();
     private Texture2D _divisionTexture = null!;
     private Task<MapBuildResult> _mapTask;
     private MapBuildResult _pendingMapResult;
@@ -345,7 +371,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:army look")) UpdateMilitaryPresentation();
         }
         using (Simulation.SimProfiler.Measure("f:army vis"))
+        {
+            UpdateCounterScale();
             UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod);
+        }
         using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
         UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, _distance <= 13.5f);
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
@@ -435,8 +464,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             _targetFlatX = longitude / 18f;
             _targetFlatY = latitude / 18f;
-            _targetFlatZoom = Mathf.Clamp((distance - MinimumDistance) / (MaximumDistance - MinimumDistance) * 8f + 2.4f,
-                MinimumFlatZoom, MaximumFlatZoom);
+            _targetFlatZoom = FlatZoomForDistance(distance);
             ClampFlatCamera();
             return;
         }
@@ -545,11 +573,43 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return true;
     }
 
+    private float _counterScale = 1f;
+
+    /// <summary>
+    /// Resize the counters when the camera has moved far enough to matter.
+    ///
+    /// Twelve hundred markers is too many to touch every frame for a size that only
+    /// changes while the player is turning the wheel, so nothing happens until the factor
+    /// has moved a few percent. A zoom gesture costs a handful of passes rather than one
+    /// per frame.
+    /// </summary>
+    private void UpdateCounterScale()
+    {
+        var wanted = _flatMap
+            ? Mathf.Lerp(CounterCloseScale, 1f, Mathf.InverseLerp(MinimumFlatZoom, 7.4f, _flatZoom))
+            : Mathf.Lerp(CounterCloseScale, 1f, Mathf.InverseLerp(MinimumDistance, 10.8f, _distance));
+        wanted = Mathf.Clamp(wanted, 1f, CounterCloseScale);
+        if (Mathf.Abs(wanted - _counterScale) < 0.03f) return;
+        _counterScale = wanted;
+
+        foreach (var marker in _armyStacks.Values)
+        {
+            if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
+            if (marker.Plate is not null) marker.Plate.PixelSize = CounterPlatePixelSize * wanted;
+            if (marker.Count is null) continue;
+            marker.Count.PixelSize = CounterTextPixelSize * wanted;
+            marker.Count.OutlineSize = Mathf.RoundToInt(CounterOutlineSize * wanted);
+        }
+    }
+
     private bool TryPickArmyStack(Vector2 pixel, out IReadOnlyList<Simulation.Army> armies)
     {
         armies = null;
         if (_distance > 13.5f || !IsInstanceValid(_camera)) return false;
-        var bestDistance = 28f * 28f;
+        // A bigger counter is a bigger target: the radius that finds it follows the size
+        // it is actually drawn at, or clicking a close-up counter near its edge misses.
+        var reach = 28f * _counterScale;
+        var bestDistance = reach * reach;
         foreach (var (node, candidates) in _armyByMarker)
         {
             if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
@@ -572,7 +632,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var selected = armyIds.ToHashSet();
         _selectedArmyIds.Clear();
         _selectedArmyIds.UnionWith(selected);
-        _selectedArmyId = selected.Count == 1 ? selected.First() : -1;
         _routeFingerprint = int.MinValue;
         foreach (var (node, armies) in _armyByMarker)
         {
@@ -706,21 +765,49 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _ => 192
     };
 
+    /// <summary>
+    /// Where everything the player has selected is going.
+    ///
+    /// It drew one ribbon, for the one division selected alone - so the moment a player
+    /// selected the six divisions they were actually managing, every trajectory vanished,
+    /// which is precisely when they need to see them. There is a ribbon per formation now,
+    /// each in the colour of its own order, so a mixed selection reads as what it is: some
+    /// attacking, some falling back, some standing.
+    /// </summary>
     private void UpdateRoutePreview()
     {
         if (_campaign?.ProvinceMap is null || !IsInstanceValid(_routePreview)) return;
-        var army = _campaign.Armies.Find(candidate => candidate.Id == _selectedArmyId);
-        var fingerprint = army is null ? -1 : HashCode.Combine(army.ProvinceId, army.Route.Count,
-            army.Route.Count == 0 ? -1 : army.Route[^1], army.OrderKind, army.ObjectiveStateMapIndex,
-            army.PlanActive, army.OrderProvinceId);
+
+        var fingerprint = _selectedArmyIds.Count;
+        if (fingerprint > 0)
+            foreach (var candidate in _campaign.Armies)
+            {
+                if (!_selectedArmyIds.Contains(candidate.Id)) continue;
+                fingerprint = HashCode.Combine(fingerprint, candidate.Id, candidate.ProvinceId,
+                    candidate.Route.Count, candidate.Route.Count == 0 ? -1 : candidate.Route[^1],
+                    candidate.OrderKind, candidate.OrderProvinceId, candidate.PlanActive);
+            }
         if (fingerprint == _routeFingerprint) return;
         _routeFingerprint = fingerprint;
         _routeMesh.ClearSurfaces();
-        var directObjective = army is not null &&
+
+        var drawn = 0;
+        if (_selectedArmyIds.Count > 0)
+            foreach (var candidate in _campaign.Armies)
+            {
+                if (!_selectedArmyIds.Contains(candidate.Id)) continue;
+                if (AppendRouteRibbon(candidate)) drawn++;
+            }
+        _routePreview.Visible = drawn > 0;
+    }
+
+    /// <summary>One formation's trajectory, as its own surface. False when it has none.</summary>
+    private bool AppendRouteRibbon(Simulation.Army army)
+    {
+        var directObjective =
             army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead &&
             army.OrderProvinceId > 0;
-        _routePreview.Visible = army is not null && (army.Route.Count > 0 || directObjective);
-        if (!_routePreview.Visible) return;
+        if (army.Route.Count == 0 && !directObjective) return false;
 
         var routeColor = army.OrderKind switch
         {
@@ -741,36 +828,39 @@ public sealed partial class GlobePresentation : SubViewportContainer
             TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
             CullMode = BaseMaterial3D.CullModeEnum.Disabled
         };
-        var points = new List<Vector3> { PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius) };
+
+        _routePoints.Clear();
+        _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
         foreach (var province in army.Route)
         {
             var center = _campaign.ProvinceMap.CenterOf(province);
-            points.Add(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+            _routePoints.Add(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
         }
         if (directObjective && (army.Route.Count == 0 || army.Route[^1] != army.OrderProvinceId))
         {
             var objective = _campaign.ProvinceMap.CenterOf(army.OrderProvinceId);
-            points.Add(PresentationPoint(objective.Latitude, objective.Longitude, SurfaceLineRadius));
+            _routePoints.Add(PresentationPoint(objective.Latitude, objective.Longitude, SurfaceLineRadius));
         }
-        if (points.Count < 2) return;
+        if (_routePoints.Count < 2) return false;
 
         _routeMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip, material);
-        for (var index = 0; index < points.Count; index++)
+        for (var index = 0; index < _routePoints.Count; index++)
         {
-            var previous = points[Math.Max(0, index - 1)];
-            var next = points[Math.Min(points.Count - 1, index + 1)];
+            var previous = _routePoints[Math.Max(0, index - 1)];
+            var next = _routePoints[Math.Min(_routePoints.Count - 1, index + 1)];
             var tangent = (next - previous).Normalized();
-            var normal = _flatMap ? Vector3.Forward : points[index].Normalized();
+            var normal = _flatMap ? Vector3.Forward : _routePoints[index].Normalized();
             var side = normal.Cross(tangent).Normalized() * (_flatMap ? 0.020f : 0.018f);
-            var u = index / (float)(points.Count - 1);
+            var u = index / (float)(_routePoints.Count - 1);
             _routeMesh.SurfaceSetColor(routeColor);
             _routeMesh.SurfaceSetUV(new Vector2(u, 0f));
-            _routeMesh.SurfaceAddVertex(points[index] + side);
+            _routeMesh.SurfaceAddVertex(_routePoints[index] + side);
             _routeMesh.SurfaceSetColor(routeColor);
             _routeMesh.SurfaceSetUV(new Vector2(u, 1f));
-            _routeMesh.SurfaceAddVertex(points[index] - side);
+            _routeMesh.SurfaceAddVertex(_routePoints[index] - side);
         }
         _routeMesh.SurfaceEnd();
+        return true;
     }
 
     public override void _GuiInput(InputEvent inputEvent)
@@ -837,11 +927,19 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
             if (button.ButtonIndex == MouseButton.WheelUp || button.ButtonIndex == MouseButton.WheelDown)
             {
+                // A step proportional to the altitude rather than a fixed one. A quarter
+                // of a unit is a nudge from orbit and a lurch from a hundred metres up,
+                // and the whole reason for coming this close is to move one division.
                 var sign = button.ButtonIndex == MouseButton.WheelUp ? -1f : 1f;
                 if (_flatMap)
-                    _targetFlatZoom = Mathf.Clamp(_targetFlatZoom + sign * 0.85f, MinimumFlatZoom, MaximumFlatZoom);
+                    _targetFlatZoom = Mathf.Clamp(_targetFlatZoom * (1f + sign * 0.15f),
+                        MinimumFlatZoom, MaximumFlatZoom);
                 else
-                    _targetDistance = Mathf.Clamp(_targetDistance + sign * 1.25f, MinimumDistance, MaximumDistance);
+                {
+                    var altitude = Mathf.Max(0.10f, _targetDistance - GlobeRadius);
+                    _targetDistance = Mathf.Clamp(_targetDistance + sign * altitude * 0.22f,
+                        MinimumDistance, MaximumDistance);
+                }
                 AcceptEvent();
                 return;
             }
@@ -1452,7 +1550,7 @@ void fragment() {
             var plate = new Sprite3D
             {
                 Texture = ArmyCounterTexture(nation, templateId),
-                PixelSize = 0.000115f,
+                PixelSize = CounterPlatePixelSize * _counterScale,
                 FixedSize = true,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
@@ -1467,11 +1565,11 @@ void fragment() {
                 Name = "DivisionCount",
                 Text = "",
                 FontSize = 27,
-                PixelSize = 0.00030f,
+                PixelSize = CounterTextPixelSize * _counterScale,
                 LineSpacing = -6f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 FixedSize = true,
-                OutlineSize = 8,
+                OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale),
                 Modulate = Ui.Colour("military.ready"),
                 OutlineModulate = Ui.Colour("globe.label_outline"),
                 Position = new Vector3(0f, -0.004f, 0.004f),

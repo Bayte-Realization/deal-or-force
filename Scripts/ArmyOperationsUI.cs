@@ -13,16 +13,25 @@ public partial class DealOrForceGame
     private readonly Dictionary<ReinforcementPriority, Button> _armyPriorityButtons = new();
     private Label _armyCommandFeedback = null!;
 
+    /// <summary>Shift means "these as well".</summary>
+    private static bool AddingToSelection =>
+        Input.IsKeyPressed(Key.Shift) && !Input.IsKeyPressed(Key.Ctrl);
+
+    /// <summary>Control means "not these".</summary>
+    private static bool RemovingFromSelection => Input.IsKeyPressed(Key.Ctrl);
+
     private void OnArmyPicked(Army army)
     {
         if (!_hudLayer.Visible || army is null) return;
         CloseFleetPanel();
-        if (army.NationId == _campaign.Player.Id && Input.IsKeyPressed(Key.Shift))
+        // Shift adds, control takes away - the Paradox reading, and the one that lets a
+        // player build a selection without fear. A single key that toggled did both, so
+        // shift-clicking a stack you had half-selected removed the ones you wanted and
+        // added the ones you did not, and there was no way to say "this one, definitely".
+        if (army.NationId == _campaign.Player.Id && (AddingToSelection || RemovingFromSelection))
         {
-            if (_selectedArmies.Contains(army))
-                _selectedArmies.Remove(army);
-            else
-                _selectedArmies.Add(army);
+            if (RemovingFromSelection) _selectedArmies.Remove(army);
+            else if (!_selectedArmies.Contains(army)) _selectedArmies.Add(army);
             if (_selectedArmies.Count == 0)
             {
                 ClearArmySelectionAndClose();
@@ -32,7 +41,8 @@ public partial class DealOrForceGame
             _selectedNation = _campaign.Player;
             _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));
             ShowSelectedArmies();
-            SetArmyFeedback("Selection updated. Shift-click another friendly division to add or remove it.");
+            SetArmyFeedback($"{_selectedArmies.Count} division(s) selected. " +
+                            "Shift-click adds, Ctrl-click removes.");
             return;
         }
         _selectedArmy = army;
@@ -42,7 +52,7 @@ public partial class DealOrForceGame
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
         SetArmyFeedback(army.NationId == _campaign.Player.Id
-            ? "RMB: march or attack · Shift+RMB: append waypoint · Shift+click: add another division."
+            ? "RMB: march or attack · Shift+RMB: append waypoint · Shift+click adds a division, Ctrl+click removes one."
             : "Foreign formation: it can be inspected, but only its owner may issue orders.");
     }
 
@@ -51,14 +61,29 @@ public partial class DealOrForceGame
         if (!_hudLayer.Visible) return;
         var playerArmies = armies.Where(army => army.NationId == _campaign.Player.Id).Distinct().ToArray();
         if (playerArmies.Length == 0) return;
-        if (!Input.IsKeyPressed(Key.Shift)) _selectedArmies.Clear();
-        foreach (var army in playerArmies)
-            if (!_selectedArmies.Contains(army)) _selectedArmies.Add(army);
-        _selectedArmy = playerArmies[0];
+
+        // A box does the same three things a click does: replace, add, or take away.
+        if (RemovingFromSelection)
+        {
+            foreach (var army in playerArmies) _selectedArmies.Remove(army);
+            if (_selectedArmies.Count == 0)
+            {
+                ClearArmySelectionAndClose();
+                return;
+            }
+        }
+        else
+        {
+            if (!AddingToSelection) _selectedArmies.Clear();
+            foreach (var army in playerArmies)
+                if (!_selectedArmies.Contains(army)) _selectedArmies.Add(army);
+        }
+        _selectedArmy = _selectedArmies[0];
         _selectedNation = _campaign.Player;
         _globe.SelectArmies(_selectedArmies.Select(army => army.Id));
         ShowSelectedArmies();
-        SetArmyFeedback($"{_selectedArmies.Count} division(s) selected. RMB gives one shared destination; Shift+RMB queues a waypoint.");
+        SetArmyFeedback($"{_selectedArmies.Count} division(s) selected. RMB gives one shared destination; " +
+                        "Shift+RMB queues a waypoint.");
     }
 
     /// <summary>
