@@ -236,6 +236,8 @@ public partial class DealOrForceGame : Control
             HidePauseMenu();
         else if (_ledgerLayer is { Visible: true })
             CloseLedger();
+        else if (_warLedgerLayer is { Visible: true })
+            CloseWarLedger();
         else if (_sidePanel.Visible)
             CloseSidePanel();
         else if (_pickerLayer.Visible)
@@ -480,7 +482,6 @@ public partial class DealOrForceGame : Control
         BuildRegionInteractionControls(sideRows);
         BuildEconomyControls(sideRows);
         BuildDecisionControls(sideRows);
-        BuildWarControls(sideRows);
         BuildBattleDetailControls(sideRows);
 
         _militarySpending = new HSlider
@@ -503,6 +504,7 @@ public partial class DealOrForceGame : Control
         BuildFleetPanel(_hudLayer);
         BuildPeaceConference();
         BuildLedgerInterface();
+        BuildWarLedger();
         BuildMapControls();
         BuildStrategicHud();
     }
@@ -548,7 +550,15 @@ public partial class DealOrForceGame : Control
             OpenLedger();
             return;
         }
+        // Wars are a screen of their own now, not a paragraph per war in the side panel.
+        if (screen == "Wars")
+        {
+            OpenWarLedger();
+            UpdateScreenButtons();
+            return;
+        }
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
+        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
         _openScreen = screen;
         _sidePanel.Visible = true;
         SetArmyPanelVisible(false);
@@ -556,7 +566,6 @@ public partial class DealOrForceGame : Control
         HideRegionInteractionControls();
         _economyControls.Visible = screen == "Economy";
         _decisionControls.Visible = screen == "Decisions";
-        _warControls.Visible = screen == "Wars";
         _battleDetailControls.Visible = false;
         _militarySpending.Visible = screen == "Military";
         _militarySpendingReadout.Visible = screen == "Military";
@@ -644,34 +653,6 @@ public partial class DealOrForceGame : Control
                 ShowCountryInteraction(nation, "Diplomatic overview");
                 break;
 
-            case "Wars":
-                var activeWars = _campaign.Wars.Where(war => !war.Ended).ToArray();
-                _sideBody.Text = activeWars.Length == 0
-                    ? "WARS AND FRONTS\n\nNo active wars." + PeaceHistory()
-                    : "WARS AND FRONTS\n\n" + string.Join("\n\n", activeWars.Select(war =>
-                    {
-                        var attacker = _campaign.NationById(war.AttackerId);
-                        var defender = _campaign.NationById(war.DefenderId);
-                        var involvement = war.Involves(player.Id) ? "YOU ARE A BELLIGERENT" : "Foreign war";
-                        var battles = _campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended).ToArray();
-                        var latest = battles.OrderByDescending(battle => battle.StartedDay).FirstOrDefault();
-                        var objective = _campaign.States.FirstOrDefault(state => state.MapIndex == war.ClaimedStateMapIndex);
-                        var attackerDoctrine = attacker is null ? "unknown" : AiStrategyCatalog.Resolve(_campaign, war, attacker).Id;
-                        var defenderDoctrine = defender is null ? "unknown" : AiStrategyCatalog.Resolve(_campaign, war, defender).Id;
-                        return $"{war.Name}\n{attacker?.Name} vs {defender?.Name}\n" +
-                               $"War goal: {(objective?.Name ?? "strategic supremacy")}\n" +
-                               $"Operational profiles: {attackerDoctrine} / {defenderDoctrine}\n" +
-                               $"Front: {war.AttackerFront.Count} / {war.DefenderFront.Count} provinces\n" +
-                               $"War score: {war.WarScore:+0.0;-0.0;0.0} · active battles: {battles.Length}\n" +
-                               $"  occupation {war.OccupationScore:+0.0;-0.0;0.0} · battles {war.BattleScore:+0.0;-0.0;0.0}\n" +
-                               $"  objective {war.ObjectiveScore:+0.0;-0.0;0.0} · support {war.SupportScore:+0.0;-0.0;0.0}\n" +
-                               $"Losses: {war.AttackerLosses:N0} / {war.DefenderLosses:N0}\n" +
-                               $"Support: {war.AttackerWarSupport:P0} / {war.DefenderWarSupport:P0}\n" +
-                               (latest is null ? "" : $"Latest contact: province #{latest.ProvinceId:N0} · {latest.Outcome}\n") +
-                               involvement;
-                    }));
-                RefreshWarControls();
-                break;
 
             case "Decisions":
                 ShowDecisionsScreen();
@@ -712,7 +693,6 @@ public partial class DealOrForceGame : Control
         _regionControls.Visible = pick.State is not null;
         _economyControls.Visible = false;
         _decisionControls.Visible = false;
-        _warControls.Visible = false;
         _battleDetailControls.Visible = false;
         _militarySpending.Visible = false;
         _sideTitle.Text = pick.Nation.Name;
@@ -823,6 +803,7 @@ public partial class DealOrForceGame : Control
         RefreshEventInterface();
         RefreshStrategicHud();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
+        if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
         else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation")
             OpenScreen(_openScreen);

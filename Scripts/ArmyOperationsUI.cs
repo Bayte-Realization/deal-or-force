@@ -101,7 +101,6 @@ public partial class DealOrForceGame
         HideRegionInteractionControls();
         _economyControls.Visible = false;
         _decisionControls.Visible = false;
-        _warControls.Visible = false;
         _battleDetailControls.Visible = false;
         UpdateScreenButtons();
         RefreshArmyPanel();
@@ -121,7 +120,6 @@ public partial class DealOrForceGame
         HideRegionInteractionControls();
         _economyControls.Visible = false;
         _decisionControls.Visible = false;
-        _warControls.Visible = false;
         _battleDetailControls.Visible = false;
         UpdateScreenButtons();
         RefreshArmyPanel();

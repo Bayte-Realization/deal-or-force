@@ -299,7 +299,6 @@ public partial class DealOrForceGame
         HideRegionInteractionControls();
         _economyControls.Visible = false;
         _decisionControls.Visible = false;
-        _warControls.Visible = false;
         _militarySpending.Visible = false;
         _battleDetailControls.Visible = true;
         var attacker = _campaign.NationById(battle.AttackerId);

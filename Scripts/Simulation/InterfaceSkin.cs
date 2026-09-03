@@ -209,6 +209,7 @@ public static class InterfaceSkin
         ("modal.handover",     new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -250f, -160f, 250f, 160f)),
         ("modal.multiplayer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -285f, -340f, 285f, 340f)),
         ("modal.ledger",       new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("modal.war_ledger",   new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
     };
 
     /// <summary>A panel's rectangle, or a sane full-screen one if the name is unknown.</summary>

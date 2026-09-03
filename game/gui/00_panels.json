@@ -293,6 +293,20 @@
         340
       ]
     },
+    "modal.war_ledger": {
+      "anchors": [
+        0.055,
+        0.115,
+        0.945,
+        0.9
+      ],
+      "offsets": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
     "modal.ledger": {
       "anchors": [
         0.055,
