@@ -48,6 +48,9 @@ public partial class DealOrForceGame : Control
     public override void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        // The interface is built next and asks for its pictures by name, so the names have
+        // to mean something first. Mods layer their own over these when a campaign starts.
+        Simulation.SpriteCatalog.Load();
         BuildInterface();
         StartCampaign();
     }
@@ -310,7 +313,7 @@ public partial class DealOrForceGame : Control
         var rows = PanelRows(panel, 28, 24, 9);
         var logo = new TextureRect
         {
-            Texture = GD.Load<Texture2D>("res://Assets/Textures/UI/Brand/deal_or_force_logo_banner.png"),
+            Texture = Art("brand_logo_banner", "res://Assets/Textures/UI/Brand/deal_or_force_logo_banner.png"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
             CustomMinimumSize = new Vector2(0, 184),
@@ -437,7 +440,8 @@ public partial class DealOrForceGame : Control
         {
             var captured = screen;
             var button = ActionButton(screen, () => OpenScreen(captured), 118, 38,
-                false, $"res://Assets/Textures/UI/Modern/Icons/{icon}.svg");
+                false, SpriteCatalog.TextureOf($"icon_{icon}",
+                    $"res://Assets/Textures/UI/Modern/Icons/{icon}.svg"));
             button.TooltipText = help;
             _screenButtons[captured] = button;
             nav.AddChild(button);
@@ -1107,6 +1111,14 @@ public partial class DealOrForceGame : Control
         return label;
     }
 
+    /// <summary>
+    /// The picture the game means by a name. The path the interface was written against is
+    /// passed as the fallback, so a mod that removes a declaration loses its own override
+    /// rather than leaving the player with an empty frame.
+    /// </summary>
+    private static Texture2D Art(string sprite, string shipped) =>
+        GD.Load<Texture2D>(SpriteCatalog.TextureOf(sprite, shipped));
+
     private Button ActionButton(string text, System.Action callback, float width, float height,
         bool primary = false, string iconPath = "")
     {
@@ -1278,11 +1290,11 @@ public partial class DealOrForceGame : Control
         var contentVertical = strip ? 4f : command ? 22f : 4f;
         return new StyleBoxTexture
         {
-            Texture = GD.Load<Texture2D>(strip
-                ? "res://Assets/Textures/UI/Modern/panel_command_strip.png"
+            Texture = strip
+                ? Art("panel_command_strip", "res://Assets/Textures/UI/Modern/panel_command_strip.png")
                 : command
-                    ? "res://Assets/Textures/UI/Modern/panel_command_frame.png"
-                    : "res://Assets/Textures/UI/Modern/panel_dossier.png"),
+                    ? Art("panel_command_frame", "res://Assets/Textures/UI/Modern/panel_command_frame.png")
+                    : Art("panel_dossier", "res://Assets/Textures/UI/Modern/panel_dossier.png"),
             TextureMarginLeft = textureMargin,
             TextureMarginTop = textureMargin,
             TextureMarginRight = textureMargin,

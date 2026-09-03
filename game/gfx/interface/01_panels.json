@@ -1,0 +1,13 @@
+// The frames and plates the interface is drawn on.
+//
+// These are the pieces a reskin replaces first: change these four and the game reads as a
+// different game without a line of code moving.
+{
+  "sprites": {
+    "panel_command_strip": "Assets/Textures/UI/Modern/panel_command_strip.png",
+    "panel_command_frame": "Assets/Textures/UI/Modern/panel_command_frame.png",
+    "panel_dossier": "Assets/Textures/UI/Modern/panel_dossier.png",
+    "panel_inset": "Assets/Textures/UI/Modern/panel_inset.png",
+    "brand_logo_banner": "Assets/Textures/UI/Brand/deal_or_force_logo_banner.png"
+  }
+}

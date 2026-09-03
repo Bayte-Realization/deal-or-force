@@ -95,6 +95,7 @@ public sealed class ModLoader
         MapRasterCatalog.ResetCatalog();
         Loc.ResetCatalog();
         InterfaceSkin.ResetCatalog();
+        SpriteCatalog.Load();
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
@@ -115,6 +116,7 @@ public sealed class ModLoader
             ApplyMapData(package);
             ApplyLocalization(package);
             ApplySkin(package);
+            ApplySprites(package);
             ApplyCountries(package, campaign);
             ApplyProvinceOwnership(package);
             ApplyHistory(package, campaign);
@@ -225,6 +227,22 @@ public sealed class ModLoader
             InterfaceSkin.LoadDirectory(Path.Combine(package.PhysicalRoot, "gui"), package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"interface: {exception.Message}"); }
+    }
+
+    /// <summary>
+    /// A mod's own artwork. The declarations are layered like every other category, and a
+    /// mod's relative texture paths resolve inside the mod's own folder - so it ships the
+    /// picture beside the line that names it, and neither has to know where the player
+    /// installed it.
+    /// </summary>
+    private void ApplySprites(ModPackage package)
+    {
+        try
+        {
+            SpriteCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "gfx"),
+                package.VirtualRoot, package.Errors);
+        }
+        catch (Exception exception) { package.Errors.Add($"gfx: {exception.Message}"); }
     }
 
     /// <summary>

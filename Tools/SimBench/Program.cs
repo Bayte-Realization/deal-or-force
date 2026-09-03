@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -121,6 +122,8 @@ public static class Program
         failures += Check("a category folder is read whole and later files win",
             ACategoryFolderIsReadWhole());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
+        failures += Check("every picture the interface asks for has a name a mod can rebind",
+            ArtworkIsNamedRatherThanSpelledOut());
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
         failures += Check("every explained number adds up to what the screen shows",
@@ -1579,6 +1582,66 @@ public static class Program
     /// So the check writes a file into a real category folder, reloads, and takes it away
     /// again.
     /// </summary>
+    /// <summary>
+    /// The interface must ask for pictures by name, and the names must be declared in data.
+    ///
+    /// Twelve texture paths used to be spelled out in the middle of the interface code,
+    /// which made every one of them a picture no mod could replace without forking a C#
+    /// file. The check is deliberately two-sided: the declarations have to exist and
+    /// resolve, and a later file has to win - because a `gfx/` folder that is read but not
+    /// layered is a folder a mod can only replace wholesale, which is the thing the layout
+    /// exists to avoid.
+    /// </summary>
+    private static string ArtworkIsNamedRatherThanSpelledOut()
+    {
+        SpriteCatalog.Load();
+        if (SpriteCatalog.Count == 0) return "gfx/ declares no sprites at all";
+
+        // The pieces the interface will not boot without.
+        var required = new[]
+        {
+            "icon_army_advance", "icon_diplomacy", "icon_plan_front",
+            "panel_dossier", "panel_command_frame", "brand_logo_banner",
+            "globe_capital_star", "globe_division_marker", "globe_space_background",
+            "globe_plan_arrows"
+        };
+        var missing = required.Where(name => !SpriteCatalog.Has(name)).ToList();
+        if (missing.Count > 0)
+            return $"gfx/ declares nothing for {string.Join(", ", missing)}";
+
+        // Declared paths must point at art that is actually there. A sprite table whose
+        // entries resolve to nothing is worse than no sprite table: the fallback hides it
+        // in the shipped game and the mod that overrides it inherits a broken path.
+        var root = GameDataLoader.DataFolder("gfx");
+        var projectRoot = root is null ? null : Directory.GetParent(root)?.Parent?.FullName;
+        var absent = new List<string>();
+        foreach (var name in SpriteCatalog.Names)
+        {
+            var texture = SpriteCatalog.Get(name).Texture;
+            if (projectRoot is null || !texture.StartsWith("res://", StringComparison.Ordinal)) continue;
+            var relative = texture.Substring("res://".Length).Replace('/', Path.DirectorySeparatorChar);
+            if (!File.Exists(Path.Combine(projectRoot, relative))) absent.Add($"{name} -> {texture}");
+        }
+        if (absent.Count > 0)
+            return $"{absent.Count:N0} sprite(s) point at art that is not there: " +
+                   string.Join("; ", absent.Take(3));
+
+        // And the layering, tested the way a mod would use it.
+        var before = SpriteCatalog.TextureOf("panel_dossier");
+        SpriteCatalog.Merge("{ \"sprites\": { \"panel_dossier\": \"art/mine.png\" } }",
+            "user://mods/example", "test", null);
+        var after = SpriteCatalog.TextureOf("panel_dossier");
+        SpriteCatalog.Load();
+        if (after == before)
+            return "a later gfx file did not override an earlier one";
+        if (after != "user://mods/example/art/mine.png")
+            return $"a mod's own art resolved to '{after}' instead of inside the mod folder";
+
+        Console.WriteLine($"  artwork: {SpriteCatalog.Count:N0} named sprite(s) in gfx/, every path present, " +
+                          "and a later file wins.");
+        return "";
+    }
+
     private static string ACategoryFolderIsReadWhole()
     {
         var folder = GameDataLoader.DataFolder("common", "defines");

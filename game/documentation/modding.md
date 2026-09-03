@@ -30,6 +30,9 @@ category, and never the executable.
         modifiers/       timed effects that can be granted to a country or region
         units/           division templates: attack, armour, width, supply use
       events/            scripted events and their outcomes
+      gfx/               which picture the game means by a name
+        interface/       icons, panel frames, the logo
+        globe/           what is drawn on the globe itself
       gui/               where the panels sit - anchors and offsets
       interface/         what the game is made of - the colour palette and its metrics
       history/           what was true when the bookmark opens
@@ -48,8 +51,12 @@ category, and never the executable.
 `common/` says what may exist; `history/` says what was true in 2024. A total conversion
 usually wants one without the other, which is why they are apart.
 
-`interface/` and `gui/` are apart for the same reason: colour and position are edited by
-different people. A reskin never opens `gui/`; a layout mod never opens `interface/`.
+`interface/`, `gui/` and `gfx/` are apart for the same reason: colour, position and
+artwork are edited by different people. A retint never opens `gui/`; a layout mod never
+opens `gfx/`.
+
+Where a `gfx/` file sits does not matter - the whole tree is read, subfolders and all, in
+path order. The subfolders are there to be read by people, not by the game.
 
 ## The pieces you are most likely to want
 
@@ -92,6 +99,23 @@ English text, so an untranslated string renders as itself.
 **Redraw a border.** `history/provinces/50_my_borders.csv`, one line per province you
 change — `province;owner;controller`, with the controller left off when the owner holds it.
 Provinces you do not mention keep what the map gave them.
+
+**Swap the artwork.** The interface never names a file, it names a sprite, and `gfx/`
+says which picture that is. `gfx/interface/50_my_icons.json`:
+
+    {
+      "sprites": {
+        "icon_diplomacy": "art/my_diplomacy.png",
+        "panel_dossier": { "texture": "art/my_frame.png", "tint": "#c8b48a" }
+      }
+    }
+
+Paths are relative to your own mod folder, so the art ships beside the line that names it
+and neither has to know where the player installed you. An absolute `res://` path is left
+alone, which is how the base game points at its own `Assets/` tree.
+
+List only the sprites you are replacing: the other thirty are inherited. `game/gfx/` is
+the full set of names, and it is the only place they are written down.
 
 ## What is still code
 
