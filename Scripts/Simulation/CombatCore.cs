@@ -309,8 +309,16 @@ public static partial class Warfare
                 continue;
             }
 
-            var battle = campaign.Battles.FirstOrDefault(candidate => !candidate.Ended &&
-                candidate.WarId == war.Id && candidate.ProvinceId == target);
+            // Found by hand rather than by FirstOrDefault: the lambda captures the war and
+            // the target, so it was a fresh closure and a fresh enumerator for every
+            // division that advanced anywhere in the world, every day.
+            LandBattle battle = null;
+            foreach (var candidate in campaign.Battles)
+            {
+                if (candidate.Ended || candidate.WarId != war.Id || candidate.ProvinceId != target) continue;
+                battle = candidate;
+                break;
+            }
             if (battle is null)
             {
                 battle = new LandBattle
@@ -328,6 +336,54 @@ public static partial class Warfare
             }
             Join(battle, army, true);
         }
+    }
+
+    /// <summary>
+    /// An army has just come off a ship onto somebody else's beach. An undefended coast
+    /// changes hands; a defended one is a battle, fought by the ordinary combat model with
+    /// the landing party as the attacker - which is the point, because an amphibious
+    /// assault should be a fight a player already knows how to read.
+    /// </summary>
+    public static string LandInvasion(Campaign campaign, StrategicWar war, int provinceId,
+        IReadOnlyList<Army> landed)
+    {
+        if (landed.Count == 0) return "nothing came ashore";
+        var controllers = campaign.ProvinceController;
+        if (controllers is null) return "no map";
+
+        if (_provinceIndexStale) IndexArmies(campaign);
+        var invaderId = landed[0].NationId;
+        var defenderId = invaderId == war.AttackerId ? war.DefenderId : war.AttackerId;
+
+        DefendingSide.Clear();
+        foreach (var army in In(ByProvince, provinceId))
+            if (army.NationId == defenderId && army.Divisions >= 0.1f) DefendingSide.Add(army);
+
+        if (DefendingSide.Count == 0)
+        {
+            Capture(campaign, war, provinceId, invaderId, landed, Array.Empty<Army>(), "came ashore unopposed");
+            return $"{landed.Count:N0} formation(s) landed against no opposition and took the province";
+        }
+
+        var battle = campaign.Battles.Find(candidate => !candidate.Ended &&
+            candidate.WarId == war.Id && candidate.ProvinceId == provinceId);
+        if (battle is null)
+        {
+            battle = new LandBattle
+            {
+                Id = campaign.NextBattleId++,
+                WarId = war.Id,
+                ProvinceId = provinceId,
+                AttackerId = invaderId,
+                DefenderId = defenderId,
+                StartedDay = campaign.ElapsedDays
+            };
+            campaign.Battles.Add(battle);
+            foreach (var defending in DefendingSide) Join(battle, defending, false);
+        }
+        foreach (var army in landed) Join(battle, army, true);
+        _provinceIndexStale = true;
+        return $"{landed.Count:N0} formation(s) landed into a contested beach";
     }
 
     private static void ResolveBattles(Campaign campaign)

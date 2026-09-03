@@ -242,7 +242,8 @@ public partial class DealOrForceGame
 
         // A fleet is ordered to a place rather than to a province - most of the sea is not
         // one - so it is handled before the province guard below rejects open water.
-        if (_selectedFleet is not null && SendSelectedFleet(pick.Latitude, pick.Longitude)) return;
+        if (_selectedFleet is not null &&
+            SendSelectedFleet(pick.Latitude, pick.Longitude, pick.ProvinceId)) return;
 
         if (pick.ProvinceId <= 0) return;
         if (_selectedArmy is null)

@@ -136,6 +136,9 @@ public static class BattlePlanning
         return dy * dy + dx * dx;
     }
 
+    /// <summary>Take a formation off any line it was on - it has gone to sea.</summary>
+    public static void Forget(Campaign campaign, Army army) => DrawFrontLineCommand.Detach(campaign, army);
+
     private static readonly HashSet<int> EmptyPosts = new();
 }
 

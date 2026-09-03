@@ -59,8 +59,17 @@ public static class CampaignDiplomacy
         if (relation.TruceUntil > campaign.ElapsedDays) { reason = $"Truce: {relation.TruceUntil - campaign.ElapsedDays} days remain."; return false; }
         if (!SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
         {
-            reason = "No shared land front; naval invasions are not ported yet.";
-            return false;
+            // Force can be projected across water by a country that has ships to project it
+            // with. This used to be a flat refusal, which made every island in the world
+            // permanently safe and left a navy with nothing to do.
+            var carriers = 0;
+            foreach (var fleet in campaign.Fleets)
+                if (fleet.NationId == attackerId) carriers += fleet.Hulls;
+            if (carriers <= 0)
+            {
+                reason = "No shared land front, and no fleet to reach them with.";
+                return false;
+            }
         }
         return true;
     }

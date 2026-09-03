@@ -103,8 +103,18 @@ public static partial class Warfare
         if (topology is null || controllers is null) return;
 
         // Which war, if any, two countries are fighting each other in.
-        var byPair = new Dictionary<long, StrategicWar>();
-        var belligerents = new HashSet<ushort>();
+        //
+        // The province walk below is the single most expensive thing the simulation does -
+        // thirty-eight thousand provinces and all their neighbours, every time any war's
+        // front goes stale. Hashing a country index twice per neighbour was most of it, so
+        // membership is a flat array indexed by map index instead, and the attacker's index
+        // is worked out once per war rather than once per pair of touching provinces.
+        var byPair = Pairs;
+        byPair.Clear();
+        var belligerents = Belligerents;
+        if (belligerents.Length <= campaign.Nations.Count + 8)
+            belligerents = Belligerents = new bool[campaign.Nations.Count + 512];
+        Array.Clear(belligerents);
         foreach (var war in campaign.Wars)
         {
             war.AttackerFront.Clear();
@@ -115,36 +125,38 @@ public static partial class Warfare
             var attacker = campaign.NationById(war.AttackerId);
             var defender = campaign.NationById(war.DefenderId);
             if (attacker is null || defender is null) continue;
-            byPair[PairKey(attacker.MapIndex, defender.MapIndex)] = war;
-            belligerents.Add((ushort)attacker.MapIndex);
-            belligerents.Add((ushort)defender.MapIndex);
+            byPair[PairKey(attacker.MapIndex, defender.MapIndex)] = (war, (ushort)attacker.MapIndex);
+            if (attacker.MapIndex < belligerents.Length) belligerents[attacker.MapIndex] = true;
+            if (defender.MapIndex < belligerents.Length) belligerents[defender.MapIndex] = true;
         }
         if (byPair.Count == 0) return;
 
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var owner = controllers[province];
-            if (owner == 0 || !belligerents.Contains(owner)) continue;
+            if (owner == 0 || owner >= belligerents.Length || !belligerents[owner]) continue;
             foreach (var neighbour in topology.Neighbors[province])
             {
                 var other = controllers[neighbour];
-                if (other == 0 || other == owner || !belligerents.Contains(other)) continue;
-                if (!byPair.TryGetValue(PairKey(owner, other), out var war)) continue;
+                if (other == 0 || other == owner || other >= belligerents.Length || !belligerents[other]) continue;
+                if (!byPair.TryGetValue(PairKey(owner, other), out var found)) continue;
 
-                var attackerMap = campaign.NationById(war.AttackerId)?.MapIndex ?? -1;
-                if (owner == attackerMap)
+                if (owner == found.AttackerMap)
                 {
-                    war.AttackerFront.Add(province);
-                    war.DefenderFront.Add(neighbour);
+                    found.War.AttackerFront.Add(province);
+                    found.War.DefenderFront.Add(neighbour);
                 }
                 else
                 {
-                    war.DefenderFront.Add(province);
-                    war.AttackerFront.Add(neighbour);
+                    found.War.DefenderFront.Add(province);
+                    found.War.AttackerFront.Add(neighbour);
                 }
             }
         }
     }
+
+    private static readonly Dictionary<long, (StrategicWar War, ushort AttackerMap)> Pairs = new();
+    private static bool[] Belligerents = Array.Empty<bool>();
 
     /// <summary>Order-independent key for a pair of countries.</summary>
     private static long PairKey(int a, int b) =>
@@ -195,6 +207,7 @@ public static partial class FrontPlanner
         {
             if (army.AssignedWarId != war.Id || army.OrderKind == ArmyOrder.Manual || army.InBattle)
                 continue;
+            if (army.EmbarkedFleetId >= 0) continue;
             var expected = BattlePlanning.Posts(campaign, war, army);
             if (expected.Count == 0 || expected.Contains(army.ProvinceId) ||
                 (army.OrderProvinceId > 0 && expected.Contains(army.OrderProvinceId)))
@@ -228,9 +241,12 @@ public static partial class FrontPlanner
 
     public static void UpdateAiExecution(Campaign campaign, StrategicWar war)
     {
-        foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id && !army.PlanActive &&
-                     (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead)))
+        // Filtered by hand: the lambda captured the war, so this was a fresh closure and a
+        // fresh enumerator for every one of the world's wars, every day.
+        foreach (var army in campaign.Armies)
         {
+            if (army.AssignedWarId != war.Id || army.PlanActive) continue;
+            if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) continue;
             var nation = campaign.NationById(army.NationId);
             if (nation is null || nation.IsHuman) continue;
             var profile = AiStrategyCatalog.Resolve(campaign, war, nation);

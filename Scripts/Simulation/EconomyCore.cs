@@ -591,10 +591,18 @@ public static class ConstructionSystem
 {
     public static void Tick(Campaign campaign)
     {
+        // The oldest unfinished project each country has, found by hand. Where().OrderBy()
+        // .FirstOrDefault() built a closure, an enumerator, a sorter and its key buffer for
+        // every one of the two hundred and sixty-one countries every single day, to pick
+        // one item out of a list that is usually a few hundred long.
         foreach (var nation in campaign.Nations)
         {
-            var project = campaign.Construction.Where(item => item.NationId == nation.Id)
-                .OrderBy(item => item.Id).FirstOrDefault();
+            ConstructionProject project = null;
+            foreach (var item in campaign.Construction)
+            {
+                if (item.NationId != nation.Id) continue;
+                if (project is null || item.Id < project.Id) project = item;
+            }
             if (project is null) continue;
             var required = project.Cost / Math.Max(1, project.DurationDays);
             var paid = Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury));
@@ -610,7 +618,9 @@ public static class ConstructionSystem
 
     private static void Complete(Campaign campaign, Nation nation, ConstructionProject project)
     {
-        var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == project.StateMapIndex);
+        ScenarioState state = null;
+        foreach (var candidate in campaign.States)
+            if (candidate.MapIndex == project.StateMapIndex) { state = candidate; break; }
         if (state is null) return;
         var definition = BuildingCatalog.Get(project.Building);
         state.Buildings[project.Building] = state.Buildings.GetValueOrDefault(project.Building) + 1;

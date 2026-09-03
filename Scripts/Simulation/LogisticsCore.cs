@@ -149,6 +149,16 @@ public static class LogisticsSystem
 
         foreach (var army in armies)
         {
+            // A formation at sea is supplied by the ship it is on, not by the province
+            // network. Marking it cut off would starve an invasion before it landed.
+            if (army.EmbarkedFleetId >= 0)
+            {
+                army.CutOff = false;
+                army.SupplyDistance = 0;
+                army.SupplyCongestion = 1f;
+                continue;
+            }
+
             var province = army.ProvinceId;
             if (province <= 0 || province >= stamp.Length || stamp[province] != generation)
             {

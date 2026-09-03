@@ -1182,6 +1182,15 @@ public partial class DealOrForceGame : Control
             TextureMarginTop = command ? 48 : 28,
             TextureMarginRight = command ? 48 : 28,
             TextureMarginBottom = command ? 48 : 28,
+            // Texture margins describe the nine-slice artwork, not layout padding.
+            // Leaving these margins implicit makes PanelContainer add another 56/96 px
+            // to its minimum size. Tall panels then ignore their data-driven rectangle
+            // and collide with the map-mode and navigation bands. Every panel already
+            // owns an explicit MarginContainer, so the style must not reserve space too.
+            ContentMarginLeft = 0,
+            ContentMarginTop = 0,
+            ContentMarginRight = 0,
+            ContentMarginBottom = 0,
             ModulateColor = command
                 ? new Color(0.88f, 0.92f, 0.98f, 0.985f)
                 : new Color(0.9f, 0.94f, 1f, 0.98f)

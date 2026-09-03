@@ -33,6 +33,7 @@ public partial class DealOrForceGame
         FleetMission.Patrol => "Patrol",
         FleetMission.Blockade => "Blockade",
         FleetMission.Raid => "Raid trade",
+        FleetMission.Invasion => "Invasion",
         _ => "Escort"
     };
 
@@ -46,6 +47,8 @@ public partial class DealOrForceGame
             "Sit on an enemy coast. Cuts what reaches their provinces by sea, so an army on that shore stops being supplied.",
         FleetMission.Raid =>
             "Hunt enemy merchant shipping. Takes money out of their weekly trade for as long as it lasts.",
+        FleetMission.Invasion =>
+            "Carrying an army to a coast. Right-click enemy shore to send it; what it carries goes ashore on arrival.",
         _ => "Guard your own shipping against enemy raiders, and keep the money coming in."
     };
 
@@ -84,10 +87,12 @@ public partial class DealOrForceGame
         _fleetSubtitle.Text = $"{owner?.Tag ?? "?"} · {fleet.Hulls:N0} hulls · {MissionName(fleet.Mission)}" +
                               (fleet.IsMoving ? " · under way" : "") +
                               (fleet.InAction ? " · in action" : "");
+        var carried = NavalInvasion.CarriedDivisions(_campaign, fleet);
+        var capacity = NavalInvasion.Capacity(_campaign, fleet);
         _fleetCondition.Text =
-            $"Strength {fleet.Strength:P0}    Cohesion {fleet.Organisation:P0}\n" +
-            $"Stores {fleet.Supply:P0}    Readiness {fleet.Readiness:P0}\n" +
-            $"Experience {fleet.Experience:P0}";
+            $"Strength {fleet.Strength:P0}    Cohesion {fleet.Organisation:P0}" + System.Environment.NewLine +
+            $"Stores {fleet.Supply:P0}    Readiness {fleet.Readiness:P0}" + System.Environment.NewLine +
+            $"Aboard {carried:0.#} of {capacity:0.#} divisions";
 
         foreach (var (mission, button) in _fleetMissionButtons)
         {
@@ -119,10 +124,31 @@ public partial class DealOrForceGame
     }
 
     /// <summary>Send the selected fleet to a point on the globe, keeping its mission.</summary>
-    private bool SendSelectedFleet(float latitude, float longitude)
+    private bool SendSelectedFleet(float latitude, float longitude, int provinceId = -1)
     {
         if (_selectedFleet is null || _campaign.Player is null) return false;
         if (_selectedFleet.NationId != _campaign.Player.Id) return false;
+        // A loaded fleet right-clicked at a shore is an invasion; an empty one is a move.
+        // The player does not have to say which, because there is nothing else either could
+        // have meant.
+        if (_selectedFleet.Carried.Count > 0 && provinceId > 0)
+        {
+            _campaign.Commands.Enqueue(new LaunchInvasionCommand
+            {
+                IssuerId = _campaign.Player.Id,
+                FleetId = _selectedFleet.Id,
+                ProvinceId = provinceId
+            });
+            _campaign.Commands.ApplyAll(_campaign);
+            ShowSelectedFleet();
+            var reach = NavalOperations.Distance(_selectedFleet.Latitude, _selectedFleet.Longitude,
+                latitude, longitude);
+            SetFleetFeedback($"Invasion under way — about " +
+                             $"{Mathf.CeilToInt(reach / Mathf.Max(0.01f, _campaign.Defines.FleetDegreesPerDay)):N0} " +
+                             "day(s) to the beach.");
+            return true;
+        }
+
         var mission = _selectedFleet.Mission == FleetMission.Anchored
             ? FleetMission.Patrol
             : _selectedFleet.Mission;
@@ -141,6 +167,56 @@ public partial class DealOrForceGame
         var days = Mathf.CeilToInt(away / Mathf.Max(0.01f, _campaign.Defines.FleetDegreesPerDay));
         SetFleetFeedback($"Under way — about {days:N0} day(s) out, on {MissionName(mission).ToLowerInvariant()}.");
         return true;
+    }
+
+    /// <summary>
+    /// Take aboard whatever of the player's divisions are standing at this fleet's port.
+    /// Loading is deliberately one button rather than a manifest: the constraint that
+    /// matters is how much fits, and the player can see that on the panel.
+    /// </summary>
+    private void LoadTroops()
+    {
+        if (_selectedFleet is null || _campaign.Player is null) return;
+        if (_selectedFleet.NationId != _campaign.Player.Id) return;
+
+        var wanted = new System.Collections.Generic.List<int>();
+        var refused = "";
+        foreach (var army in _campaign.Armies)
+        {
+            if (army.NationId != _campaign.Player.Id || army.EmbarkedFleetId >= 0) continue;
+            if (NavalInvasion.CanEmbark(_campaign, _selectedFleet, army, out var reason)) wanted.Add(army.Id);
+            else if (refused.Length == 0 && reason.Length > 0) refused = reason;
+        }
+        if (wanted.Count == 0)
+        {
+            SetFleetFeedback(refused.Length > 0
+                ? refused
+                : "No division of yours is standing at this fleet's port.");
+            return;
+        }
+
+        _campaign.Commands.Enqueue(new EmbarkArmiesCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            FleetId = _selectedFleet.Id,
+            ArmyIds = wanted
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        ShowSelectedFleet();
+        SetFleetFeedback($"{_selectedFleet.Carried.Count:N0} division(s) aboard. " +
+                         "Right-click an enemy shore to land them there.");
+    }
+
+    private void UnloadTroops()
+    {
+        if (_selectedFleet is null || _campaign.Player is null) return;
+        if (_selectedFleet.NationId != _campaign.Player.Id || _selectedFleet.Carried.Count == 0) return;
+        var port = _selectedFleet.HomeProvinceId;
+        var landed = NavalInvasion.Disembark(_campaign, _selectedFleet, port);
+        _selectedFleet.Mission = FleetMission.Anchored;
+        _selectedFleet.TargetProvinceId = -1;
+        ShowSelectedFleet();
+        SetFleetFeedback($"{landed:N0} division(s) put ashore.");
     }
 
     private void SetFleetFeedback(string text)
@@ -195,6 +271,18 @@ public partial class DealOrForceGame
         missions.AddChild(bottom);
         AddMissionButton(bottom, FleetMission.Blockade, 148);
         AddMissionButton(bottom, FleetMission.Raid, 148);
+
+        rows.AddChild(Title("TROOPS", 11, Ui.Colour("text.caption")));
+        var cargo = new HBoxContainer();
+        cargo.AddThemeConstantOverride("separation", 4);
+        rows.AddChild(cargo);
+        var load = ActionButton("Load troops", LoadTroops, 148, 32);
+        load.TooltipText = "Load troops\nTake aboard your divisions standing at this fleet's port. " +
+                           "What fits is set by the hulls.";
+        cargo.AddChild(load);
+        var unload = ActionButton("Put ashore", UnloadTroops, 148, 32);
+        unload.TooltipText = "Put ashore\nLand what the fleet is carrying on the nearest friendly coast.";
+        cargo.AddChild(unload);
 
         _fleetFeedback = Title("", 11, Ui.Colour("text.hint"));
         _fleetFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;

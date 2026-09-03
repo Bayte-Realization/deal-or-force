@@ -56,12 +56,12 @@ public partial class DealOrForceGame
         Ui.Place(_armyPanel, "hud.army_panel");
         _armyPanel.Visible = false;
 
-        var rows = PanelRows(_armyPanel, 16, 12, 6);
+        var shell = PanelRows(_armyPanel, 16, 12, 6);
 
         // ---- header: which army, who commands it, how much of it is selected ----------
         var header = new HBoxContainer();
         header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
+        shell.AddChild(header);
 
         var identity = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         identity.AddThemeConstantOverride("separation", 1);
@@ -83,7 +83,7 @@ public partial class DealOrForceGame
         // ---- composition: what the selection is made of, at a glance ------------------
         _armyComposition = new HBoxContainer();
         _armyComposition.AddThemeConstantOverride("separation", 12);
-        rows.AddChild(_armyComposition);
+        shell.AddChild(_armyComposition);
 
         // ---- the roster ---------------------------------------------------------------
         var scroll = new ScrollContainer
@@ -91,9 +91,10 @@ public partial class DealOrForceGame
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 220)
+            CustomMinimumSize = new Vector2(0, 150),
+            SizeFlagsStretchRatio = 0.75f
         };
-        rows.AddChild(scroll);
+        shell.AddChild(scroll);
         _armyRoster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _armyRoster.AddThemeConstantOverride("separation", 2);
         scroll.AddChild(_armyRoster);
@@ -102,7 +103,26 @@ public partial class DealOrForceGame
             "Click a division to command it alone · Ctrl+click to add or remove · double-click to take every division of the same template",
             11, Ui.Colour("text.faint"));
         _armyRosterHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(_armyRosterHint);
+        shell.AddChild(_armyRosterHint);
+
+        // The command deck has many useful controls, but it must never dictate the
+        // panel's screen-space height. Keeping it in its own scroll viewport lets the
+        // data-driven HUD rectangle remain authoritative at every supported resolution.
+        // The roster remains independently scrollable, so selecting seventy divisions
+        // does not push the battle-plan buttons below the map controls.
+        var commandScroll = new ScrollContainer
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = 1.45f,
+            CustomMinimumSize = new Vector2(0, 250),
+            FollowFocus = true
+        };
+        shell.AddChild(commandScroll);
+        var rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        rows.AddThemeConstantOverride("separation", 6);
+        commandScroll.AddChild(rows);
 
         // ---- battle plans -------------------------------------------------------------
         rows.AddChild(Title("BATTLE PLANS", 11, Ui.Colour("text.caption")));

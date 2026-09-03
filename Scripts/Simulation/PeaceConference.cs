@@ -267,7 +267,8 @@ public sealed class PeaceLedger
     private readonly Nation _loser;
     private readonly Dictionary<int, int> _provincesPerState = new();
     private readonly Dictionary<int, long> _statePopulation = new();
-    private readonly int _capitalStateMapIndex = -1;
+    private int _capitalStateMapIndex = -1;
+    private bool _surveyed;
 
     public PeaceLedger(Campaign campaign, StrategicWar war, int proposerId)
     {
@@ -277,7 +278,24 @@ public sealed class PeaceLedger
         _loser = war is null ? null : campaign.NationById(
             proposerId == war.AttackerId ? war.DefenderId : war.AttackerId);
         Budget = PeaceConference.Budget(campaign, war, proposerId);
+    }
 
+    /// <summary>
+    /// Work out what the loser owns and where their capital is - once, and only if somebody
+    /// asks what a province costs.
+    ///
+    /// This used to happen in the constructor, which meant a walk of all thirty-eight
+    /// thousand provinces every time a ledger was made. The AI makes one every time it
+    /// wonders whether to negotiate, reads the budget off it, and in nine cases out of ten
+    /// throws it away without pricing anything - ten thousand times over a campaign, which
+    /// was three hundred and seventy million province reads and most of the AI's garbage.
+    /// </summary>
+    private void EnsureSurveyed()
+    {
+        if (_surveyed) return;
+        _surveyed = true;
+
+        var campaign = _campaign;
         var topology = campaign.ProvinceMap;
         if (topology is null || _loser is null) return;
 
@@ -310,7 +328,14 @@ public sealed class PeaceLedger
     public Nation Loser => _loser;
 
     /// <summary>Provinces the loser still owns - the ground a conference may paint over.</summary>
-    public IReadOnlyDictionary<int, int> ProvincesPerState => _provincesPerState;
+    public IReadOnlyDictionary<int, int> ProvincesPerState
+    {
+        get
+        {
+            EnsureSurveyed();
+            return _provincesPerState;
+        }
+    }
 
     public PeaceConference.ProvinceCost Price(int province)
     {
@@ -340,6 +365,7 @@ public sealed class PeaceLedger
             reason += ", inside the declared war goal";
         }
 
+        EnsureSurveyed();
         if (_provincesPerState.TryGetValue(stateMapIndex, out var provinces) && provinces > 0 &&
             _statePopulation.TryGetValue(stateMapIndex, out var population))
         {

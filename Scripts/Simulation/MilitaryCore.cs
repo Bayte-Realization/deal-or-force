@@ -108,6 +108,13 @@ public sealed class Army
 
     /// <summary>The drawn line this formation was put on, or -1 for the war's own front.</summary>
     public int FrontLineId = -1;
+
+    /// <summary>
+    /// The fleet carrying this formation, or -1 on dry land. An embarked formation holds
+    /// province zero - which every land system already reads as "nowhere" - so nothing on
+    /// the land side has to learn that ships exist.
+    /// </summary>
+    public int EmbarkedFleetId = -1;
     public float LastReinforced;
     public ArmyMoveResult LastMoveResult;
     public int LastMoveResultDay = -1;

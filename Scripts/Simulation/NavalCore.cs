@@ -32,7 +32,10 @@ public enum FleetMission
     Raid,
 
     /// <summary>Guarding one's own shipping against exactly that.</summary>
-    Escort
+    Escort,
+
+    /// <summary>Carrying an army at a coast, to put it ashore when it arrives.</summary>
+    Invasion
 }
 
 /// <summary>
@@ -92,6 +95,10 @@ public sealed class Fleet
     /// <summary>Set for the day a fleet was in action, so the interface can say so.</summary>
     public bool InAction;
 
+    /// <summary>Formations aboard, and the coast they are being taken to.</summary>
+    public readonly List<int> Carried = new();
+    public int TargetProvinceId = -1;
+
     public bool IsMoving => HasOrder;
 
     /// <summary>
@@ -131,6 +138,13 @@ public static class NavalOperations
             fleet.Readiness = M.Lerp(fleet.Readiness, funded, defines.FleetReadinessDrift);
 
             var inPort = fleet.Mission == FleetMission.Anchored && !fleet.HasOrder;
+            if (fleet.Hulls > 0 && fleet.Carried.Count > 0 && fleet.Mission != FleetMission.Invasion &&
+                !fleet.HasOrder)
+            {
+                // A fleet ordered home while loaded lands its passengers where it stops.
+                var port = fleet.HomeProvinceId;
+                if (fleet.Mission == FleetMission.Anchored && port > 0) NavalInvasion.Disembark(campaign, fleet, port);
+            }
             if (inPort)
             {
                 fleet.Supply = M.Clamp01(fleet.Supply + defines.FleetSupplyInPortPerDay);
@@ -152,6 +166,12 @@ public static class NavalOperations
             }
 
             Sail(campaign, fleet);
+
+            // A loaded fleet that has reached the coast it was sent to puts its army
+            // ashore. Everything that then happens - a province changing hands, or a
+            // battle - is the ordinary land model's business.
+            if (fleet.Mission == FleetMission.Invasion && !fleet.HasOrder && fleet.TargetProvinceId > 0)
+                NavalInvasion.Land(campaign, fleet, fleet.TargetProvinceId);
         }
 
         ResolveActions(campaign);

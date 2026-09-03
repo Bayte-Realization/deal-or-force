@@ -187,11 +187,11 @@ public static class InterfaceSkin
     {
         // The campaign HUD
         ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,      14f, 12f, -14f, 104f)),
-        ("hud.navigation",     new PanelRect(0.5f, 1f, 0.5f, 1f, -475f, -97f, 475f, -10f)),
+        ("hud.navigation",     new PanelRect(0.5f, 1f, 0.5f, 1f, -475f, -96f, 475f, -12f)),
         ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      20f, 140f, 404f, -170f)),
-        ("hud.map_controls",   new PanelRect(0f, 1f, 0f, 1f,      14f, -154f, 660f, -106f)),
+        ("hud.map_controls",   new PanelRect(0f, 1f, 0f, 1f,      14f, -160f, 660f, -110f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 154f)),
-        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 1f,    -334f, 116f, -14f, -112f)),
+        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 1f,    -334f, 116f, -14f, -116f)),
         ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      14f, 140f, 500f, -190f)),
         ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      14f, 140f, 360f, 430f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),

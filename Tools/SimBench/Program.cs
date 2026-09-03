@@ -149,6 +149,8 @@ public static class Program
                     RegionsSplitAlongNewBorders(sandbox));
                 failures += Check("a redrawn border survives a save", BordersSurviveASave(sandbox));
                 failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
+                failures += Check("an army can be put ashore across water",
+                    AnArmyCanBePutAshore(sandbox));
                 failures += Check("a drawn line moves the formations put on it",
                     ADrawnLineCommandsTheFormationsOnIt(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
@@ -613,6 +615,116 @@ public static class Program
         if (casualties < 20_000f * years)
             return $"only {casualties:N0} casualties in {days} day(s) - the front is frozen, not contested";
         return "";
+    }
+
+    /// <summary>
+    /// The hole the whole naval side was shaped around: every war across water was refused
+    /// with "naval invasions are not ported yet", so every island was permanently safe and
+    /// a navy had nothing to do.
+    ///
+    /// Four things have to be true for the word to be earned. A country with ships may
+    /// declare a war it has no land border for, and one without ships may not. Divisions
+    /// can be loaded onto a fleet, and while aboard they hold no ground - or an invasion
+    /// force would still be standing on its own coast. A loaded fleet sent at a shore
+    /// arrives and puts them there. And the landing costs them their order, because coming
+    /// off a ship onto somebody else's beach should not be free.
+    /// </summary>
+    private static string AnArmyCanBePutAshore(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+        var invader = campaign.NationByTag("GBR");
+        if (invader is null) return "no invader to test with";
+        var fleet = campaign.Fleets.Find(candidate => candidate.NationId == invader.Id);
+        if (fleet is null) return "GBR has no fleet";
+
+        // Somebody across water that GBR shares no land border with.
+        var target = campaign.Nations.Find(nation => nation.Id != invader.Id && nation.Population > 0 &&
+            !CampaignDiplomacy.SharesLandBorder(campaign, invader.MapIndex, nation.MapIndex) &&
+            CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, nation.Id, out _));
+        if (target is null) return "no overseas country to invade";
+        if (!CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, target.Id, out var refusal))
+            return $"a country with {fleet.Hulls:N0} hulls was refused a war across water: {refusal}";
+
+        var landless = campaign.Nations.Find(nation => nation.Population > 0 &&
+            !campaign.Fleets.Exists(candidate => candidate.NationId == nation.Id));
+        if (landless is not null)
+        {
+            var far = campaign.Nations.Find(nation => nation.Id != landless.Id && nation.Population > 0 &&
+                !CampaignDiplomacy.SharesLandBorder(campaign, landless.MapIndex, nation.MapIndex));
+            if (far is not null && CampaignDiplomacy.CanDeclareWar(campaign, landless.Id, far.Id, out _))
+                return $"{landless.Tag} has no ships at all and was still allowed a war across water";
+        }
+
+        var war = CampaignDiplomacy.DeclareWar(campaign, invader.Id, target.Id);
+        if (war is null) return "the overseas war was refused after all";
+        try
+        {
+            var troops = campaign.Armies.FindAll(army => army.NationId == invader.Id && army.EmbarkedFleetId < 0);
+            if (troops.Count == 0) return "GBR has no divisions to load";
+            var loaded = troops.GetRange(0, Math.Min(2, troops.Count));
+            foreach (var army in loaded)
+            {
+                // Put them in the fleet's own port so they can walk up the gangway.
+                if (fleet.HomeProvinceId > 0)
+                {
+                    army.ProvinceId = fleet.HomeProvinceId;
+                    var where = topology.CenterOf(fleet.HomeProvinceId);
+                    army.Latitude = where.Latitude;
+                    army.Longitude = where.Longitude;
+                }
+                army.Organisation = 1f;
+            }
+            fleet.HasOrder = false;
+            fleet.Mission = FleetMission.Anchored;
+
+            new EmbarkArmiesCommand
+            {
+                IssuerId = invader.Id, FleetId = fleet.Id,
+                ArmyIds = loaded.ConvertAll(army => army.Id)
+            }.Apply(campaign);
+            if (fleet.Carried.Count == 0) return "no division could be loaded onto a fleet in its own port";
+            var aboard = campaign.Armies.Find(army => army.Id == fleet.Carried[0]);
+            if (aboard is null || aboard.ProvinceId > 0)
+                return "a formation aboard a ship was still holding ground ashore";
+
+            // A coastal province the target holds.
+            var beach = -1;
+            for (var province = 1; province <= topology.ProvinceCount && beach < 0; province++)
+                if (campaign.ProvinceController[province] == (ushort)target.MapIndex) beach = province;
+            if (beach < 0) return $"{target.Tag} holds no province to land on";
+
+            new LaunchInvasionCommand
+            {
+                IssuerId = invader.Id, FleetId = fleet.Id, ProvinceId = beach
+            }.Apply(campaign);
+            if (fleet.Mission != FleetMission.Invasion) return "the fleet refused the invasion order";
+
+            var before = aboard.Organisation;
+            var sailed = 0;
+            for (; sailed < 400 && fleet.Carried.Count > 0; sailed++) NavalOperations.Tick(campaign);
+            if (fleet.Carried.Count > 0) return $"the fleet never arrived after {sailed:N0} days at sea";
+            if (aboard.ProvinceId <= 0) return "the landing left the formation nowhere";
+            if (aboard.Organisation >= before) return "coming ashore on a hostile beach cost nothing";
+
+            Console.WriteLine($"  invasion: {invader.Tag} declared war on {target.Tag} across water, loaded " +
+                              $"{loaded.Count:N0} division(s) onto {fleet.Hulls:N0} hulls, sailed {sailed:N0} day(s) " +
+                              $"and landed at {aboard.Organisation:P0} organisation against {before:P0} aboard.");
+            return "";
+        }
+        finally
+        {
+            war.Ended = true;
+            foreach (var id in new List<int>(fleet.Carried))
+            {
+                var army = campaign.Armies.Find(candidate => candidate.Id == id);
+                if (army is not null) army.EmbarkedFleetId = -1;
+            }
+            fleet.Carried.Clear();
+            fleet.Mission = FleetMission.Anchored;
+            fleet.HasOrder = false;
+            fleet.TargetProvinceId = -1;
+        }
     }
 
     /// <summary>

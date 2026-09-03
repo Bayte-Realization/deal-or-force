@@ -357,6 +357,18 @@ public sealed class Defines
 	/// <summary>How much of a coastal province's supply a full blockade takes.</summary>
 	public float FleetBlockadeSupplyPenalty { get; set; } = 0.55f;
 
+	/// <summary>Divisions one hull can carry. Eighty hulls lift about five divisions.</summary>
+	public float FleetDivisionsPerHull { get; set; } = 0.062f;
+
+	/// <summary>How close a formation must be to a fleet to walk up its gangway.</summary>
+	public float FleetEmbarkRangeDegrees { get; set; } = 5.0f;
+
+	/// <summary>Cohesion a formation loses coming off a ship onto a hostile shore.</summary>
+	public float InvasionLandingOrganisationCost { get; set; } = 0.45f;
+
+	/// <summary>Days a formation needs ashore before it can attack out of its beachhead.</summary>
+	public int InvasionRestAfterLandingDays { get; set; } = 3;
+
 
 	/// <summary>
 	/// Days a formation spends consolidating on a province it has just taken before it can

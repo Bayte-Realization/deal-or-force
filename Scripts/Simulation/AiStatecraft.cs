@@ -68,9 +68,12 @@ public static class AiStatecraft
 
             // Staggered: a nation thinks about its neighbours once a week and about its
             // budget once a month, on its own day, so the cost is spread rather than spiked.
-            if ((campaign.ElapsedDays + nation.Id) % 7 == 0) Diplomacy(campaign, nation);
-            if ((campaign.ElapsedDays + nation.Id) % 30 == 0) Economy(campaign, nation);
-            if ((campaign.ElapsedDays + nation.Id) % 11 == 0) Warmaking(campaign, nation);
+            if ((campaign.ElapsedDays + nation.Id) % 7 == 0)
+                using (SimProfiler.Measure("  ai:diplomacy")) Diplomacy(campaign, nation);
+            if ((campaign.ElapsedDays + nation.Id) % 30 == 0)
+                using (SimProfiler.Measure("  ai:economy")) Economy(campaign, nation);
+            if ((campaign.ElapsedDays + nation.Id) % 11 == 0)
+                using (SimProfiler.Measure("  ai:warmaking")) Warmaking(campaign, nation);
         }
     }
 
