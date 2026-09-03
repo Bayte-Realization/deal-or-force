@@ -12,11 +12,32 @@ public enum DecisionKind
     EducationReform,
     PublicHealthCampaign,
     AntiCorruptionDrive,
-    EmergencyMobilisation
+    EmergencyMobilisation,
+
+    /// <summary>
+    /// A decision whose whole consequence is written in `effects`. The five above are the
+    /// ones the game shipped before decisions could be scripted at all; this is the one a
+    /// mod uses, and the one the newer shipped decisions use, because a decision that
+    /// needs a C# case is a decision only the base game can write.
+    /// </summary>
+    Scripted
 }
 
 public readonly record struct DecisionDefinition(
-    string Id, string Name, string Description, int CooldownDays, float GdpCostShare, DecisionKind Kind);
+    string Id, string Name, string Description, int CooldownDays, float GdpCostShare, DecisionKind Kind)
+{
+    /// <summary>What has to be true of the country. Empty means "whenever it can be paid for".</summary>
+    public ScriptedTrigger Trigger { get; init; }
+
+    /// <summary>What it does, on top of whatever its <see cref="Kind"/> does.</summary>
+    public ScriptedEffects.Effect Effect { get; init; }
+
+    /// <summary>Told to the player when the trigger refuses.</summary>
+    public string Unavailable { get; init; }
+
+    /// <summary>The scripted score an AI weighs this with. Nothing declared means never.</summary>
+    public string AiWillDo { get; init; }
+}
 
 public static class DecisionCatalog
 {
@@ -44,22 +65,79 @@ public static class DecisionCatalog
 
     public static void ResetCatalog()
     {
+        // Decisions name triggers and effects out of the libraries as they are read.
+        ScriptLibrary.EnsureLoaded();
         Definitions.Clear();
         Definitions.AddRange(Defaults);
         foreach (var document in GameDataLoader.DataDocuments("common", "decisions"))
             using (document)
             foreach (var entry in document.RootElement.EnumerateObject())
-            {
-                var value = entry.Value;
-                if (!value.TryGetProperty("kind", out var kindValue) || kindValue.ValueKind != JsonValueKind.String ||
-                    !Enum.TryParse<DecisionKind>(kindValue.GetString(), true, out var kind)) continue;
-                Override(entry.Name,
-                    value.TryGetProperty("name", out var name) ? name.GetString() : null,
-                    value.TryGetProperty("description", out var description) ? description.GetString() : null,
-                    value.TryGetProperty("cooldown_days", out var cooldown) && cooldown.TryGetInt32(out var days) ? days : null,
-                    value.TryGetProperty("gdp_cost_share", out var cost) && cost.TryGetSingle(out var share) ? share : null,
-                    kind);
-            }
+                Apply(entry.Name, entry.Value, null);
+    }
+
+    /// <summary>
+    /// One decision, from the base game's folder or a mod's - they are read the same way,
+    /// because they are the same thing.
+    ///
+    /// `kind` used to be required, and a decision without one was skipped in silence: a
+    /// mod could rename the five decisions the game compiled and could not write a sixth.
+    /// A decision with an `effects` block needs no kind at all now, which is the whole
+    /// point of having the block.
+    /// </summary>
+    public static bool Apply(string id, JsonElement value, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(id) || value.ValueKind != JsonValueKind.Object)
+        {
+            errors?.Add($"decision '{id}': expected an object.");
+            return false;
+        }
+
+        string Text(string key) =>
+            value.TryGetProperty(key, out var found) && found.ValueKind == JsonValueKind.String
+                ? found.GetString()
+                : null;
+
+        var declared = Text("kind");
+        DecisionKind kind;
+        if (string.IsNullOrWhiteSpace(declared)) kind = DecisionKind.Scripted;
+        else if (!Enum.TryParse(declared, true, out kind))
+        {
+            errors?.Add($"decision '{id}': unknown kind '{declared}'.");
+            return false;
+        }
+
+        if (!Override(id, Text("name"), Text("description"),
+                value.TryGetProperty("cooldown_days", out var cooldown) && cooldown.TryGetInt32(out var days)
+                    ? days
+                    : null,
+                value.TryGetProperty("gdp_cost_share", out var cost) && cost.TryGetSingle(out var share)
+                    ? share
+                    : null,
+                kind))
+        {
+            errors?.Add($"decision '{id}': invalid values.");
+            return false;
+        }
+
+        var index = Definitions.FindIndex(definition =>
+            string.Equals(definition.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return false;
+
+        var trigger = value.TryGetProperty("trigger", out var condition)
+            ? ScriptedTrigger.Parse(condition, $"decision '{id}'", errors)
+            : null;
+        var effect = value.TryGetProperty("effects", out var effects)
+            ? ScriptedEffects.Parse(effects, $"decision '{id}'", errors)
+            : null;
+
+        Definitions[index] = Definitions[index] with
+        {
+            Trigger = trigger ?? Definitions[index].Trigger,
+            Effect = effect ?? Definitions[index].Effect,
+            Unavailable = Text("unavailable") ?? Definitions[index].Unavailable,
+            AiWillDo = Text("ai_will_do") ?? Definitions[index].AiWillDo
+        };
+        return true;
     }
 
     public static IReadOnlyList<DecisionDefinition> All => Definitions;
@@ -99,6 +177,10 @@ public static class DecisionCatalog
         if (nation.Treasury < Cost(nation, definition)) return "Insufficient treasury";
         if (definition.Kind == DecisionKind.EmergencyMobilisation &&
             !campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id))) return "Requires an active war";
+        if (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation))
+            return string.IsNullOrWhiteSpace(definition.Unavailable)
+                ? "The country is not in a position to do this"
+                : definition.Unavailable;
         return "";
     }
 }
@@ -151,6 +233,10 @@ public sealed class TakeDecisionCommand : ICampaignCommand
                 }
                 break;
         }
+
+        // Whatever the decision says in data, on top of whatever its kind does in code.
+        // A scripted decision has no kind and this is all of it.
+        item.Effect?.Apply(campaign, nation);
         campaign.MarkStrategicChange();
     }
 }

@@ -102,6 +102,7 @@ public sealed class ModLoader
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
+        ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
         ModifierCatalog.ResetCatalog();
@@ -109,6 +110,7 @@ public sealed class ModLoader
         MilitaryBootstrap.ResetPersonnel();
         foreach (var package in _packages)
         {
+            ApplyScriptLibraries(package);
             ApplyDefines(package, campaign.Defines);
             ApplyUnits(package);
             ApplyGoods(package);
@@ -153,6 +155,17 @@ public sealed class ModLoader
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
+    /// <summary>
+    /// A mod's own named triggers, effects and scores. They load before everything else
+    /// the mod brings, because its decisions and events refer to them by name while they
+    /// are being read.
+    /// </summary>
+    private void ApplyScriptLibraries(ModPackage package)
+    {
+        try { ScriptLibrary.LoadDirectories(package.PhysicalRoot, package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"scripted libraries: {exception.Message}"); }
+    }
+
     private void ApplyDecisions(ModPackage package)
     {
         foreach (var path in JsonFiles(package, "common", "decisions"))
@@ -161,14 +174,10 @@ public sealed class ModLoader
             using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
             {
-                var value = entry.Value;
-                string Text(string key) => value.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
-                float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
-                int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
-                if (!Enum.TryParse<DecisionKind>(Text("kind"), true, out var kind) ||
-                    !DecisionCatalog.Override(entry.Name, Text("name"), Text("description"),
-                        Integer("cooldown_days"), Number("gdp_cost_share"), kind))
-                    package.Errors.Add($"Invalid decision '{entry.Name}' in {Path.GetFileName(path)}");
+                // The same reader the base game's own folder goes through. It used to be
+                // a second, narrower copy here that required a compiled `kind` - so a mod
+                // could rename the five decisions the game shipped and write no others.
+                DecisionCatalog.Apply(entry.Name, entry.Value, package.Errors);
             }
         }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }

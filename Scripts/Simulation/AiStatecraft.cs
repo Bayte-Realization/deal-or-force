@@ -304,6 +304,37 @@ public static class AiStatecraft
         }
 
         using (SimProfiler.Measure("    eco:build")) Build(campaign, nation, atWar, reserves);
+        using (SimProfiler.Measure("    eco:cabinet")) Cabinet(campaign, nation);
+    }
+
+    /// <summary>
+    /// One decision a month, if the country wants one enough.
+    ///
+    /// Decisions existed and no AI had ever taken one: two hundred and sixty governments
+    /// sat on the same five levers for the whole campaign while the player pulled them.
+    /// How much a country wants a decision is a scripted score - `ai_will_do` in the
+    /// decision, resolved out of `common/scripted_modifiers` - so tuning an AI that
+    /// mobilises too eagerly is a line in a file rather than a rebuild, and a mod's own
+    /// decisions are weighed by the same rule as the shipped ones.
+    ///
+    /// A decision with no score declared is never taken. That is deliberate: an AI that
+    /// takes anything a modder forgot to weigh is worse than one that waits to be told.
+    /// </summary>
+    private static void Cabinet(Campaign campaign, Nation nation)
+    {
+        var bestScore = campaign.Defines.AiDecisionThreshold;
+        var best = "";
+        foreach (var definition in DecisionCatalog.All)
+        {
+            if (string.IsNullOrEmpty(definition.AiWillDo)) continue;
+            if (DecisionCatalog.BlockReason(campaign, nation, definition).Length > 0) continue;
+            var score = ScriptLibrary.Score(campaign, nation, definition.AiWillDo);
+            if (score <= bestScore) continue;
+            bestScore = score;
+            best = definition.Id;
+        }
+        if (best.Length == 0) return;
+        new TakeDecisionCommand { IssuerId = nation.Id, DecisionId = best }.Apply(campaign);
     }
 
     /// <summary>

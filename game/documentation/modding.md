@@ -28,6 +28,9 @@ category, and never the executable.
         defines/         every tuning number in the simulation
         goods/           the commodities the market trades
         modifiers/       timed effects that can be granted to a country or region
+        scripted_effects/    named consequences, referred to by "use"
+        scripted_modifiers/  named scores: how much an AI wants something
+        scripted_triggers/   named conditions, referred to by "use"
         units/           division templates: attack, armour, width, supply use
       events/            scripted events and their outcomes
       gfx/               which picture the game means by a name
@@ -170,6 +173,57 @@ glyphs for needs one of yours, or every string you translated renders as empty b
         "ui.default": "fonts/NotoSansSC-Regular.ttf"
       }
     }
+
+**Write a decision.** A decision used to need a `kind` - a consequence compiled into the
+game - so a mod could rename the five that shipped and write no sixth. A decision with an
+`effects` block needs no kind at all. `common/decisions/50_my_decisions.json`:
+
+    {
+      "land_reform": {
+        "name": "Land reform",
+        "description": "Break up the estates. The countryside is quieter and poorer for a while.",
+        "cooldown_days": 1800,
+        "gdp_cost_share": 0.0030,
+        "unavailable": "Requires an unhappy countryside",
+        "trigger": { "use": [ "restive" ], "max_standard_of_living": 0.55 },
+        "effects": { "use": [ "civil_calm" ], "state.radicalism": -0.03, "gdp_percent": -0.002 },
+        "ai_will_do": "ai_land_reform"
+      }
+    }
+
+**Write the rules it leans on.** `trigger` and `effects` both accept `use`, which pulls in
+named blocks from `common/scripted_triggers` and `common/scripted_effects`. That is what
+those folders are for: write "this country is at war and can afford it" once, refer to it
+everywhere, and change it in one place.
+
+    // common/scripted_triggers/50_mine.json
+    { "restive": { "max_stability": 0.45 } }
+
+    // common/scripted_effects/50_mine.json
+    { "civil_calm": { "stability": 0.020, "state.radicalism": -0.010 } }
+
+A trigger block is an "and": every clause has to hold. Clauses are `min_<key>`,
+`max_<key>`, `at_war` and `tags`. Effects are `<key>` to add, `<key>_percent` to scale by
+(1 + value), `<key>_mult` to multiply, `<key>_set` to assign, and a `state.` prefix to
+apply the entry to every region the country owns. `game/common/scripted_triggers` and
+`scripted_effects` are the shipped libraries and the full list of keys.
+
+**Say how much the AI wants it.** `ai_will_do` names a score in
+`common/scripted_modifiers`. A decision with no score is never taken by an AI - so a mod's
+decisions are the player's alone until you weigh them.
+
+    {
+      "ai_land_reform": {
+        "base": 0.0,
+        "modifiers": [
+          { "trigger": { "use": [ "restive" ] }, "add": 1.4 },
+          { "trigger": { "at_war": true }, "factor": 0.3 }
+        ]
+      }
+    }
+
+Each government weighs its decisions once a month and takes the best one that beats
+`ai_decision_threshold` in `common/defines`.
 
 ## What is still code
 

@@ -1,37 +1,105 @@
+// The buttons a government may press.
+//
+// A decision names what it costs, what has to be true before it may be taken, what it
+// does, and how much an AI wants it. The first five carry a `kind`, which is a
+// consequence compiled into the game from before decisions could be scripted; the rest
+// have no kind at all and are nothing but the data below - which is what a mod writes.
+//
+// trigger    - a condition block; "use" pulls in common/scripted_triggers.
+// effects    - a change block; "use" pulls in common/scripted_effects.
+// ai_will_do - a score in common/scripted_modifiers. Without one no AI ever takes it.
 {
   "economic_stimulus": {
     "name": "Economic stimulus",
     "description": "Fund domestic demand and industrial orders. Immediate GDP and stability, paid from the treasury.",
     "cooldown_days": 365,
     "gdp_cost_share": 0.0040,
-    "kind": "EconomicStimulus"
+    "kind": "EconomicStimulus",
+    "ai_will_do": "ai_economic_stimulus"
   },
   "education_reform": {
     "name": "National education reform",
     "description": "Raise literacy and productivity; universities amplify the result over time.",
     "cooldown_days": 730,
     "gdp_cost_share": 0.0025,
-    "kind": "EducationReform"
+    "kind": "EducationReform",
+    "ai_will_do": "ai_education_reform"
   },
   "public_health": {
     "name": "Public health campaign",
     "description": "Improve living standards and population growth throughout the country.",
     "cooldown_days": 540,
     "gdp_cost_share": 0.0018,
-    "kind": "PublicHealthCampaign"
+    "kind": "PublicHealthCampaign",
+    "ai_will_do": "ai_public_health"
   },
   "anti_corruption": {
     "name": "Anti-corruption drive",
     "description": "Improve tax collection and state stability at a short-term administrative cost.",
     "cooldown_days": 600,
     "gdp_cost_share": 0.0012,
-    "kind": "AntiCorruptionDrive"
+    "kind": "AntiCorruptionDrive",
+    "ai_will_do": "ai_anti_corruption"
   },
   "emergency_mobilisation": {
     "name": "Emergency mobilisation",
     "description": "Restore frontline readiness during an active war, at a cost to stability and the economy.",
     "cooldown_days": 180,
     "gdp_cost_share": 0.0020,
-    "kind": "EmergencyMobilisation"
+    "kind": "EmergencyMobilisation",
+    "ai_will_do": "ai_emergency_mobilisation"
+  }
+  ,
+
+  "austerity_budget": {
+    "name": "Austerity budget",
+    "description": "Cut the state to the bone to refill the treasury. It works, and nobody thanks you for it.",
+    "cooldown_days": 400,
+    "gdp_cost_share": 0.0,
+    "unavailable": "The treasury is not empty enough to justify it",
+    "trigger": { "use": [ "empty_coffers" ] },
+    "effects": { "use": [ "austerity" ] },
+    "ai_will_do": "ai_austerity_budget"
+  },
+
+  "conscription_drive": {
+    "name": "Conscription drive",
+    "description": "Widen the call-up. Men for the front, at the price of the patience of the people sending them.",
+    "cooldown_days": 240,
+    "gdp_cost_share": 0.0008,
+    "unavailable": "Requires a war and a shortage of men",
+    "trigger": { "use": [ "short_of_men" ] },
+    "effects": {
+      "manpower": 180000,
+      "war_support": -0.030,
+      "stability": -0.018
+    },
+    "ai_will_do": "ai_conscription_drive"
+  },
+
+  "infrastructure_bond": {
+    "name": "Infrastructure bond",
+    "description": "Borrow against the peace to build roads, power and rail. The bill comes now; the country is richer for a decade.",
+    "cooldown_days": 500,
+    "gdp_cost_share": 0.0035,
+    "unavailable": "Requires peace and reserves to borrow against",
+    "trigger": { "use": [ "at_peace", "solvent" ] },
+    "effects": { "use": [ "industrial_push" ] },
+    "ai_will_do": "ai_infrastructure_bond"
+  },
+
+  "amnesty": {
+    "name": "General amnesty",
+    "description": "Empty the prisons of the politically inconvenient. Cheap, immediate, and remembered.",
+    "cooldown_days": 900,
+    "gdp_cost_share": 0.0002,
+    "unavailable": "The country is calm enough not to need it",
+    "trigger": { "use": [ "restive" ] },
+    "effects": {
+      "use": [ "civil_calm" ],
+      "stability": 0.015,
+      "state.radicalism": -0.012
+    },
+    "ai_will_do": "ai_amnesty"
   }
 }

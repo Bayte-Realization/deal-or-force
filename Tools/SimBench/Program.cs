@@ -4,6 +4,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using DealOrForce.Simulation;
 
 namespace DealOrForce.Tools;
@@ -137,6 +138,8 @@ public static class Program
                 FrontIsAStalemate(campaign, frontBefore, ukraineTrace, days));
 
         failures += Check("the world governs itself", TheWorldGovernsItself(campaign, days));
+        failures += Check("governments take decisions written in data",
+            GovernmentsTakeScriptedDecisions(campaign, days));
 
         // The destructive checks redraw the map and end wars, so they run against a fresh
         // campaign rather than the one that was just measured. Sharing one made them
@@ -1800,6 +1803,72 @@ public static class Program
 
         Console.WriteLine($"  order of battle: a mod can replace one country's army and navy and " +
                           $"leave the rest alone; fonts ship {shippedFaces:N0} face(s) and a mod can add one.");
+        return "";
+    }
+
+    /// <summary>
+    /// Decisions are content, and content the AI acts on.
+    ///
+    /// Two holes, one check. A decision used to need a `kind` - a consequence compiled
+    /// into the executable - so a mod could rename the five the game shipped and write no
+    /// sixth; and no AI had ever taken one, so two hundred and sixty governments sat on
+    /// the same five levers for a whole campaign while only the player pulled them.
+    ///
+    /// The check refuses to accept either half on its own: the libraries have to load and
+    /// compose, a shipped decision has to be nothing but data, and somebody who is not the
+    /// player has to have actually done something over two years.
+    /// </summary>
+    private static string GovernmentsTakeScriptedDecisions(Campaign campaign, int days)
+    {
+        if (ScriptLibrary.TriggerCount == 0) return "common/scripted_triggers declares nothing";
+        if (ScriptLibrary.EffectCount == 0) return "common/scripted_effects declares nothing";
+        if (ScriptLibrary.ScoreCount == 0) return "common/scripted_modifiers declares nothing";
+
+        // A decision that needs no compiled case is the one a mod could write.
+        var scripted = DecisionCatalog.All
+            .Where(decision => decision.Kind == DecisionKind.Scripted)
+            .ToList();
+        if (scripted.Count == 0)
+            return "every shipped decision still needs a compiled kind, so a mod cannot write one";
+        var toothless = scripted.FirstOrDefault(decision => decision.Effect is null || decision.Effect.IsEmpty);
+        if (toothless.Id is not null)
+            return $"scripted decision '{toothless.Id}' does nothing: its effects did not parse";
+        var ungated = scripted.FirstOrDefault(decision => decision.Trigger is null || decision.Trigger.IsEmpty);
+        if (ungated.Id is not null)
+            return $"scripted decision '{ungated.Id}' has no condition, so it is always on offer";
+
+        // `use` has to actually fold a named block in, or the libraries are decoration.
+        using (var document = JsonDocument.Parse("{ \"use\": [ \"restive\" ] }"))
+        {
+            var borrowed = ScriptedTrigger.Parse(document.RootElement, "bench", null);
+            if (borrowed.IsEmpty) return "a trigger that uses a named one came out empty";
+
+            var calm = campaign.Nations.Find(nation => nation.Stability > 0.60f);
+            var troubled = campaign.Nations.Find(nation => nation.Stability < 0.40f);
+            if (calm is not null && borrowed.Matches(campaign, calm))
+                return $"'restive' matched {calm.Tag}, whose stability is {calm.Stability:P0}";
+            if (troubled is not null && !borrowed.Matches(campaign, troubled))
+                return $"'restive' refused {troubled.Tag}, whose stability is {troubled.Stability:P0}";
+        }
+
+        var acted = campaign.Nations.Count(nation => !nation.IsHuman && nation.DecisionAvailableDay.Count > 0);
+        if (acted == 0)
+            return $"no government took a decision in {days:N0} day(s); the AI cabinet is not sitting";
+
+        var taken = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var nation in campaign.Nations)
+            foreach (var decision in nation.DecisionAvailableDay.Keys)
+                taken[decision] = taken.GetValueOrDefault(decision) + 1;
+        var popular = string.Join(", ", taken
+            .OrderByDescending(entry => entry.Value)
+            .Take(4)
+            .Select(entry => $"{entry.Key} x{entry.Value:N0}"));
+
+        Console.WriteLine($"  cabinets: {acted:N0} of {campaign.Nations.Count:N0} governments took a decision " +
+                          $"in {days:N0} day(s) - {popular}.");
+        Console.WriteLine($"  script libraries: {ScriptLibrary.TriggerCount:N0} trigger(s), " +
+                          $"{ScriptLibrary.EffectCount:N0} effect(s), {ScriptLibrary.ScoreCount:N0} score(s); " +
+                          $"{scripted.Count:N0} decision(s) are data alone.");
         return "";
     }
 

@@ -223,6 +223,13 @@ public sealed class Defines
 	public float EntrenchmentAtScenarioStart { get; set; } = 0.85f;
 
 	/// <summary>
+	/// How much a government has to want a decision before it takes one. Scores come from
+	/// `common/scripted_modifiers`; a decision has to beat this to be worth the cooldown it
+	/// spends, so a country holds its powder for the month it actually needs it.
+	/// </summary>
+	public float AiDecisionThreshold { get; set; } = 1.0f;
+
+	/// <summary>
 	/// The share of its entrenchment a division keeps when it marches to another province
 	/// its own country already holds.
 	///

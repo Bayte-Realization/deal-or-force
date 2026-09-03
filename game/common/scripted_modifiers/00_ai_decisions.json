@@ -1,0 +1,89 @@
+// How much a government wants to do something.
+//
+// A base, then conditions that add to it or scale it. The AI takes the highest-scoring
+// decision it can afford each month, and only if the score beats ai_decision_threshold in
+// common/defines. A decision with no score named here is never taken by an AI - which is
+// deliberate: a government that does whatever a modder forgot to weigh is worse than one
+// that waits to be told.
+{
+  "ai_economic_stimulus": {
+    "base": 0.4,
+    "modifiers": [
+      { "trigger": { "use": [ "deep_reserves" ] }, "add": 1.2 },
+      { "trigger": { "use": [ "hungry_for_work" ] }, "add": 0.9 },
+      { "trigger": { "use": [ "at_war" ] }, "factor": 0.4 }
+    ]
+  },
+
+  "ai_education_reform": {
+    "base": 0.3,
+    "modifiers": [
+      { "trigger": { "use": [ "poorly_schooled" ] }, "add": 1.1 },
+      { "trigger": { "use": [ "settled", "solvent" ] }, "add": 0.6 },
+      { "trigger": { "use": [ "at_war" ] }, "factor": 0.2 }
+    ]
+  },
+
+  "ai_public_health": {
+    "base": 0.3,
+    "modifiers": [
+      { "trigger": { "use": [ "hungry_for_work" ] }, "add": 1.0 },
+      { "trigger": { "use": [ "at_war" ] }, "factor": 0.3 }
+    ]
+  },
+
+  "ai_anti_corruption": {
+    "base": 0.4,
+    "modifiers": [
+      { "trigger": { "use": [ "restive" ] }, "add": 1.3 },
+      { "trigger": { "use": [ "empty_coffers" ] }, "add": 0.5 }
+    ]
+  },
+
+  // Mobilisation is for a war going badly, not for every war. At war on its own does not
+  // clear the threshold: a government has to be losing its people's patience or running
+  // out of men. Giving it to both sides on a timer turned an even front into a race, and
+  // the side with more divisions won the race - a decision that refills organisation on
+  // demand helps whoever is attacking.
+  "ai_emergency_mobilisation": {
+    "base": 0.0,
+    "modifiers": [
+      { "trigger": { "use": [ "at_war" ] }, "add": 0.4 },
+      { "trigger": { "use": [ "war_weary" ] }, "add": 0.9 },
+      { "trigger": { "use": [ "short_of_men" ] }, "add": 1.0 },
+      { "trigger": { "use": [ "restive" ] }, "factor": 0.5 }
+    ]
+  },
+
+  "ai_austerity_budget": {
+    "base": 0.0,
+    "modifiers": [
+      { "trigger": { "use": [ "empty_coffers" ] }, "add": 1.6 },
+      { "trigger": { "use": [ "restive" ] }, "factor": 0.4 }
+    ]
+  },
+
+  "ai_conscription_drive": {
+    "base": 0.0,
+    "modifiers": [
+      { "trigger": { "use": [ "short_of_men" ] }, "add": 1.7 },
+      { "trigger": { "use": [ "war_weary" ] }, "factor": 0.5 }
+    ]
+  },
+
+  "ai_infrastructure_bond": {
+    "base": 0.2,
+    "modifiers": [
+      { "trigger": { "use": [ "at_peace", "deep_reserves" ] }, "add": 1.2 },
+      { "trigger": { "use": [ "at_war" ] }, "factor": 0.1 }
+    ]
+  },
+
+  "ai_amnesty": {
+    "base": 0.0,
+    "modifiers": [
+      { "trigger": { "use": [ "restive" ] }, "add": 1.5 },
+      { "trigger": { "use": [ "at_war" ] }, "factor": 0.6 }
+    ]
+  }
+}

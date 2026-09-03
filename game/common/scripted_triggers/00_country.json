@@ -1,0 +1,31 @@
+// Conditions worth writing down once.
+//
+// A trigger block is an "and": every clause in it has to hold. The vocabulary is the same
+// one the effects write to - min_<key> and max_<key> over any country value, plus at_war
+// and tags - so anything you can change you can also test.
+//
+// Anything that takes a trigger also takes "use", which folds these in:
+//
+//   "trigger": { "use": [ "at_war", "solvent" ], "min_war_support": 0.30 }
+{
+  "at_war": { "at_war": true },
+  "at_peace": { "at_war": false },
+
+  // Money. "Solvent" is the floor for anything that costs a year's savings; deep reserves
+  // is the country that can do something expensive without noticing.
+  "solvent": { "min_treasury": 20 },
+  "deep_reserves": { "min_treasury": 150 },
+  // Broke, and with something left to cut. Treasury alone caught most of the world -
+  // most countries are small - and austerity everywhere is austerity nowhere.
+  "empty_coffers": { "max_treasury": 2, "min_welfare_spending": 0.045 },
+
+  // Politics.
+  "restive": { "max_stability": 0.45 },
+  "settled": { "min_stability": 0.62 },
+  "war_weary": { "at_war": true, "max_war_support": 0.55 },
+
+  // Capacity.
+  "poorly_schooled": { "max_literacy": 0.75 },
+  "short_of_men": { "at_war": true, "max_manpower": 250000 },
+  "hungry_for_work": { "max_standard_of_living": 0.45 }
+}

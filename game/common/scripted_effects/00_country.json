@@ -1,0 +1,34 @@
+// Consequences worth writing down once.
+//
+// An effect block is a bag of changes. A bare number adds; _percent scales by (1 + value);
+// _mult multiplies; _set assigns; a state. prefix applies to every region the country
+// owns. Anything that takes an effect also takes "use", which folds these in:
+//
+//   "effects": { "use": [ "war_footing" ], "treasury_percent": -0.01 }
+{
+  // What putting a country on a war footing costs and buys, in one place, so a decision,
+  // an event and a mod's own content all mean the same thing by it.
+  "war_footing": {
+    "war_support": 0.06,
+    "stability": -0.020,
+    "military_spending": 0.010
+  },
+
+  "civil_calm": {
+    "stability": 0.020,
+    "state.radicalism": -0.010
+  },
+
+  "austerity": {
+    "treasury_percent": 0.030,
+    "welfare_spending": -0.008,
+    "standard_of_living": -0.010,
+    "stability": -0.012
+  },
+
+  "industrial_push": {
+    "gdp_percent": 0.0035,
+    "construction_capacity": 0.10,
+    "state.urbanization": 0.004
+  }
+}

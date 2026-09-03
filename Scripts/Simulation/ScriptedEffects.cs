@@ -195,13 +195,35 @@ public static class ScriptedEffects
     /// Parse an "effects" object. An unknown key costs that one line, not the whole file:
     /// one typo in a mod should never take the rest of the mod down with it.
     /// </summary>
-    public static Effect Parse(JsonElement element, string context, List<string> errors)
+    public static Effect Parse(JsonElement element, string context, List<string> errors, int depth = 0)
     {
         var effect = new Effect();
         if (element.ValueKind != JsonValueKind.Object) return effect;
 
         foreach (var property in element.EnumerateObject())
         {
+            // A named effect out of `common/scripted_effects`, folded in before this
+            // block's own entries so the block can override what it borrowed.
+            if (property.Name.Equals("use", StringComparison.OrdinalIgnoreCase))
+            {
+                if (depth > 8)
+                {
+                    errors?.Add($"{context}: scripted effects reference each other in a circle.");
+                    continue;
+                }
+                foreach (var reference in ScriptReferences.Names(property.Value))
+                {
+                    if (!ScriptLibrary.TryEffect(reference, out var block))
+                    {
+                        errors?.Add($"{context}: unknown scripted effect '{reference}'.");
+                        continue;
+                    }
+                    foreach (var entry in Parse(block, $"scripted_effects/{reference}", errors, depth + 1).Entries)
+                        effect.Add(entry.Key, entry.Value);
+                }
+                continue;
+            }
+
             if (!property.Value.TryGetSingle(out var value))
             {
                 errors?.Add($"{context}: effect '{property.Name}' must be a number.");
@@ -240,7 +262,8 @@ public sealed class ScriptedTrigger
 
     public bool IsEmpty => _bounds.Count == 0 && _atWar is null && _tags.Count == 0;
 
-    public static ScriptedTrigger Parse(JsonElement element, string context, List<string> errors)
+    public static ScriptedTrigger Parse(JsonElement element, string context, List<string> errors,
+        int depth = 0)
     {
         var trigger = new ScriptedTrigger();
         if (element.ValueKind != JsonValueKind.Object) return trigger;
@@ -248,6 +271,27 @@ public sealed class ScriptedTrigger
         foreach (var property in element.EnumerateObject())
         {
             var name = property.Name.Trim().Replace('-', '_');
+
+            // A named condition out of `common/scripted_triggers`. Its clauses join this
+            // block's, and every clause still has to hold - a trigger is an "and".
+            if (name.Equals("use", StringComparison.OrdinalIgnoreCase))
+            {
+                if (depth > 8)
+                {
+                    errors?.Add($"{context}: scripted triggers reference each other in a circle.");
+                    continue;
+                }
+                foreach (var reference in ScriptReferences.Names(property.Value))
+                {
+                    if (!ScriptLibrary.TryTrigger(reference, out var block))
+                    {
+                        errors?.Add($"{context}: unknown scripted trigger '{reference}'.");
+                        continue;
+                    }
+                    trigger.Absorb(Parse(block, $"scripted_triggers/{reference}", errors, depth + 1));
+                }
+                continue;
+            }
 
             if (name.Equals("at_war", StringComparison.OrdinalIgnoreCase))
             {
@@ -293,6 +337,15 @@ public sealed class ScriptedTrigger
         return trigger;
     }
 
+    /// <summary>Take another trigger's clauses into this one. Both then have to hold.</summary>
+    internal void Absorb(ScriptedTrigger other)
+    {
+        if (other is null) return;
+        _bounds.AddRange(other._bounds);
+        _tags.AddRange(other._tags);
+        _atWar ??= other._atWar;
+    }
+
     public bool Matches(Campaign campaign, Nation nation)
     {
         if (nation is null) return false;
@@ -308,6 +361,22 @@ public sealed class ScriptedTrigger
             if (!isMinimum && current > value) return false;
         }
         return true;
+    }
+}
+
+/// <summary>A `use` entry is one name or a list of them.</summary>
+internal static class ScriptReferences
+{
+    public static IEnumerable<string> Names(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            yield return value.GetString() ?? "";
+            yield break;
+        }
+        if (value.ValueKind != JsonValueKind.Array) yield break;
+        foreach (var element in value.EnumerateArray())
+            if (element.ValueKind == JsonValueKind.String) yield return element.GetString() ?? "";
     }
 }
 
