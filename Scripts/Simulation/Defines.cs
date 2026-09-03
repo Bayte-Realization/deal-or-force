@@ -222,6 +222,23 @@ public sealed class Defines
 	/// <summary>Entrenchment divisions already hold when a campaign opens mid-war.</summary>
 	public float EntrenchmentAtScenarioStart { get; set; } = 0.85f;
 
+	/// <summary>
+	/// The share of its entrenchment a division keeps when it marches to another province
+	/// its own country already holds.
+	///
+	/// Marching used to cost all of it, and every province a division walks through under
+	/// its own orders is friendly ground by definition - ground taken from the enemy is
+	/// handled by the fighting, not the marching. So a defender that shifted one sector
+	/// along its own line arrived in bare earth, was easier to push out, retreated, shifted
+	/// again, and the line unravelled from one reshuffle. Half the seeds ran that loop and
+	/// Ukraine lost a third of the country in two years without anybody attacking well.
+	///
+	/// The works are in the ground as much as in the unit: a line held for months has
+	/// positions along its whole length, and a division stepping sideways into them is not
+	/// starting from nothing. It is not free either, hence a share rather than all of it.
+	/// </summary>
+	public float EntrenchmentKeptMovingWithinOwnLines { get; set; } = 0.6f;
+
 	/// <summary>Extra frontage each additional province an attack comes from opens up.</summary>
 	public float CombatWidthPerDirection { get; set; } = 20f;
 

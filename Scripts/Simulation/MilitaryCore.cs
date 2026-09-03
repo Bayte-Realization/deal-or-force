@@ -296,7 +296,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
         army.ObjectiveStateMapIndex = war is null ? -1 : topology.ProvinceToState[TargetProvinceId];
         army.PlanActive = war is not null;
         army.MoveProgress = 0f;
-        army.Entrenchment = 0f;
+        // Being told to go somewhere does not fill in a trench; marching out of it does,
+        // and the march charges for that province by province.
         SetResult(army, campaign, army.InBattle
             ? ArmyMoveResult.QueuedAfterBattle
             : war is null ? ArmyMoveResult.Issued : ArmyMoveResult.AttackIssued);
@@ -503,7 +504,9 @@ public static class MilitaryOperations
             army.Route.RemoveAt(0);
             army.StateMapIndex = topology.ProvinceToState[army.ProvinceId];
             (army.Latitude, army.Longitude) = topology.CenterOf(army.ProvinceId);
-            army.Entrenchment = 0f;
+            // Friendly ground by definition - the route above refuses any province the
+            // country does not control - so this is a march within its own lines.
+            army.Entrenchment *= campaign.Defines.EntrenchmentKeptMovingWithinOwnLines;
             army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningLossPerProvince);
             if (army.Route.Count == 0)
             {
