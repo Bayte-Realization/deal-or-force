@@ -57,13 +57,21 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// because the provinces are dots, and at the new close zoom a province is three
     /// hundred pixels tall and the counter is still a thumbnail.
     ///
-    /// So the size follows the camera down: full size where the player is moving single
-    /// divisions, unchanged where making it bigger would only bury the neighbours.
+    /// So the size follows the camera down - but only over the last stretch of it. Growing
+    /// across the whole operational range made counters large at the zoom a player actually
+    /// works at, and a front is dozens of counters in adjacent provinces: they piled into
+    /// each other and the map became unreadable at exactly the scale it has to be read.
+    /// They stay at their normal size until the camera is nearly on the ground, and grow a
+    /// third from there.
     /// </summary>
     private const float CounterPlatePixelSize = 0.000115f;
-    private const float CounterTextPixelSize = 0.00030f;
-    private const int CounterOutlineSize = 8;
-    private const float CounterCloseScale = 1.8f;
+    private const float CounterTextPixelSize = 0.00025f;
+    private const int CounterOutlineSize = 6;
+    private const float CounterCloseScale = 1.35f;
+
+    /// <summary>Above this the counters are simply their normal size.</summary>
+    private const float CounterGrowthDistance = 6.6f;
+    private const float CounterGrowthFlatZoom = 1.6f;
 
     private readonly Dictionary<int, uint> _colorByMapIndex = new();
     private readonly Dictionary<int, Simulation.Nation> _nationByMapIndex = new();
@@ -586,8 +594,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private void UpdateCounterScale()
     {
         var wanted = _flatMap
-            ? Mathf.Lerp(CounterCloseScale, 1f, Mathf.InverseLerp(MinimumFlatZoom, 7.4f, _flatZoom))
-            : Mathf.Lerp(CounterCloseScale, 1f, Mathf.InverseLerp(MinimumDistance, 10.8f, _distance));
+            ? Mathf.Lerp(CounterCloseScale, 1f,
+                Mathf.InverseLerp(MinimumFlatZoom, CounterGrowthFlatZoom, _flatZoom))
+            : Mathf.Lerp(CounterCloseScale, 1f,
+                Mathf.InverseLerp(MinimumDistance, CounterGrowthDistance, _distance));
         wanted = Mathf.Clamp(wanted, 1f, CounterCloseScale);
         if (Mathf.Abs(wanted - _counterScale) < 0.03f) return;
         _counterScale = wanted;
@@ -1564,9 +1574,9 @@ void fragment() {
             {
                 Name = "DivisionCount",
                 Text = "",
-                FontSize = 27,
+                FontSize = 21,
                 PixelSize = CounterTextPixelSize * _counterScale,
-                LineSpacing = -6f,
+                LineSpacing = -5f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 FixedSize = true,
                 OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale),
