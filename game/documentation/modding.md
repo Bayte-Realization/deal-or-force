@@ -36,7 +36,7 @@ category, and never the executable.
         countries/2024/  money, people, armies, stability, war support
         provinces/       the political map: one line per province
         states/          regional starting values
-        units/           standing army sizes
+        units/           standing army sizes, and the navies of the bookmark
       localization/      one folder per language, as many files as you like
         english/
         russian/
@@ -69,6 +69,14 @@ files; anything you leave out keeps its value.
 pixels from them, in the order left, top, right, bottom. Write one and inherit the other.
 
     { "layout": { "hud.army_panel": { "offsets": [14, 140, 560, -190] } } }
+
+**Give a country a navy.** `history/units/2024/50_my_fleets.json`. A fleet is hulls at a
+place; its home port is worked out from that place, so you write coordinates you can read
+off any map rather than a province id that moves when the map is recompiled. Naming a
+country replaces its fleets and leaves everyone else's alone.
+
+    { "fleets": { "ARG": [ { "name": "Fleet of the South Atlantic",
+                             "hulls": 24, "latitude": -38.1, "longitude": -57.4 } ] } }
 
 **Translate the game.** `localization/<language>/50_my_strings.json`. The base game is
 written in English, and any caption the interface passes through is looked up by its own

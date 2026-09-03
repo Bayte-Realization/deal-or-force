@@ -245,6 +245,10 @@ public static class MarketSystem
             nation.ShortageIndex = weight <= 0f ? 0f : M.Clamp01(shortages / weight);
             nation.MarketAccess = 1f - nation.ShortageIndex;
             nation.WeeklyTradeBalance = trade * campaign.Defines.MarketTreasuryTradeShare;
+
+            // What the enemy's navy takes off the sea lanes, and what one's own escorts
+            // keep. This is where a fleet stops being scenery and becomes money.
+            NavalOperations.ApplyCommerceEffects(campaign, nation, null);
             nation.WeeklyTariffIncome = tariffs * campaign.Defines.MarketTreasuryTradeShare;
         }
     }

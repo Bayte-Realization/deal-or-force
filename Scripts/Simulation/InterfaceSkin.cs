@@ -193,12 +193,13 @@ public static class InterfaceSkin
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 154f)),
         ("hud.outliner",       new PanelRect(1f, 0f, 1f, 1f,    -334f, 116f, -14f, -112f)),
         ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      14f, 140f, 500f, -190f)),
+        ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      14f, 140f, 360f, 430f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
         ("hud.hotseat",        new PanelRect(0f, 0f, 0f, 0f,      14f, 146f, 294f, 224f)),
         ("hud.network",        new PanelRect(0f, 0f, 0f, 0f,      14f, 146f, 350f, 208f)),
 
         // Full-screen and modal panels
-        ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -230f, -315f, 230f, 315f)),
+        ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -270f, -400f, 270f, 400f)),
         ("picker.heading",     new PanelRect(0f, 0f, 0f, 0f,      18f, 18f, 455f, 106f)),
         ("picker.country",     new PanelRect(1f, 0.5f, 1f, 0.5f, -420f, -338f, -18f, 338f)),
         ("picker.actions",     new PanelRect(0f, 1f, 0f, 1f,      18f, -82f, 486f, -18f)),

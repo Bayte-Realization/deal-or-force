@@ -107,8 +107,12 @@ public static class GameDataLoader
             using (document)
             {
                 if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
+                // TryGetSingle throws rather than returning false when the value is not a
+                // number at all, so the kind is checked first. A category folder holds
+                // whatever a mod puts in it, and one stray object should not be fatal.
                 foreach (var entry in document.RootElement.EnumerateObject())
-                    if (entry.Value.TryGetSingle(out var number)) result[entry.Name] = number;
+                    if (entry.Value.ValueKind == JsonValueKind.Number &&
+                        entry.Value.TryGetSingle(out var number)) result[entry.Name] = number;
             }
         return result;
     }

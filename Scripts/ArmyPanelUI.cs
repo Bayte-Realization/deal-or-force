@@ -52,7 +52,7 @@ public partial class DealOrForceGame
 
     private void BuildArmyPanel()
     {
-        _armyPanel = TexturedPanel(_hudLayer);
+        _armyPanel = TexturedPanel(_hudLayer, PanelSurface.Command);
         Ui.Place(_armyPanel, "hud.army_panel");
         _armyPanel.Visible = false;
 

@@ -148,6 +148,7 @@ public static class Program
                 failures += Check("a region cut by a new border becomes two regions",
                     RegionsSplitAlongNewBorders(sandbox));
                 failures += Check("a redrawn border survives a save", BordersSurviveASave(sandbox));
+                failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
                 failures += Check("a drawn line moves the formations put on it",
                     ADrawnLineCommandsTheFormationsOnIt(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
@@ -612,6 +613,86 @@ public static class Program
         if (casualties < 20_000f * years)
             return $"only {casualties:N0} casualties in {days} day(s) - the front is frozen, not contested";
         return "";
+    }
+
+    /// <summary>
+    /// The navy was fifteen counters that sat where they were put, could not be clicked,
+    /// and changed nothing anywhere. Rebuilt on the same bones as a division, it has to
+    /// earn the word: fleets that meet must fight, a fight must cost both of them, a beaten
+    /// fleet must go home, and a fleet on an enemy's trade must cost that enemy money.
+    ///
+    /// Everything here is done to a throwaway war between two navies, and put back after.
+    /// </summary>
+    private static string ANavyIsWorthHaving(Campaign campaign)
+    {
+        var left = campaign.NationByTag("GBR");
+        var right = campaign.NationByTag("FRA");
+        if (left is null || right is null) return "no two navies to test with";
+        var mine = campaign.Fleets.Find(fleet => fleet.NationId == left.Id);
+        var theirs = campaign.Fleets.Find(fleet => fleet.NationId == right.Id);
+        if (mine is null || theirs is null) return "GBR or FRA has no fleet in the scenario";
+
+        var war = new StrategicWar
+        {
+            Id = 90_000,
+            Name = "Bench naval war",
+            AttackerId = left.Id,
+            DefenderId = right.Id,
+            StartedDay = campaign.ElapsedDays,
+            AiNegotiationUnlockDay = int.MaxValue
+        };
+        campaign.Wars.Add(war);
+        try
+        {
+            // Put them within sight of each other, both at sea and both willing.
+            mine.Latitude = theirs.Latitude = 48f;
+            mine.Longitude = theirs.Longitude = -8f;
+            mine.Mission = FleetMission.Patrol;
+            theirs.Mission = FleetMission.Patrol;
+            mine.HasOrder = theirs.HasOrder = false;
+            mine.Organisation = theirs.Organisation = 1f;
+            mine.Strength = theirs.Strength = 1f;
+            mine.Experience = theirs.Experience = 0f;
+            mine.ReadyDay = theirs.ReadyDay = 0;
+
+            NavalOperations.Tick(campaign);
+            if (!mine.InAction || !theirs.InAction)
+                return "two hostile fleets on the same spot did not find each other";
+            if (mine.Organisation >= 1f || theirs.Organisation >= 1f)
+                return "an action cost neither fleet any cohesion";
+            if (mine.Strength >= 1f && theirs.Strength >= 1f)
+                return "an action cost neither fleet a single hull";
+            if (mine.Experience <= 0f) return "a fleet learned nothing from being in action";
+
+            // Fought to a standstill, the weaker one must break off for home rather than
+            // fight forever on the spot.
+            var fought = 1;
+            for (; fought < 60 && mine.Mission == FleetMission.Patrol &&
+                   theirs.Mission == FleetMission.Patrol; fought++)
+                NavalOperations.Tick(campaign);
+            if (mine.Mission == FleetMission.Patrol && theirs.Mission == FleetMission.Patrol)
+                return $"neither fleet broke off after {fought:N0} days of action";
+
+            // And a navy on an enemy's trade has to be felt in the enemy's budget.
+            theirs.Mission = FleetMission.Raid;
+            theirs.Organisation = 1f;
+            var before = left.WeeklyTradeBalance;
+            NavalOperations.ApplyCommerceEffects(campaign, left, null);
+            if (left.WeeklyTradeBalance >= before)
+                return "an enemy fleet raiding trade cost the victim nothing at all";
+            var raided = before - left.WeeklyTradeBalance;
+
+            Console.WriteLine($"  navy: two fleets met and fought for {fought:N0} day(s) - " +
+                              $"{mine.Hulls:N0} hulls at {mine.Strength:P0} strength against {theirs.Hulls:N0} at " +
+                              $"{theirs.Strength:P0} - and raiding cost the loser {Fmt.Money(raided)} a week.");
+            return "";
+        }
+        finally
+        {
+            campaign.Wars.Remove(war);
+            mine.Mission = theirs.Mission = FleetMission.Anchored;
+            mine.HasOrder = theirs.HasOrder = false;
+        }
     }
 
     /// <summary>

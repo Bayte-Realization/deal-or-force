@@ -420,6 +420,10 @@ public sealed partial class Campaign
         var politicalOverrides = ProvinceOwnership.Apply(this, topology, ProvinceController);
         if (politicalOverrides > 0) PoliticalOverridesApplied = politicalOverrides;
         ProvinceOccupation = new float[topology.ProvinceCount + 1];
+
+        // A fleet's home port is a province, and provinces only exist once the map is
+        // attached. Until then a fleet knows where it is but not what it belongs to.
+        FleetHistory.AssignHomePorts(this);
         var savedTopologyMatches = _pendingProvinceController is not null &&
             _pendingProvinceOccupation is not null &&
             _pendingProvinceController.Length == ProvinceController.Length &&

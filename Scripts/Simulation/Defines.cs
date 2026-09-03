@@ -307,6 +307,57 @@ public sealed class Defines
 	/// </summary>
 	public float CoveringPresenceFloor { get; set; } = 0.45f;
 
+	// ---------------------------------------------------------------- the navy
+	// A fleet is built on the same bones as a division, so its numbers read the same way:
+	// something is spent by being at sea and in action, and restored in port.
+
+	/// <summary>Degrees of the globe a fleet in good order covers in a day.</summary>
+	public float FleetDegreesPerDay { get; set; } = 3.2f;
+
+	/// <summary>How close two hostile fleets must be before they find each other.</summary>
+	public float FleetContactRangeDegrees { get; set; } = 3.0f;
+
+	/// <summary>How far a blockade reaches onto the coast it is sitting on.</summary>
+	public float FleetBlockadeRangeDegrees { get; set; } = 6.0f;
+
+	/// <summary>Distance from home at which a fleet is burning stores as fast as it can.</summary>
+	public float FleetSupplyRangeDegrees { get; set; } = 45f;
+
+	/// <summary>Share of a navy's budget that reaches it each day.</summary>
+	public float FleetReadinessDrift { get; set; } = 0.010f;
+
+	public float FleetSupplyInPortPerDay { get; set; } = 0.090f;
+	public float FleetSupplyAtSeaPerDay { get; set; } = 0.024f;
+	public float FleetOrganisationInPortPerDay { get; set; } = 0.055f;
+	public float FleetOrganisationAtSeaPerDay { get; set; } = 0.020f;
+	public float FleetRepairInPortPerDay { get; set; } = 0.008f;
+
+	/// <summary>Cohesion a day of action costs, before the odds are weighed in.</summary>
+	public float FleetOrganisationLossPerAction { get; set; } = 0.16f;
+
+	/// <summary>Ships lost for each point of cohesion spent fighting.</summary>
+	public float FleetLossesPerOrganisationPoint { get; set; } = 0.085f;
+
+	public float FleetExperiencePerAction { get; set; } = 0.010f;
+
+	/// <summary>Cohesion at which a fleet breaks off and runs for its home port.</summary>
+	public float FleetBreakOrganisation { get; set; } = 0.22f;
+
+	/// <summary>Days a fleet needs before it will fight again after breaking off.</summary>
+	public int FleetRestAfterActionDays { get; set; } = 14;
+
+	/// <summary>What one hull's presence is worth at raiding, guarding and blockading.</summary>
+	public float FleetRaidValue { get; set; } = 0.0016f;
+	public float FleetEscortValue { get; set; } = 0.0020f;
+	public float FleetBlockadeValue { get; set; } = 0.0024f;
+
+	/// <summary>Share of output that moves by sea, and so can be taken away by a navy.</summary>
+	public float FleetCommerceShare { get; set; } = 0.0022f;
+
+	/// <summary>How much of a coastal province's supply a full blockade takes.</summary>
+	public float FleetBlockadeSupplyPenalty { get; set; } = 0.55f;
+
+
 	/// <summary>
 	/// Days a formation spends consolidating on a province it has just taken before it can
 	/// attack again. Two looks far too few beside the seven an attack that failed costs -

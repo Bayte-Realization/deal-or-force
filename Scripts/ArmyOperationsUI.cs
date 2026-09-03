@@ -16,6 +16,7 @@ public partial class DealOrForceGame
     private void OnArmyPicked(Army army)
     {
         if (!_hudLayer.Visible || army is null) return;
+        CloseFleetPanel();
         if (army.NationId == _campaign.Player.Id && Input.IsKeyPressed(Key.Shift))
         {
             if (_selectedArmies.Contains(army))
@@ -237,7 +238,13 @@ public partial class DealOrForceGame
 
     private void OnProvinceCommanded(GlobePick pick)
     {
-        if (!_hudLayer.Visible || pick.ProvinceId <= 0) return;
+        if (!_hudLayer.Visible) return;
+
+        // A fleet is ordered to a place rather than to a province - most of the sea is not
+        // one - so it is handled before the province guard below rejects open water.
+        if (_selectedFleet is not null && SendSelectedFleet(pick.Latitude, pick.Longitude)) return;
+
+        if (pick.ProvinceId <= 0) return;
         if (_selectedArmy is null)
             return;
         if (_selectedArmy.NationId != _campaign.Player.Id)

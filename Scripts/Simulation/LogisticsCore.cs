@@ -170,7 +170,14 @@ public static class LogisticsSystem
             var traceRange = Math.Max(1, campaign.Defines.SupplyTraceRange);
             var distanceFactor = M.Clamp(1f - distance[province] / (float)traceRange * 0.62f, 0.22f, 1f);
             var lakeMultiplier = topology.HasLakeAccess(province) ? 1f + campaign.Defines.LakeSupplyBonus : 1f;
-            var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier);
+
+            // A fleet sitting off the coast takes what arrives by sea. This is the one
+            // thing a navy does that a land player feels immediately: an army on a
+            // blockaded shore stops being supplied, and stops being able to attack.
+            var centre = topology.CenterOf(province);
+            var blockade = NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude);
+            var blockadeFactor = 1f - blockade * campaign.Defines.FleetBlockadeSupplyPenalty;
+            var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor);
             army.SupplyDistance = distance[province];
             army.SupplySourceStateMapIndex = sourceState;
             army.SupplyCongestion = congestion;

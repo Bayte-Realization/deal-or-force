@@ -194,6 +194,7 @@ public partial class DealOrForceGame : Control
         _globe = new GlobePresentation();
         _globe.CountryPicked += OnCountryPicked;
         _globe.ArmyPicked += OnArmyPicked;
+        _globe.FleetPicked += OnFleetPicked;
         _globe.BattlePicked += ShowBattleDetails;
         _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
         _globe.ProvinceCommanded += OnProvinceCommanded;
@@ -222,8 +223,17 @@ public partial class DealOrForceGame : Control
         // Godot 4.x builds, which pushed this panel off-screen.
         Ui.Place(panel, "menu.main");
 
-        var rows = PanelRows(panel, 28, 24, 16);
-        rows.AddChild(Title("DEAL OR FORCE", 34, Ui.Colour("text.accent")));
+        var rows = PanelRows(panel, 28, 24, 9);
+        var logo = new TextureRect
+        {
+            Texture = GD.Load<Texture2D>("res://Assets/Textures/UI/Brand/deal_or_force_logo_banner.png"),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            CustomMinimumSize = new Vector2(0, 184),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            TooltipText = "Deal or Force"
+        };
+        rows.AddChild(logo);
         rows.AddChild(Title(
             "The world as it stands in 2024 — its borders, its people and its economy.",
             15,
@@ -318,7 +328,7 @@ public partial class DealOrForceGame : Control
         }
         UpdateSpeedButtons();
 
-        var navigation = TexturedPanel(_hudLayer);
+        var navigation = TexturedPanel(_hudLayer, PanelSurface.Command);
         Ui.Place(navigation, "hud.navigation");
         var navMargin = Margin(navigation, 10, 8);
         var nav = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
@@ -328,21 +338,22 @@ public partial class DealOrForceGame : Control
         // Each screen says what it is for. A player who has never opened one of these games
         // should be able to learn the interface by resting on it rather than by clicking
         // everything to find out.
-        var screens = new (string Name, string Help)[]
+        var screens = new (string Name, string Icon, string Help)[]
         {
-            ("Nation", "Who you are: capital, people, output, treasury and how settled the country is."),
-            ("Economy", "The budget: what the week raises, what it costs, and what the region you have selected is made of."),
-            ("Military", "The armed forces: how many, how ready, how well fed, and what spending buys."),
-            ("Diplomacy", "How the selected country regards you, and what can be done about it."),
-            ("Wars", "Every war being fought, what it is costing, and the table where it can be ended."),
-            ("Decisions", "One-off national actions, with their price and their consequence."),
-            ("Ledger", "The full record: charts, budget, trade, population and the cabinet.")
+            ("Nation", "nation", "Who you are: capital, people, output, treasury and how settled the country is."),
+            ("Economy", "economy", "The budget: what the week raises, what it costs, and what the region you have selected is made of."),
+            ("Military", "military", "The armed forces: how many, how ready, how well fed, and what spending buys."),
+            ("Diplomacy", "diplomacy", "How the selected country regards you, and what can be done about it."),
+            ("Wars", "wars", "Every war being fought, what it is costing, and the table where it can be ended."),
+            ("Decisions", "decisions", "One-off national actions, with their price and their consequence."),
+            ("Ledger", "ledger", "The full record: charts, budget, trade, population and the cabinet.")
         };
         _screenButtons.Clear();
-        foreach (var (screen, help) in screens)
+        foreach (var (screen, icon, help) in screens)
         {
             var captured = screen;
-            var button = ActionButton(screen, () => OpenScreen(captured), 118, 38);
+            var button = ActionButton(screen, () => OpenScreen(captured), 118, 38,
+                false, $"res://Assets/Textures/UI/Modern/Icons/{icon}.svg");
             button.TooltipText = help;
             _screenButtons[captured] = button;
             nav.AddChild(button);
@@ -397,6 +408,7 @@ public partial class DealOrForceGame : Control
         sideRows.AddChild(_militarySpendingReadout);
 
         BuildArmyPanel();
+        BuildFleetPanel(_hudLayer);
         BuildPeaceConference();
         BuildLedgerInterface();
         BuildMapControls();
@@ -913,10 +925,16 @@ public partial class DealOrForceGame : Control
         return layer;
     }
 
-    private PanelContainer TexturedPanel(Node parent)
+    private enum PanelSurface
+    {
+        Dossier,
+        Command
+    }
+
+    private PanelContainer TexturedPanel(Node parent, PanelSurface surface = PanelSurface.Dossier)
     {
         var panel = new PanelContainer();
-        panel.AddThemeStyleboxOverride("panel", PanelStyle());
+        panel.AddThemeStyleboxOverride("panel", PanelStyle(surface));
         parent.AddChild(panel);
         return panel;
     }
@@ -994,13 +1012,19 @@ public partial class DealOrForceGame : Control
         return label;
     }
 
-    private Button ActionButton(string text, System.Action callback, float width, float height, bool primary = false)
+    private Button ActionButton(string text, System.Action callback, float width, float height,
+        bool primary = false, string iconPath = "")
     {
         var button = new Button
         {
             Text = Tr(text),
             CustomMinimumSize = new Vector2(width, height)
         };
+        if (!string.IsNullOrWhiteSpace(iconPath))
+        {
+            button.Icon = GD.Load<Texture2D>(iconPath);
+            button.ExpandIcon = false;
+        }
         button.SetMeta(LocSourceMeta, text);
         button.SetMeta(LocAppliedMeta, button.Text);
         StyleButton(button, primary);
@@ -1146,16 +1170,21 @@ public partial class DealOrForceGame : Control
         };
     }
 
-    private StyleBox PanelStyle()
+    private StyleBox PanelStyle(PanelSurface surface)
     {
+        var command = surface == PanelSurface.Command;
         return new StyleBoxTexture
         {
-            Texture = GD.Load<Texture2D>("res://Assets/Textures/LegacyGlobality/panel_chrome_v2.png"),
-            TextureMarginLeft = 16,
-            TextureMarginTop = 16,
-            TextureMarginRight = 16,
-            TextureMarginBottom = 16,
-            ModulateColor = new Color(0.78f, 0.86f, 0.94f, 0.98f)
+            Texture = GD.Load<Texture2D>(command
+                ? "res://Assets/Textures/UI/Modern/panel_command_frame.png"
+                : "res://Assets/Textures/UI/Modern/panel_dossier.png"),
+            TextureMarginLeft = command ? 48 : 28,
+            TextureMarginTop = command ? 48 : 28,
+            TextureMarginRight = command ? 48 : 28,
+            TextureMarginBottom = command ? 48 : 28,
+            ModulateColor = command
+                ? new Color(0.88f, 0.92f, 0.98f, 0.985f)
+                : new Color(0.9f, 0.94f, 1f, 0.98f)
         };
     }
 }

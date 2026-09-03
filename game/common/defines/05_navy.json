@@ -1,0 +1,29 @@
+// Deal or Force - the navy.
+//
+// A fleet is built on the same bones as a division: hulls with an organisation, a strength,
+// a supply level and an experience, which together make a Power the action model compares
+// against somebody else's. What is spent at sea is restored in port.
+//
+// Every file in this folder is read in name order and later files win.
+{
+  "FleetDegreesPerDay": 3.2,
+  "FleetContactRangeDegrees": 3.0,
+  "FleetBlockadeRangeDegrees": 6.0,
+  "FleetSupplyRangeDegrees": 45,
+  "FleetReadinessDrift": 0.010,
+  "FleetSupplyInPortPerDay": 0.090,
+  "FleetSupplyAtSeaPerDay": 0.024,
+  "FleetOrganisationInPortPerDay": 0.055,
+  "FleetOrganisationAtSeaPerDay": 0.020,
+  "FleetRepairInPortPerDay": 0.008,
+  "FleetOrganisationLossPerAction": 0.16,
+  "FleetLossesPerOrganisationPoint": 0.085,
+  "FleetExperiencePerAction": 0.010,
+  "FleetBreakOrganisation": 0.22,
+  "FleetRestAfterActionDays": 14,
+  "FleetRaidValue": 0.0016,
+  "FleetEscortValue": 0.0020,
+  "FleetBlockadeValue": 0.0024,
+  "FleetCommerceShare": 0.0022,
+  "FleetBlockadeSupplyPenalty": 0.55
+}

@@ -11,7 +11,7 @@ public partial class DealOrForceGame
 
     private void BuildMapControls()
     {
-        var panel = TexturedPanel(_hudLayer);
+        var panel = TexturedPanel(_hudLayer, PanelSurface.Command);
         panel.Name = "MapControls";
         Ui.Place(panel, "hud.map_controls");
 

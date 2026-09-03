@@ -45,6 +45,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private readonly List<(Node3D Node, Vector3 Normal)> _capitalMarkers = new();
     private readonly List<(Node3D Node, Vector3 Normal)> _armyMarkers = new();
     private readonly List<(Node3D Node, Vector3 Normal)> _fleetMarkers = new();
+    private readonly Dictionary<Node3D, Simulation.Fleet> _fleetByMarker = new();
+    private readonly Dictionary<int, (Node3D Node, Label3D Count, Sprite3D Plate)> _fleetNodes = new();
+    private int _fleetRosterFingerprint = int.MinValue;
+    private int _selectedFleetId = -1;
     private readonly Dictionary<Node3D, IReadOnlyList<Simulation.Army>> _armyByMarker = new();
     private readonly HashSet<int> _selectedArmyIds = new();
     private readonly Dictionary<(int Nation, string Template), Texture2D> _armyCounterTextures = new();
@@ -108,6 +112,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public event Action<GlobePick> CountryPicked;
     public event Action<Simulation.Army> ArmyPicked;
+    public event Action<Simulation.Fleet> FleetPicked;
     public event Action<Simulation.LandBattle> BattlePicked;
     public event Action<IReadOnlyList<Simulation.Army>> ArmiesBoxPicked;
     public event Action<GlobePick> ProvinceCommanded;
@@ -289,9 +294,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (_freeCamera) UpdateFreeCamera(delta);
         else UpdateOrbitCamera(delta);
 
+        // Keep the authored political raster legible at strategic distance. The old
+        // quarter-resolution layer supplied almost forty percent of the default globe,
+        // which made country silhouettes and coastlines look out of focus. A small
+        // mipmapped contribution remains to suppress shimmer while the full authored
+        // layer carries the actual line work.
         var detailMix = _flatMap
-            ? Mathf.Clamp((11.5f - _flatZoom) / 4.2f, 0f, 1f)
-            : Mathf.Clamp((15f - _distance) / 4f, 0f, 1f);
+            ? Mathf.Clamp((13f - _flatZoom) / 4.8f, 0.15f, 1f)
+            : Mathf.Clamp((17f - _distance) / 5.5f, 0.12f, 1f);
         var provinceDetail = _flatMap
             ? Mathf.Clamp((6.8f - _flatZoom) / 2.6f, 0f, 1f)
             : Mathf.Clamp((9.3f - _distance) / 2.8f, 0f, 1f);
@@ -310,6 +320,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             UpdateMilitaryPresentation();
         }
         UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod);
+        UpdateFleetMarkers();
         UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, _distance <= 13.5f);
         UpdateRoutePreview();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
@@ -347,11 +358,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 var crisp = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgba8, result.PoliticalPixels);
                 _globeMaterial.SetShaderParameter("political_detail", ImageTexture.CreateFromImage(crisp));
-                // The distant layer does not need the full tactical resolution. A
-                // compact mipmapped copy removes shimmer without duplicating an
-                // 88 MB mip chain for the close-range political texture.
+                // One third of the authored width matches a 1920 px viewport. That is
+                // still compact enough to mipmap cheaply, but unlike the previous
+                // 1440x720 quarter copy it does not discard visible coastline detail.
                 var smooth = crisp.Duplicate() as Image;
-                smooth.Resize(MapWidth / 4, MapHeight / 4, Image.Interpolation.Lanczos);
+                smooth.Resize(MapWidth / 3, MapHeight / 3, Image.Interpolation.Lanczos);
                 smooth.GenerateMipmaps();
                 _globeMaterial.SetShaderParameter("political_map", ImageTexture.CreateFromImage(smooth));
                 break;
@@ -759,6 +770,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     if (rect.Size.Length() < 8f)
                     {
                         if (TryPickBattle(button.Position, out var battle)) BattlePicked?.Invoke(battle);
+                        else if (TryPickFleet(button.Position, out var fleet)) FleetPicked?.Invoke(fleet);
                         else if (TryPickArmyStack(button.Position, out var stack))
                         {
                             if (stack.Count == 1) ArmyPicked?.Invoke(stack[0]);
@@ -1421,6 +1433,8 @@ void fragment() {
         if (!IsInstanceValid(_fleetRoot) || _fleetTexture is null) return;
         foreach (var child in _fleetRoot.GetChildren()) child.QueueFree();
         _fleetMarkers.Clear();
+        _fleetByMarker.Clear();
+        _fleetNodes.Clear();
         foreach (var fleet in campaign.Fleets)
         {
             var nation = campaign.NationById(fleet.NationId);
@@ -1428,6 +1442,14 @@ void fragment() {
             var marker = new Node3D { Name = $"Fleet_{fleet.Id}_{nation.Tag}" };
             marker.Position = SurfacePoint(fleet.Latitude, fleet.Longitude, SurfaceMarkerRadius);
             _fleetRoot.AddChild(marker);
+            // A fleet flies its country's colours, the way its provinces are painted in
+            // them. A sea full of identical blue counters tells a player nothing about
+            // whose sea it is.
+            var packed = _colorByMapIndex.TryGetValue(nation.MapIndex, out var owned) ? owned : 0x6E7B8BFFu;
+            var flag = new Color(
+                ((packed >> 24) & 0xFF) / 255f,
+                ((packed >> 16) & 0xFF) / 255f,
+                ((packed >> 8) & 0xFF) / 255f, 1f);
             var plate = new Sprite3D
             {
                 Texture = _fleetTexture,
@@ -1436,7 +1458,7 @@ void fragment() {
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                Modulate = new Color(0.60f, 0.82f, 0.90f, 0.86f)
+                Modulate = flag.Lerp(Colors.White, 0.22f) with { A = 0.94f }
             };
             marker.AddChild(plate);
             var strength = new Label3D
@@ -1448,8 +1470,68 @@ void fragment() {
             };
             marker.AddChild(strength);
             _fleetMarkers.Add((marker, marker.Position.Normalized()));
+            _fleetByMarker[marker] = fleet;
+            _fleetNodes[fleet.Id] = (marker, strength, plate);
         }
     }
+
+    /// <summary>
+    /// Fleets move now, so their counters have to follow them. Rebuilding the markers every
+    /// frame would be absurd for something that moves three degrees a day, so the nodes are
+    /// kept and only their positions are written - and the roster is rebuilt only when the
+    /// set of fleets actually changes.
+    /// </summary>
+    private void UpdateFleetMarkers()
+    {
+        if (_campaign is null || !IsInstanceValid(_fleetRoot)) return;
+
+        var fingerprint = _campaign.Fleets.Count;
+        foreach (var fleet in _campaign.Fleets) fingerprint = HashCode.Combine(fingerprint, fleet.Id, fleet.NationId);
+        if (fingerprint != _fleetRosterFingerprint)
+        {
+            _fleetRosterFingerprint = fingerprint;
+            BuildFleetMarkers(_campaign);
+        }
+
+        for (var index = 0; index < _fleetMarkers.Count; index++)
+        {
+            var (node, _) = _fleetMarkers[index];
+            if (!IsInstanceValid(node) || !_fleetByMarker.TryGetValue(node, out var fleet)) continue;
+            var point = SurfacePoint(fleet.Latitude, fleet.Longitude, SurfaceMarkerRadius);
+            node.Position = point;
+            _fleetMarkers[index] = (node, point.Normalized());
+            if (!_fleetNodes.TryGetValue(fleet.Id, out var parts)) continue;
+            if (IsInstanceValid(parts.Count))
+            {
+                var text = fleet.Hulls.ToString();
+                if (parts.Count.Text != text) parts.Count.Text = text;
+                parts.Count.Modulate = fleet.InAction
+                    ? Ui.Colour("military.battle")
+                    : fleet.Id == _selectedFleetId
+                        ? Ui.Colour("globe.selection")
+                        : Ui.Colour("globe.label_province");
+            }
+        }
+    }
+
+    private bool TryPickFleet(Vector2 pixel, out Simulation.Fleet fleet)
+    {
+        fleet = null;
+        if (_distance > 13.5f || !IsInstanceValid(_camera)) return false;
+        var bestDistance = 26f * 26f;
+        foreach (var (node, candidate) in _fleetByMarker)
+        {
+            if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            var screen = _camera.UnprojectPosition(node.GlobalPosition);
+            var distance = screen.DistanceSquaredTo(pixel);
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            fleet = candidate;
+        }
+        return fleet is not null;
+    }
+
+    public void SelectFleet(int fleetId) => _selectedFleetId = fleetId;
 
     private static Texture2D CreateFleetMarkerTexture()
     {

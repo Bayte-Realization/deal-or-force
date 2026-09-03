@@ -19,7 +19,7 @@ public partial class DealOrForceGame
 
     private void BuildStrategicHud()
     {
-        var alerts = TexturedPanel(_hudLayer);
+        var alerts = TexturedPanel(_hudLayer, PanelSurface.Command);
         alerts.Name = "StrategicAlerts";
         Ui.Place(alerts, "hud.alerts");
         var alertMargin = Margin(alerts, 8, 5);
@@ -27,7 +27,7 @@ public partial class DealOrForceGame
         _alertRows.AddThemeConstantOverride("separation", 5);
         alertMargin.AddChild(_alertRows);
 
-        _outliner = TexturedPanel(_hudLayer);
+        _outliner = TexturedPanel(_hudLayer, PanelSurface.Command);
         _outliner.Name = "StrategicOutliner";
         Ui.Place(_outliner, "hud.outliner");
         var outer = Margin(_outliner, 10, 8);
@@ -122,6 +122,26 @@ public partial class DealOrForceGame
                 () => ShowBattleDetails(battle), "Open the battle report and focus the engagement.");
         }
 
+        // The navy, in full. The armies list was dropped because it showed seven divisions
+        // of however many a country has, which is not a list of anything - but a country has
+        // one or two fleets, so this one is complete, and hunting a counter across an ocean
+        // is no way to find your own navy. Every Paradox game has this list for that reason.
+        var fleets = _campaign.Fleets.Where(fleet => fleet.NationId == player.Id)
+            .OrderByDescending(fleet => fleet.Hulls).ToArray();
+        if (fleets.Length > 0)
+        {
+            AddOutlinerHeader("NAVY");
+            foreach (var fleet in fleets)
+            {
+                var state = fleet.InAction ? "IN ACTION"
+                    : fleet.IsMoving ? "→"
+                    : MissionName(fleet.Mission).ToUpperInvariant();
+                AddOutlinerButton($"{fleet.Name}  {state}  {fleet.Hulls:N0}", () => FocusFleet(fleet),
+                    $"{fleet.Hulls:N0} hulls · strength {fleet.Strength:P0} · cohesion {fleet.Organisation:P0} · " +
+                    $"stores {fleet.Supply:P0}" + System.Environment.NewLine + MissionHelp(fleet.Mission));
+            }
+        }
+
         AddOutlinerHeader("MARKET");
         var worstGood = player.Market.Values.OrderBy(quote => quote.Satisfaction).FirstOrDefault();
         if (worstGood is null) AddOutlinerHint("No market data");
@@ -187,6 +207,12 @@ public partial class DealOrForceGame
     {
         OnArmyPicked(army);
         _globe.FocusOn(army.Latitude, army.Longitude, 6.8f);
+    }
+
+    private void FocusFleet(Fleet fleet)
+    {
+        OnFleetPicked(fleet);
+        _globe.FocusOn(fleet.Latitude, fleet.Longitude, 6.8f);
     }
 
     private void OpenFirstPlayerBattle()
