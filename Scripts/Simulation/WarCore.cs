@@ -135,10 +135,15 @@ public static partial class Warfare
         {
             var owner = controllers[province];
             if (owner == 0 || owner >= belligerents.Length || !belligerents[owner]) continue;
+            // Nobody holds a line in the middle of a lake. Water can be owned and drawn,
+            // and it can be the thing two armies are on opposite sides of, but it is never
+            // itself a place a division is asked to stand.
+            if (topology.IsWater(province)) continue;
             foreach (var neighbour in topology.Neighbors[province])
             {
                 var other = controllers[neighbour];
                 if (other == 0 || other == owner || other >= belligerents.Length || !belligerents[other]) continue;
+                if (topology.IsWater(neighbour)) continue;
                 if (!byPair.TryGetValue(PairKey(owner, other), out var found)) continue;
 
                 if (owner == found.AttackerMap)

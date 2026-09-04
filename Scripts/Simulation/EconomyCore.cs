@@ -218,7 +218,16 @@ public static class EconomySystem
                 remaining = 0;
             }
 
-            var free = Enumerable.Range(0, states.Length).Where(index => authored[index] == 0).ToArray();
+            // Nobody lives on a lake. Water regions are owned and drawn like any other, so
+            // without this they take a full share of the country's population - which put two
+            // million Ukrainians in the Kakhovka reservoir and forty-seven million Chinese in
+            // Qinghai Lake, and took those people away from the land they actually live on.
+            var free = Enumerable.Range(0, states.Length)
+                .Where(index => authored[index] == 0 && !LakeRegions.IsWaterState(states[index])).ToArray();
+            // Unless there is nowhere else: a country of nothing but water still has to put
+            // its people somewhere, and losing them silently is worse than drowning them.
+            if (free.Length == 0)
+                free = Enumerable.Range(0, states.Length).Where(index => authored[index] == 0).ToArray();
             var weights = free.Select(index => 0.75 + StableFraction(states[index].MapIndex) * 0.50).ToArray();
             var totalWeight = weights.Sum();
             long assigned = 0;
@@ -234,6 +243,8 @@ public static class EconomySystem
             for (var index = 0; index < states.Length; index++)
                 if (authored[index] > 0)
                     SeedState(states[index], nation, Math.Max(0, (long)(authored[index] * scale)));
+            for (var index = 0; index < states.Length; index++)
+                if (authored[index] == 0 && !free.Contains(index)) SeedState(states[index], nation, 0);
         }
     }
 

@@ -54,6 +54,7 @@ category, and never the executable.
       map_data/          the map itself
         state_regions/   corrections to the region layer, applied over the source map
         hydrography/     rivers and lakes
+        lakes/           which water is big enough to be a region nobody can march across
       documentation/     this file
 
 `common/` says what may exist; `history/` says what was true in 2024. A total conversion
@@ -301,6 +302,31 @@ islands a box would miss. Every rule is reported when the map is compiled, with 
 its boundary left out, so a border you drew badly says so.
 
 Rebuild the map after changing this: `dotnet run --project Tools/MapDataCompiler`.
+
+**Decide which water is a place.** A lake past a certain size stops being scenery and
+becomes a region of its own: it belongs to a country, it is drawn in that country's colour
+like anywhere else, and nothing on foot may enter it. Armies march round it, fronts stop at
+its shore, and supply passes it without paying for the detour. `map_data/lakes/00_lakes.json`
+is the whole of it:
+
+    {
+      "minimum_cells": 40,
+      "minimum_width_cells": 3,
+      "first_map_index": 2000
+    }
+
+`minimum_cells` is how much water is worth a region at all. `minimum_width_cells` is how far
+it is from the shore to the middle, and it is the number that matters: area alone would make
+a region of every reservoir on every river, and a reservoir a few kilometres across is
+something armies have always crossed - made impassable it reads as a wall down the middle of
+a country rather than as water. Three cells is roughly forty kilometres of open water, which
+is Ladoga, Baikal and Superior, and is not the Dnipro. Raise it and only the inland seas
+count; lower it and every pond becomes a border.
+
+The shapes themselves are not listed here - they come from `map_data/hydrography/`, so a mod
+that adds a lake to the hydrology gets a lake region for free, and one that thinks the
+threshold is wrong changes one number. Which country a lake belongs to is not listed either:
+it goes to whoever holds the most of its shore, so moving the border moves the lake.
 
 **Change what countries remember.** An opinion is the sum of named reasons, each with a
 size, a lifetime and whether it fades. `common/opinion_modifiers/50_mine.json`:

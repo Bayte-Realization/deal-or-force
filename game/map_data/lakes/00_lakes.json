@@ -1,0 +1,10 @@
+{
+  "//": "Which water on the map is a region of its own, and impassable to anything on foot.",
+  "//minimum_cells": "How much water it takes to be worth a region at all, in map cells.",
+  "//minimum_width_cells": "How far from the shore to the middle. Depth, not area, is what makes water a barrier: a reservoir on a river covers as many cells as a lake and is a few kilometres across, and armies have always crossed those. Three cells is roughly forty kilometres of open water.",
+  "//first_map_index": "Where lake regions start numbering, clear of the shipped region table and its corrections.",
+
+  "minimum_cells": 40,
+  "minimum_width_cells": 3,
+  "first_map_index": 2000
+}

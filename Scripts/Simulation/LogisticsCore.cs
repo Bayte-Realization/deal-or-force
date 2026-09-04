@@ -100,6 +100,8 @@ public static class LogisticsSystem
         foreach (var province in territory)
         {
             if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+            // A lake keeps no depot, however much of it a country owns.
+            if (topology.IsWater(province)) continue;
             var state = topology.ProvinceToState[province];
             if (!HubByState.ContainsKey(state)) HubByState[state] = province;
         }
@@ -130,7 +132,13 @@ public static class LogisticsSystem
             {
                 if (stamp[neighbor] == generation || controllers[neighbor] != nation.MapIndex) continue;
                 stamp[neighbor] = generation;
-                distance[neighbor] = next;
+                // Water is transparent to a supply line and impassable to a column. An
+                // army cannot march across a lake; the lorries that feed it go round by
+                // the roads on the shore, and charging that as extra hops of a trace
+                // budget would be inventing a cost the map does not model anywhere else.
+                // Before lakes were regions this ground was land and cost nothing extra;
+                // it should not start costing something because it was given a name.
+                distance[neighbor] = topology.IsWater(neighbor) ? distance[province] : next;
                 source[neighbor] = from;
                 Frontier.Enqueue(neighbor);
             }

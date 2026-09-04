@@ -245,7 +245,8 @@ public static class TerritorialTopology
     /// import can assert its own arithmetic instead of a hard-coded total.</summary>
     public static int RegionRuleCount =>
         RegionRules.Count + Partitions.Sum(partition =>
-            partition.Pieces.Count(piece => !ShippedStateIndices.Contains(piece.MapIndex)));
+            partition.Pieces.Count(piece => !ShippedStateIndices.Contains(piece.MapIndex))) +
+        LakeRegions.CreatedCount;
 
     private static HashSet<int> _shippedStateIndices;
 
@@ -282,6 +283,7 @@ public static class TerritorialTopology
         RegionRules.Clear();
         RegionRules.AddRange(DefaultRegionRules);
         Partitions.Clear();
+        LakeRegions.ResetCatalog();
         var file = GameDataLoader.DataFiles("map_data", "state_regions").FirstOrDefault();
         if (file is null) return;
         try { LoadOverrides(File.ReadAllText(file), null); }
@@ -425,6 +427,13 @@ public static class TerritorialTopology
 
         foreach (var partition in Partitions)
             ApplyPartition(campaign, control, states, width, height, partition, summaries);
+
+        // Water last, so a lake is carved out of whatever region ends up around it rather
+        // than being divided along with the land. Every caller gets this - the map
+        // compiler and the game reach the map through here, and the two of them drawing
+        // different lakes is the one way this could go badly wrong.
+        var lakes = LakeRegions.Apply(campaign, control, states, width, height);
+        if (lakes > 0) summaries.Add(new RepairSummary($"{lakes:N0} lake(s)", "LAKES", lakes));
 
         var applied = AppliedRules.GetValue(control, _ => new HashSet<string>(StringComparer.Ordinal));
         foreach (var rule in BaseRules)

@@ -39,6 +39,16 @@ public sealed class ProvinceTopology
     public int ProvinceCount => ProvinceToState.Length - 1;
     public byte[] RiverIntensityByProvince { get; private set; }
     public bool[] LakeAccessByProvince { get; private set; }
+
+    /// <summary>
+    /// Whether a province is water rather than ground.
+    ///
+    /// A lake is a region like any other and its provinces are drawn and owned like any
+    /// other - but nothing marches through them. The flag lives here because this is where
+    /// movement is answered, and a rule that has to be remembered at every call site is a
+    /// rule that will be forgotten at one of them.
+    /// </summary>
+    public bool[] WaterByProvince { get; private set; }
     public int RiverCrossingCount => _riverCrossings.Count;
     private readonly Dictionary<long, byte> _riverCrossings = new();
 
@@ -63,6 +73,9 @@ public sealed class ProvinceTopology
         EdgeCount = directedEdges / 2;
         RiverIntensityByProvince = new byte[ProvinceCount + 1];
         LakeAccessByProvince = new bool[ProvinceCount + 1];
+        WaterByProvince = new bool[ProvinceCount + 1];
+        for (var province = 1; province <= ProvinceCount; province++)
+            WaterByProvince[province] = LakeRegions.IsLakeRegion(ProvinceToState[province]);
     }
 
     public static ProvinceTopology Build(
@@ -492,6 +505,10 @@ public sealed class ProvinceTopology
     public bool HasLakeAccess(int provinceId) => provinceId > 0 && provinceId < LakeAccessByProvince.Length &&
         LakeAccessByProvince[provinceId];
 
+    /// <summary>Whether this province is water. Nothing on foot may enter or cross one.</summary>
+    public bool IsWater(int provinceId) => provinceId > 0 && WaterByProvince is not null &&
+        provinceId < WaterByProvince.Length && WaterByProvince[provinceId];
+
     private bool AreNeighbors(int first, int second)
     {
         if (first <= 0 || second <= 0 || first >= Neighbors.Length || second >= Neighbors.Length) return false;
@@ -548,6 +565,8 @@ public sealed class ProvinceTopology
             controllers[targetProvince] != nationMapIndex)
             return Array.Empty<int>();
         if (startProvince == targetProvince) return Array.Empty<int>();
+        // Nowhere to march to, and nothing to march through.
+        if (IsWater(startProvince) || IsWater(targetProvince)) return Array.Empty<int>();
 
         var generation = BeginRouteSearch();
         var previous = _routePrevious;
@@ -562,7 +581,7 @@ public sealed class ProvinceTopology
             var current = queue.Dequeue();
             foreach (var next in Neighbors[current])
             {
-                if (stamp[next] == generation || controllers[next] != nationMapIndex) continue;
+                if (stamp[next] == generation || controllers[next] != nationMapIndex || IsWater(next)) continue;
                 stamp[next] = generation;
                 previous[next] = current;
                 queue.Enqueue(next);
@@ -592,6 +611,7 @@ public sealed class ProvinceTopology
             controllers is null || controllers.Length < Neighbors.Length ||
             (!allowUncontrolledStart && controllers[startProvince] != nationMapIndex))
             return Array.Empty<int>();
+        if (IsWater(startProvince)) return Array.Empty<int>();
         if (targets.Contains(startProvince)) return Array.Empty<int>();
 
         var generation = BeginRouteSearch();
@@ -608,7 +628,7 @@ public sealed class ProvinceTopology
             var current = queue.Dequeue();
             foreach (var next in Neighbors[current])
             {
-                if (stamp[next] == generation || controllers[next] != nationMapIndex) continue;
+                if (stamp[next] == generation || controllers[next] != nationMapIndex || IsWater(next)) continue;
                 stamp[next] = generation;
                 previous[next] = current;
                 if (targets.Contains(next))

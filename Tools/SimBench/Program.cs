@@ -60,6 +60,9 @@ public static class Program
         if (mapped)
             failures += Check("every authored region correction exists on the map",
                 AuthoredRegionsExist(campaign));
+        if (mapped)
+            failures += Check("a lake is a place armies cannot walk on",
+                LakesArePlacesArmiesCannotWalkOn(campaign));
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -2187,6 +2190,7 @@ public static class Program
 
         var authored = campaign.States
             .Where(state => state.MapIndex >= 1711 && state.MapIndex < StatePartition.FirstDynamicMapIndex)
+            .Where(state => !LakeRegions.IsWaterState(state))
             .OrderBy(state => state.MapIndex)
             .ToList();
         if (authored.Count == 0) return "no authored region corrections were applied at all";
@@ -2202,6 +2206,66 @@ public static class Program
 
         Console.WriteLine("  authored regions: " + string.Join(", ", authored.Select(state =>
             $"{state.Name} {counts.GetValueOrDefault(state.MapIndex)}p/{Fmt.People(state.Population)}")));
+        return "";
+    }
+
+    /// <summary>
+    /// A lake is a place, and nothing walks on it.
+    ///
+    /// Water used to be paint over land: a province could span half a reservoir and a column
+    /// could march across Lake Michigan without anything noticing. Now every lake above the
+    /// threshold is a region, so three things have to hold together - it belongs to somebody,
+    /// nobody lives on it, and no route on foot ever enters one. The third is the one that
+    /// matters and the easiest to lose: it is enforced in one place each for movement, fronts
+    /// and supply, and any of those three could be edited back out without a symptom until
+    /// somebody watched an army walk over Baikal.
+    /// </summary>
+    private static string LakesArePlacesArmiesCannotWalkOn(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "the map has no provinces";
+
+        var lakes = campaign.States.Where(LakeRegions.IsWaterState).ToList();
+        if (lakes.Count == 0) return "the world has no lakes at all, which no map of Earth manages";
+
+        var faults = new List<string>();
+        foreach (var lake in lakes)
+        {
+            if (lake.NationMapIndex <= 0) faults.Add($"{lake.Name} belongs to nobody");
+            if (lake.Population > 0) faults.Add($"{lake.Name} has {Fmt.People(lake.Population)} living on the water");
+        }
+
+        var water = 0;
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (topology.IsWater(province)) water++;
+        if (water == 0) faults.Add("no province is marked as water, so the lakes are decoration");
+
+        // Walk out of a lakeside province and see whether anything offers to cross.
+        var controllers = campaign.ProvinceController;
+        var crossings = 0;
+        var sampled = 0;
+        for (var province = 1; province <= topology.ProvinceCount && sampled < 400; province++)
+        {
+            if (topology.IsWater(province) || controllers is null) continue;
+            var touchesWater = false;
+            foreach (var neighbour in topology.Neighbors[province])
+                if (topology.IsWater(neighbour)) { touchesWater = true; break; }
+            if (!touchesWater) continue;
+            sampled++;
+
+            var nation = controllers[province];
+            foreach (var neighbour in topology.Neighbors[province])
+            {
+                if (!topology.IsWater(neighbour)) continue;
+                var route = topology.FindRoute(province, neighbour, nation);
+                if (route.Length > 0) crossings++;
+            }
+        }
+        if (crossings > 0) faults.Add($"{crossings:N0} route(s) march straight into open water");
+
+        if (faults.Count > 0) return string.Join("; ", faults.Take(6));
+        Console.WriteLine($"  lakes: {lakes.Count:N0} region(s) over {water:N0} province(s) of water, " +
+            $"every one owned, empty of people and closed to marching ({sampled:N0} shoreline(s) tried).");
         return "";
     }
 
