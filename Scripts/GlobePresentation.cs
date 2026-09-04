@@ -333,11 +333,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _capitalRoot = new Node3D { Name = "CapitalMarkers" };
         world.AddChild(_capitalRoot);
         _capitalTexture = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_capital_star",
-            "res://Assets/Textures/LegacyGlobality/capital_star.png"));
+            "res://game/gfx/globe/globe_capital_star.png"));
         _armyRoot = new Node3D { Name = "ArmyMarkers" };
         world.AddChild(_armyRoot);
         _divisionTexture = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_division_marker",
-            "res://Assets/Textures/LegacyGlobality/division_camo.png"));
+            "res://game/gfx/globe/globe_division_marker.png"));
         _fleetRoot = new Node3D { Name = "FleetMarkers" };
         world.AddChild(_fleetRoot);
         _fleetTexture = CreateFleetMarkerTexture();
@@ -666,7 +666,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         _routeMesh = new ImmediateMesh();
         var atlas = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_plan_arrows",
-            "res://Assets/Textures/UI/army_plan_arrow_textures.png"));
+            "res://game/gfx/globe/globe_plan_arrows.png"));
         _moveOrderTexture = AtlasSlice(atlas, new Rect2(0f, 42f, 1672f, 270f));
         _preparedOrderTexture = AtlasSlice(atlas, new Rect2(0f, 322f, 1672f, 270f));
         _attackOrderTexture = AtlasSlice(atlas, new Rect2(0f, 604f, 1672f, 275f));
@@ -1228,7 +1228,7 @@ void fragment() {
         var material = new StandardMaterial3D
         {
             AlbedoTexture = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_space_background",
-            "res://Assets/Textures/LegacyGlobality/space_background.png")),
+            "res://game/gfx/globe/globe_space_background.png")),
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             CullMode = BaseMaterial3D.CullModeEnum.Front,
             TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic

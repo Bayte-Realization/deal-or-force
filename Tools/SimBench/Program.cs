@@ -1633,18 +1633,38 @@ public static class Program
             return $"{absent.Count:N0} sprite(s) point at art that is not there: " +
                    string.Join("; ", absent.Take(3));
 
+        // The convention is the point: a picture in the tree is a sprite because of what
+        // it is called, not because a file somewhere lists it. If that ever needs a
+        // declaration again, a modder is back to writing JSON to replace an icon.
+        var declared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in Directory.EnumerateFiles(root!, "*.json", SearchOption.AllDirectories))
+            using (var document = JsonDocument.Parse(File.ReadAllText(file), GameDataLoader.ForgivingJson))
+            {
+                var body = document.RootElement;
+                if (body.TryGetProperty("sprites", out var inner)) body = inner;
+                if (body.ValueKind != JsonValueKind.Object) continue;
+                foreach (var entry in body.EnumerateObject()) declared.Add(entry.Name);
+            }
+        var byConvention = SpriteCatalog.Names.Count(name => !declared.Contains(name));
+        if (byConvention < 20)
+            return $"only {byConvention:N0} sprite(s) come from the file names alone; " +
+                   "the art is not laid out where the game looks for it";
+        if (declared.Contains("icon_diplomacy"))
+            return "icon_diplomacy still needs a declaration, so the convention is not carrying it";
+
         // And the layering, tested the way a mod would use it.
         var before = SpriteCatalog.TextureOf("panel_dossier");
-        SpriteCatalog.Merge("{ \"sprites\": { \"panel_dossier\": \"art/mine.png\" } }",
-            "user://mods/example", "test", null);
+        SpriteCatalog.Merge("{ \"sprites\": { \"panel_dossier\": \"interface/panels/mine.png\" } }",
+            "user://mods/example/gfx", "test", null);
         var after = SpriteCatalog.TextureOf("panel_dossier");
         SpriteCatalog.Load();
         if (after == before)
             return "a later gfx file did not override an earlier one";
-        if (after != "user://mods/example/art/mine.png")
+        if (after != "user://mods/example/gfx/interface/panels/mine.png")
             return $"a mod's own art resolved to '{after}' instead of inside the mod folder";
 
-        Console.WriteLine($"  artwork: {SpriteCatalog.Count:N0} named sprite(s) in gfx/, every path present, " +
+        Console.WriteLine($"  artwork: {SpriteCatalog.Count:N0} named sprite(s) in gfx/, " +
+                          $"{byConvention:N0} of them from the file name alone, every path present, " +
                           "and a later file wins.");
         return "";
     }

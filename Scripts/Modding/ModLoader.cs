@@ -254,7 +254,7 @@ public sealed class ModLoader
         try
         {
             SpriteCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "gfx"),
-                package.VirtualRoot, package.Errors);
+                $"{package.VirtualRoot}/gfx", package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"gfx: {exception.Message}"); }
     }

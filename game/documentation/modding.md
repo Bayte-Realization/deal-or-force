@@ -33,8 +33,9 @@ category, and never the executable.
         scripted_triggers/   named conditions, referred to by "use"
         units/           division templates: attack, armour, width, supply use
       events/            scripted events and their outcomes
-      gfx/               which picture the game means by a name
-        interface/       icons, panel frames, the logo
+      gfx/               the game's pictures, and what each one is called
+        interface/icons/ the icons on buttons
+        interface/panels/ the frames panels are drawn on
         globe/           what is drawn on the globe itself
       gui/               where the panels sit - anchors and offsets
       interface/         what the game is made of - the colour palette and its metrics
@@ -106,22 +107,27 @@ English text, so an untranslated string renders as itself.
 change — `province;owner;controller`, with the controller left off when the owner holds it.
 Provinces you do not mention keep what the map gave them.
 
-**Swap the artwork.** The interface never names a file, it names a sprite, and `gfx/`
-says which picture that is. `gfx/interface/50_my_icons.json`:
+**Swap the artwork.** Put a picture in your own `gfx/` tree with the same name as the one
+you are replacing. That is the whole procedure - there is no file to edit:
+
+    my_mod/gfx/interface/icons/icon_diplomacy.png
+
+A picture's file name *is* its sprite name. The interface asks for `icon_diplomacy`, the
+game finds whichever file is called that, and the last one loaded wins - so yours does.
+Where in the tree you put it makes no difference; the subfolders are for people.
+
+`game/gfx/` is the full set of names, because it is the full set of pictures.
+
+For what a file name cannot say - how many frames a strip holds, a tint to multiply a
+picture by, or a sprite whose name should differ from its file - write a declaration
+beside it. Paths in one are relative to your `gfx/` folder:
 
     {
       "sprites": {
-        "icon_diplomacy": "art/my_diplomacy.png",
-        "panel_dossier": { "texture": "art/my_frame.png", "tint": "#c8b48a" }
+        "globe_plan_arrows": { "frames": 4 },
+        "panel_dossier": { "texture": "interface/panels/mine.png", "tint": "#c8b48a" }
       }
     }
-
-Paths are relative to your own mod folder, so the art ships beside the line that names it
-and neither has to know where the player installed you. An absolute `res://` path is left
-alone, which is how the base game points at its own `Assets/` tree.
-
-List only the sprites you are replacing: the other thirty are inherited. `game/gfx/` is
-the full set of names, and it is the only place they are written down.
 
 **Change what the game sounds like.** The code names the moment - a war was declared, a
 battle was lost - and `sound/` says what that is. `sound/50_my_audio.json`:

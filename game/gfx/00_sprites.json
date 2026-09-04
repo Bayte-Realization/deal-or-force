@@ -1,0 +1,15 @@
+// What a file name cannot say.
+//
+// Every picture in this tree declares itself: `interface/icons/icon_diplomacy.svg` is the
+// sprite `icon_diplomacy` because that is what it is called. A mod replaces it by putting
+// a file of the same name anywhere in its own gfx/ tree, and writes nothing here at all.
+//
+// This file is for the rest: how many frames a strip holds, a tint to multiply a picture
+// by, or a sprite whose name should differ from its file. Paths, when given, are relative
+// to gfx/ - so the same line means the same thing in the base game and in a mod.
+{
+  "sprites": {
+    // Four arrowheads across one sheet: move, prepared attack, live attack, fall back.
+    "globe_plan_arrows": { "frames": 4 }
+  }
+}

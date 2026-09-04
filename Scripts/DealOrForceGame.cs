@@ -319,7 +319,7 @@ public partial class DealOrForceGame : Control
         var rows = PanelRows(panel, 28, 24, 9);
         var logo = new TextureRect
         {
-            Texture = Art("brand_logo_banner", "res://Assets/Textures/UI/Brand/deal_or_force_logo_banner.png"),
+            Texture = Art("brand_logo_banner", "res://game/gfx/interface/brand_logo_banner.png"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
             CustomMinimumSize = new Vector2(0, 184),
@@ -447,7 +447,7 @@ public partial class DealOrForceGame : Control
             var captured = screen;
             var button = ActionButton(screen, () => OpenScreen(captured), 118, 38,
                 false, SpriteCatalog.TextureOf($"icon_{icon}",
-                    $"res://Assets/Textures/UI/Modern/Icons/{icon}.svg"));
+                    $"res://game/gfx/interface/icons/icon_{icon}.svg"));
             button.TooltipText = help;
             _screenButtons[captured] = button;
             nav.AddChild(button);
@@ -1297,10 +1297,10 @@ public partial class DealOrForceGame : Control
         return new StyleBoxTexture
         {
             Texture = strip
-                ? Art("panel_command_strip", "res://Assets/Textures/UI/Modern/panel_command_strip.png")
+                ? Art("panel_command_strip", "res://game/gfx/interface/panels/panel_command_strip.png")
                 : command
-                    ? Art("panel_command_frame", "res://Assets/Textures/UI/Modern/panel_command_frame.png")
-                    : Art("panel_dossier", "res://Assets/Textures/UI/Modern/panel_dossier.png"),
+                    ? Art("panel_command_frame", "res://game/gfx/interface/panels/panel_command_frame.png")
+                    : Art("panel_dossier", "res://game/gfx/interface/panels/panel_dossier.png"),
             TextureMarginLeft = textureMargin,
             TextureMarginTop = textureMargin,
             TextureMarginRight = textureMargin,

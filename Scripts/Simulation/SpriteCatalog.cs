@@ -20,10 +20,19 @@ namespace DealOrForce.Simulation;
 /// interface code. Every one of them was a picture no mod could replace without forking a
 /// C# file, which is exactly the thing the rest of the data layer was built to avoid.
 ///
-/// The whole `gfx/` tree is read, subfolders and all, in path order: where a declaration
-/// sits carries no meaning, the same way a `.gfx` file's location carries none. Later
-/// files win, so a mod loaded after the base game retints one sprite and inherits the
-/// other hundred.
+/// The art itself lives in the tree, and a picture's file name *is* its sprite name.
+/// `gfx/interface/icons/icon_diplomacy.svg` declares `icon_diplomacy` by being called
+/// that; a mod replaces it by putting a file of the same name at the same place, and
+/// writes no JSON at all. That is the part a modder actually wants: not "you may point at
+/// any path", but "put it here and call it this".
+///
+/// Declarations remain for what a file name cannot say - how many frames a strip holds,
+/// what tint to multiply it by, or a sprite whose name should differ from its file. They
+/// are read after the scan, so an explicit line always wins over the convention.
+///
+/// The whole `gfx/` tree is read, subfolders and all, in path order: the subfolders are
+/// for people, not for the game. Later files win, so a mod loaded after the base game
+/// replaces one sprite and inherits the other hundred.
 /// </summary>
 public static class SpriteCatalog
 {
@@ -80,23 +89,33 @@ public static class SpriteCatalog
     {
         Sprites.Clear();
         var root = GameDataLoader.DataFolder("gfx");
-        if (root is not null) LoadTree(root, "res://", null);
+        if (root is not null) LoadTree(root, "res://game/gfx", null);
         Changed?.Invoke();
     }
 
+    /// <summary>What the engine will load a picture as, from a file name.</summary>
+    private static readonly string[] PictureExtensions =
+        { ".png", ".svg", ".jpg", ".jpeg", ".webp", ".bmp", ".tga", ".dds", ".ktx" };
+
     /// <summary>
-    /// Layer one package's `gfx/` tree over what is already loaded. <paramref name="assetRoot"/>
-    /// is where that package's own art lives - `res://` for the base game, the mod's folder
-    /// for a mod - and every relative texture path in it is resolved against that.
+    /// Layer one package's `gfx/` tree over what is already loaded.
+    ///
+    /// <paramref name="virtualDirectory"/> is the same folder as the engine names it -
+    /// `res://game/gfx` for the base game, `<c>&lt;mod&gt;/gfx</c>` for a mod. Everything
+    /// inside is addressed relative to it, so the same declaration means the same thing
+    /// wherever it was installed.
+    ///
+    /// Pictures first, declarations after: the file names set the table and the JSON
+    /// corrects it.
     /// </summary>
-    public static void LoadTree(string directory, string assetRoot, List<string> errors)
+    public static void LoadTree(string directory, string virtualDirectory, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
 
-        IEnumerable<string> files;
+        string[] everything;
         try
         {
-            files = Directory.EnumerateFiles(directory, "*.json", SearchOption.AllDirectories)
+            everything = Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
                 .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
@@ -106,10 +125,32 @@ public static class SpriteCatalog
             return;
         }
 
-        foreach (var file in files)
+        var root = directory.Replace('\\', '/').TrimEnd('/');
+        foreach (var file in everything)
         {
+            var extension = Path.GetExtension(file).ToLowerInvariant();
+            if (Array.IndexOf(PictureExtensions, extension) < 0) continue;
+
+            // The name on the box is the name of the thing. A picture called
+            // `icon_diplomacy.svg` is the sprite `icon_diplomacy`, wherever in the tree
+            // somebody chose to file it.
+            var name = Path.GetFileNameWithoutExtension(file);
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            var relative = file.Replace('\\', '/');
+            relative = relative.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+                ? relative[root.Length..].TrimStart('/')
+                : Path.GetFileName(file);
+            var previous = Get(name);
+            Sprites[name] = new Sprite(
+                GameDataLoader.ResolveAssetPath(relative, virtualDirectory),
+                previous.Tint, previous.Frames);
+        }
+
+        foreach (var file in everything)
+        {
+            if (!file.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
             var origin = $"gfx/{Path.GetFileName(file)}";
-            try { Merge(File.ReadAllText(file), assetRoot, origin, errors); }
+            try { Merge(File.ReadAllText(file), virtualDirectory, origin, errors); }
             catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
         }
 
@@ -161,19 +202,28 @@ public static class SpriteCatalog
                         }
                     if (string.IsNullOrWhiteSpace(texture))
                     {
-                        errors?.Add($"{origin}: sprite '{name}' declares no texture");
-                        continue;
+                        // No file named, so this line is describing a picture the scan
+                        // already found - how many frames it holds, what to tint it by.
+                        var scanned = Get(name);
+                        if (string.IsNullOrEmpty(scanned.Texture))
+                        {
+                            errors?.Add($"{origin}: sprite '{name}' names no texture, and no " +
+                                        "picture in the tree is called that either");
+                            continue;
+                        }
+                        texture = scanned.Texture;
                     }
 
+                    var known = Get(name);
                     var tint = value.TryGetProperty("tint", out var tinted) &&
                                tinted.ValueKind == JsonValueKind.String
                         ? tinted.GetString()
-                        : "";
+                        : known.Tint;
                     var frames = value.TryGetProperty("frames", out var counted) &&
                                  counted.ValueKind == JsonValueKind.Number &&
                                  counted.TryGetInt32(out var parsed)
                         ? parsed
-                        : 1;
+                        : known.Frames;
                     Sprites[name] = new Sprite(GameDataLoader.ResolveAssetPath(texture, assetRoot), tint, frames);
                     break;
                 }
