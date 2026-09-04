@@ -55,6 +55,7 @@ category, and never the executable.
         state_regions/   corrections to the region layer, applied over the source map
         hydrography/     rivers and lakes
         lakes/           which water is big enough to be a region nobody can march across
+        compiled.json    written by the compiler: which region layer provinces.png was cut from
       documentation/     this file
 
 `common/` says what may exist; `history/` says what was true in 2024. A total conversion
@@ -327,6 +328,18 @@ The shapes themselves are not listed here - they come from `map_data/hydrography
 that adds a lake to the hydrology gets a lake region for free, and one that thinks the
 threshold is wrong changes one number. Which country a lake belongs to is not listed either:
 it goes to whoever holds the most of its shore, so moving the border moves the lake.
+
+**When the map disappears.** Provinces are grown inside regions and never cross one, so
+`provinces.png` is an *output* of the region layer rather than something that stands on its
+own. Change the regions - through `state_regions/`, `lakes/`, hydrography, or the code that
+draws them - and the raster on disk no longer fits. The game refuses a map it does not fit
+rather than drawing a wrong one, so what you see is no map at all.
+
+`compiled.json` is there so the refusal can say which half is stale. It holds a fingerprint
+of the region layer the raster was cut from; if it disagrees with what the running build
+draws, the message says whether to recompile the map or to rebuild the game first. It is
+written by the compiler and is not worth editing - change it and you have only taught the
+check to lie.
 
 **Change what countries remember.** An opinion is the sum of named reasons, each with a
 size, a lifetime and whether it fades. `common/opinion_modifiers/50_mine.json`:

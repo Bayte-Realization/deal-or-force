@@ -6,6 +6,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
@@ -176,11 +177,13 @@ public static class MapRasterCatalog
     public const string DefinitionFile = "definition.csv";
     public const string RiverFile = "rivers.png";
     public const string LakeFile = "lakes.png";
+    public const string StampFile = "compiled.json";
 
     public static string ProvincePath { get; private set; }
     public static string DefinitionPath { get; private set; }
     public static string RiverPath { get; private set; }
     public static string LakePath { get; private set; }
+    public static string StampPath { get; private set; }
 
     static MapRasterCatalog() => ResetCatalog();
 
@@ -190,6 +193,7 @@ public static class MapRasterCatalog
         DefinitionPath = null;
         RiverPath = null;
         LakePath = null;
+        StampPath = null;
         var descriptor = GameDataLoader.FindDataFile("map_data", DescriptorFile);
         if (descriptor is not null) ApplyDirectory(Path.GetDirectoryName(descriptor)!, null);
         else
@@ -198,6 +202,7 @@ public static class MapRasterCatalog
             DefinitionPath = GameDataLoader.FindDataFile("map_data", DefinitionFile);
             RiverPath = GameDataLoader.FindDataFile("map_data", RiverFile);
             LakePath = GameDataLoader.FindDataFile("map_data", LakeFile);
+            StampPath = GameDataLoader.FindDataFile("map_data", StampFile);
         }
     }
 
@@ -236,6 +241,44 @@ public static class MapRasterCatalog
             errors?.Add($"default.map references missing lake image: {Path.GetFileName(lakes)}");
         if (File.Exists(rivers)) RiverPath = rivers;
         if (File.Exists(lakes)) LakePath = lakes;
+        var stamp = Path.Combine(directory, StampFile);
+        if (File.Exists(stamp)) StampPath = stamp;
+    }
+
+    /// <summary>
+    /// One number standing for the whole region layer, so a map can say what it was cut from.
+    ///
+    /// Provinces are grown inside regions and never cross one, which makes the province
+    /// raster an output of the region layer rather than something that stands on its own. If
+    /// the two are ever built by different code the province layer refuses the map, and the
+    /// refusal reads as "the map is corrupt" when what actually happened is that one half of
+    /// it is older than the other - a game that was not rebuilt after the region code
+    /// changed, or a map that was not recompiled after the data did. The fingerprint is
+    /// written beside the raster so the refusal can say which half.
+    /// </summary>
+    public static ulong RegionFingerprint(ushort[] states)
+    {
+        var hash = 14695981039346656037UL;
+        foreach (var index in states)
+        {
+            hash = (hash ^ (byte)index) * 1099511628211UL;
+            hash = (hash ^ (byte)(index >> 8)) * 1099511628211UL;
+        }
+        return hash;
+    }
+
+    /// <summary>The region layer the province raster on disk was cut from, if it says.</summary>
+    private static ulong? StampedFingerprint()
+    {
+        if (string.IsNullOrWhiteSpace(StampPath) || !File.Exists(StampPath)) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(StampPath));
+            if (document.RootElement.TryGetProperty("regions", out var value) &&
+                value.TryGetUInt64(out var fingerprint)) return fingerprint;
+        }
+        catch { /* A map pack that says nothing is treated as one that was never stamped. */ }
+        return null;
     }
 
     public static bool TryBuildProvinceTopology(ushort[] states, ushort[] control, int width, int height,
@@ -245,6 +288,15 @@ public static class MapRasterCatalog
         if (string.IsNullOrWhiteSpace(ProvincePath) || string.IsNullOrWhiteSpace(DefinitionPath))
         {
             message = "no province raster pair found";
+            return false;
+        }
+        var stamped = StampedFingerprint();
+        if (stamped is not null && stamped != RegionFingerprint(states))
+        {
+            message = $"{Path.GetFileName(ProvincePath)} was cut from a different region layer " +
+                "than this build draws. Nothing is corrupt - one half of the map is simply older " +
+                "than the other. If the data changed, recompile the map with Tools/MapDataCompiler; " +
+                "if the code that draws regions changed, rebuild the game first and then recompile";
             return false;
         }
         try
@@ -307,9 +359,26 @@ public static class MapRasterCatalog
         }
     }
 
-    public static void Export(string directory, ProvinceTopology topology, HydrologyRaster hydrology)
+    public static void Export(string directory, ProvinceTopology topology, HydrologyRaster hydrology,
+        ushort[] states = null)
     {
         Directory.CreateDirectory(directory);
+        if (states is not null)
+        {
+            var note = "Written by Tools/MapDataCompiler. Not hand-edited - it records which " +
+                "region layer provinces.png was cut from, so a mismatch can say so instead of " +
+                "looking like a corrupt map.";
+            var stamp = new StringBuilder();
+            stamp.AppendLine("{");
+            stamp.AppendLine($"  \"//\": \"{note}\",");
+            stamp.AppendLine(string.Create(CultureInfo.InvariantCulture,
+                $"  \"regions\": {RegionFingerprint(states)},"));
+            stamp.AppendLine(string.Create(CultureInfo.InvariantCulture,
+                $"  \"provinces\": {topology.ProvinceCount}"));
+            stamp.AppendLine("}");
+            File.WriteAllText(Path.Combine(directory, StampFile), stamp.ToString(), new UTF8Encoding(false));
+        }
+
         var provinces = new byte[topology.Width * topology.Height * 3];
         for (var cell = 0; cell < topology.CellToProvince.Length; cell++)
         {

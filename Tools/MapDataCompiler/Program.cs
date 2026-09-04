@@ -16,7 +16,7 @@ provinces = provinces.RelaxShapes(SourceEarthData.States, SourceEarthData.Contro
 // The compiler deliberately builds physical pixels from the vector sources. Existing
 // PNGs are outputs, not inputs, so repeated compilation is deterministic.
 var hydrology = HydrologyCatalog.BuildVectorRaster(SourceEarthData.Width, SourceEarthData.Height);
-MapRasterCatalog.Export(output, provinces, hydrology);
+MapRasterCatalog.Export(output, provinces, hydrology, SourceEarthData.States);
 
 MapRasterCatalog.ResetCatalog();
 if (!MapRasterCatalog.TryBuildProvinceTopology(SourceEarthData.States, SourceEarthData.Control,

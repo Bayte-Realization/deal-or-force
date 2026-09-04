@@ -63,6 +63,9 @@ public static class Program
         if (mapped)
             failures += Check("a lake is a place armies cannot walk on",
                 LakesArePlacesArmiesCannotWalkOn(campaign));
+        if (mapped)
+            failures += Check("the compiled map matches the code that drew it",
+                TheCompiledMapMatchesTheCodeThatDrewIt());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -2266,6 +2269,27 @@ public static class Program
         if (faults.Count > 0) return string.Join("; ", faults.Take(6));
         Console.WriteLine($"  lakes: {lakes.Count:N0} region(s) over {water:N0} province(s) of water, " +
             $"every one owned, empty of people and closed to marching ({sampled:N0} shoreline(s) tried).");
+        return "";
+    }
+
+    /// <summary>
+    /// The compiled map still matches the region layer this build draws.
+    ///
+    /// Provinces are cut inside regions, so the raster on disk is an output of the code that
+    /// draws them. Change one without rebuilding the other and the game loses its whole map
+    /// at boot - which is what it looks like from the outside, rather than what it is, and it
+    /// cost an afternoon once already. Cheaper to be told here.
+    /// </summary>
+    private static string TheCompiledMapMatchesTheCodeThatDrewIt()
+    {
+        if (string.IsNullOrWhiteSpace(MapRasterCatalog.StampPath))
+            return "game/map_data/compiled.json is missing - recompile with Tools/MapDataCompiler";
+        var fingerprint = MapRasterCatalog.RegionFingerprint(Globality.EarthData.States);
+        var stamped = System.Text.Json.JsonDocument.Parse(File.ReadAllText(MapRasterCatalog.StampPath))
+            .RootElement.GetProperty("regions").GetUInt64();
+        if (stamped != fingerprint)
+            return $"provinces.png was cut from region layer {stamped}, this build draws {fingerprint}";
+        Console.WriteLine($"  map stamp: provinces.png and this build agree on region layer {fingerprint}.");
         return "";
     }
 
