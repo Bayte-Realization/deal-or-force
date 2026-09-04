@@ -189,17 +189,19 @@ public static class AiStatecraft
             var relation = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
             if (relation.Stance == DiplomaticStance.AtWar) continue;
 
-            // Where this relationship naturally sits: friction from sharing a border,
-            // warmth from trade and from a pact somebody bothered to sign.
-            var baseline = defines.AiBorderFriction;
-            if (relation.TradeAgreement) baseline += defines.AiTradeWarmth;
-            if (relation.NonAggressionPact) baseline += defines.AiPactWarmth;
-            if (relation.Stance == DiplomaticStance.Allied) baseline += defines.AiAllianceWarmth;
-            var strength = Strength(campaign, other) / M.Max(0.01f, Strength(campaign, nation));
-            baseline -= M.Clamp(strength - 1f, 0f, 2f) * defines.AiFearOfStrength;
+            // Where this relationship naturally sits, written as the same named reasons a
+            // war or a denunciation is written in - so the standing part of an opinion can
+            // be explained to the player and retuned by a mod, rather than being five
+            // numbers in Defines.cs that nothing on any screen accounts for.
+            OpinionSystem.Remember(campaign, relation, "shared_border");
+            if (relation.Stance == DiplomaticStance.Allied)
+                OpinionSystem.Remember(campaign, relation, "alliance");
+            else OpinionSystem.Forget(campaign, relation, "alliance");
 
-            relation.Opinion = M.Clamp(
-                M.Lerp(relation.Opinion, baseline, defines.AiOpinionDrift), -100f, 100f);
+            var strength = Strength(campaign, other) / M.Max(0.01f, Strength(campaign, nation));
+            var fear = M.Clamp(strength - 1f, 0f, 2f);
+            if (fear > 0.05f) OpinionSystem.Remember(campaign, relation, "fear_of_strength", fear);
+            else OpinionSystem.Forget(campaign, relation, "fear_of_strength");
 
             if (relation.Opinion > bestOpinion) { bestOpinion = relation.Opinion; bestFriend = other; }
             if (relation.Opinion < worstOpinion) { worstOpinion = relation.Opinion; worstRival = other; }
@@ -214,11 +216,13 @@ public static class AiStatecraft
             if (!relation.TradeAgreement && bestOpinion >= defines.AiTradeThreshold)
             {
                 relation.TradeAgreement = true;
+                OpinionSystem.Remember(campaign, relation, "trade_agreement");
                 relation.LastActionDay = campaign.ElapsedDays;
             }
             else if (!relation.NonAggressionPact && bestOpinion >= defines.AiPactThreshold)
             {
                 relation.NonAggressionPact = true;
+                OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
                 relation.LastActionDay = campaign.ElapsedDays;
             }
             else if (relation.Stance != DiplomaticStance.Allied && bestOpinion >= defines.AiAllianceThreshold)

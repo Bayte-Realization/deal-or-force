@@ -106,6 +106,7 @@ public sealed class ModLoader
         DecisionCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
         ModifierCatalog.ResetCatalog();
+        OpinionCatalog.ResetCatalog();
         AiStrategyCatalog.ResetCatalog();
         MilitaryBootstrap.ResetPersonnel();
         foreach (var package in _packages)
@@ -118,6 +119,7 @@ public sealed class ModLoader
             ApplyDecisions(package);
             ApplyEvents(package);
             ApplyModifiers(package);
+            ApplyOpinionModifiers(package);
             ApplyAiStrategies(package);
             ApplyMapData(package);
             ApplyLocalization(package);
@@ -187,6 +189,22 @@ public sealed class ModLoader
     {
         foreach (var path in JsonFiles(package, "events"))
         try { EventCatalog.Load(File.ReadAllText(path), package.Errors); }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+    }
+
+    /// <summary>A mod's own reasons for one country to think ill of another.</summary>
+    private void ApplyOpinionModifiers(ModPackage package)
+    {
+        foreach (var path in JsonFiles(package, "common", "opinion_modifiers"))
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
+            OpinionCatalog.Merge(document.RootElement, package.Errors);
+        }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 

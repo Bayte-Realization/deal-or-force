@@ -25,6 +25,15 @@ public sealed class DiplomaticRelation
     public bool TradeAgreement;
     public bool NonAggressionPact;
 
+    /// <summary>
+    /// Why this country feels the way it does - see OpinionCore. <see cref="Opinion"/> is
+    /// the sum of these, not a number anybody sets directly.
+    /// </summary>
+    public readonly List<OpinionReason> Reasons = new();
+
+    /// <summary>The same sum, named part by name, for the screen that shows it.</summary>
+    public readonly Breakdown OpinionDrivers = new();
+
     public int Other(int nationId) => nationId == A ? B : A;
 }
 
@@ -81,7 +90,8 @@ public static class CampaignDiplomacy
         var defender = campaign.NationById(defenderId);
         var relation = Get(campaign, attackerId, defenderId);
         relation.Stance = DiplomaticStance.AtWar;
-        relation.Opinion = Math.Min(relation.Opinion, -60f);
+        OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
+        OpinionSystem.Remember(campaign, relation, "fought_a_war");
         relation.LastActionDay = campaign.ElapsedDays;
         var war = new StrategicWar
         {
@@ -188,7 +198,7 @@ public sealed class ImproveRelationsCommand : ICampaignCommand
         var nation = campaign.NationById(IssuerId);
         if (relation is null || nation is null || campaign.ElapsedDays - relation.LastActionDay < 14 || nation.Treasury < 0.1f) return;
         nation.Treasury -= 0.1f;
-        relation.Opinion = M.Clamp(relation.Opinion + 12f, -100f, 100f);
+        OpinionSystem.Remember(campaign, relation, "improved_relations");
         relation.LastActionDay = campaign.ElapsedDays;
         if (relation.Opinion >= 35f && relation.Stance == DiplomaticStance.Neutral)
             relation.Stance = DiplomaticStance.Friendly;
@@ -203,7 +213,7 @@ public sealed class DenounceCommand : ICampaignCommand
     {
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         if (relation is null || campaign.ElapsedDays - relation.LastActionDay < 14) return;
-        relation.Opinion = M.Clamp(relation.Opinion - 18f, -100f, 100f);
+        OpinionSystem.Remember(campaign, relation, "denounced");
         relation.LastActionDay = campaign.ElapsedDays;
         if (relation.Opinion <= -35f && relation.Stance == DiplomaticStance.Neutral)
             relation.Stance = DiplomaticStance.Rival;

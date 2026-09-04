@@ -117,6 +117,7 @@ public static class PeaceNegotiation
         {
             var tradeRelation = CampaignDiplomacy.Get(campaign, war.AttackerId, war.DefenderId);
             tradeRelation.TradeAgreement = true;
+            OpinionSystem.Remember(campaign, tradeRelation, "trade_agreement");
         }
 
         if (terms == PeaceTerms.DemilitarizedSettlement)

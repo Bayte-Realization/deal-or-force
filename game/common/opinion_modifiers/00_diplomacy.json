@@ -1,0 +1,98 @@
+// Why one country feels the way it does about another.
+//
+// Opinion is the sum of these, not a number anybody sets. A reason has a size, a lifetime
+// in days, and whether it fades over that lifetime or holds at full weight until it is
+// taken away. `max_stacks` is how many times the same thing can be counted - a second
+// denunciation stings again, a fifth does not.
+//
+// days: 0 means it is held for as long as whatever caused it lasts.
+{
+  "improved_relations": {
+    "name": "Recent diplomacy",
+    "opinion": 12,
+    "days": 900,
+    "decays": true,
+    "max_stacks": 4
+  },
+
+  "denounced": {
+    "name": "Denounced us publicly",
+    "opinion": -18,
+    "days": 1100,
+    "decays": true,
+    "max_stacks": 3
+  },
+
+  // A war is the thing a country remembers longest, and the thing that fades slowest -
+  // ten years, and only then is it gone. Before this an opinion set to minus sixty by a
+  // war in 2024 was still minus sixty in 2124.
+  "declared_war_on_us": {
+    "name": "Declared war on us",
+    "opinion": -60,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  "fought_a_war": {
+    "name": "We have fought",
+    "opinion": -25,
+    "days": 2200,
+    "decays": true,
+    "max_stacks": 3
+  },
+
+  "made_peace": {
+    "name": "Settled it without rancour",
+    "opinion": 10,
+    "days": 1460,
+    "decays": true
+  },
+
+  "took_our_land": {
+    "name": "Took our land",
+    "opinion": -45,
+    "days": 7300,
+    "decays": true,
+    "max_stacks": 3
+  },
+
+  // Standing conditions: held at full weight while they are true, forgotten the day they
+  // are not. These five used to be numbers in Defines.cs that the AI lerped an opinion
+  // towards - real, and invisible, and untouchable by a mod.
+  "trade_agreement": {
+    "name": "Trade agreement",
+    "opinion": 28,
+    "days": 0,
+    "decays": false
+  },
+
+  "non_aggression_pact": {
+    "name": "Non-aggression pact",
+    "opinion": 22,
+    "days": 0,
+    "decays": false
+  },
+
+  "alliance": {
+    "name": "Allied",
+    "opinion": 34,
+    "days": 0,
+    "decays": false
+  },
+
+  "shared_border": {
+    "name": "We share a border",
+    "opinion": -6,
+    "days": 0,
+    "decays": false
+  },
+
+  // Scaled by how much bigger the neighbour is - the same fear, felt harder.
+  "fear_of_strength": {
+    "name": "They are stronger than us",
+    "opinion": -16,
+    "days": 0,
+    "decays": false
+  }
+}

@@ -1,0 +1,210 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+
+namespace DealOrForce.Simulation;
+
+/// <summary>
+/// A named reason one country holds an opinion of another: `common/opinion_modifiers`.
+///
+/// Opinion was a single number that two buttons moved by twelve and eighteen, and a
+/// declaration of war slammed to minus sixty. It had no memory of why, so nothing could
+/// explain it to the player, and nothing forgot: a war fought in 2024 held a country at
+/// minus sixty in 2124, while a decade of patient diplomacy read exactly the same as a
+/// bribe paid last Tuesday.
+///
+/// Paradox settled this a long time ago and the answer is worth copying. An opinion is the
+/// sum of remembered reasons; a reason has a name, a size, a lifetime and whether it fades.
+/// The number the player sees is then explicable - and, being data, a mod can decide that
+/// its world holds grudges longer.
+/// </summary>
+public readonly record struct OpinionModifierDefinition(
+    string Id, string Name, float Opinion, int Days, bool Decays, int MaxStacks);
+
+public static class OpinionCatalog
+{
+    private static readonly Dictionary<string, OpinionModifierDefinition> Definitions =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    static OpinionCatalog() => ResetCatalog();
+
+    public static int Count => Definitions.Count;
+
+    public static IEnumerable<OpinionModifierDefinition> All => Definitions.Values;
+
+    public static OpinionModifierDefinition? Find(string id) =>
+        !string.IsNullOrEmpty(id) && Definitions.TryGetValue(id, out var definition)
+            ? definition
+            : null;
+
+    public static void ResetCatalog()
+    {
+        Definitions.Clear();
+        foreach (var document in GameDataLoader.DataDocuments("common", "opinion_modifiers"))
+            using (document)
+                Merge(document.RootElement, null);
+    }
+
+    /// <summary>Layer one package's opinion modifiers over what is already loaded.</summary>
+    public static void Merge(JsonElement root, List<string> errors)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            errors?.Add("opinion_modifiers: expected an object of named reasons");
+            return;
+        }
+
+        foreach (var entry in root.EnumerateObject())
+        {
+            var value = entry.Value;
+            if (value.ValueKind != JsonValueKind.Object)
+            {
+                errors?.Add($"opinion_modifiers: '{entry.Name}' is not a declaration");
+                continue;
+            }
+            if (!value.TryGetProperty("opinion", out var opinion) || !opinion.TryGetSingle(out var weight))
+            {
+                errors?.Add($"opinion_modifiers: '{entry.Name}' says nothing about opinion");
+                continue;
+            }
+
+            var known = Find(entry.Name);
+            Definitions[entry.Name] = new OpinionModifierDefinition(
+                entry.Name,
+                value.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String
+                    ? name.GetString()
+                    : known?.Name ?? entry.Name,
+                weight,
+                value.TryGetProperty("days", out var days) && days.TryGetInt32(out var lifetime)
+                    ? Math.Max(0, lifetime)
+                    : known?.Days ?? 0,
+                value.TryGetProperty("decays", out var fades) &&
+                fades.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? fades.GetBoolean()
+                    : known?.Decays ?? true,
+                value.TryGetProperty("max_stacks", out var stacks) && stacks.TryGetInt32(out var limit)
+                    ? Math.Max(1, limit)
+                    : known?.MaxStacks ?? 1);
+        }
+    }
+}
+
+/// <summary>One reason, as this pair of countries currently holds it.</summary>
+public sealed class OpinionReason
+{
+    public string Id = "";
+    public int GrantedDay;
+
+    /// <summary>Zero or less means it is held for good.</summary>
+    public int ExpiresDay;
+
+    /// <summary>How many times it has happened - a second denunciation stings again.</summary>
+    public int Stacks = 1;
+
+    /// <summary>
+    /// How strongly, for reasons that come in degrees. Fear of a neighbour twice your size
+    /// is the same reason as fear of one slightly bigger, felt harder; a declaration of war
+    /// is not, and leaves this at one.
+    /// </summary>
+    public float Scale = 1f;
+}
+
+public static class OpinionSystem
+{
+    /// <summary>
+    /// Remember something. A reason that is already held is refreshed rather than doubled,
+    /// up to whatever the declaration allows - so a country that denounces you five times
+    /// in a week has said one thing five times, not five things.
+    /// </summary>
+    public static void Remember(Campaign campaign, DiplomaticRelation relation, string id,
+        float scale = 1f)
+    {
+        var definition = OpinionCatalog.Find(id);
+        if (definition is null || relation is null) return;
+        var item = definition.Value;
+
+        OpinionReason held = null;
+        foreach (var reason in relation.Reasons)
+            if (string.Equals(reason.Id, id, StringComparison.OrdinalIgnoreCase)) { held = reason; break; }
+
+        if (held is null)
+        {
+            held = new OpinionReason { Id = item.Id };
+            relation.Reasons.Add(held);
+        }
+        // A standing condition is refreshed, not repeated: a border shared for ten years
+        // is one border. Only reasons that can happen again count up.
+        var fresh = held.GrantedDay == 0 && held.Stacks <= 1;
+        held.GrantedDay = campaign.ElapsedDays;
+        held.ExpiresDay = item.Days > 0 ? campaign.ElapsedDays + item.Days : 0;
+        held.Scale = scale;
+        if (item.MaxStacks > 1 && !fresh) held.Stacks = Math.Min(item.MaxStacks, held.Stacks + 1);
+        if (held.Stacks < 1) held.Stacks = 1;
+        Settle(campaign, relation);
+    }
+
+    /// <summary>Forget a reason outright - a pact torn up stops being worth anything at once.</summary>
+    public static void Forget(Campaign campaign, DiplomaticRelation relation, string id)
+    {
+        if (relation is null) return;
+        relation.Reasons.RemoveAll(reason =>
+            string.Equals(reason.Id, id, StringComparison.OrdinalIgnoreCase));
+        Settle(campaign, relation);
+    }
+
+    /// <summary>What one reason is worth today, having faded for as long as it has been held.</summary>
+    public static float Weight(Campaign campaign, OpinionReason reason)
+    {
+        var definition = OpinionCatalog.Find(reason.Id);
+        if (definition is null) return 0f;
+        var item = definition.Value;
+        var value = item.Opinion * Math.Max(1, reason.Stacks) * (reason.Scale <= 0f ? 1f : reason.Scale);
+        if (!item.Decays || item.Days <= 0 || reason.ExpiresDay <= 0) return value;
+
+        var life = Math.Max(1, reason.ExpiresDay - reason.GrantedDay);
+        var left = Math.Max(0, reason.ExpiresDay - campaign.ElapsedDays);
+        return value * (left / (float)life);
+    }
+
+    /// <summary>
+    /// Add up what a country currently holds against another, and record the parts.
+    ///
+    /// The breakdown is filled at the same time, because an opinion nobody can account for
+    /// is the thing this replaced - the player used to read a number with no story behind
+    /// it and no way to find one.
+    /// </summary>
+    public static void Settle(Campaign campaign, DiplomaticRelation relation)
+    {
+        if (relation is null) return;
+        relation.Reasons.RemoveAll(reason =>
+            reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays);
+
+        relation.OpinionDrivers.Begin("Opinion", "share");
+        var total = 0f;
+        foreach (var reason in relation.Reasons)
+        {
+            var weight = Weight(campaign, reason);
+            if (Math.Abs(weight) < 0.05f) continue;
+            total += weight;
+            var definition = OpinionCatalog.Find(reason.Id);
+            var name = definition?.Name ?? reason.Id;
+            relation.OpinionDrivers.Add(reason.Stacks > 1 ? $"{name} (x{reason.Stacks})" : name, weight);
+        }
+
+        relation.Opinion = M.Clamp(total, -100f, 100f);
+        relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
+    }
+
+    /// <summary>
+    /// Let time work on every grudge in the world.
+    ///
+    /// Once a week rather than once a day: a linear fade over years does not move enough in
+    /// twenty-four hours to be worth walking thirty thousand relations for, and the reasons
+    /// that matter - a war, a pact - are settled the moment they happen anyway.
+    /// </summary>
+    public static void Tick(Campaign campaign)
+    {
+        if (campaign.ElapsedDays % 7 != 0) return;
+        foreach (var relation in campaign.Relations.Values) Settle(campaign, relation);
+    }
+}

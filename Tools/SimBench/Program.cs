@@ -171,6 +171,8 @@ public static class Program
                     ADrawnLineCommandsTheFormationsOnIt(sandbox));
                 failures += Check("a mod can rewrite a country's army, navy and typeface",
                     TheOrderOfBattleIsAModsToRewrite(sandbox));
+                failures += Check("a country remembers why it dislikes another",
+                    OpinionIsRememberedAndForgotten(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
                     APeaceCanBeWritten(sandbox));
                 failures += Check("a moved border leaves a national minority behind",
@@ -1889,6 +1891,73 @@ public static class Program
         Console.WriteLine($"  script libraries: {ScriptLibrary.TriggerCount:N0} trigger(s), " +
                           $"{ScriptLibrary.EffectCount:N0} effect(s), {ScriptLibrary.ScoreCount:N0} score(s); " +
                           $"{scripted.Count:N0} decision(s) are data alone.");
+        return "";
+    }
+
+    /// <summary>
+    /// An opinion has to be made of reasons, and the reasons have to fade.
+    ///
+    /// Opinion was one number that two buttons moved and a war slammed to minus sixty. It
+    /// remembered nothing, so nothing could explain it to the player, and it forgot
+    /// nothing either: a war fought in 2024 held a country at minus sixty in 2124, while a
+    /// decade of patient diplomacy read exactly like a bribe paid last Tuesday.
+    ///
+    /// The check holds both halves. The parts have to add up to the number - an opinion
+    /// that does not equal its own breakdown is a screen that lies - and time has to
+    /// actually work on them.
+    /// </summary>
+    private static string OpinionIsRememberedAndForgotten(Campaign campaign)
+    {
+        if (OpinionCatalog.Count == 0) return "common/opinion_modifiers declares nothing";
+
+        var first = campaign.Nations.Find(nation => nation.Population > 0);
+        var second = campaign.Nations.Find(nation =>
+            nation != first && nation.Population > 0 &&
+            !campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)));
+        if (first is null || second is null) return "not enough countries to test with";
+
+        var relation = CampaignDiplomacy.Get(campaign, first.Id, second.Id);
+        relation.Reasons.Clear();
+        OpinionSystem.Settle(campaign, relation);
+        if (Math.Abs(relation.Opinion) > 0.01f)
+            return $"a country with no history of another has an opinion of {relation.Opinion:0.0}";
+
+        OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
+        var remembered = relation.Opinion;
+        if (remembered > -50f)
+            return $"a declaration of war moved opinion to {remembered:0.0}, which is barely a grudge";
+
+        // What the screen shows has to equal what it is made of.
+        var parts = 0f;
+        foreach (var entry in relation.OpinionDrivers.Entries) parts += entry.Value;
+        if (Math.Abs(parts - relation.Opinion) > 0.5f)
+            return $"the opinion reads {relation.Opinion:0.0} and its parts add to {parts:0.0}";
+
+        // And it fades. Nine years on, the same grudge has to be worth less.
+        var reason = relation.Reasons.Find(item =>
+            string.Equals(item.Id, "declared_war_on_us", StringComparison.OrdinalIgnoreCase));
+        if (reason is null) return "the declaration of war was not recorded as a reason";
+        reason.GrantedDay = campaign.ElapsedDays - 3285;
+        reason.ExpiresDay = campaign.ElapsedDays + 365;
+        OpinionSystem.Settle(campaign, relation);
+        var faded = relation.Opinion;
+        if (faded <= remembered + 5f)
+            return $"nine years on the grudge is still {faded:0.0}, having started at {remembered:0.0}";
+
+        // Expired reasons are gone rather than lingering at zero weight.
+        reason.ExpiresDay = campaign.ElapsedDays - 1;
+        OpinionSystem.Settle(campaign, relation);
+        if (relation.Reasons.Any(item =>
+                string.Equals(item.Id, "declared_war_on_us", StringComparison.OrdinalIgnoreCase)))
+            return "a reason that ran out is still on the books";
+
+        relation.Reasons.Clear();
+        OpinionSystem.Settle(campaign, relation);
+
+        var held = 0;
+        foreach (var entry in campaign.Relations.Values) held += entry.Reasons.Count;
+        Console.WriteLine($"  opinion: {OpinionCatalog.Count:N0} kind(s) of reason; the world is holding " +
+                          $"{held:N0} of them across {campaign.Relations.Count:N0} relation(s).");
         return "";
     }
 

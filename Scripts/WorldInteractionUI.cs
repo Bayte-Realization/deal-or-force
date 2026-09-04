@@ -1,3 +1,4 @@
+using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -36,9 +37,18 @@ public partial class DealOrForceGame
         _selectedNation = nation;
         _sideTitle.Text = nation.Name;
         var relation = nation == _campaign.Player ? null : CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, nation.Id);
+        // The number, and then what it is made of. An opinion nobody can account for is a
+        // number the player has no way to act on: "they dislike you" is not a fact you can
+        // do anything with, and "they have not forgotten the war, and the trade agreement
+        // is not making up for it" is.
         var relationText = relation is null
             ? "Your country"
             : $"Relations: {relation.Opinion:+0;-0;0} · {relation.Stance}";
+        if (relation is not null && relation.OpinionDrivers.HasEntries)
+            foreach (var entry in relation.OpinionDrivers.Entries
+                         .OrderByDescending(item => System.Math.Abs(item.Value))
+                         .Take(5))
+                relationText += $"\n    {entry.Source}  {entry.Value:+0;-0;0}";
         var war = nation == _campaign.Player ? null : _campaign.Wars.Find(candidate =>
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text =

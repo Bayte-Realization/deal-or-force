@@ -558,18 +558,9 @@ public sealed class Defines
 
 	// ---- Diplomacy: where a relationship naturally settles, and what moves it ----
 
-	/// <summary>Opinion a shared border is worth on its own. Neighbours are friction.</summary>
-	public float AiBorderFriction { get; set; } = -6f;
 
-	public float AiTradeWarmth { get; set; } = 28f;
-	public float AiPactWarmth { get; set; } = 22f;
-	public float AiAllianceWarmth { get; set; } = 34f;
 
-	/// <summary>How much a stronger neighbour is resented per unit of advantage.</summary>
-	public float AiFearOfStrength { get; set; } = 16f;
 
-	/// <summary>How fast opinion moves toward where the relationship actually sits.</summary>
-	public float AiOpinionDrift { get; set; } = 0.10f;
 
 	/// <summary>Opinion a week of courting a neighbour is worth, against that drift.</summary>
 	public float AiCourtshipStep { get; set; } = 6f;

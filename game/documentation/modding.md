@@ -28,6 +28,7 @@ category, and never the executable.
         defines/         every tuning number in the simulation
         goods/           the commodities the market trades
         modifiers/       timed effects that can be granted to a country or region
+        opinion_modifiers/   why one country thinks what it does of another
         scripted_effects/    named consequences, referred to by "use"
         scripted_modifiers/  named scores: how much an AI wants something
         scripted_triggers/   named conditions, referred to by "use"
@@ -262,6 +263,24 @@ islands a box would miss. Every rule is reported when the map is compiled, with 
 its boundary left out, so a border you drew badly says so.
 
 Rebuild the map after changing this: `dotnet run --project Tools/MapDataCompiler`.
+
+**Change what countries remember.** An opinion is the sum of named reasons, each with a
+size, a lifetime and whether it fades. `common/opinion_modifiers/50_mine.json`:
+
+    {
+      "declared_war_on_us": { "name": "Declared war on us", "opinion": -60,
+                              "days": 3650, "decays": true, "max_stacks": 2 },
+      "trade_agreement":    { "name": "Trade agreement", "opinion": 28,
+                              "days": 0, "decays": false }
+    }
+
+`days: 0` means the reason is held until something takes it away - which is how a standing
+condition like a pact or a shared border is written. A decaying reason is worth its full
+size the day it happens and nothing the day it runs out. `max_stacks` is how many times the
+same thing counts: a second denunciation stings again, a fifth does not.
+
+Make the numbers bigger and your world holds longer grudges. There is nothing else to
+change - the screens read the same sum, and so does the AI.
 
 ## What is still code
 
