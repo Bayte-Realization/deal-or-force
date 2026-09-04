@@ -258,6 +258,34 @@ without it a box takes any ground the country holds inside it, which matters whe
 region you are splitting wraps around another: a box over Hebei contains Beijing and
 Tianjin, and would quietly swallow two municipalities.
 
+**Split a region into several.** A box cuts along a parallel, and a border ruled along a
+parallel looks exactly like what it is. A partition grows each share out of a point instead,
+so the border lands where two shares meet and follows the ground:
+
+    {
+      "partitions": [
+        {
+          "nation": "CHN",
+          "carve_from_iso": "CN-HE",
+          "pieces": [
+            { "map_index": 1099, "name": "Shijiazhuang", "iso": "CN-HE-SJZ",
+              "kind": "Prefecture", "population": 23660000, "seed": [114.51, 38.04] },
+            { "map_index": 1721, "name": "Zhangjiakou", "iso": "CN-HE-ZJK",
+              "kind": "Prefecture", "population": 3050000, "seed": [114.89, 40.82] }
+          ]
+        }
+      ]
+    }
+
+`seed` is longitude and latitude. Every cell goes to whichever seed reaches it first by
+land, so a piece cut off by a bay belongs to whoever is on its side of the water rather
+than to whoever is nearer in a straight line.
+
+A piece may reuse the map index of the region being split - that share keeps being the same
+region under a truer name, instead of leaving an empty region behind. Give every piece a
+population or it inherits the national average, which for China is forty million a
+prefecture.
+
 `polygon` traces a border by hand when a box is too blunt, and `seed_points` reaches
 islands a box would miss. Every rule is reported when the map is compiled, with the ground
 its boundary left out, so a border you drew badly says so.

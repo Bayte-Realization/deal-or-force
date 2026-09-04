@@ -22,6 +22,25 @@ public static class TerritorialTopology
         int ConnectedComponents = 0,
         string ClippedAway = "");
 
+    /// <summary>One share of a region that is being split, and where its centre is.</summary>
+    private readonly record struct RegionPiece(
+        int MapIndex, string Name, string Iso, string Kind, long Population,
+        float Longitude, float Latitude);
+
+    /// <summary>
+    /// A region split into several, by growing outwards from a point in each.
+    ///
+    /// A bounding box cuts along a parallel, and a border drawn along a parallel looks
+    /// exactly like what it is - a line somebody ruled across a country. Growing instead
+    /// puts the border where the two shares meet, which follows the shape of the ground:
+    /// around a bay, along the far side of a mountain, and never straight for long.
+    ///
+    /// One share may keep the map index of the region being split, which renames it rather
+    /// than leaving an empty region behind with nothing in it.
+    /// </summary>
+    private readonly record struct RegionPartition(
+        string NationTag, string CarveFromIso, RegionPiece[] Pieces);
+
     private readonly record struct AdjacencyRule(
         string SubjectTag,
         string NeighborTag,
@@ -208,16 +227,51 @@ public static class TerritorialTopology
                 population = rule.Population;
                 return true;
             }
+        // A share of a split region is authored the same way a corrected one is. Without
+        // this every prefecture of Hebei came out with the national average living in it -
+        // forty million apiece, which is what a country gets when nobody says otherwise.
+        foreach (var partition in Partitions)
+        foreach (var piece in partition.Pieces)
+            if (piece.MapIndex == mapIndex && piece.Population > 0)
+            {
+                population = piece.Population;
+                return true;
+            }
         population = 0;
         return false;
     }
 
     /// <summary>How many authoritative region corrections are loaded, so the scenario
     /// import can assert its own arithmetic instead of a hard-coded total.</summary>
-    public static int RegionRuleCount => RegionRules.Count;
+    public static int RegionRuleCount =>
+        RegionRules.Count + Partitions.Sum(partition =>
+            partition.Pieces.Count(piece => !ShippedStateIndices.Contains(piece.MapIndex)));
+
+    private static HashSet<int> _shippedStateIndices;
+
+    /// <summary>
+    /// Every region the state table already ships. A partition piece that reuses one of
+    /// these renames a region rather than adding one, and must not be counted as a
+    /// correction - the scenario import checks that its own arithmetic agrees with this.
+    /// </summary>
+    private static HashSet<int> ShippedStateIndices
+    {
+        get
+        {
+            if (_shippedStateIndices is not null) return _shippedStateIndices;
+            _shippedStateIndices = new HashSet<int>();
+            foreach (var row in EarthData.StateRows)
+            {
+                var parts = row.Split('|');
+                if (parts.Length > 0 && int.TryParse(parts[0], out var index)) _shippedStateIndices.Add(index);
+            }
+            return _shippedStateIndices;
+        }
+    }
 
     private static readonly List<AdjacencyRule> BaseRules = new();
     private static readonly List<RegionRule> RegionRules = new();
+    private static readonly List<RegionPartition> Partitions = new();
 
     static TerritorialTopology() => ResetCatalog();
 
@@ -227,6 +281,7 @@ public static class TerritorialTopology
         BaseRules.AddRange(DefaultAdjacencyRules);
         RegionRules.Clear();
         RegionRules.AddRange(DefaultRegionRules);
+        Partitions.Clear();
         var file = GameDataLoader.DataFiles("map_data", "state_regions").FirstOrDefault();
         if (file is null) return;
         try { LoadOverrides(File.ReadAllText(file), null); }
@@ -262,6 +317,34 @@ public static class TerritorialTopology
             }
             catch (Exception exception) { errors?.Add($"Invalid map_data region override: {exception.Message}"); }
         }
+        if (document.RootElement.TryGetProperty("partitions", out var partitions) &&
+            partitions.ValueKind == JsonValueKind.Array)
+        foreach (var value in partitions.EnumerateArray())
+        {
+            try
+            {
+                var pieces = new List<RegionPiece>();
+                if (value.TryGetProperty("pieces", out var listed) && listed.ValueKind == JsonValueKind.Array)
+                    foreach (var piece in listed.EnumerateArray())
+                    {
+                        var seed = piece.GetProperty("seed");
+                        pieces.Add(new RegionPiece(
+                            piece.GetProperty("map_index").GetInt32(),
+                            piece.GetProperty("name").GetString() ?? "",
+                            piece.TryGetProperty("iso", out var iso) ? iso.GetString() ?? "" : "",
+                            piece.TryGetProperty("kind", out var kind) ? kind.GetString() ?? "Region" : "Region",
+                            piece.TryGetProperty("population", out var people) ? people.GetInt64() : 0,
+                            seed[0].GetSingle(), seed[1].GetSingle()));
+                    }
+                if (pieces.Count < 2) continue;
+                Partitions.Add(new RegionPartition(
+                    value.GetProperty("nation").GetString() ?? "",
+                    value.GetProperty("carve_from_iso").GetString() ?? "",
+                    pieces.ToArray()));
+            }
+            catch (Exception exception) { errors?.Add($"Invalid map_data partition: {exception.Message}"); }
+        }
+
         if (document.RootElement.TryGetProperty("adjacency_repairs", out var adjacency) && adjacency.ValueKind == JsonValueKind.Array)
         foreach (var value in adjacency.EnumerateArray())
         {
@@ -340,6 +423,9 @@ public static class TerritorialTopology
             summaries.Add(new RepairSummary(rule.Name, "REGION", changed, connectedComponents, clipped));
         }
 
+        foreach (var partition in Partitions)
+            ApplyPartition(campaign, control, states, width, height, partition, summaries);
+
         var applied = AppliedRules.GetValue(control, _ => new HashSet<string>(StringComparer.Ordinal));
         foreach (var rule in BaseRules)
         {
@@ -393,6 +479,124 @@ public static class TerritorialTopology
             }
         }
         return _stateIndexByIso.TryGetValue(iso, out var found) ? found : (ushort)0;
+    }
+
+    /// <summary>
+    /// Split one region into several, growing each share out of its own seed until the
+    /// shares meet. Every cell goes to whichever seed reaches it first, so a share can only
+    /// take ground it can actually walk to - a piece cut off by a bay belongs to whoever is
+    /// on its side of the water, not to whoever is nearer as the crow flies.
+    /// </summary>
+    private static void ApplyPartition(Campaign campaign, ushort[] control, ushort[] states,
+        int width, int height, RegionPartition partition, List<RepairSummary> summaries)
+    {
+        var nation = campaign.NationByTag(partition.NationTag);
+        var donorIndex = StateIndexByIso(partition.CarveFromIso);
+        if (nation is null || donorIndex == 0) return;
+
+        // The ground being divided is the region plus everything already divided out of
+        // it. Taking only what still carries the original index would re-divide the
+        // leftovers on a second pass, and this runs twice - once as the campaign is built
+        // and once when the map is repaired - so the map compiler and the game would
+        // disagree about where the borders are, and the game would refuse its own map.
+        var shares = new HashSet<ushort> { donorIndex };
+        foreach (var piece in partition.Pieces) shares.Add((ushort)piece.MapIndex);
+        var ground = new List<int>();
+        for (var cell = 0; cell < states.Length; cell++)
+            if (shares.Contains(states[cell])) ground.Add(cell);
+        if (ground.Count == 0) return;
+
+        var donor = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == donorIndex);
+
+        // Each share is a region of its own, except the one that keeps the index of what is
+        // being split - that one is the same region under a truer name.
+        foreach (var piece in partition.Pieces)
+        {
+            var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == piece.MapIndex);
+            if (state is null)
+            {
+                state = new ScenarioState
+                {
+                    MapIndex = piece.MapIndex,
+                    NationMapIndex = nation.MapIndex,
+                    NationId = nation.Tag,
+                    Id = piece.Iso.ToLowerInvariant().Replace('-', '_'),
+                    Name = piece.Name,
+                    Iso = piece.Iso,
+                    Kind = piece.Kind
+                };
+                campaign.States.Add(state);
+                if (donor is not null && piece.Population > 0)
+                    EconomySystem.AdjustStatePopulation(donor, -piece.Population);
+                EconomySystem.SeedState(state, nation, piece.Population);
+            }
+            else if (piece.MapIndex == donorIndex && !string.IsNullOrWhiteSpace(piece.Name))
+            {
+                state.Name = piece.Name;
+                if (!string.IsNullOrWhiteSpace(piece.Iso))
+                {
+                    state.Iso = piece.Iso;
+                    state.Id = piece.Iso.ToLowerInvariant().Replace('-', '_');
+                }
+                if (!string.IsNullOrWhiteSpace(piece.Kind)) state.Kind = piece.Kind;
+            }
+        }
+
+        // Where each share starts: the piece of ground nearest the point it was given.
+        var owner = new Dictionary<int, ushort>(ground.Count);
+        var frontier = new Queue<int>();
+        foreach (var piece in partition.Pieces)
+        {
+            var seedX = LongitudeToX(piece.Longitude, width);
+            var seedY = LatitudeToY(piece.Latitude, height);
+            var best = -1;
+            var bestDistance = long.MaxValue;
+            foreach (var cell in ground)
+            {
+                var dy = (long)(cell / width) - seedY;
+                var dx = (long)(cell % width) - seedX;
+                if (dx > width / 2) dx -= width;
+                if (dx < -width / 2) dx += width;
+                var distance = dx * dx + dy * dy;
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                best = cell;
+            }
+            if (best < 0 || owner.ContainsKey(best)) continue;
+            owner[best] = (ushort)piece.MapIndex;
+            frontier.Enqueue(best);
+        }
+        if (frontier.Count == 0) return;
+
+        var inside = new HashSet<int>(ground);
+        while (frontier.Count > 0)
+        {
+            var cell = frontier.Dequeue();
+            var mine = owner[cell];
+            var y = cell / width;
+            var x = cell % width;
+            for (var side = 0; side < 4; side++)
+            {
+                var nx = x + (side == 0 ? -1 : side == 1 ? 1 : 0);
+                var ny = y + (side == 2 ? -1 : side == 3 ? 1 : 0);
+                if (ny < 0 || ny >= height) continue;
+                nx = (nx + width) % width;
+                var next = ny * width + nx;
+                if (!inside.Contains(next) || owner.ContainsKey(next)) continue;
+                owner[next] = mine;
+                frontier.Enqueue(next);
+            }
+        }
+
+        var counts = new Dictionary<ushort, int>();
+        foreach (var (cell, index) in owner)
+        {
+            states[cell] = index;
+            counts[index] = counts.GetValueOrDefault(index) + 1;
+        }
+        foreach (var piece in partition.Pieces)
+            summaries.Add(new RepairSummary(piece.Name, "REGION",
+                counts.GetValueOrDefault((ushort)piece.MapIndex)));
     }
 
     /// <summary>

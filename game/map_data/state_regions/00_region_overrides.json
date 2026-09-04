@@ -182,68 +182,35 @@
         [44.7, 39.85]
       ]
     }
-    ,
-    // Hebei wraps around Beijing and Tianjin - two municipalities carved out of it in
-    // reality - so as one region it drew as a crescent with a hole in the middle, and the
-    // strip between the two capitals hung off it by a thread. It is split into prefectures
-    // instead, which is both what China actually does and a shape a player can read.
-    // carve_from_iso keeps the boxes off the municipalities: without it a box over Hebei
-    // swallows them, because a box takes any ground the country holds inside it.
+
+  ],
+  "partitions": [
     {
-      "map_index": 1721,
+      // Hebei wraps around Beijing and Tianjin - two municipalities carved out of it in
+      // reality - so as one region it drew as a crescent with a hole in the middle. Boxes
+      // fixed that and left something worse: borders ruled along parallels, and a leftover
+      // in the south still labelled Hebei, which it no longer was.
+      //
+      // Growing from the prefecture capitals instead puts each border where two shares
+      // meet, so it follows the ground rather than a line of latitude. Shijiazhuang keeps
+      // the original region's index - the province is not renamed out of existence, it is
+      // called what the piece around its capital is actually called.
       "nation": "CHN",
-      "name": "Zhangjiakou",
-      "iso": "CN-HE-ZJK",
-      "kind": "Prefecture",
-      "donor_iso": "CN-HE",
       "carve_from_iso": "CN-HE",
-      "population": 3050000,
-      "min_longitude": 113.4,
-      "max_longitude": 116.2,
-      "min_latitude": 39.5,
-      "max_latitude": 42.6
-    },
-    {
-      "map_index": 1722,
-      "nation": "CHN",
-      "name": "Chengde",
-      "iso": "CN-HE-CDE",
-      "kind": "Prefecture",
-      "donor_iso": "CN-HE",
-      "carve_from_iso": "CN-HE",
-      "population": 2480000,
-      "min_longitude": 116.2,
-      "max_longitude": 119.3,
-      "min_latitude": 40.1,
-      "max_latitude": 42.6
-    },
-    {
-      "map_index": 1723,
-      "nation": "CHN",
-      "name": "Tangshan",
-      "iso": "CN-HE-TGS",
-      "kind": "Prefecture",
-      "donor_iso": "CN-HE",
-      "carve_from_iso": "CN-HE",
-      "population": 8030000,
-      "min_longitude": 117.2,
-      "max_longitude": 120.0,
-      "min_latitude": 38.7,
-      "max_latitude": 40.1
-    },
-    {
-      "map_index": 1724,
-      "nation": "CHN",
-      "name": "Baoding",
-      "iso": "CN-HE-BDG",
-      "kind": "Prefecture",
-      "donor_iso": "CN-HE",
-      "carve_from_iso": "CN-HE",
-      "population": 10880000,
-      "min_longitude": 113.5,
-      "max_longitude": 117.2,
-      "min_latitude": 38.55,
-      "max_latitude": 39.5
+      "pieces": [
+        { "map_index": 1099, "name": "Shijiazhuang", "iso": "CN-HE-SJZ", "kind": "Prefecture",
+          "population": 23660000, "seed": [114.51, 38.04] },
+        { "map_index": 1721, "name": "Zhangjiakou", "iso": "CN-HE-ZJK", "kind": "Prefecture",
+          "population": 3050000, "seed": [114.89, 40.82] },
+        { "map_index": 1722, "name": "Chengde", "iso": "CN-HE-CDE", "kind": "Prefecture",
+          "population": 2480000, "seed": [117.94, 40.95] },
+        { "map_index": 1723, "name": "Tangshan", "iso": "CN-HE-TGS", "kind": "Prefecture",
+          "population": 8030000, "seed": [118.18, 39.63] },
+        { "map_index": 1724, "name": "Baoding", "iso": "CN-HE-BDG", "kind": "Prefecture",
+          "population": 10880000, "seed": [115.46, 38.87] },
+        { "map_index": 1725, "name": "Cangzhou", "iso": "CN-HE-CZH", "kind": "Prefecture",
+          "population": 5400000, "seed": [116.86, 38.30] }
+      ]
     }
   ],
   "adjacency_repairs": [
