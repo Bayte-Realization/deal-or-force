@@ -544,7 +544,8 @@ public static class TerritorialTopology
 
         // Where each share starts: the piece of ground nearest the point it was given.
         var owner = new Dictionary<int, ushort>(ground.Count);
-        var frontier = new Queue<int>();
+        var reached = new Dictionary<int, int>(ground.Count);
+        var frontier = new PriorityQueue<int, int>();
         foreach (var piece in partition.Pieces)
         {
             var seedX = LongitudeToX(piece.Longitude, width);
@@ -564,14 +565,28 @@ public static class TerritorialTopology
             }
             if (best < 0 || owner.ContainsKey(best)) continue;
             owner[best] = (ushort)piece.MapIndex;
-            frontier.Enqueue(best);
+            reached[best] = 0;
+            frontier.Enqueue(best, 0);
         }
         if (frontier.Count == 0) return;
 
+        // Ground does not cost the same everywhere.
+        //
+        // Growing at one step a cell puts the border exactly halfway between two seeds,
+        // and halfway between two points is a straight line - which is what a ruled border
+        // looks like, and the whole thing this was meant to avoid. Two seeds on the same
+        // latitude produced a dead vertical edge a hundred cells long.
+        //
+        // So each cell costs a little more or a little less, from smooth noise fixed to the
+        // map rather than to the run. The front advances faster through some country than
+        // others and the border wanders, the way a border between two places that grew
+        // towards each other actually wanders. It is the same wander every time: the
+        // compiler and the game have to agree about it to the cell.
         var inside = new HashSet<int>(ground);
         while (frontier.Count > 0)
         {
-            var cell = frontier.Dequeue();
+            if (!frontier.TryDequeue(out var cell, out var cost)) break;
+            if (reached.TryGetValue(cell, out var known) && cost > known) continue;
             var mine = owner[cell];
             var y = cell / width;
             var x = cell % width;
@@ -582,21 +597,156 @@ public static class TerritorialTopology
                 if (ny < 0 || ny >= height) continue;
                 nx = (nx + width) % width;
                 var next = ny * width + nx;
-                if (!inside.Contains(next) || owner.ContainsKey(next)) continue;
+                if (!inside.Contains(next)) continue;
+                var step = cost + GroundCost(nx, ny);
+                if (reached.TryGetValue(next, out var seen) && seen <= step) continue;
+                reached[next] = step;
                 owner[next] = mine;
-                frontier.Enqueue(next);
+                frontier.Enqueue(next, step);
             }
         }
+
+        TidyStrayPieces(states, width, height, ground, owner);
 
         var counts = new Dictionary<ushort, int>();
         foreach (var (cell, index) in owner)
         {
+            // A stray with no neighbour to give it to keeps what it had. Writing the
+            // sentinel would put a region number on the map that no region answers to,
+            // and a province grown on it belongs to nowhere.
+            if (index == ushort.MaxValue) continue;
             states[cell] = index;
             counts[index] = counts.GetValueOrDefault(index) + 1;
         }
         foreach (var piece in partition.Pieces)
             summaries.Add(new RepairSummary(piece.Name, "REGION",
                 counts.GetValueOrDefault((ushort)piece.MapIndex)));
+    }
+
+    /// <summary>
+    /// What one step across this cell costs a growing region.
+    ///
+    /// Smooth value noise on a coarse lattice, hashed off the cell's own coordinates so it
+    /// is the same on every machine and every run. Sixteen cells to a lattice square makes
+    /// the border wander over tens of kilometres rather than jitter pixel by pixel, which
+    /// reads as a border rather than as static.
+    /// </summary>
+    private static int GroundCost(int x, int y)
+    {
+        const int lattice = 8;
+        var cellX = x / lattice;
+        var cellY = y / lattice;
+        var fx = (x % lattice) / (float)lattice;
+        var fy = (y % lattice) / (float)lattice;
+        // Smoothstep, so the lattice itself never shows as a grid.
+        fx = fx * fx * (3f - 2f * fx);
+        fy = fy * fy * (3f - 2f * fy);
+
+        static float Corner(int cx, int cy)
+        {
+            var hash = (uint)(cx * 374761393 + cy * 668265263);
+            hash = (hash ^ (hash >> 13)) * 1274126177u;
+            return ((hash ^ (hash >> 16)) & 0xFFFF) / 65535f;
+        }
+
+        var top = Corner(cellX, cellY) + (Corner(cellX + 1, cellY) - Corner(cellX, cellY)) * fx;
+        var bottom = Corner(cellX, cellY + 1) + (Corner(cellX + 1, cellY + 1) - Corner(cellX, cellY + 1)) * fx;
+        var value = top + (bottom - top) * fy;
+        return 100 + (int)(value * 130f);
+    }
+
+    /// <summary>
+    /// Hand every stray scrap to a neighbour.
+    ///
+    /// A share can end up holding ground it cannot reach - the enclave east of Beijing is
+    /// the standing example, a fragment of one province wedged between two others that has
+    /// to be walked around to be reached at all. Left alone it draws as a speck of the
+    /// wrong colour sitting on its own, which reads as a mistake because it looks like one.
+    /// Each fragment goes to whichever region it shares the most border with, which is the
+    /// neighbour it already looks like part of.
+    /// </summary>
+    private static void TidyStrayPieces(ushort[] states, int width, int height,
+        List<int> ground, Dictionary<int, ushort> owner)
+    {
+        var visited = new HashSet<int>();
+        var component = new List<int>();
+        var queue = new Queue<int>();
+        var largest = new Dictionary<ushort, int>();
+        var components = new List<(ushort Owner, List<int> Cells)>();
+
+        // Ground the growth never reached is ground no share can walk to - an enclave, an
+        // island, a scrap on the far side of somebody else's territory. It has no owner at
+        // all, and leaving it be is what left a speck of Hebei sitting alone east of
+        // Beijing. Treated as its own fragment, it goes to a neighbour like any other.
+        const ushort unreached = ushort.MaxValue;
+        foreach (var cell in ground)
+            if (!owner.ContainsKey(cell)) owner[cell] = unreached;
+
+        foreach (var start in ground)
+        {
+            if (!owner.TryGetValue(start, out var mine) || !visited.Add(start)) continue;
+            component.Clear();
+            queue.Clear();
+            queue.Enqueue(start);
+            component.Add(start);
+            while (queue.Count > 0)
+            {
+                var cell = queue.Dequeue();
+                var y = cell / width;
+                var x = cell % width;
+                for (var side = 0; side < 4; side++)
+                {
+                    var nx = x + (side == 0 ? -1 : side == 1 ? 1 : 0);
+                    var ny = y + (side == 2 ? -1 : side == 3 ? 1 : 0);
+                    if (ny < 0 || ny >= height) continue;
+                    nx = (nx + width) % width;
+                    var next = ny * width + nx;
+                    if (!owner.TryGetValue(next, out var theirs) || theirs != mine) continue;
+                    if (!visited.Add(next)) continue;
+                    queue.Enqueue(next);
+                    component.Add(next);
+                }
+            }
+            components.Add((mine, new List<int>(component)));
+            if (component.Count > largest.GetValueOrDefault(mine)) largest[mine] = component.Count;
+        }
+
+        foreach (var (mine, cells) in components)
+        {
+            // Unreached ground is always a stray, however much of it there is.
+            if (mine != unreached && cells.Count >= largest.GetValueOrDefault(mine)) continue;
+
+            // Whoever this scrap already touches most.
+            var shared = new Dictionary<ushort, int>();
+            foreach (var cell in cells)
+            {
+                var y = cell / width;
+                var x = cell % width;
+                for (var side = 0; side < 4; side++)
+                {
+                    var nx = x + (side == 0 ? -1 : side == 1 ? 1 : 0);
+                    var ny = y + (side == 2 ? -1 : side == 3 ? 1 : 0);
+                    if (ny < 0 || ny >= height) continue;
+                    nx = (nx + width) % width;
+                    var next = ny * width + nx;
+                    var neighbour = owner.TryGetValue(next, out var inside) ? inside : states[next];
+                    if (neighbour == 0 || neighbour == mine || neighbour == unreached) continue;
+                    shared[neighbour] = shared.GetValueOrDefault(neighbour) + 1;
+                }
+            }
+            if (shared.Count == 0) continue;
+
+            var best = (ushort)0;
+            var bestEdge = 0;
+            foreach (var (neighbour, edge) in shared)
+                if (edge > bestEdge || (edge == bestEdge && neighbour < best))
+                {
+                    bestEdge = edge;
+                    best = neighbour;
+                }
+            if (best == 0) continue;
+            foreach (var cell in cells) owner[cell] = best;
+        }
     }
 
     /// <summary>

@@ -281,6 +281,16 @@ so the border lands where two shares meet and follows the ground:
 land, so a piece cut off by a bay belongs to whoever is on its side of the water rather
 than to whoever is nearer in a straight line.
 
+Ground does not cost the same everywhere: smooth noise fixed to the map makes the front
+advance faster through some country than others, so the border wanders instead of settling
+on the straight line exactly halfway between two seeds. Put two seeds on the same meridian
+and the wander is all you get - the border between them still runs east to west, because
+that is where halfway is. Offset them.
+
+Any share that ends up holding ground it cannot walk to hands that scrap to whichever
+region it touches most, so a split never leaves a speck of the wrong colour sitting on its
+own.
+
 A piece may reuse the map index of the region being split - that share keeps being the same
 region under a truer name, instead of leaving an empty region behind. Give every piece a
 population or it inherits the national average, which for China is forty million a

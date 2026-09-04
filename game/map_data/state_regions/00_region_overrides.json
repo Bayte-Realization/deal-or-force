@@ -186,30 +186,26 @@
   ],
   "partitions": [
     {
-      // Hebei wraps around Beijing and Tianjin - two municipalities carved out of it in
-      // reality - so as one region it drew as a crescent with a hole in the middle. Boxes
-      // fixed that and left something worse: borders ruled along parallels, and a leftover
-      // in the south still labelled Hebei, which it no longer was.
+      // Hebei wraps around Beijing and Tianjin, which are carved out of it in reality, so
+      // it draws as a crescent. Splitting the whole province into prefectures fixed the
+      // crescent and cost more than it was worth: the province stopped being called Hebei
+      // at all. Only the two arms come off - the northern one behind Beijing and the
+      // north-eastern one along the Chengde hills - and the body of the province keeps its
+      // name and most of its people.
       //
-      // Growing from the prefecture capitals instead puts each border where two shares
-      // meet, so it follows the ground rather than a line of latitude. Shijiazhuang keeps
-      // the original region's index - the province is not renamed out of existence, it is
-      // called what the piece around its capital is actually called.
+      // The shares grow out of their capitals and meet where they meet, so no border here
+      // is a line of latitude. A share that ends up holding ground it cannot walk to gives
+      // that scrap to whichever region it touches most, which is what becomes of the
+      // fragment east of Beijing.
       "nation": "CHN",
       "carve_from_iso": "CN-HE",
       "pieces": [
-        { "map_index": 1099, "name": "Shijiazhuang", "iso": "CN-HE-SJZ", "kind": "Prefecture",
-          "population": 23660000, "seed": [114.51, 38.04] },
+        { "map_index": 1099, "name": "Hebei", "iso": "CN-HE", "kind": "Province",
+          "population": 46030000, "seed": [115.95, 37.85] },
         { "map_index": 1721, "name": "Zhangjiakou", "iso": "CN-HE-ZJK", "kind": "Prefecture",
-          "population": 3050000, "seed": [114.89, 40.82] },
+          "population": 4120000, "seed": [114.89, 40.82] },
         { "map_index": 1722, "name": "Chengde", "iso": "CN-HE-CDE", "kind": "Prefecture",
-          "population": 2480000, "seed": [117.94, 40.95] },
-        { "map_index": 1723, "name": "Tangshan", "iso": "CN-HE-TGS", "kind": "Prefecture",
-          "population": 8030000, "seed": [118.18, 39.63] },
-        { "map_index": 1724, "name": "Baoding", "iso": "CN-HE-BDG", "kind": "Prefecture",
-          "population": 10880000, "seed": [115.46, 38.87] },
-        { "map_index": 1725, "name": "Cangzhou", "iso": "CN-HE-CZH", "kind": "Prefecture",
-          "population": 5400000, "seed": [116.86, 38.30] }
+          "population": 3350000, "seed": [117.94, 41.00] }
       ]
     }
   ],
