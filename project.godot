@@ -14,6 +14,7 @@ config/name="Deal or Force"
 run/main_scene="res://Scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon.png"
+config/windows_native_icon="res://icon.ico"
 
 [autoload]
 
