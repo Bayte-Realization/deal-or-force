@@ -47,7 +47,16 @@ public static class TerritorialTopology
         float MinLatitude,
         float MaxLatitude,
         GeoPoint[] Polygon,
-        RegionSeed[] Seeds
+        RegionSeed[] Seeds,
+
+        /// <summary>
+        /// Take ground only from this region, by ISO code. Empty means "any ground the
+        /// source country holds inside the box", which is right for a region being pulled
+        /// out of open country and wrong for one being split off a province that wraps
+        /// around somebody else: a box over Hebei contains Beijing and Tianjin, and
+        /// without this the rule would quietly eat two municipalities.
+        /// </summary>
+        string CarveFromIso = ""
     );
 
     private readonly record struct GeoPoint(float Longitude, float Latitude);
@@ -246,7 +255,8 @@ public static class TerritorialTopology
                     value.GetProperty("min_longitude").GetSingle(), value.GetProperty("max_longitude").GetSingle(),
                     value.GetProperty("min_latitude").GetSingle(), value.GetProperty("max_latitude").GetSingle(),
                     value.TryGetProperty("polygon", out var polygon) ? ParsePolygon(polygon) : Array.Empty<GeoPoint>(),
-                    value.TryGetProperty("seed_points", out var seeds) ? ParseSeeds(seeds) : Array.Empty<RegionSeed>());
+                    value.TryGetProperty("seed_points", out var seeds) ? ParseSeeds(seeds) : Array.Empty<RegionSeed>(),
+                    value.TryGetProperty("carve_from_iso", out var carveFrom) ? carveFrom.GetString() ?? "" : "");
                 var index = RegionRules.FindIndex(item => item.MapIndex == rule.MapIndex);
                 if (index >= 0) RegionRules[index] = rule; else RegionRules.Add(rule);
             }
@@ -314,9 +324,19 @@ public static class TerritorialTopology
                     EconomySystem.AdjustStatePopulation(donor, -rule.Population);
                 EconomySystem.SeedState(state, nation, rule.Population);
             }
+            // Which region the ground has to be coming out of, if the rule insists on one.
+            //
+            // Resolved from the shipped state table rather than from the campaign's live
+            // list. The list is still being filled while these rules run - the map compiler
+            // reached this line before Hebei was in it and skipped the rule, while the game
+            // reached it after and applied it, so the compiler baked provinces that
+            // straddled a border the game then drew. A table that is the same at every
+            // moment cannot do that.
+            var carveFrom = StateIndexByIso(rule.CarveFromIso);
+
             var changed = PaintRegion(control, states, width, height, (ushort)nation.MapIndex,
-                (ushort)sourceNation.MapIndex, (ushort)rule.MapIndex, rule, out var connectedComponents,
-                out var clipped);
+                (ushort)sourceNation.MapIndex, (ushort)rule.MapIndex, rule, carveFrom,
+                out var connectedComponents, out var clipped);
             summaries.Add(new RepairSummary(rule.Name, "REGION", changed, connectedComponents, clipped));
         }
 
@@ -347,6 +367,32 @@ public static class TerritorialTopology
         }
 
         return summaries;
+    }
+
+    private static Dictionary<string, ushort> _stateIndexByIso;
+
+    /// <summary>
+    /// A region's map index from its ISO code, out of the shipped state table.
+    ///
+    /// Zero for "no restriction" - both when a rule names nothing and when it names
+    /// something that does not exist, because a rule that quietly does nothing at one
+    /// moment and everything at another is worse than one that simply always paints.
+    /// </summary>
+    private static ushort StateIndexByIso(string iso)
+    {
+        if (string.IsNullOrWhiteSpace(iso)) return 0;
+        if (_stateIndexByIso is null)
+        {
+            _stateIndexByIso = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in EarthData.StateRows)
+            {
+                var parts = row.Split('|');
+                if (parts.Length < 4) continue;
+                if (!int.TryParse(parts[0], out var index) || index <= 0 || index > ushort.MaxValue) continue;
+                _stateIndexByIso[parts[3]] = (ushort)index;
+            }
+        }
+        return _stateIndexByIso.TryGetValue(iso, out var found) ? found : (ushort)0;
     }
 
     /// <summary>
@@ -402,6 +448,7 @@ public static class TerritorialTopology
         ushort sourceNation,
         ushort state,
         RegionRule rule,
+        ushort carveFrom,
         out int connectedComponents,
         out string clippedAway)
     {
@@ -420,6 +467,7 @@ public static class TerritorialTopology
         {
             var cell = y * width + x;
             if ((control[cell] != sourceNation && control[cell] != nation) || states[cell] == state) continue;
+            if (carveFrom != 0 && states[cell] != carveFrom) continue;
             if (rule.Polygon.Length >= 3 && !Contains(rule.Polygon,
                     XToLongitude(x, width), YToLatitude(y, height)))
             {

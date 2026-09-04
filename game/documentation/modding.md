@@ -231,6 +231,38 @@ decisions are the player's alone until you weigh them.
 Each government weighs its decisions once a month and takes the best one that beats
 `ai_decision_threshold` in `common/defines`.
 
+**Split a region, or add one.** `map_data/state_regions/50_my_regions.json` lists regions
+to carve out of the map. A region is a bounding box, a name and a population; the ground
+comes from whatever the box covers, and the people are taken off whoever held it:
+
+    {
+      "regions": [
+        {
+          "map_index": 1740,
+          "nation": "CHN",
+          "name": "Baoding",
+          "iso": "CN-HE-BDG",
+          "kind": "Prefecture",
+          "donor_iso": "CN-HE",
+          "carve_from_iso": "CN-HE",
+          "population": 10880000,
+          "min_longitude": 113.5, "max_longitude": 117.2,
+          "min_latitude": 38.55, "max_latitude": 39.5
+        }
+      ]
+    }
+
+`donor_iso` says who loses the people. `carve_from_iso` says whose ground may be taken -
+without it a box takes any ground the country holds inside it, which matters whenever the
+region you are splitting wraps around another: a box over Hebei contains Beijing and
+Tianjin, and would quietly swallow two municipalities.
+
+`polygon` traces a border by hand when a box is too blunt, and `seed_points` reaches
+islands a box would miss. Every rule is reported when the map is compiled, with the ground
+its boundary left out, so a border you drew badly says so.
+
+Rebuild the map after changing this: `dotnet run --project Tools/MapDataCompiler`.
+
 ## What is still code
 
 Region membership is geometric: a province is grown inside one region and never crosses its
