@@ -453,7 +453,7 @@ public partial class DealOrForceGame : Control
             var captured = screen;
             var button = ActionButton(screen, () => OpenScreen(captured), 118, 38,
                 false, SpriteCatalog.TextureOf($"icon_{icon}",
-                    $"res://game/gfx/interface/icons/icon_{icon}.svg"));
+                    $"res://game/gfx/interface/icons/icon_{icon}.png"));
             button.TooltipText = help;
             _screenButtons[captured] = button;
             nav.AddChild(button);
@@ -1149,7 +1149,14 @@ public partial class DealOrForceGame : Control
         if (!string.IsNullOrWhiteSpace(iconPath))
         {
             button.Icon = GD.Load<Texture2D>(iconPath);
-            button.ExpandIcon = false;
+            button.ExpandIcon = true;
+            // The art is stored far larger than any button draws it - a picture that is
+            // downsampled looks right, and one that is stretched does not - so the button
+            // has to be told how much room the icon may have. Without this the whole 256
+            // pixels arrive and the caption is pushed off the screen, which is exactly what
+            // happened the first time the icons stopped being vectors.
+            var room = (int)Mathf.Clamp(height * 0.62f, 14f, 28f);
+            button.AddThemeConstantOverride("icon_max_width", room);
         }
         button.SetMeta(LocSourceMeta, text);
         button.SetMeta(LocAppliedMeta, button.Text);

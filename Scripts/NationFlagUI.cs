@@ -16,14 +16,17 @@ public partial class DealOrForceGame
     /// A country's flag.
     ///
     /// The same rule as every other picture in the game: the file is the declaration.
-    /// `gfx/flags/flag_fra.svg` IS the flag of France, so a mod that wants a different one
-    /// drops its own `flag_fra.svg` into its own `gfx/flags/` and nothing else has to be
+    /// `gfx/flags/flag_fra.png` IS the flag of France, so a mod that wants a different one
+    /// drops its own `flag_fra.png` into its own `gfx/flags/` and nothing else has to be
     /// written down anywhere. A country the base game has never heard of works the same way.
     ///
-    /// They are vector files on purpose. A flag stored as a picture is the thing that looks
-    /// like porridge the moment it is drawn larger than it was saved, which is what happens
-    /// to every flag in every strategy game that ships them as small bitmaps; an SVG is
-    /// exact at whatever size the panel asks for.
+    /// They are pictures rather than vectors, which is a decision about who mods this game
+    /// rather than about fidelity. Anybody can open a PNG in whatever they already have and
+    /// paint over it; an SVG asks them to find and learn a vector editor first, and a
+    /// modding format that half the people who want to use it cannot open is not a modding
+    /// format. What that costs is bought back with resolution: every flag is stored far
+    /// larger than any panel draws it, so it is downsampled rather than stretched, and
+    /// downsampling is the direction that looks fine.
     /// </summary>
     private static Texture2D FlagTexture(string tag)
     {
@@ -31,7 +34,7 @@ public partial class DealOrForceGame
         var key = tag.ToLowerInvariant();
         if (FlagCache.TryGetValue(key, out var cached)) return cached;
 
-        var path = SpriteCatalog.TextureOf($"flag_{key}", $"res://game/gfx/flags/flag_{key}.svg");
+        var path = SpriteCatalog.TextureOf($"flag_{key}", $"res://game/gfx/flags/flag_{key}.png");
         var texture = !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path)
             ? GD.Load<Texture2D>(path)
             : null;

@@ -21,7 +21,7 @@ namespace DealOrForce.Simulation;
 /// C# file, which is exactly the thing the rest of the data layer was built to avoid.
 ///
 /// The art itself lives in the tree, and a picture's file name *is* its sprite name.
-/// `gfx/interface/icons/icon_diplomacy.svg` declares `icon_diplomacy` by being called
+/// `gfx/interface/icons/icon_diplomacy.png` declares `icon_diplomacy` by being called
 /// that; a mod replaces it by putting a file of the same name at the same place, and
 /// writes no JSON at all. That is the part a modder actually wants: not "you may point at
 /// any path", but "put it here and call it this".
@@ -95,7 +95,7 @@ public static class SpriteCatalog
 
     /// <summary>What the engine will load a picture as, from a file name.</summary>
     private static readonly string[] PictureExtensions =
-        { ".png", ".svg", ".jpg", ".jpeg", ".webp", ".bmp", ".tga", ".dds", ".ktx" };
+        { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tga", ".dds", ".ktx", ".svg" };
 
     /// <summary>
     /// Layer one package's `gfx/` tree over what is already loaded.
@@ -132,7 +132,7 @@ public static class SpriteCatalog
             if (Array.IndexOf(PictureExtensions, extension) < 0) continue;
 
             // The name on the box is the name of the thing. A picture called
-            // `icon_diplomacy.svg` is the sprite `icon_diplomacy`, wherever in the tree
+            // `icon_diplomacy.png` is the sprite `icon_diplomacy`, wherever in the tree
             // somebody chose to file it.
             var name = Path.GetFileNameWithoutExtension(file);
             if (string.IsNullOrWhiteSpace(name)) continue;

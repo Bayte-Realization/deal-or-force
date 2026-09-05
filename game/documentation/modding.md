@@ -38,7 +38,7 @@ category, and never the executable.
         units/           division templates: attack, armour, width, supply use
       events/            scripted events and their outcomes
       gfx/               the game's pictures, and what each one is called
-        flags/           one flag per country: flag_fra.svg IS the flag of France
+        flags/           one flag per country: flag_fra.png IS the flag of France
         interface/icons/ the icons on buttons
         interface/panels/ the frames panels are drawn on
         globe/           what is drawn on the globe itself
@@ -404,13 +404,23 @@ both. Left unsaid, the largest people is taken to be the state's own.
 
 Shares are normalised, so they need not add to exactly one.
 
-**Change a flag.** `gfx/flags/flag_fra.svg` **is** the flag of France - the file is the
-declaration, the same rule as every other picture in the game. Drop your own `flag_fra.svg`
-into your mod's `gfx/flags/` and nothing else has to be written down anywhere; a country the
-base game has never heard of works the same way. They are vector files on purpose: a flag
-stored as a picture turns to porridge the moment it is drawn larger than it was saved, which
-is what happens to the flags in most strategy games. Every one ships at the same height and
-its own width, so a Nepalese pennant and a Swiss square keep their shape.
+**Change a flag, or any picture.** `gfx/flags/flag_fra.png` **is** the flag of France - the
+file is the declaration, the same rule as every other picture in the game. Drop your own
+`flag_fra.png` into your mod's `gfx/flags/` and nothing else has to be written down
+anywhere; a country the base game has never heard of works the same way, and so does an
+icon: `gfx/interface/icons/icon_diplomacy.png`.
+
+Everything ships as PNG on purpose. Anybody can open a picture in whatever they already
+have and paint over it; a vector file asks them to find and learn an editor first, and a
+modding format that half the people who want to use it cannot open is not a modding format.
+The resolution is the compensation - flags are 512 pixels tall and icons 256 square, far
+larger than any panel draws them, so they are downsampled rather than stretched. Keep to
+roughly those sizes and your art will sit beside the base game's without anyone noticing
+which is which.
+
+Flags all share a height and keep their own width, so a Nepalese pennant and a Swiss square
+keep their shape. SVG still loads if you insist - it is last in the list of picture formats,
+so a `.png` beside it wins - but nothing in the base game uses it.
 
 **Change what countries remember.** An opinion is the sum of named reasons, each with a
 size, a lifetime and whether it fades. `common/opinion_modifiers/50_mine.json`:
