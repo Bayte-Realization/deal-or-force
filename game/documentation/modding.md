@@ -45,7 +45,8 @@ category, and never the executable.
       gui/               where the panels sit - anchors and offsets
       interface/         what the game is made of - the colour palette and its metrics
       history/           what was true when the bookmark opens
-        countries/2024/  money, people, armies, stability, war support
+        countries/2024/  money, people, armies, politics - and how each country lives:
+                         literacy, urbanisation, the share of it working the land
         pops/            who lived where in 2024, by people and by faith
         provinces/       the political map: one line per province
         states/          regional starting values
@@ -348,6 +349,25 @@ draws, the message says whether to recompile the map or to rebuild the game firs
 written by the compiler and is not worth editing - change it and you have only taught the
 check to lie.
 
+**Correct a country's statistics.** `history/countries/2024/10_statistics.json` holds three
+numbers per country that decide how its regions are built:
+
+    "DEU": { "literacy": 0.99, "urbanisation": 0.78, "agriculture": 0.012 },
+    "ETH": { "literacy": 0.52, "urbanisation": 0.23, "agriculture": 0.630 }
+
+`urbanisation` sets what trades the country's regions hold; `agriculture` sets the level the
+curve in `common/professions/` could only guess at. Both are consumed before the population
+is dealt out, which is why they live in `history/countries` rather than being corrected
+afterwards - a figure applied after the deal is a figure the regions never saw.
+
+A country not listed has all three worked out from what it earns per head. That guess is a
+reasonable one and it is still a guess: income and urbanisation part company in both
+directions, the Gulf being far more urban than its oil income implies and Rwanda far less
+than its poverty does. So the honest way to make this game's statistics better is to add
+countries to that file rather than to tune the curve, and `Tools/SimBench` checks that every
+country which states a figure ends up with it - within a few points, because regions vary
+around their national average on purpose.
+
 **Change who lives somewhere.** Four folders, and they are worth taking together.
 
 `common/religions/` and `common/cultures/` say what peoples and faiths exist. A culture is
@@ -364,18 +384,34 @@ forty groups instead of a dozen would be one nobody can read and nobody can affo
 
 `common/professions/` is what people do for a living, and it is the bridge to the economy:
 
-    "peasants": { "name": "Peasants", "class": "Farmers",
-                  "rural_share": 0.860, "urban_share": 0.000, "curve": 0.55,
-                  "wealth": 0.22, "employment": 0.86, "colour": "#7f9c4f" }
+    "subsistence_farmers": { "name": "Subsistence farmers", "class": "Farmers",
+                             "rural_share": 0.720, "urban_share": 0.000,
+                             "rural_falloff": 2.60, "urban_rise": 1.00,
+                             "wealth": 0.16, "employment": 0.84, "colour": "#6f8a45" }
 
 Every trade names the social class whose wages and politics it shares, so the market did not
-have to be rewritten to gain a population screen - nine trades map onto the four classes it
+have to be rewritten to gain a population screen - ten trades map onto the four classes it
 already priced. The two shares are the same trade in two different places: a farming region
-is mostly peasants, a city is mostly wage labour, counters and desks, and every region
-blends the two by how urban it actually is. `curve` says how fast that crossing happens -
-below one it happens early, which is the truth about working the land, because a country
-only has to be a quarter urban before most of it has stopped farming. Shares are weights and
-are normalised, so you may add a tenth trade without rebalancing the other nine.
+is mostly people working their own land, a city is mostly wage labour, counters and desks,
+and every region blends the two by how urban it actually is.
+
+The two exponents say how fast each half arrives, and they exist because a straight line is
+wrong about the one thing it matters most for. Work on the land does not decline evenly as
+towns grow - it collapses. A country three quarters urban has almost nobody left farming,
+while one a quarter urban still has half its people in the fields; `rural_falloff` above one
+is that collapse, and `urban_rise` above one is a trade that waits for a real city, which is
+what clerks and capital do.
+
+Note that there are two farming trades, not one. **Subsistence farmers** are people feeding
+themselves off their own land, largely outside the market - which is a true description of
+much of the Sahel and the Himalayas and no description at all of Denmark. **Farmers** are
+commercial agriculture: fewer people, machinery, selling a crop. Both are the Farmers class,
+so the economy sees no difference; the population screen does, and so does anyone reading
+it. A game that called the Danish countryside "peasants" would be using a nineteenth-century
+word for a twenty-first-century country.
+
+Shares are weights and are normalised, so you may add an eleventh trade without rebalancing
+the other ten.
 
 `history/pops/` is who was actually there in 2024. Two tables:
 

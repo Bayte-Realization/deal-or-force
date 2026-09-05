@@ -1,25 +1,28 @@
 // What people do for a living.
 //
 // Each trade names the social class whose wages and politics it shares, so the market did
-// not have to be rewritten to gain a population screen: nine professions map onto the four
+// not have to be rewritten to gain a population screen: ten trades map onto the four
 // classes the economy already priced.
 //
-// The two shares are the same trade in two different places. A farming region is mostly
-// peasants; a city is mostly wage labour, counters and desks. Rather than author a profile
-// for every country, each trade says what it is worth in the countryside and what it is
-// worth in a city, and a region blends the two by how urban it actually is - so
-// Bangladesh and Belgium end up with different populations without either being written down.
+// The two shares are the same trade in two different places, and the two exponents say how
+// fast each half arrives. Work on the land does not decline evenly as towns grow - it
+// collapses: a country three quarters urban has almost nobody left farming, while one a
+// quarter urban still has half its people in the fields. `rural_falloff` is that collapse;
+// `urban_rise` is how late a city trade waits for a real city.
 //
-// Shares are weights, not percentages: they are normalised per region, so a mod may add a
-// tenth profession without having to rebalance the other nine.
+// Shares are weights, not percentages: they are normalised per region, so a mod may add an
+// eleventh trade without having to rebalance the other ten. A country that states its own
+// `agriculture` in history/countries overrides the curve for the two farming trades - the
+// curve gets the shape of a country right and the real level is worth looking up.
 {
-  "peasants": { "name": "Peasants", "class": "Farmers", "rural_share": 0.860, "urban_share": 0.000, "wealth": 0.22, "employment": 0.86, "curve": 0.55, "colour": "#7f9c4f" },
-  "labourers": { "name": "Labourers", "class": "Workers", "rural_share": 0.090, "urban_share": 0.230, "wealth": 0.30, "employment": 0.88, "curve": 1.00, "colour": "#8f6f4f" },
-  "machinists": { "name": "Machinists", "class": "Workers", "rural_share": 0.010, "urban_share": 0.170, "wealth": 0.42, "employment": 0.93, "curve": 1.25, "colour": "#5f7f9f" },
-  "service_workers": { "name": "Service workers", "class": "Workers", "rural_share": 0.020, "urban_share": 0.300, "wealth": 0.36, "employment": 0.90, "curve": 0.90, "colour": "#6f9fa8" },
-  "shopkeepers": { "name": "Shopkeepers", "class": "MiddleClass", "rural_share": 0.010, "urban_share": 0.100, "wealth": 0.58, "employment": 0.95, "curve": 0.95, "colour": "#c0a04f" },
-  "clerks": { "name": "Clerks", "class": "MiddleClass", "rural_share": 0.005, "urban_share": 0.135, "wealth": 0.55, "employment": 0.96, "curve": 1.30, "colour": "#9f8fbf" },
-  "professionals": { "name": "Professionals", "class": "MiddleClass", "rural_share": 0.003, "urban_share": 0.075, "wealth": 0.70, "employment": 0.97, "curve": 1.35, "colour": "#bf7f9f" },
-  "capitalists": { "name": "Capitalists", "class": "Owners", "rural_share": 0.001, "urban_share": 0.020, "wealth": 0.92, "employment": 0.99, "curve": 1.40, "colour": "#c85f4f" },
-  "landowners": { "name": "Landowners", "class": "Owners", "rural_share": 0.026, "urban_share": 0.004, "wealth": 0.88, "employment": 0.99, "curve": 0.70, "colour": "#a8863f" }
+  "subsistence_farmers": { "name": "Subsistence farmers", "class": "Farmers", "rural_share": 0.720, "urban_share": 0.000, "rural_falloff": 2.60, "urban_rise": 1.00, "wealth": 0.16, "employment": 0.84, "colour": "#6f8a45" },
+  "farmers":             { "name": "Farmers",             "class": "Farmers", "rural_share": 0.130, "urban_share": 0.016, "rural_falloff": 1.10, "urban_rise": 1.00, "wealth": 0.40, "employment": 0.92, "colour": "#93ad5c" },
+  "labourers":           { "name": "Labourers",           "class": "Workers", "rural_share": 0.100, "urban_share": 0.240, "rural_falloff": 1.00, "urban_rise": 0.90, "wealth": 0.30, "employment": 0.88, "colour": "#8f6f4f" },
+  "machinists":          { "name": "Machinists",          "class": "Workers", "rural_share": 0.012, "urban_share": 0.170, "rural_falloff": 1.00, "urban_rise": 1.35, "wealth": 0.42, "employment": 0.93, "colour": "#5f7f9f" },
+  "service_workers":     { "name": "Service workers",     "class": "Workers", "rural_share": 0.020, "urban_share": 0.310, "rural_falloff": 1.00, "urban_rise": 0.95, "wealth": 0.36, "employment": 0.90, "colour": "#6f9fa8" },
+  "shopkeepers":         { "name": "Shopkeepers",         "class": "MiddleClass", "rural_share": 0.012, "urban_share": 0.100, "rural_falloff": 1.00, "urban_rise": 1.00, "wealth": 0.58, "employment": 0.95, "colour": "#c0a04f" },
+  "clerks":              { "name": "Clerks",              "class": "MiddleClass", "rural_share": 0.005, "urban_share": 0.140, "rural_falloff": 1.00, "urban_rise": 1.30, "wealth": 0.55, "employment": 0.96, "colour": "#9f8fbf" },
+  "professionals":       { "name": "Professionals",       "class": "MiddleClass", "rural_share": 0.004, "urban_share": 0.085, "rural_falloff": 1.00, "urban_rise": 1.30, "wealth": 0.70, "employment": 0.97, "colour": "#bf7f9f" },
+  "capitalists":         { "name": "Capitalists",         "class": "Owners", "rural_share": 0.001, "urban_share": 0.021, "rural_falloff": 1.00, "urban_rise": 1.40, "wealth": 0.92, "employment": 0.99, "colour": "#c85f4f" },
+  "landowners":          { "name": "Landowners",          "class": "Owners", "rural_share": 0.030, "urban_share": 0.004, "rural_falloff": 0.80, "urban_rise": 1.00, "wealth": 0.88, "employment": 0.99, "colour": "#a8863f" }
 }

@@ -188,9 +188,11 @@ public static class ScenarioCatalog
             throw new InvalidOperationException($"Base scenario GDP units drifted for KOR: {southKorea.Gdp}B.");
 
         campaign.InvalidateStateIndex();
-        EconomySystem.Seed(campaign);
+        // Names, then the country's own figures, then the deal, then the corrections to it.
         CountryDefinitions.Apply(campaign);
-        HistoryDataLoader.ApplyBase(campaign);
+        HistoryDataLoader.ApplyBaseCountries(campaign);
+        EconomySystem.Seed(campaign);
+        HistoryDataLoader.ApplyBaseStates(campaign);
         campaign.SetPlayer(southKorea.Id);
         MilitaryBootstrap.Seed(campaign);
         NavalBootstrap.Seed(campaign);

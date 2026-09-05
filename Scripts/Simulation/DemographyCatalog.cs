@@ -54,21 +54,27 @@ public sealed class ProfessionDefinition
     public float Employment = 0.9f;
 
     /// <summary>
-    /// How fast a trade crosses from its country share to its city share.
+    /// How fast the countryside half of a trade fades as towns grow, and how fast the city
+    /// half arrives.
     ///
-    /// One means evenly. Below one the change happens early - which is the truth about
-    /// working the land: a country only has to be a quarter urban before most of it has
-    /// stopped farming, and a straight line between the two ends puts a fifth of Germany
-    /// behind a plough. Above one the change waits for a real city, which is what happens
-    /// to clerks and to capital.
+    /// One each means both move in a straight line, which is wrong for the one trade it
+    /// matters most for. Work on the land does not decline evenly with urbanisation; it
+    /// collapses - a country that is three quarters urban has almost nobody left farming,
+    /// while one that is a quarter urban still has half its people in the fields. Two
+    /// exponents fit that curve where a straight line put a fifth of Germany behind a
+    /// plough, and they cost one number each in the data.
     /// </summary>
-    public float Curve = 1f;
+    public float RuralFalloff = 1f;
+
+    public float UrbanRise = 1f;
 
     /// <summary>How much of the workforce this is, in a region of the given urbanisation.</summary>
     public float ShareAt(float urbanisation)
     {
-        var along = MathF.Pow(M.Clamp01(urbanisation), Math.Max(0.05f, Curve));
-        return Math.Max(0f, RuralShare + (UrbanShare - RuralShare) * along);
+        var urban = M.Clamp01(urbanisation);
+        return Math.Max(0f,
+            RuralShare * MathF.Pow(1f - urban, Math.Max(0.05f, RuralFalloff)) +
+            UrbanShare * MathF.Pow(urban, Math.Max(0.05f, UrbanRise)));
     }
 }
 
@@ -247,8 +253,10 @@ public static class DemographyCatalog
                 profession.Wealth = M.Clamp01(wealthValue);
             if (value.TryGetProperty("employment", out var employed) && employed.TryGetSingle(out var employment))
                 profession.Employment = M.Clamp01(employment);
-            if (value.TryGetProperty("curve", out var curve) && curve.TryGetSingle(out var shape) && shape > 0f)
-                profession.Curve = shape;
+            if (value.TryGetProperty("rural_falloff", out var falloff) &&
+                falloff.TryGetSingle(out var fade) && fade > 0f) profession.RuralFalloff = fade;
+            if (value.TryGetProperty("urban_rise", out var rise) &&
+                rise.TryGetSingle(out var climb) && climb > 0f) profession.UrbanRise = climb;
         }
     }
 

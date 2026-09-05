@@ -267,8 +267,9 @@ public static class EconomySystem
                 if (authored[index] > 0) counts[index] = Math.Max(0, (long)(authored[index] * scale));
 
             var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts);
+            var farming = StatedAgricultureScale(nation, states, counts);
             for (var index = 0; index < states.Length; index++)
-                SeedState(states[index], nation, counts[index], composition[index]);
+                SeedState(states[index], nation, counts[index], composition[index], farming);
         }
     }
 
@@ -590,7 +591,7 @@ public static class EconomySystem
     }
 
     internal static void SeedState(ScenarioState state, Nation nation, long population) =>
-        SeedState(state, nation, population, null);
+        SeedState(state, nation, population, null, (1f, 1f));
 
     /// <summary>
     /// Fill one region with the people who live in it.
@@ -606,30 +607,45 @@ public static class EconomySystem
     /// and they are a tenth of the simulation's population objects.
     /// </summary>
     internal static void SeedState(ScenarioState state, Nation nation, long population,
-        IReadOnlyList<(string Culture, float Share)> composition)
+        IReadOnlyList<(string Culture, float Share)> composition, (float Fields, float Town) farming)
     {
         state.Population = population;
         state.Literacy = M.Clamp01(nation.Literacy + (StableFraction(state.MapIndex + 17) - 0.5f) * 0.12f);
         state.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + (StableFraction(state.MapIndex + 31) - 0.5f) * 0.10f);
         state.Radicalism = M.Clamp01((0.52f - state.StandardOfLiving) * 0.40f);
-        // How urban a place is, from what it earns per head.
-        //
-        // The old line divided a national GDP in billions by a population in millions and
-        // scaled the result, which made Germany twenty-seven per cent urban and therefore
-        // half of Bavaria peasants. Urbanisation tracks income per head and it tracks it
-        // logarithmically - the step from four hundred dollars a year to four thousand
-        // empties far more villages than the step from forty thousand to eighty.
-        var perHead = nation.Gdp * 1_000_000_000f / Math.Max(1f, nation.Population);
-        var national = M.Clamp(0.12f + 0.27f * MathF.Log10(Math.Max(300f, perHead) / 300f), 0.10f, 0.90f);
-        // And a country is not one place: some of its regions are the city and some are the
-        // land behind it, which is the whole reason the trades differ from region to region.
-        state.Urbanization = M.Clamp(national + (StableFraction(state.MapIndex + 53) - 0.5f) * 0.26f, 0.06f, 0.95f);
+        state.Urbanization = StateUrbanisation(nation, state.MapIndex);
         state.PopulationGroups.Clear();
-        BuildGroups(state, nation, population, composition);
+        BuildGroups(state, nation, population, composition, farming);
         state.Buildings[BuildingKind.Agriculture] = Math.Max(1, (int)(population / 4_000_000));
         state.Buildings[BuildingKind.CivilianIndustry] = Math.Max(0, (int)(population * state.Urbanization / 5_000_000));
         state.Buildings[BuildingKind.Infrastructure] = Math.Max(1, (int)(state.Urbanization * 4));
         SeedResources(state, nation);
+    }
+
+    /// <summary>
+    /// How urban one region is.
+    ///
+    /// A country is not one place: some of its regions are the city and some are the land
+    /// behind it, which is the whole reason the trades differ from region to region. The
+    /// spread is fixed to the region's own index, so it is the same on every machine and
+    /// can be worked out ahead of time - which the country-wide arithmetic needs.
+    /// </summary>
+    internal static float StateUrbanisation(Nation nation, int mapIndex) =>
+        M.Clamp(NationalUrbanisation(nation) + (StableFraction(mapIndex + 53) - 0.5f) * 0.26f, 0.06f, 0.95f);
+
+    /// <summary>
+    /// How urban a country is, stated or implied.
+    ///
+    /// Implied logarithmically from income per head, because the step from four hundred
+    /// dollars a year to four thousand empties far more villages than the step from forty
+    /// thousand to eighty. The line this replaced divided billions by millions and made
+    /// Germany twenty-seven per cent urban, which put half of Bavaria behind a plough.
+    /// </summary>
+    internal static float NationalUrbanisation(Nation nation)
+    {
+        if (nation.Urbanisation > 0f) return M.Clamp01(nation.Urbanisation);
+        var perHead = nation.Gdp * 1_000_000_000f / Math.Max(1f, nation.Population);
+        return M.Clamp(0.12f + 0.27f * MathF.Log10(Math.Max(300f, perHead) / 300f), 0.10f, 0.90f);
     }
 
     private static void SeedResources(ScenarioState state, Nation nation)
@@ -665,7 +681,7 @@ public static class EconomySystem
     }
 
     private static void BuildGroups(ScenarioState state, Nation nation, long population,
-        IReadOnlyList<(string Culture, float Share)> composition)
+        IReadOnlyList<(string Culture, float Share)> composition, (float Fields, float Town) farming)
     {
         if (population <= 0) return;
 
@@ -694,6 +710,13 @@ public static class EconomySystem
         var weights = trades.Select(trade => Math.Max(0f, trade.ShareAt(state.Urbanization))).ToArray();
         var weightTotal = weights.Sum();
         if (weightTotal <= 0f) return;
+        if (farming.Fields != 1f || farming.Town != 1f)
+        {
+            for (var index = 0; index < trades.Count; index++)
+                weights[index] *= trades[index].Class == SocialClass.Farmers ? farming.Fields : farming.Town;
+            weightTotal = weights.Sum();
+            if (weightTotal <= 0f) return;
+        }
 
         var floor = Math.Max(1L, population / 1000);
         long placed = 0;
@@ -730,6 +753,53 @@ public static class EconomySystem
         }
         largest.Size += population - placed;
         if (largest.Size < 0) largest.Size = 0;
+    }
+
+    /// <summary>
+    /// Make a country's stated share of farm work come true, without flattening its regions.
+    ///
+    /// The curve gets the shape of a country right and the level only roughly - it has one
+    /// national number to work from, and the real figure spans one and a half per cent in
+    /// Germany to two thirds in Burundi. Where a scenario states the number, the farming
+    /// trades are scaled by however much the curve missed it, and every region keeps its own
+    /// position around that average: the fields near the city still hold fewer farmers than
+    /// the ones three hundred kilometres out.
+    ///
+    /// Measured across the country's actual regions rather than at its average urbanisation,
+    /// because the curve bends. The average of a bent line is not the line at the average -
+    /// aiming at the midpoint left Rwanda ten points too agricultural and Liberia ten points
+    /// too little, in opposite directions, which is exactly the signature of that mistake.
+    /// </summary>
+    private static (float Fields, float Town) StatedAgricultureScale(Nation nation,
+        IReadOnlyList<ScenarioState> states, IReadOnlyList<long> counts)
+    {
+        var trades = DemographyCatalog.Professions;
+        if (nation.AgricultureShare <= 0f || trades.Count == 0) return (1f, 1f);
+
+        double farmed = 0, everything = 0;
+        for (var index = 0; index < states.Count; index++)
+        {
+            var people = Math.Max(0, counts[index]);
+            if (people <= 0) continue;
+            var urban = StateUrbanisation(nation, states[index].MapIndex);
+            double here = 0, fields = 0;
+            foreach (var trade in trades)
+            {
+                var share = Math.Max(0f, trade.ShareAt(urban));
+                here += share;
+                if (trade.Class == SocialClass.Farmers) fields += share;
+            }
+            if (here <= 0) continue;
+            farmed += people * (fields / here);
+            everything += people;
+        }
+        if (everything <= 0 || farmed <= 0) return (1f, 1f);
+
+        var believed = farmed / everything;
+        var stated = M.Clamp(nation.AgricultureShare, 0.001f, 0.95f);
+        // Scale the fields by one factor and everything else by another, so the two together
+        // still fill the country: no trade is invented and none is quietly lost.
+        return ((float)(stated / believed), (float)((1 - stated) / Math.Max(0.0001, 1 - believed)));
     }
 
     private static PopulationGroup Add(ScenarioState state, string culture, string religion,

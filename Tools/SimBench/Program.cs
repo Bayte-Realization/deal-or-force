@@ -70,6 +70,8 @@ public static class Program
             EveryRegionKnowsWhoLivesInIt(campaign));
         failures += Check("a content pack is locked until it is owned",
             ContentPacksAreLockedUntilOwned());
+        failures += Check("a country that states a figure about itself gets that figure",
+            TheStatedStatisticsCameTrue(campaign));
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -2458,6 +2460,77 @@ public static class Program
         DecisionCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         Console.WriteLine($"  content packs: {string.Join(", ", reported)} - absent while locked, complete once owned.");
+        return "";
+    }
+
+    /// <summary>
+    /// A country that states a figure about itself ends up with that figure.
+    ///
+    /// The population screen is only worth reading if its numbers are the real ones. Two
+    /// of them are looked up rather than guessed - how urban a country is and how much of
+    /// it works the land - and both are consumed a long way from where they are written:
+    /// they set the weights of ten trades, in every region separately, and the regions are
+    /// then normalised. There are several honest-looking ways for a figure to be quietly
+    /// halved on that journey, and none of them would look like anything on screen.
+    ///
+    /// Regions vary around the national average on purpose, so this checks the country as a
+    /// whole rather than any one region.
+    /// </summary>
+    private static string TheStatedStatisticsCameTrue(Campaign campaign)
+    {
+        var stated = campaign.Nations.Where(nation => nation.AgricultureShare > 0f).ToList();
+        if (stated.Count < 50) return $"only {stated.Count} countries state what they do for a living";
+
+        var faults = new List<string>();
+        var worst = 0.0;
+        var worstTag = "";
+        var worstPair = (Stated: 0.0, Actual: 0.0);
+        foreach (var nation in stated)
+        {
+            long total = 0, farming = 0;
+            foreach (var state in campaign.StatesOf(nation))
+            foreach (var group in state.PopulationGroups)
+            {
+                if (group.Size <= 0) continue;
+                total += group.Size;
+                if (group.Class == SocialClass.Farmers) farming += group.Size;
+            }
+            if (total < 100_000) continue;
+            var actual = farming / (double)total;
+            var slip = Math.Abs(actual - nation.AgricultureShare);
+            if (slip > worst)
+            {
+                worst = slip;
+                worstTag = nation.Tag;
+                worstPair = (nation.AgricultureShare, actual);
+            }
+            // Regions vary around the average on purpose, so a few points of slack is the
+            // spread and not a fault. Ten would be the bug this caught: aiming at the
+            // midpoint of a bent curve instead of averaging across the real regions.
+            if (slip > 0.05)
+                faults.Add($"{nation.Tag} says {nation.AgricultureShare:P0} of it farms and {actual:P0} does");
+        }
+        if (faults.Count > 0) return string.Join("; ", faults.Take(5));
+
+        var sample = new[] { "DEU", "USA", "IND", "ETH", "CHN" }
+            .Select(tag => campaign.NationByTag(tag))
+            .Where(nation => nation is not null && nation.AgricultureShare > 0f)
+            .Select(nation =>
+            {
+                long total = 0, farming = 0;
+                foreach (var state in campaign.StatesOf(nation))
+                foreach (var group in state.PopulationGroups)
+                {
+                    if (group.Size <= 0) continue;
+                    total += group.Size;
+                    if (group.Class == SocialClass.Farmers) farming += group.Size;
+                }
+                return $"{nation.Tag} {farming / (double)Math.Max(1, total):P0} (said {nation.AgricultureShare:P0})";
+            });
+        Console.WriteLine($"  statistics: {stated.Count:N0} countries state how urban they are and how much of " +
+                          $"them farms, and get it back within {worst:P1} at worst " +
+                          $"({worstTag} {worstPair.Stated:P0} -> {worstPair.Actual:P0}).");
+        Console.WriteLine($"    on the land: {string.Join(", ", sample)}.");
         return "";
     }
 

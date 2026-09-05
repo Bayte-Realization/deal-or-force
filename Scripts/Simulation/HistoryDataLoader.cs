@@ -12,12 +12,28 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public static class HistoryDataLoader
 {
-    public static void ApplyBase(Campaign campaign)
+    /// <summary>
+    /// What a country was in 2024, before anything is worked out from it.
+    ///
+    /// This has to run before the population is dealt out, because it is the input to that
+    /// arithmetic rather than a correction to it: how urban a country is and how much of it
+    /// works the land decide what trades its regions hold, and a figure applied afterwards
+    /// would be a figure the regions never saw.
+    /// </summary>
+    public static void ApplyBaseCountries(Campaign campaign)
     {
         // A bookmark is a folder, so a mod that adds a hundred countries to 2024 adds a
         // file beside the base game's rather than editing it.
         foreach (var file in GameDataLoader.DataFiles("history", "countries", "2024"))
             ApplyOptional(campaign, file, true, null);
+    }
+
+    /// <summary>
+    /// What particular regions were, which can only be said once the regions have people:
+    /// these are corrections to the deal, so they come after it.
+    /// </summary>
+    public static void ApplyBaseStates(Campaign campaign)
+    {
         foreach (var file in GameDataLoader.DataFiles("history", "states", "2024"))
             ApplyOptional(campaign, file, false, null);
     }
@@ -40,6 +56,8 @@ public static class HistoryDataLoader
             SetFloat(value, "tax_rate", number => nation.TaxRate = M.Clamp(number, 0.05f, 0.55f));
             SetFloat(value, "military_spending", number => nation.MilitarySpending = M.Clamp01(number));
             SetFloat(value, "literacy", number => nation.Literacy = M.Clamp01(number));
+            SetFloat(value, "urbanisation", number => nation.Urbanisation = M.Clamp01(number));
+            SetFloat(value, "agriculture", number => nation.AgricultureShare = M.Clamp01(number));
             SetFloat(value, "standard_of_living", number => nation.StandardOfLiving = M.Clamp01(number));
             SetFloat(value, "stability", number => nation.Stability = M.Clamp01(number));
             SetFloat(value, "war_support", number => nation.WarSupport = M.Clamp01(number));

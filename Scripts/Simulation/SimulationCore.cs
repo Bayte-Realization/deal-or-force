@@ -164,6 +164,20 @@ public sealed class Nation
 
     public float StandardOfLiving = 0.50f;
     public float Literacy = 0.65f;
+
+    /// <summary>
+    /// How much of the country lives in towns, and how much of it works the land.
+    ///
+    /// Both are left at zero until a scenario says otherwise, and zero means "not stated"
+    /// rather than "none": a country that says nothing has these worked out from what it
+    /// earns per head, which is a decent guess and never as good as the real number. They
+    /// are here rather than derived on the spot because they decide what trades every one
+    /// of the country's regions holds, and a figure that half the game derives and half
+    /// looks up is a figure the two halves will eventually disagree about.
+    /// </summary>
+    public float Urbanisation;
+
+    public float AgricultureShare;
     public float Stability = 0.65f;
     public float ConstructionCapacity = 1f;
     public readonly Dictionary<string, int> DecisionAvailableDay = new(StringComparer.Ordinal);
