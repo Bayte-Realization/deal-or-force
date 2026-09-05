@@ -31,6 +31,8 @@ public partial class DealOrForceGame : Control
     private readonly System.Collections.Generic.Dictionary<string, Button> _screenButtons = new();
     private Label _militarySpendingReadout = null!;
     private Label _sideTitle = null!;
+    private Control _sideFlag;
+    private Control _identityFlag;
     private Label _sideBody = null!;
     private VBoxContainer _sideDetail = null!;
     private HSlider _militarySpending = null!;
@@ -374,7 +376,11 @@ public partial class DealOrForceGame : Control
         row.AddThemeConstantOverride("separation", 24);
         margin.AddChild(row);
 
-        var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(230, 0) };
+        // Whose war this is, said in the one way that needs no reading.
+        _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
+        row.AddChild(_identityFlag);
+
+        var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(196, 0) };
         identityBox.AddThemeConstantOverride("separation", 2);
         row.AddChild(identityBox);
         _identity = Title("South Korea", 21, Ui.Colour("text.accent"));
@@ -460,7 +466,11 @@ public partial class DealOrForceGame : Control
 
         var sideRows = ScrollablePanelRows(_sidePanel, 24, 20, 12);
         var header = new HBoxContainer();
+        header.AddThemeConstantOverride("separation", 8);
         sideRows.AddChild(header);
+        _sideFlag = FlagBadge("", 26);
+        _sideFlag.Visible = false;
+        header.AddChild(_sideFlag);
         _sideTitle = Title("Nation", 27, Ui.Colour("text.accent"));
         _sideTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(_sideTitle);
@@ -574,6 +584,7 @@ public partial class DealOrForceGame : Control
         var player = _campaign.Player;
         var nation = _selectedNation ?? player;
         _sideTitle.Text = screen;
+        ShowSideFlag(screen is "Nation" or "Diplomacy" or "Economy" or "Military" ? nation.Tag : "");
         ClearDetail();
 
         switch (screen)
@@ -696,6 +707,7 @@ public partial class DealOrForceGame : Control
         _battleDetailControls.Visible = false;
         _militarySpending.Visible = false;
         _sideTitle.Text = pick.Nation.Name;
+        ShowSideFlag(pick.Nation.Tag);
         var state = pick.State is null ? "Unmapped land" : $"{pick.State.Name} ({pick.State.Kind})";
         var province = pick.ProvinceId > 0 ? $"Tactical province #{pick.ProvinceId:N0}" : "Province topology loading";
         ShowCountryInteraction(pick.Nation, $"{state} · {province}");
@@ -769,6 +781,7 @@ public partial class DealOrForceGame : Control
         var player = _campaign.Player;
         _identity.Text = $"{player.Name} ({player.Tag})";
         _identityTag.Text = _observerMode ? "OBS · observer mode" : $"{player.Tag} · player nation";
+        SetFlag(_identityFlag, player.Tag, 34);
         _date.Text = _campaign.Date.ToString();
 
         var day = _campaign.ElapsedDays;

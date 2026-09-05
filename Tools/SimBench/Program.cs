@@ -66,6 +66,10 @@ public static class Program
         if (mapped)
             failures += Check("the compiled map matches the code that drew it",
                 TheCompiledMapMatchesTheCodeThatDrewIt());
+        failures += Check("every region knows who lives in it",
+            EveryRegionKnowsWhoLivesInIt(campaign));
+        failures += Check("a content pack is locked until it is owned",
+            ContentPacksAreLockedUntilOwned());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -2085,8 +2089,8 @@ public static class Program
             return $"'{taken.State.Name}' changed hands and only {taken.Foreign:P0} of it is foreign; " +
                    "people are apparently changing nationality when a treaty is signed";
 
-        var nationalities = EconomySystem.Nationalities(taken.State);
-        if (nationalities.Count == 0) return "the annexed region has nobody in it";
+        var peoples = EconomySystem.Cultures(taken.State);
+        if (peoples.Count == 0) return "the annexed region has nobody in it";
 
         var radicalismBefore = taken.State.Radicalism;
         var foreignBefore = taken.Foreign;
@@ -2096,7 +2100,7 @@ public static class Program
 
         Console.WriteLine($"  nationality: {taken.Owner.Tag} took {taken.State.Name}, " +
                           $"{foreignBefore:P0} foreign at the treaty and {foreignAfter:P0} a year later " +
-                          $"({string.Join(", ", nationalities.Take(3).Select(entry => $"{entry.Nationality} {entry.Size:N0}"))}); " +
+                          $"({string.Join(", ", peoples.Take(3).Select(entry => $"{DemographyCatalog.CultureName(entry.Culture)} {entry.Size:N0}"))}); " +
                           $"radicalism {radicalismBefore:P0} -> {taken.State.Radicalism:P0}.");
 
         if (foreignAfter >= foreignBefore)
@@ -2290,6 +2294,170 @@ public static class Program
         if (stamped != fingerprint)
             return $"provinces.png was cut from region layer {stamped}, this build draws {fingerprint}";
         Console.WriteLine($"  map stamp: provinces.png and this build agree on region layer {fingerprint}.");
+        return "";
+    }
+
+    /// <summary>
+    /// Every region knows who lives in it, and the minorities are where they actually live.
+    ///
+    /// Three things have to hold at once and only the first is obvious. The head-count has
+    /// to add up, or the population screen and the economy disagree about the same region.
+    /// Every people, faith and trade has to be one the catalogues define, or the screen
+    /// renders an id. And the peoples have to be in the right provinces: a census that is
+    /// right nationally and smeared evenly over the country puts Tibetans in Shanghai and
+    /// Chechens in Kaliningrad, which is worse than no census at all, and it is the failure
+    /// that no total will ever catch.
+    /// </summary>
+    private static string EveryRegionKnowsWhoLivesInIt(Campaign campaign)
+    {
+        if (DemographyCatalog.Cultures.Count == 0) return "no peoples are defined at all";
+        if (DemographyCatalog.Professions.Count == 0) return "no trades are defined at all";
+
+        var faults = new List<string>();
+        var unknown = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var empty = 0;
+        long counted = 0;
+        long stated = 0;
+        foreach (var state in campaign.States)
+        {
+            if (LakeRegions.IsWaterState(state)) continue;
+            var total = state.PopulationGroups.Sum(group => group.Size);
+            stated += state.Population;
+            counted += total;
+            if (state.Population > 0 && total == 0) empty++;
+            else if (state.Population > 0 && Math.Abs(total - state.Population) > Math.Max(4, state.Population / 1000))
+                faults.Add($"{state.Name} holds {total:N0} people and says it holds {state.Population:N0}");
+            foreach (var group in state.PopulationGroups)
+            {
+                if (group.Size <= 0) continue;
+                if (DemographyCatalog.Culture(group.Culture) is null) unknown.Add($"culture {group.Culture}");
+                if (DemographyCatalog.Religion(group.Religion) is null) unknown.Add($"faith {group.Religion}");
+                if (DemographyCatalog.Profession(group.Profession) is null) unknown.Add($"trade {group.Profession}");
+            }
+            if (faults.Count > 4) break;
+        }
+        if (empty > 0) faults.Add($"{empty:N0} inhabited region(s) have nobody in them");
+        if (unknown.Count > 0) faults.Add("undefined: " + string.Join(", ", unknown.Take(4)));
+        if (faults.Count > 0) return string.Join("; ", faults.Take(5));
+
+        // The peoples who named the regions they live in are actually in them. Each of these
+        // is a place where a national average is a lie, and the whole point of the "where"
+        // line is that the map shows it.
+        var expected = new (string Region, string Culture, float AtLeast)[]
+        {
+            ("Tatarstan", "tatar", 0.40f),
+            ("Chechen", "chechen", 0.70f),
+            ("Xinjiang", "uyghur", 0.30f),
+            ("Tibet", "tibetan", 0.60f),
+            ("Quebec", "quebecois", 0.55f),
+            ("Kurdistan", "kurdish", 0.60f)
+        };
+        var reported = new List<string>();
+        foreach (var (name, culture, atLeast) in expected)
+        {
+            var state = campaign.States.FirstOrDefault(candidate =>
+                candidate.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+            if (state is null) continue;
+            var here = EconomySystem.Cultures(state);
+            var share = here.Where(entry => string.Equals(entry.Culture, culture, StringComparison.OrdinalIgnoreCase))
+                .Sum(entry => entry.Size) / (double)Math.Max(1, state.Population);
+            if (share < atLeast)
+                faults.Add($"{state.Name} is {share:P0} {culture} and should be at least {atLeast:P0}");
+            reported.Add($"{state.Name} {share:P0} {culture}");
+        }
+        if (faults.Count > 0) return string.Join("; ", faults.Take(4));
+
+        var sample = campaign.States.FirstOrDefault(state => state.Name.Contains("Bavaria", StringComparison.OrdinalIgnoreCase))
+                     ?? campaign.States.OrderByDescending(state => state.Population).First();
+        var trades = EconomySystem.Professions(sample).Take(3)
+            .Select(entry => $"{DemographyCatalog.ProfessionName(entry.Profession)} {entry.Size / (double)Math.Max(1, sample.Population):P0}");
+        Console.WriteLine($"  people: {DemographyCatalog.Cultures.Count:N0} peoples, {DemographyCatalog.Religions.Count} faiths, " +
+                          $"{DemographyCatalog.Professions.Count} trades over {DemographyCatalog.CountryCount} countries and " +
+                          $"{DemographyCatalog.RegionOverrideCount} region correction(s); {counted:N0} of {stated:N0} placed.");
+        Console.WriteLine($"    minorities where they live: {string.Join(", ", reported)}.");
+        Console.WriteLine($"    {sample.Name} works as: {string.Join(", ", trades)}.");
+        return "";
+    }
+
+    /// <summary>
+    /// A content pack is locked until it is owned, and works the moment it is.
+    ///
+    /// Both halves matter and each fails silently on its own. A pack whose content leaks
+    /// into an unentitled game has no gate; a pack that is gated but broken sells somebody
+    /// a folder of JSON that does nothing. So: the shipped game must not contain the pack's
+    /// decisions, and loading the pack's own files by hand must produce them.
+    ///
+    /// This checks the data rather than the loader, because the loader needs the engine and
+    /// this bench deliberately does not. What it proves is the part that can actually rot -
+    /// a pack file with a typo in it, or a decision id that quietly collided with the base
+    /// game and was there all along.
+    /// </summary>
+    private static string ContentPacksAreLockedUntilOwned()
+    {
+        var root = Path.Combine(Directory.GetCurrentDirectory(), "dlc");
+        if (!Directory.Exists(root)) return "there is no dlc/ folder; the content pack framework is gone";
+
+        var packs = Directory.GetDirectories(root)
+            .Where(directory => File.Exists(Path.Combine(directory, "dlc.json")))
+            .OrderBy(directory => directory, StringComparer.Ordinal)
+            .ToList();
+        if (packs.Count == 0) return "dlc/ holds no content pack, so nothing proves the pipeline works";
+
+        var reported = new List<string>();
+        foreach (var pack in packs)
+        {
+            using var descriptor = JsonDocument.Parse(File.ReadAllText(Path.Combine(pack, "dlc.json")),
+                GameDataLoader.ForgivingJson);
+            var root_ = descriptor.RootElement;
+            if (!root_.TryGetProperty("id", out var id) || string.IsNullOrWhiteSpace(id.GetString()))
+                return $"{Path.GetFileName(pack)} has no id";
+            var entitlement = root_.TryGetProperty("entitlement", out var owned) ? owned.GetString() ?? "" : "";
+
+            var files = Directory.Exists(Path.Combine(pack, "common"))
+                ? Directory.GetFiles(Path.Combine(pack, "common"), "*.json", SearchOption.AllDirectories)
+                : Array.Empty<string>();
+            if (files.Length == 0) return $"{id.GetString()} ships no content at all";
+
+            var decisions = files.Where(file => file.Contains(Path.Combine("common", "decisions"))).ToArray();
+            var added = new List<string>();
+            foreach (var file in decisions)
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                foreach (var entry in document.RootElement.EnumerateObject())
+                {
+                    if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+                    added.Add(entry.Name);
+                    // Locked, and therefore absent from the game the player is running.
+                    if (!string.IsNullOrWhiteSpace(entitlement) && DecisionCatalog.Find(entry.Name) is not null)
+                        return $"'{entry.Name}' is in the base game although {id.GetString()} is not owned";
+                }
+            }
+            if (added.Count == 0) continue;
+
+            // Unlocked: the same files have to actually load and produce those decisions.
+            var errors = new List<string>();
+            ScriptLibrary.LoadDirectories(pack, errors);
+            var before = DecisionCatalog.All.Count;
+            foreach (var file in decisions)
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                foreach (var entry in document.RootElement.EnumerateObject())
+                    if (!entry.Name.StartsWith("//", StringComparison.Ordinal))
+                        DecisionCatalog.Apply(entry.Name, entry.Value, errors);
+            }
+            var missing = added.Where(name => DecisionCatalog.Find(name) is null).ToArray();
+            if (missing.Length > 0)
+                return $"{id.GetString()} was unlocked and still did not deliver: {string.Join(", ", missing)}";
+            if (errors.Count > 0)
+                return $"{id.GetString()} loaded with complaints: {errors[0]}";
+            reported.Add($"{id.GetString()} ({(string.IsNullOrWhiteSpace(entitlement) ? "free" : "gated")}, " +
+                         $"{DecisionCatalog.All.Count - before} decision(s))");
+        }
+
+        // Put the game back: the pack was loaded to prove it works, not to play with it.
+        DecisionCatalog.ResetCatalog();
+        ScriptLibrary.ResetCatalog();
+        Console.WriteLine($"  content packs: {string.Join(", ", reported)} - absent while locked, complete once owned.");
         return "";
     }
 

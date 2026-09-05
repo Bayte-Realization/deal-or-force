@@ -1,0 +1,8 @@
+{
+  "//": "What the player owns. A store writes this; until there is one, this file is it.",
+  "//owned": "Entitlement names, matching the \"entitlement\" field of a pack's dlc.json. A pack that names no entitlement is free and does not need listing here.",
+  "//unlock_everything": "Development switch. True treats every pack found on disk as owned - useful for testing a pack before there is anything to buy it with, and wrong in a shipped build.",
+
+  "owned": [],
+  "unlock_everything": false
+}

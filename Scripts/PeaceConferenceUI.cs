@@ -31,6 +31,16 @@ public partial class DealOrForceGame
     private PeaceLedger _peaceLedgerModel;
     private StrategicWar _peaceWar;
 
+    /// <summary>
+    /// The war whose page the player left to come here, so the Leave button puts them back.
+    ///
+    /// The conference is drawn on the map: you claim ground by dragging across provinces.
+    /// The war ledger is a full-screen page, so opening the table from it left the table
+    /// asking for a stroke the player physically could not make. Whatever screen sent the
+    /// player here stands aside while they negotiate, and is put back exactly as it was.
+    /// </summary>
+    private int _peaceReturnsToWar = -1;
+
     private void BuildPeaceConference()
     {
         _peaceLayer = FullLayer("PeaceConference");
@@ -123,6 +133,9 @@ public partial class DealOrForceGame
         _peaceLayer.Visible = true;
         _sidePanel.Visible = false;
         SetArmyPanelVisible(false);
+        _peaceReturnsToWar = _warLedgerLayer is { Visible: true } ? war.Id : -1;
+        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
+        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _globe.PaintMode = true;
         _globe.ProvincePainted -= OnProvincePainted;
         _globe.ProvincePainted += OnProvincePainted;
@@ -141,6 +154,15 @@ public partial class DealOrForceGame
         _peaceDemand = null;
         _peaceLedgerModel = null;
         _peaceWar = null;
+
+        // Back to the war we were reading about. A war that ended while we were at the
+        // table has no page any more, so that lands on the list instead.
+        var resume = _peaceReturnsToWar;
+        _peaceReturnsToWar = -1;
+        if (resume < 0) return;
+        OpenWarLedger();
+        var war = _campaign?.Wars.FirstOrDefault(candidate => candidate.Id == resume);
+        if (war is { Ended: false }) ShowWarLedgerDetail(resume);
     }
 
     /// <summary>One brush stroke: claim the province, or hand it back.</summary>

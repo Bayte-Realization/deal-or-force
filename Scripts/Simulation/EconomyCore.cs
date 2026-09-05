@@ -20,10 +20,28 @@ public enum BuildingKind
     ArmsIndustry
 }
 
+/// <summary>
+/// A people, a faith, a trade, and how many of them there are in one region.
+///
+/// The four social classes the market prices are still here as `Class`; what is new is
+/// that a group also knows who it is. A region is no longer four numbers but a table of
+/// them, and the two things anyone actually wants to know about a place - who lives there
+/// and what they do for a living - are facts about the simulation rather than captions on
+/// a screen.
+/// </summary>
 public sealed class PopulationGroup
 {
     public SocialClass Class;
-    public string Nationality = "";
+
+    /// <summary>The people, by the id in common/cultures.</summary>
+    public string Culture = "";
+
+    /// <summary>What they believe, by the id in common/religions.</summary>
+    public string Religion = "";
+
+    /// <summary>What they do, by the id in common/professions.</summary>
+    public string Profession = "";
+
     public long Size;
     public float Employment = 0.9f;
     public float Wealth = 0.5f;
@@ -230,21 +248,27 @@ public static class EconomySystem
                 free = Enumerable.Range(0, states.Length).Where(index => authored[index] == 0).ToArray();
             var weights = free.Select(index => 0.75 + StableFraction(states[index].MapIndex) * 0.50).ToArray();
             var totalWeight = weights.Sum();
+
+            // Every region's head-count first, and only then who those people are. It cannot
+            // be done a region at a time: a people who named the regions they live in have a
+            // national number to place, and placing it means knowing how big those regions
+            // are relative to one another.
+            var counts = new long[states.Length];
             long assigned = 0;
             for (var slot = 0; slot < free.Length; slot++)
             {
                 var index = free[slot];
-                var population = slot == free.Length - 1
+                counts[index] = Math.Max(0, slot == free.Length - 1
                     ? remaining - assigned
-                    : (long)(remaining * weights[slot] / totalWeight);
-                assigned += population;
-                SeedState(states[index], nation, Math.Max(0, population));
+                    : (long)(remaining * weights[slot] / totalWeight));
+                assigned += counts[index];
             }
             for (var index = 0; index < states.Length; index++)
-                if (authored[index] > 0)
-                    SeedState(states[index], nation, Math.Max(0, (long)(authored[index] * scale)));
+                if (authored[index] > 0) counts[index] = Math.Max(0, (long)(authored[index] * scale));
+
+            var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts);
             for (var index = 0; index < states.Length; index++)
-                if (authored[index] == 0 && !free.Contains(index)) SeedState(states[index], nation, 0);
+                SeedState(states[index], nation, counts[index], composition[index]);
         }
     }
 
@@ -464,24 +488,43 @@ public static class EconomySystem
         {
             if (group.Size <= 0) continue;
             total += group.Size;
-            if (!string.Equals(group.Nationality, ownerTag, StringComparison.OrdinalIgnoreCase))
-                foreign += group.Size;
+            // A minority is a people the state is not for. Which peoples those are is data:
+            // Belgium has two of its own and Switzerland four, and a rule that assumed one
+            // would make foreigners of half of both.
+            if (!DemographyCatalog.IsPrimary(ownerTag, group.Culture)) foreign += group.Size;
         }
         return total <= 0 ? 0f : foreign / (float)total;
     }
 
-    /// <summary>Every nationality living in a region, largest first.</summary>
-    public static IReadOnlyList<(string Nationality, long Size)> Nationalities(ScenarioState state)
+    /// <summary>Every people living in a region, largest first.</summary>
+    public static IReadOnlyList<(string Culture, long Size)> Cultures(ScenarioState state) =>
+        Tally(state, group => group.Culture);
+
+    /// <summary>Every faith held in a region, largest first.</summary>
+    public static IReadOnlyList<(string Religion, long Size)> Religions(ScenarioState state) =>
+        Tally(state, group => group.Religion);
+
+    /// <summary>Every trade worked in a region, largest first.</summary>
+    public static IReadOnlyList<(string Profession, long Size)> Professions(ScenarioState state) =>
+        Tally(state, group => group.Profession);
+
+    /// <summary>Every social class in a region, largest first.</summary>
+    public static IReadOnlyList<(string Class, long Size)> Classes(ScenarioState state) =>
+        Tally(state, group => group.Class.ToString());
+
+    private static IReadOnlyList<(string Key, long Size)> Tally(ScenarioState state, Func<PopulationGroup, string> of)
     {
         if (state is null) return Array.Empty<(string, long)>();
         var totals = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in state.PopulationGroups)
         {
             if (group.Size <= 0) continue;
-            var key = string.IsNullOrEmpty(group.Nationality) ? "?" : group.Nationality;
+            var key = of(group);
+            if (string.IsNullOrEmpty(key)) key = "?";
             totals[key] = totals.GetValueOrDefault(key) + group.Size;
         }
         return totals.OrderByDescending(entry => entry.Value)
+            .ThenBy(entry => entry.Key, StringComparer.Ordinal)
             .Select(entry => (entry.Key, entry.Value))
             .ToList();
     }
@@ -512,7 +555,7 @@ public static class EconomySystem
         foreach (var group in state.PopulationGroups)
         {
             if (group.Size <= 0) continue;
-            if (string.Equals(group.Nationality, nation.Tag, StringComparison.OrdinalIgnoreCase)) continue;
+            if (DemographyCatalog.IsPrimary(nation.Tag, group.Culture)) continue;
             var share = (long)MathF.Round(group.Size * rate);
             if (share <= 0) continue;
             group.Size -= share;
@@ -520,14 +563,20 @@ public static class EconomySystem
         }
         if (moved <= 0) return;
 
+        // They become the first of the peoples the state is for. Which one that is comes
+        // from the data, so assimilating into Switzerland does not turn everybody German.
+        var into = DemographyCatalog.PrimaryCultures(nation.Tag).FirstOrDefault()
+                   ?? nation.Tag.ToLowerInvariant();
         var host = state.PopulationGroups.Find(group =>
-            string.Equals(group.Nationality, nation.Tag, StringComparison.OrdinalIgnoreCase));
+            string.Equals(group.Culture, into, StringComparison.OrdinalIgnoreCase));
         if (host is null)
         {
             host = new PopulationGroup
             {
                 Class = SocialClass.Workers,
-                Nationality = nation.Tag,
+                Culture = into,
+                Religion = DemographyCatalog.FaithOf(into)[0].Religion,
+                Profession = "labourers",
                 Size = 0,
                 Employment = 0.90f,
                 Wealth = 0.38f,
@@ -540,22 +589,43 @@ public static class EconomySystem
         state.PopulationGroups.RemoveAll(group => group.Size <= 0 && group != host);
     }
 
-    internal static void SeedState(ScenarioState state, Nation nation, long population)
+    internal static void SeedState(ScenarioState state, Nation nation, long population) =>
+        SeedState(state, nation, population, null);
+
+    /// <summary>
+    /// Fill one region with the people who live in it.
+    ///
+    /// Every people is crossed with every trade, so a region is a table rather than a total:
+    /// Tatar peasants and Russian machinists are separate rows, they answer to the same
+    /// market as before through the social class each trade belongs to, and the population
+    /// screen has something true to draw. The trades are weighted by how urban the region
+    /// is, which is why Bangladesh and Belgium come out differently without either being
+    /// written down anywhere.
+    ///
+    /// Groups below a thousandth of the region are folded away. They are noise on any chart
+    /// and they are a tenth of the simulation's population objects.
+    /// </summary>
+    internal static void SeedState(ScenarioState state, Nation nation, long population,
+        IReadOnlyList<(string Culture, float Share)> composition)
     {
         state.Population = population;
         state.Literacy = M.Clamp01(nation.Literacy + (StableFraction(state.MapIndex + 17) - 0.5f) * 0.12f);
         state.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + (StableFraction(state.MapIndex + 31) - 0.5f) * 0.10f);
         state.Radicalism = M.Clamp01((0.52f - state.StandardOfLiving) * 0.40f);
-        state.Urbanization = M.Clamp(0.18f + nation.Gdp / Math.Max(1f, nation.Population / 1_000_000f) * 0.002f, 0.08f, 0.88f);
-        AddGroup(state, nation.Tag, SocialClass.Farmers, 0.34f);
-        AddGroup(state, nation.Tag, SocialClass.Workers, 0.38f);
-        AddGroup(state, nation.Tag, SocialClass.MiddleClass, 0.22f);
-        var used = state.PopulationGroups.Sum(group => group.Size);
-        state.PopulationGroups.Add(new PopulationGroup
-        {
-            Class = SocialClass.Owners, Nationality = nation.Tag, Size = Math.Max(0, population - used),
-            Employment = 0.96f, Wealth = 0.86f, StandardOfLiving = M.Clamp01(state.StandardOfLiving + 0.24f)
-        });
+        // How urban a place is, from what it earns per head.
+        //
+        // The old line divided a national GDP in billions by a population in millions and
+        // scaled the result, which made Germany twenty-seven per cent urban and therefore
+        // half of Bavaria peasants. Urbanisation tracks income per head and it tracks it
+        // logarithmically - the step from four hundred dollars a year to four thousand
+        // empties far more villages than the step from forty thousand to eighty.
+        var perHead = nation.Gdp * 1_000_000_000f / Math.Max(1f, nation.Population);
+        var national = M.Clamp(0.12f + 0.27f * MathF.Log10(Math.Max(300f, perHead) / 300f), 0.10f, 0.90f);
+        // And a country is not one place: some of its regions are the city and some are the
+        // land behind it, which is the whole reason the trades differ from region to region.
+        state.Urbanization = M.Clamp(national + (StableFraction(state.MapIndex + 53) - 0.5f) * 0.26f, 0.06f, 0.95f);
+        state.PopulationGroups.Clear();
+        BuildGroups(state, nation, population, composition);
         state.Buildings[BuildingKind.Agriculture] = Math.Max(1, (int)(population / 4_000_000));
         state.Buildings[BuildingKind.CivilianIndustry] = Math.Max(0, (int)(population * state.Urbanization / 5_000_000));
         state.Buildings[BuildingKind.Infrastructure] = Math.Max(1, (int)(state.Urbanization * 4));
@@ -594,15 +664,91 @@ public static class EconomySystem
         GrowGroups(state, bounded);
     }
 
-    private static void AddGroup(ScenarioState state, string nationality, SocialClass socialClass, float share)
+    private static void BuildGroups(ScenarioState state, Nation nation, long population,
+        IReadOnlyList<(string Culture, float Share)> composition)
     {
-        state.PopulationGroups.Add(new PopulationGroup
+        if (population <= 0) return;
+
+        // No data for this country at all: it is one people, named after itself. Wrong in
+        // detail, right in shape, and the population screen says so rather than inventing
+        // a breakdown nobody wrote.
+        if (composition is null || composition.Count == 0)
+            composition = new[] { (nation.Tag.ToLowerInvariant(), 1f) };
+
+        var trades = DemographyCatalog.Professions;
+        if (trades.Count == 0)
         {
-            Class = socialClass, Nationality = nationality, Size = (long)(state.Population * share),
-            Employment = socialClass == SocialClass.Farmers ? 0.82f : 0.90f,
-            Wealth = socialClass == SocialClass.MiddleClass ? 0.62f : 0.38f,
-            StandardOfLiving = state.StandardOfLiving, Radicalism = state.Radicalism
-        });
+            // Without a trade catalogue there is still a population; it simply has no
+            // occupations. The economy only needs the classes, so seed those directly.
+            foreach (var (culture, share) in composition)
+                foreach (var socialClass in Enum.GetValues<SocialClass>())
+                    Add(state, culture, "", socialClass.ToString(), socialClass,
+                        (long)(population * share * (socialClass == SocialClass.Owners ? 0.06f :
+                            socialClass == SocialClass.MiddleClass ? 0.22f :
+                            socialClass == SocialClass.Workers ? 0.38f : 0.34f)),
+                        socialClass == SocialClass.Farmers ? 0.82f : 0.90f,
+                        socialClass == SocialClass.Owners ? 0.86f : socialClass == SocialClass.MiddleClass ? 0.62f : 0.38f);
+            return;
+        }
+
+        var weights = trades.Select(trade => Math.Max(0f, trade.ShareAt(state.Urbanization))).ToArray();
+        var weightTotal = weights.Sum();
+        if (weightTotal <= 0f) return;
+
+        var floor = Math.Max(1L, population / 1000);
+        long placed = 0;
+        PopulationGroup largest = null;
+        foreach (var (culture, share) in composition)
+        {
+            var faith = DemographyCatalog.FaithOf(culture);
+            var people = (long)(population * share);
+            if (people <= 0) continue;
+            for (var index = 0; index < trades.Count; index++)
+            {
+                var trade = trades[index];
+                var ofTrade = (long)(people * (weights[index] / weightTotal));
+                if (ofTrade < floor) continue;
+                foreach (var (religion, faithShare) in faith)
+                {
+                    var size = (long)(ofTrade * faithShare);
+                    if (size < floor) continue;
+                    var group = Add(state, culture, religion, trade.Id, trade.Class, size,
+                        trade.Employment, trade.Wealth);
+                    placed += size;
+                    if (largest is null || group.Size > largest.Size) largest = group;
+                }
+            }
+        }
+
+        // Whatever the rounding and the floor left over goes to the largest group, so the
+        // region's people add up to the region's population exactly.
+        if (largest is null)
+        {
+            var (culture, _) = composition[0];
+            largest = Add(state, culture, DemographyCatalog.FaithOf(culture)[0].Religion,
+                trades[0].Id, trades[0].Class, 0, trades[0].Employment, trades[0].Wealth);
+        }
+        largest.Size += population - placed;
+        if (largest.Size < 0) largest.Size = 0;
+    }
+
+    private static PopulationGroup Add(ScenarioState state, string culture, string religion,
+        string profession, SocialClass socialClass, long size, float employment, float wealth)
+    {
+        var group = new PopulationGroup
+        {
+            Class = socialClass,
+            Culture = culture,
+            Religion = religion,
+            Profession = profession,
+            Size = size,
+            Employment = employment,
+            Wealth = wealth,
+            StandardOfLiving = M.Clamp01(state.StandardOfLiving + (wealth - 0.4f) * 0.5f),
+            Radicalism = state.Radicalism
+        };
+        state.PopulationGroups.Add(group);
+        return group;
     }
 
     private static void GrowGroups(ScenarioState state, long delta)

@@ -24,6 +24,9 @@ category, and never the executable.
         ai_strategy/     how the AI weighs war, courtship and its budget
         buildings/       what can be built, what it costs, what it gives
         countries/       what a country IS: name, map colour, capital
+        cultures/        the peoples of the world, and what each of them believes
+        professions/     what people do for a living, and which class each trade belongs to
+        religions/       the faiths
         decisions/       the buttons a government may press
         defines/         every tuning number in the simulation
         goods/           the commodities the market trades
@@ -35,6 +38,7 @@ category, and never the executable.
         units/           division templates: attack, armour, width, supply use
       events/            scripted events and their outcomes
       gfx/               the game's pictures, and what each one is called
+        flags/           one flag per country: flag_fra.svg IS the flag of France
         interface/icons/ the icons on buttons
         interface/panels/ the frames panels are drawn on
         globe/           what is drawn on the globe itself
@@ -42,6 +46,7 @@ category, and never the executable.
       interface/         what the game is made of - the colour palette and its metrics
       history/           what was true when the bookmark opens
         countries/2024/  money, people, armies, stability, war support
+        pops/            who lived where in 2024, by people and by faith
         provinces/       the political map: one line per province
         states/          regional starting values
         units/2024/      standing army sizes, and the navies of the bookmark
@@ -57,6 +62,8 @@ category, and never the executable.
         lakes/           which water is big enough to be a region nobody can march across
         compiled.json    written by the compiler: which region layer provinces.png was cut from
       documentation/     this file
+
+    dlc/                 content packs that ship with the game - see dlc/README.md
 
 `common/` says what may exist; `history/` says what was true in 2024. A total conversion
 usually wants one without the other, which is why they are apart.
@@ -340,6 +347,70 @@ of the region layer the raster was cut from; if it disagrees with what the runni
 draws, the message says whether to recompile the map or to rebuild the game first. It is
 written by the compiler and is not worth editing - change it and you have only taught the
 check to lie.
+
+**Change who lives somewhere.** Four folders, and they are worth taking together.
+
+`common/religions/` and `common/cultures/` say what peoples and faiths exist. A culture is
+a name, a family, a colour, and what most of it believes:
+
+    "tatar":  { "name": "Tatar",  "group": "turkic",       "colour": "#3f9c6a", "religion": "sunni" },
+    "yoruba": { "name": "Yoruba", "group": "niger_congo",  "colour": "#5f9f5f",
+                "religion": { "other_christian": 0.55, "sunni": 0.44, "animist": 0.01 } }
+
+The faith may be one entry or two. A people genuinely split down the middle is a fact about
+the Yoruba and the Albanians and the Lebanese, and flattening it to a majority throws away
+the most interesting thing about them. Only the two largest are kept: a region that carried
+forty groups instead of a dozen would be one nobody can read and nobody can afford.
+
+`common/professions/` is what people do for a living, and it is the bridge to the economy:
+
+    "peasants": { "name": "Peasants", "class": "Farmers",
+                  "rural_share": 0.860, "urban_share": 0.000, "curve": 0.55,
+                  "wealth": 0.22, "employment": 0.86, "colour": "#7f9c4f" }
+
+Every trade names the social class whose wages and politics it shares, so the market did not
+have to be rewritten to gain a population screen - nine trades map onto the four classes it
+already priced. The two shares are the same trade in two different places: a farming region
+is mostly peasants, a city is mostly wage labour, counters and desks, and every region
+blends the two by how urban it actually is. `curve` says how fast that crossing happens -
+below one it happens early, which is the truth about working the land, because a country
+only has to be a quarter urban before most of it has stopped farming. Shares are weights and
+are normalised, so you may add a tenth trade without rebalancing the other nine.
+
+`history/pops/` is who was actually there in 2024. Two tables:
+
+    "countries": {
+      "CHN": { "primary_cultures": [ "han" ], "cultures": {
+        "han": 0.9150,
+        "uyghur":  { "share": 0.0080, "where": [ "CN-XJ" ] },
+        "tibetan": { "share": 0.0050, "where": [ "CN-XZ", "CN-QH" ] } } }
+    },
+    "regions": {
+      "CN-XJ": { "cultures": { "uyghur": 0.450, "han": 0.420, "kazakh": 0.062, "hui": 0.045 } }
+    }
+
+The `where` line is the one that matters. Without it a minority is spread evenly over the
+whole country, which is how a game ends up with Tibetans in Shanghai and Chechens in
+Kaliningrad. With it, the people's whole national head-count is placed in the regions named,
+in proportion to how big they are, and everyone else fills what is left. It is one line, and
+it is the difference between a map worth looking at and a map that is the same colour
+everywhere. `regions` is the blunter instrument for the places a national average simply
+lies about: a region listed there is taken at its word and takes no further part.
+
+`primary_cultures` says whose state it is; everyone else in it is a minority, which is what
+assimilation works on and what radicalises a region governed by somebody it is not. Belgium
+has two, Switzerland four, and a game that assumed one would make foreigners of half of
+both. Left unsaid, the largest people is taken to be the state's own.
+
+Shares are normalised, so they need not add to exactly one.
+
+**Change a flag.** `gfx/flags/flag_fra.svg` **is** the flag of France - the file is the
+declaration, the same rule as every other picture in the game. Drop your own `flag_fra.svg`
+into your mod's `gfx/flags/` and nothing else has to be written down anywhere; a country the
+base game has never heard of works the same way. They are vector files on purpose: a flag
+stored as a picture turns to porridge the moment it is drawn larger than it was saved, which
+is what happens to the flags in most strategy games. Every one ships at the same height and
+its own width, so a Nepalese pennant and a Swiss square keep their shape.
 
 **Change what countries remember.** An opinion is the sum of named reasons, each with a
 size, a lifetime and whether it fades. `common/opinion_modifiers/50_mine.json`:

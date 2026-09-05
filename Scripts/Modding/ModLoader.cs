@@ -30,6 +30,10 @@ public sealed class ModPackage
     public ModManifest Manifest { get; init; }
     public string PhysicalRoot { get; init; } = "";
     public string VirtualRoot { get; init; } = "";
+
+    /// <summary>Whether this package came from `dlc/` rather than from a mod folder.</summary>
+    public bool IsContentPack { get; init; }
+
     public List<string> Errors { get; } = new();
 }
 
@@ -52,13 +56,32 @@ public sealed class ModLoader
     private readonly List<string> _log = new();
     private ModApi _api;
 
+    /// <summary>
+    /// The content packs that ship with the game.
+    ///
+    /// A DLC is loaded through this same loader rather than beside it, because there is one
+    /// content pipeline in this game and a second one would drift from the first. It goes in
+    /// front of every mod in the order, so a mod can correct a DLC exactly as it can correct
+    /// the base game.
+    /// </summary>
+    public DlcLoader Dlc { get; } = new();
+
     public IReadOnlyList<ModPackage> Packages => _packages;
     public IReadOnlyList<string> Log => _log;
-    public int EnabledCount => _packages.Count;
+    public int EnabledCount => _packages.Count(package => !package.IsContentPack);
+    public int ContentPackCount => _packages.Count(package => package.IsContentPack);
     public int ErrorCount => _packages.Sum(package => package.Errors.Count);
-    public string StatusLine => EnabledCount == 0
-        ? "No external mods loaded · open user://mods or res://Mods"
-        : $"{EnabledCount} mod(s) loaded" + (ErrorCount > 0 ? $" · {ErrorCount} warning(s)" : "");
+    public string StatusLine
+    {
+        get
+        {
+            var packs = Dlc.Packages.Count == 0 ? "" : $"{Dlc.StatusLine} · ";
+            var mods = EnabledCount == 0
+                ? "no external mods · open user://mods or res://Mods"
+                : $"{EnabledCount} mod(s) loaded";
+            return packs + mods + (ErrorCount > 0 ? $" · {ErrorCount} warning(s)" : "");
+        }
+    }
 
     public void Discover()
     {
@@ -82,8 +105,30 @@ public sealed class ModLoader
             enabled.Remove(package);
         }
 
+        // Base game, then content packs, then mods. Later wins, so a mod may overrule a
+        // pack the player has paid for - which is the right way round: they own both.
+        Dlc.Discover();
+        foreach (var pack in Dlc.Active)
+            _packages.Add(new ModPackage
+            {
+                Manifest = new ModManifest
+                {
+                    Id = pack.Manifest.Id,
+                    Name = pack.Manifest.Name,
+                    Version = pack.Manifest.Version
+                },
+                PhysicalRoot = pack.PhysicalRoot,
+                VirtualRoot = pack.VirtualRoot,
+                IsContentPack = true
+            });
+        foreach (var pack in Dlc.Packages)
+            Write(pack.Active
+                ? $"Content pack {pack.Manifest.Name} {pack.Manifest.Version} active."
+                : $"Content pack {pack.Manifest.Name} present but not active" +
+                  (pack.Errors.Count > 0 ? $" ({pack.Errors[0]})" : " (not owned)") + ".");
+
         _packages.AddRange(TopologicalOrder(enabled));
-        Write($"Discovery complete: {_packages.Count} enabled mod(s).");
+        Write($"Discovery complete: {ContentPackCount} content pack(s), {EnabledCount} enabled mod(s).");
     }
 
     public void ApplyCampaignData(Campaign campaign)
@@ -107,8 +152,10 @@ public sealed class ModLoader
         EventCatalog.ResetCatalog();
         ModifierCatalog.ResetCatalog();
         OpinionCatalog.ResetCatalog();
+        DemographyCatalog.ResetCatalog();
         AiStrategyCatalog.ResetCatalog();
         MilitaryBootstrap.ResetPersonnel();
+        var reseed = false;
         foreach (var package in _packages)
         {
             ApplyScriptLibraries(package);
@@ -120,6 +167,7 @@ public sealed class ModLoader
             ApplyEvents(package);
             ApplyModifiers(package);
             ApplyOpinionModifiers(package);
+            reseed |= ApplyDemography(package);
             ApplyAiStrategies(package);
             ApplyMapData(package);
             ApplyLocalization(package);
@@ -128,8 +176,17 @@ public sealed class ModLoader
             ApplyAudio(package);
             ApplyCountries(package, campaign);
             ApplyProvinceOwnership(package);
-            ApplyHistory(package, campaign);
         }
+
+        // A mod that rewrote who lives where has to be believed, and the population was
+        // already dealt out before any mod was read. Seeding again is the only honest
+        // answer; it is skipped entirely when nothing touched the census, which is almost
+        // always, so the cost falls on the mods that asked for it.
+        if (reseed) EconomySystem.Seed(campaign);
+
+        // History last, and after the reseed: `history/states` corrects particular regions,
+        // and a correction applied before the deal is a correction dealt away.
+        foreach (var package in _packages) ApplyHistory(package, campaign);
     }
 
     private void ApplyBuildings(ModPackage package)
@@ -206,6 +263,32 @@ public sealed class ModLoader
             OpinionCatalog.Merge(document.RootElement, package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+    }
+
+    /// <summary>
+    /// A mod's own peoples, faiths, trades and censuses.
+    ///
+    /// Four folders in one pass because they are one subject: adding a people usually means
+    /// putting them somewhere, and a mod that splits a culture in two will want to say which
+    /// regions each half lives in. Each is layered like everything else, so a mod that only
+    /// wants to correct one country's census writes that one country.
+    /// </summary>
+    private bool ApplyDemography(ModPackage package)
+    {
+        var read = false;
+        foreach (var path in JsonFiles(package, "common", "religions"))
+        try { DemographyCatalog.LoadReligions(File.ReadAllText(path), package.Errors); read = true; }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+        foreach (var path in JsonFiles(package, "common", "cultures"))
+        try { DemographyCatalog.LoadCultures(File.ReadAllText(path), package.Errors); read = true; }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+        foreach (var path in JsonFiles(package, "common", "professions"))
+        try { DemographyCatalog.LoadProfessions(File.ReadAllText(path), package.Errors); read = true; }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+        foreach (var path in JsonFiles(package, "history", "pops"))
+        try { DemographyCatalog.LoadPops(File.ReadAllText(path), package.Errors); read = true; }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+        return read;
     }
 
     private void ApplyModifiers(ModPackage package)

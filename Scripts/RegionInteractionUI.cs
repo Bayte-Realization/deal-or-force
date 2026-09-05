@@ -87,19 +87,29 @@ public partial class DealOrForceGame
             _selectedState.Radicalism > 0.45f ? "state.negative" :
             _selectedState.Radicalism > 0.25f ? "state.warning" : "state.positive");
 
+        var cultures = EconomySystem.Cultures(_selectedState);
+        if (cultures.Count > 0)
+            DetailRow("Largest people", DemographyCatalog.CultureName(cultures[0].Culture),
+                $"{Fmt.PeopleExact(cultures[0].Size)} of {Fmt.PeopleExact(_selectedState.Population)}. " +
+                "The whole table is under Population.");
+        var faiths = EconomySystem.Religions(_selectedState);
+        if (faiths.Count > 0)
+            DetailRow("Largest faith", DemographyCatalog.ReligionName(faiths[0].Religion),
+                $"{faiths[0].Size / (double)Math.Max(1, _selectedState.Population):P0} of the region.");
+
         var foreign = EconomySystem.ForeignShare(_selectedState, owner?.Tag ?? "");
         if (foreign > 0.001f)
         {
-            var nationalities = EconomySystem.Nationalities(_selectedState);
-            var largest = nationalities.FirstOrDefault(entry =>
-                !string.Equals(entry.Nationality, owner?.Tag, StringComparison.OrdinalIgnoreCase));
-            DetailRow("Foreign nationals", Fmt.Percent(foreign),
-                "People here who are not of the nation that governs them. They are more restive than " +
+            var largest = cultures.FirstOrDefault(entry =>
+                !DemographyCatalog.IsPrimary(owner?.Tag ?? "", entry.Culture));
+            DetailRow("Minorities", Fmt.Percent(foreign),
+                "People here who are not of a nation this state is for. They are more restive than " +
                 "their neighbours and assimilate only slowly — the standing cost of a border that moved.",
                 foreign > 0.5f ? "state.negative" : "state.warning");
             if (largest.Size > 0)
-                DetailRow("Largest minority", $"{largest.Nationality} {Fmt.People(largest.Size)}",
-                    "The biggest group living under a flag that is not its own.");
+                DetailRow("Largest minority",
+                    $"{DemographyCatalog.CultureName(largest.Culture)} {Fmt.People(largest.Size)}",
+                    "The biggest people living under a flag that is not its own.");
         }
 
         DetailHeading("ECONOMY");
@@ -153,7 +163,14 @@ public partial class DealOrForceGame
         SetRegionalActionsEnabled(owned);
     }
 
-    /// <summary>The demographic register: who lives here, by class and by nation.</summary>
+    /// <summary>
+    /// Who lives here: the peoples, their faiths, their trades and the classes they fall in.
+    ///
+    /// Four compositions rather than four lists of numbers. A region is a thing you are
+    /// supposed to be able to recognise at a glance - one people or five, one faith or a
+    /// fault line through the middle of it, a countryside or a city - and a column of
+    /// percentages does not do that however accurate it is.
+    /// </summary>
     private void ShowRegionPopulation()
     {
         if (_selectedState is null) return;
@@ -165,34 +182,51 @@ public partial class DealOrForceGame
         var total = Math.Max(1L, _selectedState.Population);
         _sideBody.Text = $"{Fmt.People(_selectedState.Population)} people under {owner?.Name ?? "an unknown flag"}";
 
-        DetailHeading("SOCIAL CLASSES");
-        foreach (var socialClass in Enum.GetValues<SocialClass>())
+        DetailHeading("THE REGION");
+        DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
+        DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),
+            "How much of the region can read. Literacy raises productivity and assimilates minorities faster.");
+        DetailRow("Standard of living", Fmt.Percent(_selectedState.StandardOfLiving),
+            "How well people live here. Below the national average it feeds radicalism; above it, calm.");
+        DetailRow("Urbanisation", Fmt.Percent(_selectedState.Urbanization),
+            "Share living in towns — and what decides the trades below: a rural region is mostly " +
+            "peasants, a city is mostly wage labour, counters and desks.");
+        DetailRow("Radicalism", Fmt.Percent(_selectedState.Radicalism),
+            "How angry the region is. Poverty, austerity and foreign rule all raise it.",
+            _selectedState.Radicalism > 0.45f ? "state.negative" :
+            _selectedState.Radicalism > 0.25f ? "state.warning" : "state.positive");
+        var foreign = EconomySystem.ForeignShare(_selectedState, owner?.Tag ?? "");
+        DetailRow("Minorities", Fmt.Percent(foreign),
+            "People of no nation this state is for. A starred people below is one of its own.",
+            foreign > 0.5f ? "state.negative" : foreign > 0.15f ? "state.warning" : "state.positive");
+
+        DetailComposition("PEOPLES", CultureSlices(_selectedState, owner), total);
+        DetailComposition("FAITHS", ReligionSlices(_selectedState), total, 6);
+        DetailComposition("TRADES", ProfessionSlices(_selectedState), total, 9);
+
+        var classes = Enum.GetValues<SocialClass>().Select(socialClass =>
         {
             var groups = _selectedState.PopulationGroups.Where(group => group.Class == socialClass).ToArray();
             var size = groups.Sum(group => group.Size);
-            if (size <= 0) continue;
+            if (size <= 0) return new Slice(ClassName(socialClass), 0, Colors.Transparent, "");
             var employed = groups.Sum(group => group.Size * group.Employment) / size;
             var wealth = groups.Sum(group => group.Size * group.Wealth) / size;
             var living = groups.Sum(group => group.Size * group.StandardOfLiving) / size;
-            DetailRow(ClassName(socialClass), $"{Fmt.People(size)} · {size / (double)total:P0}",
+            return new Slice(ClassName(socialClass), size, Swatch(ClassColour(socialClass)),
                 $"{Fmt.PeopleExact(size)} people\n" +
                 $"Employed {employed:P0} · wealth {wealth:P0} · standard of living {living:P0}");
-        }
-
-        DetailHeading("NATIONALITIES");
-        foreach (var entry in EconomySystem.Nationalities(_selectedState).Take(8))
-        {
-            var nation = _campaign.NationByTag(entry.Nationality);
-            var ruling = string.Equals(entry.Nationality, owner?.Tag, StringComparison.OrdinalIgnoreCase);
-            DetailRow((ruling ? "★ " : "") + (nation?.Name ?? entry.Nationality),
-                $"{Fmt.People(entry.Size)} · {entry.Size / (double)total:P0}",
-                ruling
-                    ? "The nation that governs here. Its people are the calm everything else is measured against."
-                    : "Living under another nation's flag. More restive than their neighbours, and " +
-                      "assimilating slowly — faster where people are schooled and comfortable, slower where they are angry.",
-                ruling ? "text.bright" : "state.warning");
-        }
+        }).ToList();
+        DetailComposition("SOCIAL CLASSES", classes, total, 4);
     }
+
+    /// <summary>The four strata the market prices, in the colours the economy screens use.</summary>
+    private static string ClassColour(SocialClass socialClass) => socialClass switch
+    {
+        SocialClass.Farmers => "#7f9c4f",
+        SocialClass.Workers => "#6f8fa8",
+        SocialClass.MiddleClass => "#bf9f5f",
+        _ => "#c06f5f"
+    };
 
     /// <summary>One tactical province: who owns it, who holds it, and what it is made of.</summary>
     private void ShowProvinceOverview()

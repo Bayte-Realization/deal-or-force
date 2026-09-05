@@ -19,6 +19,7 @@ public partial class DealOrForceGame
     private Label _pickerHeading = null!;
     private Label _pickerSubheading = null!;
     private VBoxContainer _pickerSeats = null!;
+    private Control _pickerFlag = null!;
     private Nation _pickerNation;
     private bool _pickerHotseatMode;
 
@@ -54,8 +55,14 @@ public partial class DealOrForceGame
         _pickerResults.AddThemeConstantOverride("separation", 4);
         rows.AddChild(_pickerResults);
 
+        var nameRow = new HBoxContainer();
+        nameRow.AddThemeConstantOverride("separation", 10);
+        rows.AddChild(nameRow);
+        _pickerFlag = FlagBadge("KOR", 32);
+        nameRow.AddChild(_pickerFlag);
         _pickerName = Title("South Korea", 27, Ui.Colour("text.accent"));
-        rows.AddChild(_pickerName);
+        _pickerName.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        nameRow.AddChild(_pickerName);
         _pickerTier = Title("KOR · major power", 13, Ui.Colour("text.muted"));
         rows.AddChild(_pickerTier);
         _pickerStats = Title("", 15, Ui.Colour("text.bright"));
@@ -122,6 +129,7 @@ public partial class DealOrForceGame
         var armies = _campaign.Armies.Where(army => army.NationId == nation.Id).ToArray();
         var divisions = armies.Sum(army => army.Divisions);
         _pickerName.Text = nation.Name;
+        SetFlag(_pickerFlag, nation.Tag, 32);
         _pickerTier.Text = $"{nation.Tag} · rank #{rank} · {tier}";
         _pickerStats.Text =
             $"Capital  {nation.CapitalName}\n" +

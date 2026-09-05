@@ -209,7 +209,9 @@ public static class StatePartition
             carved.PopulationGroups.Add(new PopulationGroup
             {
                 Class = group.Class,
-                Nationality = group.Nationality,
+                Culture = group.Culture,
+                Religion = group.Religion,
+                Profession = group.Profession,
                 Size = size,
                 Employment = group.Employment,
                 Wealth = group.Wealth,

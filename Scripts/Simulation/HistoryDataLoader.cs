@@ -83,8 +83,10 @@ public static class HistoryDataLoader
                     if (CommodityCatalog.TryParse(resource.Name, out var commodity) && resource.Value.TryGetSingle(out var potential))
                         state.ResourceDeposits[commodity] = Math.Max(0f, potential);
                     else errors?.Add($"Invalid resource '{resource.Name}' in state '{entry.Name}'.");
-            if (value.TryGetProperty("nationalities", out var nationalities) && nationalities.ValueKind == JsonValueKind.Object)
-                ApplyNationalities(state, nationalities, errors);
+            if (value.TryGetProperty("cultures", out var cultures) && cultures.ValueKind == JsonValueKind.Object)
+                ApplyCultureMix(state, cultures, errors);
+            else if (value.TryGetProperty("nationalities", out var nationalities) && nationalities.ValueKind == JsonValueKind.Object)
+                ApplyCultureMix(state, nationalities, errors);
         }
 
         foreach (var mapIndex in populationChanged)
@@ -95,34 +97,73 @@ public static class HistoryDataLoader
         }
     }
 
-    private static void ApplyNationalities(ScenarioState state, JsonElement nationalities, List<string> errors)
+    /// <summary>
+    /// Replace who lives in one region, keeping what they do for a living.
+    ///
+    /// A scenario that says Kirkuk is half Kurdish is making a claim about peoples, not
+    /// about trades: the fields and the workshops are where they were, and the same share
+    /// of the region still works them. So the trades are measured before the swap and the
+    /// new peoples are spread across exactly the same ones - which also means a region
+    /// rewritten by history still draws a sensible population screen.
+    ///
+    /// Keys are culture ids. A nation tag is accepted too and resolves to that country's
+    /// own people, because scenarios written before there were cultures said "IND".
+    /// </summary>
+    private static void ApplyCultureMix(ScenarioState state, JsonElement cultures, List<string> errors)
     {
-        var shares = new List<(string Tag, float Share)>();
-        foreach (var entry in nationalities.EnumerateObject())
-            if (entry.Value.TryGetSingle(out var share) && share > 0f) shares.Add((entry.Name, share));
-            else errors?.Add($"Invalid nationality share '{entry.Name}' in state '{state.Id}'.");
+        var shares = new List<(string Culture, float Share)>();
+        foreach (var entry in cultures.EnumerateObject())
+        {
+            if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            if (!entry.Value.TryGetSingle(out var share) || share <= 0f)
+            {
+                errors?.Add($"Invalid culture share '{entry.Name}' in state '{state.Id}'.");
+                continue;
+            }
+            var id = DemographyCatalog.Culture(entry.Name) is not null
+                ? entry.Name
+                : DemographyCatalog.PrimaryCultures(entry.Name).FirstOrDefault() ?? entry.Name.ToLowerInvariant();
+            shares.Add((id, share));
+        }
         var total = shares.Sum(item => item.Share);
         if (total <= 0f) return;
-        var classShares = Enum.GetValues<SocialClass>().ToDictionary(kind => kind, kind =>
-            state.PopulationGroups.Where(group => group.Class == kind).Sum(group => group.Size) /
-            (double)Math.Max(1, state.Population));
+
+        // The trades as they stand, so the swap changes who works rather than what work exists.
+        var trades = state.PopulationGroups
+            .Where(group => group.Size > 0)
+            .GroupBy(group => (group.Profession, group.Class))
+            .Select(group => (group.Key.Profession, group.Key.Class,
+                Weight: group.Sum(entry => entry.Size) / (double)Math.Max(1, state.Population),
+                Employment: group.Sum(entry => entry.Size * entry.Employment) / group.Sum(entry => entry.Size),
+                Wealth: group.Sum(entry => entry.Size * entry.Wealth) / group.Sum(entry => entry.Size)))
+            .ToList();
+        if (trades.Count == 0)
+            trades.Add(("labourers", SocialClass.Workers, 1.0, 0.9f, 0.38f));
+
         state.PopulationGroups.Clear();
         long assigned = 0;
-        foreach (var nationality in shares)
-        foreach (var socialClass in Enum.GetValues<SocialClass>())
+        foreach (var (culture, share) in shares)
         {
-            var size = (long)Math.Round(state.Population * nationality.Share / total * classShares[socialClass]);
-            assigned += size;
-            state.PopulationGroups.Add(new PopulationGroup
+            var faith = DemographyCatalog.FaithOf(culture);
+            foreach (var trade in trades)
+            foreach (var (religion, faithShare) in faith)
             {
-                Nationality = nationality.Tag,
-                Class = socialClass,
-                Size = size,
-                Employment = socialClass == SocialClass.Farmers ? 0.82f : 0.90f,
-                Wealth = socialClass == SocialClass.Owners ? 0.86f : socialClass == SocialClass.MiddleClass ? 0.62f : 0.38f,
-                StandardOfLiving = state.StandardOfLiving,
-                Radicalism = state.Radicalism
-            });
+                var size = (long)Math.Round(state.Population * (share / total) * trade.Weight * faithShare);
+                if (size <= 0) continue;
+                assigned += size;
+                state.PopulationGroups.Add(new PopulationGroup
+                {
+                    Culture = culture,
+                    Religion = religion,
+                    Profession = trade.Profession,
+                    Class = trade.Class,
+                    Size = size,
+                    Employment = trade.Employment,
+                    Wealth = trade.Wealth,
+                    StandardOfLiving = state.StandardOfLiving,
+                    Radicalism = state.Radicalism
+                });
+            }
         }
         if (state.PopulationGroups.Count > 0)
             state.PopulationGroups[^1].Size += state.Population - assigned;

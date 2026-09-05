@@ -1,0 +1,29 @@
+// What people believe.
+//
+// A faith is a name, a family and a colour - nothing more, because nothing more is
+// simulated yet. What it is for is the population screen and the map: religion is one of
+// the two things you look at a region to find out, and a region that cannot say what it
+// believes is a region you cannot govern badly on purpose.
+//
+// Later files win, so a mod that only wants a different colour for Orthodoxy writes one line.
+{
+  "catholic": { "name": "Catholic", "group": "christian", "colour": "#c8a93f" },
+  "orthodox": { "name": "Orthodox", "group": "christian", "colour": "#7f5fb0" },
+  "protestant": { "name": "Protestant", "group": "christian", "colour": "#5f8fc8" },
+  "other_christian": { "name": "Other Christian", "group": "christian", "colour": "#8fa8c0" },
+  "sunni": { "name": "Sunni", "group": "muslim", "colour": "#2f8f5f" },
+  "shia": { "name": "Shia", "group": "muslim", "colour": "#1f6f7f" },
+  "ibadi": { "name": "Ibadi", "group": "muslim", "colour": "#3f9f8f" },
+  "druze": { "name": "Druze", "group": "muslim", "colour": "#6faf9f" },
+  "jewish": { "name": "Jewish", "group": "abrahamic", "colour": "#4f6fc0" },
+  "hindu": { "name": "Hindu", "group": "dharmic", "colour": "#d4762f" },
+  "buddhist": { "name": "Buddhist", "group": "dharmic", "colour": "#d4a02f" },
+  "sikh": { "name": "Sikh", "group": "dharmic", "colour": "#c85f3f" },
+  "jain": { "name": "Jain", "group": "dharmic", "colour": "#b8a04f" },
+  "shinto": { "name": "Shinto", "group": "east_asian", "colour": "#c05f7f" },
+  "folk": { "name": "Folk religion", "group": "east_asian", "colour": "#a05f4f" },
+  "animist": { "name": "Animist", "group": "traditional", "colour": "#6f8f3f" },
+  "bahai": { "name": "Baha'i", "group": "abrahamic", "colour": "#9f7fbf" },
+  "zoroastrian": { "name": "Zoroastrian", "group": "traditional", "colour": "#bf7f3f" },
+  "irreligion": { "name": "Irreligious", "group": "none", "colour": "#7f8790" }
+}
