@@ -105,6 +105,9 @@ public partial class DealOrForceGame : Control
             {
                 _applyingNetworkCommand = false;
                 Rpc(nameof(ClientAdvanceNetworkDay), _campaign.ElapsedDays);
+                // And every so often, what the world actually looks like, so a client that
+                // has quietly drifted finds out within days instead of never.
+                BroadcastNetworkChecksum();
             }
             MaybeAutosave();
             days++;

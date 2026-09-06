@@ -72,6 +72,8 @@ public static class Program
             ContentPacksAreLockedUntilOwned());
         failures += Check("every order a player can give crosses the wire",
             EveryOrderCrossesTheWire());
+        failures += Check("the same seed gives the same world twice",
+            TheSameSeedGivesTheSameWorld(Math.Min(days, 90)));
         failures += Check("a country that states a figure about itself gets that figure",
             TheStatedStatisticsCameTrue(campaign));
 
@@ -2891,6 +2893,47 @@ public static class Program
             return $"a campaign day allocated {perDay:N0} kB, over the {budget / 1024:N0} kB budget - " +
                    "run the bench and read the pass table above: whichever line grew is the one that did it";
         Console.WriteLine($"  garbage: {perDay:N0} kB a day against a {budget / 1024:N0} kB budget.");
+        return "";
+    }
+
+    /// <summary>
+    /// The same seed gives the same world, twice.
+    ///
+    /// This is the foundation multiplayer stands on and the only one worth checking first.
+    /// Peers do not exchange the world; they exchange the orders given to it and each runs
+    /// the same simulation. If two runs of the same seed diverge on their own, they will
+    /// diverge across a network too - and the symptom there is not an error but two players
+    /// slowly coming to disagree about where the front is, which is unfixable after the fact
+    /// and nearly impossible to diagnose from a save.
+    ///
+    /// A divergence here is nearly always one of three things: a dictionary iterated in hash
+    /// order, a clock or an unseeded random read during a tick, or a collection sorted with
+    /// no tie-break. All three are silent, and all three show up as the day this stops
+    /// matching.
+    /// </summary>
+    private static string TheSameSeedGivesTheSameWorld(int days)
+    {
+        var first = Campaign.CreateBootstrap(20260830);
+        if (!AttachMap(first)) return "no province map, so there is nothing to diverge about";
+        var second = Campaign.CreateBootstrap(20260830);
+        if (!AttachMap(second)) return "the second campaign got no province map";
+
+        first.IsPaused = false;
+        second.IsPaused = false;
+        for (var day = 1; day <= days; day++)
+        {
+            first.Tick();
+            second.Tick();
+            var left = CampaignFingerprint.Of(first);
+            var right = CampaignFingerprint.Of(second);
+            if (left == right) continue;
+            return $"two runs of seed 20260830 disagreed on day {day} - " +
+                   "multiplayer cannot be stable while this is true. Look for a dictionary " +
+                   "iterated in hash order, a clock read inside a tick, or a sort with no tie-break";
+        }
+
+        Console.WriteLine($"  determinism: two runs of one seed agreed to the bit for {days} day(s) - " +
+                          $"{first.Armies.Count:N0} formations and {first.Nations.Count:N0} countries.");
         return "";
     }
 

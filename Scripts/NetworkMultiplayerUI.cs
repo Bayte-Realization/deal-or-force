@@ -34,6 +34,25 @@ public partial class DealOrForceGame
 
     private bool IsNetworkClient => _networkConnected && !_networkIsHost;
 
+    /// <summary>
+    /// How far behind the host a client may fall before it stops trying to catch up and
+    /// asks for the world again.
+    ///
+    /// Catching up is normal and cheap - a client that stalls for a second replays the days
+    /// it missed. Catching up forever is not: a client that is simply slower than the host
+    /// falls further behind every day, and every order it receives is then applied to a
+    /// world several days younger than the one the order was given in. That is a silent
+    /// divergence, and it is worse than a pause, so past this many days it takes a
+    /// snapshot instead.
+    /// </summary>
+    private const int NetworkResyncGapDays = 20;
+
+    /// <summary>How often the host says what its world looks like, in days.</summary>
+    private const int NetworkChecksumEveryDays = 10;
+
+    private int _networkResyncRequestedDay = int.MinValue;
+    private int _networkLastChecksumDay;
+
     private void BuildNetworkMultiplayerInterface()
     {
         _networkHud = TexturedPanel(_hudLayer);
@@ -375,6 +394,9 @@ public partial class DealOrForceGame
     private void ClientAdvanceNetworkDay(int hostElapsedDays)
     {
         if (_networkIsHost || _campaign is null || hostElapsedDays <= _campaign.ElapsedDays) return;
+
+        // A day at a time, up to a budget, so a client that is momentarily behind catches
+        // up over the next few messages rather than freezing while it replays a month.
         var ticks = 0;
         _applyingNetworkCommand = true;
         while (_campaign.ElapsedDays < hostElapsedDays && ticks < 8)
@@ -384,8 +406,72 @@ public partial class DealOrForceGame
             ticks++;
         }
         _applyingNetworkCommand = false;
-        if (_campaign.ElapsedDays != hostElapsedDays)
-            _networkHudStatus.Text = $"RESYNC NEEDED · local {_campaign.ElapsedDays:N0} / host {hostElapsedDays:N0}";
+
+        var behind = hostElapsedDays - _campaign.ElapsedDays;
+        if (behind <= 0) return;
+        if (behind < NetworkResyncGapDays)
+        {
+            _networkHudStatus.Text = $"CATCHING UP · {behind:N0} day(s) behind the host";
+            return;
+        }
+        // Too far to replay, and every order arriving now would be applied to the wrong
+        // world. Ask for the world itself instead - and say so, because a player who sees
+        // nothing assumes nothing is wrong.
+        _networkHudStatus.Text = $"RESYNCHRONISING · {behind:N0} day(s) behind";
+        RequestNetworkResync($"{behind:N0} days behind");
+    }
+
+    /// <summary>
+    /// Ask the host for the world again, at most once every few days.
+    ///
+    /// Rate-limited because the trigger conditions repeat: a client that is behind is still
+    /// behind on the next message, and a snapshot of a world this size is not something to
+    /// send several times a second while it arrives.
+    /// </summary>
+    private void RequestNetworkResync(string reason)
+    {
+        if (_networkIsHost || _campaign is null) return;
+        if (_campaign.ElapsedDays - _networkResyncRequestedDay < NetworkChecksumEveryDays) return;
+        _networkResyncRequestedDay = _campaign.ElapsedDays;
+        RpcId(1, nameof(ServerRequestNetworkResync), reason ?? "");
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void ServerRequestNetworkResync(string reason)
+    {
+        if (!_networkIsHost || !_networkGameStarted) return;
+        var peer = Multiplayer.GetRemoteSenderId();
+        if (!_networkPeerNations.ContainsKey(peer)) return;
+        GD.Print($"[net] resynchronising peer {peer}: {reason}");
+        SendNetworkSnapshot(peer);
+    }
+
+    /// <summary>
+    /// What the host's world looks like, said out loud every few days.
+    ///
+    /// Without it a divergence is invisible until somebody notices the front is in two
+    /// different places, by which time neither save can be trusted. With it the client
+    /// finds out within ten days and fixes itself.
+    /// </summary>
+    private void BroadcastNetworkChecksum()
+    {
+        if (!_networkIsHost || !_networkGameStarted || _campaign is null) return;
+        if (_campaign.ElapsedDays - _networkLastChecksumDay < NetworkChecksumEveryDays) return;
+        _networkLastChecksumDay = _campaign.ElapsedDays;
+        Rpc(nameof(ClientCheckNetworkSync), _campaign.ElapsedDays,
+            CampaignFingerprint.Of(_campaign).ToString());
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void ClientCheckNetworkSync(int hostElapsedDays, string hostFingerprint)
+    {
+        if (_networkIsHost || _campaign is null) return;
+        // Only comparable on the same day; a client still catching up is not diverged, and
+        // telling it so would send it a snapshot every ten days for no reason.
+        if (_campaign.ElapsedDays != hostElapsedDays) return;
+        if (CampaignFingerprint.Of(_campaign).ToString() == hostFingerprint) return;
+        _networkHudStatus.Text = $"DESYNCHRONISED on day {hostElapsedDays:N0} · asking the host for the world";
+        RequestNetworkResync($"checksum mismatch on day {hostElapsedDays}");
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
