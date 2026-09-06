@@ -88,6 +88,36 @@
     "decays": false
   },
 
+  "embargoed_us": {
+    "name": "Refuses to trade with us",
+    "opinion": -30,
+    "days": 0,
+    "decays": false
+  },
+
+  "guaranteed_us": {
+    "name": "Has guaranteed our independence",
+    "opinion": 26,
+    "days": 0,
+    "decays": false
+  },
+
+  // What the world thinks of a country that keeps taking things. Scaled by how much it has
+  // taken, held while it is still notorious, and forgotten when it is not.
+  "notoriety": {
+    "name": "Their appetite worries us",
+    "opinion": -34,
+    "days": 0,
+    "decays": false
+  },
+
+  "coalition_partner": {
+    "name": "We are containing the same country",
+    "opinion": 20,
+    "days": 0,
+    "decays": false
+  },
+
   // Scaled by how much bigger the neighbour is - the same fear, felt harder.
   "fear_of_strength": {
     "name": "They are stronger than us",

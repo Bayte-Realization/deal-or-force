@@ -205,40 +205,34 @@ public static class MarketSystem
         foreach (var nation in campaign.Nations)
             CalculateNationalBalance(campaign, nation);
 
+        // Who actually sells to whom. This used to be an anonymous pool: a shortfall was
+        // met by "the world" at a constant rate, so nobody could be cut off and a trade
+        // partner was worth one opinion modifier. Every import and export below is now a
+        // named route to a named country - see TradeNetwork.
+        TradeNetwork.Route(campaign);
+
         foreach (var commodity in CommodityCatalog.All)
         {
-            var market = campaign.Nations.Select(nation => (Nation: nation, Quote: nation.Market[commodity])).ToArray();
-            var totalDemand = MathF.Max(0.01f, market.Sum(item => item.Quote.Demand));
-            var totalProduction = MathF.Max(0.01f, market.Sum(item => item.Quote.Production));
-            var totalExportable = market.Sum(item => MathF.Max(0f, item.Quote.Production - item.Quote.Demand) *
-                                                         TradePolicyRules.ExportAccess(item.Nation.TradePolicy));
-            var totalImportDemand = market.Sum(item => MathF.Max(0f, item.Quote.Demand - item.Quote.Production) *
-                                                           TradePolicyRules.ImportAccess(item.Nation.TradePolicy));
-            var clearing = totalImportDemand <= 0.001f
-                ? 0f
-                : MathF.Min(1f, totalExportable / totalImportDemand);
-            var totalImports = 0f;
-
-            foreach (var item in market)
+            var totalDemand = 0f;
+            var totalProduction = 0f;
+            foreach (var nation in campaign.Nations)
             {
-                item.Quote.Imports = MathF.Max(0f, item.Quote.Demand - item.Quote.Production) *
-                                     campaign.Defines.WorldMarketAccess *
-                                     TradePolicyRules.ImportAccess(item.Nation.TradePolicy) * clearing;
-                totalImports += item.Quote.Imports;
+                if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
+                totalDemand += quote.Demand;
+                totalProduction += quote.Production;
             }
+            totalDemand = MathF.Max(0.01f, totalDemand);
+            totalProduction = MathF.Max(0.01f, totalProduction);
 
-            foreach (var item in market)
+            var definition = CommodityCatalog.Get(commodity);
+            var worldScarcity = M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
+            foreach (var nation in campaign.Nations)
             {
-                var quote = item.Quote;
-                var rawSurplus = MathF.Max(0f, quote.Production - quote.Demand);
-                var exportable = rawSurplus * TradePolicyRules.ExportAccess(item.Nation.TradePolicy);
-                quote.Exports = totalExportable <= 0.001f ? 0f : exportable * totalImports / totalExportable;
+                if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
                 quote.Satisfaction = quote.Demand <= 0.001f
                     ? 1f
                     : M.Clamp((quote.Production + quote.Imports) / quote.Demand, 0f, 1f);
 
-                var definition = CommodityCatalog.Get(commodity);
-                var worldScarcity = M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
                 var localScarcity = 1f + (1f - quote.Satisfaction) * 1.40f;
                 var importMarkup = quote.Imports > 0.001f ? campaign.Defines.ImportMarkup : 1f;
                 var targetPrice = definition.BasePrice * worldScarcity * localScarcity * importMarkup;

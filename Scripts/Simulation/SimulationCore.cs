@@ -107,7 +107,7 @@ public sealed class CampaignCommandQueue
     }
 }
 
-public sealed class Nation
+public sealed partial class Nation
 {
     public int Id;
     public string Tag = "";

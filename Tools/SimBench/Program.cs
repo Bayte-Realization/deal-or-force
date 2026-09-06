@@ -201,6 +201,8 @@ public static class Program
                     OpinionIsRememberedAndForgotten(sandbox));
                 failures += Check("the peace an AI writes hangs together",
                     ThePeaceAnAiWritesHangsTogether(sandbox));
+                failures += Check("trade has names on it, and an embargo has teeth",
+                    TradeHasNamesOnIt(sandbox));
                 failures += Check("the world makes what the world needs",
                     TheWorldMakesWhatItNeeds(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
@@ -1454,6 +1456,74 @@ public static class Program
     ///
     /// This prints the whole balance sheet and holds every good between the two.
     /// </summary>
+    /// <summary>
+    /// Whether trade is between countries rather than with nowhere.
+    ///
+    /// The market was one anonymous pool: a shortfall was met by "the world" at a constant
+    /// rate. Nobody could be cut off, so an embargo was unthinkable, a blockade took money
+    /// instead of goods, and a country could invade its largest customer and lose nothing
+    /// but soldiers. This checks the three things that had to become true: that every import
+    /// has a named seller behind it, that a country knows how much of its economy runs
+    /// through each partner, and that refusing to trade is actually felt.
+    /// </summary>
+    private static string TradeHasNamesOnIt(Campaign campaign)
+    {
+        if (campaign.TradeRoutes.Count == 0)
+            return "not one country sold anything to another; the market is still anonymous";
+
+        // Somebody has to depend on somebody. If no pair of countries carries a meaningful
+        // share of each other's trade, nothing downstream of this can weigh a partner.
+        // The largest trading relationship in the world by value - not by share, or the
+        // answer is always some island whose entire foreign trade is one shipment.
+        Nation buyer = null;
+        Nation seller = null;
+        var largest = 0f;
+        foreach (var nation in campaign.Nations)
+        foreach (var (partnerId, value) in nation.TradePartners)
+        {
+            if (value <= largest) continue;
+            largest = value;
+            buyer = nation;
+            seller = campaign.NationById(partnerId);
+        }
+        if (buyer is null || seller is null)
+            return "no two countries in the world trade with each other at all";
+        var strongest = buyer.TradeDependenceOn(seller.Id);
+        if (strongest < 0.03f)
+            return $"the largest trading relationship in the world is worth only {strongest:P1} of " +
+                   $"{buyer.Tag}'s trade, which is not a relationship anybody would defend";
+
+        // And refusing has to cost something. Cut the strongest pair and see.
+        var before = buyer.ImportValue + buyer.ExportValue;
+        var beforeAccess = buyer.MarketAccess;
+        var relation = CampaignDiplomacy.Get(campaign, buyer.Id, seller.Id);
+        var wasEmbargoed = relation.EmbargoBy(seller.Id);
+        new SetEmbargoCommand { IssuerId = seller.Id, TargetId = buyer.Id, Embargo = true }.Apply(campaign);
+        MarketSystem.Prime(campaign);
+        var after = buyer.ImportValue + buyer.ExportValue;
+        var afterAccess = buyer.MarketAccess;
+
+        new SetEmbargoCommand { IssuerId = seller.Id, TargetId = buyer.Id, Embargo = wasEmbargoed }.Apply(campaign);
+        MarketSystem.Prime(campaign);
+
+        if (campaign.TradeRoutes.Count == 0) return "the market emptied when one embargo was lifted";
+        var stillTrading = 0f;
+        foreach (var route in campaign.TradeRoutes)
+            if (route.BuyerId == buyer.Id && route.SellerId == seller.Id) stillTrading += route.Value;
+        if (stillTrading <= 0.0001f && !wasEmbargoed)
+            return $"{seller.Tag} stopped selling to {buyer.Tag} and never started again";
+
+        if (after >= before)
+            return $"{seller.Tag} refused to trade with {buyer.Tag} and {buyer.Tag}'s trade did not fall " +
+                   $"({before:0.00} before, {after:0.00} after) - an embargo costs nothing";
+
+        Console.WriteLine($"  trade: {campaign.TradeRoutes.Count:N0} route(s) between named countries; " +
+                          $"the tightest pair is {buyer.Tag}, which runs {strongest:P0} of its trade through {seller.Tag}.");
+        Console.WriteLine($"    an embargo by {seller.Tag} cut {buyer.Tag}'s trade from {before:0.0} to {after:0.0} " +
+                          $"and its market access from {beforeAccess:P0} to {afterAccess:P0}.");
+        return "";
+    }
+
     private static string TheWorldMakesWhatItNeeds(Campaign campaign)
     {
         var worst = "";

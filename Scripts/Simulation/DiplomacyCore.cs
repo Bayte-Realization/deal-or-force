@@ -26,6 +26,23 @@ public sealed class DiplomaticRelation
     public bool NonAggressionPact;
 
     /// <summary>
+    /// Whether each side refuses to trade with the other. Directional, because sanctions
+    /// usually are: the country imposing them is rarely the one that needs the goods.
+    ///
+    /// A is always the lower id - see <see cref="CampaignDiplomacy.Get"/> - so these are
+    /// read through <see cref="EmbargoBy"/> rather than by remembering which is which.
+    /// </summary>
+    public bool EmbargoByA;
+    public bool EmbargoByB;
+
+    /// <summary>Whether each side has promised to fight for the other if it is attacked.</summary>
+    public bool GuaranteeByA;
+    public bool GuaranteeByB;
+
+    public bool EmbargoBy(int nationId) => nationId == A ? EmbargoByA : EmbargoByB;
+    public bool GuaranteedBy(int nationId) => nationId == A ? GuaranteeByA : GuaranteeByB;
+
+    /// <summary>
     /// Why this country feels the way it does - see OpinionCore. <see cref="Opinion"/> is
     /// the sum of these, not a number anybody sets directly.
     /// </summary>
@@ -49,6 +66,25 @@ public static class CampaignDiplomacy
         relation = new DiplomaticRelation { A = low, B = high };
         campaign.Relations[key] = relation;
         return relation;
+    }
+
+    /// <summary>
+    /// The relation between two countries, or null if they have never had one.
+    ///
+    /// <see cref="Get"/> creates on demand, which is right for anything that is about to
+    /// write to it and disastrous for anything that only wants to look: the trade pass asks
+    /// about a hundred thousand pairs a week, and creating a relation object for each would
+    /// leave the world holding tens of thousands of empty relationships forever - every one
+    /// of them then settled, weekly, by the opinion pass.
+    /// </summary>
+    public static DiplomaticRelation Peek(Campaign campaign, int a, int b)
+    {
+        if (a == b || a < 0 || b < 0) return null;
+        var low = Math.Min(a, b);
+        var high = Math.Max(a, b);
+        return campaign.Relations.TryGetValue(((long)low << 32) | (uint)high, out var relation)
+            ? relation
+            : null;
     }
 
     public static bool AtWar(Campaign campaign, int a, int b) =>
@@ -217,6 +253,67 @@ public sealed class DenounceCommand : ICampaignCommand
         relation.LastActionDay = campaign.ElapsedDays;
         if (relation.Opinion <= -35f && relation.Stance == DiplomaticStance.Neutral)
             relation.Stance = DiplomaticStance.Rival;
+    }
+}
+
+/// <summary>
+/// Refuse to trade with somebody, or stop refusing.
+///
+/// The first thing between a stiff note and a declaration of war, and until trade became
+/// bilateral there was no way to express it: with one anonymous world market there was
+/// nobody to cut off. Now an embargo removes a real supplier from a real buyer, and since
+/// the world's surplus of any one good is finite - rare earths sit at barely three per cent
+/// above what the world uses - a large exporter refusing to sell is felt within the month.
+///
+/// It costs the country that imposes it too, which is why it is a decision rather than a
+/// free move: the trade it gives up was also its own, and the other side remembers.
+/// </summary>
+public sealed class SetEmbargoCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int TargetId { get; init; }
+    public bool Embargo { get; init; } = true;
+
+    public void Apply(Campaign campaign)
+    {
+        var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
+        if (relation is null) return;
+        var already = relation.EmbargoBy(IssuerId);
+        if (already == Embargo) return;
+        if (IssuerId == relation.A) relation.EmbargoByA = Embargo;
+        else relation.EmbargoByB = Embargo;
+        relation.LastActionDay = campaign.ElapsedDays;
+        if (Embargo) OpinionSystem.Remember(campaign, relation, "embargoed_us");
+        else OpinionSystem.Forget(campaign, relation, "embargoed_us");
+        campaign.MarkStrategicChange();
+    }
+}
+
+/// <summary>
+/// Promise to fight for somebody who has not asked you to be their ally.
+///
+/// A guarantee is the cheap half of an alliance and the useful half of being a great power:
+/// it commits nothing until somebody attacks the country guaranteed, and then it commits
+/// everything. It is what lets a large country make a small one not worth invading without
+/// tying its own foreign policy to it.
+/// </summary>
+public sealed class GuaranteeCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int TargetId { get; init; }
+    public bool Guarantee { get; init; } = true;
+
+    public void Apply(Campaign campaign)
+    {
+        var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
+        if (relation is null || relation.Stance == DiplomaticStance.AtWar) return;
+        if (relation.GuaranteedBy(IssuerId) == Guarantee) return;
+        if (IssuerId == relation.A) relation.GuaranteeByA = Guarantee;
+        else relation.GuaranteeByB = Guarantee;
+        relation.LastActionDay = campaign.ElapsedDays;
+        if (Guarantee) OpinionSystem.Remember(campaign, relation, "guaranteed_us");
+        else OpinionSystem.Forget(campaign, relation, "guaranteed_us");
+        campaign.MarkStrategicChange();
     }
 }
 
