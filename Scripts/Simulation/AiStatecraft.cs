@@ -38,6 +38,19 @@ public static partial class AiStatecraft
     private static readonly Dictionary<int, Nation> NationByMapIndex = new();
     private static int _cacheDay = -1;
 
+    /// <summary>
+    /// Which campaign the caches below describe.
+    ///
+    /// They were stamped with the day alone, which is correct for exactly one world at a
+    /// time. Two are not a hypothetical: a multiplayer client rebuilding itself from a host
+    /// snapshot holds the new campaign and the old one at once, and whichever ticks first
+    /// stamps the day - after which the other reads a table of some other world's armies and
+    /// some other world's map indices, agrees with nobody, and desynchronises without an
+    /// error anywhere. The same is true of every bench check that works on a campaign of its
+    /// own, which is how this was found.
+    /// </summary>
+    private static Campaign _cacheCampaign;
+
     public static void Tick(Campaign campaign)
     {
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
@@ -50,11 +63,13 @@ public static partial class AiStatecraft
         // recomputed for each neighbour of each country every week - which made the AI the
         // most expensive system in the simulation by a factor of three. It changes once a
         // day at most, so it is worked out once a day.
-        if (_cacheDay != campaign.ElapsedDays)
+        if (_cacheDay != campaign.ElapsedDays || !ReferenceEquals(_cacheCampaign, campaign))
         {
             _cacheDay = campaign.ElapsedDays;
+            _cacheCampaign = campaign;
             StrengthCache.Clear();
             NationByMapIndex.Clear();
+            OverseasCache.Clear();
             foreach (var candidate in campaign.Nations)
             {
                 NationByMapIndex[candidate.MapIndex] = candidate;

@@ -119,6 +119,13 @@ public static class TradeNetwork
     private static int _distanceNations;
 
     /// <summary>
+    /// Which campaign the distance table was built for. Two worlds with the same number of
+    /// countries are not the same world, and handing one the other's geography is a silent
+    /// divergence rather than an error.
+    /// </summary>
+    private static Campaign _distanceCampaign;
+
+    /// <summary>
     /// Match the world's shortfalls against the world's surpluses, and write the result
     /// into every country's quotes.
     /// </summary>
@@ -374,8 +381,10 @@ public static class TradeNetwork
     {
         var count = 0;
         foreach (var nation in campaign.Nations) count = Math.Max(count, nation.Id + 1);
-        if (_distance is not null && _distanceNations == count) return;
+        if (_distance is not null && _distanceNations == count &&
+            ReferenceEquals(_distanceCampaign, campaign)) return;
 
+        _distanceCampaign = campaign;
         _distanceNations = count;
         _distance = new float[count * count];
         for (var index = 0; index < _distance.Length; index++) _distance[index] = 12000f;

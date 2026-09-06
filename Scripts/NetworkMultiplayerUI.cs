@@ -53,6 +53,22 @@ public partial class DealOrForceGame
     private int _networkResyncRequestedDay = int.MinValue;
     private int _networkLastChecksumDay;
 
+    /// <summary>
+    /// Orders that arrived before the client had reached the day they were given on.
+    ///
+    /// Peers exchange orders, not state, and each replays the same simulation - which works
+    /// exactly as long as an order is applied on the same day everywhere. A client that has
+    /// fallen a few days behind was applying every order the moment it arrived, to a world
+    /// several days younger than the one the order was given in: the host raises a tax on
+    /// day 400 and the client raises it on day 396, and from then on the two worlds are
+    /// quietly different. Nothing errors. The checksum notices ten days later and asks for
+    /// the world again, which is a repair rather than a fix.
+    ///
+    /// So an order now carries the day it was given, and a client that is behind holds it
+    /// until it gets there.
+    /// </summary>
+    private readonly List<(int Day, DealOrForce.Simulation.ICampaignCommand Command)> _networkDeferred = new();
+
     private void BuildNetworkMultiplayerInterface()
     {
         _networkHud = TexturedPanel(_hudLayer);
@@ -344,7 +360,7 @@ public partial class DealOrForceGame
             {
                 if (!_networkGameStarted || _applyingNetworkCommand) return false;
                 if (NetworkCommandCodec.TryEncode(command, out var type, out var json))
-                    Rpc(nameof(ClientApplyNetworkCommand), type, json);
+                    Rpc(nameof(ClientApplyNetworkCommand), type, json, _campaign.ElapsedDays);
                 return false;
             };
         }
@@ -366,19 +382,67 @@ public partial class DealOrForceGame
         if (!_networkIsHost || !_networkGameStarted ||
             !NetworkCommandCodec.TryDecode(typeName, json, out var command)) return;
         var sender = Multiplayer.GetRemoteSenderId();
-        if (!_networkPeerNations.TryGetValue(sender, out var nationId) || command.IssuerId != nationId) return;
+        if (!_networkPeerNations.TryGetValue(sender, out var nationId) || command.IssuerId != nationId)
+        {
+            // Somebody sent an order for a country they do not play. It is refused, and the
+            // refusal is said out loud: a client whose order vanished used to go on believing
+            // it had happened, which looks exactly like a desynchronisation and is not one.
+            RpcId(sender, nameof(ClientNetworkCommandRefused), typeName);
+            return;
+        }
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void ClientApplyNetworkCommand(string typeName, string json)
+    private void ClientNetworkCommandRefused(string typeName)
     {
-        if (_networkIsHost || !NetworkCommandCodec.TryDecode(typeName, json, out var command)) return;
+        if (_networkIsHost) return;
+        var name = typeName ?? "order";
+        var cut = name.LastIndexOf('.');
+        if (cut >= 0 && cut < name.Length - 1) name = name[(cut + 1)..];
+        _networkHudStatus.Text = $"REFUSED · the host did not accept your {name}";
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void ClientApplyNetworkCommand(string typeName, string json, int hostDay)
+    {
+        if (_networkIsHost || _campaign is null ||
+            !NetworkCommandCodec.TryDecode(typeName, json, out var command)) return;
+
+        // On the day it was given, or held until we get there. Applying it early is the
+        // silent divergence this whole exchange exists to avoid.
+        if (hostDay > _campaign.ElapsedDays)
+        {
+            _networkDeferred.Add((hostDay, command));
+            return;
+        }
+        ApplyNetworkCommand(command);
+    }
+
+    private void ApplyNetworkCommand(DealOrForce.Simulation.ICampaignCommand command)
+    {
         _applyingNetworkCommand = true;
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         _applyingNetworkCommand = false;
+    }
+
+    /// <summary>
+    /// Everything that was waiting for today. Held orders are applied in the order they
+    /// arrived, which is the order the host applied them in.
+    /// </summary>
+    private void ApplyDeferredNetworkCommands()
+    {
+        if (_networkDeferred.Count == 0 || _campaign is null) return;
+        for (var index = 0; index < _networkDeferred.Count; index++)
+        {
+            var waiting = _networkDeferred[index];
+            if (waiting.Day > _campaign.ElapsedDays) continue;
+            ApplyNetworkCommand(waiting.Command);
+            _networkDeferred.RemoveAt(index);
+            index--;
+        }
     }
 
     private void NetworkProcess(double delta)
@@ -404,6 +468,11 @@ public partial class DealOrForceGame
             _campaign.Tick();
             _modLoader.OnDayAdvanced(_campaign);
             ticks++;
+            // Orders given on the day we have just reached, applied before the next one is
+            // simulated - which is the whole of what lockstep means.
+            _applyingNetworkCommand = false;
+            ApplyDeferredNetworkCommands();
+            _applyingNetworkCommand = true;
         }
         _applyingNetworkCommand = false;
 
@@ -508,6 +577,7 @@ public partial class DealOrForceGame
         _networkPeer = null;
         Multiplayer.MultiplayerPeer = null;
         _networkPeerNations.Clear();
+        _networkDeferred.Clear();
         _networkIsHost = false;
         _networkConnected = false;
         _networkGameStarted = false;

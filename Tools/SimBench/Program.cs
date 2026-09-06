@@ -74,6 +74,10 @@ public static class Program
             EveryOrderCrossesTheWire());
         failures += Check("the same seed gives the same world twice",
             TheSameSeedGivesTheSameWorld(Math.Min(days, 90)));
+        failures += Check("two worlds in one process do not read each other's notes",
+            TwoWorldsDoNotShareNotes(Math.Min(days, 45)));
+        failures += Check("two worlds in one process do not read each other's notes",
+            TwoWorldsDoNotShareNotes(Math.Min(days, 45)));
         failures += Check("a country that states a figure about itself gets that figure",
             TheStatedStatisticsCameTrue(campaign));
 
@@ -3545,6 +3549,74 @@ public static class Program
     /// no tie-break. All three are silent, and all three show up as the day this stops
     /// matching.
     /// </summary>
+    /// <summary>
+    /// Whether two campaigns alive at the same time stay out of each other's way.
+    ///
+    /// This is the multiplayer failure that leaves no trace. Several systems cache expensive
+    /// answers - who borders whom, what every country's army is worth, how far apart two
+    /// capitals are - and they were stamped with the day, or the map revision, or the number
+    /// of countries. All of those are correct for exactly one world at a time, and a client
+    /// rebuilding itself from a host snapshot holds two: the new campaign and the old one
+    /// that has not been collected yet. Whichever ticks first stamps the cache; the other
+    /// reads some other world's answers, agrees with nobody, and diverges without an error
+    /// anywhere.
+    ///
+    /// So: run a campaign alone, then run it again interleaved with a different one, and
+    /// require the two results to be identical to the bit.
+    /// </summary>
+    private static string TwoWorldsDoNotShareNotes(int days)
+    {
+        // Each world run by itself, first, so there is something to be different from.
+        // Both of them: whichever campaign ticks second is the one that reads the first
+        // one's notes, so checking only the leader would miss the whole problem.
+        var firstAlone = Campaign.CreateBootstrap(20250303);
+        var secondAlone = Campaign.CreateBootstrap(19991231);
+        if (!AttachMap(firstAlone) || !AttachMap(secondAlone))
+            return "no province map, so there is nothing to share";
+        // The two worlds have to be genuinely different, or a cache leaking between them
+        // leaks nearly the right answer and nothing shows. Halving one world's armies makes
+        // every strength comparison in it different from the other's.
+        Halve(secondAlone);
+        firstAlone.IsPaused = false;
+        secondAlone.IsPaused = false;
+        for (var day = 0; day < days; day++) firstAlone.Tick();
+        for (var day = 0; day < days; day++) secondAlone.Tick();
+        var expectedFirst = CampaignFingerprint.Of(firstAlone);
+        var expectedSecond = CampaignFingerprint.Of(secondAlone);
+
+        var same = Campaign.CreateBootstrap(20250303);
+        var other = Campaign.CreateBootstrap(19991231);
+        if (!AttachMap(same) || !AttachMap(other)) return "the second pair got no province map";
+        Halve(other);
+        same.IsPaused = false;
+        other.IsPaused = false;
+        for (var day = 0; day < days; day++)
+        {
+            same.Tick();
+            other.Tick();
+        }
+
+        var leaderMatches = CampaignFingerprint.Of(same) == expectedFirst;
+        var followerMatches = CampaignFingerprint.Of(other) == expectedSecond;
+        if (!leaderMatches || !followerMatches)
+            return $"the campaign that ticked {(leaderMatches ? "second" : "first")} came out " +
+                   $"different when run beside another one for {days} day(s) - something cached is " +
+                   "stamped with the day, the map revision or the country count rather than the " +
+                   "campaign, and a multiplayer client rebuilding from a snapshot will " +
+                   "desynchronise on it";
+
+        Console.WriteLine($"  isolation: a campaign ticked beside a different one for {days} day(s) " +
+                          "and came out identical to the bit.");
+        return "";
+    }
+
+    /// <summary>Take half the world's formations away, deterministically.</summary>
+    private static void Halve(Campaign campaign)
+    {
+        for (var index = campaign.Armies.Count - 1; index >= 0; index--)
+            if (campaign.Armies[index].Id % 2 == 0) campaign.Armies.RemoveAt(index);
+    }
+
     private static string TheSameSeedGivesTheSameWorld(int days)
     {
         var first = Campaign.CreateBootstrap(20260830);
