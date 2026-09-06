@@ -232,14 +232,43 @@ public partial class DealOrForceGame : Control
         // Halt, and come off the plan. Two keys because they are two decisions - see
         // HaltSelectedDivisions for what one key cost. Only while formations are selected
         // and only in the campaign, so H stays a letter everywhere else.
-        if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.H } &&
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } key &&
             _hudLayer is { Visible: true } && _selectedArmies.Count > 0)
         {
-            if (Input.IsKeyPressed(Key.Ctrl)) DetachSelectedDivisions();
-            else if (Input.IsKeyPressed(Key.Shift)) ReturnSelectedDivisionsToPlan();
-            else HaltSelectedDivisions();
-            GetViewport().SetInputAsHandled();
-            return;
+            switch (key.Keycode)
+            {
+                case Key.H:
+                    if (Input.IsKeyPressed(Key.Ctrl)) DetachSelectedDivisions();
+                    else if (Input.IsKeyPressed(Key.Shift)) ReturnSelectedDivisionsToPlan();
+                    else HaltSelectedDivisions();
+                    GetViewport().SetInputAsHandled();
+                    return;
+
+                // Ctrl+B is the key HOI4 uses, and a mode rather than a modifier because
+                // Control on the right button already means "support this attack".
+                case Key.B when Input.IsKeyPressed(Key.Ctrl):
+                    ToggleStrategicRedeployment();
+                    GetViewport().SetInputAsHandled();
+                    return;
+
+                case Key.K when Input.IsKeyPressed(Key.Ctrl):
+                    ConsolidateSelectedDivisions();
+                    GetViewport().SetInputAsHandled();
+                    return;
+
+                // Guard a region rather than hold a line, and how freely the plan may
+                // shuffle the formations on it. Both belong on buttons in the army panel;
+                // they are on keys until that panel stops being rewritten under us.
+                case Key.G when Input.IsKeyPressed(Key.Ctrl):
+                    ToggleDrawing(Simulation.FrontLineKind.AreaDefence);
+                    GetViewport().SetInputAsHandled();
+                    return;
+
+                case Key.F when Input.IsKeyPressed(Key.Ctrl):
+                    CyclePlanCohesion();
+                    GetViewport().SetInputAsHandled();
+                    return;
+            }
         }
 
         if (!inputEvent.IsActionPressed("ui_cancel")) return;

@@ -20,6 +20,16 @@ public partial class DealOrForceGame
     /// <summary>Control means "not these".</summary>
     private static bool RemovingFromSelection => Input.IsKeyPressed(Key.Ctrl);
 
+    /// <summary>
+    /// Whether the next right-click puts the selection on the railways.
+    ///
+    /// A mode rather than a modifier because Control is already spoken for on the right
+    /// button - it means "help with this attack" - and because redeployment is a decision
+    /// about a whole move rather than about one click. Ctrl+B arms it, the next order
+    /// spends it, Escape or a second Ctrl+B puts it away.
+    /// </summary>
+    private bool _redeploymentArmed;
+
     private void OnArmyPicked(Army army)
     {
         if (!_hudLayer.Visible || army is null) return;
@@ -52,8 +62,10 @@ public partial class DealOrForceGame
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
         SetArmyFeedback(army.NationId == _campaign.Player.Id
-            ? "RMB: march or attack · Shift+RMB: append waypoint · Shift+click adds a division, Ctrl+click removes one. " +
-              "H halts, Ctrl+H takes them off the plan, Shift+H hands them back."
+            ? "RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
+              "the ground · Shift+click adds a division, Ctrl+click removes one.  " +
+              "H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · " +
+              "Ctrl+G guard an area · Ctrl+F plan cohesion."
             : "Foreign formation: it can be inspected, but only its owner may issue orders.");
     }
 
@@ -280,9 +292,28 @@ public partial class DealOrForceGame
 
         var targets = SelectedPlayerDivisions();
         var append = Input.IsKeyPressed(Key.Shift);
+        // Control on the right button is the support attack: fight for the province and
+        // stay where you are. It cannot also mean "append", so a modified click is one
+        // order rather than a queued one.
+        var supporting = Input.IsKeyPressed(Key.Ctrl) && !append;
+        var railing = _redeploymentArmed && !append && !supporting;
         var results = new Dictionary<ArmyMoveResult, int>();
         foreach (var army in targets)
         {
+            if (railing)
+            {
+                var rail = new StrategicRedeploymentCommand
+                {
+                    IssuerId = _campaign.Player.Id,
+                    ArmyId = army.Id,
+                    TargetProvinceId = pick.ProvinceId
+                };
+                _campaign.Commands.Enqueue(rail);
+                _campaign.Commands.ApplyAll(_campaign);
+                results[rail.Result] = results.GetValueOrDefault(rail.Result) + 1;
+                continue;
+            }
+
             var command = new MoveArmyCommand
             {
                 IssuerId = _campaign.Player.Id,
@@ -293,14 +324,27 @@ public partial class DealOrForceGame
             _campaign.Commands.Enqueue(command);
             _campaign.Commands.ApplyAll(_campaign);
             results[command.Result] = results.GetValueOrDefault(command.Result) + 1;
+
+            // Support is a property of the order that was just given, so it is set after
+            // it: an order that was refused is not an order to support anything.
+            _campaign.Commands.Enqueue(new SupportAttackCommand
+            {
+                IssuerId = _campaign.Player.Id,
+                ArmyId = army.Id,
+                SupportOnly = supporting && command.Result == ArmyMoveResult.AttackIssued
+            });
+            _campaign.Commands.ApplyAll(_campaign);
         }
+        if (railing) _redeploymentArmed = false;
         ShowSelectedArmies();
         if (IsNetworkClient)
         {
             SetArmyFeedback($"Order for {targets.Length} division(s) submitted to the host. The authoritative route will appear after validation.");
             return;
         }
-        SetArmyFeedback(MoveResultSummary(results, pick, append));
+        SetArmyFeedback(MoveResultSummary(results, pick, append) +
+                        (supporting ? " · supporting: they will fight and hold their ground." : "") +
+                        (railing ? " · by rail: fast, and they will arrive shaken." : ""));
     }
 
     private string MoveResultSummary(IReadOnlyDictionary<ArmyMoveResult, int> results, GlobePick pick, bool append)
@@ -309,6 +353,7 @@ public partial class DealOrForceGame
         var parts = new List<string>();
         AddResult(parts, results, ArmyMoveResult.Issued, append ? "waypoint appended" : "moving");
         AddResult(parts, results, ArmyMoveResult.AttackIssued, "attacking through the nearest friendly front province");
+        AddResult(parts, results, ArmyMoveResult.RouteInterrupted, "route blocked");
         AddResult(parts, results, ArmyMoveResult.QueuedAfterBattle, "queued until battle ends");
         AddResult(parts, results, ArmyMoveResult.AlreadyAtDestination, "already there");
         AddResult(parts, results, ArmyMoveResult.TargetNotControlled, "destination is not controlled");
@@ -387,6 +432,101 @@ public partial class DealOrForceGame
         ShowSelectedArmies();
         SetArmyFeedback($"{targets.Length} division(s) handed back to the plan. They will hold the line " +
                         "until the operation orders them forward.");
+    }
+
+    /// <summary>
+    /// Step the cohesion of the line the selection is standing on.
+    ///
+    /// One setting per plan rather than per formation, so this reads the line the first
+    /// selected division is on and moves everybody on it together - which is what the
+    /// setting means. A player who wants one division exempt takes that division off the
+    /// plan, which is Ctrl+H and a different idea.
+    /// </summary>
+    private void CyclePlanCohesion()
+    {
+        var army = SelectedPlayerDivisions().FirstOrDefault(candidate => candidate.FrontLineId >= 0);
+        if (army is null)
+        {
+            SetArmyFeedback("None of the selected divisions is on a drawn plan, so there is no cohesion to set.");
+            return;
+        }
+        var line = _campaign.FrontLines.Find(candidate => candidate.Id == army.FrontLineId);
+        if (line is null) return;
+
+        var next = line.Cohesion switch
+        {
+            PlanCohesion.Flexible => PlanCohesion.Balanced,
+            PlanCohesion.Balanced => PlanCohesion.Rigid,
+            PlanCohesion.Rigid => PlanCohesion.Immobile,
+            _ => PlanCohesion.Flexible
+        };
+        _campaign.Commands.Enqueue(new SetPlanCohesionCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            FrontLineId = line.Id,
+            Cohesion = next
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        SetArmyFeedback($"Plan cohesion: {next}. " + next switch
+        {
+            PlanCohesion.Flexible => "Whoever is best, from anywhere on the line - it will close holes fast " +
+                                     "and its divisions will spend a lot of the war walking sideways.",
+            PlanCohesion.Balanced => "The planner prefers a formation's neighbours. Right nearly always.",
+            PlanCohesion.Rigid => "Only the next post along, and only when it is empty. Dispositions hold; " +
+                                  "a hole two provinces away stays open.",
+            _ => "Nobody moves. Where they are put is where they stay, and the plan will not shuffle them."
+        });
+    }
+
+    /// <summary>Arm or disarm the railways for the next order.</summary>
+    private void ToggleStrategicRedeployment()
+    {
+        _redeploymentArmed = !_redeploymentArmed;
+        SetArmyFeedback(_redeploymentArmed
+            ? "Strategic redeployment armed: the next right-click rails the selection there through your own " +
+              "territory - about three times a marching pace, paid for in organisation. Ctrl+B again to cancel."
+            : "Strategic redeployment cancelled. The next right-click is an ordinary march.");
+    }
+
+    /// <summary>
+    /// Fold the selected formations into each other.
+    ///
+    /// The point is not a bigger division - it is fewer of them. Supply is charged per
+    /// formation, so six divisions at a third strength eat like six and fight like two;
+    /// consolidating makes them two that eat like two.
+    /// </summary>
+    private void ConsolidateSelectedDivisions()
+    {
+        var targets = SelectedPlayerDivisions();
+        if (targets.Length < 2)
+        {
+            SetArmyFeedback("Select at least two formations of the same kind, standing together, to consolidate.");
+            return;
+        }
+        var command = new ConsolidateArmiesCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            ArmyIds = targets.Select(army => army.Id).ToArray()
+        };
+        _campaign.Commands.Enqueue(command);
+        _campaign.Commands.ApplyAll(_campaign);
+
+        // The selection may have just lost members to the merge.
+        _selectedArmies.RemoveAll(army => !_campaign.Armies.Contains(army));
+        if (_selectedArmies.Count == 0)
+        {
+            ClearArmySelectionAndClose();
+        }
+        else
+        {
+            _selectedArmy = _selectedArmies[0];
+            _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));
+            ShowSelectedArmies();
+        }
+        SetArmyFeedback(command.Merged > 0
+            ? $"{command.Merged} formation(s) folded in; {command.PersonnelKept:N0} men kept and now in fewer " +
+              "divisions, which is fewer mouths for the supply network to reach."
+            : command.Refusal);
     }
 
     private void SetArmyFeedback(string text)

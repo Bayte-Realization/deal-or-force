@@ -57,7 +57,9 @@ public sealed class ArmyGroup
 /// Engine-neutral operational formation ported from the s&box Army model.
 /// Rendering and input are Godot concerns; these values are save/replay state.
 /// </summary>
-public sealed class Army
+// Partial so that manoeuvres added later can carry their own state without this file
+// growing every time: see ArmyManoeuvres.cs.
+public sealed partial class Army
 {
     public int Id;
     public int NationId;
@@ -83,6 +85,9 @@ public sealed class Army
     public bool PlanActive = true;
     public float Planning;
     public float MoveProgress;
+    /// <summary>Length and completed part of the current order, used by the map arrow.</summary>
+    public int OrderRouteSteps;
+    public int OrderStepsCompleted;
     public float Divisions;
     public float Organisation = 1f;
     public float Strength = 1f;
@@ -118,6 +123,11 @@ public sealed class Army
     public float LastReinforced;
     public ArmyMoveResult LastMoveResult;
     public int LastMoveResultDay = -1;
+    /// <summary>
+    /// Complete visual and tactical path of the current order. For an attack this includes
+    /// hostile provinces; Route contains only the friendly leg that can be marched normally.
+    /// </summary>
+    public readonly List<int> PlannedRoute = new();
     public readonly List<int> Route = new();
     public float Latitude;
     public float Longitude;

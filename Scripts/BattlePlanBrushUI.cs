@@ -28,6 +28,7 @@ public partial class DealOrForceGame
     {
         FrontLineKind.Defence => "front line",
         FrontLineKind.Offensive => "offensive line",
+        FrontLineKind.AreaDefence => "area to guard",
         _ => "fallback line"
     };
 
@@ -126,7 +127,10 @@ public partial class DealOrForceGame
         _globe.RefreshBattlePlans();
         SetArmyFeedback($"{armies.Count:N0} formation(s) drawn onto a {DrawName(kind)} " +
                                $"of {provinces.Count:N0} province(s)." +
-                               (kind == FrontLineKind.Offensive ? " Press Execute when the plan is ready." : ""));
+                               (kind == FrontLineKind.Offensive ? " Press Execute when the plan is ready." : "") +
+                               (kind == FrontLineKind.AreaDefence
+                                   ? " They will spread over the places worth holding rather than along an edge."
+                                   : ""));
         ShowSelectedArmies();
     }
 

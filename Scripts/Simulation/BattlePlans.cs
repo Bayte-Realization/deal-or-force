@@ -14,7 +14,40 @@ public enum FrontLineKind
     Offensive,
 
     /// <summary>Stand here instead if the line in front gives way.</summary>
-    Fallback
+    Fallback,
+
+    /// <summary>
+    /// Guard these places. Not a line at all: a set of provinces worth holding, with the
+    /// formations spread over the ones that matter rather than along an edge.
+    ///
+    /// It is what the rear is actually defended with - ports, cities, a coast somebody
+    /// might land on - and it is a different question from "where does the front run",
+    /// which is why walking these provinces end to end would be meaningless.
+    /// </summary>
+    AreaDefence
+}
+
+/// <summary>
+/// How far the planner may drag a formation along its own line to improve the spread.
+///
+/// The freedom is real and so is its cost. Left free, the planner shuffles the whole line
+/// every time the situation moves, and a front of divisions permanently walking sideways
+/// defends nothing; pinned, it holds its dispositions and cannot close a hole that opens
+/// two provinces away. The player is the one who knows which mistake they would rather make.
+/// </summary>
+public enum PlanCohesion
+{
+    /// <summary>Send whoever is best, from anywhere on the line.</summary>
+    Flexible,
+
+    /// <summary>Prefer the neighbours. The default, and right nearly always.</summary>
+    Balanced,
+
+    /// <summary>Only the next post along, and only when it is empty.</summary>
+    Rigid,
+
+    /// <summary>Nobody moves. Where they are put is where they stay.</summary>
+    Immobile
 }
 
 /// <summary>
@@ -37,6 +70,10 @@ public sealed class DrawnFrontLine
     public int Id;
     public int NationId;
     public FrontLineKind Kind;
+
+    /// <summary>How freely the planner may re-sort the formations along this line.</summary>
+    public PlanCohesion Cohesion = PlanCohesion.Balanced;
+
     public readonly HashSet<int> Provinces = new();
     public readonly List<int> ArmyIds = new();
 
@@ -80,7 +117,29 @@ public static class BattlePlanning
         if (slot < 0) slot = Math.Abs(army.Id);
         var count = Math.Max(1, line.ArmyIds.Count);
         var index = (int)((slot + 0.5f) / count * ordered.Count);
-        return ordered[Math.Clamp(index, 0, ordered.Count - 1)];
+        index = Math.Clamp(index, 0, ordered.Count - 1);
+
+        // Where the formation actually is, if that is anywhere on this line. Cohesion is
+        // about the distance between here and the post it has been given: a wanted post
+        // four provinces away is a division that spends a week walking sideways instead of
+        // holding anything, and at the tight end of the scale it is simply refused.
+        var standing = -1;
+        for (var index2 = 0; index2 < ordered.Count; index2++)
+            if (ordered[index2] == army.ProvinceId) { standing = index2; break; }
+        if (standing < 0) return ordered[index];
+
+        var allowed = line.Cohesion switch
+        {
+            PlanCohesion.Flexible => int.MaxValue,
+            PlanCohesion.Balanced => Math.Max(2, ordered.Count / 4),
+            PlanCohesion.Rigid => 1,
+            _ => 0
+        };
+        if (allowed <= 0) return army.ProvinceId;
+        var drift = index - standing;
+        if (Math.Abs(drift) <= allowed) return ordered[index];
+        var capped = standing + Math.Sign(drift) * allowed;
+        return ordered[Math.Clamp(capped, 0, ordered.Count - 1)];
     }
 
     /// <summary>
@@ -97,6 +156,29 @@ public static class BattlePlanning
             (topology is null || province <= topology.ProvinceCount)).ToList();
         provinces.Sort();
         if (topology is null || provinces.Count <= 2) return provinces;
+
+        // An area is not a line, so it is not walked. The order is by what is worth
+        // standing on - the biggest places first - because spreading formations evenly
+        // over a region means covering what is in it, not pacing its outline.
+        if (line.Kind == FrontLineKind.AreaDefence)
+        {
+            var population = new Dictionary<int, long>();
+            foreach (var state in campaign.States) population[state.MapIndex] = state.Population;
+            var worth = provinces.ToDictionary(province => province, province =>
+            {
+                var people = population.GetValueOrDefault(topology.ProvinceToState[province]);
+                // A place with few land neighbours is an edge - a coast or a corner - and an
+                // edge is where somebody else can arrive without asking first.
+                var exposed = topology.Neighbors[province].Length < 4 ? 1.35 : 1.0;
+                return people * exposed;
+            });
+            provinces.Sort((left, right) =>
+            {
+                var order = worth[right].CompareTo(worth[left]);
+                return order != 0 ? order : left.CompareTo(right);
+            });
+            return provinces;
+        }
 
         var centers = provinces.ToDictionary(province => province, topology.CenterOf);
         var midLatitude = centers.Values.Average(point => point.Latitude);
@@ -189,6 +271,9 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
         {
             FrontLineKind.Offensive => ArmyOrder.AdvanceFront,
             FrontLineKind.Fallback => ArmyOrder.ReserveFront,
+            // Guarding the rear is a reserve posture, not a front-line one: these
+            // formations are not meant to be drawn into the fighting at the edge.
+            FrontLineKind.AreaDefence => ArmyOrder.ReserveFront,
             _ => ArmyOrder.DefendFront
         };
         foreach (var id in line.ArmyIds)
@@ -202,6 +287,27 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
         previous?.ArmyIds.Remove(army.Id);
         army.FrontLineId = -1;
         campaign.FrontLines.RemoveAll(candidate => candidate.ArmyIds.Count == 0);
+    }
+}
+
+/// <summary>
+/// Say how freely the planner may move formations along one drawn line.
+///
+/// Per line rather than per formation, because it is a property of the plan: a player who
+/// wants one division pinned takes that division off the plan instead, which is a different
+/// order with a different key.
+/// </summary>
+public sealed class SetPlanCohesionCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int FrontLineId { get; init; }
+    public PlanCohesion Cohesion { get; init; }
+
+    public void Apply(Campaign campaign)
+    {
+        var line = campaign.FrontLines.Find(candidate => candidate.Id == FrontLineId);
+        if (line is null || line.NationId != IssuerId) return;
+        line.Cohesion = Cohesion;
     }
 }
 

@@ -170,6 +170,9 @@ public static class Program
                 failures += Check("a region cut by a new border becomes two regions",
                     RegionsSplitAlongNewBorders(sandbox));
                 failures += Check("a redrawn border survives a save", BordersSurviveASave(sandbox));
+                // Deletes formations and puts others on trains, so it belongs on the copy.
+                failures += Check("a consolidation invents nobody and the railways are paid for",
+                    ManoeuvresCostWhatTheySave(sandbox));
                 failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
                 failures += Check("an army can be put ashore across water",
                     AnArmyCanBePutAshore(sandbox));
@@ -2531,6 +2534,110 @@ public static class Program
                           $"them farms, and get it back within {worst:P1} at worst " +
                           $"({worstTag} {worstPair.Stated:P0} -> {worstPair.Actual:P0}).");
         Console.WriteLine($"    on the land: {string.Join(", ", sample)}.");
+        return "";
+    }
+
+    /// <summary>
+    /// Consolidation invents nobody, and the railways cost what they save.
+    ///
+    /// Both are the kind of rule that fails silently and pleasantly. A consolidation that
+    /// rounds men into existence gives the player free divisions and nothing on screen ever
+    /// says so; a redeployment that is fast and free is simply a better march, and every
+    /// formation in the game would use it for everything.
+    /// </summary>
+    private static string ManoeuvresCostWhatTheySave(Campaign campaign)
+    {
+        var player = campaign.NationByTag("RUS") ?? campaign.Player;
+        if (player is null) return "there is no country to manoeuvre with";
+
+        // ------------------------------------------------------------------ consolidation
+        var together = campaign.Armies
+            .Where(army => army.NationId == player.Id && !army.InBattle && army.ProvinceId > 0)
+            .GroupBy(army => (army.TemplateId, army.ProvinceId))
+            .FirstOrDefault(group => group.Count() > 1);
+        if (together is null)
+        {
+            // Put two of them in one place, which is what a player does before consolidating.
+            var pair = campaign.Armies
+                .Where(army => army.NationId == player.Id && !army.InBattle && army.ProvinceId > 0)
+                .GroupBy(army => army.TemplateId)
+                .FirstOrDefault(group => group.Count() > 1)?.Take(2).ToList();
+            if (pair is null || pair.Count < 2) return "the country has no two formations of a kind";
+            pair[1].ProvinceId = pair[0].ProvinceId;
+            pair[1].StateMapIndex = pair[0].StateMapIndex;
+            together = campaign.Armies
+                .Where(army => army.NationId == player.Id && !army.InBattle && army.ProvinceId > 0)
+                .GroupBy(army => (army.TemplateId, army.ProvinceId))
+                .FirstOrDefault(group => group.Count() > 1);
+            if (together is null) return "two formations refused to stand in the same province";
+        }
+
+        var chosen = together.ToList();
+        // Worn down, which is the state consolidation is for: four divisions at a third
+        // strength should become two at full strength, not four at a third.
+        foreach (var army in chosen)
+        {
+            army.Personnel = Math.Max(1, army.MaxPersonnel / 3);
+            army.Strength = army.Personnel / (float)Math.Max(1, army.MaxPersonnel);
+        }
+        var before = chosen.Sum(army => (long)army.Personnel);
+        var beforeCount = chosen.Count;
+        var consolidate = new ConsolidateArmiesCommand
+        {
+            IssuerId = player.Id,
+            ArmyIds = chosen.Select(army => army.Id).ToArray()
+        };
+        consolidate.Apply(campaign);
+        var survivors = campaign.Armies.Where(army => chosen.Contains(army)).ToList();
+        var after = survivors.Sum(army => (long)army.Personnel);
+
+        if (consolidate.Merged == 0)
+            return $"{beforeCount} formations of one kind in one province refused to consolidate: {consolidate.Refusal}";
+        if (survivors.Count >= beforeCount)
+            return "consolidation merged nothing away";
+        if (after > before)
+            return $"consolidation created {after - before:N0} men out of nothing ({before:N0} -> {after:N0})";
+        if (after < before * 0.9)
+            return $"consolidation lost {before - after:N0} of {before:N0} men";
+
+        // ------------------------------------------------------------------ the railways
+        var traveller = campaign.Armies.FirstOrDefault(army =>
+            army.NationId == player.Id && !army.InBattle && army.ProvinceId > 0 && army.EmbarkedFleetId < 0);
+        if (traveller is null) return "nobody is available to redeploy";
+
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "there is no province map to redeploy across";
+        var destination = topology.Neighbors[traveller.ProvinceId]
+            .SelectMany(step => topology.Neighbors[step])
+            .SelectMany(step => topology.Neighbors[step])
+            .FirstOrDefault(province => province > 0 &&
+                campaign.ProvinceController[province] == (ushort)player.MapIndex &&
+                province != traveller.ProvinceId);
+        if (destination <= 0) return "there is nowhere far enough to redeploy to";
+
+        traveller.Organisation = 1f;
+        traveller.OrderKind = ArmyOrder.Manual;
+        var rail = new StrategicRedeploymentCommand
+        {
+            IssuerId = player.Id, ArmyId = traveller.Id, TargetProvinceId = destination
+        };
+        rail.Apply(campaign);
+        if (rail.Result != ArmyMoveResult.Issued)
+            return $"a redeployment across three provinces of home ground was refused: {rail.Result}";
+        if (!traveller.IsRedeploying) return "the order was issued and the formation is not on the railways";
+
+        var organisationBefore = traveller.Organisation;
+        campaign.IsPaused = false;
+        for (var day = 0; day < 6 && traveller.IsRedeploying; day++) campaign.Tick();
+
+        if (traveller.Organisation >= organisationBefore)
+            return "a week on the trains cost nothing in organisation, which makes it a better march";
+        if (traveller.IsRedeploying && traveller.Route.Count > 0 && traveller.MoveProgress <= 0f)
+            return "the formation was railed nowhere";
+
+        Console.WriteLine($"  manoeuvres: consolidation folded {consolidate.Merged} formation(s) and kept " +
+                          $"{after:N0} of {before:N0} men; a redeployment cost " +
+                          $"{organisationBefore - traveller.Organisation:P0} organisation.");
         return "";
     }
 
