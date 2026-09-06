@@ -99,9 +99,21 @@ public static class TradeNetwork
     private static readonly List<float> SellerCapacity = new();
     private static readonly List<float> SellerScore = new();
     private static readonly List<int> SellerOrder = new();
-    private static readonly List<int> BuyerOrder = new();
-    private static readonly List<float> BuyerDeficit = new();
+    private static int[] _buyerIds;
+    private static float[] _buyerKeys;
+
     private static readonly Dictionary<int, float> Reach = new();
+    private static readonly Dictionary<int, (int States, int Infrastructure, int Ports, int Rails)> Counts = new();
+
+    /// <summary>
+    /// Route objects, reused.
+    ///
+    /// Two thousand two hundred of them a week is ninety kilobytes of garbage for a list
+    /// that is emptied and refilled from scratch every time. They are plain data with no
+    /// identity, so the same objects are handed out again.
+    /// </summary>
+    private static readonly List<TradeRoute> RoutePool = new();
+    private static int _routesInUse;
 
     private static float[] _distance;
     private static int _distanceNations;
@@ -114,6 +126,7 @@ public static class TradeNetwork
     {
         var nations = campaign.Nations;
         campaign.TradeRoutes.Clear();
+        _routesInUse = 0;
         foreach (var nation in nations)
         {
             nation.TradePartners.Clear();
@@ -127,8 +140,7 @@ public static class TradeNetwork
         }
 
         EnsureDistances(campaign);
-        Reach.Clear();
-        foreach (var nation in nations) Reach[nation.Id] = ReachOf(campaign, nation);
+        MeasureReach(campaign);
 
         foreach (var commodity in CommodityCatalog.All)
             RouteOne(campaign, commodity);
@@ -160,24 +172,35 @@ public static class TradeNetwork
         // Who is short, biggest shortfall first. Order matters - the sellers run out - and
         // serving the largest economies first is both the realistic answer and a stable
         // one, since it does not depend on where a country sits in a list.
-        BuyerOrder.Clear();
-        BuyerDeficit.Clear();
+        // Ordering two hundred buyers by insertion is forty thousand list moves per good and
+        // eight hundred thousand per market week, which was most of what this pass cost. A
+        // sort of two reused arrays does the same job; it is deterministic for identical
+        // input, which is what the seed has to be able to rely on.
+        if (_buyerIds is null || _buyerIds.Length < nations.Count)
+        {
+            _buyerIds = new int[nations.Count + 32];
+            _buyerKeys = new float[nations.Count + 32];
+        }
+        var buyers = 0;
         for (var index = 0; index < nations.Count; index++)
         {
             var nation = nations[index];
             if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
-            var deficit = (quote.Demand - quote.Production) *
-                          TradePolicyRules.ImportAccess(nation.TradePolicy) *
-                          Ceiling(campaign, nation);
-            if (deficit <= 0.0001f) continue;
-            Insert(BuyerOrder, BuyerDeficit, nation.Id, deficit, int.MaxValue);
+            var shortfall = (quote.Demand - quote.Production) *
+                            TradePolicyRules.ImportAccess(nation.TradePolicy) *
+                            Ceiling(campaign, nation);
+            if (shortfall <= 0.0001f) continue;
+            _buyerIds[buyers] = nation.Id;
+            _buyerKeys[buyers] = -shortfall;
+            buyers++;
         }
+        if (buyers > 1) Array.Sort(_buyerKeys, _buyerIds, 0, buyers);
 
-        for (var index = 0; index < BuyerOrder.Count; index++)
+        for (var index = 0; index < buyers; index++)
         {
-            var buyer = campaign.NationById(BuyerOrder[index]);
+            var buyer = campaign.NationById(_buyerIds[index]);
             if (buyer is null) continue;
-            var deficit = BuyerDeficit[index];
+            var deficit = -_buyerKeys[index];
 
             // Rank this week's exporters from where the buyer is standing.
             SellerScore.Clear();
@@ -234,11 +257,14 @@ public static class TradeNetwork
         buyerQuote.Imports += volume;
 
         var value = volume * MathF.Max(0.0001f, sellerQuote.Price);
-        campaign.TradeRoutes.Add(new TradeRoute
-        {
-            SellerId = seller.Id, BuyerId = buyer.Id, Commodity = commodity,
-            Volume = volume, Value = value
-        });
+        if (_routesInUse >= RoutePool.Count) RoutePool.Add(new TradeRoute());
+        var route = RoutePool[_routesInUse++];
+        route.SellerId = seller.Id;
+        route.BuyerId = buyer.Id;
+        route.Commodity = commodity;
+        route.Volume = volume;
+        route.Value = value;
+        campaign.TradeRoutes.Add(route);
 
         seller.TradePartners[buyer.Id] = seller.TradePartners.GetValueOrDefault(buyer.Id) + value;
         buyer.TradePartners[seller.Id] = buyer.TradePartners.GetValueOrDefault(seller.Id) + value;
@@ -274,8 +300,10 @@ public static class TradeNetwork
         // the ports and railways to do it.
         if (!CampaignDiplomacy.SharesLandBorder(campaign, buyer.MapIndex, seller.MapIndex))
         {
-            var kilometres = Kilometres(campaign, buyer, seller);
-            var falloff = 1f / (1f + MathF.Pow(kilometres / HalfReachKilometres, 1.35f));
+            // A squared falloff rather than a fractional power: the same shape to the eye,
+            // and not a hundred thousand calls to MathF.Pow every market week.
+            var span = Kilometres(campaign, buyer, seller) / HalfReachKilometres;
+            var falloff = 1f / (1f + span * span);
             var reach = (Reach.GetValueOrDefault(buyer.Id, 0.5f) + Reach.GetValueOrDefault(seller.Id, 0.5f)) * 0.5f;
             score *= falloff * reach;
         }
@@ -298,27 +326,41 @@ public static class TradeNetwork
         M.Clamp(campaign.Defines.WorldMarketAccess * Reach.GetValueOrDefault(nation.Id, 0.5f), 0.30f, 1.05f);
 
     /// <summary>
-    /// How far this country's goods travel. Infrastructure is what it already has; ports and
-    /// railways are what it can decide to build, and they are the only way a country far
-    /// from everything can stop being at the mercy of its immediate neighbours.
+    /// How far every country's goods travel, in one pass over the world's regions.
+    ///
+    /// Infrastructure is what a country already has; ports and railways are what it can
+    /// decide to build, and they are the only way a country far from everything can stop
+    /// being at the mercy of its immediate neighbours.
+    ///
+    /// One pass rather than one per country: the same answer, and not two hundred and sixty
+    /// walks of eighteen hundred regions every market week.
     /// </summary>
-    public static float ReachOf(Campaign campaign, Nation nation)
+    private static void MeasureReach(Campaign campaign)
     {
-        var states = 0;
-        var infrastructure = 0;
-        var ports = 0;
-        var rails = 0;
+        Reach.Clear();
+        Counts.Clear();
         foreach (var state in campaign.States)
         {
-            if (state.NationMapIndex != nation.MapIndex) continue;
-            states++;
-            infrastructure += state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure);
-            ports += state.Buildings.GetValueOrDefault(BuildingKind.Port);
-            rails += state.Buildings.GetValueOrDefault(BuildingKind.RailNetwork);
+            var current = Counts.GetValueOrDefault(state.NationMapIndex);
+            Counts[state.NationMapIndex] = (
+                current.States + 1,
+                current.Infrastructure + state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure),
+                current.Ports + state.Buildings.GetValueOrDefault(BuildingKind.Port),
+                current.Rails + state.Buildings.GetValueOrDefault(BuildingKind.RailNetwork));
         }
-        var averageInfrastructure = states == 0 ? 0f : infrastructure / (float)states;
-        return M.Clamp(0.45f + averageInfrastructure * 0.06f + ports * 0.05f + rails * 0.035f, 0.45f, 1.50f);
+        foreach (var nation in campaign.Nations)
+        {
+            var counted = Counts.GetValueOrDefault(nation.MapIndex);
+            var averageInfrastructure = counted.States == 0 ? 0f : counted.Infrastructure / (float)counted.States;
+            Reach[nation.Id] = M.Clamp(
+                0.45f + averageInfrastructure * 0.06f + counted.Ports * 0.05f + counted.Rails * 0.035f,
+                0.45f, 1.50f);
+        }
     }
+
+    /// <summary>What one country's goods can reach, for anything that wants to show it.</summary>
+    public static float ReachOf(Campaign campaign, Nation nation) =>
+        Reach.TryGetValue(nation.Id, out var reach) ? reach : 0.45f;
 
     /// <summary>Great-circle distance between two capitals, cached for the whole campaign.</summary>
     private static float Kilometres(Campaign campaign, Nation a, Nation b)

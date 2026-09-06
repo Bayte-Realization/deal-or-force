@@ -202,15 +202,17 @@ public static class MarketSystem
 
     private static void Recalculate(Campaign campaign, bool adjustPrice)
     {
-        foreach (var nation in campaign.Nations)
-            CalculateNationalBalance(campaign, nation);
+        using (SimProfiler.Measure("    mkt:balance"))
+            foreach (var nation in campaign.Nations)
+                CalculateNationalBalance(campaign, nation);
 
         // Who actually sells to whom. This used to be an anonymous pool: a shortfall was
         // met by "the world" at a constant rate, so nobody could be cut off and a trade
         // partner was worth one opinion modifier. Every import and export below is now a
         // named route to a named country - see TradeNetwork.
-        TradeNetwork.Route(campaign);
+        using (SimProfiler.Measure("    mkt:trade")) TradeNetwork.Route(campaign);
 
+        using var pricing = SimProfiler.Measure("    mkt:prices");
         foreach (var commodity in CommodityCatalog.All)
         {
             var totalDemand = 0f;
@@ -305,6 +307,56 @@ public static class MarketSystem
             workers += group.Size / 1_000_000f * WorkingAgeShare * group.Employment * participation;
         }
         return workers;
+    }
+
+    /// <summary>What a country has under construction, under arms, at sea and at war.</summary>
+    private readonly record struct NationTally(int Projects, float Divisions, int Hulls, bool AtWar);
+
+    private static readonly Dictionary<int, NationTally> TallyByNation = new();
+    private static int _talliedDay = int.MinValue;
+    private static Campaign _talliedCampaign;
+
+    /// <summary>
+    /// The four global lists, walked once each, instead of once per country.
+    ///
+    /// Cached for the day and stamped with the campaign it describes, because two live
+    /// campaigns sharing a static cache is a bug that has already been paid for once in this
+    /// codebase - see the border table in CampaignDiplomacy.
+    /// </summary>
+    private static NationTally Tallies(Campaign campaign, int nationId)
+    {
+        if (!ReferenceEquals(_talliedCampaign, campaign) || _talliedDay != campaign.ElapsedDays)
+        {
+            _talliedCampaign = campaign;
+            _talliedDay = campaign.ElapsedDays;
+            TallyByNation.Clear();
+
+            foreach (var project in campaign.Construction)
+            {
+                var current = TallyByNation.GetValueOrDefault(project.NationId);
+                TallyByNation[project.NationId] = current with { Projects = current.Projects + 1 };
+            }
+            foreach (var army in campaign.Armies)
+            {
+                var current = TallyByNation.GetValueOrDefault(army.NationId);
+                TallyByNation[army.NationId] = current with { Divisions = current.Divisions + army.Divisions };
+            }
+            foreach (var fleet in campaign.Fleets)
+            {
+                var current = TallyByNation.GetValueOrDefault(fleet.NationId);
+                TallyByNation[fleet.NationId] = current with { Hulls = current.Hulls + fleet.Hulls };
+            }
+            foreach (var war in campaign.Wars)
+            {
+                if (war.Ended) continue;
+                foreach (var side in new[] { war.AttackerId, war.DefenderId })
+                {
+                    var current = TallyByNation.GetValueOrDefault(side);
+                    TallyByNation[side] = current with { AtWar = true };
+                }
+            }
+        }
+        return TallyByNation.GetValueOrDefault(nationId);
     }
 
     private static void CalculateNationalBalance(Campaign campaign, Nation nation)
@@ -462,14 +514,18 @@ public static class MarketSystem
                 industry * 0.90f * (Supplied(nation, Commodity.Electronics, 0.80f) - 1f);
         }
 
-        var projects = campaign.Construction.Count(project => project.NationId == nation.Id);
+        // Four LINQ scans of four global lists, once per country, with a capturing closure
+        // each. That is a thousand closures and half a million list steps every market week,
+        // to answer four questions that one pass over each list answers for everybody.
+        var tallies = Tallies(campaign, nation.Id);
+        var projects = tallies.Projects;
         nation.Market[Commodity.IndustrialMaterials].Demand += projects * 2.2f;
         nation.Market[Commodity.Machinery].Demand += projects * 0.85f;
         nation.Market[Commodity.Timber].Demand += projects * 0.70f;
         nation.Market[Commodity.Aluminium].Demand += projects * 0.30f;
-        var divisions = campaign.Armies.Where(army => army.NationId == nation.Id).Sum(army => army.Divisions);
-        var hulls = campaign.Fleets.Where(fleet => fleet.NationId == nation.Id).Sum(fleet => fleet.Hulls);
-        var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+        var divisions = tallies.Divisions;
+        var hulls = tallies.Hulls;
+        var atWar = tallies.AtWar;
         nation.Market[Commodity.Arms].Production += nation.Gdp / 250f * M.Clamp(nation.Productivity, 0.55f, 1.55f);
         nation.Market[Commodity.Arms].Demand += divisions * (atWar ? 0.52f : 0.18f) + hulls * 0.04f;
         nation.Market[Commodity.Oil].Demand += divisions * (atWar ? 0.18f : 0.06f) + hulls * 0.025f;
