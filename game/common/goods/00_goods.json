@@ -8,5 +8,20 @@
   "Oil": { "name": "Oil", "icon": "●", "base_price": 0.052, "essential_weight": 0.68, "description": "Fuel and petrochemical feedstock for transport, armies and industry." },
   "IronOre": { "name": "Iron ore", "icon": "⬟", "base_price": 0.026, "essential_weight": 0.38, "description": "Ore refined into construction and industrial materials." },
   "RareEarths": { "name": "Rare earths", "icon": "✧", "base_price": 0.094, "essential_weight": 0.32, "description": "Strategic minerals for advanced electronics and precision equipment." },
-  "Machinery": { "name": "Machinery", "icon": "⚙", "base_price": 0.072, "essential_weight": 0.54, "description": "Machine tools, engines and industrial equipment." }
+  "Machinery": { "name": "Machinery", "icon": "⚙", "base_price": 0.072, "essential_weight": 0.54, "description": "Machine tools, engines and industrial equipment." },
+
+  // The second tier. These are links in chains rather than standalone goods: bauxite is
+  // worthless without a smelter and cheap power, electronics need rare earths that eight
+  // countries have, and a modern harvest is made of natural gas. Retune any of them here
+  // and the whole map of who needs whom moves with it.
+  "NaturalGas": { "name": "Natural gas", "icon": "◇", "base_price": 0.041, "essential_weight": 0.72, "description": "Heating, power generation and the feedstock every chemical industry starts from." },
+  "Timber": { "name": "Timber", "icon": "❦", "base_price": 0.014, "essential_weight": 0.34, "description": "Construction lumber, pulp and the raw material behind cloth and paper." },
+  "Bauxite": { "name": "Bauxite", "icon": "◭", "base_price": 0.021, "essential_weight": 0.20, "description": "Aluminium ore. Worthless without a smelter and cheap electricity." },
+  "Uranium": { "name": "Uranium", "icon": "☢", "base_price": 0.118, "essential_weight": 0.18, "description": "Fuel for reactors, and the reason some countries are watched more closely than others." },
+  "Aluminium": { "name": "Aluminium", "icon": "▣", "base_price": 0.058, "essential_weight": 0.36, "description": "Light metal for airframes, vehicles and transmission lines." },
+  "Chemicals": { "name": "Chemicals", "icon": "⚗", "base_price": 0.047, "essential_weight": 0.44, "description": "Industrial chemistry: plastics, explosives, fertiliser and medicine all begin here." },
+  "Fertiliser": { "name": "Fertiliser", "icon": "✿", "base_price": 0.033, "essential_weight": 0.58, "description": "Nitrogen and phosphate. What a modern harvest is actually made of." },
+  "Electronics": { "name": "Electronics", "icon": "⌘", "base_price": 0.106, "essential_weight": 0.52, "description": "Chips, sensors and control systems for industry, consumers and precision weapons." },
+  "Textiles": { "name": "Textiles", "icon": "▩", "base_price": 0.017, "essential_weight": 0.48, "description": "Cloth and clothing - the cheapest industry to start and the first one to be undercut." },
+  "Pharmaceuticals": { "name": "Pharmaceuticals", "icon": "✚", "base_price": 0.089, "essential_weight": 0.66, "description": "Medicine. A shortage is felt in living standards long before it is felt in the ledger." }
 }

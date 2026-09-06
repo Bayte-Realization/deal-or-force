@@ -17,7 +17,22 @@ public enum BuildingKind
     Barracks,
     ExtractionIndustry,
     PowerPlant,
-    ArmsIndustry
+    ArmsIndustry,
+
+    // The second tier. Four of these refine something into something else, which is what
+    // gives the new goods their chains; two of them - the port and the rail network - are
+    // not industry at all but reach, and decide how much of the world a country can
+    // actually trade with. A landlocked country with no port is a country whose foreign
+    // policy has to be about its neighbours, and that is a far more interesting country
+    // to play than one for whom the world market was a constant.
+    Refinery,
+    ChemicalPlant,
+    Smelter,
+    ElectronicsPlant,
+    Shipyard,
+    Port,
+    RailNetwork,
+    ResearchLab
 }
 
 /// <summary>
@@ -88,7 +103,23 @@ public static class BuildingCatalog
         [BuildingKind.PowerPlant] = new("Power plant", 2.05f, 230, 1.10f, 0.16f,
             "Reliable energy for households, mines and manufacturing."),
         [BuildingKind.ArmsIndustry] = new("Arms industry", 2.85f, 280, 1.45f, 0.10f,
-            "Dedicated weapons and ammunition production for field forces.")
+            "Dedicated weapons and ammunition production for field forces."),
+        [BuildingKind.Refinery] = new("Refinery", 2.20f, 250, 1.05f, 0.08f,
+            "Turns crude oil and gas into fuel, energy and chemical feedstock."),
+        [BuildingKind.ChemicalPlant] = new("Chemical plant", 2.55f, 265, 1.20f, 0.09f,
+            "Chemicals, fertiliser and medicine out of oil, gas and coal."),
+        [BuildingKind.Smelter] = new("Smelter", 2.10f, 235, 0.95f, 0.11f,
+            "Ore and bauxite into industrial materials and aluminium. Drinks electricity."),
+        [BuildingKind.ElectronicsPlant] = new("Electronics plant", 3.15f, 300, 1.75f, 0.08f,
+            "Chips and control systems from rare earths, chemicals and aluminium."),
+        [BuildingKind.Shipyard] = new("Shipyard", 2.75f, 290, 0.90f, 0.10f,
+            "Hull capacity for the navy and the merchant marine that carries its trade."),
+        [BuildingKind.Port] = new("Port", 1.70f, 200, 0.55f, 0.18f,
+            "How much of the world this country can trade with across water."),
+        [BuildingKind.RailNetwork] = new("Rail network", 1.95f, 215, 0.60f, 0.30f,
+            "Overland throughput: supply to the front, and goods to the neighbours."),
+        [BuildingKind.ResearchLab] = new("Research laboratory", 2.30f, 320, 0.65f, 0.06f,
+            "Productivity, literacy and the medicine a modern population expects.")
     };
     private static readonly Dictionary<BuildingKind, BuildingDefinition> Definitions = new();
 
@@ -672,11 +703,23 @@ public static class EconomySystem
         state.ResourceDeposits[Commodity.Coal] = TaggedPotential(nation.Tag,
             "CHN USA IND RUS AUS DEU POL IDN ZAF UKR", basePotential, state.MapIndex + 151);
         state.ResourceDeposits[Commodity.Oil] = TaggedPotential(nation.Tag,
-            "SAU RUS USA CAN IRN IRQ ARE VEN KWT QAT NOR KAZ AZE NGA BRA", basePotential * 0.55f, state.MapIndex + 181);
+            "SAU RUS USA CAN IRN IRQ ARE VEN KWT QAT NOR KAZ AZE NGA BRA", basePotential * 0.55f, state.MapIndex + 181) * 2.85f;
         state.ResourceDeposits[Commodity.IronOre] = TaggedPotential(nation.Tag,
             "AUS BRA CHN IND RUS UKR CAN SWE ZAF KAZ", basePotential * 0.75f, state.MapIndex + 211);
         state.ResourceDeposits[Commodity.RareEarths] = TaggedPotential(nation.Tag,
             "CHN USA AUS MMR VNM BRA IND RUS", basePotential * 0.22f, state.MapIndex + 241);
+
+        // The four the second tier of industry starts from. Gas and bauxite decide who can
+        // run a chemical industry and a smelter at all; uranium decides who is watched.
+        // Timber is deliberately not tagged to a short list - almost everywhere has some,
+        // and a good that everybody has is a useful counterweight to four that they do not.
+        state.ResourceDeposits[Commodity.NaturalGas] = TaggedPotential(nation.Tag,
+            "RUS USA QAT IRN TKM SAU AUS NOR DZA CAN CHN NGA EGY", basePotential * 0.60f, state.MapIndex + 271) * 2.70f;
+        state.ResourceDeposits[Commodity.Bauxite] = TaggedPotential(nation.Tag,
+            "AUS GIN BRA CHN IND IDN JAM RUS KAZ VNM", basePotential * 0.30f, state.MapIndex + 307);
+        state.ResourceDeposits[Commodity.Uranium] = TaggedPotential(nation.Tag,
+            "KAZ CAN AUS NAM NER RUS UZB USA ZAF UKR", basePotential * 0.14f, state.MapIndex + 337) * 0.23f;
+        state.ResourceDeposits[Commodity.Timber] = (0.35f + StableFraction(state.MapIndex + 367) * 1.45f) * 1.90f;
     }
 
     private static float TaggedPotential(string tag, string richTags, float fallback, int seed)

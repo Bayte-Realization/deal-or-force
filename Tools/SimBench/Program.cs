@@ -201,6 +201,8 @@ public static class Program
                     OpinionIsRememberedAndForgotten(sandbox));
                 failures += Check("the peace an AI writes hangs together",
                     ThePeaceAnAiWritesHangsTogether(sandbox));
+                failures += Check("the world makes what the world needs",
+                    TheWorldMakesWhatItNeeds(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
                     APeaceCanBeWritten(sandbox));
                 failures += Check("a moved border leaves a national minority behind",
@@ -1439,6 +1441,53 @@ public static class Program
             war.AiNegotiationUnlockDay = unlockDay;
             if (!war.Ended) war.LastPeaceProposalDay = lastProposal;
         }
+    }
+
+    /// <summary>
+    /// Whether the world's industry adds up.
+    ///
+    /// A good that nobody makes enough of is not a scarcity, it is a bug: every country in
+    /// the world sits in permanent shortage, living standards fall everywhere at once, and
+    /// the market stops being a place where a decision can be made. A good that everybody
+    /// makes four times over is the opposite bug - it can never run short, so nothing that
+    /// happens to it matters and it may as well not be simulated.
+    ///
+    /// This prints the whole balance sheet and holds every good between the two.
+    /// </summary>
+    private static string TheWorldMakesWhatItNeeds(Campaign campaign)
+    {
+        var worst = "";
+        var worstRatio = float.MaxValue;
+        var lines = new List<string>();
+        var complaints = new List<string>();
+        foreach (var commodity in CommodityCatalog.All)
+        {
+            var production = 0f;
+            var demand = 0f;
+            var shortOf = 0;
+            foreach (var nation in campaign.Nations)
+            {
+                if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
+                production += quote.Production;
+                demand += quote.Demand;
+                if (quote.IsShortage) shortOf++;
+            }
+            if (demand <= 0.001f) continue;
+            var ratio = production / demand;
+            lines.Add($"{CommodityCatalog.Get(commodity).Name} {ratio:0.00}x ({shortOf:N0} short)");
+            if (ratio < worstRatio) { worstRatio = ratio; worst = CommodityCatalog.Get(commodity).Name; }
+            if (ratio < 0.75f)
+                complaints.Add($"the world makes only {ratio:0.00} of the {CommodityCatalog.Get(commodity).Name} " +
+                               $"it wants ({shortOf:N0} countries short)");
+            else if (ratio > 4.0f)
+                complaints.Add($"the world makes {ratio:0.0}x the {CommodityCatalog.Get(commodity).Name} it wants, " +
+                               "so nothing that happens to it can matter");
+        }
+
+        Console.WriteLine("  world balance: " + string.Join(", ", lines));
+        Console.WriteLine($"    tightest good: {worst} at {worstRatio:0.00} of demand.");
+        if (complaints.Count > 0) return string.Join("; ", complaints);
+        return "";
     }
 
     private static string ThePeaceAnAiWritesHangsTogether(Campaign campaign)

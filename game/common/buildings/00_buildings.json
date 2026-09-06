@@ -70,5 +70,73 @@
     "gdp_gain": 1.45,
     "capacity_gain": 0.10,
     "description": "Dedicated weapons and ammunition production for field forces."
+  },
+
+  // The second tier. Four of these refine one good into another, which is what gives the
+  // new goods their chains. Two of them are not industry at all: a port and a rail network
+  // are reach, and decide how much of the world a country can actually trade with.
+  "Refinery": {
+    "name": "Refinery",
+    "cost": 2.20,
+    "days": 250,
+    "gdp_gain": 1.05,
+    "capacity_gain": 0.08,
+    "description": "Turns crude oil and gas into fuel, energy and chemical feedstock."
+  },
+  "ChemicalPlant": {
+    "name": "Chemical plant",
+    "cost": 2.55,
+    "days": 265,
+    "gdp_gain": 1.20,
+    "capacity_gain": 0.09,
+    "description": "Chemicals, fertiliser and medicine out of oil, gas and coal."
+  },
+  "Smelter": {
+    "name": "Smelter",
+    "cost": 2.10,
+    "days": 235,
+    "gdp_gain": 0.95,
+    "capacity_gain": 0.11,
+    "description": "Ore and bauxite into industrial materials and aluminium. Drinks electricity."
+  },
+  "ElectronicsPlant": {
+    "name": "Electronics plant",
+    "cost": 3.15,
+    "days": 300,
+    "gdp_gain": 1.75,
+    "capacity_gain": 0.08,
+    "description": "Chips and control systems from rare earths, chemicals and aluminium."
+  },
+  "Shipyard": {
+    "name": "Shipyard",
+    "cost": 2.75,
+    "days": 290,
+    "gdp_gain": 0.90,
+    "capacity_gain": 0.10,
+    "description": "Hull capacity for the navy and the merchant marine that carries its trade."
+  },
+  "Port": {
+    "name": "Port",
+    "cost": 1.70,
+    "days": 200,
+    "gdp_gain": 0.55,
+    "capacity_gain": 0.18,
+    "description": "How much of the world this country can trade with across water."
+  },
+  "RailNetwork": {
+    "name": "Rail network",
+    "cost": 1.95,
+    "days": 215,
+    "gdp_gain": 0.60,
+    "capacity_gain": 0.30,
+    "description": "Overland throughput: supply to the front, and goods to the neighbours."
+  },
+  "ResearchLab": {
+    "name": "Research laboratory",
+    "cost": 2.30,
+    "days": 320,
+    "gdp_gain": 0.65,
+    "capacity_gain": 0.06,
+    "description": "Productivity, literacy and the medicine a modern population expects."
   }
 }
