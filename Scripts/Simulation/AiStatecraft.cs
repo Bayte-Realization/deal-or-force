@@ -698,6 +698,12 @@ public static class AiStatecraft
     /// What a country is worth in a fight: the divisions it has, weighted by what state
     /// they are in, plus what its economy could raise if the war lasted.
     /// </summary>
+    /// <summary>
+    /// The same figure, for the parts of statecraft that are not the AI's own decisions -
+    /// whether an ally can afford to honour a promise, most of all.
+    /// </summary>
+    public static float StrengthOf(Campaign campaign, Nation nation) => Strength(campaign, nation);
+
     private static float Strength(Campaign campaign, Nation nation) =>
         nation is not null && StrengthCache.TryGetValue(nation.Id, out var value)
             ? value

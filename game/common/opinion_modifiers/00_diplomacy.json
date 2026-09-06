@@ -111,6 +111,22 @@
     "decays": false
   },
 
+  "stood_by_us": {
+    "name": "Stood by us when it counted",
+    "opinion": 45,
+    "days": 5500,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  "abandoned_us": {
+    "name": "Abandoned us when it counted",
+    "opinion": -55,
+    "days": 5500,
+    "decays": true,
+    "max_stacks": 2
+  },
+
   "coalition_partner": {
     "name": "We are containing the same country",
     "opinion": 20,

@@ -201,6 +201,8 @@ public static class Program
                     OpinionIsRememberedAndForgotten(sandbox));
                 failures += Check("the peace an AI writes hangs together",
                     ThePeaceAnAiWritesHangsTogether(sandbox));
+                failures += Check("a promise is answered and a conquest is counted",
+                    APromiseIsAnsweredAndAConquestIsCounted());
                 failures += Check("trade has names on it, and an embargo has teeth",
                     TradeHasNamesOnIt(sandbox));
                 failures += Check("the world makes what the world needs",
@@ -1466,6 +1468,133 @@ public static class Program
     /// has a named seller behind it, that a country knows how much of its economy runs
     /// through each partner, and that refusing to trade is actually felt.
     /// </summary>
+    /// <summary>
+    /// Whether the promises countries make to each other are worth anything.
+    ///
+    /// Alliances existed as a word. The stance could be Allied and nothing anywhere read it,
+    /// so a country could watch its ally dismembered without sending a note; there was no
+    /// such thing as a strong small country, and no reason to court anybody. Conquest had no
+    /// price either: every province taken made the next one easier, and nothing on the map
+    /// grew in proportion to somebody else's success.
+    ///
+    /// Run on a campaign of its own, because it starts wars.
+    /// </summary>
+    private static string APromiseIsAnsweredAndAConquestIsCounted()
+    {
+        var campaign = Campaign.CreateBootstrap(20240101);
+        if (!AttachMap(campaign)) return "no province map, so nobody borders anybody";
+
+        // Three countries that touch each other, so that a war between two of them is a war
+        // the third can physically join.
+        Nation attacker = null;
+        Nation victim = null;
+        Nation friend = null;
+        foreach (var candidate in campaign.Nations)
+        {
+            if (candidate.Population < 5_000_000) continue;
+            foreach (var victimMap in CampaignDiplomacy.Neighbours(campaign, candidate.MapIndex))
+            {
+                var possibleVictim = NationByMap(campaign, victimMap);
+                if (possibleVictim is null || possibleVictim.Population < 5_000_000) continue;
+                foreach (var friendMap in CampaignDiplomacy.Neighbours(campaign, possibleVictim.MapIndex))
+                {
+                    var possibleFriend = NationByMap(campaign, friendMap);
+                    if (possibleFriend is null || possibleFriend.Id == candidate.Id) continue;
+                    if (possibleFriend.Population < 5_000_000 || possibleFriend.IsHuman) continue;
+                    if (!CampaignDiplomacy.SharesLandBorder(campaign, possibleFriend.MapIndex, candidate.MapIndex))
+                        continue;
+                    attacker = candidate;
+                    victim = possibleVictim;
+                    friend = possibleFriend;
+                    break;
+                }
+                if (friend is not null) break;
+            }
+            if (friend is not null) break;
+        }
+        if (attacker is null || victim is null || friend is null)
+        {
+            var sample = 0;
+            foreach (var nation in campaign.Nations)
+            {
+                if (nation.Population < 5_000_000) continue;
+                sample = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex).Count;
+                if (sample > 0) break;
+            }
+            return "could not find three countries that all touch each other " +
+                   $"(a large country has {sample:N0} neighbour(s), so the border table is " +
+                   (sample == 0 ? "empty" : "fine and the triangle is what is missing") + ")";
+        }
+
+        // A real alliance, and a friend able and willing to honour it.
+        var bond = CampaignDiplomacy.Get(campaign, friend.Id, victim.Id);
+        bond.Stance = DiplomaticStance.Allied;
+        bond.Opinion = 90f;
+        friend.WarSupport = 1f;
+        friend.Stability = 0.9f;
+
+        var warsBefore = campaign.Wars.Count;
+        var notorietyBefore = attacker.Notoriety;
+        var war = CampaignDiplomacy.DeclareWar(campaign, attacker.Id, victim.Id);
+        if (war is null) return $"{attacker.Tag} could not declare on its own neighbour {victim.Tag}";
+
+        var friendJoined = false;
+        foreach (var candidate in campaign.Wars)
+            if (!candidate.Ended && candidate.AttackerId == friend.Id && candidate.DefenderId == attacker.Id)
+                friendJoined = true;
+        if (!friendJoined)
+            return $"{friend.Tag} was allied to {victim.Tag} at {bond.Opinion:0} opinion, watched " +
+                   $"{attacker.Tag} attack it, and did nothing";
+        if (campaign.Wars.Count <= warsBefore + 1)
+            return "the call to arms produced no second war";
+
+        // The declaration itself is counted, and so is what it takes afterwards.
+        if (attacker.Notoriety <= notorietyBefore && string.IsNullOrEmpty(attacker.LastWarJustification))
+            return $"{attacker.Tag} declared a war it could give no reason for and the world did not mind";
+
+        var beforeAnnexation = attacker.Notoriety;
+        var takeable = new List<int>();
+        var topology = campaign.ProvinceMap;
+        for (var province = 1; province <= topology.ProvinceCount && takeable.Count < 40; province++)
+            if (topology.ProvinceToNation[province] == (ushort)victim.MapIndex) takeable.Add(province);
+        if (takeable.Count > 0)
+        {
+            StatePartition.Annex(campaign, takeable, attacker);
+            if (attacker.Notoriety <= beforeAnnexation)
+                return $"{attacker.Tag} annexed {takeable.Count:N0} province(s) of {victim.Tag} for free";
+        }
+
+        // And enough of it brings the neighbourhood together.
+        attacker.Notoriety = Statecraft.CoalitionThreshold + 5f;
+        foreach (var neighbourMap in CampaignDiplomacy.Neighbours(campaign, attacker.MapIndex))
+        {
+            var neighbour = NationByMap(campaign, neighbourMap);
+            if (neighbour is null || neighbour.Id == attacker.Id) continue;
+            CampaignDiplomacy.Get(campaign, neighbour.Id, attacker.Id).Opinion = -40f;
+        }
+        for (var step = 0; step < 8 && Statecraft.CoalitionAgainst(campaign, attacker.Id) is null; step++)
+        {
+            campaign.IsPaused = false;
+            campaign.Tick();
+        }
+        var coalition = Statecraft.CoalitionAgainst(campaign, attacker.Id);
+        if (coalition is null)
+            return $"{attacker.Tag} reached {attacker.Notoriety:0} notoriety among hostile neighbours " +
+                   "and nobody organised against it";
+
+        Console.WriteLine($"  statecraft: {attacker.Tag} attacked {victim.Tag}; {friend.Tag} honoured its " +
+                          $"alliance and declared. {attacker.Tag} carries {attacker.Notoriety:0} notoriety " +
+                          $"and {coalition.MemberIds.Count:N0} countries have formed against it.");
+        return "";
+    }
+
+    private static Nation NationByMap(Campaign campaign, int mapIndex)
+    {
+        foreach (var nation in campaign.Nations)
+            if (nation.MapIndex == mapIndex) return nation;
+        return null;
+    }
+
     private static string TradeHasNamesOnIt(Campaign campaign)
     {
         if (campaign.TradeRoutes.Count == 0)

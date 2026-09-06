@@ -89,6 +89,23 @@ public sealed class Defines
 	/// <summary>People one unit of habitable land area can support at full development.</summary>
 	public float PopulationPerAreaUnit { get; set; } = 320000f;
 
+	// --- statecraft ---
+
+	/// <summary>Notoriety earned by declaring a war nobody accepts a reason for.</summary>
+	public float NotorietyPerUnjustifiedWar { get; set; } = 18f;
+
+	/// <summary>Notoriety earned per million people annexed by force.</summary>
+	public float NotorietyPerMillionTaken { get; set; } = 0.85f;
+
+	/// <summary>Stability lost at home for a war declared with no reason given.</summary>
+	public float UnjustifiedWarStabilityCost { get; set; } = 0.06f;
+
+	/// <summary>War support lost for a war declared with no reason given.</summary>
+	public float UnjustifiedWarSupportCost { get; set; } = 0.10f;
+
+	/// <summary>Stability lost by a government that refuses to honour its own alliance.</summary>
+	public float BrokenPromiseStabilityCost { get; set; } = 0.08f;
+
 	// --- market ---
 
 	/// <summary>How fast prices chase their target. 0 freezes them, 1 snaps instantly.</summary>

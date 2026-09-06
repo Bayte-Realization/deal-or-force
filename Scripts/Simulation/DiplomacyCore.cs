@@ -119,7 +119,18 @@ public static class CampaignDiplomacy
         return true;
     }
 
-    public static StrategicWar DeclareWar(Campaign campaign, int attackerId, int defenderId, int claimedStateMapIndex = -1)
+    /// <summary>
+    /// Declare a war, and pay for it with everybody who is not in it.
+    ///
+    /// The justification is what the attacker tells the world. Passing null means "work it
+    /// out", which is what any caller that is not deliberately staging something wants:
+    /// <see cref="Statecraft.CasusBelli"/> answers it out of state the game already keeps -
+    /// land taken from us and not forgotten, our own people living on the other side of the
+    /// border, a friend already being attacked. An empty answer is a war nobody accepts a
+    /// reason for, and that is where notoriety comes from.
+    /// </summary>
+    public static StrategicWar DeclareWar(Campaign campaign, int attackerId, int defenderId,
+        int claimedStateMapIndex = -1, string justification = null)
     {
         if (!CanDeclareWar(campaign, attackerId, defenderId, out _)) return null;
         var attacker = campaign.NationById(attackerId);
@@ -139,9 +150,16 @@ public static class CampaignDiplomacy
             ClaimedStateMapIndex = ResolveWarGoal(campaign, defender.MapIndex, claimedStateMapIndex)
         };
         campaign.Wars.Add(war);
+        Statecraft.RecordDeclaration(campaign, attacker, defender,
+            justification ?? Statecraft.CasusBelli(campaign, attacker, defender));
         Warfare.RebuildFronts(campaign);
         FrontPlanner.ReassignAi(campaign, war);
         campaign.MarkStrategicChange();
+
+        // And everybody who promised to stand by the country just attacked is asked whether
+        // they meant it. They answer with their own declarations, through this same path, so
+        // nothing downstream has to learn about wars with more than two sides.
+        Statecraft.CallToArms(campaign, war);
         return war;
     }
 
@@ -162,6 +180,19 @@ public static class CampaignDiplomacy
     private static Dictionary<int, HashSet<int>> _borders;
     private static int _borderRevision = -1;
     private static int _borderDay = -1;
+
+    /// <summary>
+    /// Which campaign the cached table belongs to.
+    ///
+    /// It was cached on the day and the map revision alone, which is correct for exactly one
+    /// campaign at a time and silently wrong the moment there are two: a second campaign on
+    /// a different day with a coincidentally equal revision was handed the first one's
+    /// borders, and one that happened to share the day was told nobody borders anybody. That
+    /// is not a theoretical case - it is a multiplayer client rebuilding its world from a
+    /// snapshot while the old one is still being collected, and it is every bench check that
+    /// works on a campaign of its own.
+    /// </summary>
+    private static Campaign _borderCampaign;
 
     public static bool SharesLandBorder(Campaign campaign, int mapA, int mapB) =>
         Borders(campaign).TryGetValue(mapA, out var set) && set.Contains(mapB);
@@ -188,25 +219,32 @@ public static class CampaignDiplomacy
         //
         // Nothing needs it fresher. Which countries a country touches is an input to
         // decisions it takes weekly and monthly; a day out of date cannot change one.
-        if (_borders is not null && _borderDay == campaign.ElapsedDays) return _borders;
-        if (_borders is not null && _borderRevision == campaign.MapRevision)
+        if (_borders is not null && ReferenceEquals(_borderCampaign, campaign))
         {
-            _borderDay = campaign.ElapsedDays;
-            return _borders;
+            if (_borderDay == campaign.ElapsedDays) return _borders;
+            if (_borderRevision == campaign.MapRevision)
+            {
+                _borderDay = campaign.ElapsedDays;
+                return _borders;
+            }
         }
 
         // The table and its sets are emptied and refilled rather than thrown away and
         // rebuilt: handing the collector a dictionary of two hundred and sixty fresh hash
         // sets each time was the AI's whole allocation cost.
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        // Nothing to build from. Do not stamp the cache - a campaign whose map has not been
+        // attached yet would otherwise be told for the rest of the day that it has no
+        // neighbours at all, which is exactly the sort of answer nobody thinks to doubt.
+        if (topology is null || controllers is null) return _borders ??= new Dictionary<int, HashSet<int>>();
+
         Rebuilds++;
         _borders ??= new Dictionary<int, HashSet<int>>();
         foreach (var set in _borders.Values) set.Clear();
+        _borderCampaign = campaign;
         _borderRevision = campaign.MapRevision;
         _borderDay = campaign.ElapsedDays;
-
-        var topology = campaign.ProvinceMap;
-        var controllers = campaign.ProvinceController;
-        if (topology is null || controllers is null) return _borders;
 
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {

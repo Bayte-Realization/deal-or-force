@@ -259,6 +259,9 @@ public static class SaveSystem
         public List<Fleet> Fleets = new();
         public List<StrategicWar> Wars = new();
 
+        /// <summary>Who the world has agreed to contain. Notoriety rides along on the nations.</summary>
+        public List<Coalition> Coalitions = new();
+
         /// <summary>
         /// The lines the player drew, and the next id to hand out.
         ///
@@ -306,6 +309,7 @@ public static class SaveSystem
             ArmyGroups = new List<ArmyGroup>(campaign.ArmyGroups),
             Fleets = new List<Fleet>(campaign.Fleets),
             Wars = new List<StrategicWar>(campaign.Wars),
+            Coalitions = new List<Coalition>(campaign.Coalitions),
             FrontLines = new List<DrawnFrontLine>(campaign.FrontLines),
             NextFrontLineId = campaign.NextFrontLineId,
             Battles = new List<LandBattle>(campaign.Battles),
@@ -328,6 +332,7 @@ public static class SaveSystem
             Replace(campaign.ArmyGroups, ArmyGroups);
             Replace(campaign.Fleets, Fleets);
             Replace(campaign.Wars, Wars);
+            Replace(campaign.Coalitions, Coalitions);
             Replace(campaign.FrontLines, FrontLines);
             // Never below what the restored lines already use, or the next drawn line would
             // be handed an id somebody is standing on.

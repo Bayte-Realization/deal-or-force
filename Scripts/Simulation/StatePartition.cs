@@ -43,16 +43,30 @@ public static class StatePartition
 
         var touched = new HashSet<int>();
         var moved = 0;
+        var peopleTaken = 0L;
         foreach (var province in provinces)
         {
             if (province <= 0 || province > topology.ProvinceCount) continue;
             if (topology.ProvinceToNation[province] == (ushort)newOwner.MapIndex) continue;
-            touched.Add(topology.ProvinceToState[province]);
+            var stateIndex = topology.ProvinceToState[province];
+            if (touched.Add(stateIndex))
+            {
+                foreach (var state in campaign.States)
+                {
+                    if (state.MapIndex != stateIndex) continue;
+                    peopleTaken += state.Population;
+                    break;
+                }
+            }
             topology.ProvinceToNation[province] = (ushort)newOwner.MapIndex;
             campaign.SetProvinceController(province, (ushort)newOwner.MapIndex);
             moved++;
         }
         if (moved == 0) return Array.Empty<ScenarioState>();
+
+        // What the neighbours make of it. Scaled by people rather than provinces, because a
+        // hundred square kilometres of tundra is not what makes a neighbourhood nervous.
+        Statecraft.RecordAnnexation(campaign, newOwner, peopleTaken);
 
         var created = new List<ScenarioState>();
         foreach (var stateMapIndex in touched)
