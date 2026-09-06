@@ -22,7 +22,7 @@ namespace DealOrForce.Simulation;
 /// single day pays for all of them, and the border graph every decision leans on is built
 /// once per change to the map rather than once per question.
 /// </summary>
-public static class AiStatecraft
+public static partial class AiStatecraft
 {
     /// <summary>
     /// A running count of what the AI decided and why it stopped deciding. Not campaign
@@ -250,8 +250,17 @@ public static class AiStatecraft
             var relation = CampaignDiplomacy.Get(campaign, nation.Id, bestFriend.Id);
             if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
             {
-                relation.Opinion = M.Clamp(relation.Opinion + defines.AiCourtshipStep, -100f, 100f);
-                relation.LastActionDay = campaign.ElapsedDays;
+                // Through the opinion system, not around it. This used to write the number
+                // directly, and the weekly settle - which computes an opinion as the sum of
+                // its named reasons - erased it every seven days. A country could court a
+                // neighbour for a decade and end exactly where it started, which is why in
+                // two years of a world running itself not one alliance was ever signed.
+                if (campaign.ElapsedDays - relation.LastActionDay >= 14 && nation.Treasury > 0.1f)
+                {
+                    nation.Treasury -= 0.1f;
+                    OpinionSystem.Remember(campaign, relation, "improved_relations");
+                    relation.LastActionDay = campaign.ElapsedDays;
+                }
                 return;
             }
         }
@@ -263,7 +272,14 @@ public static class AiStatecraft
             {
                 relation.Stance = DiplomaticStance.Rival;
                 relation.LastActionDay = campaign.ElapsedDays;
+                return;
             }
+
+            // Naming a rival used to be the end of the AI's imagination. There are things
+            // between a stiff note and an invasion, and now that trade is bilateral and a
+            // guarantee brings an army, they are worth doing: sanction a rival who needs us
+            // more than we need them, or shelter whoever is next on their list.
+            ActShortOfWar(campaign, nation, worstRival);
         }
     }
 
@@ -294,7 +310,8 @@ public static class AiStatecraft
 
         // The army costs what the situation is worth.
         bool threatened;
-        using (SimProfiler.Measure("    eco:threat")) threatened = !atWar && Threatened(campaign, nation);
+        using (SimProfiler.Measure("    eco:threat"))
+            threatened = !atWar && (nation.WarPlanTargetId >= 0 || Threatened(campaign, nation));
         var militaryTarget = atWar
             ? defines.AiWartimeMilitarySpending
             : threatened ? defines.AiTenseMilitarySpending : defines.AiPeacetimeMilitarySpending;
@@ -407,11 +424,16 @@ public static class AiStatecraft
         if (!campaign.Defines.AiMayDeclareWar) return;
 
         var defines = campaign.Defines;
+
+        // First, whatever we already decided to do about somebody. A country with a plan
+        // spends its week on the plan rather than on shopping for a different war.
+        PursueWarPlan(campaign, nation);
+
         if (nation.WarSupport < defines.AiWarSupportFloor) return;
         if (nation.Stability < defines.AiWarStabilityFloor) return;
 
         Nation target = null;
-        var bestDesire = defines.AiWarDesireThreshold;
+        var bestJudgement = float.MinValue;
         foreach (var mapIndex in Reachable(campaign, nation))
         {
             var other = ByMapIndex(mapIndex);
@@ -420,15 +442,35 @@ public static class AiStatecraft
             if (other.IsHuman && !defines.AiMayAttackPlayer) continue;
             if (!CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, other.Id, out _)) { Count("blocked"); continue; }
 
-            var desire = WarDesire(campaign, nation, other);
+            // What it is worth, minus what it costs. Subtracted rather than multiplied,
+            // because the price has to be able to win the argument outright - and under the
+            // old multiplicative rule nothing ever could.
+            var judgement = WarJudgement(campaign, nation, other);
             if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, other.MapIndex))
-                desire *= campaign.Defines.AiOverseasWarAppetite;
-            if (desire > 0f) Count("wanted");
-            if (desire <= bestDesire) continue;
-            bestDesire = desire;
+                judgement -= defines.AiOverseasCaution;
+            if (judgement > 0f) Count("wanted");
+            if (judgement <= bestJudgement) continue;
+            bestJudgement = judgement;
             target = other;
         }
-        if (target is null) return;
+        if (target is null || bestJudgement <= 0f)
+        {
+            ClearWarPlan(nation);
+            return;
+        }
+
+        // Worth having, but not yet worth having now. A government that reaches this point
+        // does not forget the idea - it keeps the target, builds, and starts prising the
+        // target's friends away. That is the whole of the difference between an AI that is
+        // less aggressive and one that is simply slower.
+        if (bestJudgement < defines.AiWarDesireThreshold)
+        {
+            if (nation.WarPlanTargetId == target.Id) return;
+            nation.WarPlanTargetId = target.Id;
+            nation.WarPlanSinceDay = campaign.ElapsedDays;
+            Count("planned");
+            return;
+        }
         Count("targeted");
 
         // Even a country that wants a war does not start one on a particular Tuesday.
@@ -440,40 +482,14 @@ public static class AiStatecraft
         // roads moved the Russo-Ukrainian front by twenty provinces, and no measurement of
         // one system could be trusted after a change to any other.
         var roll = Roll(campaign.Seed, nation.Id, campaign.ElapsedDays);
-        if (roll > defines.AiWarChance * bestDesire) return;
+        if (roll > defines.AiWarChance * bestJudgement) return;
 
+        // A country that has been preparing for this one goes sooner; the preparation is the
+        // point of having made the plan.
+        if (nation.WarPlanTargetId == target.Id) ClearWarPlan(nation);
         if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id) is not null) Count("declared");
     }
 
-    /// <summary>
-    /// How much one country wants another's ground. Weakness invites, hostility motivates,
-    /// a neighbour already fighting somebody else is an opportunity, and a country that is
-    /// itself unstable has other problems.
-    /// </summary>
-    private static float WarDesire(Campaign campaign, Nation nation, Nation other)
-    {
-        var defines = campaign.Defines;
-        var relation = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
-        if (relation.Stance == DiplomaticStance.Allied) return 0f;
-
-        var mine = Strength(campaign, nation);
-        var theirs = Strength(campaign, other);
-        if (mine <= 0.01f) return 0f;
-
-        // Below parity there is no appetite at all; the curve only starts once a country
-        // is meaningfully stronger than what it is looking at.
-        var advantage = mine / M.Max(0.01f, theirs);
-        if (advantage < defines.AiWarMinimumAdvantage) return 0f;
-
-        var desire = M.Clamp(advantage - defines.AiWarMinimumAdvantage, 0f, 4f);
-        desire += M.Clamp(-relation.Opinion / 100f, 0f, 1f) * defines.AiHostilityAppetite;
-        if (relation.Stance == DiplomaticStance.Rival) desire += defines.AiRivalryAppetite;
-        if (campaign.Wars.Any(war => !war.Ended && war.Involves(other.Id)))
-            desire += defines.AiOpportunismAppetite;
-        desire *= M.Clamp(nation.WarSupport, 0.1f, 1f);
-        desire *= M.Clamp(nation.Stability + 0.35f, 0.2f, 1.4f);
-        return desire;
-    }
 
     /// <summary>
     /// A country at war asks, periodically, whether it is done. Winning it writes a peace

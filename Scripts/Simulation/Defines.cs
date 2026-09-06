@@ -618,6 +618,54 @@ public sealed class Defines
 	public float AiRivalryAppetite { get; set; } = 0.8f;
 	public float AiOpportunismAppetite { get; set; } = 1.1f;
 	public float AiWarDesireThreshold { get; set; } = 0.55f;
+
+	// --- what a war is worth, and what it costs before a shot is fired ---
+	//
+	// The old appetite had five terms and every one of them argued for war. These are the
+	// other half of the sum, and they are subtracted from it rather than multiplying it, so
+	// that a price can win the argument outright.
+
+	/// <summary>How much a large population on the other side of the border is worth taking.</summary>
+	public float AiConquestAppetite { get; set; } = 0.85f;
+
+	/// <summary>How much a country wants the regions its own people live in.</summary>
+	public float AiIrredentaAppetite { get; set; } = 1.15f;
+
+	/// <summary>How much a country wants a good it is going without and the target sells.</summary>
+	public float AiResourceAppetite { get; set; } = 0.70f;
+
+	/// <summary>What losing all trade with the target is worth avoiding.</summary>
+	public float AiTradeLossWeight { get; set; } = 2.60f;
+
+	/// <summary>What each ally and guarantor of the target is worth avoiding.</summary>
+	public float AiAllyDeterrence { get; set; } = 0.95f;
+
+	/// <summary>What each member of a coalition already formed against us is worth avoiding.</summary>
+	public float AiCoalitionDeterrence { get; set; } = 0.60f;
+
+	/// <summary>How much a country's own notoriety restrains it.</summary>
+	public float AiNotorietyCaution { get; set; } = 1.30f;
+
+	/// <summary>The cost of going to war with nothing to say about why.</summary>
+	public float AiNoCasusBelliCaution { get; set; } = 0.80f;
+
+	/// <summary>How much a tired population restrains its government.</summary>
+	public float AiWarWearinessCaution { get; set; } = 1.60f;
+
+	/// <summary>How much unrest at home restrains a government.</summary>
+	public float AiInstabilityCaution { get; set; } = 1.40f;
+
+	/// <summary>The restraint of an empty treasury.</summary>
+	public float AiPovertyCaution { get; set; } = 0.55f;
+
+	/// <summary>Subtracted from the case for a war that has to be carried across water.</summary>
+	public float AiOverseasCaution { get; set; } = 1.35f;
+
+	/// <summary>How long a government will prepare for a war before dropping the idea.</summary>
+	public int AiWarPlanPatienceDays { get; set; } = 1460;
+
+	/// <summary>How much more dependent on us a rival must be before we sanction them.</summary>
+	public float AiEmbargoLeverage { get; set; } = 0.08f;
 	public float AiWarSupportFloor { get; set; } = 0.45f;
 	public float AiWarStabilityFloor { get; set; } = 0.35f;
 

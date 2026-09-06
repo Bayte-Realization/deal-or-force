@@ -201,6 +201,8 @@ public static class Program
                     OpinionIsRememberedAndForgotten(sandbox));
                 failures += Check("the peace an AI writes hangs together",
                     ThePeaceAnAiWritesHangsTogether(sandbox));
+                failures += Check("a country counts the cost before it declares",
+                    ACountryCountsTheCost());
                 failures += Check("a promise is answered and a conquest is counted",
                     APromiseIsAnsweredAndAConquestIsCounted());
                 failures += Check("trade has names on it, and an embargo has teeth",
@@ -1479,6 +1481,84 @@ public static class Program
     ///
     /// Run on a campaign of its own, because it starts wars.
     /// </summary>
+    /// <summary>
+    /// Whether a war is a decision rather than an appetite.
+    ///
+    /// The old judgement had five terms and every one argued for war: strength, dislike,
+    /// rivalry, opportunity, and a multiplier for morale. Nothing anywhere argued against,
+    /// so the only brake on the map was a low die roll, and a country would happily invade
+    /// its largest customer while a coalition formed behind it.
+    ///
+    /// The claim being checked is precise: the same pair of countries, in the same world, on
+    /// the same day, is a war worth having when nothing connects them and not worth having
+    /// when half an economy runs through it. If that is not true, the price is decoration.
+    /// </summary>
+    private static string ACountryCountsTheCost()
+    {
+        var campaign = Campaign.CreateBootstrap(20240202);
+        if (!AttachMap(campaign)) return "no province map, so nobody borders anybody";
+
+        // A strong country next to a much weaker one - the case the old rule always took.
+        Nation strong = null;
+        Nation weak = null;
+        var bestGap = 3f;
+        foreach (var candidate in campaign.Nations)
+        {
+            if (candidate.Population < 8_000_000 || candidate.IsHuman) continue;
+            foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, candidate.MapIndex))
+            {
+                var neighbour = NationByMap(campaign, mapIndex);
+                if (neighbour is null || neighbour.Population < 500_000) continue;
+                if (!CampaignDiplomacy.CanDeclareWar(campaign, candidate.Id, neighbour.Id, out _)) continue;
+                var gap = AiStatecraft.StrengthOf(campaign, candidate) /
+                          MathF.Max(0.01f, AiStatecraft.StrengthOf(campaign, neighbour));
+                if (gap <= bestGap) continue;
+                bestGap = gap;
+                strong = candidate;
+                weak = neighbour;
+            }
+        }
+        if (strong is null || weak is null)
+            return "no country in the world is three times its neighbour's strength";
+
+        var wanted = AiStatecraft.JudgeWarFor(campaign, strong, weak);
+        if (wanted <= 0f)
+            return $"{strong.Tag} is {bestGap:0.0} times {weak.Tag}'s strength and still would not " +
+                   $"consider a war ({wanted:0.00}); the AI has stopped being dangerous rather than " +
+                   "started being careful";
+
+        // Now give them a real economic relationship and ask again.
+        strong.TradePartners[weak.Id] = 100f;
+        strong.ImportValue = 100f;
+        strong.ExportValue = 100f;
+        var withTrade = AiStatecraft.JudgeWarFor(campaign, strong, weak);
+        strong.TradePartners.Remove(weak.Id);
+        strong.ImportValue = 0f;
+        strong.ExportValue = 0f;
+
+        if (withTrade >= wanted)
+            return $"{strong.Tag} runs half its economy through {weak.Tag} and wants the war just as " +
+                   $"much ({wanted:0.00} against {withTrade:0.00}); trade is not a cost";
+
+        // And friends have to matter too.
+        var shelter = campaign.Nations.Find(other =>
+            other.Id != strong.Id && other.Id != weak.Id && other.Population > 5_000_000);
+        if (shelter is null) return "nobody left to guarantee the weak country";
+        var bond = CampaignDiplomacy.Get(campaign, shelter.Id, weak.Id);
+        if (shelter.Id == bond.A) bond.GuaranteeByA = true; else bond.GuaranteeByB = true;
+        var withFriends = AiStatecraft.JudgeWarFor(campaign, strong, weak);
+        if (shelter.Id == bond.A) bond.GuaranteeByA = false; else bond.GuaranteeByB = false;
+
+        if (withFriends >= wanted)
+            return $"{shelter.Tag} guaranteed {weak.Tag} and {strong.Tag} did not care " +
+                   $"({wanted:0.00} against {withFriends:0.00}); a guarantee deters nobody";
+
+        Console.WriteLine($"  restraint: {strong.Tag} is {bestGap:0.0}x stronger than {weak.Tag} and rates " +
+                          $"the war at {wanted:0.00}. Half its trade running through {weak.Tag} takes that " +
+                          $"to {withTrade:0.00}; a guarantee from {shelter.Tag} takes it to {withFriends:0.00}.");
+        return "";
+    }
+
     private static string APromiseIsAnsweredAndAConquestIsCounted()
     {
         var campaign = Campaign.CreateBootstrap(20240101);
