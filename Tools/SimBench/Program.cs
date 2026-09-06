@@ -127,6 +127,8 @@ public static class Program
         Console.WriteLine();
 
         Console.WriteLine();
+        failures += Check("a campaign day does not bury the collector",
+            ADayDoesNotBuryTheCollector(allocated / (double)days));
         failures += Check("the economy actually moved", EconomyMoved(campaign));
         failures += Check("scripted content parses and applies", ScriptedContentWorks(campaign));
         failures += Check("modifiers grant, tick and expire", ModifiersWork(campaign));
@@ -2864,6 +2866,31 @@ public static class Program
         }
 
         Console.WriteLine($"  wire: {orders.Length} order(s) encoded, sent and read back with every field intact.");
+        return "";
+    }
+
+    /// <summary>
+    /// A simulated day may not hand the collector more than a budget of garbage.
+    ///
+    /// Wall time on a machine that is also running an editor is noise, and this bench says
+    /// so everywhere else. Allocation is not noise: it is the same on every machine, and it
+    /// is what the player actually feels, because every megabyte comes back later as a
+    /// collection pause in the middle of a war.
+    ///
+    /// A day cost 1.35 MB and thirty gen-0 collections a simulated year. Almost all of it
+    /// was four habits rather than four algorithms - a LINQ Contains on a list, a closure
+    /// in a RemoveAll, a JSON trigger re-parsed per question, and prose composed for
+    /// cabinets nobody was reading. The budget below is the measured figure with room to
+    /// breathe; it is here so that the next feature has to notice when it spends it.
+    /// </summary>
+    private static string ADayDoesNotBuryTheCollector(double bytesPerDay)
+    {
+        const double budget = 420 * 1024;
+        var perDay = bytesPerDay / 1024.0;
+        if (bytesPerDay > budget)
+            return $"a campaign day allocated {perDay:N0} kB, over the {budget / 1024:N0} kB budget - " +
+                   "run the bench and read the pass table above: whichever line grew is the one that did it";
+        Console.WriteLine($"  garbage: {perDay:N0} kB a day against a {budget / 1024:N0} kB budget.");
         return "";
     }
 

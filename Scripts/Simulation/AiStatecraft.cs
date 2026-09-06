@@ -331,7 +331,7 @@ public static class AiStatecraft
         foreach (var definition in DecisionCatalog.All)
         {
             if (string.IsNullOrEmpty(definition.AiWillDo)) continue;
-            if (DecisionCatalog.BlockReason(campaign, nation, definition).Length > 0) continue;
+            if (DecisionCatalog.IsBlocked(campaign, nation, definition)) continue;
             var score = ScriptLibrary.Score(campaign, nation, definition.AiWillDo);
             if (score <= bestScore) continue;
             bestScore = score;

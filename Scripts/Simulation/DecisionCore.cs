@@ -175,13 +175,40 @@ public static class DecisionCatalog
         if (nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays)
             return $"Available in {nation.DecisionAvailableDay[definition.Id] - campaign.ElapsedDays} days";
         if (nation.Treasury < Cost(nation, definition)) return "Insufficient treasury";
-        if (definition.Kind == DecisionKind.EmergencyMobilisation &&
-            !campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id))) return "Requires an active war";
+        if (definition.Kind == DecisionKind.EmergencyMobilisation && !AtWar(campaign, nation))
+            return "Requires an active war";
         if (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation))
             return string.IsNullOrWhiteSpace(definition.Unavailable)
                 ? "The country is not in a position to do this"
                 : definition.Unavailable;
         return "";
+    }
+
+    /// <summary>
+    /// Whether a decision may be taken, without saying why not.
+    ///
+    /// The same tests as the reason above, and it is separate because of who asks. A player
+    /// asks once, of one decision, and wants the sentence. Two hundred and sixty cabinets
+    /// ask it of every decision they have, every month, and throw the sentence away - and
+    /// the first test writes a fresh "available in 214 days" for every decision on cooldown,
+    /// which is most of them, most of the time. That was fourteen megabytes of prose a
+    /// simulated year, composed for nobody.
+    /// </summary>
+    public static bool IsBlocked(Campaign campaign, Nation nation, DecisionDefinition definition) =>
+        nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays ||
+        nation.Treasury < Cost(nation, definition) ||
+        (definition.Kind == DecisionKind.EmergencyMobilisation && !AtWar(campaign, nation)) ||
+        (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation));
+
+    /// <summary>By hand: Wars.Any(lambda) captures the nation and allocates to say so.</summary>
+    private static bool AtWar(Campaign campaign, Nation nation)
+    {
+        for (var index = 0; index < campaign.Wars.Count; index++)
+        {
+            var war = campaign.Wars[index];
+            if (!war.Ended && war.Involves(nation.Id)) return true;
+        }
+        return false;
     }
 }
 

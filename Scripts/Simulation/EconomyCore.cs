@@ -340,7 +340,7 @@ public static class EconomySystem
     public static void Tick(Campaign campaign)
     {
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
-        MarketSystem.Tick(campaign);
+        using (SimProfiler.Measure("eco:market")) MarketSystem.Tick(campaign);
         foreach (var nation in campaign.Nations)
         {
             var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
@@ -362,16 +362,23 @@ public static class EconomySystem
             nation.WeeklyBalance = nation.WeeklyTaxIncome + nation.WeeklyTariffIncome -
                                    nation.WeeklyExpenses + nation.WeeklyTradeBalance;
 
-            nation.Budget.Begin("Weekly balance", "money");
-            nation.Budget.Add($"Taxation at {nation.TaxRate:P0}", nation.WeeklyTaxIncome);
-            nation.Budget.Add("Tariffs", nation.WeeklyTariffIncome);
-            nation.Budget.Add("Trade", nation.WeeklyTradeBalance);
-            nation.Budget.Add("Administration", -administration);
-            nation.Budget.Add($"Armed forces at {nation.MilitarySpending:P0}", -military);
-            nation.Budget.Add($"Welfare at {nation.WelfareSpending:P0}", -welfare);
-            nation.Budget.Add($"Education at {nation.EducationSpending:P0}", -education);
-            nation.Budget.Add("Policing unrest", -unrest);
-            nation.Budget.Settle(nation.WeeklyBalance, "rounding");
+            // Itemised for whoever is going to read it, which is a human. The four labels
+            // that carry a rate have to be composed fresh every week, and composing them
+            // for the two hundred and sixty cabinets nobody is looking at was fifty
+            // thousand sentences a simulated year written for an empty room.
+            if (nation.IsHuman)
+            {
+                nation.Budget.Begin("Weekly balance", "money");
+                nation.Budget.Add($"Taxation at {nation.TaxRate:P0}", nation.WeeklyTaxIncome);
+                nation.Budget.Add("Tariffs", nation.WeeklyTariffIncome);
+                nation.Budget.Add("Trade", nation.WeeklyTradeBalance);
+                nation.Budget.Add("Administration", -administration);
+                nation.Budget.Add($"Armed forces at {nation.MilitarySpending:P0}", -military);
+                nation.Budget.Add($"Welfare at {nation.WelfareSpending:P0}", -welfare);
+                nation.Budget.Add($"Education at {nation.EducationSpending:P0}", -education);
+                nation.Budget.Add("Policing unrest", -unrest);
+                nation.Budget.Settle(nation.WeeklyBalance, "rounding");
+            }
 
             nation.Treasury += nation.WeeklyBalance;
 
@@ -408,6 +415,7 @@ public static class EconomySystem
 
             var states = campaign.StatesOf(nation);
             long totalPopulation = 0;
+            using var stateScope = SimProfiler.Measure("eco:states");
             foreach (var state in states)
             {
                 var hospital = state.Buildings.GetValueOrDefault(BuildingKind.Hospital);
@@ -566,10 +574,18 @@ public static class EconomySystem
 
         // They become the first of the peoples the state is for. Which one that is comes
         // from the data, so assimilating into Switzerland does not turn everybody German.
-        var into = DemographyCatalog.PrimaryCultures(nation.Tag).FirstOrDefault()
-                   ?? nation.Tag.ToLowerInvariant();
-        var host = state.PopulationGroups.Find(group =>
-            string.Equals(group.Culture, into, StringComparison.OrdinalIgnoreCase));
+        var into = DemographyCatalog.PrimaryCulture(nation.Tag);
+        // By hand rather than by List.Find: the predicate would capture `into`, and a
+        // closure allocated once per region per week is a closure allocated a hundred
+        // thousand times a simulated year.
+        PopulationGroup host = null;
+        for (var index = 0; index < state.PopulationGroups.Count; index++)
+        {
+            var candidate = state.PopulationGroups[index];
+            if (!string.Equals(candidate.Culture, into, StringComparison.OrdinalIgnoreCase)) continue;
+            host = candidate;
+            break;
+        }
         if (host is null)
         {
             host = new PopulationGroup

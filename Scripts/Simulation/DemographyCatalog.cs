@@ -116,6 +116,21 @@ public static class DemographyCatalog
     private static readonly Dictionary<string, List<CultureShare>> ByRegion = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, List<string>> PrimaryByCountry = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The same peoples again, as a set, and the first of them.
+    ///
+    /// Kept beside the list because "is this people one of the state's own" is asked once
+    /// per population group per region per week - about three million times a simulated
+    /// year - and asking it of a list through LINQ allocated an enumerator every time. That
+    /// single question was three quarters of everything the simulation gave the garbage
+    /// collector; the answer is the same, it simply no longer costs anything to get.
+    /// </summary>
+    private static readonly Dictionary<string, HashSet<string>> PrimarySetByCountry =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly Dictionary<string, string> FirstPrimaryByCountry =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public static IReadOnlyDictionary<string, CultureDefinition> Cultures => CultureById;
     public static IReadOnlyDictionary<string, ReligionDefinition> Religions => ReligionById;
     public static IReadOnlyList<ProfessionDefinition> Professions => ProfessionList;
@@ -139,8 +154,18 @@ public static class DemographyCatalog
     /// <summary>Whether a people is one of the state's own, which is what makes the rest minorities.</summary>
     public static bool IsPrimary(string countryTag, string culture) =>
         countryTag is not null && culture is not null &&
-        PrimaryByCountry.TryGetValue(countryTag, out var primary) &&
-        primary.Contains(culture, StringComparer.OrdinalIgnoreCase);
+        PrimarySetByCountry.TryGetValue(countryTag, out var primary) &&
+        primary.Contains(culture);
+
+    /// <summary>
+    /// The people a state assimilates into: the first it is for, or its own tag if it says
+    /// nothing. Looked up rather than taken off the front of a list, because the caller is
+    /// in the weekly loop over every region in the world.
+    /// </summary>
+    public static string PrimaryCulture(string countryTag) =>
+        countryTag is not null && FirstPrimaryByCountry.TryGetValue(countryTag, out var first)
+            ? first
+            : countryTag?.ToLowerInvariant() ?? "";
 
     public static IReadOnlyList<string> PrimaryCultures(string countryTag) =>
         countryTag is not null && PrimaryByCountry.TryGetValue(countryTag, out var primary)
@@ -157,6 +182,8 @@ public static class DemographyCatalog
         ByCountry.Clear();
         ByRegion.Clear();
         PrimaryByCountry.Clear();
+        PrimarySetByCountry.Clear();
+        FirstPrimaryByCountry.Clear();
 
         foreach (var document in GameDataLoader.DataDocuments("common", "religions"))
             using (document) MergeReligions(document.RootElement, null);
@@ -312,6 +339,8 @@ public static class DemographyCatalog
         // than it is wrong, and where it is wrong the country says so in one line.
         if (primary.Count == 0) primary.Add(shares.OrderByDescending(share => share.Share).First().Culture);
         PrimaryByCountry[entry.Name] = primary;
+        PrimarySetByCountry[entry.Name] = new HashSet<string>(primary, StringComparer.OrdinalIgnoreCase);
+        FirstPrimaryByCountry[entry.Name] = primary[0];
     }
 
     // ------------------------------------------------------------------ using it

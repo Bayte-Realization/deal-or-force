@@ -147,9 +147,19 @@ public static class OpinionSystem
     public static void Forget(Campaign campaign, DiplomaticRelation relation, string id)
     {
         if (relation is null) return;
-        relation.Reasons.RemoveAll(reason =>
-            string.Equals(reason.Id, id, StringComparison.OrdinalIgnoreCase));
-        Settle(campaign, relation);
+        // By hand, and only settling when something actually went. RemoveAll takes a
+        // predicate that captures the id, so it allocated a closure every time - and every
+        // country tells the diplomacy pass to forget two or three things about each of its
+        // neighbours every week, which came to eight megabytes of closures a simulated
+        // year for a list that is usually empty.
+        var removed = false;
+        for (var index = relation.Reasons.Count - 1; index >= 0; index--)
+        {
+            if (!string.Equals(relation.Reasons[index].Id, id, StringComparison.OrdinalIgnoreCase)) continue;
+            relation.Reasons.RemoveAt(index);
+            removed = true;
+        }
+        if (removed) Settle(campaign, relation);
     }
 
     /// <summary>What one reason is worth today, having faded for as long as it has been held.</summary>

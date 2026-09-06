@@ -34,6 +34,18 @@ public static class ScriptLibrary
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, JsonDocument> EffectBlocks =
         new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Triggers inside AI scores, parsed once instead of once per question.
+    ///
+    /// A score is asked of two hundred and sixty cabinets, for every decision they have,
+    /// every month - and every one of those asks was re-parsing the score's conditions out
+    /// of JSON and composing a fresh context string to blame if the parse failed. The
+    /// conditions never change between asks; only the country does. Parsing them once and
+    /// keeping them is the whole optimisation, and it costs one dictionary that is emptied
+    /// whenever the scripts are reloaded.
+    /// </summary>
+    private static readonly Dictionary<(string Name, int Index), ScriptedTrigger> ScoreTriggers = new();
+
     private static readonly Dictionary<string, JsonDocument> ScoreBlocks =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -90,6 +102,7 @@ public static class ScriptLibrary
         Clear(TriggerBlocks);
         Clear(EffectBlocks);
         Clear(ScoreBlocks);
+        ScoreTriggers.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "scripted_triggers"))
             using (document) Absorb(TriggerBlocks, document.RootElement);
         foreach (var document in GameDataLoader.DataDocuments("common", "scripted_effects"))
@@ -131,12 +144,16 @@ public static class ScriptLibrary
         if (!root.TryGetProperty("modifiers", out var modifiers) ||
             modifiers.ValueKind != JsonValueKind.Array) return score;
 
+        var index = -1;
         foreach (var entry in modifiers.EnumerateArray())
         {
+            index++;
             if (entry.ValueKind != JsonValueKind.Object) continue;
             if (entry.TryGetProperty("trigger", out var condition))
             {
-                var trigger = ScriptedTrigger.Parse(condition, $"scripted_modifiers/{name}", null);
+                var key = (name, index);
+                if (!ScoreTriggers.TryGetValue(key, out var trigger))
+                    ScoreTriggers[key] = trigger = ScriptedTrigger.Parse(condition, "scripted_modifiers/" + name, null);
                 if (!trigger.Matches(campaign, nation)) continue;
             }
             if (entry.TryGetProperty("add", out var add) && add.TryGetSingle(out var addition))
