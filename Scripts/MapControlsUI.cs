@@ -7,7 +7,7 @@ public partial class DealOrForceGame
 {
     private readonly Dictionary<StrategicMapMode, Button> _mapModeButtons = new();
     private Button _projectionButton = null!;
-    private Label _mapModeLegend = null!;
+    private OptionButton _mapModeLegend = null!;
 
     private void BuildMapControls()
     {
@@ -34,14 +34,16 @@ public partial class DealOrForceGame
         row.AddChild(_projectionButton);
 
         AddMode(row, StrategicMapMode.Political, "POL", "Political: countries, controllers and occupied provinces.");
-        AddMode(row, StrategicMapMode.Diplomatic, "DIP", "Diplomatic: relations with the player country.");
         AddMode(row, StrategicMapMode.Wars, "WAR", "Wars: belligerents, fronts and occupied territory.");
-        AddMode(row, StrategicMapMode.Population, "POP", "Population: logarithmic population density by country.");
-        AddMode(row, StrategicMapMode.Economy, "GDP", "Economy: logarithmic GDP scale by country.");
+        AddMode(row, StrategicMapMode.Terrain, "TER", "Terrain: geographical surface without political colours. Hover a province for combat and movement effects.");
 
-        _mapModeLegend = Title("POLITICAL", 12, Ui.Colour("text.accent_dim"));
-        _mapModeLegend.CustomMinimumSize = new Vector2(92, 0);
-        _mapModeLegend.HorizontalAlignment = HorizontalAlignment.Center;
+        // A dropdown keeps all seven layers reachable without pushing the strip past its artwork.
+        _mapModeLegend = new OptionButton { CustomMinimumSize = new Vector2(130, 34),
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, FitToLongestItem = false,
+            TooltipText = "All map layers, including diplomatic, population, economy and the moddable relief layer." };
+        foreach (StrategicMapMode mode in System.Enum.GetValues<StrategicMapMode>())
+            _mapModeLegend.AddItem(mode.ToString(), (int)mode);
+        _mapModeLegend.ItemSelected += index => _globe.SetMapMode((StrategicMapMode)_mapModeLegend.GetItemId((int)index));
         row.AddChild(_mapModeLegend);
 
         _globe.ProjectionChanged += flat =>
@@ -78,11 +80,12 @@ public partial class DealOrForceGame
                 StrategicMapMode.Wars => "WAR",
                 StrategicMapMode.Population => "POP",
                 StrategicMapMode.Economy => "GDP",
+                StrategicMapMode.Terrain => "TER",
                 _ => "MAP"
             };
             pair.Value.Text = pair.Key == active ? $"[{shortName}]" : shortName;
         }
-        if (_mapModeLegend is not null) _mapModeLegend.Text = active.ToString().ToUpperInvariant();
+        if (_mapModeLegend is not null) _mapModeLegend.Select(_mapModeLegend.GetItemIndex((int)active));
     }
 
     private void ToggleProjection() => _globe.ToggleProjection();

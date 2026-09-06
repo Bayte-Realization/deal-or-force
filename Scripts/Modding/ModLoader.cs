@@ -138,6 +138,7 @@ public sealed class ModLoader
         TerritorialTopology.ResetCatalog();
         HydrologyCatalog.ResetCatalog();
         MapRasterCatalog.ResetCatalog();
+        TerrainCatalog.ResetCatalog();
         Loc.ResetCatalog();
         InterfaceSkin.ResetCatalog();
         SpriteCatalog.Load();
@@ -307,6 +308,7 @@ public sealed class ModLoader
 
     private void ApplyMapData(ModPackage package)
     {
+        TerrainCatalog.ApplyDirectory(package.PhysicalRoot, package.Errors);
         MapRasterCatalog.ApplyDirectory(Path.Combine(package.PhysicalRoot, "map_data"), package.Errors);
         foreach (var path in JsonFiles(package, "map_data"))
         try

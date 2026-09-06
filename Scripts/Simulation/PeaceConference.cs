@@ -186,6 +186,7 @@ public static class PeaceConference
             army.AssignedWarId = -1;
             army.OrderKind = ArmyOrder.Manual;
             army.Route.Clear();
+            army.PlannedRoute.Clear();
             army.MoveProgress = 0f;
         }
         foreach (var battle in campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended))

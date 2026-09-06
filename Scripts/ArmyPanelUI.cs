@@ -56,32 +56,43 @@ public partial class DealOrForceGame
         Ui.Place(_armyPanel, "hud.army_panel");
         _armyPanel.Visible = false;
 
-        var shell = PanelRows(_armyPanel, 16, 12, 6);
+        // panel_command_frame.png has an ornamental bevel inside the StyleBox content
+        // rectangle. Twenty-two semantic pixels keep text, scroll bars and tab controls
+        // within the *visible* rail, rather than merely within the Control's outer box.
+        var shell = PanelRows(_armyPanel, 22, 16, 6);
+        shell.ClipContents = true;
 
         // ---- header: which army, who commands it, how much of it is selected ----------
-        var header = new HBoxContainer();
+        var header = new HBoxContainer { ClipContents = true };
         header.AddThemeConstantOverride("separation", 8);
         shell.AddChild(header);
 
-        var identity = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        identity.AddThemeConstantOverride("separation", 1);
-        header.AddChild(identity);
         _armyPanelTitle = Title("Army", 19, Ui.Colour("text.accent"));
+        _armyPanelTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _armyPanelTitle.AutowrapMode = TextServer.AutowrapMode.Off;
-        identity.AddChild(_armyPanelTitle);
-        _armyPanelSubtitle = Title("", 12, Ui.Colour("text.muted"));
-        _armyPanelSubtitle.AutowrapMode = TextServer.AutowrapMode.Off;
-        identity.AddChild(_armyPanelSubtitle);
+        _armyPanelTitle.ClipText = true;
+        header.AddChild(_armyPanelTitle);
 
         _armyPanelCount = Title("", 15, Ui.Colour("text.bright"));
         _armyPanelCount.HorizontalAlignment = HorizontalAlignment.Right;
         _armyPanelCount.AutowrapMode = TextServer.AutowrapMode.Off;
-        _armyPanelCount.CustomMinimumSize = new Vector2(96, 0);
+        _armyPanelCount.ClipText = true;
+        _armyPanelCount.CustomMinimumSize = new Vector2(84, 0);
         header.AddChild(_armyPanelCount);
         header.AddChild(ActionButton("×", ClearArmySelectionAndClose, 32, 28));
 
+        // The descriptive line gets the complete safe width instead of fighting the
+        // selection count and close button in the header. Long commander names wrap
+        // to a second line and are then clipped, never painted through the frame.
+        _armyPanelSubtitle = Title("", 12, Ui.Colour("text.muted"));
+        _armyPanelSubtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _armyPanelSubtitle.ClipText = true;
+        _armyPanelSubtitle.MaxLinesVisible = 2;
+        _armyPanelSubtitle.CustomMinimumSize = new Vector2(0, 18);
+        shell.AddChild(_armyPanelSubtitle);
+
         // ---- composition: what the selection is made of, at a glance ------------------
-        _armyComposition = new HBoxContainer();
+        _armyComposition = new HBoxContainer { ClipContents = true };
         _armyComposition.AddThemeConstantOverride("separation", 12);
         shell.AddChild(_armyComposition);
 
@@ -90,8 +101,12 @@ public partial class DealOrForceGame
         {
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            ClipContents = true,
+            FollowFocus = true,
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 150),
+            // Two rows remain usable even in a 720p window; surplus height is shared
+            // with the command deck below.
+            CustomMinimumSize = new Vector2(0, 72),
             SizeFlagsStretchRatio = 0.75f
         };
         shell.AddChild(scroll);
@@ -103,83 +118,83 @@ public partial class DealOrForceGame
             "Click a division to command it alone · Ctrl+click to add or remove · double-click to take every division of the same template",
             11, Ui.Colour("text.faint"));
         _armyRosterHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _armyRosterHint.ClipText = true;
+        _armyRosterHint.MaxLinesVisible = 2;
+        _armyRosterHint.CustomMinimumSize = new Vector2(0, 34);
         shell.AddChild(_armyRosterHint);
 
-        // The command deck has many useful controls, but it must never dictate the
-        // panel's screen-space height. Keeping it in its own scroll viewport lets the
-        // data-driven HUD rectangle remain authoritative at every supported resolution.
-        // The roster remains independently scrollable, so selecting seventy divisions
-        // does not push the battle-plan buttons below the map controls.
-        var commandScroll = new ScrollContainer
+        // Commands are split into three short pages. The former single 430 px column
+        // looked acceptable with seven divisions, then silently continued below the
+        // panel frame with a large selection. Tabs keep every control inside a stable
+        // surface and leave the roster the flexible part of the panel.
+        var commandTabs = new TabContainer
         {
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = 1.45f,
-            CustomMinimumSize = new Vector2(0, 250),
-            FollowFocus = true
+            CustomMinimumSize = new Vector2(0, 180),
+            ClipContents = true
         };
-        shell.AddChild(commandScroll);
-        var rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        rows.AddThemeConstantOverride("separation", 6);
-        commandScroll.AddChild(rows);
+        commandTabs.AddThemeFontSizeOverride("font_size", 12);
+        shell.AddChild(commandTabs);
+
+        var plansPage = CommandPage(commandTabs, "ORDERS");
+        var doctrinePage = CommandPage(commandTabs, "STANCE");
+        var organisationPage = CommandPage(commandTabs, "ORGANISE");
 
         // ---- battle plans -------------------------------------------------------------
-        rows.AddChild(Title("BATTLE PLANS", 11, Ui.Colour("text.caption")));
         var plans = new HBoxContainer();
         plans.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(plans);
-        AddOrderButton(plans, "✋", ArmyOrder.Manual, "Halt",
+        plansPage.AddChild(plans);
+        AddOrderButton(plans, "army_halt", ArmyOrder.Manual, "Halt",
             "Cancel the route or plan and hold the present province.");
-        AddOrderButton(plans, "▬", ArmyOrder.DefendFront, "Front line",
+        AddOrderButton(plans, "army_defend", ArmyOrder.DefendFront, "Front line",
             "Hold the assigned sector of the front. Entrench, recover, and repel what comes.");
-        AddOrderButton(plans, "➤", ArmyOrder.AdvanceFront, "Offensive line",
+        AddOrderButton(plans, "army_advance", ArmyOrder.AdvanceFront, "Offensive line",
             "Push the front forward across its whole width once the plan is ready.");
-        AddOrderButton(plans, "➤➤", ArmyOrder.Spearhead, "Spearhead",
+        AddOrderButton(plans, "army_spearhead", ArmyOrder.Spearhead, "Spearhead",
             "Drive at the last selected enemy region, or at the war goal if none was picked.");
-        AddOrderButton(plans, "⌂", ArmyOrder.ReserveFront, "Reserve",
+        AddOrderButton(plans, "army_reserve", ArmyOrder.ReserveFront, "Reserve",
             "Stand behind the contact line, recover faster and reinforce defensive battles nearby.");
 
         var execution = new HBoxContainer();
         execution.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(execution);
-        var prepare = ActionButton("Prepare", () => IssuePlanExecution(false), 96, 30);
+        plansPage.AddChild(execution);
+        var prepare = ActionButton("Prepare", () => IssuePlanExecution(false), 102, 32, false, Icon("plan_prepare"));
         prepare.TooltipText = "Hold offensive formations on their sector so they entrench and accumulate a plan.";
         execution.AddChild(prepare);
-        var execute = ActionButton("Execute ▶", () => IssuePlanExecution(true), 110, 30, true);
+        var execute = ActionButton("Execute", () => IssuePlanExecution(true), 104, 32, true, Icon("plan_execute"));
         execute.TooltipText = "Activate the selected offensive plans. Front-line and reserve orders stay as they are.";
         execution.AddChild(execute);
-        var autoFront = ActionButton("Auto-deploy", AutoDeployFront, 110, 30);
+        var autoFront = ActionButton("Auto-deploy", AutoDeployFront, 118, 32, false, Icon("auto_deploy"));
         autoFront.TooltipText = "Spread the selection across unique sectors of the active front.";
         execution.AddChild(autoFront);
 
         // ---- the brush ----------------------------------------------------------------
         // An order names a role; a drawn line says where. The three buttons pick which
         // kind of line the brush is drawing, and pressing the same one again commits it.
-        rows.AddChild(Title("DRAW ON THE MAP", 11, Ui.Colour("text.caption")));
+        plansPage.AddChild(Title("DRAW ON THE MAP", 11, Ui.Colour("text.caption")));
         var draw = new HBoxContainer();
         draw.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(draw);
-        AddDrawButton(draw, "▬ Front", FrontLineKind.Defence, "Front line",
+        plansPage.AddChild(draw);
+        AddDrawButton(draw, "Front", "plan_front", FrontLineKind.Defence, "Front line",
             "Draw the line to hold. The selection spreads along its length and digs in.");
-        AddDrawButton(draw, "➤ Attack", FrontLineKind.Offensive, "Offensive line",
+        AddDrawButton(draw, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive line",
             "Draw a line across enemy ground. The selection attacks towards it once executed.");
-        AddDrawButton(draw, "⌂ Fall back", FrontLineKind.Fallback, "Fallback line",
+        AddDrawButton(draw, "Fall back", "plan_fallback", FrontLineKind.Fallback, "Fallback line",
             "Draw the line to hold if the one in front gives way.");
-        var dropLine = ActionButton("Erase", ClearDrawnLine, 74, 30);
+        var dropLine = ActionButton("Erase", ClearDrawnLine, 82, 30, false, Icon("plan_erase"));
         dropLine.TooltipText = "Take the selection off its drawn line and return it to the war's own front.";
         draw.AddChild(dropLine);
 
         _drawFeedback = Title("Pick a line, then drag along the map. Right button rubs out.",
             11, Ui.Colour("text.muted"));
         _drawFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(_drawFeedback);
+        plansPage.AddChild(_drawFeedback);
 
         // ---- posture and reinforcement -------------------------------------------------
-        rows.AddChild(Title("POSTURE", 11, Ui.Colour("text.caption")));
+        doctrinePage.AddChild(Title("POSTURE", 11, Ui.Colour("text.caption")));
         var posture = new HBoxContainer();
         posture.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(posture);
+        doctrinePage.AddChild(posture);
         AddStanceButton(posture, "Cautious", ArmyStance.Cautious,
             "Slower and more careful: better recovery, entrenchment and defence, fewer casualties.");
         AddStanceButton(posture, "Balanced", ArmyStance.Balanced,
@@ -187,10 +202,10 @@ public partial class DealOrForceGame
         AddStanceButton(posture, "Aggressive", ArmyStance.Aggressive,
             "Faster and harder-hitting, at the cost of recovery, defence and heavier casualties.");
 
-        rows.AddChild(Title("REINFORCEMENT PRIORITY", 11, Ui.Colour("text.caption")));
+        doctrinePage.AddChild(Title("REINFORCEMENT PRIORITY", 11, Ui.Colour("text.caption")));
         var priority = new HBoxContainer();
         priority.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(priority);
+        doctrinePage.AddChild(priority);
         AddReinforcementPriorityButton(priority, "Low", ReinforcementPriority.Low,
             "0.45 weight. For quiet sectors and formations that are training rather than fighting.");
         AddReinforcementPriorityButton(priority, "Normal", ReinforcementPriority.Normal,
@@ -199,57 +214,85 @@ public partial class DealOrForceGame
             "1.90 weight. These recover first, and starve the lower priorities when reserves are short.");
 
         // ---- organisation --------------------------------------------------------------
-        rows.AddChild(Title("ARMY", 11, Ui.Colour("text.caption")));
-        var grouping = new HBoxContainer();
+        organisationPage.AddChild(Title("HEADQUARTERS", 11, Ui.Colour("text.caption")));
+        // Two columns keep translated captions and icon-bearing buttons within the
+        // narrow command frame. A single row could exceed the safe inner rail even
+        // when its declared minimum widths appeared to fit.
+        var grouping = new GridContainer
+        {
+            Columns = 2,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         grouping.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(grouping);
-        var newGroup = ActionButton("New HQ", CreateGroupFromSelection, 84, 28, true);
+        organisationPage.AddChild(grouping);
+        var newGroup = ActionButton("New HQ", CreateGroupFromSelection, 96, 30, true, Icon("hq_new"));
         newGroup.TooltipText = "Raise a new army headquarters and attach every selected division to it.";
         grouping.AddChild(newGroup);
-        var nextGroup = ActionButton("Next HQ", AssignSelectionToNextGroup, 84, 28);
+        var nextGroup = ActionButton("Next HQ", AssignSelectionToNextGroup, 96, 30, false, Icon("hq_next"));
         nextGroup.TooltipText = "Move the selection to the next existing army headquarters.";
         grouping.AddChild(nextGroup);
-        var ungroup = ActionButton("Detach", () => AssignSelectionToGroup(-1), 78, 28);
+        var ungroup = ActionButton("Detach", () => AssignSelectionToGroup(-1), 90, 30, false, Icon("hq_detach"));
         ungroup.TooltipText = "Remove the selection from its army while leaving it on the map.";
         grouping.AddChild(ungroup);
-        var selectHq = ActionButton("Whole HQ", SelectCurrentArmyGroup, 88, 28);
+        var selectHq = ActionButton("Whole HQ", SelectCurrentArmyGroup, 104, 30, false, Icon("hq_whole"));
         selectHq.TooltipText = "Select every division attached to the lead division's army headquarters.";
         grouping.AddChild(selectHq);
 
         var selection = new HBoxContainer();
         selection.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(selection);
-        var everything = ActionButton("Every division", SelectAllPlayerArmies, 118, 28);
+        organisationPage.AddChild(selection);
+        var everything = ActionButton("Every division", SelectAllPlayerArmies, 124, 30, false, Icon("select_all"));
         everything.TooltipText = "Take every field division your country has into the roster.";
         selection.AddChild(everything);
-        var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 96, 28);
+        var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 104, 30, false, Icon("drop_lead"));
         dropLead.TooltipText = "Remove the lead division from the selection without moving or disbanding it.";
         selection.AddChild(dropLead);
-        var region = ActionButton("Region", ShowSelectedArmyRegion, 96, 28);
+        var region = ActionButton("Region", ShowSelectedArmyRegion, 96, 30, false, Icon("region"));
         region.TooltipText = "Open the demographic and economic inspector for the ground this division is on.";
         selection.AddChild(region);
 
         _armyCommandFeedback = Title("Right-click to march or attack · Shift+right-click queues a waypoint",
             11, Ui.Colour("text.body_soft"));
         _armyCommandFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(_armyCommandFeedback);
+        organisationPage.AddChild(_armyCommandFeedback);
 
         // The old order controls lived in the generic side panel; the panel is that
         // container now, so the visibility flags the rest of the HUD sets still land.
-        _armyOrders = rows;
+        _armyOrders = commandTabs;
     }
 
-    private void AddDrawButton(Container parent, string label, FrontLineKind kind, string name, string help)
+    private static VBoxContainer CommandPage(TabContainer tabs, string name)
     {
-        var button = ActionButton(label, () => ToggleDrawing(kind), 92, 30);
+        var page = new VBoxContainer
+        {
+            Name = name,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            ClipContents = true
+        };
+        page.AddThemeConstantOverride("separation", 6);
+        tabs.AddChild(page);
+        return page;
+    }
+
+    /// <summary>
+    /// The icon a control asks for, named as a sprite rather than as a file, so a mod
+    /// dropping its own `icon_army_advance.png` into its `gfx/` tree replaces it.
+    /// </summary>
+    private static string Icon(string name) =>
+        Simulation.SpriteCatalog.TextureOf($"icon_{name}",
+            $"res://game/gfx/interface/icons/icon_{name}.png");
+
+    private void AddDrawButton(Container parent, string label, string icon, FrontLineKind kind, string name, string help)
+    {
+        var button = ActionButton(label, () => ToggleDrawing(kind), 96, 30, false, Icon(icon));
         button.TooltipText = $"{name}\n{help}";
         _drawButtons[kind] = button;
         parent.AddChild(button);
     }
 
-    private void AddOrderButton(Container parent, string glyph, ArmyOrder order, string name, string help)
+    private void AddOrderButton(Container parent, string icon, ArmyOrder order, string name, string help)
     {
-        var button = ActionButton(glyph, () => IssueArmyOrder(order), 56, 34);
+        var button = ActionButton("", () => IssueArmyOrder(order), 56, 36, false, Icon(icon));
         button.TooltipText = $"{name}\n{help}";
         _armyOrderButtons[order] = button;
         parent.AddChild(button);

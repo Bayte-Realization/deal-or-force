@@ -12,7 +12,9 @@ public enum StrategicMapMode
     Diplomatic,
     Wars,
     Population,
-    Economy
+    Economy,
+    Terrain,
+    Relief
 }
 
 public sealed partial class GlobePresentation
@@ -241,6 +243,7 @@ public sealed partial class GlobePresentation
     public void SetMapMode(StrategicMapMode mode)
     {
         _mapMode = mode;
+        _globeMaterial?.SetShaderParameter("terrain_mode", mode == StrategicMapMode.Terrain ? 1f : mode == StrategicMapMode.Relief ? 2f : 0f);
         _globeMaterial?.SetShaderParameter("map_mode", mode == StrategicMapMode.Political ? 0f : 1f);
         RefreshMapModePalette();
         MapModeChanged?.Invoke(mode);
@@ -250,7 +253,7 @@ public sealed partial class GlobePresentation
     {
         if (_campaign is null || _globeMaterial is null) return;
         _lastMapModeDay = _campaign.ElapsedDays;
-        if (_mapMode == StrategicMapMode.Political)
+        if (_mapMode is StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief)
         {
             _globeMaterial.SetShaderParameter("map_mode", 0f);
             return;
@@ -338,7 +341,7 @@ public sealed partial class GlobePresentation
 
     private void UpdateMapModePaletteIfNeeded()
     {
-        if (_mapMode == StrategicMapMode.Political || _campaign is null) return;
+        if (_mapMode is StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief || _campaign is null) return;
         if (_campaign.ElapsedDays - _lastMapModeDay >= 30) RefreshMapModePalette();
     }
 }

@@ -80,6 +80,7 @@ public static class NavalInvasion
         army.EmbarkedFleetId = fleet.Id;
         army.ProvinceId = 0;
         army.Route.Clear();
+        army.PlannedRoute.Clear();
         army.MoveProgress = 0f;
         army.OrderKind = ArmyOrder.Manual;
         army.OrderProvinceId = -1;
@@ -108,6 +109,7 @@ public static class NavalInvasion
             army.Longitude = centre.Longitude;
             army.MoveProgress = 0f;
             army.Route.Clear();
+            army.PlannedRoute.Clear();
             landed++;
         }
         fleet.Carried.Clear();

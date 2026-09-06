@@ -373,7 +373,10 @@ public partial class DealOrForceGame
             division.Latitude = center.Latitude;
             division.Longitude = center.Longitude;
             division.Route.Clear();
+            division.PlannedRoute.Clear();
             division.MoveProgress = 0f;
+            division.OrderRouteSteps = 0;
+            division.OrderStepsCompleted = 0;
         }
         _campaign.MarkStrategicChange();
         return $"Teleported {targets.Length} division(s) to province #{province:N0}.";

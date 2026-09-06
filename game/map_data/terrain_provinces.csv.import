@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cd3hevw1kb4cf"
+
+[deps]
+
+source_file="res://game/map_data/terrain_provinces.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

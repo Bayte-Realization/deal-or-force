@@ -50,6 +50,11 @@ public sealed class ProvinceTopology
     /// </summary>
     public bool[] WaterByProvince { get; private set; }
     public int RiverCrossingCount => _riverCrossings.Count;
+    public TerrainDefinition[] TerrainByProvince { get; private set; } = Array.Empty<TerrainDefinition>();
+    public byte[] TerrainSurfaceSlots { get; internal set; } = Array.Empty<byte>();
+    public TerrainDefinition TerrainAt(int province) => province > 0 && province < TerrainByProvince.Length
+        ? TerrainByProvince[province] : TerrainCatalog.Get("plains");
+    public void AttachTerrain() => TerrainByProvince = TerrainCatalog.Bind(this);
     private readonly Dictionary<long, byte> _riverCrossings = new();
 
     private ProvinceTopology(
@@ -251,7 +256,8 @@ public sealed class ProvinceTopology
     /// </summary>
     public ProvinceTopology CloneForOverrides() =>
         new(CellToProvince, (ushort[])ProvinceToState.Clone(), (ushort[])ProvinceToNation.Clone(),
-            ProvinceCenterCell, Neighbors, Width, Height);
+            ProvinceCenterCell, Neighbors, Width, Height)
+        { TerrainByProvince = (TerrainDefinition[])TerrainByProvince.Clone(), TerrainSurfaceSlots = TerrainSurfaceSlots };
 
     /// <summary>
     /// The growth and relaxation algorithms need a sentinel for "not assigned yet" and use
@@ -582,6 +588,58 @@ public sealed class ProvinceTopology
             foreach (var next in Neighbors[current])
             {
                 if (stamp[next] == generation || controllers[next] != nationMapIndex || IsWater(next)) continue;
+                stamp[next] = generation;
+                previous[next] = current;
+                queue.Enqueue(next);
+            }
+        }
+
+        if (stamp[targetProvince] != generation) return Array.Empty<int>();
+        var route = _routeBuffer;
+        route.Clear();
+        for (var cursor = targetProvince; cursor != startProvince; cursor = previous[cursor])
+            route.Add(cursor);
+        route.Reverse();
+        return route.ToArray();
+    }
+
+    /// <summary>
+    /// Shortest land corridor for an offensive order. Only the two belligerents' ground
+    /// may be crossed, so a drawn arrow cannot cut through an unrelated neutral country.
+    /// Unlike <see cref="FindRoute(int,int,ushort,ushort[],bool)"/>, hostile provinces are
+    /// deliberately legal: this is the route the formation intends to fight through.
+    /// </summary>
+    public int[] FindOperationalRoute(int startProvince, int targetProvince, ushort friendlyMapIndex,
+        ushort hostileMapIndex, ushort[] controllers)
+    {
+        if (startProvince <= 0 || targetProvince <= 0 ||
+            startProvince >= Neighbors.Length || targetProvince >= Neighbors.Length ||
+            controllers is null || controllers.Length < Neighbors.Length ||
+            IsWater(startProvince) || IsWater(targetProvince))
+            return Array.Empty<int>();
+        if (startProvince == targetProvince) return Array.Empty<int>();
+
+        static bool Allowed(ushort controller, ushort friendly, ushort hostile) =>
+            controller == friendly || controller == hostile;
+        if (!Allowed(controllers[startProvince], friendlyMapIndex, hostileMapIndex) ||
+            !Allowed(controllers[targetProvince], friendlyMapIndex, hostileMapIndex))
+            return Array.Empty<int>();
+
+        var generation = BeginRouteSearch();
+        var previous = _routePrevious;
+        var stamp = _routeStamp;
+        var queue = _routeFrontier;
+        stamp[startProvince] = generation;
+        previous[startProvince] = startProvince;
+        queue.Enqueue(startProvince);
+
+        while (queue.Count > 0 && stamp[targetProvince] != generation)
+        {
+            var current = queue.Dequeue();
+            foreach (var next in Neighbors[current])
+            {
+                if (stamp[next] == generation || IsWater(next) ||
+                    !Allowed(controllers[next], friendlyMapIndex, hostileMapIndex)) continue;
                 stamp[next] = generation;
                 previous[next] = current;
                 queue.Enqueue(next);

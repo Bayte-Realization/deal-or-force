@@ -1,0 +1,63 @@
+{
+  "size": [
+    5760,
+    2880
+  ],
+  "source_year": 2009,
+  "land_pixels": 5489569,
+  "nearest_landcover_fallback_pixels": 89267,
+  "provinces": 37909,
+  "province_distribution": {
+    "desert": 2503,
+    "farmland": 3181,
+    "forest": 5352,
+    "hills": 6561,
+    "ice": 10921,
+    "jungle": 1568,
+    "marsh": 243,
+    "mountains": 1473,
+    "plains": 2242,
+    "steppe": 1942,
+    "tundra": 1898,
+    "urban": 25
+  },
+  "classification": {
+    "cover_classes": {
+      "11": "farmland",
+      "14": "farmland",
+      "20": "farmland",
+      "30": "plains",
+      "40": "forest",
+      "50": "forest",
+      "60": "forest",
+      "70": "forest",
+      "90": "forest",
+      "100": "forest",
+      "110": "forest",
+      "120": "plains",
+      "130": "steppe",
+      "140": "plains",
+      "150": "steppe",
+      "160": "marsh",
+      "170": "marsh",
+      "180": "marsh",
+      "190": "urban",
+      "200": "desert",
+      "220": "ice"
+    },
+    "jungle_max_latitude": 28,
+    "tundra_min_latitude": 62,
+    "hills_local_range_m": 300,
+    "mountains_local_range_m": 900,
+    "elevation_neighborhood_pixels": 5,
+    "note": "Gameplay generalisation, not a scientific biome classification. Mountain relief supersedes cover except ice, wetland and urban. Tundra and jungle use latitude proxies."
+  },
+  "sources": [
+    "https://doi.org/10.1594/PANGAEA.787668",
+    "https://www.worldclim.org/data/worldclim21.html"
+  ],
+  "sha256": {
+    "globcover2009.zip": "3a5e46b589f6b650759308d4ccb2d62d906a8ffc6f44c6595545e18702a3f7c6",
+    "elevation.zip": "6761259f10b4d5ac421e9949d38cc80e8f586c54bba4ef30b1f257c4475774a9"
+  }
+}

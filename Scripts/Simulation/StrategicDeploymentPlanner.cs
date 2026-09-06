@@ -89,6 +89,7 @@ public static class StrategicDeploymentPlanner
         army.Latitude = center.Latitude;
         army.Longitude = center.Longitude;
         army.Route.Clear();
+        army.PlannedRoute.Clear();
         army.MoveProgress = 0f;
         army.OrderProvinceId = -1;
         army.OrderStateMapIndex = -1;

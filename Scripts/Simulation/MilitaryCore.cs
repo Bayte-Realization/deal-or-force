@@ -256,38 +256,25 @@ public sealed class MoveArmyCommand : ICampaignCommand
         }
 
         int[] route;
+        int[] plannedRoute;
         if (war is null)
         {
             route = topology.FindRoute(routeStart, TargetProvinceId, (ushort)nation.MapIndex, controllers,
                 allowUncontrolledStart: routeStart == army.ProvinceId);
+            plannedRoute = route;
         }
         else
         {
-            // A direct attack stages through friendly territory and leaves the enemy
-            // province to CombatCore. Moving an army entity into hostile control first
-            // would bypass defenders, occupation and river-combat rules.
-            route = topology.Neighbors[TargetProvinceId]
-                .Where(province => controllers[province] == nation.MapIndex)
-                .Select(province => routeStart == province
-                    ? Array.Empty<int>()
-                    : topology.FindRoute(routeStart, province, (ushort)nation.MapIndex, controllers,
-                        allowUncontrolledStart: routeStart == army.ProvinceId))
-                .Where(candidate => candidate.Length > 0 || topology.Neighbors[TargetProvinceId].Contains(routeStart))
-                .OrderBy(candidate => candidate.Length)
-                .ThenBy(candidate => candidate.Length == 0 ? routeStart : candidate[^1])
-                .FirstOrDefault();
-            if (route is null)
-            {
-                var front = war.FriendlyFront(nation.Id);
-                route = topology.FindRouteToAny(routeStart, front, (ushort)nation.MapIndex, controllers,
-                    allowUncontrolledStart: routeStart == army.ProvinceId);
-                if (route.Length == 0 && !front.Contains(routeStart)) route = null;
-            }
-            if (route is null)
+            plannedRoute = topology.FindOperationalRoute(routeStart, TargetProvinceId,
+                (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers);
+            if (plannedRoute.Length == 0)
             {
                 SetResult(army, campaign, ArmyMoveResult.NoLandRoute);
                 return;
             }
+            // CombatCore owns every hostile step. The ordinary marcher receives only the
+            // friendly prefix, while the complete corridor remains visible and guides it.
+            route = plannedRoute.TakeWhile(province => controllers[province] == nation.MapIndex).ToArray();
         }
         if (route.Length == 0)
         {
@@ -297,8 +284,16 @@ public sealed class MoveArmyCommand : ICampaignCommand
                 return;
             }
         }
-        if (!AppendWaypoint) army.Route.Clear();
+        if (!AppendWaypoint)
+        {
+            army.Route.Clear();
+            army.PlannedRoute.Clear();
+            army.OrderRouteSteps = 0;
+            army.OrderStepsCompleted = 0;
+        }
         army.Route.AddRange(route);
+        army.PlannedRoute.AddRange(plannedRoute);
+        army.OrderRouteSteps += plannedRoute.Length;
         army.OrderKind = war is null ? ArmyOrder.Manual : ArmyOrder.Spearhead;
         army.AssignedWarId = war?.Id ?? -1;
         army.OrderProvinceId = TargetProvinceId;
@@ -405,10 +400,13 @@ public sealed class SplitArmyCommand : ICampaignCommand
         army.Divisions -= detached;
         army.OrderKind = ArmyOrder.Manual;
         army.Route.Clear();
+        army.PlannedRoute.Clear();
         army.AssignedWarId = -1;
         army.OrderProvinceId = -1;
         army.OrderStateMapIndex = -1;
         army.MoveProgress = 0f;
+        army.OrderRouteSteps = 0;
+        army.OrderStepsCompleted = 0;
 
         var id = campaign.Armies.Max(candidate => candidate.Id) + 1;
         campaign.Armies.Add(new Army
@@ -497,6 +495,7 @@ public static class MilitaryOperations
                 controllers[nextProvince] != nation.MapIndex)
             {
                 army.Route.Clear();
+                army.PlannedRoute.Clear();
                 army.OrderProvinceId = -1;
                 army.OrderStateMapIndex = -1;
                 army.MoveProgress = 0f;
@@ -507,11 +506,16 @@ public static class MilitaryOperations
             var crossingStrength = topology.RiverCrossingStrength(army.ProvinceId, nextProvince);
             var riverMovement = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier, crossingStrength);
             army.MoveProgress += MilitaryBootstrap.MarchProgressPerDay * template.Speed *
-                MilitaryDoctrine.Movement(army.Stance) * M.Clamp(army.SupplyLevel, 0.25f, 1f) * riverMovement;
+                MilitaryDoctrine.Movement(army.Stance) * M.Clamp(army.SupplyLevel, 0.25f, 1f) * riverMovement *
+                topology.TerrainAt(nextProvince).MovementSpeed *
+                StrategicRedeployment.DayOf(campaign, army);
             if (army.MoveProgress < 1f) continue;
             army.MoveProgress -= 1f;
             army.ProvinceId = army.Route[0];
             army.Route.RemoveAt(0);
+            if (army.PlannedRoute.Count > 0 && army.PlannedRoute[0] == army.ProvinceId)
+                army.PlannedRoute.RemoveAt(0);
+            army.OrderStepsCompleted++;
             army.StateMapIndex = topology.ProvinceToState[army.ProvinceId];
             (army.Latitude, army.Longitude) = topology.CenterOf(army.ProvinceId);
             // Friendly ground by definition - the route above refuses any province the
@@ -605,11 +609,31 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         army.OrderProvinceId = -1;
         army.ObjectiveStateMapIndex = Order == ArmyOrder.Spearhead ? ObjectiveStateMapIndex : -1;
         army.MoveProgress = 0f;
+        army.OrderRouteSteps = 0;
+        army.OrderStepsCompleted = 0;
         army.Route.Clear();
+        army.PlannedRoute.Clear();
 
         if (Order == ArmyOrder.Manual || campaign.ProvinceMap is null) return;
         var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(IssuerId));
         var nation = campaign.NationById(IssuerId);
+        var peacefulLine = BattlePlanning.LineFor(campaign, army);
+        if (war is null && nation is not null && peacefulLine is { Kind: FrontLineKind.Defence })
+        {
+            var posts = BattlePlanning.Sequence(campaign, peacefulLine);
+            var post = posts.Count > 0 ? BattlePlanning.PostFor(peacefulLine, army, posts) : -1;
+            if (post > 0)
+            {
+                var march = campaign.ProvinceMap.FindRoute(army.ProvinceId, post, (ushort)nation.MapIndex,
+                    campaign.ProvinceController ?? campaign.ProvinceMap.ProvinceToNation);
+                army.Route.AddRange(march);
+                army.PlannedRoute.AddRange(march);
+                army.OrderRouteSteps = march.Length;
+                army.OrderProvinceId = post;
+                army.OrderStateMapIndex = campaign.ProvinceMap.ProvinceToState[post];
+            }
+            return;
+        }
         if (war is null || nation is null) return;
         // A line the player drew outranks the front the war worked out for itself, and
         // formations spread along its length rather than being scattered over it by a
@@ -630,28 +654,31 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
             : drawn is not null
                 ? BattlePlanning.PostFor(drawn, army, orderedFront)
                 : orderedFront.Count == 0 ? -1 : orderedFront[Math.Abs(army.Id) % orderedFront.Count];
-        var route = target < 0
+        var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
+        var enemy = campaign.NationById(enemyId);
+        var targetIsHostile = target > 0 && enemy is not null && controllers[target] == enemy.MapIndex;
+        var plannedRoute = target < 0
             ? Array.Empty<int>()
-            : campaign.ProvinceMap.FindRoute(army.ProvinceId, target, (ushort)nation.MapIndex, controllers);
-        if (route.Length == 0 && army.ProvinceId != target)
-            route = campaign.ProvinceMap.FindRouteToAny(army.ProvinceId, front, (ushort)nation.MapIndex, controllers);
-        // An offensive line is drawn across ground the enemy holds, so no friendly route
-        // reaches it. The formation moves up to the edge of what it can walk and CombatCore
-        // takes it the rest of the way; the objective it is attacking towards is kept.
-        if (route.Length == 0 && drawn is { Kind: FrontLineKind.Offensive } && target > 0)
-        {
-            army.ObjectiveStateMapIndex = campaign.ProvinceMap.ProvinceToState[target];
-            army.OrderProvinceId = target;
-            army.OrderStateMapIndex = army.ObjectiveStateMapIndex;
-            army.AssignedWarId = war.Id;
-            return;
-        }
+            : targetIsHostile
+                ? campaign.ProvinceMap.FindOperationalRoute(army.ProvinceId, target,
+                    (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers)
+                : campaign.ProvinceMap.FindRoute(army.ProvinceId, target, (ushort)nation.MapIndex, controllers);
+        if (plannedRoute.Length == 0 && army.ProvinceId != target && !targetIsHostile)
+            plannedRoute = campaign.ProvinceMap.FindRouteToAny(army.ProvinceId, front,
+                (ushort)nation.MapIndex, controllers);
+        var route = targetIsHostile
+            ? plannedRoute.TakeWhile(province => controllers[province] == nation.MapIndex).ToArray()
+            : plannedRoute;
         army.AssignedWarId = war.Id;
         army.Route.AddRange(route);
-        if (route.Length > 0)
+        army.PlannedRoute.AddRange(plannedRoute);
+        army.OrderRouteSteps = plannedRoute.Length;
+        army.OrderStepsCompleted = 0;
+        if (target > 0)
         {
-            army.OrderProvinceId = route[^1];
-            army.OrderStateMapIndex = campaign.ProvinceMap.ProvinceToState[route[^1]];
+            army.OrderProvinceId = target;
+            army.OrderStateMapIndex = campaign.ProvinceMap.ProvinceToState[target];
+            if (targetIsHostile) army.ObjectiveStateMapIndex = army.OrderStateMapIndex;
         }
     }
 

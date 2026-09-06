@@ -1,0 +1,122 @@
+{
+  "plains": {
+    "name": "Plains",
+    "color": "#8DAB68",
+    "texture": "gfx/terrain/plains.png",
+    "movement_speed": 1,
+    "attack": 1,
+    "defense": 1,
+    "combat_width": 1,
+    "supply": 1
+  },
+  "farmland": {
+    "name": "Farmland",
+    "color": "#B9AB66",
+    "texture": "gfx/terrain/farmland.png",
+    "movement_speed": 1,
+    "attack": 1,
+    "defense": 1,
+    "combat_width": 1.05,
+    "supply": 1.05
+  },
+  "forest": {
+    "name": "Forest",
+    "color": "#3E6946",
+    "texture": "gfx/terrain/forest.png",
+    "movement_speed": 0.75,
+    "attack": 0.8,
+    "defense": 1.18,
+    "combat_width": 0.8,
+    "supply": 0.9
+  },
+  "jungle": {
+    "name": "Jungle",
+    "color": "#28553F",
+    "texture": "gfx/terrain/jungle.png",
+    "movement_speed": 0.55,
+    "attack": 0.65,
+    "defense": 1.25,
+    "combat_width": 0.65,
+    "supply": 0.7
+  },
+  "hills": {
+    "name": "Hills",
+    "color": "#908665",
+    "texture": "gfx/terrain/hills.png",
+    "movement_speed": 0.78,
+    "attack": 0.82,
+    "defense": 1.2,
+    "combat_width": 0.8,
+    "supply": 0.9
+  },
+  "mountains": {
+    "name": "Mountains",
+    "color": "#888981",
+    "texture": "gfx/terrain/mountains.png",
+    "movement_speed": 0.5,
+    "attack": 0.62,
+    "defense": 1.4,
+    "combat_width": 0.6,
+    "supply": 0.65
+  },
+  "desert": {
+    "name": "Desert",
+    "color": "#CFB785",
+    "texture": "gfx/terrain/desert.png",
+    "movement_speed": 0.85,
+    "attack": 0.9,
+    "defense": 1,
+    "combat_width": 1,
+    "supply": 0.65
+  },
+  "steppe": {
+    "name": "Steppe",
+    "color": "#B0A273",
+    "texture": "gfx/terrain/steppe.png",
+    "movement_speed": 1,
+    "attack": 1,
+    "defense": 1,
+    "combat_width": 1,
+    "supply": 0.85
+  },
+  "marsh": {
+    "name": "Marsh",
+    "color": "#60796C",
+    "texture": "gfx/terrain/marsh.png",
+    "movement_speed": 0.5,
+    "attack": 0.65,
+    "defense": 1.2,
+    "combat_width": 0.65,
+    "supply": 0.7
+  },
+  "tundra": {
+    "name": "Tundra",
+    "color": "#9BA394",
+    "texture": "gfx/terrain/tundra.png",
+    "movement_speed": 0.7,
+    "attack": 0.85,
+    "defense": 1.08,
+    "combat_width": 0.85,
+    "supply": 0.7
+  },
+  "urban": {
+    "name": "Urban",
+    "color": "#8D8C88",
+    "texture": "gfx/terrain/urban.png",
+    "movement_speed": 0.75,
+    "attack": 0.7,
+    "defense": 1.35,
+    "combat_width": 0.7,
+    "supply": 1
+  },
+  "ice": {
+    "name": "Ice",
+    "color": "#DDE5E9",
+    "texture": "gfx/terrain/ice.png",
+    "movement_speed": 0.45,
+    "attack": 0.65,
+    "defense": 1.15,
+    "combat_width": 0.7,
+    "supply": 0.45
+  }
+}

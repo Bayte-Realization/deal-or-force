@@ -304,6 +304,7 @@ public static class MapRasterCatalog
             var raster = DataMapPng.LoadRgb(ProvincePath);
             var definitions = LoadDefinitions(DefinitionPath);
             topology = ProvinceTopology.FromColorRaster(states, control, width, height, raster, definitions);
+            topology.AttachTerrain();
             message = $"{Path.GetFileName(ProvincePath)} + {Path.GetFileName(DefinitionPath)}";
             return true;
         }

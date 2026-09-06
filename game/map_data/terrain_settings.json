@@ -1,0 +1,9 @@
+{
+  "terrain": "map_data/terrain.png",
+  "heightmap": "map_data/heightmap.png",
+  "relief_color": "map_data/relief_color.png",
+  "political_opacity": 0.68,
+  "tile_repeat": 180,
+  "relief_strength": 0.8,
+  "relief_color_opacity": 0.0
+}

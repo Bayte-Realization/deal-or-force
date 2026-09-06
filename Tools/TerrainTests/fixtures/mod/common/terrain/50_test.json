@@ -1,0 +1,4 @@
+{
+  "forest": { "movement_speed": 0.66 },
+  "volcanic": { "name": "Volcanic ground", "color": "#5A4051", "movement_speed": 0.6, "defense": 1.2 }
+}

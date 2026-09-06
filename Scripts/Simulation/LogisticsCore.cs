@@ -195,7 +195,8 @@ public static class LogisticsSystem
             var centre = topology.CenterOf(province);
             var blockade = NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude);
             var blockadeFactor = 1f - blockade * campaign.Defines.FleetBlockadeSupplyPenalty;
-            var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor);
+            var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor *
+                                   topology.TerrainAt(province).Supply);
             army.SupplyDistance = distance[province];
             army.SupplySourceStateMapIndex = sourceState;
             army.SupplyCongestion = congestion;

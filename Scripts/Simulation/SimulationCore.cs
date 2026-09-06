@@ -363,6 +363,7 @@ public sealed partial class Campaign
             army.OrderProvinceId = -1;
             army.OrderStateMapIndex = -1;
             army.Route.Clear();
+            army.PlannedRoute.Clear();
             army.MoveProgress = 0f;
         }
         Changed?.Invoke();

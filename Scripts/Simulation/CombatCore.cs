@@ -227,10 +227,17 @@ public static partial class Warfare
             var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
             var enemy = campaign.NationById(enemyId);
             if (enemy is null || army.ProvinceId <= 0) continue;
+            if (PrepareOperationalRoute(campaign, war, army, controllers)) continue;
             Candidates.Clear();
             foreach (var province in topology.Neighbors[army.ProvinceId])
                 if (controllers[province] == (ushort)enemy.MapIndex) Candidates.Add(province);
             if (Candidates.Count == 0) continue;
+            if (army.PlannedRoute.Count > 0 && Candidates.Contains(army.PlannedRoute[0]))
+            {
+                var nextPlannedProvince = army.PlannedRoute[0];
+                Candidates.Clear();
+                Candidates.Add(nextPlannedProvince);
+            }
             if (army.OrderProvinceId > 0 && Candidates.Contains(army.OrderProvinceId))
             {
                 Candidates.Clear();
@@ -339,6 +346,36 @@ public static partial class Warfare
     }
 
     /// <summary>
+    /// Keeps the attack corridor executable as control changes. Returns true when the army
+    /// has first been assigned a friendly staging leg and therefore should not attack today.
+    /// </summary>
+    private static bool PrepareOperationalRoute(Campaign campaign, StrategicWar war, Army army,
+        ushort[] controllers)
+    {
+        var topology = campaign.ProvinceMap;
+        var nation = campaign.NationById(army.NationId);
+        var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
+        var enemy = campaign.NationById(enemyId);
+        if (topology is null || nation is null || enemy is null || army.OrderProvinceId <= 0) return false;
+
+        while (army.PlannedRoute.Count > 0 && army.PlannedRoute[0] == army.ProvinceId)
+            army.PlannedRoute.RemoveAt(0);
+        if (army.PlannedRoute.Count == 0 || !topology.Neighbors[army.ProvinceId].Contains(army.PlannedRoute[0]))
+        {
+            army.PlannedRoute.Clear();
+            army.PlannedRoute.AddRange(topology.FindOperationalRoute(army.ProvinceId, army.OrderProvinceId,
+                (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers));
+            army.OrderRouteSteps = Math.Max(army.OrderStepsCompleted + army.PlannedRoute.Count,
+                army.OrderRouteSteps);
+        }
+        if (army.PlannedRoute.Count == 0 || controllers[army.PlannedRoute[0]] != nation.MapIndex) return false;
+
+        army.Route.Clear();
+        army.Route.AddRange(army.PlannedRoute.TakeWhile(province => controllers[province] == nation.MapIndex));
+        return army.Route.Count > 0;
+    }
+
+    /// <summary>
     /// An army has just come off a ship onto somebody else's beach. An undefended coast
     /// changes hands; a defended one is a battle, fought by the ordinary combat model with
     /// the landing party as the attacker - which is the point, because an amphibious
@@ -426,16 +463,18 @@ public static partial class Warfare
             // rather than free strength.
             // ----------------------------------------------------------------------
             var defines = campaign.Defines;
+            var terrain = campaign.ProvinceMap?.TerrainAt(battle.ProvinceId) ?? TerrainCatalog.Get("plains");
+            var baseWidth = defines.CombatWidth * terrain.CombatWidth;
             var directions = attacking.Select(army => army.ProvinceId).Distinct().Count();
-            var usableWidth = defines.CombatWidth + defines.CombatWidthPerDirection *
+            var usableWidth = baseWidth + defines.CombatWidthPerDirection * terrain.CombatWidth *
                 M.Clamp(directions - 1, 0, M.Max(0, defines.MaxAttackDirections - 1));
 
             var attackerWantedWidth = WantedWidth(attacking);
             var defenderWantedWidth = WantedWidth(defending);
             battle.AttackerWidth = MathF.Min(usableWidth, attackerWantedWidth);
-            battle.DefenderWidth = MathF.Min(defines.CombatWidth, defenderWantedWidth);
+            battle.DefenderWidth = MathF.Min(baseWidth, defenderWantedWidth);
             var attackerEngagement = Engagement(battle.AttackerWidth, attackerWantedWidth, usableWidth, defines);
-            var defenderEngagement = Engagement(battle.DefenderWidth, defenderWantedWidth, defines.CombatWidth, defines);
+            var defenderEngagement = Engagement(battle.DefenderWidth, defenderWantedWidth, baseWidth, defines);
 
             // ----------------------------------------------------------------------
             // What each side is made of. Hardness decides which of an enemy's two
@@ -467,7 +506,7 @@ public static partial class Warfare
             var attackerOffence = attacking.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, defenderHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance)) *
-                attackerEngagement * attackerPierces * riverAttackMultiplier *
+                attackerEngagement * attackerPierces * riverAttackMultiplier * terrain.Attack *
                 (1f + attackerPlanning * defines.MaxPlanningAttackBonus);
 
             var defenderOffence = defending.Sum(army => M.Max(0.01f, army.Power) *
@@ -479,7 +518,7 @@ public static partial class Warfare
             var defenderProtection = defending.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
                     MilitaryDoctrine.Defense(army.Stance)) *
-                defenderEngagement * defines.DefenderAdvantage *
+                defenderEngagement * defines.DefenderAdvantage * terrain.Defense *
                 (1f + dugIn * defines.EntrenchmentBonus);
 
             var attackerProtection = attacking.Sum(army => M.Max(0.01f, army.Power) *
@@ -606,12 +645,34 @@ public static partial class Warfare
         var center = topology.CenterOf(provinceId);
         foreach (var army in advancing)
         {
+            if (army.SupportOnly)
+            {
+                // It was ordered to help win the fight, not to take the ground. It keeps
+                // its position, and with it whatever it had dug - which is the entire
+                // reason a player gives this order instead of an ordinary attack.
+                army.SupportOnly = false;
+                army.OrderProvinceId = -1;
+                army.OrderStateMapIndex = -1;
+                army.PlannedRoute.Clear();
+                continue;
+            }
             army.ProvinceId = provinceId;
             army.StateMapIndex = topology.ProvinceToState[provinceId];
             army.Latitude = center.Latitude;
             army.Longitude = center.Longitude;
             army.Route.Clear();
             army.MoveProgress = 0f;
+            if (army.PlannedRoute.Count > 0 && army.PlannedRoute[0] == provinceId)
+            {
+                army.PlannedRoute.RemoveAt(0);
+                army.OrderStepsCompleted++;
+            }
+            else if (army.PlannedRoute.Count > 0)
+            {
+                // A battle can be resolved by another formation first. Drop the stale
+                // corridor; it will be rebuilt from this new position on the next advance.
+                army.PlannedRoute.Clear();
+            }
             army.Entrenchment = 0f;
             army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterCaptureDays;
             if (army.OrderProvinceId == provinceId)
@@ -624,6 +685,7 @@ public static partial class Warfare
                 army.OrderStateMapIndex = -1;
                 army.ObjectiveStateMapIndex = -1;
                 army.PlanActive = false;
+                army.PlannedRoute.Clear();
             }
         }
         foreach (var army in retreating)
@@ -638,6 +700,7 @@ public static partial class Warfare
             army.Latitude = fallback.Latitude;
             army.Longitude = fallback.Longitude;
             army.Route.Clear();
+            army.PlannedRoute.Clear();
             army.MoveProgress = 0f;
             army.Entrenchment = 0f;
             army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays;

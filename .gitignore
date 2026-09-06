@@ -26,3 +26,4 @@ demo/
 Thumbs.db
 desktop.ini
 perf.log
+/Tools/TerrainCompiler/cache/

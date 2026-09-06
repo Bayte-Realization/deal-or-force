@@ -70,6 +70,11 @@ public sealed class DrawnFrontLine
     public int Id;
     public int NationId;
     public FrontLineKind Kind;
+    // Persistent border intent; Provinces below is only its current deployment cache.
+    public int BorderNationId = -1;
+    public bool WholeBorder;
+    public float StartLatitude, StartLongitude, EndLatitude, EndLongitude;
+    internal int BorderRevision = int.MinValue;
 
     /// <summary>How freely the planner may re-sort the formations along this line.</summary>
     public PlanCohesion Cohesion = PlanCohesion.Balanced;
@@ -109,6 +114,7 @@ public static class BattlePlanning
     {
         if (campaign is null || army is null || army.FrontLineId < 0) return null;
         var line = campaign.FrontLines.Find(candidate => candidate.Id == army.FrontLineId);
+        if (line is not null) BorderFronts.Refresh(campaign, line);
         return line is null || line.Provinces.Count == 0 ? null : line;
     }
 
@@ -391,6 +397,13 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
     public FrontLineKind Kind { get; init; }
     public IReadOnlyList<int> Provinces { get; init; } = Array.Empty<int>();
     public IReadOnlyList<int> ArmyIds { get; init; } = Array.Empty<int>();
+    public int BorderNationId { get; init; } = -1;
+    public int EditLineId { get; init; } = -1;
+    public bool WholeBorder { get; init; }
+    public float StartLatitude { get; init; }
+    public float StartLongitude { get; init; }
+    public float EndLatitude { get; init; }
+    public float EndLongitude { get; init; }
 
     public void Apply(Campaign campaign)
     {
@@ -398,18 +411,42 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
         if (nation is null || Provinces.Count == 0 || ArmyIds.Count == 0) return;
         var topology = campaign.ProvinceMap;
 
+        var existing = EditLineId >= 0 ? campaign.FrontLines.Find(x => x.Id == EditLineId && x.NationId == IssuerId) : null;
+        if (EditLineId >= 0 && existing is null) return;
         var line = new DrawnFrontLine
         {
-            Id = campaign.NextFrontLineId++,
+            Id = existing?.Id ?? campaign.NextFrontLineId++,
             NationId = IssuerId,
-            Kind = Kind
+            Kind = Kind,
+            BorderNationId = BorderNationId,
+            WholeBorder = WholeBorder,
+            StartLatitude = StartLatitude, StartLongitude = StartLongitude,
+            EndLatitude = EndLatitude, EndLongitude = EndLongitude,
+            Cohesion = existing?.Cohesion ?? PlanCohesion.Balanced
         };
-        foreach (var province in Provinces)
-            if (province > 0 && (topology is null || province <= topology.ProvinceCount))
-                line.Provinces.Add(province);
+        if (Kind == FrontLineKind.Defence)
+        {
+            if (line.BorderNationId < 0)
+            {
+                // Old callers/AI still supply province hints. Snap those to a real border.
+                var seed = Provinces.FirstOrDefault(p => BorderFronts.ForeignAt(campaign, IssuerId, p) >= 0);
+                if (seed <= 0) return;
+                line.BorderNationId = BorderFronts.ForeignAt(campaign, IssuerId, seed);
+                var first = topology.CenterOf(seed);
+                var last = topology.CenterOf(Provinces.Last());
+                line.StartLatitude = first.Latitude; line.StartLongitude = first.Longitude;
+                line.EndLatitude = last.Latitude; line.EndLongitude = last.Longitude;
+            }
+            BorderFronts.Refresh(campaign, line);
+        }
+        else foreach (var province in Provinces)
+            if (province > 0 && (topology is null || province <= topology.ProvinceCount)) line.Provinces.Add(province);
         if (line.Provinces.Count == 0) return;
 
-        foreach (var id in ArmyIds)
+        var assigned = existing is null ? ArmyIds : existing.ArmyIds.ToArray();
+        if (existing is not null) campaign.FrontLines.Remove(existing);
+
+        foreach (var id in assigned)
         {
             var army = campaign.Armies.Find(candidate => candidate.Id == id);
             if (army is null || army.NationId != IssuerId) continue;

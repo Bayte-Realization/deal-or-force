@@ -1,0 +1,14 @@
+{
+  "cover_classes": {
+    "11": "farmland", "14": "farmland", "20": "farmland", "30": "plains",
+    "40": "forest", "50": "forest", "60": "forest", "70": "forest", "90": "forest", "100": "forest",
+    "110": "forest", "120": "plains", "130": "steppe", "140": "plains", "150": "steppe",
+    "160": "marsh", "170": "marsh", "180": "marsh", "190": "urban", "200": "desert", "220": "ice"
+  },
+  "jungle_max_latitude": 28,
+  "tundra_min_latitude": 62,
+  "hills_local_range_m": 300,
+  "mountains_local_range_m": 900,
+  "elevation_neighborhood_pixels": 5,
+  "note": "Gameplay generalisation, not a scientific biome classification. Mountain relief supersedes cover except ice, wetland and urban. Tundra and jungle use latitude proxies."
+}

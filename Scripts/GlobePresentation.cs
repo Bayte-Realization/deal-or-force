@@ -124,9 +124,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private Node3D _countryLabelRoot = null!;
     private ImmediateMesh _routeMesh = null!;
     private MeshInstance3D _routePreview = null!;
-    private Texture2D _moveOrderTexture = null!;
-    private Texture2D _preparedOrderTexture = null!;
-    private Texture2D _attackOrderTexture = null!;
+    private StandardMaterial3D _routeMaterial = null!;
     private ImmediateMesh _frontMesh = null!;
     private MeshInstance3D _frontPreview = null!;
     private ImageTexture _controllerTexture;
@@ -192,6 +190,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private ushort _peacePreviewOwner;
     private readonly HashSet<int> _planPreview = new();
     private int _planPreviewKind;
+    private int _planPreviewForeignId = -1;
+    private ImageTexture _borderPlanTexture;
+    private ImageTexture _borderControllerTexture;
 
     /// <summary>
     /// The stroke in progress. A drawn line only means anything if the player can see it
@@ -200,14 +201,25 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     public void SetPlanPreview(IEnumerable<int> provinces, int kind)
     {
+        _planPreviewForeignId = -1;
         _planPreview.Clear();
         if (provinces is not null) foreach (var province in provinces) _planPreview.Add(province);
         _planPreviewKind = kind;
         BuildFrontPreview();
     }
 
+    public void SetBorderPlanPreview(IEnumerable<int> provinces, int foreignId)
+    {
+        _planPreview.Clear();
+        _planPreview.UnionWith(provinces);
+        _planPreviewKind = 0;
+        _planPreviewForeignId = foreignId;
+        BuildFrontPreview();
+    }
+
     public void ClearPlanPreview()
     {
+        _planPreviewForeignId = -1;
         if (_planPreview.Count == 0) return;
         _planPreview.Clear();
         BuildFrontPreview();
@@ -445,6 +457,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
             case 4:
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(Image.CreateFromData(
                     MapWidth, MapHeight, false, Image.Format.Rg8, result.HydrologyPixels)));
+                break;
+            case 5:
+                ApplyTerrainPresentation(result.Provinces);
                 break;
             default:
                 _provinceTopology = result.Provinces;
@@ -685,27 +700,26 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private void CreateRoutePreview(Node3D world)
     {
         _routeMesh = new ImmediateMesh();
-        var atlas = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_plan_arrows",
-            "res://game/gfx/globe/globe_plan_arrows.png"));
-        _moveOrderTexture = AtlasSlice(atlas, new Rect2(0f, 42f, 1672f, 270f));
-        _preparedOrderTexture = AtlasSlice(atlas, new Rect2(0f, 322f, 1672f, 270f));
-        _attackOrderTexture = AtlasSlice(atlas, new Rect2(0f, 604f, 1672f, 275f));
+        _routeMaterial = new StandardMaterial3D
+        {
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            VertexColorUseAsAlbedo = true,
+            AlbedoTexture = GD.Load<Texture2D>("res://game/gfx/globe/order_arrow_surface_v1.png"),
+            TextureRepeat = true,
+            NoDepthTest = false,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled
+        };
         _routePreview = new MeshInstance3D
         {
             Name = "SelectedArmyRoute",
             Mesh = _routeMesh,
+            MaterialOverride = _routeMaterial,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Visible = false
         };
         world.AddChild(_routePreview);
     }
-
-    private static AtlasTexture AtlasSlice(Texture2D atlas, Rect2 region) => new()
-    {
-        Atlas = atlas,
-        Region = region,
-        FilterClip = true
-    };
 
     private void CreateFrontPreview(Node3D world)
     {
@@ -734,6 +748,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _frontMesh.ClearSurfaces();
         _frontPreview.Visible = false;
         var pixels = _frontPixels ??= new byte[256 * 256 * 4];
+        var borderTargets = new byte[256 * 256 * 4];
+        var controllers = new byte[256 * 256 * 2];
+        var liveControl = _campaign.ProvinceController ?? _campaign.ProvinceMap.ProvinceToNation;
+        for (var p = 1; p < liveControl.Length; p++)
+        {
+            controllers[p * 2] = (byte)(liveControl[p] & 255);
+            controllers[p * 2 + 1] = (byte)(liveControl[p] >> 8);
+        }
         Array.Clear(pixels);
         foreach (var war in _campaign.Wars)
         {
@@ -758,11 +780,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // so correcting a line reads immediately under the brush.
         foreach (var line in _campaign.FrontLines)
         {
+            if (line.NationId != _campaign.Player?.Id) continue;
+            Simulation.BorderFronts.Refresh(_campaign, line);
             var code = PlanCode(line.Kind);
             foreach (var province in line.Provinces)
             {
                 if (province <= 0 || province >= 256 * 256) continue;
                 pixels[province * 4 + 2] = code;
+                if (line.Kind == Simulation.FrontLineKind.Defence)
+                    PutBorderTarget(borderTargets, province, line.NationId, line.BorderNationId);
             }
         }
         if (_planPreview.Count > 0)
@@ -772,8 +798,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 if (province <= 0 || province >= 256 * 256) continue;
                 pixels[province * 4 + 2] = code;
+                if (_planPreviewForeignId >= 0)
+                    PutBorderTarget(borderTargets, province, _campaign.Player.Id, _planPreviewForeignId);
             }
         }
+
+        UpdateBorderTexture(ref _borderPlanTexture, borderTargets, Image.Format.Rgba8, "border_plan_targets");
+        UpdateBorderTexture(ref _borderControllerTexture, controllers, Image.Format.Rg8, "border_controller_ids");
 
         if (_frontTexture is null)
         {
@@ -792,110 +823,194 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         Simulation.FrontLineKind.Defence => 64,
         Simulation.FrontLineKind.Offensive => 128,
+        Simulation.FrontLineKind.AreaDefence => 224,
         _ => 192
     };
 
+    private void PutBorderTarget(byte[] pixels, int province, int ownerId, int foreignId)
+    {
+        var own = _campaign.NationById(ownerId)?.MapIndex ?? 0;
+        var other = _campaign.NationById(foreignId)?.MapIndex ?? 0;
+        var write = province * 4;
+        pixels[write] = (byte)(own & 255); pixels[write + 1] = (byte)(own >> 8);
+        pixels[write + 2] = (byte)(other & 255); pixels[write + 3] = (byte)(other >> 8);
+    }
+
+    private void UpdateBorderTexture(ref ImageTexture texture, byte[] pixels, Image.Format format, string uniform)
+    {
+        using var image = Image.CreateFromData(256, 256, false, format, pixels);
+        if (texture is null)
+        {
+            texture = ImageTexture.CreateFromImage(image);
+            _globeMaterial.SetShaderParameter(uniform, texture);
+        }
+        else texture.Update(image);
+    }
+
     /// <summary>
-    /// Where everything the player has selected is going.
-    ///
-    /// It drew one ribbon, for the one division selected alone - so the moment a player
-    /// selected the six divisions they were actually managing, every trajectory vanished,
-    /// which is precisely when they need to see them. There is a ribbon per formation now,
-    /// each in the colour of its own order, so a mixed selection reads as what it is: some
-    /// attacking, some falling back, some standing.
+    /// One clean textured arrow per selected division. The old sprite atlas contained several
+    /// strokes inside every arrow and made even one order look like a bundle of routes. The
+    /// ribbon is now single-stroke geometry, while separate divisions keep separate routes.
     /// </summary>
     private void UpdateRoutePreview()
     {
         if (_campaign?.ProvinceMap is null || !IsInstanceValid(_routePreview)) return;
 
-        var fingerprint = _selectedArmyIds.Count;
-        if (fingerprint > 0)
+        var fingerprint = HashCode.Combine(_selectedArmyIds.Count, _campaign.Player?.Id ?? -1);
+        if (_selectedArmyIds.Count > 0)
             foreach (var candidate in _campaign.Armies)
             {
-                if (!_selectedArmyIds.Contains(candidate.Id)) continue;
+                if (!_selectedArmyIds.Contains(candidate.Id) || candidate.NationId != _campaign.Player?.Id) continue;
                 fingerprint = HashCode.Combine(fingerprint, candidate.Id, candidate.ProvinceId,
-                    candidate.Route.Count, candidate.Route.Count == 0 ? -1 : candidate.Route[^1],
-                    candidate.OrderKind, candidate.OrderProvinceId, candidate.PlanActive);
+                    candidate.Route.Count, candidate.PlannedRoute.Count,
+                    candidate.PlannedRoute.Count == 0 ? -1 : candidate.PlannedRoute[^1],
+                    candidate.OrderKind, candidate.OrderProvinceId);
+                fingerprint = HashCode.Combine(fingerprint,
+                    candidate.PlanActive,
+                    candidate.OrderRouteSteps, candidate.OrderStepsCompleted,
+                    Mathf.RoundToInt(candidate.MoveProgress * 20f));
             }
         if (fingerprint == _routeFingerprint) return;
         _routeFingerprint = fingerprint;
         _routeMesh.ClearSurfaces();
 
-        var drawn = 0;
-        if (_selectedArmyIds.Count > 0)
-            foreach (var candidate in _campaign.Armies)
-            {
-                if (!_selectedArmyIds.Contains(candidate.Id)) continue;
-                if (AppendRouteRibbon(candidate)) drawn++;
-            }
-        _routePreview.Visible = drawn > 0;
+        var selected = _campaign.Armies
+            .Where(candidate => candidate.NationId == _campaign.Player?.Id &&
+                                _selectedArmyIds.Contains(candidate.Id) && HasRouteIntent(candidate))
+            .OrderBy(candidate => candidate.Id)
+            .ToArray();
+        var drewAny = false;
+        foreach (var army in selected)
+            drewAny |= AppendRouteArrow(army);
+        _routePreview.Visible = drewAny;
     }
 
-    /// <summary>One formation's trajectory, as its own surface. False when it has none.</summary>
-    private bool AppendRouteRibbon(Simulation.Army army)
-    {
-        var directObjective =
-            army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead &&
-            army.OrderProvinceId > 0;
-        if (army.Route.Count == 0 && !directObjective) return false;
+    private static bool HasRouteIntent(Simulation.Army army) => army.Route.Count > 0 || army.PlannedRoute.Count > 0 ||
+        (army.OrderProvinceId > 0 &&
+         army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead);
 
-        var routeColor = army.OrderKind switch
-        {
-            Simulation.ArmyOrder.DefendFront => new Color(0.30f, 0.68f, 1f, 0.92f),
-            Simulation.ArmyOrder.ReserveFront => new Color(0.70f, 0.74f, 0.78f, 0.84f),
-            _ => Colors.White
-        };
-        var texture = army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead
-            ? army.PlanActive ? _attackOrderTexture : _preparedOrderTexture
-            : _moveOrderTexture;
-        var material = new StandardMaterial3D
-        {
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            VertexColorUseAsAlbedo = true,
-            NoDepthTest = false,
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            AlbedoTexture = texture,
-            TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled
-        };
+    private static bool IsAttackIntent(Simulation.Army army) => army.AssignedWarId >= 0 &&
+        army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead;
+
+    /// <summary>Draws the complete current route of one selected division.</summary>
+    private bool AppendRouteArrow(Simulation.Army army)
+    {
+        if (army.NationId != _campaign?.Player?.Id) return false;
+        var attack = IsAttackIntent(army);
+        var route = PresentationRoute(army, attack);
+        var directObjective = army.OrderProvinceId > 0;
 
         _routePoints.Clear();
         _routePoints.Add(PresentationPoint(army.Latitude, army.Longitude, SurfaceLineRadius));
-        foreach (var province in army.Route)
+        foreach (var province in route)
         {
             var center = _campaign.ProvinceMap.CenterOf(province);
-            _routePoints.Add(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
+            AddRoutePoint(PresentationPoint(center.Latitude, center.Longitude, SurfaceLineRadius));
         }
-        if (directObjective && (army.Route.Count == 0 || army.Route[^1] != army.OrderProvinceId))
+        // A manual order may come from an old save which predates PlannedRoute. Offensive
+        // orders never receive a ruler-straight fallback: their corridor is reconstructed
+        // through the two belligerents' province graph below.
+        if (!attack && directObjective && (route.Count == 0 || route[^1] != army.OrderProvinceId))
         {
             var objective = _campaign.ProvinceMap.CenterOf(army.OrderProvinceId);
-            _routePoints.Add(PresentationPoint(objective.Latitude, objective.Longitude, SurfaceLineRadius));
+            AddRoutePoint(PresentationPoint(objective.Latitude, objective.Longitude, SurfaceLineRadius));
         }
         if (_routePoints.Count < 2) return false;
 
-        _routeMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip, material);
+        var vivid = attack
+            ? new Color(0.90f, 0.10f, 0.075f, 0.98f)
+            : new Color(1.00f, 0.72f, 0.10f, 0.98f);
+        var waiting = attack
+            ? new Color(0.52f, 0.12f, 0.09f, 0.62f)
+            : new Color(0.68f, 0.53f, 0.12f, 0.62f);
+        var progress = OrderProgress(army);
+        var distances = new float[_routePoints.Count];
+        for (var index = 1; index < _routePoints.Count; index++)
+            distances[index] = distances[index - 1] + _routePoints[index - 1].DistanceTo(_routePoints[index]);
+        var totalDistance = MathF.Max(0.0001f, distances[^1]);
+        var textureRepeats = MathF.Max(1f, totalDistance / (_flatMap ? 0.052f : 0.044f));
+
+        _routeMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip, _routeMaterial);
         for (var index = 0; index < _routePoints.Count; index++)
         {
             var previous = _routePoints[Math.Max(0, index - 1)];
             var next = _routePoints[Math.Min(_routePoints.Count - 1, index + 1)];
             var tangent = (next - previous).Normalized();
             var normal = _flatMap ? Vector3.Forward : _routePoints[index].Normalized();
-            var side = normal.Cross(tangent).Normalized() * (_flatMap ? 0.020f : 0.018f);
-            var u = index / (float)(_routePoints.Count - 1);
-            _routeMesh.SurfaceSetColor(routeColor);
-            _routeMesh.SurfaceSetUV(new Vector2(u, 0f));
+            // Keep operational arrows subordinate to counters and borders.  The old
+            // width read like a filled battle-plan area when the camera was close.
+            var side = normal.Cross(tangent).Normalized() * (_flatMap ? 0.0072f : 0.0064f);
+            var routeFraction = distances[index] / totalDistance;
+            var colour = progress > 0.001f && routeFraction <= progress ? vivid : waiting;
+            var textureU = routeFraction * textureRepeats;
+            _routeMesh.SurfaceSetColor(colour);
+            _routeMesh.SurfaceSetUV(new Vector2(textureU, 0.08f));
             _routeMesh.SurfaceAddVertex(_routePoints[index] + side);
-            _routeMesh.SurfaceSetColor(routeColor);
-            _routeMesh.SurfaceSetUV(new Vector2(u, 1f));
+            _routeMesh.SurfaceSetColor(colour);
+            _routeMesh.SurfaceSetUV(new Vector2(textureU, 0.92f));
             _routeMesh.SurfaceAddVertex(_routePoints[index] - side);
         }
         _routeMesh.SurfaceEnd();
+
+        // A single, unambiguous head. It stays muted until the march reaches the target,
+        // while the shaft fills from its origin with actual province-to-province progress.
+        var tip = _routePoints[^1];
+        var beforeTip = _routePoints[^2];
+        var tipTangent = (tip - beforeTip).Normalized();
+        var tipNormal = _flatMap ? Vector3.Forward : tip.Normalized();
+        var tipSide = tipNormal.Cross(tipTangent).Normalized();
+        var headLength = MathF.Min(_flatMap ? 0.050f : 0.044f, totalDistance * 0.24f);
+        var headWidth = MathF.Min(_flatMap ? 0.025f : 0.022f, headLength * 0.52f);
+        var basePoint = tip - tipTangent * headLength;
+        var headColour = progress >= 0.985f ? vivid : waiting;
+        _routeMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _routeMaterial);
+        _routeMesh.SurfaceSetColor(headColour);
+        _routeMesh.SurfaceSetUV(new Vector2(0.5f, 0.08f));
+        _routeMesh.SurfaceAddVertex(tip);
+        _routeMesh.SurfaceSetColor(headColour);
+        _routeMesh.SurfaceSetUV(new Vector2(0.08f, 0.92f));
+        _routeMesh.SurfaceAddVertex(basePoint + tipSide * headWidth);
+        _routeMesh.SurfaceSetColor(headColour);
+        _routeMesh.SurfaceSetUV(new Vector2(0.92f, 0.92f));
+        _routeMesh.SurfaceAddVertex(basePoint - tipSide * headWidth);
+        _routeMesh.SurfaceEnd();
         return true;
+    }
+
+    private IReadOnlyList<int> PresentationRoute(Simulation.Army army, bool attack)
+    {
+        if (army.PlannedRoute.Count > 0) return army.PlannedRoute;
+        if (!attack || army.OrderProvinceId <= 0) return army.Route;
+
+        // Compatibility for campaigns saved before complete operational routes became
+        // persistent. The reconstruction is deterministic and restricted to belligerents.
+        var war = _campaign.Wars.Find(candidate => candidate.Id == army.AssignedWarId && !candidate.Ended);
+        var nation = _campaign.NationById(army.NationId);
+        if (war is null || nation is null) return army.Route;
+        var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
+        var enemy = _campaign.NationById(enemyId);
+        if (enemy is null) return army.Route;
+        var controllers = _campaign.ProvinceController ?? _campaign.ProvinceMap.ProvinceToNation;
+        return _campaign.ProvinceMap.FindOperationalRoute(army.ProvinceId, army.OrderProvinceId,
+            (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers);
+    }
+
+    private void AddRoutePoint(Vector3 point)
+    {
+        if (_routePoints.Count == 0 || _routePoints[^1].DistanceSquaredTo(point) > 0.000004f)
+            _routePoints.Add(point);
+    }
+
+    private static float OrderProgress(Simulation.Army army)
+    {
+        if (army.OrderRouteSteps <= 0) return Mathf.Clamp(army.MoveProgress, 0f, 1f);
+        return Mathf.Clamp((army.OrderStepsCompleted + army.MoveProgress) / army.OrderRouteSteps, 0f, 1f);
     }
 
     public override void _GuiInput(InputEvent inputEvent)
     {
         if (_freeCamera && HandleFreeCameraInput(inputEvent)) { AcceptEvent(); return; }
+        if (BorderPaintMode && HandleBorderInput(inputEvent)) return;
         if (PaintMode && HandlePaintInput(inputEvent)) return;
 
         if (inputEvent is InputEventMouseButton button)
@@ -1052,7 +1167,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
             : "";
         return $"{pick.Nation.Name} ({pick.Nation.Tag})\n{state}\nProvince #{pick.ProvinceId:N0}" +
                (controller is null || controller == pick.Nation ? "" : $"\nControlled by {controller.Name} · occupation {occupation:P0}") +
-               hydrology;
+               hydrology + (pick.ProvinceId > 0 && _provinceTopology is not null
+                   ? TerrainDescription(_provinceTopology.TerrainAt(pick.ProvinceId)) : "");
     }
 
     private List<Simulation.Army> ArmiesInScreenRect(Rect2 rect)
@@ -1109,6 +1225,19 @@ uniform sampler2D hydrology_map : filter_linear, repeat_enable;
 uniform sampler2D province_control_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2D front_membership : filter_nearest, repeat_disable;
 uniform sampler2D map_mode_colors : source_color, filter_nearest, repeat_disable;
+uniform sampler2DArray terrain_tiles : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D province_terrain : filter_nearest, repeat_disable;
+uniform sampler2D terrain_surface : filter_nearest, repeat_enable;
+uniform sampler2D border_plan_targets : filter_nearest, repeat_disable;
+uniform sampler2D border_controller_ids : filter_nearest, repeat_disable;
+uniform sampler2D relief_height : filter_linear_mipmap, repeat_enable;
+uniform sampler2D relief_color : source_color, filter_linear_mipmap, repeat_enable;
+uniform float terrain_ready = 0.0;
+uniform float terrain_mode = 0.0;
+uniform float political_opacity = 0.68;
+uniform float terrain_repeat = 180.0;
+uniform float relief_strength = 0.8;
+uniform float relief_color_opacity = 0.0;
 // Matches the source scenario's Ocean terrain (#0f4a6b). The relief texture stays
 // deliberately disabled: at strategic scale it reads as visual noise, not water.
 // Darkened here to compensate for Godot's directional + ambient lighting; the final
@@ -1147,6 +1276,22 @@ float front_crossing(float province, vec3 here, vec2 uv) {
     float opposite_sides = step(0.20, abs(here.g - other.g));
     return both * same_war * opposite_sides * step(0.5, abs(province - other_province));
 }
+float planned_border(float province, vec2 uv) {
+    vec2 lookup = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
+    vec4 target = round(texture(border_plan_targets, lookup) * 255.0);
+    float own = target.r + target.g * 256.0;
+    float enemy = target.b + target.a * 256.0;
+    float neighbor = map_id(province_ids, uv);
+    vec2 neighbor_lookup = (vec2(mod(neighbor, 256.0), floor(neighbor / 256.0)) + 0.5) / 256.0;
+    // Decode this lookup directly: map_id's repeating raster sampler is incompatible
+    // with repeat_disable controller lookups in Godot's shader compiler.
+    vec2 here_code = round(texture(border_controller_ids, lookup).rg * 255.0);
+    vec2 other_code = round(texture(border_controller_ids, neighbor_lookup).rg * 255.0);
+    float here_owner = here_code.r + here_code.g * 256.0;
+    float other_owner = other_code.r + other_code.g * 256.0;
+    return step(0.5, enemy) * (1.0 - step(0.5, abs(own - here_owner))) *
+        (1.0 - step(0.5, abs(enemy - other_owner)));
+}
 void fragment() {
     vec4 political_smooth = texture(political_map, UV);
     vec4 political_crisp = texture(political_detail, UV);
@@ -1184,6 +1329,28 @@ void fragment() {
     political.rgb = mix(political.rgb, strategic.rgb * mix(0.84, 1.02, political_light),
         map_mode * strategic.a);
     vec3 base = mix(water, political.rgb, political.a);
+    if (terrain_ready > 0.5) {
+        vec2 province_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
+        float terrain_slot = round(texture(terrain_surface, vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0))).r * 255.0);
+        vec2 terrain_uv = UV * vec2(terrain_repeat, terrain_repeat * 0.5);
+        vec3 ground = texture(terrain_tiles, vec3(terrain_uv, terrain_slot)).rgb;
+        vec3 relief_tint = texture(relief_color, UV).rgb;
+        ground = mix(ground, relief_tint, relief_color_opacity);
+        // Political tint is an albedo blend, not transparent 3D geometry.
+        // Keep surface detail while preserving recognisable controller colours.
+        float ground_light = clamp(dot(ground, vec3(0.2126, 0.7152, 0.0722)) * 1.4 + 0.50, 0.62, 1.1);
+        vec3 colored_ground = mix(ground, political.rgb * ground_light, political_opacity);
+        vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
+        base = mix(water, land_surface, political.a);
+        vec2 ht = 1.0 / vec2(textureSize(relief_height, 0));
+        float west = texture(relief_height, vec2(fract(UV.x - ht.x), clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        float east = texture(relief_height, vec2(fract(UV.x + ht.x), clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        float north = texture(relief_height, vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
+        float south = texture(relief_height, vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
+        vec2 slope = clamp(vec2(west - east, south - north) * relief_strength * 8.0, vec2(-0.8), vec2(0.8));
+        NORMAL_MAP = normalize(vec3(slope * political.a, 1.0)) * 0.5 + 0.5;
+        NORMAL_MAP_DEPTH = 1.0;
+    }
     vec2 hydrography = texture(hydrology_map, UV).rg;
     float lake_water = smoothstep(0.14, 0.62, hydrography.r);
     float river_water = smoothstep(0.18, 0.70, hydrography.g);
@@ -1215,6 +1382,9 @@ void fragment() {
         front_crossing(province, front, UV - vec2(texel.x * 2.0, 0.0))), max(
         front_crossing(province, front, UV + vec2(0.0, texel.y * 2.0)),
         front_crossing(province, front, UV - vec2(0.0, texel.y * 2.0))));
+    // The terrain/relief views contain no political front shading.
+    front_edge *= 1.0 - step(0.5, terrain_mode);
+    front_outer *= 1.0 - step(0.5, terrain_mode);
 
     // Tactical borders should read as fine cartography, not dark fish-scales.
     // Selection remains strong below; the idle network stays deliberately subtle.
@@ -1224,9 +1394,16 @@ void fragment() {
     vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)
         : (plan < 2.5 ? vec3(0.96, 0.52, 0.16) : vec3(0.70, 0.73, 0.78));
     float plan_on = step(0.5, plan) * max(province_detail, detail_mix * 0.70);
+    if (plan < 1.5) plan_on = 0.0;
+    float border_plan = 0.0;
+    if (plan > 0.5 && plan < 1.5) border_plan = max(max(planned_border(province, UV + vec2(texel.x, 0.0)),
+        planned_border(province, UV - vec2(texel.x, 0.0))),
+        max(planned_border(province, UV + vec2(0.0, texel.y)), planned_border(province, UV - vec2(0.0, texel.y))));
     base = mix(base, plan_color, plan_on * 0.40);
     base = mix(base, vec3(1.0, 0.22, 0.10), front_edge * max(province_detail, detail_mix * 0.70) * 0.94);
     base = mix(base, vec3(0.93, 0.16, 0.07), front_outer * max(province_detail, detail_mix * 0.70) * 0.38);
+    // One narrow cartographic stroke on the shared boundary, never a filled province.
+    base = mix(base, vec3(0.30, 0.72, 0.96), border_plan * 0.95);
     base = mix(base, vec3(0.95, 0.76, 0.25), region_selected * 0.10);
     base = mix(base, vec3(1.0, 0.84, 0.30), province_selected * province_detail * 0.16);
     float selection_edge = max(region_edge * region_selected, province_edge * province_selected * province_detail);
@@ -2040,9 +2217,9 @@ void fragment() {
         if (!IsInstanceValid(_countryLabelRoot) || !IsInstanceValid(_camera)) return;
         // At tactical zoom, country names yield to states/provinces and unit
         // counters. Keeping continent-scale typography there would cover the map.
-        _countryLabelRoot.Visible = _flatMap
+        _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap
             ? _flatZoom is >= 4.4f and <= 10.8f
-            : _distance is >= 7.9f and <= 16.5f;
+            : _distance is >= 7.9f and <= 16.5f);
         if (!_countryLabelRoot.Visible) return;
         var minimumCells = _flatMap
             ? _flatZoom > 8.8f ? 26000 : _flatZoom > 6.2f ? 6500 : _flatZoom > 4.0f ? 1500 : 150

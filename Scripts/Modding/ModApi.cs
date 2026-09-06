@@ -29,6 +29,23 @@ public partial class ModApi : RefCounted
     public string get_date() => GetDate();
     public void log(string message) => Log(message);
 
+    public Godot.Collections.Dictionary get_province_terrain(int provinceId)
+    {
+        var result = new Godot.Collections.Dictionary();
+        var topology = _campaign?.ProvinceMap;
+        if (topology is null || provinceId <= 0 || provinceId > topology.ProvinceCount) return result;
+        var terrain = topology.TerrainAt(provinceId);
+        result["id"] = terrain.Id;
+        result["name"] = terrain.Name;
+        result["water"] = topology.IsWater(provinceId);
+        result["movement_speed"] = terrain.MovementSpeed;
+        result["attack"] = terrain.Attack;
+        result["defense"] = terrain.Defense;
+        result["combat_width"] = terrain.CombatWidth;
+        result["supply"] = terrain.Supply;
+        return result;
+    }
+
     public Godot.Collections.Dictionary GetNation(string tag)
     {
         var result = new Godot.Collections.Dictionary();
