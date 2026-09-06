@@ -90,7 +90,13 @@ public sealed class DrawnFrontLine
     /// <summary>The day the posts were last worked out. Once a day is often enough.</summary>
     internal int PostsDay = int.MinValue;
 
-    /// <summary>Who is holding what, for anything that wants to show or check it.</summary>
+    /// <summary>
+    /// Who is holding what, for anything that wants to show or check it.
+    ///
+    /// Not saved: it is worked out from the line and the war, both of which are, so writing
+    /// it down would only give a reload something to disagree with.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public IReadOnlyDictionary<int, int> Assignment => Posts;
 
     public bool IsEmpty => Provinces.Count == 0 || ArmyIds.Count == 0;

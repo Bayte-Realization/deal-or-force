@@ -70,6 +70,8 @@ public static class Program
             EveryRegionKnowsWhoLivesInIt(campaign));
         failures += Check("a content pack is locked until it is owned",
             ContentPacksAreLockedUntilOwned());
+        failures += Check("every order a player can give crosses the wire",
+            EveryOrderCrossesTheWire());
         failures += Check("a country that states a figure about itself gets that figure",
             TheStatedStatisticsCameTrue(campaign));
 
@@ -176,6 +178,8 @@ public static class Program
                 // Draws a line and gives away posts, so it belongs on the copy as well.
                 failures += Check("a drawn line is held where it is pressed",
                     ADrawnLineIsHeldWhereItIsPressed(sandbox));
+                failures += Check("a battle plan survives a save",
+                    ABattlePlanSurvivesASave(sandbox));
                 failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
                 failures += Check("an army can be put ashore across water",
                     AnArmyCanBePutAshore(sandbox));
@@ -2729,6 +2733,138 @@ public static class Program
                 ArmyIds = garrison.Select(army => army.Id).ToArray()
             }.Apply(campaign);
         }
+    }
+
+    /// <summary>
+    /// A battle plan survives a save.
+    ///
+    /// This is the failure that leaves no trace. A formation carries the id of the line it
+    /// was put on and that id was being written down; the line itself was not - so every
+    /// division came back from a reload holding a plan number that pointed at nothing,
+    /// quietly reverted to the war's own front, and a player who had spent ten minutes
+    /// drawing dispositions found them gone with no message anywhere.
+    ///
+    /// So: draw one, save, load, and it has to be the same plan with the same formations on
+    /// it, still able to say where each of them stands.
+    /// </summary>
+    private static string ABattlePlanSurvivesASave(Campaign campaign)
+    {
+        var war = campaign.Wars.FirstOrDefault(candidate => !candidate.Ended);
+        var nation = war is null ? null : campaign.NationById(war.DefenderId);
+        if (nation is null) return "nobody is at war, so there is no plan to draw";
+
+        var front = war.FriendlyFront(nation.Id).Where(province => province > 0).Take(8).ToList();
+        var garrison = campaign.Armies
+            .Where(army => army.NationId == nation.Id && army.EmbarkedFleetId < 0).Take(4).ToList();
+        if (front.Count < 2 || garrison.Count < 2) return "the war is too small to draw a plan on";
+
+        new DrawFrontLineCommand
+        {
+            IssuerId = nation.Id,
+            Kind = FrontLineKind.Defence,
+            Provinces = front,
+            ArmyIds = garrison.Select(army => army.Id).ToArray()
+        }.Apply(campaign);
+        var line = campaign.FrontLines.LastOrDefault(candidate => candidate.NationId == nation.Id);
+        if (line is null) return "the line was drawn and did not stick";
+        new SetPlanCohesionCommand
+        {
+            IssuerId = nation.Id, FrontLineId = line.Id, Cohesion = PlanCohesion.Rigid
+        }.Apply(campaign);
+
+        var lineId = line.Id;
+        var provinces = new HashSet<int>(line.Provinces);
+        var armies = new List<int>(line.ArmyIds);
+        var nextId = campaign.NextFrontLineId;
+
+        try
+        {
+            var bytes = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
+            if (bytes.Length == 0) return "the campaign refused to serialise";
+            var restored = SaveSystem.ImportNetworkSnapshot(bytes, "bench").Campaign;
+            if (restored is null) return "the save did not load back";
+
+            var back = restored.FrontLines.Find(candidate => candidate.Id == lineId);
+            if (back is null)
+                return $"a plan of {provinces.Count} province(s) and {armies.Count} formation(s) " +
+                       "was drawn, saved, and did not come back at all";
+            if (!back.Provinces.SetEquals(provinces))
+                return $"the plan came back covering {back.Provinces.Count} province(s) instead of {provinces.Count}";
+            if (back.ArmyIds.Count != armies.Count || back.ArmyIds.Any(id => !armies.Contains(id)))
+                return $"the plan came back with {back.ArmyIds.Count} formation(s) instead of {armies.Count}";
+            if (back.Cohesion != PlanCohesion.Rigid)
+                return $"the plan came back on {back.Cohesion} cohesion instead of Rigid";
+            if (restored.NextFrontLineId <= lineId)
+                return $"the next plan would be handed id {restored.NextFrontLineId}, which is already in use";
+
+            // And every formation still points at it, which is the half that was never
+            // broken and would have been the only survivor.
+            var orphan = restored.Armies.FirstOrDefault(army => army.FrontLineId >= 0 &&
+                restored.FrontLines.All(candidate => candidate.Id != army.FrontLineId));
+            if (orphan is not null)
+                return $"formation {orphan.Id} came back on plan {orphan.FrontLineId}, which does not exist";
+
+            Console.WriteLine($"  plans: a {provinces.Count}-province line with {armies.Count} formation(s) on " +
+                              $"{back.Cohesion} cohesion survived a save, and no formation came back orphaned.");
+            return "";
+        }
+        finally
+        {
+            new ClearFrontLineCommand
+            {
+                IssuerId = nation.Id,
+                ArmyIds = armies
+            }.Apply(campaign);
+            campaign.NextFrontLineId = Math.Max(campaign.NextFrontLineId, nextId);
+        }
+    }
+
+    /// <summary>
+    /// Every order a player can give crosses the wire intact.
+    ///
+    /// The codec finds commands by reflection, so a new one is carried automatically - and
+    /// that is exactly why this is worth checking. Automatic means nobody looks, and a
+    /// command whose fields do not survive the round trip fails only in multiplayer, only
+    /// for the client, and only as "nothing happened when I pressed the key".
+    /// </summary>
+    private static string EveryOrderCrossesTheWire()
+    {
+        var orders = new ICampaignCommand[]
+        {
+            new HaltArmyCommand { IssuerId = 7, ArmyId = 31 },
+            new DetachArmyFromPlanCommand { IssuerId = 7, ArmyId = 31 },
+            new ReturnArmyToPlanCommand { IssuerId = 7, ArmyId = 31, FrontLineId = 4 },
+            new SupportAttackCommand { IssuerId = 7, ArmyId = 31, SupportOnly = true },
+            new StrategicRedeploymentCommand { IssuerId = 7, ArmyId = 31, TargetProvinceId = 9012 },
+            new ConsolidateArmiesCommand { IssuerId = 7, ArmyIds = new[] { 31, 32, 33 } },
+            new SetPlanCohesionCommand { IssuerId = 7, FrontLineId = 4, Cohesion = PlanCohesion.Immobile }
+        };
+
+        foreach (var order in orders)
+        {
+            if (!NetworkCommandCodec.TryEncode(order, out var name, out var json))
+                return $"{order.GetType().Name} cannot be sent to another player at all";
+            if (!NetworkCommandCodec.TryDecode(name, json, out var back))
+                return $"{name} was sent and could not be read back";
+            if (back.IssuerId != order.IssuerId)
+                return $"{name} came back issued by {back.IssuerId} instead of {order.IssuerId}";
+            switch (back)
+            {
+                case ReturnArmyToPlanCommand ret when ret.FrontLineId != 4:
+                    return "a return-to-plan order lost which plan it was returning to";
+                case StrategicRedeploymentCommand rail when rail.TargetProvinceId != 9012:
+                    return "a redeployment order lost its destination";
+                case ConsolidateArmiesCommand fold when fold.ArmyIds.Count != 3:
+                    return $"a consolidation order arrived naming {fold.ArmyIds.Count} formation(s) instead of three";
+                case SetPlanCohesionCommand cohesion when cohesion.Cohesion != PlanCohesion.Immobile:
+                    return $"a cohesion order arrived as {cohesion.Cohesion} instead of Immobile";
+                case SupportAttackCommand support when !support.SupportOnly:
+                    return "a support order arrived as an ordinary attack, which would take the ground";
+            }
+        }
+
+        Console.WriteLine($"  wire: {orders.Length} order(s) encoded, sent and read back with every field intact.");
+        return "";
     }
 
     private static string GdpSane(Campaign campaign)

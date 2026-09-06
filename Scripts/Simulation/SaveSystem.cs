@@ -258,6 +258,18 @@ public static class SaveSystem
         public List<ArmyGroup> ArmyGroups = new();
         public List<Fleet> Fleets = new();
         public List<StrategicWar> Wars = new();
+
+        /// <summary>
+        /// The lines the player drew, and the next id to hand out.
+        ///
+        /// They were not in the save at all, which was quiet and expensive: a formation
+        /// carries the id of the line it was put on, that id was written down, and the line
+        /// itself was not - so a reload gave every division a plan number pointing at
+        /// nothing, they all silently reverted to the war's own front, and the player's
+        /// dispositions were gone with no message anywhere.
+        /// </summary>
+        public List<DrawnFrontLine> FrontLines = new();
+        public int NextFrontLineId;
         public List<LandBattle> Battles = new();
         public List<ConstructionProject> Construction = new();
         public List<PendingCampaignEvent> PendingEvents = new();
@@ -294,6 +306,8 @@ public static class SaveSystem
             ArmyGroups = new List<ArmyGroup>(campaign.ArmyGroups),
             Fleets = new List<Fleet>(campaign.Fleets),
             Wars = new List<StrategicWar>(campaign.Wars),
+            FrontLines = new List<DrawnFrontLine>(campaign.FrontLines),
+            NextFrontLineId = campaign.NextFrontLineId,
             Battles = new List<LandBattle>(campaign.Battles),
             Construction = new List<ConstructionProject>(campaign.Construction),
             PendingEvents = new List<PendingCampaignEvent>(campaign.PendingEvents),
@@ -314,6 +328,11 @@ public static class SaveSystem
             Replace(campaign.ArmyGroups, ArmyGroups);
             Replace(campaign.Fleets, Fleets);
             Replace(campaign.Wars, Wars);
+            Replace(campaign.FrontLines, FrontLines);
+            // Never below what the restored lines already use, or the next drawn line would
+            // be handed an id somebody is standing on.
+            campaign.NextFrontLineId = Math.Max(NextFrontLineId,
+                campaign.FrontLines.Count == 0 ? 0 : campaign.FrontLines.Max(line => line.Id) + 1);
             Replace(campaign.Battles, Battles);
             Replace(campaign.Construction, Construction);
             Replace(campaign.PendingEvents, PendingEvents);
