@@ -42,6 +42,27 @@ public sealed class StrategicWar
     public int LastFrontDay = -1;
     public int LastPeaceProposalDay = -1;
     public string LastNegotiation = "";
+
+    /// <summary>
+    /// A settlement the other government has put to a player and is waiting on.
+    ///
+    /// Two countries run by the computer settle a war between themselves in one step: the
+    /// demand is written and the answer is worked out in the same breath. That cannot happen
+    /// to a person, so when one side of a war is being played, what would have been a treaty
+    /// waits here for an answer instead. It lives on the war because that is where its
+    /// lifetime already is - the war ending takes it with it, and a save that restores the
+    /// war restores what was on the table.
+    /// </summary>
+    public PeaceDemand PendingOffer;
+
+    /// <summary>Whether the offer is a written settlement or one of the standing terms.</summary>
+    public bool PendingOfferIsWritten;
+    public PeaceTerms PendingOfferTerms = PeaceTerms.WhitePeace;
+
+    /// <summary>Who is waiting on an answer, or -1 when nobody is.</summary>
+    public int PendingOfferFromId = -1;
+    public int PendingOfferDay = -1;
+    public int PendingOfferExpiresDay = -1;
     public int EndedDay = -1;
     public int WinnerId = -1;
     public string PeaceSummary = "";

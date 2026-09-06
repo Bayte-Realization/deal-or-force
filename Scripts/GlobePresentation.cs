@@ -489,6 +489,26 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     private bool HandlePaintInput(InputEvent inputEvent)
     {
+        // Both mouse buttons are the brush here, which leaves nothing to move the map with -
+        // and the ground being argued over can be on the other side of the planet from
+        // whatever the camera happens to be pointed at. The middle button drags instead.
+        // WASD keeps working throughout, because it is polled rather than routed, so there
+        // is never a settlement the player can price but not look at.
+        if (inputEvent is InputEventMouseButton pan && pan.ButtonIndex == MouseButton.Middle)
+        {
+            _dragging = pan.Pressed;
+            _previousPointer = pan.Position;
+            AcceptEvent();
+            return true;
+        }
+        if (inputEvent is InputEventMouseMotion panning && _dragging && !_painting)
+        {
+            DragCamera(panning.Position - _previousPointer);
+            _previousPointer = panning.Position;
+            AcceptEvent();
+            return true;
+        }
+
         if (inputEvent is InputEventMouseButton button &&
             button.ButtonIndex is MouseButton.Left or MouseButton.Right)
         {
@@ -965,24 +985,33 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         if (inputEvent is InputEventMouseMotion motion && _dragging)
         {
-            var delta = motion.Position - _previousPointer;
+            DragCamera(motion.Position - _previousPointer);
             _previousPointer = motion.Position;
-            _dragDistance += delta.Length();
-            if (_flatMap)
-            {
-                var unitsPerPixel = _targetFlatZoom / Math.Max(1f, Size.Y);
-                _targetFlatX -= delta.X * unitsPerPixel;
-                _targetFlatY += delta.Y * unitsPerPixel;
-                ClampFlatCamera();
-            }
-            else
-            {
-                var scale = Mathf.Lerp(0.22f, 0.65f, (_targetDistance - MinimumDistance) / (MaximumDistance - MinimumDistance));
-                _targetYaw -= delta.X * 0.006f * scale;
-                _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale, -1.20f, 1.20f);
-            }
             AcceptEvent();
         }
+    }
+
+    /// <summary>
+    /// Move the world under the pointer by a mouse delta - a yaw and a pitch on the globe,
+    /// a pan on the flat map. Its own method because the paint modes need it too: while a
+    /// peace is being drawn both mouse buttons are the brush, and a camera the player cannot
+    /// move is a peace conference they cannot finish when the war is on the far side of the
+    /// world.
+    /// </summary>
+    private void DragCamera(Vector2 delta)
+    {
+        _dragDistance += delta.Length();
+        if (_flatMap)
+        {
+            var unitsPerPixel = _targetFlatZoom / Math.Max(1f, Size.Y);
+            _targetFlatX -= delta.X * unitsPerPixel;
+            _targetFlatY += delta.Y * unitsPerPixel;
+            ClampFlatCamera();
+            return;
+        }
+        var scale = Mathf.Lerp(0.22f, 0.65f, (_targetDistance - MinimumDistance) / (MaximumDistance - MinimumDistance));
+        _targetYaw -= delta.X * 0.006f * scale;
+        _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale, -1.20f, 1.20f);
     }
 
     public override string _GetTooltip(Vector2 atPosition)
@@ -1130,7 +1159,27 @@ void fragment() {
     float nation = map_id(nation_ids, UV);
     vec4 live_control = control_color(province);
     float political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
-    political.rgb = mix(political.rgb, live_control.rgb * political_light, live_control.a);
+    // Who owns ground and who is standing on it are two different questions, and a map that
+    // answers only the second is why a peace conference is unreadable: every province the
+    // enemy overran wore the enemy's colour, so a player could not tell what a treaty would
+    // annex from what it would merely hand back. Paradox answers both at once - the owner
+    // keeps the colour, the occupier wears stripes over it - and so does this now. Alpha
+    // says which of the two a colour is: a full byte replaces the province outright, which
+    // is the treaty being drafted, and anything less is an occupation drawn over an owner
+    // who has not signed anything away yet.
+    float hatch = (UV.x * 2.0 + UV.y) * 190.0;
+    float hatch_width = clamp(fwidth(hatch), 0.0005, 0.45);
+    float stripe = smoothstep(0.5 - hatch_width, 0.5 + hatch_width, fract(hatch));
+    // Zoomed far enough out that one stripe is thinner than one pixel, stripes are moire and
+    // nothing else. There they collapse into a flat half-blend, which still reads at a glance
+    // as ground somebody else is holding.
+    float hatch_visible = clamp(1.0 - hatch_width * 2.5, 0.0, 1.0);
+    float treaty = step(0.75, live_control.a);
+    float occupied = step(0.10, live_control.a) * (1.0 - treaty);
+    vec3 other_flag = live_control.rgb * political_light;
+    political.rgb = mix(political.rgb, other_flag, treaty);
+    political.rgb = mix(political.rgb, other_flag,
+        occupied * mix(0.46, mix(0.08, 0.88, stripe), hatch_visible));
     vec4 strategic = map_mode_color(nation);
     political.rgb = mix(political.rgb, strategic.rgb * mix(0.84, 1.02, political_light),
         map_mode * strategic.a);
@@ -1812,6 +1861,13 @@ void fragment() {
             GD.Print($"[dof] front {war.Name}: {war.AttackerFront.Count:N0}/{war.DefenderFront.Count:N0} provinces");
     }
 
+    /// <summary>
+    /// What the control texture's alpha means to the shader: full is a transfer of title,
+    /// this is an occupation. Kept a constant rather than a literal because the shader reads
+    /// the same threshold from the other side, and the two have to agree.
+    /// </summary>
+    private const byte OccupiedStripeAlpha = 160;
+
     private void RefreshProvinceControllers()
     {
         if (_campaign?.ProvinceMap is null || _campaign.ProvinceController is null || _globeMaterial is null) return;
@@ -1827,10 +1883,16 @@ void fragment() {
             pixels[write] = (byte)((packed >> 24) & 0xFF);
             pixels[write + 1] = (byte)((packed >> 16) & 0xFF);
             pixels[write + 2] = (byte)((packed >> 8) & 0xFF);
-            pixels[write + 3] = 255;
+            // Held, not owned. The shader reads this alpha as an instruction rather than an
+            // opacity: short of full it wears the occupier's colour as stripes over whoever
+            // the province still legally belongs to, so an advance never looks like an
+            // annexation and a peace conference can be read.
+            pixels[write + 3] = OccupiedStripeAlpha;
         }
         // The peace being negotiated is drawn over the controller map, so the player sees
-        // the border they are proposing rather than the one that exists.
+        // the border they are proposing rather than the one that exists. This one is solid -
+        // a full alpha - because a province inside the draft treaty is not being occupied,
+        // it is being signed over, and the two must not look alike while a player decides.
         if (_peacePreview.Count > 0)
         {
             var packed = _colorByMapIndex.TryGetValue(_peacePreviewOwner, out var claimColor)

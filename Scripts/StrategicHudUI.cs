@@ -108,6 +108,11 @@ public partial class DealOrForceGame
 
         if (_campaign.PendingEvents.Count > 0)
             AddAlert("! EVENT", () => RefreshEventInterface(), "A campaign event is waiting for a decision.", true);
+        var peaceOffers = PeaceOffers.AwaitingAnswer(_campaign, player.Id).Count;
+        if (peaceOffers > 0)
+            AddAlert($"\u262e PEACE OFFER{(peaceOffers == 1 ? "" : "S")} {peaceOffers}",
+                () => RefreshPeaceOfferInterface(),
+                "Another government has put a settlement to you and is waiting on an answer.", true);
         if (playerBattles > 0)
             AddAlert($"⚔ {playerBattles} BATTLE{(playerBattles == 1 ? "" : "S")}", OpenFirstPlayerBattle,
                 "Active battles involving your country.", true);

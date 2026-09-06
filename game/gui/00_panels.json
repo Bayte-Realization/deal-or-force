@@ -251,6 +251,20 @@
         225
       ]
     },
+    "modal.peace_offer": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -330,
+        -200,
+        330,
+        200
+      ]
+    },
     "modal.save_load": {
       "anchors": [
         0.5,

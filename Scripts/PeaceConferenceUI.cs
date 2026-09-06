@@ -26,6 +26,7 @@ public partial class DealOrForceGame
     private Label _peaceVerdict = null!;
     private VBoxContainer _peaceLedgerRows = null!;
     private Label _peaceHint = null!;
+    private Label _peaceLegend = null!;
     private readonly Dictionary<string, Button> _peaceTermButtons = new();
     private PeaceDemand _peaceDemand;
     private PeaceLedger _peaceLedgerModel;
@@ -65,10 +66,22 @@ public partial class DealOrForceGame
 
         _peaceHint = Title(
             "Drag the left button across the map to claim ground · drag the right button to give it back · " +
-            "click a region below to take or release all of it",
+            "click a region below to take or release all of it · " +
+            "WASD and the middle mouse button move the camera",
             12, Ui.Colour("text.faint"));
         _peaceHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceHint);
+
+        // The one thing a settlement map has to say, and the thing this one used not to:
+        // holding a province and owning it are different, and a treaty is written about the
+        // second. Occupied ground kept its owner's colour under the occupier's stripes so
+        // the border being proposed reads as a proposal rather than as the front line.
+        _peaceLegend = Title(
+            "Striped ground is theirs and you are only standing on it · " +
+            "solid in your colour is what this treaty signs over",
+            12, Ui.Colour("text.faint"));
+        _peaceLegend.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(_peaceLegend);
 
         rows.AddChild(Title("TERRITORY DEMANDED", 11, Ui.Colour("text.caption")));
         var scroll = new ScrollContainer
@@ -301,6 +314,7 @@ public partial class DealOrForceGame
         }
 
         var topology = _campaign.ProvinceMap;
+        var mine = (ushort)(_campaign.Player?.MapIndex ?? -1);
         var groups = _peaceDemand.Provinces
             .GroupBy(province => (int)topology.ProvinceToState[province])
             .Select(group => new
@@ -308,6 +322,11 @@ public partial class DealOrForceGame
                 State = _campaign.States.Find(state => state.MapIndex == group.Key),
                 MapIndex = group.Key,
                 Claimed = group.Count(),
+                // How much of what is being claimed the claimant is actually standing on.
+                // A demand for ground nobody has reached is not the same demand as a demand
+                // for ground already under occupation, it costs several times as much, and
+                // until now the ledger charged the difference without ever naming it.
+                Held = group.Count(province => _campaign.ProvinceController[province] == mine),
                 Cost = group.Sum(province => _peaceLedgerModel.Price(province).Cost),
                 Total = _peaceLedgerModel.ProvincesPerState.GetValueOrDefault(group.Key)
             })
@@ -318,15 +337,22 @@ public partial class DealOrForceGame
         {
             var name = entry.State?.Name ?? $"region {entry.MapIndex}";
             var whole = entry.Total > 0 && entry.Claimed >= entry.Total;
+            var unheld = entry.Claimed - entry.Held;
             var row = ActionButton(
-                $"{(whole ? "▣" : "▤")} {name}  {entry.Claimed}/{entry.Total}  ·  {entry.Cost:0.0}",
+                $"{(whole ? "▣" : "▤")} {name}  {entry.Claimed}/{entry.Total}" +
+                (unheld > 0 ? $"  · {entry.Held} held" : "  · all held") +
+                $"  ·  {entry.Cost:0.0}",
                 () => TogglePeaceRegion(entry.MapIndex), 0, 26);
             row.Alignment = HorizontalAlignment.Left;
             row.ClipText = true;
             row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            row.TooltipText = whole
-                ? $"All {entry.Total} provinces of {name} are on the table. Click to give the region back."
-                : $"{entry.Claimed} of {entry.Total} provinces of {name}. Click to demand the whole region.";
+            row.TooltipText = (whole
+                    ? $"All {entry.Total} provinces of {name} are on the table. Click to give the region back."
+                    : $"{entry.Claimed} of {entry.Total} provinces of {name}. Click to demand the whole region.") +
+                (unheld > 0
+                    ? $"\nYou occupy {entry.Held}; the other {unheld} are still theirs on the ground, " +
+                      "which is most of what this region is costing you."
+                    : "\nEvery province claimed here is already under your occupation, which is why it is cheap.");
             _peaceLedgerRows.AddChild(row);
         }
 

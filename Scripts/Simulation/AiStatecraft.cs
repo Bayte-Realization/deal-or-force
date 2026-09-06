@@ -42,6 +42,10 @@ public static class AiStatecraft
     {
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
 
+        // An offer nobody answered is withdrawn rather than left standing forever, so a
+        // player who ignored one is asked again later instead of never.
+        PeaceOffers.Expire(campaign);
+
         // Military strength is a sum over every division in the world, and it was being
         // recomputed for each neighbour of each country every week - which made the AI the
         // most expensive system in the simulation by a factor of three. It changes once a
@@ -476,7 +480,7 @@ public static class AiStatecraft
     /// out of the ground it actually holds - through the same conference a player uses -
     /// and losing it offers to stop.
     /// </summary>
-    private static void Negotiate(Campaign campaign, Nation nation, StrategicWar war)
+    internal static void Negotiate(Campaign campaign, Nation nation, StrategicWar war)
     {
         var defines = campaign.Defines;
         if (campaign.ElapsedDays < war.AiNegotiationUnlockDay) return;
@@ -485,7 +489,12 @@ public static class AiStatecraft
 
         var opponentId = war.AttackerId == nation.Id ? war.DefenderId : war.AttackerId;
         var opponent = campaign.NationById(opponentId);
-        if (opponent is null || opponent.IsHuman) return;
+        if (opponent is null) return;
+
+        // A settlement already on their table is a settlement being thought about. Asking
+        // again over the top of it is how a foreign ministry loses an argument it was
+        // winning, and it is also how a player gets three modal dialogs in a row.
+        if (war.PendingOfferFromId >= 0) return;
 
         var ledger = new PeaceLedger(campaign, war, nation.Id);
         if (ledger.Budget < defines.AiPeaceMinimumBudget)
@@ -496,24 +505,13 @@ public static class AiStatecraft
             // settles every border it has within a year of the campaign opening.
             if (nation.WarSupport < defines.AiCapitulationWarSupport &&
                 campaign.ElapsedDays - war.StartedDay > defines.AiMinimumWarDays * 3)
-                PeaceNegotiation.Resolve(campaign, war, nation.Id, PeaceTerms.WhitePeace);
+                PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.WhitePeace);
             return;
         }
 
-        // Winning. Take what is held, cheapest first, up to most of the budget - the same
-        // demand a player would write by claiming the ground they are standing on.
+        // Winning. Write the peace a country would actually write.
         var demand = new PeaceDemand { WarId = war.Id, ProposerId = nation.Id };
-        var held = PeaceConference.Claimable(campaign, war, nation.Id)
-            .Where(province => campaign.ProvinceController[province] == (ushort)nation.MapIndex)
-            .OrderBy(province => ledger.Price(province).Cost)
-            .ToList();
-        foreach (var province in held)
-        {
-            demand.Provinces.Add(province);
-            if (ledger.Cost(demand) <= ledger.Budget * defines.AiPeaceBudgetShare) continue;
-            demand.Provinces.Remove(province);
-            break;
-        }
+        WriteDemand(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
 
         if (demand.Provinces.Count == 0)
         {
@@ -523,11 +521,175 @@ public static class AiStatecraft
             var opponentSupport = war.AttackerId == nation.Id ? war.DefenderWarSupport : war.AttackerWarSupport;
             if (ledger.Budget >= defines.AiPeaceIndemnityBudget &&
                 opponentSupport <= defines.AiCapitulationWarSupport)
-                PeaceNegotiation.Resolve(campaign, war, nation.Id, PeaceTerms.WarReparations);
+                PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.WarReparations);
             return;
         }
 
-        PeaceConference.Resolve(campaign, war, demand);
+        PeaceOffers.Put(campaign, war, nation, opponent, demand);
+    }
+
+    /// <summary>
+    /// Write a peace out of the ground a country is standing on.
+    ///
+    /// The rule this replaces was "cheapest first", which is what a spreadsheet would do
+    /// and nothing a country has ever done. It produced the same treaty every time: a
+    /// scatter of the emptiest provinces on the map, chosen because empty ground is cheap,
+    /// leaving the winner with a border like a torn edge and none of what it went to war
+    /// for.
+    ///
+    /// Four things decide instead, in the order a foreign ministry would weigh them.
+    ///
+    /// The war goal comes first. A country that declared for a province and then annexed
+    /// three others because they were going cheap did not win its war; Paradox games make
+    /// the war goal the one thing the AI will always take, and so does this.
+    ///
+    /// Then contiguity. Ground that touches what you already hold is worth far more than
+    /// the same ground in the middle of theirs, because an enclave has to be garrisoned
+    /// forever and cannot be defended at all. A province touching nothing of yours is
+    /// nearly refused outright rather than merely discouraged.
+    ///
+    /// Then finishing what you started. Half a region is the worst of both: the loser keeps
+    /// a grievance and a salient, and the winner gets neither the whole nor a straight
+    /// border. Each province already taken from a region makes the rest of it cheaper to
+    /// want.
+    ///
+    /// And only then value for money - people per point of war score - which is what the
+    /// old rule used alone.
+    /// </summary>
+    internal static void WriteDemand(Campaign campaign, Nation nation, StrategicWar war,
+        PeaceLedger ledger, PeaceDemand demand, float budget)
+    {
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (topology is null || controllers is null || budget <= 0f) return;
+
+        var candidates = PeaceConference.Claimable(campaign, war, nation.Id)
+            .Where(province => controllers[province] == (ushort)nation.MapIndex)
+            .ToList();
+        if (candidates.Count == 0) return;
+
+        // What a province of each region is worth, and how much of each region is on offer.
+        var provincesPerState = new Dictionary<int, int>();
+        foreach (var province in candidates)
+        {
+            var state = topology.ProvinceToState[province];
+            provincesPerState[state] = provincesPerState.GetValueOrDefault(state) + 1;
+        }
+        var worthPerProvince = new Dictionary<int, float>();
+        foreach (var state in campaign.States)
+        {
+            if (!provincesPerState.TryGetValue(state.MapIndex, out var count) || count <= 0) continue;
+            worthPerProvince[state.MapIndex] = state.Population / (float)count / 1_000_000f;
+        }
+
+        var takenPerState = new Dictionary<int, int>();
+        var chosen = new HashSet<int>();
+        var mapIndex = (ushort)nation.MapIndex;
+
+        // Greedy, re-scored each time: taking one province changes what the next is worth,
+        // because it moves the border and it moves a region closer to being whole.
+        while (chosen.Count < candidates.Count && chosen.Count < 400)
+        {
+            var bestProvince = -1;
+            var bestScore = 0f;
+            var bestCost = 0f;
+            foreach (var province in candidates)
+            {
+                if (chosen.Contains(province)) continue;
+                var cost = ledger.Price(province).Cost;
+                if (cost <= 0f) continue;
+
+                var state = topology.ProvinceToState[province];
+                var value = worthPerProvince.GetValueOrDefault(state, 0.05f) + 0.05f;
+
+                if (war.ClaimedStateMapIndex >= 0 && state == war.ClaimedStateMapIndex) value *= 4f;
+
+                var touching = false;
+                foreach (var neighbour in topology.Neighbors[province])
+                {
+                    if (topology.ProvinceToNation[neighbour] != mapIndex && !chosen.Contains(neighbour)) continue;
+                    touching = true;
+                    break;
+                }
+                value *= touching ? 2.5f : 0.2f;
+
+                var taken = takenPerState.GetValueOrDefault(state);
+                var total = provincesPerState.GetValueOrDefault(state, 1);
+                value *= 1f + 1.5f * (taken / (float)(total <= 0 ? 1 : total));
+
+                var score = value / M.Max(0.01f, cost);
+                if (score <= bestScore) continue;
+                bestScore = score;
+                bestProvince = province;
+                bestCost = cost;
+            }
+            if (bestProvince < 0) break;
+
+            demand.Provinces.Add(bestProvince);
+            if (ledger.Cost(demand) > budget)
+            {
+                // Over the line. Stop rather than keep hunting for something smaller: the
+                // next province would be a scrap taken because it was affordable, which is
+                // the habit this whole method exists to break.
+                demand.Provinces.Remove(bestProvince);
+                break;
+            }
+            chosen.Add(bestProvince);
+            var takenState = topology.ProvinceToState[bestProvince];
+            takenPerState[takenState] = takenPerState.GetValueOrDefault(takenState) + 1;
+            if (bestCost <= 0f) break;
+        }
+
+        WriteTerms(campaign, nation, war, ledger, demand, budget);
+    }
+
+    /// <summary>
+    /// Spend what the land did not on the rest of the treaty.
+    ///
+    /// A settlement is not only a border. A winner with war score left over and nothing
+    /// worth annexing with it was, until now, simply throwing it away - it signed for the
+    /// provinces and walked out, leaving an indemnity it had earned on the table. These are
+    /// taken in the order a foreign ministry would take them, which is not the order of
+    /// their price.
+    ///
+    /// Money first, because an indemnity costs the winner nothing and is spent the day it
+    /// arrives. Then a decade of quiet rather than five years, because a country that has
+    /// just taken land is a country that expects to be asked for it back. Then trade, then
+    /// their army - and humiliation last and only against an opponent already broken, since
+    /// against anyone else it buys nothing but a grievance that outlives the treaty.
+    /// </summary>
+    private static void WriteTerms(Campaign campaign, Nation nation, StrategicWar war,
+        PeaceLedger ledger, PeaceDemand demand, float budget)
+    {
+        var defines = campaign.Defines;
+        var spent = ledger.Cost(demand);
+
+        bool Afford(float price) => spent + price <= budget;
+
+        if (Afford(defines.PeaceCostReparations))
+        {
+            demand.Reparations = true;
+            spent += defines.PeaceCostReparations;
+        }
+        if (demand.Provinces.Count > 0 && Afford(defines.PeaceCostLongTruce))
+        {
+            demand.LongTruce = true;
+            spent += defines.PeaceCostLongTruce;
+        }
+        if (Afford(defines.PeaceCostTradeConcessions))
+        {
+            demand.TradeConcessions = true;
+            spent += defines.PeaceCostTradeConcessions;
+        }
+        if (Afford(defines.PeaceCostDemilitarise))
+        {
+            demand.Demilitarise = true;
+            spent += defines.PeaceCostDemilitarise;
+        }
+
+        var opponentSupport = war.AttackerId == nation.Id ? war.DefenderWarSupport : war.AttackerWarSupport;
+        if (opponentSupport <= defines.AiCapitulationWarSupport && Afford(defines.PeaceCostHumiliate))
+            demand.Humiliate = true;
     }
 
     // ------------------------------------------------------------------ helpers --------

@@ -199,10 +199,16 @@ public static class Program
                     TheOrderOfBattleIsAModsToRewrite(sandbox));
                 failures += Check("a country remembers why it dislikes another",
                     OpinionIsRememberedAndForgotten(sandbox));
+                failures += Check("the peace an AI writes hangs together",
+                    ThePeaceAnAiWritesHangsTogether(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
                     APeaceCanBeWritten(sandbox));
                 failures += Check("a moved border leaves a national minority behind",
                     ConquestLeavesMinorities(sandbox));
+                // Last, because accepting a settlement ends a war and annexes ground, and
+                // the checks above are entitled to a world nobody has just redrawn.
+                failures += Check("an AI puts terms to a player instead of imposing them",
+                    AnAiPutsTermsToAPlayer(sandbox));
             }
         }
 
@@ -1293,6 +1299,306 @@ public static class Program
     /// you hold, the bill has to be refused when it exceeds what the war was worth, and
     /// signing has to actually move the border and end the war.
     /// </summary>
+    /// <summary>
+    /// Whether the treaty a country writes for itself is one a country would write.
+    ///
+    /// The old rule was "cheapest first", and cheap means empty, so an AI that won a war
+    /// annexed a handful of the emptiest provinces it happened to be standing on - scattered
+    /// across the map, touching nothing it owned, and never including the region it had
+    /// declared the war over. It was affordable and it was nonsense, and because nothing
+    /// measured the shape of a settlement, nothing ever said so.
+    ///
+    /// This measures the shape. It writes the same peace both ways on the same world and
+    /// compares them: the new one may not leave more provinces stranded than the rule it
+    /// replaced, it has to stay inside the budget, it has to be one the loser will actually
+    /// sign, and if the winner is standing on the ground it went to war for, it has to ask
+    /// for some of it.
+    /// </summary>
+    /// <summary>
+    /// Whether a country will negotiate with a person at all.
+    ///
+    /// It would not. The negotiation step opened with "if the other side is human, return",
+    /// so a war with a player in it could only ever end when the player ended it: a country
+    /// losing to a player fought to its last division without once asking to stop, and a
+    /// country beating a player took nothing and said nothing. Half of the diplomacy in the
+    /// game was unreachable from the only seat anybody actually sits in.
+    ///
+    /// So the same treaty is written and then offered rather than signed. This checks the
+    /// whole round trip: that an offer appears instead of a fait accompli, that it says what
+    /// it is asking for, that refusing it leaves the war running, and that accepting one
+    /// actually moves the border.
+    /// </summary>
+    private static string AnAiPutsTermsToAPlayer(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        StrategicWar war = null;
+        Nation proposer = null;
+        var mostHeld = 0;
+        var bestBudget = 0f;
+        foreach (var candidate in campaign.Wars)
+        {
+            if (candidate.Ended) continue;
+            foreach (var side in new[] { candidate.AttackerId, candidate.DefenderId })
+            {
+                var nation = campaign.NationById(side);
+                if (nation is null) continue;
+                var budget = PeaceConference.Budget(campaign, candidate, nation.Id);
+                if (war is not null && budget <= bestBudget) continue;
+                war = candidate;
+                proposer = nation;
+                bestBudget = budget;
+                mostHeld = PeaceConference.Claimable(campaign, candidate, nation.Id)
+                    .Count(province => campaign.ProvinceController[province] == (ushort)nation.MapIndex);
+            }
+        }
+        if (war is null || proposer is null) return "no war left to negotiate";
+
+        var opponent = campaign.NationById(war.AttackerId == proposer.Id ? war.DefenderId : war.AttackerId);
+        if (opponent is null) return "the war has no other side";
+
+        // Sit a person down opposite, and let the clocks that stop an AI negotiating too
+        // early run out, since none of that is what is being tested here.
+        var wasHuman = opponent.IsHuman;
+        var startedDay = war.StartedDay;
+        var unlockDay = war.AiNegotiationUnlockDay;
+        var lastProposal = war.LastPeaceProposalDay;
+        opponent.IsHuman = true;
+        war.AiNegotiationUnlockDay = 0;
+        war.StartedDay = Math.Min(war.StartedDay, campaign.ElapsedDays - campaign.Defines.AiMinimumWarDays * 4);
+        war.LastPeaceProposalDay = int.MinValue / 2;
+
+        try
+        {
+            AiStatecraft.Negotiate(campaign, proposer, war);
+
+            if (war.Ended)
+                return $"{proposer.Tag} ended the war against a player without asking - " +
+                       "a settlement was imposed rather than offered";
+            if (war.PendingOfferFromId != proposer.Id)
+            {
+                // Standing on a lot of ground is not the same as being ahead - a country can
+                // hold a hundred provinces and still be behind on points, and then having
+                // nothing to demand is the right answer. Being ahead on points while holding
+                // ground and saying nothing is not.
+                if (bestBudget >= campaign.Defines.AiPeaceMinimumBudget && mostHeld >= 4)
+                    return $"{proposer.Tag} is {bestBudget:0.0} of war score ahead and occupies " +
+                           $"{mostHeld:N0} claimable province(s), and put nothing on the table";
+                Console.WriteLine($"  ai offer: the best-placed belligerent, {proposer.Tag}, is " +
+                                  $"{bestBudget:0.0} of war score ahead holding {mostHeld:N0} claimable " +
+                                  "province(s) - not enough to write a settlement out of.");
+                return "";
+            }
+            if (!PeaceOffers.AwaitingAnswer(war, opponent.Id))
+                return "an offer was made and the country it was made to is not waiting on it";
+            if (PeaceOffers.AwaitingAnswer(war, proposer.Id))
+                return "the country that made the offer is being asked to answer its own offer";
+
+            var wording = PeaceOffers.Describe(campaign, war);
+            if (wording.Length == 0) return "the offer does not say what it is asking for";
+            var offered = war.PendingOfferIsWritten ? war.PendingOffer.Provinces.Count : 0;
+
+            // Refusing leaves the war exactly where it was.
+            if (!PeaceOffers.Answer(campaign, war, opponent.Id, accept: false))
+                return "a player could not refuse an offer made to them";
+            if (war.Ended) return "refusing the offer ended the war anyway";
+            if (war.PendingOfferFromId >= 0) return "a refused offer is still sitting on the table";
+
+            // And accepting one signs it.
+            war.LastPeaceProposalDay = int.MinValue / 2;
+            AiStatecraft.Negotiate(campaign, proposer, war);
+            if (war.PendingOfferFromId != proposer.Id)
+            {
+                Console.WriteLine($"  ai offer: {proposer.Tag} offered {offered:N0} province(s) and, once refused, " +
+                                  "did not come back with a second settlement.");
+                return "";
+            }
+
+            var written = war.PendingOfferIsWritten;
+            var demanded = written ? new HashSet<int>(war.PendingOffer.Provinces) : new HashSet<int>();
+            if (!PeaceOffers.Answer(campaign, war, opponent.Id, accept: true))
+                return "a player could not accept an offer made to them";
+            if (!war.Ended) return "the offer was accepted and the war is still running";
+
+            var moved = demanded.Count(province =>
+                topology.ProvinceToNation[province] == (ushort)proposer.MapIndex);
+            if (written && moved != demanded.Count)
+                return $"{demanded.Count - moved:N0} of the {demanded.Count:N0} province(s) signed over " +
+                       "did not change owner";
+
+            Console.WriteLine($"  ai offer: {proposer.Tag} put terms to {opponent.Tag} - " +
+                              $"{(written ? $"{demanded.Count:N0} province(s)" : "standing terms")} - " +
+                              $"which were refused once, offered again and signed.");
+            return "";
+        }
+        finally
+        {
+            opponent.IsHuman = wasHuman;
+            war.StartedDay = startedDay;
+            war.AiNegotiationUnlockDay = unlockDay;
+            if (!war.Ended) war.LastPeaceProposalDay = lastProposal;
+        }
+    }
+
+    private static string ThePeaceAnAiWritesHangsTogether(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        // The war with the most ground on the table, either way round. Taking the first live
+        // war would usually mean a stalemate holding four provinces, and four provinces have
+        // no shape to get wrong; the point of this check is the choosing.
+        StrategicWar war = null;
+        Nation winner = null;
+        PeaceLedger ledger = null;
+        List<int> held = null;
+        foreach (var candidate in campaign.Wars)
+        {
+            if (candidate.Ended) continue;
+            foreach (var side in new[] { candidate.AttackerId, candidate.DefenderId })
+            {
+                var nation = campaign.NationById(side);
+                if (nation is null) continue;
+                var occupied = PeaceConference.Claimable(campaign, candidate, nation.Id)
+                    .Where(province => campaign.ProvinceController[province] == (ushort)nation.MapIndex)
+                    .ToList();
+                if (held is not null && occupied.Count <= held.Count) continue;
+                war = candidate;
+                winner = nation;
+                held = occupied;
+            }
+        }
+        if (war is null || winner is null) return "no war left to negotiate";
+        ledger = new PeaceLedger(campaign, war, winner.Id);
+
+        if (held.Count < 4)
+        {
+            Console.WriteLine($"  ai peace: the best-placed belligerent in the world, {winner.Tag}, occupies " +
+                              $"{held.Count} claimable province(s) - there is no settlement to shape yet.");
+            return "";
+        }
+
+        // The shipped scenario is a stalemate, so the real war score often buys less than one
+        // province and every possible treaty is the empty one. The shape is therefore
+        // compared at a budget that forces a choice - half of what taking the whole occupation
+        // would cost - while affordability and refusal are checked against the real budget
+        // below, where there is one to check against.
+        var everything = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        foreach (var province in held) everything.Provinces.Add(province);
+        var shaping = ledger.Cost(everything) * 0.5f;
+        if (shaping <= 0f) return $"{winner.Tag}'s entire occupation prices at nothing";
+
+        // What the rule this replaced would have written, on this same world.
+        var cheapest = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        foreach (var province in held.OrderBy(province => ledger.Price(province).Cost))
+        {
+            cheapest.Provinces.Add(province);
+            if (ledger.Cost(cheapest) <= shaping) continue;
+            cheapest.Provinces.Remove(province);
+            break;
+        }
+
+        var written = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        AiStatecraft.WriteDemand(campaign, winner, war, ledger, written, shaping);
+        if (written.Provinces.Count == 0)
+            return $"{winner.Tag} wrote an empty treaty out of {held.Count:N0} occupied province(s) " +
+                   $"with {shaping:0.00} to spend";
+
+        var cost = ledger.Cost(written);
+        if (cost > shaping)
+            return $"the treaty costs {cost:0.00} against a budget of {shaping:0.00}";
+
+        var strandedNow = StrandedProvinces(campaign, winner, written.Provinces);
+        var strandedBefore = StrandedProvinces(campaign, winner, cheapest.Provinces);
+        if (strandedNow > strandedBefore)
+            return $"the treaty is in more pieces than the cheapest-first rule it replaced: " +
+                   $"{strandedNow:N0} province(s) touching nothing of {winner.Tag}, against {strandedBefore:N0}";
+
+        // The other half of "cheapest first" was that cheap means empty: the old rule spent a
+        // war's whole score on the emptiest ground the winner happened to be standing on. For
+        // the same money the new one has to come away with at least as many people, or it is
+        // not writing a better treaty, only a tidier one.
+        long PeopleIn(PeaceDemand demand)
+        {
+            long people = 0;
+            foreach (var province in demand.Provinces)
+            {
+                var mapIndex = (int)topology.ProvinceToState[province];
+                var count = ledger.ProvincesPerState.GetValueOrDefault(mapIndex, 1);
+                var state = campaign.States.Find(entry => entry.MapIndex == mapIndex);
+                if (state is not null && count > 0) people += state.Population / count;
+            }
+            return people;
+        }
+
+        var peopleNow = PeopleIn(written);
+        var peopleBefore = PeopleIn(cheapest);
+        if (peopleNow < peopleBefore)
+            return $"for the same {shaping:0.0} of war score the treaty takes {peopleNow:N0} people " +
+                   $"where the cheapest-first rule it replaced took {peopleBefore:N0}";
+
+        var regionsNow = written.Provinces.Select(province => (int)topology.ProvinceToState[province])
+            .Distinct().Count();
+        var regionsBefore = cheapest.Provinces.Select(province => (int)topology.ProvinceToState[province])
+            .Distinct().Count();
+
+        // A country that declared for a region and then took none of it did not win its war.
+        if (war.ClaimedStateMapIndex >= 0)
+        {
+            var goalHeld = held.Count(province => topology.ProvinceToState[province] == war.ClaimedStateMapIndex);
+            var goalTaken = written.Provinces.Count(province =>
+                topology.ProvinceToState[province] == war.ClaimedStateMapIndex);
+            if (goalHeld > 0 && goalTaken == 0)
+                return $"{winner.Tag} occupies {goalHeld:N0} province(s) of the region it declared war over " +
+                       "and demanded none of them";
+        }
+
+        // And what it would sign for what it has actually won, which in a stalemate is
+        // usually nothing at all - correctly.
+        var affordable = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        AiStatecraft.WriteDemand(campaign, winner, war, ledger, affordable, ledger.Budget * 0.8f);
+        if (affordable.Provinces.Count > 0)
+        {
+            var refusal = PeaceConference.BlockReason(campaign, war, affordable);
+            if (refusal.Length > 0)
+                return $"the AI wrote a peace the other side refuses: {refusal}";
+        }
+
+        Console.WriteLine($"  ai peace: given {shaping:0.0} of war score, {winner.Tag} wrote a treaty of " +
+                          $"{written.Provinces.Count:N0} province(s) across {regionsNow:N0} region(s) - " +
+                          $"{peopleNow:N0} people, {strandedNow:N0} of them detached.");
+        Console.WriteLine($"    cheapest-first, for the same money: {cheapest.Provinces.Count:N0} province(s) " +
+                          $"across {regionsBefore:N0} region(s) - {peopleBefore:N0} people, " +
+                          $"{strandedBefore:N0} detached. On its real war score of {ledger.Budget:0.0} " +
+                          $"{winner.Tag} would ask for {affordable.Provinces.Count:N0} province(s).");
+        return "";
+    }
+
+    /// <summary>
+    /// How many demanded provinces touch neither the demander's own ground nor the rest of
+    /// the demand - which is to say, how many pieces the settlement would arrive in.
+    /// </summary>
+    private static int StrandedProvinces(Campaign campaign, Nation nation, IEnumerable<int> demanded)
+    {
+        var topology = campaign.ProvinceMap;
+        var claimed = new HashSet<int>(demanded);
+        var mapIndex = (ushort)nation.MapIndex;
+        var stranded = 0;
+        foreach (var province in claimed)
+        {
+            var touching = false;
+            foreach (var neighbour in topology.Neighbors[province])
+            {
+                if (topology.ProvinceToNation[neighbour] != mapIndex && !claimed.Contains(neighbour)) continue;
+                touching = true;
+                break;
+            }
+            if (!touching) stranded++;
+        }
+        return stranded;
+    }
+
     private static string APeaceCanBeWritten(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;

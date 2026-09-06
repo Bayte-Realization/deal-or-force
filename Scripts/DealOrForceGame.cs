@@ -351,6 +351,7 @@ public partial class DealOrForceGame : Control
         BuildPauseMenu();
         BuildSaveLoadInterface();
         BuildEventInterface();
+        BuildPeaceOfferInterface();
         BuildStrategicAudio();
         BuildDeveloperConsole();
     }
@@ -871,6 +872,7 @@ public partial class DealOrForceGame : Control
         UpdateScreenButtons();
         RefreshStrategicAudio();
         RefreshEventInterface();
+        RefreshPeaceOfferInterface();
         RefreshStrategicHud();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
