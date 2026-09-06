@@ -77,6 +77,22 @@ public sealed class DrawnFrontLine
     public readonly HashSet<int> Provinces = new();
     public readonly List<int> ArmyIds = new();
 
+    /// <summary>
+    /// Which formation stands where, worked out for the line as a whole.
+    ///
+    /// It has to be decided for everybody at once. "Where should this division go" has no
+    /// answer on its own - the answer depends on where the others are and on which stretch
+    /// of the line is actually in danger - and asking it one division at a time is how a
+    /// front ends up evenly covered and everywhere too thin.
+    /// </summary>
+    internal readonly Dictionary<int, int> Posts = new();
+
+    /// <summary>The day the posts were last worked out. Once a day is often enough.</summary>
+    internal int PostsDay = int.MinValue;
+
+    /// <summary>Who is holding what, for anything that wants to show or check it.</summary>
+    public IReadOnlyDictionary<int, int> Assignment => Posts;
+
     public bool IsEmpty => Provinces.Count == 0 || ArmyIds.Count == 0;
 }
 
@@ -119,6 +135,12 @@ public static class BattlePlanning
         var index = (int)((slot + 0.5f) / count * ordered.Count);
         index = Math.Clamp(index, 0, ordered.Count - 1);
 
+        // The assignment worked out for the whole line wins where it has an opinion. The
+        // even spread below is what is left for formations it did not place - a line with
+        // more divisions than posts worth defending, which is a happy problem.
+        if (line.Posts.TryGetValue(army.Id, out var assigned) && ordered.Contains(assigned))
+            return assigned;
+
         // Where the formation actually is, if that is anywhere on this line. Cohesion is
         // about the distance between here and the post it has been given: a wanted post
         // four provinces away is a division that spends a week walking sideways instead of
@@ -155,7 +177,11 @@ public static class BattlePlanning
         var provinces = line.Provinces.Where(province => province > 0 &&
             (topology is null || province <= topology.ProvinceCount)).ToList();
         provinces.Sort();
-        if (topology is null || provinces.Count <= 2) return provinces;
+        if (topology is null || provinces.Count <= 2)
+        {
+            AssignPosts(campaign, line, provinces);
+            return provinces;
+        }
 
         // An area is not a line, so it is not walked. The order is by what is worth
         // standing on - the biggest places first - because spreading formations evenly
@@ -177,6 +203,7 @@ public static class BattlePlanning
                 var order = worth[right].CompareTo(worth[left]);
                 return order != 0 ? order : left.CompareTo(right);
             });
+            AssignPosts(campaign, line, provinces);
             return provinces;
         }
 
@@ -208,7 +235,130 @@ public static class BattlePlanning
             }
             current = nearest;
         }
+        AssignPosts(campaign, line, order);
         return order;
+    }
+
+    /// <summary>
+    /// Decide who holds what, for one line, weighing what each post is worth defending.
+    ///
+    /// The rule this replaces was "spread them evenly along the line", which is a good
+    /// first answer and a bad final one: a line half of which faces an army and half of
+    /// which faces a swamp gets the same number of divisions in each, and the half facing
+    /// the army breaks. What a post is worth is the pressure on it against what already
+    /// holds it, and what would be lost if it fell.
+    ///
+    /// The other half of the problem is churn. A planner that re-optimises freely moves
+    /// divisions up and down the line for the rest of the war, and a division walking
+    /// sideways is a division defending nothing - so a formation already standing on a post
+    /// stays there unless somewhere else is clearly worse off, "clearly" being a margin
+    /// rather than a tie-break. Cohesion is the player's control over how far it may reach.
+    /// </summary>
+    private static void AssignPosts(Campaign campaign, DrawnFrontLine line, IReadOnlyList<int> ordered)
+    {
+        if (campaign is null || ordered.Count == 0) return;
+        if (line.PostsDay == campaign.ElapsedDays) return;
+        line.PostsDay = campaign.ElapsedDays;
+
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController ?? topology?.ProvinceToNation;
+        var nation = campaign.NationById(line.NationId);
+        if (topology is null || controllers is null || nation is null) return;
+
+        var garrison = line.ArmyIds
+            .Select(id => campaign.Armies.Find(candidate => candidate.Id == id))
+            .Where(army => army is not null && army.NationId == line.NationId)
+            .ToList();
+        if (garrison.Count == 0) return;
+
+        // What is standing on each post already, and how much pressure each is under.
+        var standing = new Dictionary<int, float>();
+        foreach (var army in campaign.Armies)
+        {
+            if (army.ProvinceId <= 0) continue;
+            var friendly = army.NationId == line.NationId;
+            var key = army.ProvinceId;
+            standing[key] = standing.GetValueOrDefault(key) + (friendly ? army.Power : -army.Power);
+        }
+
+        var people = new Dictionary<int, long>();
+        foreach (var state in campaign.States) people[state.MapIndex] = state.Population;
+
+        var need = new float[ordered.Count];
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            var province = ordered[index];
+            float threat = 0f;
+            foreach (var neighbour in topology.Neighbors[province])
+            {
+                if (controllers[neighbour] == nation.MapIndex) continue;
+                // Somebody else's ground next door is pressure whether or not an army is
+                // standing on it; an army standing on it is a great deal more.
+                threat += 1f;
+                var hostile = standing.GetValueOrDefault(neighbour);
+                if (hostile < 0f) threat += -hostile * 2.5f;
+                // A river between them is the cheapest defence there is, so a post behind
+                // one needs less holding than the same post on open ground.
+                threat *= M.Lerp(1f, 0.55f, topology.RiverCrossingStrength(province, neighbour));
+            }
+
+            // What is behind the post, in people. Losing a province with a city in it is
+            // not the same as losing one with a hillside.
+            var worth = people.GetValueOrDefault(topology.ProvinceToState[province]) / 4_000_000f;
+            var held = Math.Max(0f, standing.GetValueOrDefault(province));
+            need[index] = (threat + M.Clamp(worth, 0f, 3f)) / (1f + held);
+        }
+
+        // Where each formation is now, in posts along the line.
+        var at = new Dictionary<int, int>();
+        for (var index = 0; index < ordered.Count; index++)
+            foreach (var army in garrison)
+                if (army.ProvinceId == ordered[index]) at[army.Id] = index;
+
+        var reach = line.Cohesion switch
+        {
+            PlanCohesion.Flexible => int.MaxValue,
+            PlanCohesion.Balanced => Math.Max(2, ordered.Count / 4),
+            PlanCohesion.Rigid => 1,
+            _ => 0
+        };
+
+        line.Posts.Clear();
+        var taken = new bool[ordered.Count];
+        var placed = new HashSet<int>();
+
+        // The most pressed posts first, each filled by the formation that can hold it and
+        // is nearest to it - power decides between two who are equally close, distance
+        // decides between two of equal power, and a formation already there wins both.
+        foreach (var slot in Enumerable.Range(0, ordered.Count).OrderByDescending(index => need[index])
+                     .ThenBy(index => index))
+        {
+            if (taken[slot]) continue;
+            Army best = null;
+            var bestScore = float.MinValue;
+            foreach (var army in garrison)
+            {
+                if (placed.Contains(army.Id)) continue;
+                var here = at.TryGetValue(army.Id, out var where) ? where : -1;
+                var walk = here < 0 ? ordered.Count : Math.Abs(here - slot);
+                if (here >= 0 && walk > reach) continue;
+
+                var score = army.Power / (1f + walk * 0.35f);
+                // Staying put is worth something in itself: the digging, the local
+                // knowledge, and the week it does not spend walking.
+                if (here == slot) score *= 1.6f;
+                // And leaving a post that is itself under pressure has to be worth it.
+                else if (here >= 0 && need[here] > need[slot] * 0.75f) score *= 0.5f;
+                if (score <= bestScore) continue;
+                bestScore = score;
+                best = army;
+            }
+            if (best is null) continue;
+            line.Posts[best.Id] = ordered[slot];
+            placed.Add(best.Id);
+            taken[slot] = true;
+            if (placed.Count == garrison.Count) break;
+        }
     }
 
     private static float Distance((float Latitude, float Longitude) point, float latitude, float longitude)

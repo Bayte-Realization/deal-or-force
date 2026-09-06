@@ -173,6 +173,9 @@ public static class Program
                 // Deletes formations and puts others on trains, so it belongs on the copy.
                 failures += Check("a consolidation invents nobody and the railways are paid for",
                     ManoeuvresCostWhatTheySave(sandbox));
+                // Draws a line and gives away posts, so it belongs on the copy as well.
+                failures += Check("a drawn line is held where it is pressed",
+                    ADrawnLineIsHeldWhereItIsPressed(sandbox));
                 failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
                 failures += Check("an army can be put ashore across water",
                     AnArmyCanBePutAshore(sandbox));
@@ -2639,6 +2642,93 @@ public static class Program
                           $"{after:N0} of {before:N0} men; a redeployment cost " +
                           $"{organisationBefore - traveller.Organisation:P0} organisation.");
         return "";
+    }
+
+    /// <summary>
+    /// A drawn line is held where it is pressed, and stops being re-thought once it is.
+    ///
+    /// Two failures, opposite and both quiet. A planner that spreads formations evenly
+    /// leaves the dangerous end of a line as thin as the safe end, and nothing on screen
+    /// says so until it breaks. A planner that re-optimises every tick keeps every division
+    /// walking sideways for the rest of the war, which also defends nothing and looks like
+    /// activity. So: the most pressed post must be held, and asking twice must give the
+    /// same answer.
+    /// </summary>
+    private static string ADrawnLineIsHeldWhereItIsPressed(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (topology is null || controllers is null) return "there is no map to hold";
+
+        var war = campaign.Wars.FirstOrDefault(candidate => !candidate.Ended);
+        if (war is null) return "nobody is at war, so no line is under pressure";
+        var nation = campaign.NationById(war.DefenderId) ?? campaign.NationById(war.AttackerId);
+        if (nation is null) return "the war has no defender";
+
+        var front = war.FriendlyFront(nation.Id).Where(province => province > 0).Take(14).ToList();
+        if (front.Count < 4) return $"{nation.Tag} holds a front of {front.Count} province(s), too short to spread over";
+
+        var garrison = campaign.Armies
+            .Where(army => army.NationId == nation.Id && !army.InBattle && army.EmbarkedFleetId < 0)
+            .Take(6).ToList();
+        if (garrison.Count < 3) return $"{nation.Tag} has {garrison.Count} formation(s) free, too few to spread";
+
+        new DrawFrontLineCommand
+        {
+            IssuerId = nation.Id,
+            Kind = FrontLineKind.Defence,
+            Provinces = front,
+            ArmyIds = garrison.Select(army => army.Id).ToArray()
+        }.Apply(campaign);
+        try
+        {
+
+        var line = campaign.FrontLines.LastOrDefault(candidate => candidate.NationId == nation.Id);
+        if (line is null) return "the line was drawn and did not stick";
+
+        var ordered = BattlePlanning.Sequence(campaign, line);
+        var first = new Dictionary<int, int>(line.Assignment);
+        if (first.Count == 0) return "the line was drawn and nobody was given a post";
+
+        // Asking again on the same day must not move anybody: the assignment is a decision,
+        // not a die roll, and a planner that answers differently every call is one that will
+        // march the line up and down for the rest of the war.
+        BattlePlanning.Sequence(campaign, line);
+        var second = line.Assignment;
+        if (first.Count != second.Count || first.Any(entry =>
+                !second.TryGetValue(entry.Key, out var post) || post != entry.Value))
+            return "asking twice on the same day moved formations about";
+
+        // The post with the most hostile ground next to it is the one that has to be held.
+        var pressed = -1;
+        var worst = -1;
+        foreach (var province in ordered)
+        {
+            var hostile = topology.Neighbors[province]
+                .Count(neighbour => controllers[neighbour] != nation.MapIndex);
+            if (hostile <= worst) continue;
+            worst = hostile;
+            pressed = province;
+        }
+        if (worst <= 0) return "";
+        if (!first.ContainsValue(pressed))
+            return $"the most exposed post on the line ({worst} hostile neighbours) was given to nobody, " +
+                   $"while {first.Count} formation(s) were placed elsewhere";
+
+        Console.WriteLine($"  the line: {nation.Tag} spread {first.Count} formation(s) over {ordered.Count} post(s); " +
+                          $"the most exposed ({worst} hostile neighbours) is held, and asking twice moved nobody.");
+        return "";
+        }
+        finally
+        {
+            // The line was drawn to be measured, not to be left lying on the map: another
+            // check counts lines with nobody on them, and it is right to.
+            new ClearFrontLineCommand
+            {
+                IssuerId = nation.Id,
+                ArmyIds = garrison.Select(army => army.Id).ToArray()
+            }.Apply(campaign);
+        }
     }
 
     private static string GdpSane(Campaign campaign)
