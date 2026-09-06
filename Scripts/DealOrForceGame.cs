@@ -228,6 +228,20 @@ public partial class DealOrForceGame : Control
         if (_developerConsoleLayer is { Visible: true }) return;
         HandleProjectionHotkey(inputEvent);
         if (GetViewport().IsInputHandled()) return;
+
+        // Halt, and come off the plan. Two keys because they are two decisions - see
+        // HaltSelectedDivisions for what one key cost. Only while formations are selected
+        // and only in the campaign, so H stays a letter everywhere else.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.H } &&
+            _hudLayer is { Visible: true } && _selectedArmies.Count > 0)
+        {
+            if (Input.IsKeyPressed(Key.Ctrl)) DetachSelectedDivisions();
+            else if (Input.IsKeyPressed(Key.Shift)) ReturnSelectedDivisionsToPlan();
+            else HaltSelectedDivisions();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         if (!inputEvent.IsActionPressed("ui_cancel")) return;
         if (_handoverLayer is { Visible: true }) return;
         if (_eventLayer is { Visible: true }) return;
@@ -236,6 +250,8 @@ public partial class DealOrForceGame : Control
             ClosePeaceConference();
         else if (_pauseMenuLayer is { Visible: true })
             HidePauseMenu();
+        else if (_stateAffairsLayer is { Visible: true })
+            CloseStateAffairs();
         else if (_ledgerLayer is { Visible: true })
             CloseLedger();
         else if (_warLedgerLayer is { Visible: true })
@@ -445,7 +461,10 @@ public partial class DealOrForceGame : Control
             ("Diplomacy", "diplomacy", "How the selected country regards you, and what can be done about it."),
             ("Wars", "wars", "Every war being fought, what it is costing, and the table where it can be ended."),
             ("Decisions", "decisions", "One-off national actions, with their price and their consequence."),
-            ("Ledger", "ledger", "The full record: charts, budget, trade, population and the cabinet.")
+            ("State Affairs", "state_affairs", "Running the country: taxation, the armed forces budget, " +
+                "the cabinet, welfare and education, trade policy, and what is being built."),
+            ("Ledger", "ledger", "The record, for any country: charts, history and rankings. Nothing here " +
+                "changes anything - the controls moved to State Affairs.")
         };
         _screenButtons.Clear();
         foreach (var (screen, icon, help) in screens)
@@ -514,6 +533,7 @@ public partial class DealOrForceGame : Control
         BuildFleetPanel(_hudLayer);
         BuildPeaceConference();
         BuildLedgerInterface();
+        BuildStateAffairsInterface();
         BuildWarLedger();
         BuildMapControls();
         BuildStrategicHud();
@@ -558,6 +578,11 @@ public partial class DealOrForceGame : Control
         if (screen == "Ledger")
         {
             OpenLedger();
+            return;
+        }
+        if (screen == "State Affairs")
+        {
+            OpenStateAffairs();
             return;
         }
         // Wars are a screen of their own now, not a paragraph per war in the side panel.
@@ -816,6 +841,7 @@ public partial class DealOrForceGame : Control
         RefreshEventInterface();
         RefreshStrategicHud();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
+        if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
         if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
         else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation")
@@ -996,7 +1022,10 @@ public partial class DealOrForceGame : Control
     /// <summary>The screen currently open, lit in the bottom bar.</summary>
     private void UpdateScreenButtons()
     {
-        var open = _ledgerLayer is { Visible: true } ? "Ledger" : _sidePanel is { Visible: true } ? _openScreen : "";
+        var open =
+            _stateAffairsLayer is { Visible: true } ? "State Affairs" :
+            _ledgerLayer is { Visible: true } ? "Ledger" :
+            _sidePanel is { Visible: true } ? _openScreen : "";
         foreach (var (screen, button) in _screenButtons)
         {
             if (!GodotObject.IsInstanceValid(button)) continue;

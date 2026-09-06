@@ -52,7 +52,8 @@ public partial class DealOrForceGame
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
         SetArmyFeedback(army.NationId == _campaign.Player.Id
-            ? "RMB: march or attack · Shift+RMB: append waypoint · Shift+click adds a division, Ctrl+click removes one."
+            ? "RMB: march or attack · Shift+RMB: append waypoint · Shift+click adds a division, Ctrl+click removes one. " +
+              "H halts, Ctrl+H takes them off the plan, Shift+H hands them back."
             : "Foreign formation: it can be inspected, but only its owner may issue orders.");
     }
 
@@ -322,6 +323,70 @@ public partial class DealOrForceGame
         ArmyMoveResult result, string caption)
     {
         if (results.TryGetValue(result, out var count) && count > 0) parts.Add($"{count} {caption}");
+    }
+
+    /// <summary>
+    /// Stop marching, come off the plan, go back on it - three separate things.
+    ///
+    /// They used to be one button whose effect the player could not predict. "Halt" that
+    /// also silently took a division off its front is how a carefully drawn line loses a
+    /// quarter of its strength without anybody noticing; "halt" that also handed it back to
+    /// the planner is how a hand-driven attack gets marched away from its objective on the
+    /// next tick. So each is its own key and each says what it did.
+    /// </summary>
+    private void HaltSelectedDivisions()
+    {
+        var targets = SelectedPlayerDivisions();
+        if (targets.Length == 0) return;
+        var stopped = 0;
+        foreach (var army in targets)
+        {
+            var command = new HaltArmyCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+            if (command.Halted) stopped++;
+        }
+        ShowSelectedArmies();
+        SetArmyFeedback(stopped == 0
+            ? $"{targets.Length} division(s) were already standing still. They keep their plan."
+            : $"{stopped} division(s) stopped where they stand. They are still on their plan - " +
+              "Ctrl+H takes them off it.");
+    }
+
+    private void DetachSelectedDivisions()
+    {
+        var targets = SelectedPlayerDivisions();
+        if (targets.Length == 0) return;
+        var taken = 0;
+        foreach (var army in targets)
+        {
+            var command = new DetachArmyFromPlanCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+            if (command.Detached) taken++;
+        }
+        ShowSelectedArmies();
+        SetArmyFeedback(taken == 0
+            ? $"{targets.Length} division(s) were already under hand control."
+            : $"{taken} division(s) taken off their plan. Nothing will move them but you, and the front " +
+              "no longer counts them - Shift+H hands them back.");
+    }
+
+    private void ReturnSelectedDivisionsToPlan()
+    {
+        var targets = SelectedPlayerDivisions();
+        if (targets.Length == 0) return;
+        foreach (var army in targets)
+        {
+            _campaign.Commands.Enqueue(new ReturnArmyToPlanCommand
+            {
+                IssuerId = _campaign.Player.Id, ArmyId = army.Id
+            });
+            _campaign.Commands.ApplyAll(_campaign);
+        }
+        ShowSelectedArmies();
+        SetArmyFeedback($"{targets.Length} division(s) handed back to the plan. They will hold the line " +
+                        "until the operation orders them forward.");
     }
 
     private void SetArmyFeedback(string text)
