@@ -1,0 +1,24 @@
+// What the works cost, how long they take, and what they give back.
+//
+// gdp_gain is output; capacity_gain is construction capacity, which is what lets a country
+// build the next thing faster.
+{
+  // Cheap docks and railways make the world trade freely, because reach is the ceiling on
+  // how much of its shortfall a country can physically bring in.
+  "Port": {
+    "cost": 1.10,
+    "days": 150,
+    "description": "Cheap docks. The world trades freely."
+  },
+  "RailNetwork": {
+    "cost": 1.30,
+    "days": 160
+  },
+
+  // And an expensive electronics plant, so that the countries which already have one keep
+  // the advantage for longer.
+  "ElectronicsPlant": {
+    "cost": 4.20,
+    "days": 380
+  }
+}

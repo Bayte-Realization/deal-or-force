@@ -145,6 +145,8 @@ public static class Program
         failures += Check("a category folder is read whole and later files win",
             ACategoryFolderIsReadWhole());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
+        failures += Check("every mod template names something the game actually has",
+            TheTemplatesStillNameRealThings());
         failures += Check("every picture the interface asks for has a name a mod can rebind",
             ArtworkIsNamedRatherThanSpelledOut());
         failures += Check("every sound the game makes is declared where a mod can reach it",
@@ -2624,6 +2626,129 @@ public static class Program
                           $"{held:N0} of them across {campaign.Relations.Count:N0} relation(s).");
         return "";
     }
+
+    /// <summary>
+    /// Whether the worked examples in Mods/_templates still describe this game.
+    ///
+    /// A template that has rotted is worse than no template at all: somebody follows the
+    /// guide, the mod loader reports "unknown define", and they reasonably conclude the
+    /// documentation is wrong rather than old. Every key in every template is checked
+    /// against the thing it claims to name - a define against the properties on Defines, a
+    /// good and a building against their enumerations - so that renaming any of them breaks
+    /// the build of the documentation as loudly as it breaks the code.
+    /// </summary>
+    private static string TheTemplatesStillNameRealThings()
+    {
+        var templates = FindTemplates();
+        if (templates is null) return "";
+
+        var defines = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in typeof(Defines).GetProperties(
+                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public))
+            if (property.CanWrite) defines.Add(Squash(property.Name));
+
+        var options = new System.Text.Json.JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = System.Text.Json.JsonCommentHandling.Skip
+        };
+
+        var complaints = new List<string>();
+        var keys = 0;
+        var packages = 0;
+
+        foreach (var directory in Directory.GetDirectories(templates))
+        {
+            packages++;
+            var manifest = Path.Combine(directory, "manifest.json");
+            if (!File.Exists(manifest))
+            {
+                complaints.Add($"{Path.GetFileName(directory)} has no manifest.json");
+                continue;
+            }
+            try
+            {
+                using var declared = System.Text.Json.JsonDocument.Parse(File.ReadAllText(manifest), options);
+                if (!declared.RootElement.TryGetProperty("id", out _))
+                    complaints.Add($"{Path.GetFileName(directory)}/manifest.json has no id");
+            }
+            catch (Exception exception)
+            {
+                complaints.Add($"{Path.GetFileName(directory)}/manifest.json will not parse: {exception.Message}");
+                continue;
+            }
+
+            var common = Path.Combine(directory, "common");
+            if (!Directory.Exists(common)) continue;
+            foreach (var category in Directory.GetDirectories(common))
+            foreach (var file in Directory.GetFiles(category, "*.json"))
+            {
+                System.Text.Json.JsonDocument document;
+                try { document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file), options); }
+                catch (Exception exception)
+                {
+                    complaints.Add($"{Short(templates, file)} will not parse: {exception.Message}");
+                    continue;
+                }
+                using (document)
+                {
+                    if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    var kind = Path.GetFileName(category);
+                    foreach (var entry in document.RootElement.EnumerateObject())
+                    {
+                        keys++;
+                        var known = kind switch
+                        {
+                            "defines" => defines.Contains(Squash(entry.Name)),
+                            "goods" => Enum.TryParse<Commodity>(entry.Name, true, out _),
+                            "buildings" => Enum.TryParse<BuildingKind>(entry.Name, true, out _),
+                            "opinion_modifiers" =>
+                                entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                                entry.Value.TryGetProperty("opinion", out _),
+                            _ => true
+                        };
+                        if (known) continue;
+                        complaints.Add(kind == "opinion_modifiers"
+                            ? $"{Short(templates, file)}: '{entry.Name}' says nothing about opinion"
+                            : $"{Short(templates, file)}: '{entry.Name}' is not a {kind.TrimEnd('s')} this game has");
+                    }
+                }
+            }
+        }
+
+        if (complaints.Count > 0) return string.Join("; ", complaints);
+        Console.WriteLine($"  templates: {packages:N0} worked example(s) in Mods/_templates, " +
+                          $"{keys:N0} key(s) between them, every one naming something that exists.");
+        return "";
+    }
+
+    /// <summary>The template folder, wherever the bench happens to have been started from.</summary>
+    private static string FindTemplates()
+    {
+        var roots = new List<string> { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var depth = 0; depth < 7 && directory is not null; depth++, directory = directory.Parent)
+            roots.Add(directory.FullName);
+        foreach (var root in roots)
+        {
+            var candidate = Path.Combine(root, "Mods", "_templates");
+            if (Directory.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    private static string Squash(string name)
+    {
+        var builder = new System.Text.StringBuilder(name.Length);
+        foreach (var character in name)
+            if (char.IsLetterOrDigit(character)) builder.Append(char.ToLowerInvariant(character));
+        return builder.ToString();
+    }
+
+    private static string Short(string root, string file) =>
+        file.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+            ? file[(root.Length + 1)..].Replace('\\', '/')
+            : Path.GetFileName(file);
 
     private static string ACategoryFolderIsReadWhole()
     {

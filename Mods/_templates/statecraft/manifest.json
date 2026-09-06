@@ -1,0 +1,11 @@
+{
+  "id": "example_statecraft",
+  "name": "Example: a warier world",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 100,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

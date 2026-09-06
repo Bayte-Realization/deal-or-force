@@ -1,0 +1,13 @@
+// The market itself. Every one of these is read by Scripts/Simulation/MarketCore.cs and
+// Scripts/Simulation/TradeCore.cs.
+{
+  // The ceiling on imports before a country's own ports and railways are applied. Lower
+  // this and every country lives closer to what it makes itself.
+  "world_market_access": 0.72,
+
+  // What imported goods cost over home-made ones.
+  "import_markup": 1.10,
+
+  // How fast prices chase their clearing level. 0 freezes them, 1 snaps instantly.
+  "price_adjust_speed": 0.22
+}

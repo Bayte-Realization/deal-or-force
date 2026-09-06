@@ -1,0 +1,38 @@
+// A warier world: conquest costs more and deters more.
+//
+// Every one of these is read by Scripts/Simulation/Statecraft.cs and
+// Scripts/Simulation/AiJudgement.cs. Invert them for a hungrier world - halve the price
+// side and the bench's two-year run will show visibly more wars and fewer alliances.
+{
+  // --- what a war costs before a shot is fired ---
+
+  // The trade lost on the morning of the declaration. Doubled: a country that runs half its
+  // economy through its neighbour now needs a very good reason indeed.
+  "ai_trade_loss_weight": 5.20,
+
+  // Everybody who arrives with the defender. Each is a separate war on a separate front.
+  "ai_ally_deterrence": 1.60,
+  "ai_coalition_deterrence": 1.00,
+
+  // And having nothing to say about why.
+  "ai_no_casus_belli_caution": 1.40,
+
+  // --- what taking things costs with everyone who lost nothing ---
+  "notoriety_per_million_taken": 1.30,
+  "notoriety_per_unjustified_war": 26.0,
+  "unjustified_war_stability_cost": 0.09,
+  "unjustified_war_support_cost": 0.15,
+
+  // A government that abandons its own ally pays for it at home.
+  "broken_promise_stability_cost": 0.14,
+
+  // --- patience ---
+
+  // A country that wants a war it cannot afford keeps the idea for six years rather than
+  // four, and spends them arming and prising the target's friends away.
+  "ai_war_plan_patience_days": 2190,
+
+  // And reaches for sanctions sooner: a rival only has to need us slightly more than we
+  // need them before an embargo looks better than an invasion.
+  "ai_embargo_leverage": 0.04
+}

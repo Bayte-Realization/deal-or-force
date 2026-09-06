@@ -1,0 +1,52 @@
+// Why one country feels the way it does about another.
+//
+// An opinion is the sum of these, not a number anybody sets. days: 0 means it is held for
+// as long as whatever caused it lasts; decays: true means it fades over its lifetime;
+// max_stacks is how many times the same thing can be counted.
+//
+// A file here layers over the base game's - name a reason and you replace it, leave it out
+// and it keeps what it had.
+{
+  // A long memory for the two that matter most, because a promise kept or broken under
+  // fire should outlive the government that kept or broke it.
+  "stood_by_us": {
+    "name": "Stood by us when it counted",
+    "opinion": 60,
+    "days": 9000,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  "abandoned_us": {
+    "name": "Abandoned us when it counted",
+    "opinion": -75,
+    "days": 9000,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // Sanctions are felt as an insult as much as a cost.
+  "embargoed_us": {
+    "name": "Refuses to trade with us",
+    "opinion": -42,
+    "days": 0,
+    "decays": false
+  },
+
+  // And a guarantee is worth something to the country that receives it.
+  "guaranteed_us": {
+    "name": "Has guaranteed our independence",
+    "opinion": 34,
+    "days": 0,
+    "decays": false
+  },
+
+  // What the world thinks of a country that keeps taking things. Scaled at runtime by how
+  // much it has actually taken.
+  "notoriety": {
+    "name": "Their appetite worries us",
+    "opinion": -45,
+    "days": 0,
+    "decays": false
+  }
+}

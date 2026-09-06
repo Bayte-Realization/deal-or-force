@@ -1,0 +1,24 @@
+// What a good is worth and how badly it is needed.
+//
+// Fields left out keep whatever the base game gave them, so a file can be three lines.
+// essential_weight is the one to watch: it is how much of the market-access figure this
+// good carries, and market access drives GDP, living standards and unrest.
+{
+  // Make the one good with a lopsided geography really hurt to be without. Eight countries
+  // have rare earths and everybody's electronics need them.
+  "RareEarths": {
+    "base_price": 0.118,
+    "essential_weight": 0.55,
+    "description": "Strategic minerals. Eight countries have them and everyone needs them."
+  },
+
+  // A harvest is made of gas. Raising this makes a fertiliser exporter a power.
+  "Fertiliser": {
+    "essential_weight": 0.72
+  },
+
+  // And a cheaper staple, so that a food shortage is felt in the ledger as well as the belly.
+  "Food": {
+    "base_price": 0.011
+  }
+}
