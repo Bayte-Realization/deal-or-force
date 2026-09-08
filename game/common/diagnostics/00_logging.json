@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "max_file_mb": 4,
+  "queue_limit": 2048,
+  "slow_scope_ms": 40
+}

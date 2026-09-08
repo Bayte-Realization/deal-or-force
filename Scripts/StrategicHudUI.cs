@@ -296,6 +296,7 @@ public partial class DealOrForceGame
     private void ShowBattleDetails(LandBattle battle)
     {
         if (battle is null || !_hudLayer.Visible) return;
+        if (!CampaignIntel.PlayerCanSeeBattle(_campaign, battle)) return;
         _selectedBattleId = battle.Id;
         _openScreen = "";
         _sidePanel.Visible = true;
@@ -340,6 +341,16 @@ public partial class DealOrForceGame
             $"Reinforcements: +{battle.AttackerReinforcements}/+{battle.DefenderReinforcements}\n" +
             $"Losses: {battle.AttackerLosses:N0}/{battle.DefenderLosses:N0}\n\n" +
             (recent.Length == 0 ? "The first combat round has not resolved yet." : recent);
+        if (_campaign.Player.IsHuman && battle.AttackerId != _campaign.Player.Id && battle.DefenderId != _campaign.Player.Id)
+        {
+            _attackerOrganisation.Visible = false;
+            _defenderOrganisation.Visible = false;
+            _sideBody.Text = $"{attacker?.Name} vs {defender?.Name}\n{state?.Name} · province #{battle.ProvinceId:N0}\n" +
+                $"{(battle.Ended ? battle.Outcome : "Fighting")} · Day {_campaign.ElapsedDays - battle.StartedDay + 1}\n\n" +
+                "Observed battle between foreign countries. Detailed combat reports unavailable.\n" +
+                (battle.RiverCrossingStrength > 0 ? "River crossing — defender advantage." : "");
+        }
+        else _attackerOrganisation.Visible = _defenderOrganisation.Visible = true;
         FocusProvince(battle.ProvinceId, 6.5f);
     }
 }

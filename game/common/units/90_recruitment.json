@@ -1,0 +1,8 @@
+{
+  "marine_brigade": { "recruitment_cost": 0.85, "training_days": 90, "recruitment_personnel": 8000 },
+  "line_infantry": { "recruitment_cost": 0.60, "training_days": 60, "recruitment_personnel": 15000 },
+  "motorized_corps": { "recruitment_cost": 0.95, "training_days": 75, "recruitment_personnel": 15000 },
+  "mechanized_corps": { "recruitment_cost": 1.40, "training_days": 90, "recruitment_personnel": 15000 },
+  "armored_corps": { "recruitment_cost": 2.10, "training_days": 120, "recruitment_personnel": 12000 },
+  "artillery_corps": { "recruitment_cost": 1.10, "training_days": 90, "recruitment_personnel": 10000 }
+}

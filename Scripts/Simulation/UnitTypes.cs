@@ -58,6 +58,9 @@ public sealed record UnitTypeDefinition(
 
     /// <summary>Organisation regained per day out of combat, as a multiplier of the base rate.</summary>
     public float Recovery { get; init; } = 1f;
+    public float RecruitmentCost { get; init; } = 0.60f;
+    public int TrainingDays { get; init; } = 60;
+    public int RecruitmentPersonnel { get; init; } = 15000;
 }
 
 /// <summary>Paradox-style common/units catalogue consumed by simulation and rendering.</summary>
@@ -164,6 +167,9 @@ public static class UnitTypeCatalog
             Hardness = Math.Clamp(Number("hardness", current.Hardness), 0f, 1f),
             Organisation = organisation,
             Recovery = MathF.Max(0.05f, Number("recovery", current.Recovery)),
+            RecruitmentCost = Math.Clamp(Number("recruitment_cost", current.RecruitmentCost), 0.01f, 1000f),
+            TrainingDays = (int)Math.Clamp(Number("training_days", current.TrainingDays), 1, 3650),
+            RecruitmentPersonnel = (int)Math.Clamp(Number("recruitment_personnel", current.RecruitmentPersonnel), 100, 100000),
             Amphibious = Math.Clamp(Number("amphibious", current.Amphibious), 0f, 1f)
         };
     }

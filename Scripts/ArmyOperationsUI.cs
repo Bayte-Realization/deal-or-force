@@ -32,7 +32,7 @@ public partial class DealOrForceGame
 
     private void OnArmyPicked(Army army)
     {
-        if (!_hudLayer.Visible || army is null) return;
+        if (!_hudLayer.Visible || !ArmyInteraction.CanSelect(_campaign, army)) return;
         CloseFleetPanel();
         // Shift adds, control takes away - the Paradox reading, and the one that lets a
         // player build a selection without fear. A single key that toggled did both, so
@@ -61,18 +61,16 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.NationById(army.NationId);
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
-        SetArmyFeedback(army.NationId == _campaign.Player.Id
-            ? "RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
+        SetArmyFeedback("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
               "the ground · Shift+click adds a division, Ctrl+click removes one.  " +
               "H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · " +
-              "Ctrl+G guard an area · Ctrl+F plan cohesion."
-            : "Foreign formation: it can be inspected, but only its owner may issue orders.");
+              "Ctrl+G guard an area · Ctrl+F plan cohesion.");
     }
 
     private void OnArmiesBoxPicked(IReadOnlyList<Army> armies)
     {
         if (!_hudLayer.Visible) return;
-        var playerArmies = armies.Where(army => army.NationId == _campaign.Player.Id).Distinct().ToArray();
+        var playerArmies = armies.Where(army => ArmyInteraction.CanSelect(_campaign, army)).Distinct().ToArray();
         if (playerArmies.Length == 0) return;
 
         // A box does the same three things a click does: replace, add, or take away.
@@ -183,7 +181,7 @@ public partial class DealOrForceGame
 
     private Army[] SelectedPlayerDivisions() => (_selectedArmies.Count > 0
             ? _selectedArmies : new List<Army> { _selectedArmy })
-        .Where(army => army is not null && army.NationId == _campaign.Player.Id).Distinct().ToArray();
+        .Where(army => ArmyInteraction.CanSelect(_campaign, army)).Distinct().ToArray();
 
     private void AddReinforcementPriorityButton(HBoxContainer row, string caption, ReinforcementPriority priority,
         string tooltip, bool primary = false)
@@ -319,21 +317,15 @@ public partial class DealOrForceGame
                 IssuerId = _campaign.Player.Id,
                 ArmyId = army.Id,
                 TargetProvinceId = pick.ProvinceId,
-                AppendWaypoint = append
+                AppendWaypoint = append,
+                SupportAttack = supporting
             };
             _campaign.Commands.Enqueue(command);
             _campaign.Commands.ApplyAll(_campaign);
             results[command.Result] = results.GetValueOrDefault(command.Result) + 1;
 
-            // Support is a property of the order that was just given, so it is set after
-            // it: an order that was refused is not an order to support anything.
-            _campaign.Commands.Enqueue(new SupportAttackCommand
-            {
-                IssuerId = _campaign.Player.Id,
-                ArmyId = army.Id,
-                SupportOnly = supporting && command.Result == ArmyMoveResult.AttackIssued
-            });
-            _campaign.Commands.ApplyAll(_campaign);
+            // Support is applied atomically by MoveArmyCommand after validation. A
+            // rejected click must not change the previously executing order's mode.
         }
         if (railing) _redeploymentArmed = false;
         ShowSelectedArmies();
@@ -343,7 +335,7 @@ public partial class DealOrForceGame
             return;
         }
         SetArmyFeedback(MoveResultSummary(results, pick, append) +
-                        (supporting ? " · supporting: they will fight and hold their ground." : "") +
+                        (supporting && targets.Any(army => army.SupportOnly) ? " · supporting: they will fight and hold their ground." : "") +
                         (railing ? " · by rail: fast, and they will arrive shaken." : ""));
     }
 
@@ -352,12 +344,12 @@ public partial class DealOrForceGame
         var destination = pick.State?.Name ?? $"province #{pick.ProvinceId:N0}";
         var parts = new List<string>();
         AddResult(parts, results, ArmyMoveResult.Issued, append ? "waypoint appended" : "moving");
-        AddResult(parts, results, ArmyMoveResult.AttackIssued, "attacking through the nearest friendly front province");
+        AddResult(parts, results, ArmyMoveResult.AttackIssued, "advancing along the marked route; defended provinces require a battle");
         AddResult(parts, results, ArmyMoveResult.RouteInterrupted, "route blocked");
         AddResult(parts, results, ArmyMoveResult.QueuedAfterBattle, "queued until battle ends");
         AddResult(parts, results, ArmyMoveResult.AlreadyAtDestination, "already there");
-        AddResult(parts, results, ArmyMoveResult.TargetNotControlled, "destination is not controlled");
-        AddResult(parts, results, ArmyMoveResult.NoLandRoute, "no connected friendly land route");
+        AddResult(parts, results, ArmyMoveResult.TargetNotControlled, "neutral territory: no military access or active war");
+        AddResult(parts, results, ArmyMoveResult.NoLandRoute, "no legal land corridor (water or neutral territory may block the route)");
         AddResult(parts, results, ArmyMoveResult.NotControlled, "not under your control");
         AddResult(parts, results, ArmyMoveResult.InvalidTarget, "invalid destination");
         AddResult(parts, results, ArmyMoveResult.ArmyNotFound, "formation no longer exists");
@@ -554,6 +546,8 @@ public partial class DealOrForceGame
         _selectedArmy = null;
         _selectedArmies.Clear();
         _globe.SelectArmy(-1);
+        SetArmyPanelVisible(false);
+        _redeploymentArmed = false;
         _sidePanel.Visible = false;
         _openScreen = "";
     }

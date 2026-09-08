@@ -9,6 +9,9 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public sealed class Defines
 {
+	public int BorderVisionDepth { get; set; } = 3;
+	public int ArmyVisionDepth { get; set; } = 1;
+	public float LandingVisionRangeDegrees { get; set; } = 1f;
 	// --- calendar ---
 
 	public int StartYear { get; set; } = 2024;

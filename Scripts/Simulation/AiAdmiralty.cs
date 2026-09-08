@@ -112,11 +112,10 @@ public static class AiAdmiralty
     private static void Deploy(Campaign campaign, Fleet fleet, Nation nation, Nation enemy)
     {
         var mine = 0f;
-        var theirs = 0f;
+        var theirs = CampaignIntel.EstimatedNavy(campaign, enemy);
         foreach (var other in campaign.Fleets)
         {
             if (other.NationId == nation.Id) mine += other.Presence;
-            else if (other.NationId == enemy.Id) theirs += other.Presence;
         }
 
         var mission = mine >= theirs * campaign.Defines.AiFleetOffensiveRatio

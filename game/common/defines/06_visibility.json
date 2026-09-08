@@ -1,0 +1,5 @@
+{
+  "BorderVisionDepth": 3,
+  "ArmyVisionDepth": 1,
+  "LandingVisionRangeDegrees": 1.0
+}

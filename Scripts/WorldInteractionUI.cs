@@ -53,8 +53,8 @@ public partial class DealOrForceGame
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text =
             $"{nation.Name} ({nation.Tag})\n{location}\n\n" +
-            $"Capital: {nation.CapitalName}\nPopulation: {nation.Population:N0}\n" +
-            $"GDP: ${nation.Gdp:0.00}B\nTreasury: ${nation.Treasury:0.00}B\n\n" +
+            $"Capital: {nation.CapitalName}\n" +
+            (CanInspectNation(nation.Id) ? $"Population: {nation.Population:N0}\nGDP: ${nation.Gdp:0.00}B\nTreasury: ${nation.Treasury:0.00}B\n\n" : "Internal statistics: unknown (fog of war).\n\n") +
             relationText +
             (war is null ? "" : $"\nAt war · score {(war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
         _countryActions.Visible = nation != _campaign.Player;

@@ -103,7 +103,7 @@ public sealed class CampaignCommandQueue
 
     public void ApplyAll(Campaign campaign)
     {
-        while (_pending.Count > 0) _pending.Dequeue().Apply(campaign);
+        while (_pending.Count > 0) DiagnosticLogs.TraceCommand(campaign, _pending.Dequeue());
     }
 }
 
@@ -305,16 +305,20 @@ public sealed partial class Campaign
     public void Tick()
     {
         if (IsPaused) return;
+        DiagnosticLogs.SetDay(ElapsedDays);
+        if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
         Commands.ApplyAll(this);
         Date.Advance();
         ElapsedDays++;
+        DiagnosticLogs.SetDay(ElapsedDays);
 
         // Each pass is measured so both the in-game console (`sim`) and the headless
         // bench can say which system a slow day was actually spent in, rather than
         // leaving "the simulation is slow" as the whole diagnosis.
         using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
         using (SimProfiler.Measure("military")) MilitaryOperations.Tick(this);
+        RecruitmentSystem.Tick(this);
         using (SimProfiler.Measure("naval"))
         {
             AiAdmiralty.Tick(this);
@@ -332,6 +336,9 @@ public sealed partial class Campaign
         using (SimProfiler.Measure("statecraft")) AiStatecraft.Tick(this);
         using (SimProfiler.Measure("events")) EventSystem.Tick(this);
         using (SimProfiler.Measure("history")) History.Capture(this);
+        CampaignIntel.Invalidate(this);
+        if (DiagnosticLogs.Enabled)
+            DiagnosticLogs.Write("simulation", $"DAY_END date={Date} player={Player?.Tag} divisions={Armies.Count} fleets={Fleets.Count} wars={Wars.Count(w => !w.Ended)} battles={Battles.Count(b => !b.Ended)} training={Recruitment.Count} construction={Construction.Count} treasury={DiagnosticLogs.N(Player?.Treasury ?? 0)} gdp={DiagnosticLogs.N(Player?.Gdp ?? 0)} map_revision={MapRevision}");
 
         Changed?.Invoke();
     }
@@ -665,6 +672,8 @@ public static class SimProfiler
                 ? elapsed
                 : sample.AverageMilliseconds + (elapsed - sample.AverageMilliseconds) * 0.2;
             sample.Runs++;
+            if (DiagnosticLogs.Enabled && elapsed >= DiagnosticLogs.SlowScopeMilliseconds)
+                DiagnosticLogs.Write("performance", $"SLOW_SCOPE name={_name} duration_ms={DiagnosticLogs.N(elapsed)} allocated_bytes={allocated}");
         }
     }
 }

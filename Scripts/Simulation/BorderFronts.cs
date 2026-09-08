@@ -71,6 +71,14 @@ public static class BorderFronts
 
     public static void Refresh(Campaign campaign, DrawnFrontLine line)
     {
+        if (line.Kind == FrontLineKind.Offensive && line.ObjectiveSequence.Count > 0 && line.BorderNationId >= 0)
+        {
+            if (line.BorderRevision == campaign.MapRevision) return;
+            line.SourceProvinces.Clear();
+            line.SourceProvinces.UnionWith(Resolve(campaign, line));
+            line.BorderRevision = campaign.MapRevision;
+            return;
+        }
         if (line.Kind != FrontLineKind.Defence || line.BorderNationId < 0 ||
             line.BorderRevision == campaign.MapRevision) return;
         line.Provinces.Clear();

@@ -398,7 +398,7 @@ public static class Statecraft
 
         // And the arithmetic. Nobody honours a promise into a war they cannot survive.
         var mine = AiStatecraft.StrengthOf(campaign, friend);
-        var theirs = AiStatecraft.StrengthOf(campaign, attacker);
+        var theirs = CampaignIntel.EstimatedStrength(campaign, friend.Id, attacker);
         willingness += M.Clamp(mine / MathF.Max(0.01f, theirs) - 0.75f, -0.8f, 0.8f);
 
         // A coalition member answers more readily; that is what it joined for.

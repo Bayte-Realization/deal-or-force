@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -51,7 +52,7 @@ public static partial class AiStatecraft
 
         // Weakness invites. This is the old rule, kept, because it is true.
         var mine = Strength(campaign, nation);
-        var theirs = Strength(campaign, other);
+        var theirs = CampaignIntel.EstimatedStrength(campaign, nation.Id, other);
         if (mine <= 0.01f) return 0f;
         var advantage = mine / M.Max(0.01f, theirs);
         if (advantage < defines.AiWarMinimumAdvantage) return 0f;
@@ -59,7 +60,7 @@ public static partial class AiStatecraft
 
         // What is actually over there. A neighbour with forty million people is worth more
         // than one with four, and the old rule could not tell them apart.
-        var people = other.Population / 60_000_000f;
+        var people = campaign.States.Count(s => s.NationMapIndex == other.MapIndex) / 30f;
         value += M.Clamp(people, 0f, 2.2f) * defines.AiConquestAppetite;
 
         // Our own people on the wrong side of the border. The sharpest motive there is, and
@@ -148,6 +149,7 @@ public static partial class AiStatecraft
     /// <summary>How much of the target's population is our own people, as a share of ours.</summary>
     private static float Irredentism(Campaign campaign, Nation nation, Nation other)
     {
+        if (!CampaignIntel.CanInspect(nation.Id, other.Id)) return 0f;
         if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, other.MapIndex)) return 0f;
         var ours = 0L;
         foreach (var state in campaign.States)
@@ -168,6 +170,7 @@ public static partial class AiStatecraft
     /// </summary>
     private static float Covets(Campaign campaign, Nation nation, Nation other)
     {
+        if (!CampaignIntel.CanInspect(nation.Id, other.Id)) return 0f;
         var hunger = 0f;
         foreach (var (commodity, quote) in nation.Market)
         {
@@ -284,7 +287,7 @@ public static partial class AiStatecraft
             var small = ByMapIndex(mapIndex);
             if (small is null || small.Id == nation.Id || small.Id == rival.Id) continue;
             if (small.Population <= 0) continue;
-            var exposure = Strength(campaign, rival) / M.Max(0.01f, Strength(campaign, small));
+            var exposure = CampaignIntel.EstimatedStrength(campaign, nation.Id, rival) / M.Max(0.01f, CampaignIntel.EstimatedStrength(campaign, nation.Id, small));
             if (exposure < 1.6f || exposure <= mostExposed) continue;
             var bond = CampaignDiplomacy.Peek(campaign, nation.Id, small.Id);
             if (bond is not null && (bond.GuaranteedBy(nation.Id) || bond.Stance == DiplomaticStance.AtWar)) continue;
@@ -292,7 +295,7 @@ public static partial class AiStatecraft
             shelter = small;
         }
         if (shelter is null) return false;
-        if (Strength(campaign, nation) < Strength(campaign, rival) * 0.85f) return false;
+        if (Strength(campaign, nation) < CampaignIntel.EstimatedStrength(campaign, nation.Id, rival) * 0.85f) return false;
 
         new GuaranteeCommand { IssuerId = nation.Id, TargetId = shelter.Id, Guarantee = true }.Apply(campaign);
         relation.LastActionDay = campaign.ElapsedDays;

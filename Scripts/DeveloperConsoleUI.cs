@@ -126,6 +126,7 @@ public partial class DealOrForceGame
                 "province" => ConsoleProvince(),
                 "fps" => $"FPS: {Engine.GetFramesPerSecond()} · process {_ProcessTimeMs():0.00} ms",
                 "sim" => ConsoleSimulation(),
+                "logs" => $"Logging: {(DiagnosticLogs.Enabled ? "active" : "inactive")}\nFolder: {DiagnosticLogs.DirectoryPath}\nWritten lines: {DiagnosticLogs.WrittenLines}\nLast failure: {DiagnosticLogs.LastFailure}",
                 "economy" or "gdp" => ConsoleEconomy(),
                 "loc" or "localization" => ConsoleLocalization(argument),
                 "effects" => ConsoleEffectVocabulary(),
@@ -138,6 +139,7 @@ public partial class DealOrForceGame
         }
         catch (Exception exception)
         {
+            DiagnosticLogs.Write("errors", $"CONSOLE_EXCEPTION command={command} error={exception}");
             _developerConsoleOutput.AppendText($"\n{Bb("state.negative")}Command failed: {EscapeBb(exception.Message)}[/color]");
         }
         _developerConsoleInput.GrabFocus();
@@ -150,7 +152,7 @@ public partial class DealOrForceGame
         Bb("text.accent") + "CONTROL[/color]  tag TAG · observe · pause · speed 1-5 · freecam [on/off]\n" +
         Bb("text.accent") + "MAP[/color]  mapmode pol/dip/war/pop/gdp · focus LAT LON · teleport PROVINCE\n" +
         Bb("text.accent") + "STATE[/color]  money AMOUNT · manpower AMOUNT · stability 0-100\n" +
-        Bb("text.accent") + "DEBUG[/color]  fps · sim · armies · fronts · province · date · clear\n" +
+        Bb("text.accent") + "DEBUG[/color]  fps · sim · logs · armies · fronts · province · date · clear\n" +
         Bb("text.accent") + "CONTENT[/color]  economy · effects · loc [language] · skin [token or panel]\n" +
         Bb("text.accent") + "WAR[/color]  peace - open the conference for your current war";
 
@@ -264,6 +266,7 @@ public partial class DealOrForceGame
         if (nation is null) return "Usage: tag KOR — unknown country tag.";
         _observerMode = false;
         _campaign.ConfigureSinglePlayer(nation.Id);
+        ClearArmySelectionAndClose();
         _selectedNation = nation;
         _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude, 8f);
         Refresh();
@@ -276,6 +279,7 @@ public partial class DealOrForceGame
         _observerMode = true;
         foreach (var nation in _campaign.Nations) nation.IsHuman = false;
         _campaign.HumanSeats.Clear();
+        ClearArmySelectionAndClose();
         FrontPlanner.AssignAi(_campaign);
         _identityTag.Text = "OBS · observer mode";
         return "Observer mode enabled. Country AI controls every nation; use tag TAG to return.";

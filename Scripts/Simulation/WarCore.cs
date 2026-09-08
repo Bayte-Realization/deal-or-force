@@ -233,6 +233,7 @@ public static partial class FrontPlanner
         {
             if (army.AssignedWarId != war.Id || army.OrderKind == ArmyOrder.Manual || army.InBattle)
                 continue;
+            if (army.DirectOrder && army.OrderProvinceId > 0) continue;
             if (army.EmbarkedFleetId >= 0) continue;
             var expected = BattlePlanning.Posts(campaign, war, army);
             if (expected.Count == 0 || expected.Contains(army.ProvinceId) ||

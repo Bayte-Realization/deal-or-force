@@ -6,6 +6,7 @@ namespace DealOrForce;
 public sealed partial class GlobePresentation
 {
     public bool BorderPaintMode { get; set; }
+    public bool ObjectivePaintMode { get; set; }
     public event Action<GlobePick, bool, bool> BorderStrokeStarted;
     public event Action<GlobePick> BorderStrokeMoved;
     public event Action BorderStrokeFinished;
@@ -17,6 +18,7 @@ public sealed partial class GlobePresentation
         {
             if (button.Pressed)
             {
+                if (ObjectivePaintMode && button.ButtonIndex == MouseButton.Left) { AcceptEvent(); return true; }
                 _borderPainting = false;
                 if (TryPick(button.Position, out var pick, updateSelection: false))
                 {
@@ -25,7 +27,7 @@ public sealed partial class GlobePresentation
                     if (!_borderPainting) BorderStrokeFinished?.Invoke();
                 }
             }
-            else if (_borderPainting)
+            else if (_borderPainting && button.ButtonIndex == MouseButton.Right)
             {
                 _borderPainting = false;
                 BorderStrokeFinished?.Invoke();

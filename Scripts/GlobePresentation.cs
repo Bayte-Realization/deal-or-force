@@ -103,6 +103,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public string TemplateId = "";
         public string CountText = "";
         public bool Seen;
+        public bool Compact;
+        public bool FlatLayout;
+        public bool LayoutInitialized;
     }
 
     private readonly Dictionary<(int, int, int, int), ArmyStackMarker> _armyStacks = new();
@@ -124,7 +127,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private Node3D _countryLabelRoot = null!;
     private ImmediateMesh _routeMesh = null!;
     private MeshInstance3D _routePreview = null!;
-    private StandardMaterial3D _routeMaterial = null!;
+    private readonly ShaderMaterial[] _routeMaterials = new ShaderMaterial[3];
     private ImmediateMesh _frontMesh = null!;
     private MeshInstance3D _frontPreview = null!;
     private ImageTexture _controllerTexture;
@@ -226,6 +229,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     public void SetPlanPreview(IEnumerable<int> provinces, int kind)
     {
+        _objectivePreview.Clear(); _departurePreview.Clear();
         _planPreviewForeignId = -1;
         _planPreview.Clear();
         if (provinces is not null) foreach (var province in provinces) _planPreview.Add(province);
@@ -244,6 +248,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public void ClearPlanPreview()
     {
+        _objectivePreview.Clear(); _departurePreview.Clear();
         _planPreviewForeignId = -1;
         if (_planPreview.Count == 0) return;
         _planPreview.Clear();
@@ -407,10 +412,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // Tactical boundaries should emerge only at operational zoom. Keeping them
         // faint at country-selection scale avoids turning the map into a crosshatch.
         _globeMaterial?.SetShaderParameter("province_detail", provinceDetail);
+        var fogViewer = FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
+        if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
+        _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
+        UpdateFogVisibility();
         UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, _distance <= 13.8f);
         var armyLod = _flatMap ? _flatZoom <= 7.4f : _distance <= 10.8f;
         _militaryVisualAccumulator += delta;
-        if (_mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
+        if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
         {
             _militaryVisualAccumulator = 0;
             using (Simulation.SimProfiler.Measure("f:army sync")) SyncArmyMarkers();
@@ -419,16 +428,20 @@ public sealed partial class GlobePresentation : SubViewportContainer
         using (Simulation.SimProfiler.Measure("f:army vis"))
         {
             UpdateCounterScale();
-            UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod);
+            UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod && MilitaryMarkersEnabled);
+            if (_flatMap && armyLod && MilitaryMarkersEnabled) UpdateFlatCounterDensity();
         }
-        using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
-        UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, _distance <= 13.5f);
+        if (MilitaryMarkersEnabled)
+            using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
+        UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && _distance <= 13.5f);
+        if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
             using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
-        if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = false;
+        if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
         using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
-        if (_flatMap) UpdateFlatWorldPositions();
+        if (_flatMap)
+            using (Simulation.SimProfiler.Measure("f:flat positions")) UpdateFlatWorldPositions();
         UpdateMapModePaletteIfNeeded();
 
         if (!_mapApplied && _pendingMapResult is null && _mapTask is { IsCompletedSuccessfully: true })
@@ -691,6 +704,51 @@ public sealed partial class GlobePresentation : SubViewportContainer
     }
 
     private float _counterScale = 1f;
+    private float _counterWorldPixel;
+    public bool MilitaryMarkersEnabled { get; set; } = true;
+    private bool _fogOfWarActive;
+    private int _fogViewer = -1;
+    public bool FogOfWarActive
+    {
+        get => _fogOfWarActive;
+        set
+        {
+            if (_fogOfWarActive == value) return;
+            _fogOfWarActive = value;
+            _lastMapModeDay = -100;
+            _battleMarkerDay = -1;
+        }
+    }
+    private bool CanShowMilitary(int nationId) => !FogOfWarActive || Simulation.CampaignIntel.PlayerCanInspect(_campaign, nationId);
+
+    private void SizeArmyCounter(ArmyStackMarker marker)
+    {
+        if (marker.Plate is null || marker.Count is null) return;
+        // PixelSize/OutlineSize rebuild Label3D meshes. Never animate those properties
+        // on every orthographic zoom frame for the entire world's counters.
+        if (!marker.LayoutInitialized || marker.FlatLayout != _flatMap)
+        {
+            marker.LayoutInitialized = true;
+            marker.FlatLayout = _flatMap;
+            marker.Plate.FixedSize = !_flatMap;
+            marker.Count.FixedSize = !_flatMap;
+            marker.Plate.PixelSize = _flatMap ? 52f / 176f : CounterPlatePixelSize * _counterScale;
+            marker.Count.PixelSize = _flatMap ? .60f : CounterTextPixelSize * _counterScale;
+            marker.Count.OutlineSize = _flatMap ? 2 : Mathf.RoundToInt(CounterOutlineSize * _counterScale);
+            marker.Count.Position = _flatMap ? new Vector3(10f, -1f, 4f) : new Vector3(0f, -.004f, .004f);
+            marker.Compact = false;
+            marker.Plate.Scale = Vector3.One;
+            marker.Count.Visible = true;
+        }
+        if (_flatMap) marker.Node.Scale = Vector3.One * _counterWorldPixel;
+        else
+        {
+            marker.Node.Scale = Vector3.One;
+            marker.Plate.PixelSize = CounterPlatePixelSize * _counterScale;
+            marker.Count.PixelSize = CounterTextPixelSize * _counterScale;
+            marker.Count.OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale);
+        }
+    }
 
     /// <summary>
     /// Resize the counters when the camera has moved far enough to matter.
@@ -708,37 +766,59 @@ public sealed partial class GlobePresentation : SubViewportContainer
             : Mathf.Lerp(CounterCloseScale, 1f,
                 Mathf.InverseLerp(MinimumDistance, CounterGrowthDistance, _distance));
         wanted = Mathf.Clamp(wanted, 1f, CounterCloseScale);
-        if (Mathf.Abs(wanted - _counterScale) < 0.03f) return;
+        var worldPixel = _flatMap ? _camera.Size / Math.Max(1f, _camera.GetViewport().GetVisibleRect().Size.Y) : 0f;
+        if (Mathf.Abs(wanted - _counterScale) < 0.03f &&
+            Math.Abs(worldPixel - _counterWorldPixel) <= Math.Max(.0000001f, worldPixel * .01f)) return;
         _counterScale = wanted;
+        _counterWorldPixel = worldPixel;
 
         foreach (var marker in _armyStacks.Values)
         {
             if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
-            if (marker.Plate is not null) marker.Plate.PixelSize = CounterPlatePixelSize * wanted;
-            if (marker.Count is null) continue;
-            marker.Count.PixelSize = CounterTextPixelSize * wanted;
-            marker.Count.OutlineSize = Mathf.RoundToInt(CounterOutlineSize * wanted);
+            SizeArmyCounter(marker);
         }
     }
 
-    private bool TryPickArmyStack(Vector2 pixel, out IReadOnlyList<Simulation.Army> armies)
+    private bool TryPickArmyStack(Vector2 pixel, out IReadOnlyList<Simulation.Army> armies, bool selectableOnly = true)
     {
         armies = null;
-        if (_distance > 13.5f || !IsInstanceValid(_camera)) return false;
+        if (!MilitaryMarkersEnabled || (!_flatMap && _distance > 13.5f) || !IsInstanceValid(_camera)) return false;
         // A bigger counter is a bigger target: the radius that finds it follows the size
         // it is actually drawn at, or clicking a close-up counter near its edge misses.
-        var reach = 28f * _counterScale;
+        var reach = _flatMap ? 26f : 28f * _counterScale;
         var bestDistance = reach * reach;
-        foreach (var (node, candidates) in _armyByMarker)
+        var expandedHit = false;
+        foreach (var marker in _armyStacks.Values)
         {
+            var node = marker.Node;
+            var candidates = marker.Stack;
             if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            if (!node.IsVisibleInTree()) continue;
             var screen = _camera.UnprojectPosition(node.GlobalPosition);
             var distance = screen.DistanceSquaredTo(pixel);
+            if (_flatMap)
+            {
+                if (marker.Compact)
+                {
+                    if (expandedHit || distance > 64f) continue;
+                }
+                else
+                {
+                    var offset = screen - pixel;
+                    if (Mathf.Abs(offset.X) > 27f || Mathf.Abs(offset.Y) > 17f) continue;
+                    // A pin behind a readable counter must not steal that counter's click.
+                    if (!expandedHit) { expandedHit = true; bestDistance = float.MaxValue; }
+                }
+            }
             if (distance >= bestDistance) continue;
             bestDistance = distance;
-            armies = candidates;
+            // The counter still blocks a click on the province behind it, but foreign
+            // formations never enter selection or expose their detailed army tooltip.
+            armies = selectableOnly
+                ? candidates.Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)).ToArray()
+                : candidates;
         }
-        return armies is not null && armies.Count > 0;
+        return armies is not null;
     }
 
     public void SelectArmy(int armyId)
@@ -749,8 +829,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public void SelectArmies(IEnumerable<int> armyIds)
     {
         var selected = armyIds.ToHashSet();
+        if (_campaign is null) selected.Clear();
+        else selected.IntersectWith(_campaign.Armies
+            .Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)).Select(army => army.Id));
         _selectedArmyIds.Clear();
         _selectedArmyIds.UnionWith(selected);
+        _nextCounterDensityMs = 0;
         _routeFingerprint = int.MinValue;
         foreach (var (node, armies) in _armyByMarker)
         {
@@ -774,21 +858,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private void CreateRoutePreview(Node3D world)
     {
         _routeMesh = new ImmediateMesh();
-        _routeMaterial = new StandardMaterial3D
-        {
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            VertexColorUseAsAlbedo = true,
-            AlbedoTexture = GD.Load<Texture2D>("res://game/gfx/globe/order_arrow_surface_v1.png"),
-            TextureRepeat = true,
-            NoDepthTest = false,
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            CullMode = BaseMaterial3D.CullModeEnum.Disabled
-        };
+        CreateOrderMaterials();
         _routePreview = new MeshInstance3D
         {
             Name = "SelectedArmyRoute",
             Mesh = _routeMesh,
-            MaterialOverride = _routeMaterial,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Visible = false
         };
@@ -803,6 +877,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             VertexColorUseAsAlbedo = true,
             NoDepthTest = false,
+            CullMode = BaseMaterial3D.CullModeEnum.Disabled,
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha
         };
         _frontPreview = new MeshInstance3D
@@ -856,6 +931,17 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             if (line.NationId != _campaign.Player?.Id) continue;
             Simulation.BorderFronts.Refresh(_campaign, line);
+            if (line.Kind == Simulation.FrontLineKind.Offensive && line.ObjectiveSequence.Count > 0)
+            {
+                foreach (var p in line.SourceProvinces)
+                {
+                    pixels[p * 4 + 2] = 64;
+                    PutBorderTarget(borderTargets, p, line.NationId, line.BorderNationId);
+                }
+                if (_objectivePreview.Count == 0 || !_selectedArmyIds.Any(id => line.ArmyIds.Contains(id)))
+                    DrawOffensiveGeometry(line.ObjectiveSequence, line.SourceProvinces, false);
+                continue;
+            }
             var code = PlanCode(line.Kind);
             foreach (var province in line.Provinces)
             {
@@ -865,7 +951,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     PutBorderTarget(borderTargets, province, line.NationId, line.BorderNationId);
             }
         }
-        if (_planPreview.Count > 0)
+        if (_objectivePreview.Count > 0) DrawOffensiveGeometry(_objectivePreview, _departurePreview, true);
+        if (_planPreview.Count > 0 && _objectivePreview.Count == 0)
         {
             var code = (byte)(Mathf.Clamp(_planPreviewKind + 1, 1, 3) * 64);
             foreach (var province in _planPreview)
@@ -878,6 +965,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
 
         UpdateBorderTexture(ref _borderPlanTexture, borderTargets, Image.Format.Rgba8, "border_plan_targets");
+        _frontPreview.Visible = _frontMesh.GetSurfaceCount() > 0;
         UpdateBorderTexture(ref _borderControllerTexture, controllers, Image.Format.Rg8, "border_controller_ids");
 
         if (_frontTexture is null)
@@ -940,7 +1028,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     candidate.PlannedRoute.Count == 0 ? -1 : candidate.PlannedRoute[^1],
                     candidate.OrderKind, candidate.OrderProvinceId);
                 fingerprint = HashCode.Combine(fingerprint,
-                    candidate.PlanActive,
+                    candidate.PlanActive, candidate.SupportOnly,
                     candidate.OrderRouteSteps, candidate.OrderStepsCompleted,
                     Mathf.RoundToInt(candidate.MoveProgress * 20f));
             }
@@ -963,13 +1051,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
         (army.OrderProvinceId > 0 &&
          army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead);
 
-    private static bool IsAttackIntent(Simulation.Army army) => army.AssignedWarId >= 0 &&
+    private static bool IsAttackIntent(Simulation.Army army) => army.AssignedWarId >= 0 && army.PlanActive &&
         army.OrderKind is Simulation.ArmyOrder.AdvanceFront or Simulation.ArmyOrder.Spearhead;
 
     /// <summary>Draws the complete current route of one selected division.</summary>
     private bool AppendRouteArrow(Simulation.Army army)
     {
         if (army.NationId != _campaign?.Player?.Id) return false;
+        if (!army.PlanActive && army.Route.Count == 0 &&
+            Simulation.BattlePlanning.LineFor(_campaign, army) is { Kind: Simulation.FrontLineKind.Offensive, ObjectiveSequence.Count: > 0 }) return false;
         var attack = IsAttackIntent(army);
         var route = PresentationRoute(army, attack);
         var directObjective = army.OrderProvinceId > 0;
@@ -991,64 +1081,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         if (_routePoints.Count < 2) return false;
 
-        var vivid = attack
-            ? new Color(0.90f, 0.10f, 0.075f, 0.98f)
-            : new Color(1.00f, 0.72f, 0.10f, 0.98f);
-        var waiting = attack
-            ? new Color(0.52f, 0.12f, 0.09f, 0.62f)
-            : new Color(0.68f, 0.53f, 0.12f, 0.62f);
-        var progress = OrderProgress(army);
-        var distances = new float[_routePoints.Count];
-        for (var index = 1; index < _routePoints.Count; index++)
-            distances[index] = distances[index - 1] + _routePoints[index - 1].DistanceTo(_routePoints[index]);
-        var totalDistance = MathF.Max(0.0001f, distances[^1]);
-        var textureRepeats = MathF.Max(1f, totalDistance / (_flatMap ? 0.052f : 0.044f));
-
-        _routeMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip, _routeMaterial);
-        for (var index = 0; index < _routePoints.Count; index++)
-        {
-            var previous = _routePoints[Math.Max(0, index - 1)];
-            var next = _routePoints[Math.Min(_routePoints.Count - 1, index + 1)];
-            var tangent = (next - previous).Normalized();
-            var normal = _flatMap ? Vector3.Forward : _routePoints[index].Normalized();
-            // Keep operational arrows subordinate to counters and borders.  The old
-            // width read like a filled battle-plan area when the camera was close.
-            var side = normal.Cross(tangent).Normalized() * (_flatMap ? 0.0072f : 0.0064f);
-            var routeFraction = distances[index] / totalDistance;
-            var colour = progress > 0.001f && routeFraction <= progress ? vivid : waiting;
-            var textureU = routeFraction * textureRepeats;
-            _routeMesh.SurfaceSetColor(colour);
-            _routeMesh.SurfaceSetUV(new Vector2(textureU, 0.08f));
-            _routeMesh.SurfaceAddVertex(_routePoints[index] + side);
-            _routeMesh.SurfaceSetColor(colour);
-            _routeMesh.SurfaceSetUV(new Vector2(textureU, 0.92f));
-            _routeMesh.SurfaceAddVertex(_routePoints[index] - side);
-        }
-        _routeMesh.SurfaceEnd();
-
-        // A single, unambiguous head. It stays muted until the march reaches the target,
-        // while the shaft fills from its origin with actual province-to-province progress.
-        var tip = _routePoints[^1];
-        var beforeTip = _routePoints[^2];
-        var tipTangent = (tip - beforeTip).Normalized();
-        var tipNormal = _flatMap ? Vector3.Forward : tip.Normalized();
-        var tipSide = tipNormal.Cross(tipTangent).Normalized();
-        var headLength = MathF.Min(_flatMap ? 0.050f : 0.044f, totalDistance * 0.24f);
-        var headWidth = MathF.Min(_flatMap ? 0.025f : 0.022f, headLength * 0.52f);
-        var basePoint = tip - tipTangent * headLength;
-        var headColour = progress >= 0.985f ? vivid : waiting;
-        _routeMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles, _routeMaterial);
-        _routeMesh.SurfaceSetColor(headColour);
-        _routeMesh.SurfaceSetUV(new Vector2(0.5f, 0.08f));
-        _routeMesh.SurfaceAddVertex(tip);
-        _routeMesh.SurfaceSetColor(headColour);
-        _routeMesh.SurfaceSetUV(new Vector2(0.08f, 0.92f));
-        _routeMesh.SurfaceAddVertex(basePoint + tipSide * headWidth);
-        _routeMesh.SurfaceSetColor(headColour);
-        _routeMesh.SurfaceSetUV(new Vector2(0.92f, 0.92f));
-        _routeMesh.SurfaceAddVertex(basePoint - tipSide * headWidth);
-        _routeMesh.SurfaceEnd();
-        return true;
+        return DrawOrderRibbon(army, attack);
     }
 
     private IReadOnlyList<int> PresentationRoute(Simulation.Army army, bool attack)
@@ -1110,7 +1143,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         else if (TryPickArmyStack(button.Position, out var stack))
                         {
                             if (stack.Count == 1) ArmyPicked?.Invoke(stack[0]);
-                            else ArmiesBoxPicked?.Invoke(stack);
+                            else if (stack.Count > 1) ArmiesBoxPicked?.Invoke(stack);
                         }
                         else if (TryPick(button.Position, out var pick)) CountryPicked?.Invoke(pick);
                     }
@@ -1210,16 +1243,23 @@ public sealed partial class GlobePresentation : SubViewportContainer
             var attacker = _campaign?.NationById(battle.AttackerId);
             var defender = _campaign?.NationById(battle.DefenderId);
             var latest = battle.Rounds.LastOrDefault();
+            if (FogOfWarActive && _campaign?.Player is { IsHuman: true } player &&
+                battle.AttackerId != player.Id && battle.DefenderId != player.Id)
+                return $"Observed battle · province #{battle.ProvinceId:N0}\n{attacker?.Name} vs {defender?.Name}\nDetailed foreign combat reports unavailable.";
             return $"BATTLE · province #{battle.ProvinceId:N0}\n" +
                    $"{attacker?.Name ?? "?"} vs {defender?.Name ?? "?"}\n" +
                    $"Losses {battle.AttackerLosses:N0} / {battle.DefenderLosses:N0}" +
                    (latest is null ? "" : $"\nPower {latest.AttackerPower:0.0} / {latest.DefenderPower:0.0} · plan {latest.AttackerPlanning:P0}");
         }
-        if (TryPickArmyStack(atPosition, out var stack))
+        if (TryPickArmyStack(atPosition, out var stack, selectableOnly: false))
         {
+            if (stack.Count == 0) return "";
             var lead = stack[0];
             var owner = _campaign?.NationById(lead.NationId);
             var personnel = stack.Sum(DivisionPersonnel);
+            if (!Simulation.CampaignIntel.PlayerCanInspect(_campaign, lead.NationId))
+                return $"{owner?.Name ?? "Unknown"} · {stack.Count} observed divisions\n" +
+                    $"Observed personnel: {personnel:N0}\nForeign formation — orders and route are not available.";
             return $"{owner?.Name ?? "Unknown"} · {stack.Count} division{(stack.Count == 1 ? "" : "s")}\n" +
                    $"Personnel {personnel:N0} · organisation {stack.Average(army => army.Organisation):P0}\n" +
                    $"Equipment {stack.Average(army => army.Equipment):P0} · experience {stack.Average(army => army.Experience):P0} · " +
@@ -1248,11 +1288,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private List<Simulation.Army> ArmiesInScreenRect(Rect2 rect)
     {
         var selected = new List<Simulation.Army>();
-        if (!IsInstanceValid(_camera) || _distance > 13.5f) return selected;
+        if (!IsInstanceValid(_camera) || (!_flatMap && _distance > 13.5f)) return selected;
         foreach (var (node, armies) in _armyByMarker)
         {
             if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
-            if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition))) selected.AddRange(armies);
+            if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition)))
+                selected.AddRange(armies.Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)));
         }
         return selected;
     }
@@ -1299,7 +1340,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private void ResizeViewport()
     {
-        if (IsInstanceValid(_viewport))
+        if (IsInstanceValid(_viewport) && !Stretch)
             _viewport.Size = ViewportSize();
     }
 
@@ -1452,6 +1493,8 @@ float planned_border(float province, vec2 uv) {
     return step(0.5, enemy) * (1.0 - step(0.5, abs(own - here_owner))) *
         (1.0 - step(0.5, abs(enemy - other_owner)));
 }
+uniform float fog_viewer = -1.0;
+uniform sampler2D fog_visibility : filter_nearest, repeat_disable;
 void fragment() {
     // Far away the authored raster is right: a screen pixel covers many map texels and what
     // the eye wants is the average, mipmapped and anisotropic. Close up the raster is exactly
@@ -1508,15 +1551,15 @@ void fragment() {
     //
     // The political raster is painted once, at load, from the scenario. Everything after
     // that - every province a treaty signs over, every border a war moves, every save loaded
-    // in the middle of a conquest - changed ownership in the simulation and left the picture
+    // in the middle of a conquest - changes ownership in the simulation and left the picture
     // alone, so land taken at a peace conference kept the colour of the country that had
     // lost it. The overlay that draws occupation could not help: it deliberately says nothing
     // when the occupier and the owner are the same country, which is exactly what annexation
     // makes them.
     //
     // So a second overlay carries the owner, and it is applied first: it repaints the ground
-    // itself, and any occupation stripes are then drawn over the new owner rather than the
-    // old one.
+    // itself, and any occupation stripes below are then drawn over the new owner rather than
+    // the old one.
     vec4 owner_paint = owner_color(province);
     political.rgb = mix(political.rgb, owner_paint.rgb * political_light, owner_paint.a);
     political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
@@ -1641,6 +1684,10 @@ void fragment() {
     base = mix(base, vec3(0.95, 0.76, 0.25), region_selected * 0.10);
     base = mix(base, vec3(1.0, 0.84, 0.30), province_selected * province_detail * 0.16);
     float selection_edge = max(region_edge * region_selected, province_edge * province_selected * province_detail);
+    vec2 fog_lookup = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
+    float known = texture(fog_visibility, fog_lookup).r;
+    float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, known)) * political.a;
+    base = mix(base, mix(vec3(dot(base, vec3(0.2126, 0.7152, 0.0722))), base, 0.50) * 0.60, fog);
     ALBEDO = mix(base, vec3(1.0, 0.84, 0.30), selection_edge * 0.92);
     EMISSION = mix(water * 0.025, vec3(0.28, 0.18, 0.025), selection_edge * 0.48) +
         plan_color * plan_on * 0.14 +
@@ -1889,8 +1936,16 @@ void fragment() {
         // never bleed through the globe or leave a noisy halo around it.
         if (_flatMap)
         {
+            var halfHeight = _camera.Size * .5f;
+            var viewportSize = _camera.GetViewport().GetVisibleRect().Size;
+            var halfWidth = halfHeight * viewportSize.X / Mathf.Max(1f, viewportSize.Y);
             foreach (var marker in markers)
-                if (IsInstanceValid(marker.Node)) marker.Node.Visible = true;
+                if (IsInstanceValid(marker.Node))
+                {
+                    var offset = marker.Node.Position - _camera.Position;
+                    var visible = Mathf.Abs(offset.X) < halfWidth + .1f && Mathf.Abs(offset.Y) < halfHeight + .1f;
+                    if (marker.Node.Visible != visible) marker.Node.Visible = visible;
+                }
             return;
         }
         var viewNormal = _camera.GlobalPosition.Normalized();
@@ -1914,7 +1969,7 @@ void fragment() {
     /// </summary>
     private void ReconcileArmyMarkers(Simulation.Campaign campaign)
     {
-        if (!IsInstanceValid(_armyRoot) || _divisionTexture is null) return;
+        if (!MilitaryMarkersEnabled || !IsInstanceValid(_armyRoot) || _divisionTexture is null) return;
 
         foreach (var marker in _armyStacks.Values)
         {
@@ -1925,6 +1980,7 @@ void fragment() {
         foreach (var army in campaign.Armies)
         {
             var bucket = ArmyPresentationBucket(campaign, army);
+            if (!CanShowArmy(army)) continue;
             if (!_armyStacks.TryGetValue(bucket, out var marker))
             {
                 marker = new ArmyStackMarker();
@@ -1980,8 +2036,9 @@ void fragment() {
             if (marker.Node is null) continue;
 
             var location = AverageArmyLocation(marker.Stack);
-            marker.Node.Position = PresentationPoint(location.Latitude, location.Longitude, SurfaceMarkerRadius);
-            marker.Normal = marker.Node.Position.Normalized();
+            var position = PresentationPoint(location.Latitude, location.Longitude, SurfaceMarkerRadius);
+            if (marker.Node.Position != position) marker.Node.Position = position;
+            marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f);
 
             var divisions = 0f;
             var personnel = 0f;
@@ -2047,6 +2104,7 @@ void fragment() {
             };
             node.AddChild(divisions);
             marker.Count = divisions;
+            SizeArmyCounter(marker);
 
         }
     }
@@ -2096,7 +2154,8 @@ void fragment() {
         if (_selectedArmyIds.Count > 0)
         {
             _liveArmyIds.Clear();
-            foreach (var army in _campaign.Armies) _liveArmyIds.Add(army.Id);
+            foreach (var army in _campaign.Armies)
+                if (Simulation.ArmyInteraction.CanSelect(_campaign, army)) _liveArmyIds.Add(army.Id);
             _selectedArmyIds.RemoveWhere(id => !_liveArmyIds.Contains(id));
         }
         ReconcileArmyMarkers(_campaign);
@@ -2130,6 +2189,7 @@ void fragment() {
         _fleetNodes.Clear();
         foreach (var fleet in campaign.Fleets)
         {
+            if (!CanShowMilitary(fleet.NationId)) continue;
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
             var marker = new Node3D { Name = $"Fleet_{fleet.Id}_{nation.Tag}" };
@@ -2178,7 +2238,7 @@ void fragment() {
     {
         if (_campaign is null || !IsInstanceValid(_fleetRoot)) return;
 
-        var fingerprint = _campaign.Fleets.Count;
+        var fingerprint = HashCode.Combine(_campaign.Fleets.Count, FogOfWarActive, _campaign.Player?.Id, _campaign.Player?.IsHuman);
         foreach (var fleet in _campaign.Fleets) fingerprint = HashCode.Combine(fingerprint, fleet.Id, fleet.NationId);
         if (fingerprint != _fleetRosterFingerprint)
         {

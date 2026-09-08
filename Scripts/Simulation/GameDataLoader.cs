@@ -67,6 +67,7 @@ public static class GameDataLoader
             catch (Exception exception)
             {
                 Debug.WriteLine($"[dof] {Path.GetFileName(file)} ignored: {exception.Message}");
+                DiagnosticLogs.Write("errors", $"DATA_FILE_REJECTED file={file} error={exception.Message}");
                 continue;
             }
             yield return document;

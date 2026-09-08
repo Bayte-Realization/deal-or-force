@@ -217,7 +217,7 @@ public static partial class AiStatecraft
                 OpinionSystem.Remember(campaign, relation, "alliance");
             else OpinionSystem.Forget(campaign, relation, "alliance");
 
-            var strength = Strength(campaign, other) / M.Max(0.01f, Strength(campaign, nation));
+            var strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) / M.Max(0.01f, Strength(campaign, nation));
             var fear = M.Clamp(strength - 1f, 0f, 2f);
             if (fear > 0.05f) OpinionSystem.Remember(campaign, relation, "fear_of_strength", fear);
             else OpinionSystem.Forget(campaign, relation, "fear_of_strength");
@@ -554,7 +554,7 @@ public static partial class AiStatecraft
             // Ahead on points and holding none of their ground. A country in that position
             // does not stop - it pushes, because stopping converts a war it is winning into
             // nothing at all. Only a genuinely broken opponent is worth an indemnity.
-            var opponentSupport = war.AttackerId == nation.Id ? war.DefenderWarSupport : war.AttackerWarSupport;
+            var opponentSupport = 0.5f; // Unknown; do not read the opponent's internal morale.
             if (ledger.Budget >= defines.AiPeaceIndemnityBudget &&
                 opponentSupport <= defines.AiCapitulationWarSupport)
                 PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.WarReparations);
@@ -615,7 +615,7 @@ public static partial class AiStatecraft
         foreach (var state in campaign.States)
         {
             if (!provincesPerState.TryGetValue(state.MapIndex, out var count) || count <= 0) continue;
-            worthPerProvince[state.MapIndex] = state.Population / (float)count / 1_000_000f;
+            worthPerProvince[state.MapIndex] = state.NationMapIndex == nation.MapIndex ? state.Population / (float)count / 1_000_000f : 1f / count;
         }
 
         var takenPerState = new Dictionary<int, int>();
@@ -723,7 +723,7 @@ public static partial class AiStatecraft
             spent += defines.PeaceCostDemilitarise;
         }
 
-        var opponentSupport = war.AttackerId == nation.Id ? war.DefenderWarSupport : war.AttackerWarSupport;
+        var opponentSupport = 0.5f; // Unknown under first-stage fog of war.
         if (opponentSupport <= defines.AiCapitulationWarSupport && Afford(defines.PeaceCostHumiliate))
             demand.Humiliate = true;
     }

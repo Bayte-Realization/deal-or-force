@@ -116,6 +116,7 @@ public sealed partial class GlobePresentation
         _flatRoot.Visible = enabled;
         _routeFingerprint = int.MinValue;
         ReprojectWorldDecorations();
+        BuildFrontPreview();
         ApplyCamera();
         ProjectionChanged?.Invoke(enabled);
     }
@@ -198,21 +199,29 @@ public sealed partial class GlobePresentation
         {
             if (!IsInstanceValid(node)) continue;
             var geo = GeographicFromNormal(normal);
-            node.Position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
+            var position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
+            if (node.Position != position) node.Position = position;
         }
         foreach (var (node, normal) in _fleetMarkers)
         {
             if (!IsInstanceValid(node)) continue;
             var geo = GeographicFromNormal(normal);
-            node.Position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
+            var position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
+            if (node.Position != position) node.Position = position;
         }
         foreach (var (node, army) in _armyByMarker)
-            if (IsInstanceValid(node)) node.Position = ArmyPresentationPoint(army);
+            if (IsInstanceValid(node))
+            {
+                var position = ArmyPresentationPoint(army);
+                if (node.Position != position) node.Position = position;
+            }
         foreach (var glyph in _countryGlyphs)
         {
             if (!IsInstanceValid(glyph.Node)) continue;
-            glyph.Node.Position = FlatPoint(glyph.Latitude, glyph.Longitude, FlatTextZ);
-            glyph.Node.Rotation = new Vector3(0f, 0f, glyph.FlatRotation);
+            var position = FlatPoint(glyph.Latitude, glyph.Longitude, FlatTextZ);
+            var rotation = new Vector3(0f, 0f, glyph.FlatRotation);
+            if (glyph.Node.Position != position) glyph.Node.Position = position;
+            if (glyph.Node.Rotation != rotation) glyph.Node.Rotation = rotation;
         }
         ReprojectBattleMarkers();
     }
@@ -260,8 +269,9 @@ public sealed partial class GlobePresentation
         }
 
         var pixels = new byte[256 * 256 * 4];
-        var populationLogs = _campaign.Nations.Select(nation => Math.Log10(Math.Max(1, nation.Population))).ToArray();
-        var gdpLogs = _campaign.Nations.Select(nation => Math.Log10(Math.Max(0.01, nation.Gdp))).ToArray();
+        var knownNations = _campaign.Nations.Where(n => CanShowMilitary(n.Id)).ToArray();
+        var populationLogs = knownNations.Select(nation => Math.Log10(Math.Max(1, nation.Population))).DefaultIfEmpty(0).ToArray();
+        var gdpLogs = knownNations.Select(nation => Math.Log10(Math.Max(0.01, nation.Gdp))).DefaultIfEmpty(0).ToArray();
         var minPopulation = populationLogs.Min();
         var maxPopulation = populationLogs.Max();
         var minGdp = gdpLogs.Min();
@@ -269,7 +279,8 @@ public sealed partial class GlobePresentation
 
         foreach (var nation in _campaign.Nations)
         {
-            var color = ModeColor(nation, minPopulation, maxPopulation, minGdp, maxGdp);
+            var color = !CanShowMilitary(nation.Id) && _mapMode is StrategicMapMode.Population or StrategicMapMode.Economy
+                ? new Color(.22f,.25f,.28f) : ModeColor(nation, minPopulation, maxPopulation, minGdp, maxGdp);
             var write = nation.MapIndex * 4;
             if (write < 0 || write + 3 >= pixels.Length) continue;
             pixels[write] = (byte)Mathf.RoundToInt(color.R * 255f);

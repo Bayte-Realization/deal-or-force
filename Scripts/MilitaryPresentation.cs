@@ -53,7 +53,7 @@ public sealed partial class GlobePresentation
                 var nx = (x - 87.5f) / 44.5f;
                 var ny = (y - 55.5f) / 19.5f;
                 var shell = nx * nx + ny * ny;
-                if (shell is >= 0.67f and <= 1.0f) WritePixel(pixels, width, x, y, symbol);
+                if (shell is >= 0.67f and <= 1.0f) WritePixel(pixels, width, 23 + (x-43)/2, y, symbol);
             }
         }
         else
@@ -61,14 +61,14 @@ public sealed partial class GlobePresentation
             for (var step = 0; step < 44; step++)
             for (var thickness = -2; thickness <= 2; thickness++)
             {
-                WritePixel(pixels, width, 43 + step, 32 + step + thickness, symbol);
-                WritePixel(pixels, width, 86 - step, 32 + step + thickness, symbol);
+                WritePixel(pixels, width, 23 + step, 32 + step + thickness, symbol);
+                WritePixel(pixels, width, 66 - step, 32 + step + thickness, symbol);
             }
             if (counterSymbol == "motorized")
                 for (var angle = 0; angle < 360; angle++)
                 {
                     var radians = Mathf.DegToRad(angle);
-                    WritePixel(pixels, width, 88 + Mathf.RoundToInt(Mathf.Cos(radians) * 20f),
+                    WritePixel(pixels, width, 45 + Mathf.RoundToInt(Mathf.Cos(radians) * 20f),
                         56 + Mathf.RoundToInt(Mathf.Sin(radians) * 20f), symbol);
                 }
         }
@@ -91,8 +91,10 @@ public sealed partial class GlobePresentation
     private void UpdateMilitaryPresentation()
     {
         if (_campaign is null) return;
-        foreach (var (marker, stack) in _armyByMarker)
+        foreach (var cachedMarker in _armyStacks.Values)
         {
+            var marker = cachedMarker.Node;
+            var stack = cachedMarker.Stack;
             if (!IsInstanceValid(marker)) continue;
             if (stack.Count == 0) continue;
             // One pass instead of seven. This runs for every counter on the map every
@@ -119,15 +121,16 @@ public sealed partial class GlobePresentation
             var organisation = organisationSum / stack.Count;
             var planning = planningSum / stack.Count;
             var supply = supplySum / stack.Count;
-            var plate = marker.GetChildOrNull<Sprite3D>(0);
-            var count = marker.GetNodeOrNull<Label3D>("DivisionCount");
+            var plate = cachedMarker.Plate;
+            var count = cachedMarker.Count;
             if (plate is not null)
             {
-                plate.Modulate = anySelected
+                var tint = anySelected
                     ? new Color(1f, 0.86f, 0.42f, 1f)
                     : anyBattle
                         ? new Color(1f, 0.58f, 0.48f, 1f)
                         : anyMoving ? new Color(0.76f, 0.92f, 1f, 1f) : Colors.White;
+                if (plate.Modulate != tint) plate.Modulate = tint;
             }
             if (count is not null)
             {
@@ -138,16 +141,18 @@ public sealed partial class GlobePresentation
                 // The condition now colours the whole counter rather than the small lower
                 // line, so a formation out of supply reads at a glance instead of on
                 // inspection. Order, stance and planning remain in the selection panel.
-                count.Modulate = supply < 0.45f || cutOff
+                var tint = supply < 0.45f || cutOff
                     ? Ui.Colour("military.routed")
                     : organisation < 0.35f ? Ui.Colour("military.shaken")
                     : planning > 0.70f ? Ui.Colour("military.planning") : Ui.Colour("military.ready");
+                if (count.Modulate != tint) count.Modulate = tint;
             }
         }
         UpdateBattleMarkers();
     }
 
     private int _battleMarkerDay = -1;
+    private int _battleViewer = -1;
     private readonly HashSet<int> _activeBattleIds = new();
     private readonly List<int> _finishedBattleIds = new();
     private readonly Dictionary<int, Simulation.Army> _armyById = new();
@@ -165,8 +170,10 @@ public sealed partial class GlobePresentation
     private void UpdateBattleMarkers()
     {
         if (!IsInstanceValid(_battleRoot) || _campaign?.ProvinceMap is null) return;
-        if (_battleMarkerDay != _campaign.ElapsedDays)
+        var viewer = FogOfWarActive && _campaign.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
+        if (_battleMarkerDay != _campaign.ElapsedDays || _battleViewer != viewer)
         {
+            _battleViewer = viewer;
             _battleMarkerDay = _campaign.ElapsedDays;
             RebuildBattleMarkers();
         }
@@ -179,7 +186,7 @@ public sealed partial class GlobePresentation
     {
         _activeBattleIds.Clear();
         foreach (var battle in _campaign.Battles)
-            if (!battle.Ended) _activeBattleIds.Add(battle.Id);
+            if (!battle.Ended && CanShowBattle(battle)) _activeBattleIds.Add(battle.Id);
 
         _finishedBattleIds.Clear();
         foreach (var id in _battleMarkers.Keys)
@@ -195,7 +202,7 @@ public sealed partial class GlobePresentation
 
         foreach (var battle in _campaign.Battles)
         {
-            if (battle.Ended) continue;
+            if (!_activeBattleIds.Contains(battle.Id)) continue;
             if (!_battleMarkers.TryGetValue(battle.Id, out var marker))
             {
                 var center = _campaign.ProvinceMap.CenterOf(battle.ProvinceId);
@@ -225,8 +232,9 @@ public sealed partial class GlobePresentation
 
             var label = marker.Node.GetNodeOrNull<Label3D>("BattleBalance");
             if (label is not null)
-                label.Text = $"{SideOrganisation(battle.Attackers) * 100f:00}  |  " +
-                             $"{SideOrganisation(battle.Defenders) * 100f:00}";
+                label.Text = !FogOfWarActive || CanShowMilitary(battle.AttackerId) || CanShowMilitary(battle.DefenderId)
+                    ? $"{SideOrganisation(battle.Attackers) * 100f:00} | {SideOrganisation(battle.Defenders) * 100f:00}"
+                    : "? | ?";
         }
     }
 

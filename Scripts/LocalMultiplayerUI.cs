@@ -46,7 +46,7 @@ public partial class DealOrForceGame
     private void PassHotseat()
     {
         if (!_campaign.IsHotseat || !_campaign.NextSeat()) return;
-        _selectedArmy = null;
+        ClearArmySelectionAndClose();
         _selectedNation = _campaign.Player;
         _globe.SelectArmy(-1);
         _sidePanel.Visible = false;

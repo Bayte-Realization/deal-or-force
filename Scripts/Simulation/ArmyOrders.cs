@@ -29,6 +29,13 @@ public sealed class HaltArmyCommand : ICampaignCommand
         // A formation in a battle cannot walk away from it by being told to stop; that is
         // what retreat is, and retreat is the battle's decision rather than the map's.
         Halted = army.Route.Count > 0 || army.OrderProvinceId >= 0;
+        if (army.DirectOrder)
+        {
+            army.OrderKind = ArmyOrder.Manual;
+            army.PlanActive = false;
+            army.AssignedWarId = -1;
+        }
+        army.DirectOrder = false;
         army.Route.Clear();
         army.PlannedRoute.Clear();
         army.MoveProgress = 0f;
@@ -97,6 +104,7 @@ public sealed class ReturnArmyToPlanCommand : ICampaignCommand
         // a formation handed back to the plan should not begin one on its own; if the
         // operation is executing, the planner will order it forward on its next pass.
         army.OrderKind = ArmyOrder.DefendFront;
+        army.DirectOrder = false;
         army.Route.Clear();
         army.PlannedRoute.Clear();
         army.MoveProgress = 0f;

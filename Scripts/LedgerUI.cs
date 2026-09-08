@@ -211,6 +211,14 @@ public partial class DealOrForceGame
     {
         if (_campaign?.Player is null || _ledgerLayer is null || !_ledgerLayer.Visible) return;
         var nation = ViewedLedgerNation() ?? _campaign.Player;
+        var known = CanInspectNation(nation.Id);
+        _ledgerLineA.Visible = _ledgerLineB.Visible = _ledgerBarsA.Visible = _ledgerBarsB.Visible = known;
+        if (!known)
+        {
+            _ledgerTitle.Text = $"NATIONAL LEDGER · {nation.Name}";
+            _ledgerSummary.Text = "Fog of war — foreign internal statistics are unavailable. Choose Player nation.";
+            return;
+        }
         var samples = _campaign.History.ForNation(nation.Id);
         var days = samples.Select(sample => sample.Day).ToArray();
         var first = samples.Count > 0 ? samples[0] : default;
@@ -399,10 +407,12 @@ public partial class DealOrForceGame
         _ledgerLineB.SetData("Selected-country population", "Historical trend for the viewed country", days,
             new[] { Series("Population", Blue, samples, sample => sample.PopulationMillions) }, StrategicChartFormat.Millions);
         _ledgerBarsA.SetData("Largest economies", "Current world GDP ranking", _campaign.Nations
+            .Where(candidate => CanInspectNation(candidate.Id))
             .OrderByDescending(candidate => candidate.Gdp).Take(8)
             .Select(candidate => new StrategicBarEntry(candidate.Tag, candidate.Gdp,
                 candidate.Id == nation.Id ? Gold : Blue, candidate.Name)).ToArray(), StrategicChartFormat.MoneyBillions);
         _ledgerBarsB.SetData("Largest populations", "Current world population ranking", _campaign.Nations
+            .Where(candidate => CanInspectNation(candidate.Id))
             .OrderByDescending(candidate => candidate.Population).Take(8)
             .Select(candidate => new StrategicBarEntry(candidate.Tag, candidate.Population / 1_000_000f,
                 candidate.Id == nation.Id ? Gold : Violet, candidate.Name)).ToArray(), StrategicChartFormat.Millions);

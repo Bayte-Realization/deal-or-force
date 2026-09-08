@@ -49,6 +49,7 @@ public partial class DealOrForceGame : Control
 
     public override void _Ready()
     {
+        StartDiagnostics();
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // The interface is built next and asks for its pictures by name, so the names have
         // to mean something first. Mods layer their own over these when a campaign starts.
@@ -63,8 +64,10 @@ public partial class DealOrForceGame : Control
 
     public override void _Process(double delta)
     {
+        if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
+        if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false };
         NetworkProcess(delta);
-        if (IsNetworkClient) return;
+        if (IsNetworkClient) { if (_campaign is not null) ReportFrameCost(delta); return; }
         if (_campaign is null) return;
         // Everything that happened since the last frame, drawn once.
         _campaign.FlushInterfaceChanges();
@@ -127,52 +130,6 @@ public partial class DealOrForceGame : Control
     /// something the bench cannot see, and guessing at which half is at fault is how an
     /// afternoon disappears.
     /// </summary>
-    private void ReportFrameCost(double delta)
-    {
-        _frameReportFrames++;
-        _frameReportAccumulator += delta;
-        if (_frameReportAccumulator < 5.0) return;
-        _frameReportAccumulator = 0;
-        var frames = _frameReportFrames;
-        _frameReportFrames = 0;
-
-        var days = _campaign.ElapsedDays - _frameReportDay;
-        _frameReportDay = _campaign.ElapsedDays;
-        var wanted = 5.0 / System.Math.Max(0.0001f, _campaign.Defines.SecondsForSpeed(_speed));
-
-        var line = new System.Text.StringBuilder();
-        line.Append($"[perf] {(_campaign.IsPaused ? "PAUSED" : "running")} " +
-                    $"{Engine.GetFramesPerSecond():0.#} fps, speed {_speed}: " +
-                    $"{days / 5.0:0.#} days/s against {wanted / 5.0:0.#} asked for " +
-                    $"({days:N0} day(s) in {frames:N0} frame(s)), day {_campaign.ElapsedDays:N0}. " +
-                    $"Memory {OS.GetStaticMemoryUsage() / 1_048_576:N0} MB engine, " +
-                    $"{System.GC.GetTotalMemory(false) / 1_048_576:N0} MB heap, " +
-                    $"{System.GC.GetTotalMemory(true) / 1_048_576:N0} MB live, " +
-                    $"{System.GC.CollectionCount(0)}/{System.GC.CollectionCount(1)}/" +
-                    $"{System.GC.CollectionCount(2)} collections, " +
-                    $"{Simulation.CampaignDiplomacy.Rebuilds - _frameReportRebuilds} border rebuild(s), " +
-                    $"map revision +{_campaign.MapRevision - _frameReportRevision}");
-        _frameReportRebuilds = Simulation.CampaignDiplomacy.Rebuilds;
-        _frameReportRevision = _campaign.MapRevision;
-        foreach (var sample in Simulation.SimProfiler.All
-                     .OrderByDescending(entry => entry.TotalMilliseconds)
-                     .Take(16))
-        {
-            line.AppendLine();
-            line.Append($"         {sample.Name,-14} {sample.MeanMilliseconds,7:0.###} ms" +
-                        $" x{sample.Runs,-6:N0} = {sample.TotalMilliseconds / 1000.0,6:0.##} s");
-        }
-        GD.Print(line.ToString());
-        // The log bridge does not always carry these through, and a measurement that does
-        // not arrive is not a measurement.
-        if (!OS.HasFeature("editor")) return;
-        try
-        {
-            System.IO.File.AppendAllText(ProjectSettings.GlobalizePath("res://perf.log"),
-                line.ToString() + System.Environment.NewLine);
-        }
-        catch { /* A read-only export directory is not worth a crash. */ }
-    }
 
     public override void _Input(InputEvent inputEvent)
     {
@@ -188,6 +145,8 @@ public partial class DealOrForceGame : Control
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (key.Keycode == Key.Escape && _recruitmentLayer is { Visible: true })
+        { _recruitmentLayer.Hide(); GetViewport().SetInputAsHandled(); return; }
         if (_developerConsoleLayer is { Visible: true })
         {
             if (key.Keycode == Key.Escape)
@@ -680,6 +639,7 @@ public partial class DealOrForceGame : Control
                 _sideBody.Text = $"{player.Name} armed forces";
 
                 DetailHeading("FORCES");
+                _sideDetail.AddChild(ActionButton("Recruit & deploy", () => OpenRecruitment(), 180, 38, true));
                 DetailRow("Divisions", divisions.ToString("0.0"),
                     "Independent formations under your flag. Each takes frontage in a battle, so more of " +
                     "them is not the same as more strength in one province.");
@@ -875,6 +835,7 @@ public partial class DealOrForceGame : Control
         RefreshPeaceOfferInterface();
         RefreshStrategicHud();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
+        RefreshRecruitment();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
         if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();

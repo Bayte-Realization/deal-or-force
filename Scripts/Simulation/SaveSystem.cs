@@ -61,6 +61,8 @@ public static class SaveSystem
     public static SaveMetadata Save(string root, string slot, Campaign campaign, string modFingerprint,
         string displayName = "", bool autosave = false)
     {
+        using var timing = SimProfiler.Measure("save.write");
+        DiagnosticLogs.Write("system", $"SAVE_BEGIN slot={SafeSlot(slot)} autosave={autosave} day={campaign?.ElapsedDays}");
         if (campaign?.Player is null) throw new InvalidOperationException("No active campaign to save.");
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null || campaign.ProvinceOccupation is null)
             throw new InvalidOperationException("The tactical map is still being prepared; try saving again in a moment.");
@@ -95,6 +97,7 @@ public static class SaveSystem
 
         AtomicWrite(DataPath(root, slot), compressed);
         AtomicWrite(MetaPath(root, slot), JsonSerializer.SerializeToUtf8Bytes(metadata, MetadataOptions));
+        DiagnosticLogs.Write("system", $"SAVE_END slot={slot} bytes={compressed.LongLength} checksum={metadata.Checksum} format={FormatVersion} map={MapDataVersion}");
         return metadata;
     }
 
@@ -255,6 +258,8 @@ public static class SaveSystem
         public List<Nation> Nations = new();
         public List<ScenarioState> States = new();
         public List<Army> Armies = new();
+        public List<RecruitmentOrder> Recruitment = new();
+        public int NextRecruitmentId = 1;
         public List<ArmyGroup> ArmyGroups = new();
         public List<Fleet> Fleets = new();
         public List<StrategicWar> Wars = new();
@@ -306,6 +311,8 @@ public static class SaveSystem
             Nations = new List<Nation>(campaign.Nations),
             States = new List<ScenarioState>(campaign.States),
             Armies = new List<Army>(campaign.Armies),
+            Recruitment = new List<RecruitmentOrder>(campaign.Recruitment),
+            NextRecruitmentId = campaign.NextRecruitmentId,
             ArmyGroups = new List<ArmyGroup>(campaign.ArmyGroups),
             Fleets = new List<Fleet>(campaign.Fleets),
             Wars = new List<StrategicWar>(campaign.Wars),
@@ -329,6 +336,8 @@ public static class SaveSystem
             Replace(campaign.Nations, Nations);
             Replace(campaign.States, States);
             Replace(campaign.Armies, Armies);
+            Replace(campaign.Recruitment, Recruitment);
+            campaign.NextRecruitmentId = Math.Max(NextRecruitmentId, campaign.Recruitment.Count == 0 ? 1 : campaign.Recruitment.Max(o => o.Id) + 1);
             Replace(campaign.ArmyGroups, ArmyGroups);
             Replace(campaign.Fleets, Fleets);
             Replace(campaign.Wars, Wars);

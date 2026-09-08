@@ -81,6 +81,10 @@ public sealed class DrawnFrontLine
 
     public readonly HashSet<int> Provinces = new();
     public readonly List<int> ArmyIds = new();
+    // Offensive intent: the departure front is distinct from the ordered destination stroke.
+    public readonly HashSet<int> SourceProvinces = new();
+    public readonly List<int> ObjectiveSequence = new();
+    public readonly Dictionary<int, int> Objectives = new();
 
     /// <summary>
     /// Which formation stands where, worked out for the line as a whole.
@@ -193,6 +197,8 @@ public static class BattlePlanning
     /// </summary>
     public static List<int> Sequence(Campaign campaign, DrawnFrontLine line)
     {
+        if (line.Kind == FrontLineKind.Offensive && line.ObjectiveSequence.Count > 0)
+            return new List<int>(line.ObjectiveSequence);
         var topology = campaign?.ProvinceMap;
         var provinces = line.Provinces.Where(province => province > 0 &&
             (topology is null || province <= topology.ProvinceCount)).ToList();
@@ -421,6 +427,11 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
 
         var existing = EditLineId >= 0 ? campaign.FrontLines.Find(x => x.Id == EditLineId && x.NationId == IssuerId) : null;
         if (EditLineId >= 0 && existing is null) return;
+        if (Kind == FrontLineKind.Offensive)
+        {
+            OffensivePlanning.Draw(campaign, this, existing);
+            return;
+        }
         var line = new DrawnFrontLine
         {
             Id = existing?.Id ?? campaign.NextFrontLineId++,

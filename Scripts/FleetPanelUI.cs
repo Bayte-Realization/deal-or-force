@@ -55,6 +55,7 @@ public partial class DealOrForceGame
     private void OnFleetPicked(Fleet fleet)
     {
         if (!_hudLayer.Visible || fleet is null) return;
+        if (!CanInspectNation(fleet.NationId)) return;
         // One selection at a time: an order has to be unambiguous about who it is for.
         ClearArmySelectionAndClose();
         _selectedFleet = fleet;

@@ -267,8 +267,14 @@ public static partial class Warfare
             var bestScore = 0f;
             foreach (var province in Candidates)
             {
-                var score = topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight +
-                    Power(In(ByProvince, province), enemyId) * 0.018f;
+                // Player battle plans and AI orders use the same reconnaissance. Deep
+                // hidden formations must not influence which sector the planner probes.
+                var observedResistance = 0f;
+                foreach (var defender in In(ByProvince, province))
+                    if (defender.NationId == enemyId && CampaignIntel.CanSeeArmy(campaign, army.NationId, defender))
+                        observedResistance += defender.Power;
+                var score = observedResistance / M.Max(.1f, army.Power) +
+                    topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight;
                 if (target >= 0 && (score > bestScore || (score == bestScore && province > target))) continue;
                 bestScore = score;
                 target = province;
@@ -284,35 +290,26 @@ public static partial class Warfare
 
             if (Present.Count == 0)
             {
+                // Support fire does not occupy empty ground. Wait for an actual battle;
+                // an ordinary RMB order can turn this into a march explicitly.
+                if (army.SupportOnly) continue;
                 var riverAdvance = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier,
                     topology.RiverCrossingStrength(army.ProvinceId, target));
-
-                // An empty province is not open ground. The divisions holding the provinces
-                // around it cover the gap by fire, which is what keeps a front a front
-                // rather than a race: a breach has to be widened and held, not simply
-                // strolled through because nobody happened to be standing in it.
-                //
-                // A gap can only be exploited by a force worth more than what covers it.
-                // Everything else has to break the flank first - which is the difference
-                // between an offensive and a walk, and the reason the opening front does
-                // not move on its own.
-                // Cover reaches past the provinces that actually touch the gap, because a
-                // division holds a sector rather than the tile it is standing in. Scoring
-                // cover from the immediate neighbours alone left this front taking a
-                // quarter of its ground without a fight; reaching one province further,
-                // at less than half the weight, brings that to one province in twenty and
-                // costs nothing measurable per day.
+                // Nearby enemy formations can slow deployment, not form an invisible
+                // impassable wall. Only a defender physically in the target blocks entry.
                 var coveringPower = 0f;
                 var covering = 0f;
                 Cover(campaign, topology, target, enemyId, ref coveringPower, ref covering);
-                if (coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
-                var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
-
-                var progress = war.UnopposedProgress.GetValueOrDefault(target) +
-                    campaign.Defines.UnopposedCapturePerDay * M.Clamp(army.Power / 4f, 0.35f, 1f) *
+                var contested = M.Clamp(1f / (1f + covering * campaign.Defines.ZoneOfControlResistance), 0.35f, 1f);
+                // Progress belongs to the division, not a pooled province counter: a
+                // hundred divisions must not teleport one another across the border.
+                army.MoveProgress += campaign.Defines.UnopposedCapturePerDay *
+                    UnitTypeCatalog.Get(army.TemplateId).Speed * MilitaryDoctrine.Movement(army.Stance) *
+                    M.Clamp(army.SupplyLevel, 0.25f, 1f) * topology.TerrainAt(target).MovementSpeed *
                     riverAdvance * contested;
-                war.UnopposedProgress[target] = progress;
-                if (progress >= 1f) Capture(campaign, war, target, army.NationId, new[] { army }, Array.Empty<Army>(), "walked into a gap");
+                war.UnopposedProgress[target] = MathF.Max(war.UnopposedProgress.GetValueOrDefault(target), army.MoveProgress);
+                if (army.MoveProgress >= 1f)
+                    Capture(campaign, war, target, army.NationId, new[] { army }, Array.Empty<Army>(), "walked into a gap");
                 continue;
             }
 
@@ -356,17 +353,47 @@ public static partial class Warfare
         var nation = campaign.NationById(army.NationId);
         var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
         var enemy = campaign.NationById(enemyId);
-        if (topology is null || nation is null || enemy is null || army.OrderProvinceId <= 0) return false;
+        if (topology is null || nation is null || enemy is null) return false;
+
+        var plan = BattlePlanning.LineFor(campaign, army);
+        var boundedPlan = !army.DirectOrder && plan is { Kind: FrontLineKind.Offensive } && plan.Objectives.Count > 0;
+        if (army.OrderProvinceId <= 0) return boundedPlan;
+        if (boundedPlan && army.ProvinceId == army.OrderProvinceId)
+        {
+            army.PlanActive = false;
+            army.Route.Clear(); army.PlannedRoute.Clear();
+            return true;
+        }
+
+        if (army.SupportOnly && controllers[army.OrderProvinceId] == nation.MapIndex)
+        {
+            new HaltArmyCommand { IssuerId = army.NationId, ArmyId = army.Id }.Apply(campaign);
+            army.SupportOnly = false;
+            army.PlanActive = false;
+            army.OrderKind = ArmyOrder.Manual;
+            army.AssignedWarId = -1;
+            return true;
+        }
 
         while (army.PlannedRoute.Count > 0 && army.PlannedRoute[0] == army.ProvinceId)
             army.PlannedRoute.RemoveAt(0);
-        if (army.PlannedRoute.Count == 0 || !topology.Neighbors[army.ProvinceId].Contains(army.PlannedRoute[0]))
+        if (army.PlannedRoute.Count == 0 || !topology.Neighbors[army.ProvinceId].Contains(army.PlannedRoute[0]) ||
+            (controllers[army.PlannedRoute[0]] != nation.MapIndex && controllers[army.PlannedRoute[0]] != enemy.MapIndex))
         {
             army.PlannedRoute.Clear();
             army.PlannedRoute.AddRange(topology.FindOperationalRoute(army.ProvinceId, army.OrderProvinceId,
                 (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers));
             army.OrderRouteSteps = Math.Max(army.OrderStepsCompleted + army.PlannedRoute.Count,
                 army.OrderRouteSteps);
+        }
+        if ((army.DirectOrder || boundedPlan) && army.PlannedRoute.Count == 0)
+        {
+            if (boundedPlan) { army.PlanActive = false; army.Route.Clear(); return true; }
+            var arrived = army.ProvinceId == army.OrderProvinceId;
+            new HaltArmyCommand { IssuerId = army.NationId, ArmyId = army.Id }.Apply(campaign);
+            army.LastMoveResult = arrived ? ArmyMoveResult.AlreadyAtDestination : ArmyMoveResult.RouteInterrupted;
+            army.LastMoveResultDay = campaign.ElapsedDays;
+            return true;
         }
         if (army.PlannedRoute.Count == 0 || controllers[army.PlannedRoute[0]] != nation.MapIndex) return false;
 
@@ -449,9 +476,9 @@ public static partial class Warfare
             if (attacking.Count == 0) { Close(campaign, battle, battle.DefenderId, "Attackers withdrew"); continue; }
             if (defending.Count == 0)
             {
-                Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
+                var occupied = Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
                     "defenders left the province");
-                Close(campaign, battle, battle.AttackerId, "Province taken unopposed");
+                Close(campaign, battle, battle.AttackerId, occupied ? "Province taken unopposed" : "Support ended; province not occupied");
                 continue;
             }
 
@@ -555,6 +582,8 @@ public static partial class Warfare
 
             var attackerOrg = AverageOrganisation(attacking);
             var defenderOrg = AverageOrganisation(defending);
+            if (DiagnosticLogs.Enabled)
+                DiagnosticLogs.Write("simulation", $"BATTLE_ROUND battle={battle.Id} war={battle.WarId} province={battle.ProvinceId} attacker={battle.AttackerId} defender={battle.DefenderId} attack_power={DiagnosticLogs.N(attackerOffence)} defense_power={DiagnosticLogs.N(defenderProtection)} attack_org={DiagnosticLogs.N(attackerOrg)} defense_org={DiagnosticLogs.N(defenderOrg)} attack_losses={DiagnosticLogs.N(attackerLoss)} defense_losses={DiagnosticLogs.N(defenderLoss)} river={DiagnosticLogs.N(battle.RiverCrossingStrength)} planning={DiagnosticLogs.N(attackerPlanning)}");
             battle.Rounds.Add(new LandBattle.Round
             {
                 Day = campaign.ElapsedDays,
@@ -584,9 +613,9 @@ public static partial class Warfare
 
             if (defenderOrg <= campaign.Defines.BattleBreakOrganisation)
             {
-                Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
+                var occupied = Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
                     "won the battle");
-                Close(campaign, battle, battle.AttackerId, "Defenders broke");
+                Close(campaign, battle, battle.AttackerId, occupied ? "Defenders broke" : "Defenders broke; support did not occupy");
             }
             else if (attackerOrg <= campaign.Defines.BattleBreakOrganisation)
             {
@@ -641,7 +670,10 @@ public static partial class Warfare
         foreach (var army in Reinforcements)
         {
             if (army.NationId == battle.AttackerId &&
-                (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) && attackerAdded < 2)
+                (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) &&
+                army.PlanActive && !army.IsMoving &&
+                (!army.DirectOrder || (army.PlannedRoute.Count > 0 ? army.PlannedRoute[0] : army.OrderProvinceId) == battle.ProvinceId) &&
+                attackerAdded < 2)
             {
                 Join(battle, army, true);
                 attackerAdded++;
@@ -657,21 +689,25 @@ public static partial class Warfare
         }
     }
 
-    private static void Capture(Campaign campaign, StrategicWar war, int provinceId, int winnerId,
+    private static bool Capture(Campaign campaign, StrategicWar war, int provinceId, int winnerId,
         IReadOnlyCollection<Army> advancing, IReadOnlyCollection<Army> retreating, string how)
     {
-        Tally(war.Id, "capture: " + how);
         // Taking a province moves whoever took it, so the province index no longer
         // describes where everyone is standing.
         _provinceIndexStale = true;
         var winner = campaign.NationById(winnerId);
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        if (winner is null || topology is null || controllers is null) return;
-        war.OriginalController.TryAdd(provinceId, controllers[provinceId]);
-        if (!campaign.SetProvinceController(provinceId, (ushort)winner.MapIndex)) return;
+        if (winner is null || topology is null || controllers is null) return false;
+        var occupying = advancing.Any(army => !army.SupportOnly);
+        if (occupying)
+        {
+            Tally(war.Id, "capture: " + how);
+            war.OriginalController.TryAdd(provinceId, controllers[provinceId]);
+            if (!campaign.SetProvinceController(provinceId, (ushort)winner.MapIndex)) return false;
+            war.FrontDirty = true;
+        }
         war.UnopposedProgress.Remove(provinceId);
-        war.FrontDirty = true;
         var center = topology.CenterOf(provinceId);
         foreach (var army in advancing)
         {
@@ -683,6 +719,12 @@ public static partial class Warfare
                 army.SupportOnly = false;
                 army.OrderProvinceId = -1;
                 army.OrderStateMapIndex = -1;
+                army.DirectOrder = false;
+                army.PlanActive = false;
+                army.OrderKind = ArmyOrder.Manual;
+                army.AssignedWarId = -1;
+                army.Route.Clear();
+                army.MoveProgress = 0f;
                 army.PlannedRoute.Clear();
                 continue;
             }
@@ -707,9 +749,17 @@ public static partial class Warfare
             army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterCaptureDays;
             if (army.OrderProvinceId == provinceId)
             {
+                var objectiveLine = BattlePlanning.LineFor(campaign, army);
+                if (!army.DirectOrder && objectiveLine is { Kind: FrontLineKind.Offensive } && objectiveLine.Objectives.Count > 0)
+                {
+                    army.PlanActive = false;
+                    army.PlannedRoute.Clear();
+                    continue;
+                }
                 // A direct RMB attack ends in the selected province instead of
                 // silently turning into a perpetual autonomous offensive.
                 army.OrderKind = ArmyOrder.Manual;
+                army.DirectOrder = false;
                 army.AssignedWarId = -1;
                 army.OrderProvinceId = -1;
                 army.OrderStateMapIndex = -1;
@@ -723,7 +773,12 @@ public static partial class Warfare
             var owner = campaign.NationById(army.NationId);
             var retreat = owner is null ? 0 : topology.Neighbors[provinceId]
                 .FirstOrDefault(candidate => controllers[candidate] == (ushort)owner.MapIndex);
-            if (retreat <= 0) continue;
+            if (retreat <= 0)
+            {
+                DiagnosticLogs.Write("errors", $"RETREAT_NO_EXIT army={army.Id} nation={army.NationId} province={provinceId} war={war.Id} action=left_in_place known_defect=true");
+                continue;
+            }
+            DiagnosticLogs.Write("simulation", $"RETREAT army={army.Id} nation={army.NationId} from={provinceId} to={retreat} ready_day={campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays}");
             var fallback = topology.CenterOf(retreat);
             army.ProvinceId = retreat;
             army.StateMapIndex = topology.ProvinceToState[retreat];
@@ -735,6 +790,7 @@ public static partial class Warfare
             army.Entrenchment = 0f;
             army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays;
         }
+        return occupying;
     }
 
     private static void SecureOccupation(Campaign campaign)
@@ -987,6 +1043,7 @@ public static partial class Warfare
 
     private static void Close(Campaign campaign, LandBattle battle, int winnerId, string outcome)
     {
+        DiagnosticLogs.Write("simulation", $"BATTLE_END battle={battle.Id} war={battle.WarId} province={battle.ProvinceId} winner={winnerId} outcome={outcome}");
         Tally(battle.WarId, outcome);
         battle.Ended = true;
         battle.WinnerId = winnerId;

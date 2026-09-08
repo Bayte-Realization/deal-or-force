@@ -37,16 +37,6 @@ public partial class DealOrForceGame
     private ulong _lastRosterClickMsec;
 
     /// <summary>
-    /// The row a range selection counts from.
-    ///
-    /// Every list anybody has used since the file manager works this way: a plain click sets
-    /// the anchor, shift-click takes everything between the anchor and where you clicked,
-    /// and control adds or removes one without disturbing either. The roster had control and
-    /// no shift, so a player who wanted eleven of fourteen divisions clicked eleven times.
-    /// </summary>
-    private int _rosterAnchorArmyId = -1;
-
-    /// <summary>
     /// NATO-ish counters. A player who has played a Paradox game reads these before they
     /// read the name next to them, which is the whole point of having them.
     /// </summary>
@@ -188,7 +178,7 @@ public partial class DealOrForceGame
         AddDrawButton(draw, "Front", "plan_front", FrontLineKind.Defence, "Front line",
             "Draw the line to hold. The selection spreads along its length and digs in.");
         AddDrawButton(draw, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive line",
-            "Draw a line across enemy ground. The selection attacks towards it once executed.");
+            "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Alt+RMB redraws it. Prepare holds the departure front; Execute advances to the objective and stops.");
         AddDrawButton(draw, "Fall back", "plan_fallback", FrontLineKind.Fallback, "Fallback line",
             "Draw the line to hold if the one in front gives way.");
         var dropLine = ActionButton("Erase", ClearDrawnLine, 82, 30, false, Icon("plan_erase"));
@@ -329,29 +319,17 @@ public partial class DealOrForceGame
     /// Rebuild the roster for the current selection. Called on every campaign refresh, so
     /// the bars a player is watching move while the battle they are watching is fought.
     /// </summary>
-    /// <summary>
-    /// The player's divisions in the order the roster lists them.
-    ///
-    /// A range selection is only meaningful in the order the eye is reading, so this must
-    /// stay the same sort the panel draws - hence one method both use rather than two that
-    /// agree until somebody changes one.
-    /// </summary>
-    private List<Army> RosterOrder()
-    {
-        var rows = new List<Army>();
-        if (_campaign is null) return rows;
-        // The rows the panel is actually showing, in the order it drew them. Taken from the
-        // roster's own bookkeeping rather than rebuilt from the army list, so the range a
-        // player draws is the range they can see even after the sort or the cap changes.
-        foreach (var army in _campaign.Armies)
-            if (_armyRosterRows.ContainsKey(army.Id)) rows.Add(army);
-        rows.Sort((left, right) => System.StringComparer.Ordinal.Compare(left.Name, right.Name));
-        return rows;
-    }
-
     private void RefreshArmyPanel()
     {
         if (_armyPanel is null || _campaign?.Player is null) return;
+        // Country switches, save loads or changed ownership must not leave an old
+        // roster capable of selecting a division that is no longer ours.
+        _selectedArmies.RemoveAll(army => !ArmyInteraction.CanSelect(_campaign, army));
+        if (!ArmyInteraction.CanSelect(_campaign, _selectedArmy))
+        {
+            _selectedArmy = _selectedArmies.FirstOrDefault();
+            _globe.SelectArmies(_selectedArmies.Select(army => army.Id));
+        }
         var divisions = _selectedArmies.Count > 0
             ? _selectedArmies.Where(army => army is not null).ToList()
             : _selectedArmy is null ? new List<Army>() : new List<Army> { _selectedArmy };
@@ -387,6 +365,7 @@ public partial class DealOrForceGame
             StyleButton(button, mine && divisions.All(army => army.Stance == stance));
         }
         ApplyArmyPriorityButtonStates();
+        RefreshDrawingUi();
     }
 
     private void RefreshComposition(List<Army> divisions)
@@ -513,6 +492,7 @@ public partial class DealOrForceGame
         var (glyph, token, help) =
             army.CutOff ? ("⊘", "state.negative", "Cut off from supply") :
             army.InBattle ? ("⚔", "state.warning", "In battle") :
+            army.LastMoveResult == ArmyMoveResult.RouteInterrupted ? ("!", "state.warning", "Route interrupted by changed territorial control. Issue a new destination.") :
             army.SupplyLevel < 0.45f ? ("△", "state.warning", "Short of supply") :
             army.Organisation < 0.35f ? ("↓", "state.critical", "Organisation is spent") :
             army.IsMoving ? ("→", "state.info", "On the march") :
@@ -551,6 +531,8 @@ public partial class DealOrForceGame
         text += $"\n{state?.Name ?? "Unmapped ground"} · province #{army.ProvinceId:N0}\n" +
                 $"Order: {OrderName(army.OrderKind)} · posture: {StanceName(army.Stance)}";
         if (army.InBattle) text += $"\nEngaged in battle #{army.BattleId}";
+        if (army.LastMoveResult == ArmyMoveResult.RouteInterrupted)
+            text += "\nRoute interrupted: territorial control changed and no legal corridor remains. Issue a new destination.";
         return text;
     }
 
@@ -571,7 +553,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void OnRosterRowPressed(Army army)
     {
-        if (army is null || _campaign?.Player is null) return;
+        if (!ArmyInteraction.CanSelect(_campaign, army)) return;
         var now = Time.GetTicksMsec();
         var doubleClick = _lastRosterClickId == army.Id && now - _lastRosterClickMsec < 400;
         _lastRosterClickId = army.Id;
@@ -586,35 +568,12 @@ public partial class DealOrForceGame
             _selectedArmy = _selectedArmies.FirstOrDefault();
             SetArmyFeedback($"{_selectedArmies.Count} division(s) of {UnitTypeCatalog.Get(template).Name} selected.");
         }
-        else if (Input.IsKeyPressed(Key.Shift) && _rosterAnchorArmyId >= 0)
-        {
-            // Everything between the anchor and here, in the order the roster is showing -
-            // which is the order the player is looking at, and the only order a range means
-            // anything in.
-            var rows = RosterOrder();
-            var from = rows.FindIndex(candidate => candidate.Id == _rosterAnchorArmyId);
-            var to = rows.FindIndex(candidate => candidate.Id == army.Id);
-            if (from < 0 || to < 0)
-            {
-                _selectedArmies.Clear();
-                _selectedArmies.Add(army);
-            }
-            else
-            {
-                if (from > to) (from, to) = (to, from);
-                _selectedArmies.Clear();
-                for (var index = from; index <= to; index++) _selectedArmies.Add(rows[index]);
-            }
-            _selectedArmy = _selectedArmies.Count > 0 ? _selectedArmies[0] : army;
-            SetArmyFeedback($"{_selectedArmies.Count} division(s) selected.");
-        }
         else if (Input.IsKeyPressed(Key.Ctrl))
         {
             if (_selectedArmies.Contains(army)) _selectedArmies.Remove(army);
             else _selectedArmies.Add(army);
             if (_selectedArmies.Count == 0) { ClearArmySelectionAndClose(); return; }
             _selectedArmy = _selectedArmies[0];
-            _rosterAnchorArmyId = army.Id;
             SetArmyFeedback($"{_selectedArmies.Count} division(s) selected.");
         }
         else
@@ -622,7 +581,6 @@ public partial class DealOrForceGame
             _selectedArmies.Clear();
             _selectedArmies.Add(army);
             _selectedArmy = army;
-            _rosterAnchorArmyId = army.Id;
             _globe.FocusOn(army.Latitude, army.Longitude, 6.8f);
             SetArmyFeedback($"{army.Name} has the orders.");
         }

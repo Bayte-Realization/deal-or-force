@@ -101,6 +101,7 @@ public partial class DealOrForceGame
         }
         catch (Exception exception)
         {
+            DiagnosticLogs.Write("errors", $"SAVE_EXCEPTION {exception}");
             _saveStatus.Text = $"Save failed: {exception.Message}";
             GD.PushError(_saveStatus.Text);
         }
@@ -109,6 +110,7 @@ public partial class DealOrForceGame
     private void LoadFromSlot(string slot)
     {
         var result = SaveSystem.Load(SaveRoot, slot, ModFingerprint);
+        DiagnosticLogs.Write(result.Success ? "system" : "errors", $"LOAD_RESULT slot={slot} success={result.Success} detail={result.Warning}");
         if (!result.Success)
         {
             _saveStatus.Text = result.Warning;

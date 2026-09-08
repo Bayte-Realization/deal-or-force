@@ -36,7 +36,7 @@ public partial class DealOrForceGame
         industry.TooltipText = "Queue civilian industry in this region.";
         actions.AddChild(industry);
         var raise = ActionButton("Raise army", RaiseRegionalArmy, 105, 31);
-        raise.TooltipText = "Raise one line division here. Costs $0.18B and 15,000 available personnel.";
+        raise.TooltipText = "Choose a template, training region and paid recruitment batch.";
         actions.AddChild(raise);
 
         var strategic = new HBoxContainer();
@@ -65,6 +65,7 @@ public partial class DealOrForceGame
     private void ShowRegionOverview()
     {
         if (_selectedState is null || _selectedNation is null) return;
+        if (HideForeignRegionDetails()) return;
         _sideTitle.Text = _selectedState.Name;
         _regionControls.Visible = true;
         ClearDetail();
@@ -174,6 +175,7 @@ public partial class DealOrForceGame
     private void ShowRegionPopulation()
     {
         if (_selectedState is null) return;
+        if (HideForeignRegionDetails()) return;
         _sideTitle.Text = $"{_selectedState.Name} — people";
         _regionControls.Visible = true;
         ClearDetail();
@@ -244,7 +246,7 @@ public partial class DealOrForceGame
         var controllerIndex = _campaign.ProvinceController?[_selectedProvinceId] ?? topology.ProvinceToNation[_selectedProvinceId];
         var controller = _campaign.Nations.Find(nation => nation.MapIndex == controllerIndex);
         var occupation = _campaign.ProvinceOccupation?[_selectedProvinceId] ?? 0f;
-        var formations = _campaign.Armies.Where(army => army.ProvinceId == _selectedProvinceId).ToArray();
+        var formations = _campaign.Armies.Where(army => army.ProvinceId == _selectedProvinceId && CampaignIntel.PlayerCanSeeArmy(_campaign, army)).ToArray();
         var adjacent = topology.Neighbors[_selectedProvinceId];
         var crossings = adjacent.Count(province => topology.IsRiverCrossing(_selectedProvinceId, province));
         var centre = topology.CenterOf(_selectedProvinceId);
@@ -260,7 +262,7 @@ public partial class DealOrForceGame
         DetailRow("Controller", controller?.Name ?? "unknown",
             "Who holds it right now. An army takes control; a treaty takes ownership.",
             controller == owner ? "text.bright" : "state.warning");
-        if (controller != owner)
+        if (controller != owner && controller is not null && CanInspectNation(controller.Id))
             DetailRow("Occupation", Fmt.Percent(occupation),
                 "How firmly the occupier holds it. Above the secure threshold it can be kept at a peace.",
                 occupation >= _campaign.Defines.OccupationSecureThreshold ? "state.positive" : "state.warning");
@@ -277,11 +279,11 @@ public partial class DealOrForceGame
 
         DetailHeading("FORMATIONS");
         if (formations.Length == 0)
-            DetailRow("Divisions", "none", "Nobody is standing here.");
+            DetailRow("Visible divisions", "none", "No known formations. Foreign forces are hidden by fog of war.");
         foreach (var army in formations.Take(8))
             DetailRow(Shorten(army.Name, 18),
                 $"{army.Divisions:0.0} div · {army.Organisation:P0}",
-                DivisionTooltip(army),
+                CanInspectNation(army.NationId) ? DivisionTooltip(army) : "Observed foreign formation. Orders and route are unavailable.",
                 army.CutOff ? "state.negative" : army.InBattle ? "state.warning" : "text.bright");
     }
 
@@ -313,19 +315,7 @@ public partial class DealOrForceGame
             _regionActionFeedback.Text = "Recruitment is available only in an owned region.";
             return;
         }
-        var before = _campaign.Armies.Count;
-        _campaign.Commands.Enqueue(new RaiseArmyCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            StateMapIndex = _selectedState.MapIndex,
-            Divisions = 1f,
-            TemplateId = "line_infantry"
-        });
-        _campaign.Commands.ApplyAll(_campaign);
-        _regionActionFeedback.Text = _campaign.Armies.Count > before
-            ? $"A new line division was raised in {_selectedState.Name}."
-            : "Recruitment failed: $0.18B, 15,000 personnel and an owned province are required.";
-        ShowRegionOverview();
+        OpenRecruitment(_selectedState.MapIndex);
     }
 
     private void SetRegionalActionsEnabled(bool enabled)

@@ -67,6 +67,8 @@ public sealed partial class Army
     public int ProvinceId = -1;
     public int OrderStateMapIndex = -1;
     public int OrderProvinceId = -1;
+    /// <summary>A player/issuer specified an exact route; the front planner must not replace it.</summary>
+    public bool DirectOrder;
     public int AssignedWarId = -1;
     public int ObjectiveStateMapIndex = -1;
     public ArmyOrder OrderKind;
@@ -210,6 +212,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
     public int ArmyId { get; init; }
     public int TargetProvinceId { get; init; }
     public bool AppendWaypoint { get; init; }
+    public bool SupportAttack { get; init; }
     public ArmyMoveResult Result { get; private set; }
 
     public void Apply(Campaign campaign)
@@ -225,7 +228,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
         }
         if (nation is null || topology is null || army.NationId != IssuerId)
         {
-            SetResult(army, campaign, ArmyMoveResult.NotControlled);
+            // Rejected foreign commands must not even change the owner's feedback.
+            Result = ArmyMoveResult.NotControlled;
             return;
         }
         if (TargetProvinceId <= 0 || TargetProvinceId > topology.ProvinceCount)
@@ -235,7 +239,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
         }
 
         var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
-        var routeStart = AppendWaypoint && army.Route.Count > 0 ? army.Route[^1] : army.ProvinceId;
+        var routeStart = AppendWaypoint && army.PlannedRoute.Count > 0 ? army.PlannedRoute[^1]
+            : AppendWaypoint && army.Route.Count > 0 ? army.Route[^1] : army.ProvinceId;
         if (routeStart == TargetProvinceId)
         {
             SetResult(army, campaign, ArmyMoveResult.AlreadyAtDestination);
@@ -253,6 +258,14 @@ public sealed class MoveArmyCommand : ICampaignCommand
         {
             SetResult(army, campaign, ArmyMoveResult.TargetNotControlled);
             return;
+        }
+
+        var continuingAttack = AppendWaypoint && army.AssignedWarId >= 0 && army.PlannedRoute.Count > 0;
+        if (continuingAttack && war is null)
+        {
+            war = campaign.Wars.Find(candidate => candidate.Id == army.AssignedWarId && !candidate.Ended);
+            if (war is not null)
+                enemy = campaign.NationById(war.AttackerId == nation.Id ? war.DefenderId : war.AttackerId);
         }
 
         int[] route;
@@ -291,16 +304,21 @@ public sealed class MoveArmyCommand : ICampaignCommand
             army.OrderRouteSteps = 0;
             army.OrderStepsCompleted = 0;
         }
-        army.Route.AddRange(route);
+        // A queued leg beyond hostile territory cannot be marched before that territory
+        // has been crossed. The operational corridor owns the ordering of those legs.
+        if (!continuingAttack) army.Route.AddRange(route);
         army.PlannedRoute.AddRange(plannedRoute);
         army.OrderRouteSteps += plannedRoute.Length;
         army.OrderKind = war is null ? ArmyOrder.Manual : ArmyOrder.Spearhead;
         army.AssignedWarId = war?.Id ?? -1;
         army.OrderProvinceId = TargetProvinceId;
+        army.DirectOrder = true;
         army.OrderStateMapIndex = topology.ProvinceToState[TargetProvinceId];
         army.ObjectiveStateMapIndex = war is null ? -1 : topology.ProvinceToState[TargetProvinceId];
         army.PlanActive = war is not null;
-        army.MoveProgress = 0f;
+        if (!AppendWaypoint) army.MoveProgress = 0f;
+        army.SupportOnly = SupportAttack && war is not null;
+        army.RedeployTarget = -1;
         // Being told to go somewhere does not fill in a trench; marching out of it does,
         // and the march charges for that province by province.
         SetResult(army, campaign, army.InBattle
@@ -323,64 +341,26 @@ public sealed class RaiseArmyCommand : ICampaignCommand
     public int StateMapIndex { get; init; }
     public float Divisions { get; init; } = 1f;
     public string TemplateId { get; init; } = "line_infantry";
-
+    public string FailureReason { get; private set; } = "";
     public void Apply(Campaign campaign)
     {
+        if (!float.IsFinite(Divisions) || Divisions != MathF.Floor(Divisions) || Divisions < 1 || Divisions > 6)
+        { FailureReason = "Choose 1–6 whole divisions."; return; }
+        var count = (int)Divisions;
+        FailureReason = RecruitmentSystem.Validate(campaign, IssuerId, StateMapIndex, TemplateId, count);
+        if (FailureReason.Length > 0) return;
         var nation = campaign.NationById(IssuerId);
-        var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
-        var topology = campaign.ProvinceMap;
-        if (nation is null || state is null || topology is null || state.NationMapIndex != nation.MapIndex) return;
-        var divisions = M.Clamp((int)MathF.Round(Divisions), 1, 6);
-        var personnel = divisions * MilitaryBootstrap.DivisionSize;
-        var cost = divisions * 0.18f;
-        if (nation.Treasury < cost || nation.ManpowerReserve < personnel) return;
-
-        var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
-        var province = Enumerable.Range(1, topology.ProvinceCount)
-            .Where(id => topology.ProvinceToState[id] == state.MapIndex && controllers[id] == nation.MapIndex)
-            .OrderBy(id => id)
-            .FirstOrDefault();
-        if (province <= 0) return;
-
+        var template = UnitTypeCatalog.Get(TemplateId);
+        var cost = template.RecruitmentCost * count;
         nation.Treasury -= cost;
-        nation.ManpowerReserve -= personnel;
-        var position = topology.CenterOf(province);
-        var group = campaign.ArmyGroups.FirstOrDefault(candidate => candidate.NationId == nation.Id);
-        if (group is null)
+        nation.ManpowerReserve -= template.RecruitmentPersonnel * count;
+        campaign.Recruitment.Add(new RecruitmentOrder
         {
-            group = new ArmyGroup
-            {
-                Id = campaign.ArmyGroups.Count == 0 ? 1 : campaign.ArmyGroups.Max(candidate => candidate.Id) + 1,
-                NationId = nation.Id,
-                Name = $"{nation.Tag} Army 1"
-            };
-            campaign.ArmyGroups.Add(group);
-        }
-        var id = campaign.Armies.Count == 0 ? 1 : campaign.Armies.Max(army => army.Id) + 1;
-        var serial = campaign.Armies.Count(army => army.NationId == nation.Id) + 1;
-        for (var index = 0; index < divisions; index++)
-            campaign.Armies.Add(new Army
-            {
-                Id = id + index,
-                NationId = nation.Id,
-                StateMapIndex = state.MapIndex,
-                ProvinceId = province,
-                Divisions = 1f,
-                Name = $"{serial + index}. {nation.Tag} Division",
-                TemplateId = UnitTypeCatalog.Get(TemplateId).Id,
-                ArmyGroupId = group.Id,
-                Personnel = (int)MilitaryBootstrap.DivisionSize,
-                MaxPersonnel = (int)MilitaryBootstrap.DivisionSize,
-                Organisation = 0.35f,
-                Strength = 1f,
-                Equipment = 0.72f,
-                Cohesion = 0.64f,
-                Experience = 0.05f,
-                SupplyLevel = 0.75f,
-                ReadyDay = campaign.ElapsedDays + 30,
-                Latitude = position.Latitude,
-                Longitude = position.Longitude
-            });
+            Id = campaign.NextRecruitmentId++,
+            NationId = IssuerId, StateMapIndex = StateMapIndex, TemplateId = TemplateId,
+            Count = count, PersonnelPerDivision = template.RecruitmentPersonnel,
+            PaidCost = cost, DurationDays = template.TrainingDays, LastProcessedDay = campaign.ElapsedDays
+        });
         campaign.MarkStrategicChange();
     }
 }
@@ -494,6 +474,23 @@ public static class MilitaryOperations
             if (nation is null || nextProvince <= 0 || nextProvince > topology.ProvinceCount ||
                 controllers[nextProvince] != nation.MapIndex)
             {
+                // A friendly staging step can become hostile after the order was given.
+                // Keep the player's corridor and hand that step to combat, rather than
+                // silently throwing away the whole order or walking through the enemy.
+                var blockingNation = nextProvince > 0 && nextProvince <= topology.ProvinceCount
+                    ? campaign.Nations.Find(n => n.MapIndex == controllers[nextProvince]) : null;
+                var crossingWar = nation is null || blockingNation is null ? null : campaign.Wars.Find(w =>
+                    !w.Ended && w.Involves(nation.Id) && w.Involves(blockingNation.Id));
+                if (army.DirectOrder && army.OrderProvinceId > 0 && crossingWar is not null)
+                {
+                    army.Route.Clear();
+                    army.MoveProgress = 0f;
+                    army.OrderKind = ArmyOrder.Spearhead;
+                    army.AssignedWarId = crossingWar.Id;
+                    army.PlanActive = true;
+                    continue;
+                }
+                new HaltArmyCommand { IssuerId = army.NationId, ArmyId = army.Id }.Apply(campaign);
                 army.Route.Clear();
                 army.PlannedRoute.Clear();
                 army.OrderProvinceId = -1;
@@ -526,10 +523,15 @@ public static class MilitaryOperations
             {
                 // An offensive RMB order keeps its exact hostile objective while
                 // the formation waits on the staging province for CombatCore.
-                if (army.OrderKind == ArmyOrder.Manual)
+                if (army.OrderKind == ArmyOrder.Manual || (army.DirectOrder && army.OrderProvinceId == army.ProvinceId))
                 {
                     army.OrderProvinceId = -1;
                     army.OrderStateMapIndex = -1;
+                    army.DirectOrder = false;
+                    army.OrderKind = ArmyOrder.Manual;
+                    army.AssignedWarId = -1;
+                    army.PlanActive = false;
+                    army.PlannedRoute.Clear();
                 }
                 army.MoveProgress = 0f;
             }
@@ -602,6 +604,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId) return;
         army.OrderKind = Order;
+        army.DirectOrder = false;
         // Front dispatch is the only subsystem allowed to repopulate these fields.
         // Until a war/front is assigned, changing role cancels a manual march cleanly.
         army.AssignedWarId = -1;
@@ -618,6 +621,12 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(IssuerId));
         var nation = campaign.NationById(IssuerId);
         var peacefulLine = BattlePlanning.LineFor(campaign, army);
+        if (peacefulLine is { Kind: FrontLineKind.Offensive } && peacefulLine.Objectives.Count > 0 &&
+            Order is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)
+        {
+            OffensivePlanning.Route(campaign, army, peacefulLine);
+            return;
+        }
         if (war is null && nation is not null && peacefulLine is { Kind: FrontLineKind.Defence })
         {
             var posts = BattlePlanning.Sequence(campaign, peacefulLine);
@@ -742,6 +751,12 @@ public sealed class SetArmyPlanExecutionCommand : ICampaignCommand
         if (army is null || army.NationId != IssuerId) return;
         if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) return;
         army.PlanActive = Active;
+        var line = BattlePlanning.LineFor(campaign, army);
+        if (!army.InBattle && line is { Kind: FrontLineKind.Offensive } && line.Objectives.Count > 0)
+        {
+            if (Active) OffensivePlanning.Route(campaign, army, line);
+            else { army.Route.Clear(); army.PlannedRoute.Clear(); army.MoveProgress = 0; }
+        }
     }
 }
 
