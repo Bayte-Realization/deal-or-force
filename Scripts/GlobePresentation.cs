@@ -130,6 +130,19 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private ImageTexture _controllerTexture;
     private ImageTexture _frontTexture;
     private int _controlRevision = -1;
+
+    /// <summary>
+    /// Who owned each province when the political raster was painted.
+    ///
+    /// The raster is built once and never rebuilt - it is five thousand pixels wide and
+    /// repainting it would cost a visible stall every time a treaty is signed. Keeping what
+    /// it was painted with lets the cheap 256x256 overlay say exactly which provinces have
+    /// changed hands since, which is all the shader needs to draw them correctly.
+    /// </summary>
+    private ushort[] _paintedOwner;
+    private byte[] _ownerPixels;
+    private Image _ownerImage;
+    private ImageTexture _ownerTexture;
     private int _frontRevision = -1;
 
     // The two overlay textures are rewritten whenever a province changes hands, which in a
@@ -155,6 +168,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private bool _mapApplied;
     private bool _dragging;
     private bool _boxSelecting;
+    private bool _paintBoxing;
+    private bool _paintBoxClaims;
     private Vector2 _boxStart;
     private Vector2 _boxCurrent;
     private float _dragDistance;
@@ -182,6 +197,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     /// <summary>A painted province, and whether the stroke was claiming or releasing it.</summary>
     public event Action<GlobePick, bool> ProvincePainted;
+
+    /// <summary>
+    /// A whole rectangle of ground, claimed or given back in one gesture.
+    ///
+    /// The brush is right for a border and wrong for a province of Siberia: painting the
+    /// eastern half of a country one stroke at a time is a chore, and a chore in a peace
+    /// conference is where a player stops negotiating and starts taking whatever is easiest
+    /// to reach. Shift and a drag take everything inside the rectangle instead.
+    /// </summary>
+    public event Action<IReadOnlyList<int>, bool> ProvincesBoxPainted;
 
     private bool _painting;
     private bool _paintingClaims;
@@ -463,6 +488,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 break;
             default:
                 _provinceTopology = result.Provinces;
+                // What the political raster was actually painted with. Copied rather than
+                // referenced: the simulation mutates this same array every time a border
+                // moves, and the whole point of keeping it is to be able to tell that it did.
+                _paintedOwner = (ushort[])result.Provinces.ProvinceToNation.Clone();
                 if (result.ProvinceRasterLoaded) GD.Print($"[dof] province data map loaded: {result.ProvinceSource}");
                 else GD.PushWarning($"[dof] province data map fallback: {result.ProvinceSource}");
                 GD.Print($"[dof] hydrology data source: {result.HydrologySource}");
@@ -520,6 +549,41 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             DragCamera(panning.Position - _previousPointer);
             _previousPointer = panning.Position;
+            AcceptEvent();
+            return true;
+        }
+
+        // Shift turns the brush into a rectangle. Left takes what is inside it, right gives
+        // it back - the same two hands as the brush, so nothing new has to be learned.
+        if (inputEvent is InputEventMouseButton boxButton &&
+            boxButton.ButtonIndex is MouseButton.Left or MouseButton.Right &&
+            (boxButton.ShiftPressed || _paintBoxing))
+        {
+            if (boxButton.Pressed && boxButton.ShiftPressed)
+            {
+                _paintBoxing = true;
+                _paintBoxClaims = boxButton.ButtonIndex == MouseButton.Left;
+                _boxSelecting = true;
+                _boxStart = boxButton.Position;
+                _boxCurrent = boxButton.Position;
+                QueueRedraw();
+            }
+            else if (_paintBoxing && !boxButton.Pressed)
+            {
+                _boxCurrent = boxButton.Position;
+                _paintBoxing = false;
+                _boxSelecting = false;
+                var claimed = ProvincesInScreenRect(RectFromPoints(_boxStart, _boxCurrent));
+                if (claimed.Count > 0) ProvincesBoxPainted?.Invoke(claimed, _paintBoxClaims);
+                QueueRedraw();
+            }
+            AcceptEvent();
+            return true;
+        }
+        if (inputEvent is InputEventMouseMotion boxDrag && _paintBoxing)
+        {
+            _boxCurrent = boxDrag.Position;
+            QueueRedraw();
             AcceptEvent();
             return true;
         }
@@ -1183,6 +1247,33 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return selected;
     }
 
+    /// <summary>
+    /// Every province the screen rectangle covers.
+    ///
+    /// By sampling rather than by projecting each province, because the map has thirty-eight
+    /// thousand of them and the rectangle has a few hundred thousand pixels: walking the
+    /// smaller of the two is the cheaper question, and the same ray-pick the brush already
+    /// uses answers it. The step widens with the rectangle so that selecting a continent
+    /// costs about what selecting a county does; three pixels is finer than any province is
+    /// small at a zoom where a player would draw a box at all.
+    /// </summary>
+    private List<int> ProvincesInScreenRect(Rect2 rect)
+    {
+        var found = new List<int>();
+        if (rect.Size.X < 2f || rect.Size.Y < 2f) return found;
+
+        var seen = new HashSet<int>();
+        var step = Mathf.Max(3f, rect.Size.Length() / 420f);
+        for (var y = rect.Position.Y; y <= rect.End.Y; y += step)
+        for (var x = rect.Position.X; x <= rect.End.X; x += step)
+        {
+            if (!TryPick(new Vector2(x, y), out var pick, updateSelection: false)) continue;
+            if (pick.ProvinceId <= 0 || !seen.Add(pick.ProvinceId)) continue;
+            found.Add(pick.ProvinceId);
+        }
+        return found;
+    }
+
     private static Rect2 RectFromPoints(Vector2 a, Vector2 b)
     {
         var min = new Vector2(Mathf.Min(a.X, b.X), Mathf.Min(a.Y, b.Y));
@@ -1223,6 +1314,7 @@ uniform sampler2D province_ids : filter_nearest;
 uniform sampler2D nation_ids : filter_nearest;
 uniform sampler2D hydrology_map : filter_linear, repeat_enable;
 uniform sampler2D province_control_colors : source_color, filter_nearest, repeat_disable;
+uniform sampler2D province_owner_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2D front_membership : filter_nearest, repeat_disable;
 uniform sampler2D map_mode_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2DArray terrain_tiles : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -1252,6 +1344,11 @@ uniform float map_mode = 0.0;
 float map_id(sampler2D map_texture, vec2 uv) {
     vec4 encoded = texture(map_texture, vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)));
     return floor(encoded.r * 255.0 + 0.5) + floor(encoded.g * 255.0 + 0.5) * 256.0;
+}
+vec4 owner_color(float province) {
+    float low = mod(province, 256.0);
+    float high = floor(province / 256.0);
+    return texture(province_owner_colors, (vec2(low, high) + vec2(0.5)) / 256.0);
 }
 vec4 control_color(float province) {
     float low = mod(province, 256.0);
@@ -1304,6 +1401,24 @@ void fragment() {
     float nation = map_id(nation_ids, UV);
     vec4 live_control = control_color(province);
     float political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
+
+    // Who owns this ground now, when that is no longer who owned it when the map was
+    // painted.
+    //
+    // The political raster is painted once, at load, from the scenario. Everything after
+    // that - every province a treaty signs over, every border a war moves, every save loaded
+    // in the middle of a conquest - changed ownership in the simulation and left the picture
+    // alone, so land taken at a peace conference kept the colour of the country that had
+    // lost it. The overlay that draws occupation could not help: it deliberately says nothing
+    // when the occupier and the owner are the same country, which is exactly what annexation
+    // makes them.
+    //
+    // So a second overlay carries the owner, and it is applied first: it repaints the ground
+    // itself, and any occupation stripes are then drawn over the new owner rather than the
+    // old one.
+    vec4 owner_paint = owner_color(province);
+    political.rgb = mix(political.rgb, owner_paint.rgb * political_light, owner_paint.a);
+    political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
     // Who owns ground and who is standing on it are two different questions, and a map that
     // answers only the second is why a peace conference is unreadable: every province the
     // enemy overran wore the enemy's colour, so a player could not tell what a treaty would
@@ -1430,6 +1545,7 @@ void fragment() {
         _globeMaterial.SetShaderParameter("province_ids", emptyIds);
         _globeMaterial.SetShaderParameter("nation_ids", emptyIds);
         _globeMaterial.SetShaderParameter("hydrology_map", emptyIds);
+        _globeMaterial.SetShaderParameter("province_owner_colors", placeholder);
         _globeMaterial.SetShaderParameter("province_control_colors",
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
         _globeMaterial.SetShaderParameter("front_membership",
@@ -2050,11 +2166,29 @@ void fragment() {
         if (_campaign?.ProvinceMap is null || _campaign.ProvinceController is null || _globeMaterial is null) return;
         var topology = _campaign.ProvinceMap;
         var pixels = _controlPixels ??= new byte[256 * 256 * 4];
+        var ownerPixels = _ownerPixels ??= new byte[256 * 256 * 4];
         Array.Clear(pixels);
+        Array.Clear(ownerPixels);
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
+            var owner = topology.ProvinceToNation[province];
+
+            // Ownership that has moved since the raster was painted. This is what makes a
+            // signed peace visible: the ground is repainted in the colour of whoever owns it
+            // now, whether it changed hands at a conference, at the end of a war, or in a
+            // save that was loaded halfway through one.
+            if (_paintedOwner is not null && province < _paintedOwner.Length && _paintedOwner[province] != owner)
+            {
+                var ownerPacked = _colorByMapIndex.TryGetValue(owner, out var ownerColor) ? ownerColor : 0x6E7B8BFFu;
+                var ownerWrite = province * 4;
+                ownerPixels[ownerWrite] = (byte)((ownerPacked >> 24) & 0xFF);
+                ownerPixels[ownerWrite + 1] = (byte)((ownerPacked >> 16) & 0xFF);
+                ownerPixels[ownerWrite + 2] = (byte)((ownerPacked >> 8) & 0xFF);
+                ownerPixels[ownerWrite + 3] = 255;
+            }
+
             var controller = _campaign.ProvinceController[province];
-            if (controller == topology.ProvinceToNation[province]) continue;
+            if (controller == owner) continue;
             var packed = _colorByMapIndex.TryGetValue(controller, out var color) ? color : 0x6E7B8BFFu;
             var write = province * 4;
             pixels[write] = (byte)((packed >> 24) & 0xFF);
@@ -2095,6 +2229,18 @@ void fragment() {
         {
             _controlImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
             _controllerTexture.Update(_controlImage);
+        }
+
+        if (_ownerTexture is null)
+        {
+            _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerPixels);
+            _ownerTexture = ImageTexture.CreateFromImage(_ownerImage);
+            _globeMaterial.SetShaderParameter("province_owner_colors", _ownerTexture);
+        }
+        else
+        {
+            _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, ownerPixels);
+            _ownerTexture.Update(_ownerImage);
         }
         _controlRevision = _campaign.MapRevision;
         BuildFrontPreview();

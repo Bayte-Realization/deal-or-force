@@ -66,6 +66,7 @@ public partial class DealOrForceGame
 
         _peaceHint = Title(
             "Drag the left button across the map to claim ground · drag the right button to give it back · " +
+            "hold Shift and drag to take or release a whole rectangle · " +
             "click a region below to take or release all of it · " +
             "WASD and the middle mouse button move the camera",
             12, Ui.Colour("text.faint"));
@@ -152,6 +153,8 @@ public partial class DealOrForceGame
         _globe.PaintMode = true;
         _globe.ProvincePainted -= OnProvincePainted;
         _globe.ProvincePainted += OnProvincePainted;
+        _globe.ProvincesBoxPainted -= OnProvincesBoxPainted;
+        _globe.ProvincesBoxPainted += OnProvincesBoxPainted;
         _campaign.IsPaused = true;
         StyleButton(_pause, true);
         RefreshPeaceConference();
@@ -163,6 +166,7 @@ public partial class DealOrForceGame
         _peaceLayer.Visible = false;
         _globe.PaintMode = false;
         _globe.ProvincePainted -= OnProvincePainted;
+        _globe.ProvincesBoxPainted -= OnProvincesBoxPainted;
         _globe.ClearPeacePreview();
         _peaceDemand = null;
         _peaceLedgerModel = null;
@@ -192,6 +196,31 @@ public partial class DealOrForceGame
         var changed = claiming
             ? _peaceDemand.Provinces.Add(pick.ProvinceId)
             : _peaceDemand.Provinces.Remove(pick.ProvinceId);
+        if (changed) RefreshPeaceConference();
+    }
+
+    /// <summary>
+    /// A rectangle's worth of ground at once.
+    ///
+    /// The brush is right for a border and wrong for half of Siberia. Only the other side's
+    /// land is affected, exactly as with the brush, so a box thrown loosely across a front
+    /// does the sensible thing instead of erroring.
+    /// </summary>
+    private void OnProvincesBoxPainted(IReadOnlyList<int> provinces, bool claiming)
+    {
+        if (_peaceDemand is null || _peaceLedgerModel is null || provinces is null) return;
+        var loser = _peaceLedgerModel.Loser;
+        if (loser is null) return;
+
+        var changed = false;
+        foreach (var province in provinces)
+        {
+            if (province <= 0 || province > _campaign.ProvinceMap.ProvinceCount) continue;
+            if (_campaign.ProvinceMap.ProvinceToNation[province] != (ushort)loser.MapIndex) continue;
+            changed |= claiming
+                ? _peaceDemand.Provinces.Add(province)
+                : _peaceDemand.Provinces.Remove(province);
+        }
         if (changed) RefreshPeaceConference();
     }
 
