@@ -161,6 +161,8 @@ public static class Program
             failures += Check("the Russo-Ukrainian front is still a stalemate",
                 FrontIsAStalemate(campaign, frontBefore, ukraineTrace, days));
 
+        failures += Check("a war costs formations and an army replaces them",
+            WarCostsFormations(campaign, days));
         failures += Check("the world governs itself", TheWorldGovernsItself(campaign, days));
         failures += Check("governments take decisions written in data",
             GovernmentsTakeScriptedDecisions(campaign, days));
@@ -2022,6 +2024,54 @@ public static class Program
     /// of nobody playing leaves a world that has visibly moved on its own - and that it
     /// moved without any single country running away with the map.
     /// </summary>
+    /// <summary>
+    /// Whether a war can actually destroy anything, and whether the world survives that.
+    ///
+    /// It could not. Losses came off a formation's strength and nothing ever came off the
+    /// order of battle, so a division ground to nothing walked out of the line and refilled
+    /// itself from the national manpower pool. Two years of the Russo-Ukrainian front cost
+    /// three and a half million casualties and not one formation on either side; the front
+    /// moved only when somebody walked into a province nobody was standing in.
+    ///
+    /// Two things had to become true together, and this holds both. A broken formation is
+    /// destroyed - so a battle can be won and an encirclement is worth attempting. And a
+    /// country below the army it is built to keep replaces it - so an army that can only
+    /// shrink does not lose every long war by arithmetic. Either one alone is a bug: the
+    /// first without the second empties the map, the second without the first is what was
+    /// here before.
+    /// </summary>
+    private static string WarCostsFormations(Campaign campaign, int days)
+    {
+        var destroyed = Warfare.OutcomeTally.GetValueOrDefault("destroyed: broken in the field");
+        if (destroyed == 0)
+            return $"{days:N0} day(s) of war destroyed not one formation anywhere - a battle " +
+                   "cannot be won if the loser only ever refills";
+
+        var established = 0f;
+        var standing = 0f;
+        var rebuilt = 0;
+        foreach (var nation in campaign.Nations)
+        {
+            established += nation.EstablishedDivisions;
+            if (nation.FormationsLost > 0) rebuilt++;
+        }
+        foreach (var army in campaign.Armies) standing += army.Divisions;
+
+        if (established <= 0f) return "no country ever recorded what army it keeps";
+        var share = standing / established;
+        if (share < 0.60f)
+            return $"the world's armies fell to {share:P0} of their establishment after {days:N0} day(s) - " +
+                   "formations are being destroyed faster than they are replaced, which empties the map";
+        if (share > 1.40f)
+            return $"the world's armies grew to {share:P0} of their establishment - the rebuild is not " +
+                   "bounded by what a country is built to keep";
+
+        Console.WriteLine($"  attrition: {destroyed:N0} formation(s) destroyed in {days:N0} day(s) across " +
+                          $"{rebuilt:N0} countries; the world stands at {share:P0} of its establishment " +
+                          $"({standing:N0} of {established:N0} divisions).");
+        return "";
+    }
+
     private static string TheWorldGovernsItself(Campaign campaign, int days)
     {
         var years = MathF.Max(0.01f, days / 365f);

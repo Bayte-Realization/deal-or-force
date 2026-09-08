@@ -321,6 +321,9 @@ public sealed partial class Campaign
             NavalOperations.Tick(this);
         }
         using (SimProfiler.Measure("warfare")) Warfare.Tick(this);
+        // Right after the fighting: the day's broken formations are removed and the
+        // countries that lost them start replacing them.
+        using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
         using (SimProfiler.Measure("construction")) ConstructionSystem.Tick(this);
         using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
         using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);

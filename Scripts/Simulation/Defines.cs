@@ -89,6 +89,29 @@ public sealed class Defines
 	/// <summary>People one unit of habitable land area can support at full development.</summary>
 	public float PopulationPerAreaUnit { get; set; } = 320000f;
 
+	// --- attrition ---
+
+	/// <summary>Strength below which a formation has ceased to exist rather than be losing.</summary>
+	public float DivisionBrokenStrength { get; set; } = 0.06f;
+
+	/// <summary>Strength an encircled formation loses each day it cannot be supplied.</summary>
+	public float EncircledStrengthLoss { get; set; } = 0.022f;
+
+	/// <summary>Organisation it loses on the same day.</summary>
+	public float EncircledOrganisationLoss { get; set; } = 0.035f;
+
+	/// <summary>How much faster a pocket collapses while it is also being attacked.</summary>
+	public float EncircledUnderAttack { get; set; } = 1.8f;
+
+	/// <summary>How often a country below its establishment raises another formation.</summary>
+	public int ArmyRebuildIntervalDays { get; set; } = 24;
+
+	/// <summary>What raising one costs the treasury, matching the player's own recruiting.</summary>
+	public float ArmyRebuildCost { get; set; } = 0.18f;
+
+	/// <summary>How much of its establishment a country rebuilds towards.</summary>
+	public float ArmyRebuildCeiling { get; set; } = 1.0f;
+
 	// --- statecraft ---
 
 	/// <summary>Notoriety earned by declaring a war nobody accepts a reason for.</summary>
