@@ -303,6 +303,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         foreach (var state in campaign.States)
             _stateByMapIndex[state.MapIndex] = state;
 
+        BuildNationPalette();
         BuildCapitalMarkers(campaign);
         ReconcileArmyMarkers(campaign);
         BuildFleetMarkers(campaign);
@@ -456,8 +457,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             case 0:
             {
+                // Built, downscaled, and then thrown away. Nothing samples the full-resolution
+                // political raster any more - the fill is rebuilt from the country id map -
+                // so uploading it would cost sixty-six megabytes of texture to be read by
+                // nobody. That matters most on the hardware this game wants to reach.
                 var crisp = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgba8, result.PoliticalPixels);
-                _globeMaterial.SetShaderParameter("political_detail", ImageTexture.CreateFromImage(crisp));
                 // One third of the authored width matches a 1920 px viewport. That is
                 // still compact enough to mipmap cheaply, but unlike the previous
                 // 1440x720 quarter copy it does not discard visible coastline detail.
@@ -482,6 +486,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
             case 4:
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(Image.CreateFromData(
                     MapWidth, MapHeight, false, Image.Format.Rg8, result.HydrologyPixels)));
+                // Linear, deliberately. A distance is a quantity, so the hardware may
+                // interpolate it - and that interpolation is the whole point: it is what
+                // turns a grid of texels back into a smooth curve.
+                var distance = ImageTexture.CreateFromImage(Image.CreateFromData(
+                    MapWidth, MapHeight, false, Image.Format.R8, result.NationDistance));
+                _globeMaterial.SetShaderParameter("nation_distance", distance);
                 break;
             case 5:
                 ApplyTerrainPresentation(result.Provinces);
@@ -1308,13 +1318,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             Code = @"shader_type spatial;
 render_mode diffuse_burley, cull_back;
 uniform sampler2D political_map : source_color, filter_linear_mipmap_anisotropic;
-uniform sampler2D political_detail : source_color, filter_nearest;
 uniform sampler2D region_ids : filter_nearest;
 uniform sampler2D province_ids : filter_nearest;
 uniform sampler2D nation_ids : filter_nearest;
 uniform sampler2D hydrology_map : filter_linear, repeat_enable;
 uniform sampler2D province_control_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2D province_owner_colors : source_color, filter_nearest, repeat_disable;
+uniform sampler2D nation_palette : source_color, filter_nearest, repeat_disable;
+uniform sampler2D nation_distance : filter_linear, repeat_disable;
+uniform float border_pixels = 1.35;
 uniform sampler2D front_membership : filter_nearest, repeat_disable;
 uniform sampler2D map_mode_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2DArray terrain_tiles : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -1345,6 +1357,57 @@ float map_id(sampler2D map_texture, vec2 uv) {
     vec4 encoded = texture(map_texture, vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)));
     return floor(encoded.r * 255.0 + 0.5) + floor(encoded.g * 255.0 + 0.5) * 256.0;
 }
+float id_at(sampler2D ids, vec2 cell, vec2 size) {
+    return map_id(ids, (cell + vec2(0.5)) / size);
+}
+vec4 nation_paint(float nation) {
+    float low = mod(nation, 256.0);
+    float high = floor(nation / 256.0);
+    return texture(nation_palette, (vec2(low, high) + vec2(0.5)) / 256.0);
+}
+
+/// Coverage of the nearest id over this pixel, and the neighbour with the next best claim.
+///
+/// This is the whole of the technique. An id map sampled nearest gives a hard staircase at
+/// the texel grid; sampled linearly it gives mush, because ids are labels and the average of
+/// two labels is not a label. So the ids are read at the four texels around the point and
+/// turned into a coverage instead: how much of this pixel belongs to the label the pixel is
+/// nearest to. That is a smooth field whose half-way line is a straight edge cutting through
+/// the texel grid at any angle, which is exactly the boundary the raster was drawn from -
+/// recovered rather than approximated. Everything else here is reading off that one number.
+float boundary_coverage(sampler2D ids, vec2 uv, out float near_id, out float other_id) {
+    vec2 size = vec2(textureSize(ids, 0));
+    vec2 grid = uv * size - vec2(0.5);
+    vec2 base_cell = floor(grid);
+    vec2 f = grid - base_cell;
+
+    float i00 = id_at(ids, base_cell, size);
+    float i10 = id_at(ids, base_cell + vec2(1.0, 0.0), size);
+    float i01 = id_at(ids, base_cell + vec2(0.0, 1.0), size);
+    float i11 = id_at(ids, base_cell + vec2(1.0, 1.0), size);
+
+    float w00 = (1.0 - f.x) * (1.0 - f.y);
+    float w10 = f.x * (1.0 - f.y);
+    float w01 = (1.0 - f.x) * f.y;
+    float w11 = f.x * f.y;
+
+    near_id = f.x < 0.5 ? (f.y < 0.5 ? i00 : i01) : (f.y < 0.5 ? i10 : i11);
+
+    float coverage = 0.0;
+    coverage += abs(i00 - near_id) < 0.5 ? w00 : 0.0;
+    coverage += abs(i10 - near_id) < 0.5 ? w10 : 0.0;
+    coverage += abs(i01 - near_id) < 0.5 ? w01 : 0.0;
+    coverage += abs(i11 - near_id) < 0.5 ? w11 : 0.0;
+
+    other_id = near_id;
+    float claim = 0.0;
+    if (abs(i00 - near_id) >= 0.5 && w00 > claim) { claim = w00; other_id = i00; }
+    if (abs(i10 - near_id) >= 0.5 && w10 > claim) { claim = w10; other_id = i10; }
+    if (abs(i01 - near_id) >= 0.5 && w01 > claim) { claim = w01; other_id = i01; }
+    if (abs(i11 - near_id) >= 0.5 && w11 > claim) { claim = w11; other_id = i11; }
+    return coverage;
+}
+
 vec4 owner_color(float province) {
     float low = mod(province, 256.0);
     float high = floor(province / 256.0);
@@ -1390,8 +1453,46 @@ float planned_border(float province, vec2 uv) {
         (1.0 - step(0.5, abs(enemy - other_owner)));
 }
 void fragment() {
+    // Far away the authored raster is right: a screen pixel covers many map texels and what
+    // the eye wants is the average, mipmapped and anisotropic. Close up the raster is exactly
+    // wrong - one texel covers many pixels, so nearest sampling shows the grid it was stored
+    // on. So close up the colour is rebuilt from the country id map instead, and the boundary
+    // between two countries is recovered as a straight edge at whatever angle it really runs,
+    // antialiased over one screen pixel. The raster is not being filtered; it is not being
+    // asked.
     vec4 political_smooth = texture(political_map, UV);
-    vec4 political_crisp = texture(political_detail, UV);
+    float near_nation;
+    float other_nation;
+    float nation_cover = boundary_coverage(nation_ids, UV, near_nation, other_nation);
+    float nation_aa = max(fwidth(nation_cover), 0.0001);
+    float nation_share = smoothstep(0.5 - nation_aa, 0.5 + nation_aa, nation_cover);
+
+    // How far this pixel is from the nearest border, in texels, read from a field that the
+    // hardware may interpolate - so it is smooth between texels where the id map is not, and
+    // its zero line is the curve the raster was drawn from rather than the grid it was
+    // stored on.
+    vec2 id_texels = vec2(textureSize(nation_ids, 0));
+    float border_texels = texture(nation_distance, UV).r * 255.0 / 8.0;
+    // One screen pixel, measured in texels. This is what keeps the softening exactly one
+    // pixel wide at every zoom instead of a fixed blur that reads as mush.
+    float pixel_texels = max(length(fwidth(UV) * id_texels), 0.0001);
+
+    // How wide the colour transition is, and why it is not always one pixel.
+    //
+    // A distance field is smooth away from its seeds and follows them closely at zero, so a
+    // hard threshold right on the boundary still shows the texel pattern it was seeded from.
+    // Far out that does not matter, because one pixel covers several texels and the seeding
+    // averages away. Close in it does, and there is no honest way round it: the raster knows
+    // where the border is to one texel and no better.
+    //
+    // So close in the fill fades over about a texel instead, and the border line drawn on top
+    // of it carries the edge. That is what a Paradox map does at tactical zoom - a crisp
+    // stroke over a soft colour change - and it reads as a border rather than as either a
+    // staircase or a smear.
+    float fill_texels = max(pixel_texels * 0.85, 1.0 - clamp(pixel_texels, 0.0, 1.0));
+    float fill_share = smoothstep(0.0, fill_texels, border_texels) * 0.5 + 0.5;
+    fill_share = mix(nation_share, fill_share, step(0.5, abs(near_nation - other_nation)));
+    vec4 political_crisp = mix(nation_paint(other_nation), nation_paint(near_nation), fill_share);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     vec3 water = ocean_color * (0.72 + rim * 0.28);
@@ -1479,11 +1580,26 @@ void fragment() {
         step(0.5, abs(region - map_id(region_ids, UV - vec2(texel.x, 0.0))))), max(
         step(0.5, abs(region - map_id(region_ids, UV + vec2(0.0, texel.y)))),
         step(0.5, abs(region - map_id(region_ids, UV - vec2(0.0, texel.y))))));
-    float province_edge = max(max(
-        step(0.5, abs(province - map_id(province_ids, UV + vec2(texel.x, 0.0)))),
-        step(0.5, abs(province - map_id(province_ids, UV - vec2(texel.x, 0.0))))), max(
-        step(0.5, abs(province - map_id(province_ids, UV + vec2(0.0, texel.y)))),
-        step(0.5, abs(province - map_id(province_ids, UV - vec2(0.0, texel.y))))));
+    // A province line drawn by asking four neighbours whether they differ is one texel wide
+    // and either on or off, which is a staircase wearing a border's clothes. The same
+    // coverage field gives the distance to the boundary in screen pixels, so the line can be
+    // a stroke of constant width with soft shoulders - crisp at any zoom, and gone rather
+    // than aliased when a pixel covers more of the map than a line could describe.
+    float near_province;
+    float other_province_id;
+    float province_cover = boundary_coverage(province_ids, UV, near_province, other_province_id);
+    float province_aa = max(fwidth(province_cover), 0.0001);
+    float province_edge = 1.0 - smoothstep(0.0, border_pixels, abs(province_cover - 0.5) / province_aa);
+    province_edge *= step(0.5, abs(near_province - other_province_id));
+
+    // The country line, from the field the fill was already rebuilt out of. Coasts are left
+    // alone: the ocean draws its own edge and a dark stroke on top of it only muddies it.
+    // A stroke of constant screen width, laid on the zero line of the distance field. It is
+    // never thinner than the data can describe and never wider than the eye wants, and it
+    // fades out rather than aliasing when a pixel covers more map than a line could carry.
+    float country_line_texels = max(border_pixels * pixel_texels, 0.35);
+    float country_edge = 1.0 - smoothstep(country_line_texels * 0.45, country_line_texels, border_texels);
+    country_edge *= step(0.5, near_nation) * clamp(2.2 - pixel_texels, 0.0, 1.0);
     vec3 front = front_data(province);
     float front_edge = max(max(
         front_crossing(province, front, UV + vec2(texel.x, 0.0)),
@@ -1503,7 +1619,10 @@ void fragment() {
 
     // Tactical borders should read as fine cartography, not dark fish-scales.
     // Selection remains strong below; the idle network stays deliberately subtle.
-    base = mix(base, vec3(0.10, 0.13, 0.16), province_edge * province_detail * political.a * 0.21);
+    base = mix(base, vec3(0.10, 0.13, 0.16), province_edge * province_detail * political.a * 0.26);
+    // The country border, drawn rather than baked. It replaces the one-texel darkening the
+    // political raster used to carry, which was the most visible pixel grid on the map.
+    base = mix(base, vec3(0.05, 0.07, 0.10), country_edge * detail_mix * political.a * 0.78);
     // A line the player drew. Blue holds it, amber takes it, grey falls back to it.
     float plan = round(front.b * 4.0);
     vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)
@@ -1539,7 +1658,6 @@ void fragment() {
         var transparent = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
         var placeholder = ImageTexture.CreateFromImage(transparent);
         _globeMaterial.SetShaderParameter("political_map", placeholder);
-        _globeMaterial.SetShaderParameter("political_detail", placeholder);
         var emptyIds = ImageTexture.CreateFromImage(Image.CreateEmpty(2, 2, false, Image.Format.Rg8));
         _globeMaterial.SetShaderParameter("region_ids", emptyIds);
         _globeMaterial.SetShaderParameter("province_ids", emptyIds);
@@ -2161,6 +2279,32 @@ void fragment() {
     /// </summary>
     private const byte OccupiedStripeAlpha = 160;
 
+    /// <summary>
+    /// One texel per country, holding the colour the political map paints it.
+    ///
+    /// The fill used to come from a raster of five thousand by three thousand painted colours,
+    /// which is sixty-six megabytes of texture to say two hundred and sixty things. Reading
+    /// the colour out of a palette instead lets the shader rebuild the fill from the country
+    /// id map - the boundary comes out subpixel rather than stepped - and lets the crisp
+    /// raster be dropped altogether.
+    /// </summary>
+    private void BuildNationPalette()
+    {
+        if (_globeMaterial is null) return;
+        var pixels = new byte[256 * 256 * 4];
+        foreach (var (mapIndex, packed) in _colorByMapIndex)
+        {
+            if (mapIndex <= 0 || mapIndex >= 256 * 256) continue;
+            var write = mapIndex * 4;
+            pixels[write] = (byte)((packed >> 24) & 0xFF);
+            pixels[write + 1] = (byte)((packed >> 16) & 0xFF);
+            pixels[write + 2] = (byte)((packed >> 8) & 0xFF);
+            pixels[write + 3] = 255;
+        }
+        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        _globeMaterial.SetShaderParameter("nation_palette", ImageTexture.CreateFromImage(image));
+    }
+
     private void RefreshProvinceControllers()
     {
         if (_campaign?.ProvinceMap is null || _campaign.ProvinceController is null || _globeMaterial is null) return;
@@ -2591,12 +2735,108 @@ void fragment() {
             }
         }
 
+        var nationDistance = BuildBoundaryDistance(nationIds);
+
         // Preserve the decoded grids: exact country/state picking is a core map feature.
         // This prevents a click from falling back to an approximate rendered-color lookup.
         if (provinces.ProvinceCount > ushort.MaxValue)
             throw new InvalidOperationException($"Province count {provinces.ProvinceCount} exceeds the 16-bit map contract.");
-        return new MapBuildResult(pixels, regionIds, provinceIds, nationIds, hydrology.Pixels, provinces, labelAnchors,
-            true, provinceSource, hydrology.Source);
+        return new MapBuildResult(pixels, regionIds, provinceIds, nationIds, nationDistance, hydrology.Pixels,
+            provinces, labelAnchors, true, provinceSource, hydrology.Source);
+    }
+
+    /// <summary>How many texels each point is from the nearest border, to an eighth of a texel.</summary>
+    private const float DistanceScale = 8f;
+
+    /// <summary>
+    /// A distance field for the country borders.
+    ///
+    /// This is the piece that actually removes the pixels, and the reason is worth stating
+    /// because the obvious fixes do not work. An id map cannot be filtered - ids are labels
+    /// and the average of two labels is not a label - so it must be sampled nearest, which
+    /// puts a staircase on the screen at the texel grid. Rebuilding the boundary from the
+    /// four ids around a point fixes it to within one texel, which is enough at strategic
+    /// zoom and not enough at tactical zoom, where one texel is ten screen pixels and a
+    /// one-texel staircase is a ten-pixel staircase.
+    ///
+    /// A distance is not a label. It can be interpolated, so a field holding "how far is the
+    /// nearest border" is smooth between texels, and its zero line is a curve rather than a
+    /// grid - which is exactly the border the raster was drawn from. The fill fades across it
+    /// and the border line is drawn on it, both at whatever width the screen calls for.
+    ///
+    /// Computed by a two-pass chamfer sweep, which is the cheap and entirely adequate way:
+    /// exact Euclidean distance would cost several times as much to be wrong by less than a
+    /// tenth of a texel at the only distances anybody looks at.
+    /// </summary>
+    private static byte[] BuildBoundaryDistance(byte[] nationIds)
+    {
+        const int straight = 8;   // one texel, at DistanceScale
+        const int diagonal = 11;  // and the root of two, near enough
+        const int unreached = 255;
+
+        var field = new byte[MapWidth * MapHeight];
+
+        ushort NationAt(int x, int y)
+        {
+            var index = (y * MapWidth + x) * 2;
+            return (ushort)(nationIds[index] | (nationIds[index + 1] << 8));
+        }
+
+        // Seed: every texel that touches a different country is on the border.
+        for (var y = 0; y < MapHeight; y++)
+        for (var x = 0; x < MapWidth; x++)
+        {
+            var mine = NationAt(x, y);
+            var east = NationAt(x + 1 == MapWidth ? 0 : x + 1, y);
+            var west = NationAt(x == 0 ? MapWidth - 1 : x - 1, y);
+            var north = NationAt(x, Math.Max(0, y - 1));
+            var south = NationAt(x, Math.Min(MapHeight - 1, y + 1));
+            field[y * MapWidth + x] = mine != east || mine != west || mine != north || mine != south
+                ? (byte)0
+                : (byte)unreached;
+        }
+
+        int Wrap(int x) => x < 0 ? x + MapWidth : x >= MapWidth ? x - MapWidth : x;
+
+        void Relax(int index, int fromIndex, int cost)
+        {
+            var candidate = field[fromIndex] + cost;
+            if (candidate < field[index]) field[index] = (byte)candidate;
+        }
+
+        for (var y = 0; y < MapHeight; y++)
+        {
+            var row = y * MapWidth;
+            var above = (y - 1) * MapWidth;
+            for (var x = 0; x < MapWidth; x++)
+            {
+                var index = row + x;
+                if (field[index] == 0) continue;
+                Relax(index, row + Wrap(x - 1), straight);
+                if (y == 0) continue;
+                Relax(index, above + x, straight);
+                Relax(index, above + Wrap(x - 1), diagonal);
+                Relax(index, above + Wrap(x + 1), diagonal);
+            }
+        }
+
+        for (var y = MapHeight - 1; y >= 0; y--)
+        {
+            var row = y * MapWidth;
+            var below = (y + 1) * MapWidth;
+            for (var x = MapWidth - 1; x >= 0; x--)
+            {
+                var index = row + x;
+                if (field[index] == 0) continue;
+                Relax(index, row + Wrap(x + 1), straight);
+                if (y + 1 >= MapHeight) continue;
+                Relax(index, below + x, straight);
+                Relax(index, below + Wrap(x + 1), diagonal);
+                Relax(index, below + Wrap(x - 1), diagonal);
+            }
+        }
+
+        return field;
     }
 
     private static Dictionary<int, TerritoryLabelAnchor> BuildTerritoryLabelAnchors(
@@ -2732,6 +2972,7 @@ void fragment() {
         byte[] RegionIds,
         byte[] ProvinceIds,
         byte[] NationIds,
+        byte[] NationDistance,
         byte[] HydrologyPixels,
         Simulation.ProvinceTopology Provinces,
         Dictionary<int, TerritoryLabelAnchor> LabelAnchors,
