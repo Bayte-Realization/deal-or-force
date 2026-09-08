@@ -113,7 +113,15 @@ public static class BattlePlanning
     public static DrawnFrontLine LineFor(Campaign campaign, Army army)
     {
         if (campaign is null || army is null || army.FrontLineId < 0) return null;
-        var line = campaign.FrontLines.Find(candidate => candidate.Id == army.FrontLineId);
+
+        // By hand, because Find takes a predicate and the predicate closes over `army` -
+        // which means a closure object and a delegate allocated on every call, and this is
+        // called for every formation every day whether or not anybody has drawn a line.
+        // Most campaigns have no drawn lines at all, so the usual answer is null and the
+        // usual cost was two allocations to arrive at it.
+        DrawnFrontLine line = null;
+        foreach (var candidate in campaign.FrontLines)
+            if (candidate.Id == army.FrontLineId) { line = candidate; break; }
         if (line is not null) BorderFronts.Refresh(campaign, line);
         return line is null || line.Provinces.Count == 0 ? null : line;
     }

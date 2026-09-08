@@ -597,18 +597,48 @@ public static partial class Warfare
         }
     }
 
+    private static readonly List<Army> Reinforcements = new();
+
+    /// <summary>Everyone standing in one province who could still join the fight next door.</summary>
+    private static void Consider(Campaign campaign, LandBattle battle,
+        Dictionary<int, List<Army>> byProvince, int provinceId)
+    {
+        foreach (var army in In(byProvince, provinceId))
+        {
+            if (army.InBattle || army.AssignedWarId != battle.WarId ||
+                army.ReadyDay > campaign.ElapsedDays ||
+                army.Organisation <= 0.16f || army.SupplyLevel <= 0.20f) continue;
+            Reinforcements.Add(army);
+        }
+    }
+
     private static void ReinforceBattle(Campaign campaign, LandBattle battle)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
+        if (_provinceIndexStale) IndexArmies(campaign);
         var adjacent = topology.Neighbors[battle.ProvinceId];
         var attackerAdded = 0;
         var defenderAdded = 0;
-        foreach (var army in campaign.Armies.Where(army => !army.InBattle &&
-                     army.AssignedWarId == battle.WarId && army.ReadyDay <= campaign.ElapsedDays &&
-                     army.Organisation > 0.16f && army.SupplyLevel > 0.20f &&
-                     (army.ProvinceId == battle.ProvinceId || adjacent.Contains(army.ProvinceId)))
-                 .OrderByDescending(army => army.Power))
+
+        // Reinforcements come from the province being fought over and the ones touching it,
+        // so they can be found by looking there rather than by reading the whole world's
+        // order of battle. The old form filtered all fourteen hundred divisions for every
+        // live battle every day - a hundred thousand tests to find at most a dozen - and
+        // then allocated a sorter, a key array and a buffer to put them in order.
+        Reinforcements.Clear();
+        Consider(campaign, battle, ByProvince, battle.ProvinceId);
+        foreach (var neighbour in adjacent) Consider(campaign, battle, ByProvince, neighbour);
+
+        // Strongest first, and by id where two are equally strong: a battle joined in a
+        // different order on two machines is a battle that ends differently on them.
+        Reinforcements.Sort(static (left, right) =>
+        {
+            var byPower = right.Power.CompareTo(left.Power);
+            return byPower != 0 ? byPower : left.Id.CompareTo(right.Id);
+        });
+
+        foreach (var army in Reinforcements)
         {
             if (army.NationId == battle.AttackerId &&
                 (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) && attackerAdded < 2)
