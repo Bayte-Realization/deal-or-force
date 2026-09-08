@@ -37,6 +37,16 @@ public partial class DealOrForceGame
     private ulong _lastRosterClickMsec;
 
     /// <summary>
+    /// The row a range selection counts from.
+    ///
+    /// Every list anybody has used since the file manager works this way: a plain click sets
+    /// the anchor, shift-click takes everything between the anchor and where you clicked,
+    /// and control adds or removes one without disturbing either. The roster had control and
+    /// no shift, so a player who wanted eleven of fourteen divisions clicked eleven times.
+    /// </summary>
+    private int _rosterAnchorArmyId = -1;
+
+    /// <summary>
     /// NATO-ish counters. A player who has played a Paradox game reads these before they
     /// read the name next to them, which is the whole point of having them.
     /// </summary>
@@ -319,6 +329,26 @@ public partial class DealOrForceGame
     /// Rebuild the roster for the current selection. Called on every campaign refresh, so
     /// the bars a player is watching move while the battle they are watching is fought.
     /// </summary>
+    /// <summary>
+    /// The player's divisions in the order the roster lists them.
+    ///
+    /// A range selection is only meaningful in the order the eye is reading, so this must
+    /// stay the same sort the panel draws - hence one method both use rather than two that
+    /// agree until somebody changes one.
+    /// </summary>
+    private List<Army> RosterOrder()
+    {
+        var rows = new List<Army>();
+        if (_campaign is null) return rows;
+        // The rows the panel is actually showing, in the order it drew them. Taken from the
+        // roster's own bookkeeping rather than rebuilt from the army list, so the range a
+        // player draws is the range they can see even after the sort or the cap changes.
+        foreach (var army in _campaign.Armies)
+            if (_armyRosterRows.ContainsKey(army.Id)) rows.Add(army);
+        rows.Sort((left, right) => System.StringComparer.Ordinal.Compare(left.Name, right.Name));
+        return rows;
+    }
+
     private void RefreshArmyPanel()
     {
         if (_armyPanel is null || _campaign?.Player is null) return;
@@ -556,12 +586,35 @@ public partial class DealOrForceGame
             _selectedArmy = _selectedArmies.FirstOrDefault();
             SetArmyFeedback($"{_selectedArmies.Count} division(s) of {UnitTypeCatalog.Get(template).Name} selected.");
         }
+        else if (Input.IsKeyPressed(Key.Shift) && _rosterAnchorArmyId >= 0)
+        {
+            // Everything between the anchor and here, in the order the roster is showing -
+            // which is the order the player is looking at, and the only order a range means
+            // anything in.
+            var rows = RosterOrder();
+            var from = rows.FindIndex(candidate => candidate.Id == _rosterAnchorArmyId);
+            var to = rows.FindIndex(candidate => candidate.Id == army.Id);
+            if (from < 0 || to < 0)
+            {
+                _selectedArmies.Clear();
+                _selectedArmies.Add(army);
+            }
+            else
+            {
+                if (from > to) (from, to) = (to, from);
+                _selectedArmies.Clear();
+                for (var index = from; index <= to; index++) _selectedArmies.Add(rows[index]);
+            }
+            _selectedArmy = _selectedArmies.Count > 0 ? _selectedArmies[0] : army;
+            SetArmyFeedback($"{_selectedArmies.Count} division(s) selected.");
+        }
         else if (Input.IsKeyPressed(Key.Ctrl))
         {
             if (_selectedArmies.Contains(army)) _selectedArmies.Remove(army);
             else _selectedArmies.Add(army);
             if (_selectedArmies.Count == 0) { ClearArmySelectionAndClose(); return; }
             _selectedArmy = _selectedArmies[0];
+            _rosterAnchorArmyId = army.Id;
             SetArmyFeedback($"{_selectedArmies.Count} division(s) selected.");
         }
         else
@@ -569,6 +622,7 @@ public partial class DealOrForceGame
             _selectedArmies.Clear();
             _selectedArmies.Add(army);
             _selectedArmy = army;
+            _rosterAnchorArmyId = army.Id;
             _globe.FocusOn(army.Latitude, army.Longitude, 6.8f);
             SetArmyFeedback($"{army.Name} has the orders.");
         }
