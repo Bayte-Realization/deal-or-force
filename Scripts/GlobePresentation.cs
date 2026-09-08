@@ -499,12 +499,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
             case 4:
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(Image.CreateFromData(
                     MapWidth, MapHeight, false, Image.Format.Rg8, result.HydrologyPixels)));
-                // Linear, deliberately. A distance is a quantity, so the hardware may
-                // interpolate it - and that interpolation is the whole point: it is what
-                // turns a grid of texels back into a smooth curve.
-                var distance = ImageTexture.CreateFromImage(Image.CreateFromData(
-                    MapWidth, MapHeight, false, Image.Format.R8, result.NationDistance));
-                _globeMaterial.SetShaderParameter("nation_distance", distance);
                 break;
             case 5:
                 ApplyTerrainPresentation(result.Provinces);
@@ -1366,7 +1360,6 @@ uniform sampler2D hydrology_map : filter_linear, repeat_enable;
 uniform sampler2D province_control_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2D province_owner_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2D nation_palette : source_color, filter_nearest, repeat_disable;
-uniform sampler2D nation_distance : filter_linear, repeat_disable;
 uniform float border_pixels = 1.35;
 uniform sampler2D front_membership : filter_nearest, repeat_disable;
 uniform sampler2D map_mode_colors : source_color, filter_nearest, repeat_disable;
@@ -1381,6 +1374,9 @@ uniform float terrain_ready = 0.0;
 uniform float terrain_mode = 0.0;
 uniform float political_opacity = 0.68;
 uniform float terrain_repeat = 180.0;
+uniform float terrain_blend_texels = 1.15;
+uniform float id_wander_texels = 0.62;
+uniform float terrain_warp_texels = 2.20;
 uniform float relief_strength = 0.8;
 uniform float relief_color_opacity = 0.0;
 // Matches the source scenario's Ocean terrain (#0f4a6b). The relief texture stays
@@ -1405,6 +1401,78 @@ vec4 nation_paint(float nation) {
     float low = mod(nation, 256.0);
     float high = floor(nation / 256.0);
     return texture(nation_palette, (vec2(low, high) + vec2(0.5)) / 256.0);
+}
+
+/// A number between zero and one that depends only on where you are, and looks like nothing.
+///
+/// Two of these steer the terrain boundary off the grid it was stored on. A boundary
+/// reconstructed from the raster alone is exact but straight, and a coastline of exact
+/// straight segments meeting at texel corners reads as a machine drew it. Pushing the point
+/// of sampling around by a texel or two first makes the same boundary wander the way ground
+/// actually does, at no cost in fidelity: it is the same line, walked unevenly.
+float hash21(vec2 p) {
+    p = fract(p * vec2(127.31, 311.7));
+    p += dot(p, p + 34.53);
+    return fract(p.x * p.y);
+}
+
+float value_noise(vec2 p) {
+    vec2 cell = floor(p);
+    vec2 f = p - cell;
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash21(cell), hash21(cell + vec2(1.0, 0.0)), f.x),
+               mix(hash21(cell + vec2(0.0, 1.0)), hash21(cell + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+/// Two octaves, centred on zero: a slow wander with a finer one riding on it.
+float grain(vec2 p) {
+    return value_noise(p) * 0.66 + value_noise(p * 2.7 + 11.3) * 0.34 - 0.5;
+}
+
+/// The terrain type this point stands on, as the slot number of its ground texture.
+float slot_at(sampler2D surface, vec2 cell, vec2 size) {
+    vec2 uv = (cell + vec2(0.5)) / size;
+    return floor(texture(surface, vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0))).r * 255.0 + 0.5);
+}
+
+/// The same reconstruction the borders use, applied to which ground is underfoot.
+///
+/// The terrain map is an id map like any other - the number in it selects a texture, and the
+/// average of two texture numbers is not a texture number - so it was read nearest and
+/// rounded, and the ground changed abruptly at the edge of a texel. That is the single most
+/// visible grid on the map: not a line anywhere, but every square of grass meeting every
+/// square of rock, over the whole world.
+float terrain_coverage(sampler2D surface, vec2 uv, out float near_slot, out float other_slot) {
+    vec2 size = vec2(textureSize(surface, 0));
+    vec2 g = uv * size - vec2(0.5);
+    vec2 base_cell = floor(g);
+    vec2 f = g - base_cell;
+
+    float s00 = slot_at(surface, base_cell, size);
+    float s10 = slot_at(surface, base_cell + vec2(1.0, 0.0), size);
+    float s01 = slot_at(surface, base_cell + vec2(0.0, 1.0), size);
+    float s11 = slot_at(surface, base_cell + vec2(1.0, 1.0), size);
+
+    float w00 = (1.0 - f.x) * (1.0 - f.y);
+    float w10 = f.x * (1.0 - f.y);
+    float w01 = (1.0 - f.x) * f.y;
+    float w11 = f.x * f.y;
+
+    near_slot = f.x < 0.5 ? (f.y < 0.5 ? s00 : s01) : (f.y < 0.5 ? s10 : s11);
+
+    float coverage = 0.0;
+    coverage += abs(s00 - near_slot) < 0.5 ? w00 : 0.0;
+    coverage += abs(s10 - near_slot) < 0.5 ? w10 : 0.0;
+    coverage += abs(s01 - near_slot) < 0.5 ? w01 : 0.0;
+    coverage += abs(s11 - near_slot) < 0.5 ? w11 : 0.0;
+
+    other_slot = near_slot;
+    float claim = 0.0;
+    if (abs(s00 - near_slot) >= 0.5 && w00 > claim) { claim = w00; other_slot = s00; }
+    if (abs(s10 - near_slot) >= 0.5 && w10 > claim) { claim = w10; other_slot = s10; }
+    if (abs(s01 - near_slot) >= 0.5 && w01 > claim) { claim = w01; other_slot = s01; }
+    if (abs(s11 - near_slot) >= 0.5 && w11 > claim) { claim = w11; other_slot = s11; }
+    return coverage;
 }
 
 /// Coverage of the nearest id over this pixel, and the neighbour with the next best claim.
@@ -1496,6 +1564,49 @@ float planned_border(float province, vec2 uv) {
 uniform float fog_viewer = -1.0;
 uniform sampler2D fog_visibility : filter_nearest, repeat_disable;
 void fragment() {
+    // One wander, and every boundary on the map reads through it.
+    //
+    // Reconstructing a boundary from the four ids around a point puts it within half a texel
+    // of the truth, which is exact enough at any zoom where a texel is smaller than a pixel.
+    // Close up it is not: a texel of a 5760-wide world covers ten screen pixels, half a texel
+    // is five, and five pixels of error laid along a grid is a staircase. No amount of
+    // sharpening helps, because there is nothing left in the raster to sharpen - the
+    // information simply is not there.
+    //
+    // So the boundary is moved off the grid instead. The point of sampling is pushed around
+    // by rather less than a texel, which is inside the error the reconstruction already has,
+    // and the staircase becomes a coastline. It is the same thing the ground does where two
+    // terrains meet, and the same thing a Paradox map does with a baked noise layer.
+    //
+    // Shared, and that is the whole reason it lives here rather than in three places:
+    // country, region and province all read through this one offset, so they wander together
+    // and continue to agree. Warped separately, a country border and the province border
+    // that runs along it would sit a texel apart and the map would look torn.
+    //
+    // Faded out as the camera pulls back: once a texel is smaller than a pixel the wander
+    // would only be a way of making small islands flicker.
+    vec2 id_size = vec2(textureSize(nation_ids, 0));
+    float id_span = max(length(fwidth(UV) * id_size), 0.0001);
+    // How wide a screen pixel is, measured in coverage. A coverage field crosses from one
+    // to zero over about a texel, so a pixel that spans `id_span` texels spans about that
+    // much coverage - and that is the width every soft edge on this map wants to be.
+    //
+    // It cannot be had from `fwidth` of the coverage itself once the lookup below is warped:
+    // fwidth would then be measuring how fast the noise wiggles, which is fast, and every
+    // border on the map would come out several pixels wide and washed out instead of one
+    // pixel wide and crisp. The camera says how big a pixel is; the noise does not get a
+    // vote.
+    float id_aa = max(id_span, 0.0001);
+    // Four hashes apiece and two octaves each, so this pair is the most expensive thing on
+    // the map that is not a texture fetch - and it is wanted three times over: by the
+    // political boundary, by the ground, and by the shore. It is a pair of numbers between
+    // minus a half and a half, in no units at all, so each of the three can scale it into
+    // its own texels and they all end up wandering the same way. Computed three times it
+    // cost forty hashes a pixel; computed once it costs sixteen.
+    vec2 map_drift = vec2(grain(UV * id_size * 0.9), grain(UV * id_size * 0.9 + 71.3));
+    float drift_visible = clamp(1.0 - id_span, 0.0, 1.0);
+    vec2 map_uv = UV + map_drift * id_wander_texels * drift_visible / id_size;
+
     // Far away the authored raster is right: a screen pixel covers many map texels and what
     // the eye wants is the average, mipmapped and anisotropic. Close up the raster is exactly
     // wrong - one texel covers many pixels, so nearest sampling shows the grid it was stored
@@ -1506,43 +1617,33 @@ void fragment() {
     vec4 political_smooth = texture(political_map, UV);
     float near_nation;
     float other_nation;
-    float nation_cover = boundary_coverage(nation_ids, UV, near_nation, other_nation);
-    float nation_aa = max(fwidth(nation_cover), 0.0001);
+    float nation_cover = boundary_coverage(nation_ids, map_uv, near_nation, other_nation);
+    float nation_aa = id_aa;
     float nation_share = smoothstep(0.5 - nation_aa, 0.5 + nation_aa, nation_cover);
 
-    // How far this pixel is from the nearest border, in texels, read from a field that the
-    // hardware may interpolate - so it is smooth between texels where the id map is not, and
-    // its zero line is the curve the raster was drawn from rather than the grid it was
-    // stored on.
-    vec2 id_texels = vec2(textureSize(nation_ids, 0));
-    float border_texels = texture(nation_distance, UV).r * 255.0 / 8.0;
-    // One screen pixel, measured in texels. This is what keeps the softening exactly one
-    // pixel wide at every zoom instead of a fixed blur that reads as mush.
-    float pixel_texels = max(length(fwidth(UV) * id_texels), 0.0001);
+    // One screen pixel, measured in texels. Wanted for deciding when a line is finer than
+    // the screen can carry.
+    float pixel_texels = id_span;
 
-    // How wide the colour transition is, and why it is not always one pixel.
+    // A real edge, one pixel wide.
     //
-    // A distance field is smooth away from its seeds and follows them closely at zero, so a
-    // hard threshold right on the boundary still shows the texel pattern it was seeded from.
-    // Far out that does not matter, because one pixel covers several texels and the seeding
-    // averages away. Close in it does, and there is no honest way round it: the raster knows
-    // where the border is to one texel and no better.
+    // This used to fade the fill over most of a texel - nine screen pixels close in - and let
+    // a stroke on top carry the boundary. The reason was sound at the time: a hard threshold
+    // laid on a reconstruction that is only accurate to a texel shows the texel pattern, and
+    // a soft fade at least hid it. What it actually produced was a grey halo round every
+    // coast and every border, which is how the whole map came to look slightly out of focus.
     //
-    // So close in the fill fades over about a texel instead, and the border line drawn on top
-    // of it carries the edge. That is what a Paradox map does at tactical zoom - a crisp
-    // stroke over a soft colour change - and it reads as a border rather than as either a
-    // staircase or a smear.
-    float fill_texels = max(pixel_texels * 0.85, 1.0 - clamp(pixel_texels, 0.0, 1.0));
-    float fill_share = smoothstep(0.0, fill_texels, border_texels) * 0.5 + 0.5;
-    fill_share = mix(nation_share, fill_share, step(0.5, abs(near_nation - other_nation)));
-    vec4 political_crisp = mix(nation_paint(other_nation), nation_paint(near_nation), fill_share);
+    // The wander is what makes the compromise unnecessary. The boundary is no longer on the
+    // grid, so there is no grid left to show, and the edge can be exactly as sharp as the
+    // screen allows.
+    vec4 political_crisp = mix(nation_paint(other_nation), nation_paint(near_nation), nation_share);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     vec3 water = ocean_color * (0.72 + rim * 0.28);
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
-    float region = map_id(region_ids, UV);
-    float province = map_id(province_ids, UV);
-    float nation = map_id(nation_ids, UV);
+    float region = map_id(region_ids, map_uv);
+    float province = map_id(province_ids, map_uv);
+    float nation = map_id(nation_ids, map_uv);
     vec4 live_control = control_color(province);
     float political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
 
@@ -1590,9 +1691,24 @@ void fragment() {
     vec3 base = mix(water, political.rgb, political.a);
     if (terrain_ready > 0.5) {
         vec2 province_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
-        float terrain_slot = round(texture(terrain_surface, vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0))).r * 255.0);
+        // Where one ground meets another, reconstructed rather than stepped, and walked off
+        // the grid first so the meeting is ragged instead of ruled. Two ground samples: the
+        // type this pixel mostly stands on and the one with the next best claim on it, mixed
+        // across a band a texel or so wide - and never narrower than a screen pixel, so a
+        // coastline seen from orbit fades rather than sparkles.
+        vec2 terrain_size = vec2(textureSize(terrain_surface, 0));
+        vec2 terrain_lookup = UV + map_drift * terrain_warp_texels / terrain_size;
+
+        float near_slot;
+        float other_slot;
+        float slot_cover = terrain_coverage(terrain_surface, terrain_lookup, near_slot, other_slot);
+        float slot_span = max(length(fwidth(UV) * terrain_size), 0.0001);
+        float slot_band = max(terrain_blend_texels * 0.25, slot_span);
+        float slot_share = smoothstep(0.5 - slot_band, 0.5 + slot_band, slot_cover);
+
         vec2 terrain_uv = UV * vec2(terrain_repeat, terrain_repeat * 0.5);
-        vec3 ground = texture(terrain_tiles, vec3(terrain_uv, terrain_slot)).rgb;
+        vec3 ground = mix(texture(terrain_tiles, vec3(terrain_uv, other_slot)).rgb,
+                          texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb, slot_share);
         vec3 relief_tint = texture(relief_color, UV).rgb;
         ground = mix(ground, relief_tint, relief_color_opacity);
         // Political tint is an albedo blend, not transparent 3D geometry.
@@ -1610,19 +1726,31 @@ void fragment() {
         NORMAL_MAP = normalize(vec3(slope * political.a, 1.0)) * 0.5 + 0.5;
         NORMAL_MAP_DEPTH = 1.0;
     }
+    // A shore drawn by thresholding a filtered raster takes the shape of the filter: the
+    // diamonds bilinear interpolation makes between four texels, which is a grid again by
+    // another name. The threshold is nudged by the same wander the ground uses, so the water
+    // finds an uneven edge, and its width follows the screen rather than the texture, so it
+    // stays one pixel of shore at any zoom instead of a wide gradient close up.
     vec2 hydrography = texture(hydrology_map, UV).rg;
-    float lake_water = smoothstep(0.14, 0.62, hydrography.r);
-    float river_water = smoothstep(0.18, 0.70, hydrography.g);
+    float shore_wander = map_drift.x * 0.26;
+    float lake_edge = max(fwidth(hydrography.r), 0.004);
+    float river_edge = max(fwidth(hydrography.g), 0.004);
+    float lake_water = smoothstep(0.38 - lake_edge, 0.38 + lake_edge, hydrography.r + shore_wander);
+    float river_water = smoothstep(0.44 - river_edge, 0.44 + river_edge, hydrography.g + shore_wander);
     vec3 inland_water = vec3(0.018, 0.17, 0.25);
     base = mix(base, inland_water, lake_water * 0.94);
     base = mix(base, vec3(0.025, 0.24, 0.34), river_water * mix(0.42, 0.88, detail_mix));
     float region_selected = (abs(region - selected_region_id) < 0.5 ? 1.0 : 0.0) * selection_active * political.a;
     float province_selected = (abs(province - selected_province_id) < 0.5 ? 1.0 : 0.0) * selection_active * political.a;
-    float region_edge = max(max(
-        step(0.5, abs(region - map_id(region_ids, UV + vec2(texel.x, 0.0)))),
-        step(0.5, abs(region - map_id(region_ids, UV - vec2(texel.x, 0.0))))), max(
-        step(0.5, abs(region - map_id(region_ids, UV + vec2(0.0, texel.y)))),
-        step(0.5, abs(region - map_id(region_ids, UV - vec2(0.0, texel.y))))));
+    // The region line, the last one still drawn by asking four neighbours whether they
+    // differ - which is one texel wide, on or off, and a staircase. Off the same coverage
+    // field as the province and country lines.
+    float near_region;
+    float other_region_id;
+    float region_cover = boundary_coverage(region_ids, map_uv, near_region, other_region_id);
+    float region_aa = id_aa;
+    float region_edge = 1.0 - smoothstep(0.0, border_pixels, abs(region_cover - 0.5) / region_aa);
+    region_edge *= step(0.5, abs(near_region - other_region_id));
     // A province line drawn by asking four neighbours whether they differ is one texel wide
     // and either on or off, which is a staircase wearing a border's clothes. The same
     // coverage field gives the distance to the boundary in screen pixels, so the line can be
@@ -1630,19 +1758,31 @@ void fragment() {
     // than aliased when a pixel covers more of the map than a line could describe.
     float near_province;
     float other_province_id;
-    float province_cover = boundary_coverage(province_ids, UV, near_province, other_province_id);
-    float province_aa = max(fwidth(province_cover), 0.0001);
+    float province_cover = boundary_coverage(province_ids, map_uv, near_province, other_province_id);
+    float province_aa = id_aa;
     float province_edge = 1.0 - smoothstep(0.0, border_pixels, abs(province_cover - 0.5) / province_aa);
     province_edge *= step(0.5, abs(near_province - other_province_id));
 
-    // The country line, from the field the fill was already rebuilt out of. Coasts are left
-    // alone: the ocean draws its own edge and a dark stroke on top of it only muddies it.
-    // A stroke of constant screen width, laid on the zero line of the distance field. It is
-    // never thinner than the data can describe and never wider than the eye wants, and it
-    // fades out rather than aliasing when a pixel covers more map than a line could carry.
-    float country_line_texels = max(border_pixels * pixel_texels, 0.35);
-    float country_edge = 1.0 - smoothstep(country_line_texels * 0.45, country_line_texels, border_texels);
-    country_edge *= step(0.5, near_nation) * clamp(2.2 - pixel_texels, 0.0, 1.0);
+    // The country line, off the same coverage field as the province and region lines rather
+    // than off a distance field.
+    //
+    // A distance field gives a smoother zero line, which is why it was here - but its value
+    // is a distance, and a distance read through a warped lookup is no longer a distance. The
+    // wander changes the field's gradient as well as its position, so wherever the wander
+    // happened to run along the border the stroke swelled into a blotch. Coverage does not
+    // have that problem: it is recomputed from the ids at the warped point, so it is a
+    // correct reconstruction of a boundary that has been moved, rather than a distorted
+    // reading of one that has not.
+    //
+    // Wider than a province line, and it fades out rather than aliasing once a screen pixel
+    // covers more map than a line could carry.
+    // Solid to a pixel and a bit, then two more pixels of shoulder. Written as a distance
+    // in screen pixels rather than in coverage, so the line is the same weight at every zoom
+    // - which is what makes it read as a drawn border and not as an artefact of the data.
+    float nation_edge_pixels = abs(nation_cover - 0.5) / nation_aa;
+    float country_edge = 1.0 - smoothstep(border_pixels * 0.9, border_pixels * 2.1, nation_edge_pixels);
+    country_edge *= step(0.5, abs(near_nation - other_nation)) *
+                    step(0.5, near_nation) * clamp(2.2 - pixel_texels, 0.0, 1.0);
     vec3 front = front_data(province);
     float front_edge = max(max(
         front_crossing(province, front, UV + vec2(texel.x, 0.0)),
@@ -2795,108 +2935,12 @@ void fragment() {
             }
         }
 
-        var nationDistance = BuildBoundaryDistance(nationIds);
-
         // Preserve the decoded grids: exact country/state picking is a core map feature.
         // This prevents a click from falling back to an approximate rendered-color lookup.
         if (provinces.ProvinceCount > ushort.MaxValue)
             throw new InvalidOperationException($"Province count {provinces.ProvinceCount} exceeds the 16-bit map contract.");
-        return new MapBuildResult(pixels, regionIds, provinceIds, nationIds, nationDistance, hydrology.Pixels,
+        return new MapBuildResult(pixels, regionIds, provinceIds, nationIds, hydrology.Pixels,
             provinces, labelAnchors, true, provinceSource, hydrology.Source);
-    }
-
-    /// <summary>How many texels each point is from the nearest border, to an eighth of a texel.</summary>
-    private const float DistanceScale = 8f;
-
-    /// <summary>
-    /// A distance field for the country borders.
-    ///
-    /// This is the piece that actually removes the pixels, and the reason is worth stating
-    /// because the obvious fixes do not work. An id map cannot be filtered - ids are labels
-    /// and the average of two labels is not a label - so it must be sampled nearest, which
-    /// puts a staircase on the screen at the texel grid. Rebuilding the boundary from the
-    /// four ids around a point fixes it to within one texel, which is enough at strategic
-    /// zoom and not enough at tactical zoom, where one texel is ten screen pixels and a
-    /// one-texel staircase is a ten-pixel staircase.
-    ///
-    /// A distance is not a label. It can be interpolated, so a field holding "how far is the
-    /// nearest border" is smooth between texels, and its zero line is a curve rather than a
-    /// grid - which is exactly the border the raster was drawn from. The fill fades across it
-    /// and the border line is drawn on it, both at whatever width the screen calls for.
-    ///
-    /// Computed by a two-pass chamfer sweep, which is the cheap and entirely adequate way:
-    /// exact Euclidean distance would cost several times as much to be wrong by less than a
-    /// tenth of a texel at the only distances anybody looks at.
-    /// </summary>
-    private static byte[] BuildBoundaryDistance(byte[] nationIds)
-    {
-        const int straight = 8;   // one texel, at DistanceScale
-        const int diagonal = 11;  // and the root of two, near enough
-        const int unreached = 255;
-
-        var field = new byte[MapWidth * MapHeight];
-
-        ushort NationAt(int x, int y)
-        {
-            var index = (y * MapWidth + x) * 2;
-            return (ushort)(nationIds[index] | (nationIds[index + 1] << 8));
-        }
-
-        // Seed: every texel that touches a different country is on the border.
-        for (var y = 0; y < MapHeight; y++)
-        for (var x = 0; x < MapWidth; x++)
-        {
-            var mine = NationAt(x, y);
-            var east = NationAt(x + 1 == MapWidth ? 0 : x + 1, y);
-            var west = NationAt(x == 0 ? MapWidth - 1 : x - 1, y);
-            var north = NationAt(x, Math.Max(0, y - 1));
-            var south = NationAt(x, Math.Min(MapHeight - 1, y + 1));
-            field[y * MapWidth + x] = mine != east || mine != west || mine != north || mine != south
-                ? (byte)0
-                : (byte)unreached;
-        }
-
-        int Wrap(int x) => x < 0 ? x + MapWidth : x >= MapWidth ? x - MapWidth : x;
-
-        void Relax(int index, int fromIndex, int cost)
-        {
-            var candidate = field[fromIndex] + cost;
-            if (candidate < field[index]) field[index] = (byte)candidate;
-        }
-
-        for (var y = 0; y < MapHeight; y++)
-        {
-            var row = y * MapWidth;
-            var above = (y - 1) * MapWidth;
-            for (var x = 0; x < MapWidth; x++)
-            {
-                var index = row + x;
-                if (field[index] == 0) continue;
-                Relax(index, row + Wrap(x - 1), straight);
-                if (y == 0) continue;
-                Relax(index, above + x, straight);
-                Relax(index, above + Wrap(x - 1), diagonal);
-                Relax(index, above + Wrap(x + 1), diagonal);
-            }
-        }
-
-        for (var y = MapHeight - 1; y >= 0; y--)
-        {
-            var row = y * MapWidth;
-            var below = (y + 1) * MapWidth;
-            for (var x = MapWidth - 1; x >= 0; x--)
-            {
-                var index = row + x;
-                if (field[index] == 0) continue;
-                Relax(index, row + Wrap(x + 1), straight);
-                if (y + 1 >= MapHeight) continue;
-                Relax(index, below + x, straight);
-                Relax(index, below + Wrap(x + 1), diagonal);
-                Relax(index, below + Wrap(x - 1), diagonal);
-            }
-        }
-
-        return field;
     }
 
     private static Dictionary<int, TerritoryLabelAnchor> BuildTerritoryLabelAnchors(
@@ -3032,7 +3076,6 @@ void fragment() {
         byte[] RegionIds,
         byte[] ProvinceIds,
         byte[] NationIds,
-        byte[] NationDistance,
         byte[] HydrologyPixels,
         Simulation.ProvinceTopology Provinces,
         Dictionary<int, TerritoryLabelAnchor> LabelAnchors,
