@@ -273,8 +273,13 @@ public static partial class Warfare
                 foreach (var defender in In(ByProvince, province))
                     if (defender.NationId == enemyId && CampaignIntel.CanSeeArmy(campaign, army.NationId, defender))
                         observedResistance += defender.Power;
-                var score = observedResistance / M.Max(.1f, army.Power) +
-                    topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight;
+                // Weighted, not divided. Dividing the enemy's strength by your own makes
+                // resistance dominate the score by an order of magnitude over everything
+                // else, so every formation on the front picks the single weakest sector and
+                // the front concentrates itself into a breakthrough. The weight keeps the
+                // preference a preference: probe the weak spot, but not across a river.
+                var score = topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight +
+                    observedResistance * 0.018f;
                 if (target >= 0 && (score > bestScore || (score == bestScore && province > target))) continue;
                 bestScore = score;
                 target = province;
@@ -295,12 +300,23 @@ public static partial class Warfare
                 if (army.SupportOnly) continue;
                 var riverAdvance = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier,
                     topology.RiverCrossingStrength(army.ProvinceId, target));
-                // Nearby enemy formations can slow deployment, not form an invisible
-                // impassable wall. Only a defender physically in the target blocks entry.
+                // An empty province is not open ground. The divisions holding the provinces
+                // around it cover the gap by fire, which is what keeps a front a front rather
+                // than a race: a breach has to be widened and held, not strolled through
+                // because nobody happened to be standing in it.
+                //
+                // Letting cover merely slow an advance instead of stopping it, and flooring
+                // that slowdown at a third, is what turned this front into a walkover: over
+                // two years with nobody playing, Ukraine went from losing eight provinces to
+                // losing a hundred and nineteen, and gap captures on the front went from six
+                // to sixty-one. Cover is a wall to a force smaller than what covers the gap,
+                // and no obstacle at all to one that is larger - which is the difference
+                // between an offensive and a walk.
                 var coveringPower = 0f;
                 var covering = 0f;
                 Cover(campaign, topology, target, enemyId, ref coveringPower, ref covering);
-                var contested = M.Clamp(1f / (1f + covering * campaign.Defines.ZoneOfControlResistance), 0.35f, 1f);
+                if (coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
+                var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
                 // Progress belongs to the division, not a pooled province counter: a
                 // hundred divisions must not teleport one another across the border.
                 army.MoveProgress += campaign.Defines.UnopposedCapturePerDay *
@@ -669,10 +685,20 @@ public static partial class Warfare
 
         foreach (var army in Reinforcements)
         {
+            // A formation under a direct order joins the battle it was sent to and no
+            // other - being dragged into a fight next door is exactly what a player who
+            // pointed at a province did not ask for.
+            //
+            // Requiring an active plan and a standing formation on top of that excluded
+            // almost every attacker there was, and an attacker that never joins a battle
+            // never spends anything: the Russian army finished two years at 96 % average
+            // organisation with one formation spent, walked forward against a Ukrainian
+            // army worn to 30 %, and took a hundred and nineteen provinces. Attacking has
+            // to cost the attacker, so whoever is there and able attacks.
             if (army.NationId == battle.AttackerId &&
                 (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) &&
-                army.PlanActive && !army.IsMoving &&
-                (!army.DirectOrder || (army.PlannedRoute.Count > 0 ? army.PlannedRoute[0] : army.OrderProvinceId) == battle.ProvinceId) &&
+                (!army.DirectOrder ||
+                 (army.PlannedRoute.Count > 0 ? army.PlannedRoute[0] : army.OrderProvinceId) == battle.ProvinceId) &&
                 attackerAdded < 2)
             {
                 Join(battle, army, true);

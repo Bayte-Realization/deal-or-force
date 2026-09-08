@@ -11,7 +11,7 @@ public static partial class CampaignIntel
         (!c.Player.IsHuman || CanInspect(c.Player.Id, nationId));
     public static float EstimatedStrength(Campaign c, int viewerId, Nation target) => target is null ? 0 :
         CanInspect(viewerId, target.Id) ? AiStatecraft.StrengthOf(c, target) :
-        Math.Clamp(c.States.Count(s => s.NationMapIndex == target.MapIndex) * 1.6f, 5f, 250f);
+        Math.Clamp(AiStatecraft.RegionsHeldBy(c, target.MapIndex) * 1.6f, 5f, 250f);
     public static float EstimatedNavy(Campaign c, Nation target) =>
-        Math.Clamp(c.States.Count(s => s.NationMapIndex == target.MapIndex) * 3f, 10f, 180f);
+        Math.Clamp(AiStatecraft.RegionsHeldBy(c, target.MapIndex) * 3f, 10f, 180f);
 }

@@ -60,7 +60,7 @@ public static partial class AiStatecraft
 
         // What is actually over there. A neighbour with forty million people is worth more
         // than one with four, and the old rule could not tell them apart.
-        var people = campaign.States.Count(s => s.NationMapIndex == other.MapIndex) / 30f;
+        var people = RegionCount.GetValueOrDefault(other.MapIndex) / 30f;
         value += M.Clamp(people, 0f, 2.2f) * defines.AiConquestAppetite;
 
         // Our own people on the wrong side of the border. The sharpest motive there is, and

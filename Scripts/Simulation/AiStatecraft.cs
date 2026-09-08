@@ -36,6 +36,9 @@ public static partial class AiStatecraft
     /// <summary>Military strength and a map-index lookup, both good for exactly one day.</summary>
     private static readonly Dictionary<int, float> StrengthCache = new();
     private static readonly Dictionary<int, Nation> NationByMapIndex = new();
+
+    /// <summary>Regions each country holds, by map index. Rebuilt with the strength table.</summary>
+    private static readonly Dictionary<int, int> RegionCount = new();
     private static int _cacheDay = -1;
 
     /// <summary>
@@ -59,28 +62,59 @@ public static partial class AiStatecraft
         // player who ignored one is asked again later instead of never.
         PeaceOffers.Expire(campaign);
 
-        // Military strength is a sum over every division in the world, and it was being
-        // recomputed for each neighbour of each country every week - which made the AI the
-        // most expensive system in the simulation by a factor of three. It changes once a
-        // day at most, so it is worked out once a day.
-        if (_cacheDay != campaign.ElapsedDays || !ReferenceEquals(_cacheCampaign, campaign))
-        {
-            _cacheDay = campaign.ElapsedDays;
-            _cacheCampaign = campaign;
-            StrengthCache.Clear();
-            NationByMapIndex.Clear();
-            OverseasCache.Clear();
-            foreach (var candidate in campaign.Nations)
-            {
-                NationByMapIndex[candidate.MapIndex] = candidate;
-                StrengthCache[candidate.Id] = candidate.Gdp * campaign.Defines.AiEconomicWeight;
-            }
-            foreach (var army in campaign.Armies)
-                if (StrengthCache.ContainsKey(army.NationId))
-                    StrengthCache[army.NationId] += army.Divisions * army.Strength *
-                                                    M.Max(0.15f, army.Organisation);
-        }
+        EnsureDailyTables(campaign);
+        ThinkAboutTheNeighbours(campaign);
+    }
 
+    /// <summary>
+    /// What the AI needs to know about the world today, worked out once for everybody.
+    ///
+    /// Military strength is a sum over every division in the world, and it was being
+    /// recomputed for each neighbour of each country every week - which made the AI the
+    /// most expensive system in the simulation by a factor of three. It changes once a day
+    /// at most, so it is worked out once a day.
+    ///
+    /// The same is true of how much ground a country holds, which is how anyone without
+    /// intelligence on a stranger guesses at its strength. That was a walk of the world's
+    /// three thousand regions, with a predicate closing over the stranger, for every
+    /// neighbour of every country every week.
+    ///
+    /// Stamped with the campaign as well as the day: a client rebuilding from a host's
+    /// snapshot holds two campaigns at once, and a table that only knew what day it was
+    /// would answer one of them with the other's world.
+    /// </summary>
+    private static void EnsureDailyTables(Campaign campaign)
+    {
+        if (_cacheDay == campaign.ElapsedDays && ReferenceEquals(_cacheCampaign, campaign)) return;
+        _cacheDay = campaign.ElapsedDays;
+        _cacheCampaign = campaign;
+        StrengthCache.Clear();
+        NationByMapIndex.Clear();
+        OverseasCache.Clear();
+        RegionCount.Clear();
+        foreach (var candidate in campaign.Nations)
+        {
+            NationByMapIndex[candidate.MapIndex] = candidate;
+            StrengthCache[candidate.Id] = candidate.Gdp * campaign.Defines.AiEconomicWeight;
+        }
+        foreach (var state in campaign.States)
+            RegionCount[state.NationMapIndex] = RegionCount.GetValueOrDefault(state.NationMapIndex) + 1;
+        foreach (var army in campaign.Armies)
+            if (StrengthCache.ContainsKey(army.NationId))
+                StrengthCache[army.NationId] += army.Divisions * army.Strength *
+                                                M.Max(0.15f, army.Organisation);
+    }
+
+    /// <summary>How much ground a country holds, from the day's table.</summary>
+    internal static int RegionsHeldBy(Campaign campaign, int mapIndex)
+    {
+        if (campaign is null) return 0;
+        EnsureDailyTables(campaign);
+        return RegionCount.GetValueOrDefault(mapIndex);
+    }
+
+    private static void ThinkAboutTheNeighbours(Campaign campaign)
+    {
         foreach (var nation in campaign.Nations)
         {
             if (nation.IsHuman || nation.Population <= 0) continue;
