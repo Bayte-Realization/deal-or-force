@@ -434,7 +434,12 @@ public static partial class AiStatecraft
     /// </summary>
     private static void Warmaking(Campaign campaign, Nation nation)
     {
-        var ownWar = campaign.Wars.Find(war => !war.Ended && war.Involves(nation.Id));
+        // By hand: Find's predicate closes over `nation`, so asking whether we are already
+        // at war allocated a closure and a delegate every time we asked - which is once a
+        // week for every country in the world.
+        StrategicWar ownWar = null;
+        foreach (var candidate in campaign.Wars)
+            if (!candidate.Ended && candidate.Involves(nation.Id)) { ownWar = candidate; break; }
         if (ownWar is not null) { Negotiate(campaign, nation, ownWar); return; }
         if (!campaign.Defines.AiMayDeclareWar) return;
 

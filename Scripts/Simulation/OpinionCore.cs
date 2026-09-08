@@ -186,8 +186,16 @@ public static class OpinionSystem
     public static void Settle(Campaign campaign, DiplomaticRelation relation)
     {
         if (relation is null) return;
-        relation.Reasons.RemoveAll(reason =>
-            reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays);
+        // By hand, for the same reason as the sweep above: RemoveAll's predicate closes
+        // over `campaign`, and this runs every time any country remembers or forgets
+        // anything about anyone - a closure and a delegate for a list that is almost
+        // always already correct.
+        for (var index = relation.Reasons.Count - 1; index >= 0; index--)
+        {
+            var reason = relation.Reasons[index];
+            if (reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays)
+                relation.Reasons.RemoveAt(index);
+        }
 
         relation.OpinionDrivers.Begin("Opinion", "share");
         var total = 0f;
