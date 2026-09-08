@@ -3697,10 +3697,16 @@ public static class Program
     /// in a RemoveAll, a JSON trigger re-parsed per question, and prose composed for
     /// cabinets nobody was reading. The budget below is the measured figure with room to
     /// breathe; it is here so that the next feature has to notice when it spends it.
+    ///
+    /// Tightened from 420 kB once the fifth habit turned up: an AI asking, for every one of
+    /// its divisions in every one of its wars every day, what sort of war it was fighting -
+    /// and answering by filtering the world's whole order of battle into a fresh array and
+    /// averaging it twice. That alone was 116 kB of the day. A budget nothing ever comes
+    /// near is not a budget, so it now sits where the next feature will feel it.
     /// </summary>
     private static string ADayDoesNotBuryTheCollector(double bytesPerDay)
     {
-        const double budget = 420 * 1024;
+        const double budget = 300 * 1024;
         var perDay = bytesPerDay / 1024.0;
         if (bytesPerDay > budget)
             return $"a campaign day allocated {perDay:N0} kB, over the {budget / 1024:N0} kB budget - " +

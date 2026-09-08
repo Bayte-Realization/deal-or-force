@@ -89,14 +89,66 @@ public static class AiStrategyCatalog
                 else errors?.Add($"Country '{entry.Name}' references an unknown AI profile.");
     }
 
+    /// <summary>
+    /// What one country's army amounts to: how many formations, and their organisation and
+    /// supply - totalled while the table is built, averaged when it is read.
+    /// </summary>
+    private readonly record struct Posture(int Formations, float Organisation, float Supply);
+
+    private static readonly Dictionary<int, Posture> Postures = new();
+    private static Campaign _postureCampaign;
+    private static int _postureDay = int.MinValue;
+
+    /// <summary>
+    /// Every country's army, counted once a day.
+    ///
+    /// Stamped with the campaign it describes as well as the day, because a client
+    /// rebuilding from a host's snapshot holds two campaigns at once and a table that only
+    /// knows what day it is would answer one of them with the other's army.
+    /// </summary>
+    private static Posture PostureOf(Campaign campaign, Nation nation)
+    {
+        if (_postureDay != campaign.ElapsedDays || !ReferenceEquals(_postureCampaign, campaign))
+        {
+            _postureDay = campaign.ElapsedDays;
+            _postureCampaign = campaign;
+            Postures.Clear();
+            foreach (var army in campaign.Armies)
+            {
+                var running = Postures.GetValueOrDefault(army.NationId);
+                Postures[army.NationId] = new Posture(running.Formations + 1,
+                    running.Organisation + army.Organisation, running.Supply + army.SupplyLevel);
+            }
+        }
+
+        // Totals go in, averages come out - dividing here rather than in a second pass over
+        // the table, so the day's work is one walk of the order of battle and nothing else.
+        var summed = Postures.GetValueOrDefault(nation.Id);
+        return summed.Formations == 0
+            ? summed
+            : new Posture(summed.Formations,
+                summed.Organisation / summed.Formations, summed.Supply / summed.Formations);
+    }
+
+    /// <summary>
+    /// Which way this country intends to fight.
+    ///
+    /// Asked for every formation of every country in every live war, every day - which is
+    /// tens of thousands of times a day in a busy world. It used to answer by filtering the
+    /// whole world's order of battle into a fresh array and averaging it twice, with a
+    /// closure and two delegates for each: three quarters of everything the war pass
+    /// allocated, and by a distance the largest single source of garbage in the game.
+    ///
+    /// The answer only changes when the army does, so it is worked out once a day for
+    /// everybody at once and read back here.
+    /// </summary>
     public static AiStrategyDefinition Resolve(Campaign campaign, StrategicWar war, Nation nation)
     {
         if (CountryProfiles.TryGetValue(nation.Tag, out var explicitProfile)) return Definitions[explicitProfile];
-        var armies = campaign.Armies.Where(army => army.NationId == nation.Id).ToArray();
-        var organisation = armies.Length == 0 ? 0f : armies.Average(army => army.Organisation);
-        var supply = armies.Length == 0 ? 0f : armies.Average(army => army.SupplyLevel);
-        if (nation.WarSupport < 0.45f || organisation < 0.46f || supply < 0.48f) return Definitions["defensive"];
-        if (nation.Gdp >= 500f || armies.Length >= 8) return Definitions["major_offensive"];
-        return armies.Length <= 2 ? Definitions["minor_power"] : Definitions["default"];
+        var posture = PostureOf(campaign, nation);
+        if (nation.WarSupport < 0.45f || posture.Organisation < 0.46f || posture.Supply < 0.48f)
+            return Definitions["defensive"];
+        if (nation.Gdp >= 500f || posture.Formations >= 8) return Definitions["major_offensive"];
+        return posture.Formations <= 2 ? Definitions["minor_power"] : Definitions["default"];
     }
 }
