@@ -95,30 +95,41 @@ public static class Attrition
                 Broken.Add(army);
         if (Broken.Count == 0) return;
 
-        foreach (var army in Broken)
-        {
-            campaign.Armies.Remove(army);
-            var owner = campaign.NationById(army.NationId);
-            if (owner is not null) owner.FormationsLost++;
-
-            // The battle it was standing in, and the line it was posted to, both hold its id
-            // rather than the formation itself. A dangling id is harmless where it is read -
-            // the lookup simply misses - but leaving it would put it in a save, so it goes.
-            foreach (var battle in campaign.Battles)
-            {
-                if (battle.Ended) continue;
-                battle.Attackers.Remove(army.Id);
-                battle.Defenders.Remove(army.Id);
-            }
-            foreach (var line in campaign.FrontLines) line.Posts.Remove(army.Id);
-
-            // The same tally the rest of warfare reports through, so the bench and the
-            // in-game console say this out loud rather than leaving a formation to quietly
-            // vanish from a list.
-            Warfare.OutcomeTally["destroyed: broken in the field"] =
-                Warfare.OutcomeTally.GetValueOrDefault("destroyed: broken in the field") + 1;
-        }
+        foreach (var army in Broken) Destroy(campaign, army, "destroyed: broken in the field");
         campaign.MarkStrategicChange();
+    }
+
+    /// <summary>
+    /// Take one formation out of the world, wherever the reason came from.
+    ///
+    /// Shared with the retreat, which needs exactly this and used to have nothing: a
+    /// formation beaten out of a province with no friendly ground next to it was left
+    /// standing in the province it had just lost, and the code said so in a diagnostic
+    /// marked `known_defect=true`. What has actually happened to such a formation is that
+    /// it surrendered, so it is removed and counted.
+    /// </summary>
+    public static void Destroy(Campaign campaign, Army army, string reason)
+    {
+        if (campaign is null || army is null) return;
+        campaign.Armies.Remove(army);
+        var owner = campaign.NationById(army.NationId);
+        if (owner is not null) owner.FormationsLost++;
+
+        // The battle it was standing in, and the line it was posted to, both hold its id
+        // rather than the formation itself. A dangling id is harmless where it is read -
+        // the lookup simply misses - but leaving it would put it in a save, so it goes.
+        foreach (var battle in campaign.Battles)
+        {
+            if (battle.Ended) continue;
+            battle.Attackers.Remove(army.Id);
+            battle.Defenders.Remove(army.Id);
+        }
+        foreach (var line in campaign.FrontLines) line.Posts.Remove(army.Id);
+
+        // The same tally the rest of warfare reports through, so the bench and the in-game
+        // console say this out loud rather than leaving a formation to quietly vanish from
+        // a list.
+        Warfare.OutcomeTally[reason] = Warfare.OutcomeTally.GetValueOrDefault(reason) + 1;
     }
 
     /// <summary>

@@ -797,11 +797,25 @@ public static partial class Warfare
         foreach (var army in retreating)
         {
             var owner = campaign.NationById(army.NationId);
-            var retreat = owner is null ? 0 : topology.Neighbors[provinceId]
-                .FirstOrDefault(candidate => controllers[candidate] == (ushort)owner.MapIndex);
+
+            // By hand: FirstOrDefault's predicate closes over `owner`, so working out where
+            // to fall back to allocated a closure and a delegate for every formation beaten
+            // out of every province.
+            var retreat = 0;
+            if (owner is not null)
+                foreach (var candidate in topology.Neighbors[provinceId])
+                    if (controllers[candidate] == (ushort)owner.MapIndex) { retreat = candidate; break; }
+
+            // Nowhere to go. It was left standing in the province it had just lost, inside
+            // ground the enemy now holds, and the code said as much in a diagnostic marked
+            // as a known defect. What has happened to a formation beaten out of its last
+            // position with no friendly ground behind it is that it surrendered, and that is
+            // now what happens to it - through the same path attrition uses, so it is
+            // counted and reported rather than quietly left in place.
             if (retreat <= 0)
             {
-                DiagnosticLogs.Write("errors", $"RETREAT_NO_EXIT army={army.Id} nation={army.NationId} province={provinceId} war={war.Id} action=left_in_place known_defect=true");
+                DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={provinceId} war={war.Id} reason=no_line_of_retreat");
+                Attrition.Destroy(campaign, army, "destroyed: cut off with no line of retreat");
                 continue;
             }
             DiagnosticLogs.Write("simulation", $"RETREAT army={army.Id} nation={army.NationId} from={provinceId} to={retreat} ready_day={campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays}");

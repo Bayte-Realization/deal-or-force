@@ -482,23 +482,28 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 smooth.Resize(MapWidth / 3, MapHeight / 3, Image.Interpolation.Lanczos);
                 smooth.GenerateMipmaps();
                 _globeMaterial.SetShaderParameter("political_map", ImageTexture.CreateFromImage(smooth));
+                result.PoliticalPixels = null;
                 break;
             }
             case 1:
                 _globeMaterial.SetShaderParameter("region_ids", ImageTexture.CreateFromImage(Image.CreateFromData(
                     MapWidth, MapHeight, false, Image.Format.Rg8, result.RegionIds)));
+                result.RegionIds = null;
                 break;
             case 2:
                 _globeMaterial.SetShaderParameter("province_ids", ImageTexture.CreateFromImage(Image.CreateFromData(
                     MapWidth, MapHeight, false, Image.Format.Rg8, result.ProvinceIds)));
+                result.ProvinceIds = null;
                 break;
             case 3:
                 _globeMaterial.SetShaderParameter("nation_ids", ImageTexture.CreateFromImage(Image.CreateFromData(
                     MapWidth, MapHeight, false, Image.Format.Rg8, result.NationIds)));
+                result.NationIds = null;
                 break;
             case 4:
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(Image.CreateFromData(
                     MapWidth, MapHeight, false, Image.Format.Rg8, result.HydrologyPixels)));
+                result.HydrologyPixels = null;
                 break;
             case 5:
                 ApplyTerrainPresentation(result.Provinces);
@@ -519,6 +524,23 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 RefreshProvinceControllers();
                 _pendingMapResult = null;
                 _mapApplied = true;
+
+                // One collection, here and nowhere else.
+                //
+                // Building the map is the largest allocation the game ever makes: five
+                // rasters of 5760x2880 plus everything the decoders needed to produce them,
+                // all of it on the large-object heap, which a generation-zero or -one pass
+                // never touches. Left alone the heap sits at two thirds of a gigabyte for the
+                // rest of the session, having handed the card its copies long ago.
+                //
+                // Asking for a compacting pass in the middle of play would be indefensible.
+                // Asking for one at the end of loading, which the player is already waiting
+                // through, is the opposite: it is the one moment in the game where a pause
+                // costs nothing and the amount to be reclaimed is at its largest.
+                System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                    System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                GD.Print($"[dof] map applied; managed heap {GC.GetTotalMemory(false) / (1024 * 1024):N0} MB");
                 GD.Print($"[dof] tactical province topology ready: {_provinceTopology.ProvinceCount:N0} land provinces, " +
                          $"{_provinceTopology.RiverCrossingCount:N0} river crossings, " +
                          $"{Simulation.HydrologyCatalog.RiverFeatures.Count:N0} rivers and {Simulation.HydrologyCatalog.LakeFeatures.Count:N0} lakes");
@@ -2939,8 +2961,19 @@ void fragment() {
         // This prevents a click from falling back to an approximate rendered-color lookup.
         if (provinces.ProvinceCount > ushort.MaxValue)
             throw new InvalidOperationException($"Province count {provinces.ProvinceCount} exceeds the 16-bit map contract.");
-        return new MapBuildResult(pixels, regionIds, provinceIds, nationIds, hydrology.Pixels,
-            provinces, labelAnchors, true, provinceSource, hydrology.Source);
+        return new MapBuildResult
+        {
+            PoliticalPixels = pixels,
+            RegionIds = regionIds,
+            ProvinceIds = provinceIds,
+            NationIds = nationIds,
+            HydrologyPixels = hydrology.Pixels,
+            Provinces = provinces,
+            LabelAnchors = labelAnchors,
+            ProvinceRasterLoaded = true,
+            ProvinceSource = provinceSource,
+            HydrologySource = hydrology.Source
+        };
     }
 
     private static Dictionary<int, TerritoryLabelAnchor> BuildTerritoryLabelAnchors(
@@ -3071,17 +3104,33 @@ void fragment() {
         return anchors;
     }
 
-    private sealed record MapBuildResult(
-        byte[] PoliticalPixels,
-        byte[] RegionIds,
-        byte[] ProvinceIds,
-        byte[] NationIds,
-        byte[] HydrologyPixels,
-        Simulation.ProvinceTopology Provinces,
-        Dictionary<int, TerritoryLabelAnchor> LabelAnchors,
-        bool ProvinceRasterLoaded,
-        string ProvinceSource,
-        string HydrologySource);
+    /// <summary>
+    /// What the map worker built, and what it lets go of on the way in.
+    ///
+    /// A class with settable rasters rather than a record with init-only ones, for one
+    /// reason: the five rasters are 199 MB between them at 5760x2880, and every one of them
+    /// is wanted exactly once - to hand to `Image.CreateFromData`, which copies it. Holding
+    /// all five until the last of the six upload stages finishes is 199 MB of peak that
+    /// nothing is reading, on the hardware this game most wants to reach.
+    ///
+    /// So each one is dropped the moment its stage has uploaded it. They are large enough to
+    /// go straight to the large-object heap, which is collected only on a generation-two
+    /// pass, so being dropped early is what makes the one collection at the end able to
+    /// return them.
+    /// </summary>
+    private sealed class MapBuildResult
+    {
+        public byte[] PoliticalPixels;
+        public byte[] RegionIds;
+        public byte[] ProvinceIds;
+        public byte[] NationIds;
+        public byte[] HydrologyPixels;
+        public Simulation.ProvinceTopology Provinces;
+        public Dictionary<int, TerritoryLabelAnchor> LabelAnchors;
+        public bool ProvinceRasterLoaded;
+        public string ProvinceSource = "";
+        public string HydrologySource = "";
+    }
 
     /// <summary>
     /// Where a country's name goes, and how much room it actually has.

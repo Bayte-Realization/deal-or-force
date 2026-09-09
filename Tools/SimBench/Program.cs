@@ -573,7 +573,8 @@ public static class Program
                           $"{war.DefenderLosses:N0} UKR casualties, war score {war.WarScore:+0.0;-0.0;0.0}.");
         Console.WriteLine($"  engagements: {battles:N0} battles worldwide ({live:N0} live on this front), " +
                           $"front assignment {russianDivisions:N0} RUS / {ukrainianDivisions:N0} UKR divisions, " +
-                          $"front {war.AttackerFront.Count:N0}/{war.DefenderFront.Count:N0} provinces.");
+                          $"fronts {war.AttackerFront.Count:N0} attacking and " +
+                          $"{war.DefenderFront.Count:N0} defending province(s).");
 
         // Why the line is where it is. A stalemate produced by divisions that never got
         // an order, never finished a plan, or never stood next to the enemy is a bug that
