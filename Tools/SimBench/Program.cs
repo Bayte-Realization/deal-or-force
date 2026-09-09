@@ -2746,8 +2746,11 @@ public static class Program
             if (string.Equals(name, "english", StringComparison.OrdinalIgnoreCase)) continue;
             var table = ReadLocalizationTable(name);
             if (table is null) continue;
+            // `language.name` is every table's own name for its own language, so it is not
+            // one of the strings there is to translate and belongs in neither half of this.
             var translated = 0;
-            foreach (var key in english.Keys) if (table.ContainsKey(key)) translated++;
+            foreach (var key in english.Keys)
+                if (key != "language.name" && table.ContainsKey(key)) translated++;
             var orphans = 0;
             foreach (var key in table.Keys) if (!english.ContainsKey(key)) orphans++;
             report.Add($"{name} {translated}/{english.Count - 1} ({orphans} row(s) naming nothing indexed)");
