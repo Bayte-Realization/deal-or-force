@@ -1,0 +1,21 @@
+// A good the base game has never heard of.
+//
+// The twenty goods are an enum in code, which sounds like a hard limit and is not: an enum
+// in C# is a number with names for some of its values, and the catalogs keep their own name
+// tables. An id this catalog has not seen is a new good, provided it says what it is called
+// and what it is worth - without those it is a typo, and refusing typos is most of what a
+// catalog is for.
+//
+// From here it is exactly like the other twenty: a market quote in every country, a place in
+// the ledger, something the trade routes carry. What it does not have yet is a way of being
+// made - see common/production/new_chain.json beside this file.
+
+{
+  "titanium": {
+    "name": "Titanium",
+    "icon": "◈",
+    "base_price": 0.132,
+    "essential_weight": 0.28,
+    "description": "Airframes, hulls and things that must not be heavy."
+  }
+}

@@ -109,17 +109,51 @@ public static class CommodityCatalog
     };
     private static readonly Dictionary<Commodity, CommodityDefinition> Definitions = new();
 
+    /// <summary>
+    /// What each good is called in a file, and which good that is - including the ones no
+    /// enum ever named.
+    ///
+    /// `Commodity` is an enum, and an enum in C# is an int with names for some of its values.
+    /// `(Commodity)20` is a perfectly good value: a dictionary key, a field, a number in a
+    /// save. What stopped a mod inventing a twenty-first good was never the enum, it was that
+    /// every road into the catalog went through `Enum.TryParse`, which only knows the twenty
+    /// that were compiled. So the catalog keeps its own name table, hands out the next free
+    /// number to an id it has not seen, and the enum keeps naming the twenty the game ships -
+    /// which is what lets `Commodity.Food` go on meaning what it means in a hundred places.
+    /// </summary>
+    private static readonly Dictionary<string, Commodity> Named =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly Dictionary<Commodity, string> Ids = new();
+    private static int _nextId;
+
+    /// <summary>A good the catalog has forgotten - a mod's, after the mod is gone.</summary>
+    private static readonly CommodityDefinition Unknown =
+        new("Unknown good", "?", 0.02f, 0f, "Declared by content that is no longer loaded.");
+
     public static IEnumerable<Commodity> All => Definitions.Keys;
-    public static CommodityDefinition Get(Commodity commodity) => Definitions[commodity];
+
+    public static CommodityDefinition Get(Commodity commodity) =>
+        Definitions.TryGetValue(commodity, out var definition) ? definition : Unknown;
+
+    /// <summary>The name this good has in a file, which is what a save should be keyed by.</summary>
+    public static string IdOf(Commodity commodity) =>
+        Ids.TryGetValue(commodity, out var id) ? id : ((int)commodity).ToString();
 
     static CommodityCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
     {
         Definitions.Clear();
+        Named.Clear();
+        Ids.Clear();
+        _nextId = 0;
         foreach (var entry in Defaults)
+        {
             Definitions[entry.Key] = new CommodityDefinition(entry.Value.Name, entry.Value.Icon,
                 entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description);
+            Register(entry.Key, entry.Key.ToString());
+        }
         foreach (var document in GameDataLoader.DataDocuments("common", "goods"))
             using (document)
             foreach (var entry in document.RootElement.EnumerateObject())
@@ -136,12 +170,43 @@ public static class CommodityCatalog
             }
     }
 
-    public static bool TryParse(string id, out Commodity commodity) =>
-        Enum.TryParse(id?.Replace("_", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal), true, out commodity);
+    private static string Squash(string id) => id is null
+        ? ""
+        : id.Replace("_", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal);
 
+    private static void Register(Commodity commodity, string id)
+    {
+        Named[Squash(id)] = commodity;
+        Ids[commodity] = id;
+        if ((int)commodity >= _nextId) _nextId = (int)commodity + 1;
+    }
+
+    /// <summary>Which good a file means, if the catalog has one by that name.</summary>
+    public static bool TryParse(string id, out Commodity commodity) =>
+        Named.TryGetValue(Squash(id), out commodity);
+
+    /// <summary>
+    /// Change a good, or declare one that did not exist.
+    ///
+    /// An unknown id used to be rejected, which is what made the twenty a hard limit. It is
+    /// now a new good, on one condition: a name and a base price, because a good with neither
+    /// is a typo rather than a declaration and rejecting typos is most of what a catalog is
+    /// for. Everything about it after that is the same as everything about the other twenty -
+    /// it gets a market quote in every country, it can be produced and consumed by recipes in
+    /// `common/production`, it trades, and it appears in the ledger.
+    /// </summary>
     public static bool Override(string id, string name, string icon, float? basePrice, float? essentialWeight, string description)
     {
-        if (!TryParse(id, out var commodity)) return false;
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        if (!TryParse(id, out var commodity))
+        {
+            if (string.IsNullOrWhiteSpace(name) || basePrice is not > 0f) return false;
+            commodity = (Commodity)_nextId;
+            Register(commodity, id);
+            Definitions[commodity] = new CommodityDefinition(name, icon ?? "◆", basePrice.Value,
+                essentialWeight ?? 0.3f, description ?? "");
+            return true;
+        }
         var definition = Definitions[commodity];
         if (!string.IsNullOrWhiteSpace(name)) definition.Name = name;
         if (!string.IsNullOrWhiteSpace(icon)) definition.Icon = icon;
@@ -361,8 +426,16 @@ public static class MarketSystem
 
     private static void CalculateNationalBalance(Campaign campaign, Nation nation)
     {
-        if (nation.Market.Count == 0)
-            foreach (var commodity in CommodityCatalog.All)
+        // Every good the catalog knows, not only when the market is empty.
+        //
+        // This used to seed only a market with nothing in it, which was right while the
+        // twenty goods were fixed and is wrong now that a mod can declare a twenty-first.
+        // Enabling such a mod and loading an existing campaign left every country without a
+        // quote for the new good, and the trade pass reads that quote by index - so the
+        // first market week after enabling the mod threw. Topping up costs one dictionary
+        // probe per good per country per week and cannot be got wrong.
+        foreach (var commodity in CommodityCatalog.All)
+            if (!nation.Market.ContainsKey(commodity))
                 nation.Market[commodity] = new MarketQuote { Commodity = commodity, Price = CommodityCatalog.Get(commodity).BasePrice };
 
         foreach (var quote in nation.Market.Values)

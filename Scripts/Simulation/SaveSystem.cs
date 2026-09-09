@@ -277,6 +277,24 @@ public static class SaveSystem
         /// dispositions were gone with no message anywhere.
         /// </summary>
         public List<DrawnFrontLine> FrontLines = new();
+
+        /// <summary>
+        /// What each good and building was called when this was written, against the number
+        /// it was stored as.
+        ///
+        /// A good is an enum value, which is to say a number, and the game's own twenty
+        /// always have the same numbers. A good declared by a mod is handed the next free
+        /// one, so which number it gets depends on the order the mods were read - which
+        /// means the same save, opened with the same mods in a different order, would find
+        /// its aluminium where somebody else's fertiliser used to be. Silently: a number is
+        /// a number and nothing would complain.
+        ///
+        /// So the names travel with the save and the numbers are re-derived on the way back
+        /// in. Absent - every save written before this existed - means the twenty and the
+        /// seventeen the game ships, which have never moved.
+        /// </summary>
+        public Dictionary<string, int> GoodIds = new();
+        public Dictionary<string, int> BuildingIds = new();
         public int NextFrontLineId;
         public List<LandBattle> Battles = new();
         public List<ConstructionProject> Construction = new();
@@ -324,6 +342,8 @@ public static class SaveSystem
             PendingEvents = new List<PendingCampaignEvent>(campaign.PendingEvents),
             Relations = new Dictionary<long, DiplomaticRelation>(campaign.Relations),
             History = campaign.History.Export(),
+            GoodIds = CommodityIdTable(),
+            BuildingIds = BuildingIdTable(),
             ProvinceController = campaign.ProvinceController is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceController.Clone(),
             ProvinceOccupation = campaign.ProvinceOccupation is null ? Array.Empty<float>() : (float[])campaign.ProvinceOccupation.Clone(),
             ProvinceOwner = campaign.ProvinceMap is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceMap.ProvinceToNation.Clone(),
@@ -361,6 +381,9 @@ public static class SaveSystem
             // against the bootstrap campaign no longer describes it.
             campaign.InvalidateStateIndex();
 
+            // Before anything reads a good or a building out of the restored campaign.
+            RemapContent(campaign);
+
             // A save written before output became emergent carries no calibration factor.
             // Recalibrating against the GDP the save already holds is exactly right for
             // both cases: an old save keeps the economy it was played with, and a current
@@ -369,6 +392,90 @@ public static class SaveSystem
                 EconomySystem.CalibrateOutput(campaign);
 
             return campaign;
+        }
+
+        private static Dictionary<string, int> CommodityIdTable()
+        {
+            var table = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var commodity in CommodityCatalog.All)
+                table[CommodityCatalog.IdOf(commodity)] = (int)commodity;
+            return table;
+        }
+
+        private static Dictionary<string, int> BuildingIdTable()
+        {
+            var table = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var kind in BuildingCatalog.All)
+                table[BuildingCatalog.IdOf(kind)] = (int)kind;
+            return table;
+        }
+
+        /// <summary>
+        /// Put the campaign's goods and buildings back on the numbers this catalog uses.
+        ///
+        /// Does nothing at all in the ordinary case, which is every save without mods and
+        /// most saves with them: the numbers only move when a mod that declared a good is
+        /// read in a different position than it was. Six things hold one of these values -
+        /// a country's market, a region's buildings and its deposits, a market quote's own
+        /// note of which good it is, a construction project, and a trade route.
+        /// </summary>
+        private void RemapContent(Campaign campaign)
+        {
+            var goods = Moved(GoodIds, id => CommodityCatalog.TryParse(id, out var now) ? (int)now : -1);
+            var buildings = Moved(BuildingIds, id => BuildingCatalog.TryParse(id, out var now) ? (int)now : -1);
+            if (goods.Count == 0 && buildings.Count == 0) return;
+
+            DiagnosticLogs.Write("system",
+                $"SAVE_REMAP goods={goods.Count} buildings={buildings.Count}");
+
+            foreach (var nation in campaign.Nations)
+            {
+                Rekey(nation.Market, goods, key => (Commodity)key);
+                foreach (var quote in nation.Market.Values)
+                    if (goods.TryGetValue((int)quote.Commodity, out var moved))
+                        quote.Commodity = (Commodity)moved;
+            }
+            foreach (var state in campaign.States)
+            {
+                Rekey(state.Buildings, buildings, key => (BuildingKind)key);
+                Rekey(state.ResourceDeposits, goods, key => (Commodity)key);
+            }
+            foreach (var project in campaign.Construction)
+                if (buildings.TryGetValue((int)project.Building, out var moved))
+                    project.Building = (BuildingKind)moved;
+            foreach (var route in campaign.TradeRoutes)
+                if (goods.TryGetValue((int)route.Commodity, out var moved))
+                    route.Commodity = (Commodity)moved;
+        }
+
+        /// <summary>Only the ones whose number actually changed; a name the catalog no longer
+        /// has is left where it is, so removing a mod costs its own goods and nothing else.</summary>
+        private static Dictionary<int, int> Moved(Dictionary<string, int> saved, Func<string, int> now)
+        {
+            var moved = new Dictionary<int, int>();
+            if (saved is null) return moved;
+            foreach (var entry in saved)
+            {
+                var current = now(entry.Key);
+                if (current >= 0 && current != entry.Value) moved[entry.Value] = current;
+            }
+            return moved;
+        }
+
+        private static void Rekey<TKey, TValue>(Dictionary<TKey, TValue> table,
+            Dictionary<int, int> moved, Func<int, TKey> asKey) where TKey : struct, Enum
+        {
+            if (moved.Count == 0 || table.Count == 0) return;
+            var rebuilt = new List<KeyValuePair<TKey, TValue>>(table.Count);
+            foreach (var entry in table)
+            {
+                var number = Convert.ToInt32(entry.Key);
+                rebuilt.Add(moved.TryGetValue(number, out var to)
+                    ? new KeyValuePair<TKey, TValue>(asKey(to), entry.Value)
+                    : entry);
+            }
+            table.Clear();
+            foreach (var entry in rebuilt) table[entry.Key] = entry.Value;
         }
 
         private static void Replace<T>(List<T> target, List<T> source)

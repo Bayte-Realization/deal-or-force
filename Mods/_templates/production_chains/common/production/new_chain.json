@@ -1,0 +1,26 @@
+// What the new building makes, and who wants it.
+//
+// A good and a building declared in this same mod are named here exactly as the base game's
+// own are: by their id. Nothing in the recipe format knows or cares which of them the game
+// shipped with.
+
+{
+  "titanium_milling": {
+    "good": "titanium",
+    "output": {
+      "titanium_mill": 2.4,
+      "deposit:IronOre*extraction_efficiency": 0.2
+    },
+    // Smelting titanium is famously electricity-hungry: at half supply this loses a fifth of
+    // its output rather than a tenth.
+    "needs": { "Energy": 0.55 },
+    "demand": { "CivilianIndustry": 0.3, "ArmsIndustry": 0.5, "Shipyard": 0.4 }
+  },
+
+  // And a reason for anyone to want it: aircraft and warships get lighter, so the arms
+  // industry buys titanium instead of some of its aluminium.
+  "arms_prefer_titanium": {
+    "good": "Aluminium",
+    "output": { "ArmsIndustry": -0.18 }
+  }
+}

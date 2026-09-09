@@ -123,21 +123,62 @@ public static class BuildingCatalog
     };
     private static readonly Dictionary<BuildingKind, BuildingDefinition> Definitions = new();
 
-    public static BuildingDefinition Get(BuildingKind kind) => Definitions[kind];
+    /// <summary>
+    /// What each building is called in a file, and which building that is - see the same
+    /// note on `CommodityCatalog`: the enum names the ones the game ships and does not stop
+    /// a mod declaring an eighteenth.
+    /// </summary>
+    private static readonly Dictionary<string, BuildingKind> Named =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly Dictionary<BuildingKind, string> Ids = new();
+    private static int _nextId;
+
+    private static readonly BuildingDefinition Unknown =
+        new("Unknown building", 1f, 180, 0f, 0f, "Declared by content that is no longer loaded.");
+
+    public static BuildingDefinition Get(BuildingKind kind) =>
+        Definitions.TryGetValue(kind, out var definition) ? definition : Unknown;
+
     public static IEnumerable<BuildingKind> All => Definitions.Keys;
+
+    /// <summary>The name this building has in a file, which is what a save should be keyed by.</summary>
+    public static string IdOf(BuildingKind kind) =>
+        Ids.TryGetValue(kind, out var id) ? id : ((int)kind).ToString();
+
+    private static string Squash(string id) => id is null
+        ? ""
+        : id.Replace("_", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal);
+
+    private static void Register(BuildingKind kind, string id)
+    {
+        Named[Squash(id)] = kind;
+        Ids[kind] = id;
+        if ((int)kind >= _nextId) _nextId = (int)kind + 1;
+    }
+
+    /// <summary>Which building a file means, if the catalog has one by that name.</summary>
+    public static bool TryParse(string id, out BuildingKind kind) =>
+        Named.TryGetValue(Squash(id), out kind);
 
     static BuildingCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
     {
         Definitions.Clear();
-        foreach (var entry in Defaults) Definitions[entry.Key] = entry.Value;
+        Named.Clear();
+        Ids.Clear();
+        _nextId = 0;
+        foreach (var entry in Defaults)
+        {
+            Definitions[entry.Key] = entry.Value;
+            Register(entry.Key, entry.Key.ToString());
+        }
         foreach (var document in GameDataLoader.DataDocuments("common", "buildings"))
             using (document)
             foreach (var entry in document.RootElement.EnumerateObject())
             {
-                if (!Enum.TryParse<BuildingKind>(entry.Name, true, out var kind) || entry.Value.ValueKind != JsonValueKind.Object)
-                    continue;
+                if (entry.Value.ValueKind != JsonValueKind.Object) continue;
                 var value = entry.Value;
                 Text(value, "name", out var name);
                 Text(value, "description", out var description);
@@ -145,8 +186,31 @@ public static class BuildingCatalog
                 Integer(value, "days", out var days);
                 Number(value, "gdp_gain", out var gdp);
                 Number(value, "capacity_gain", out var capacity);
-                Override(kind, name, cost, days, gdp, capacity, description);
+                Declare(entry.Name, name, cost, days, gdp, capacity, description);
             }
+    }
+
+    /// <summary>
+    /// Change a building, or declare one that did not exist.
+    ///
+    /// A new building needs a name, a cost and a build time; without them it is a typo. What
+    /// it does not get for free is a place in any production chain - a building nothing is
+    /// made out of raises GDP and employs people and nothing else, which is a legitimate
+    /// thing to want and also the first thing to check when a mod's new works does nothing.
+    /// Give it output in `common/production`.
+    /// </summary>
+    public static bool Declare(string id, string name, float? cost, int? days,
+        float? gdpGain, float? capacityGain, string description)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return false;
+        if (TryParse(id, out var existing))
+            return Override(existing, name, cost, days, gdpGain, capacityGain, description);
+        if (string.IsNullOrWhiteSpace(name) || cost is not > 0f || days is not > 0) return false;
+        var kind = (BuildingKind)_nextId;
+        Register(kind, id);
+        Definitions[kind] = new BuildingDefinition(name, cost.Value, days.Value,
+            gdpGain ?? 0f, capacityGain ?? 0f, description ?? "");
+        return true;
     }
 
     public static bool Override(BuildingKind kind, string name, float? cost, int? days,

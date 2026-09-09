@@ -93,7 +93,7 @@ public static class HistoryDataLoader
             SetFloat(value, "urbanization", number => state.Urbanization = M.Clamp01(number));
             if (value.TryGetProperty("buildings", out var buildings) && buildings.ValueKind == JsonValueKind.Object)
                 foreach (var building in buildings.EnumerateObject())
-                    if (Enum.TryParse<BuildingKind>(building.Name, true, out var kind) && building.Value.TryGetInt32(out var level))
+                    if (BuildingCatalog.TryParse(building.Name, out var kind) && building.Value.TryGetInt32(out var level))
                         state.Buildings[kind] = Math.Max(0, level);
                     else errors?.Add($"Invalid building '{building.Name}' in state '{entry.Name}'.");
             if (value.TryGetProperty("resources", out var resources) && resources.ValueKind == JsonValueKind.Object)

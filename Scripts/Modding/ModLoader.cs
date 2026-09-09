@@ -200,18 +200,23 @@ public sealed class ModLoader
             using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
             {
-                if (!Enum.TryParse<BuildingKind>(entry.Name, true, out var kind) || entry.Value.ValueKind != JsonValueKind.Object)
+                if (entry.Value.ValueKind != JsonValueKind.Object)
                 {
-                    package.Errors.Add($"Unknown building '{entry.Name}' in {Path.GetFileName(path)}");
+                    package.Errors.Add($"Building '{entry.Name}' in {Path.GetFileName(path)} is not an object");
                     continue;
                 }
                 var value = entry.Value;
                 string Text(string key) => value.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
                 float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
                 int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
-                if (!BuildingCatalog.Override(kind, Text("name"), Number("cost"), Integer("days"),
+                // Declare rather than override: a name this catalog has not seen is a new
+                // building, provided it says what it costs and how long it takes. Without
+                // those it is a typo, and refusing typos is most of what a catalog is for.
+                if (!BuildingCatalog.Declare(entry.Name, Text("name"), Number("cost"), Integer("days"),
                         Number("gdp_gain"), Number("capacity_gain"), Text("description")))
-                    package.Errors.Add($"Invalid building values for '{entry.Name}' in {Path.GetFileName(path)}");
+                    package.Errors.Add($"Building '{entry.Name}' in {Path.GetFileName(path)} is neither a " +
+                                       "valid change to an existing one nor a complete new one " +
+                                       "(a new building needs name, cost and days)");
             }
         }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }

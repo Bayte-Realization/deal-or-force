@@ -147,6 +147,8 @@ public static class Program
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
         failures += Check("the English table indexes every string the game shows",
             TheEnglishTableIsAnIndex());
+        failures += Check("a mod can add a good and a building the game never had",
+            AModCanAddAGood(campaign));
         failures += Check("every good is made by something and eaten by something",
             TheChainsHangTogether());
         failures += Check("every mod template names something the game actually has",
@@ -2841,6 +2843,112 @@ public static class Program
     }
 
     /// <summary>
+    /// Whether a twenty-first good is really possible, or only nearly.
+    ///
+    /// The goods and the buildings are enums, which sounds like a hard limit and is not: an
+    /// enum in C# is an int with names for some of its values, and `(Commodity)20` is a
+    /// perfectly good dictionary key, field and number in a save. What used to stop a mod was
+    /// that every road into the catalogs went through `Enum.TryParse`, which knows only the
+    /// names that were compiled. The catalogs keep their own name tables now.
+    ///
+    /// This declares a good and a building that exist nowhere in the game, gives the building
+    /// a recipe that makes the good, and then insists on the whole chain: that a country ends
+    /// up with a market quote for it, that a region can hold the building, that production
+    /// actually happens, and - the part that is easy to get wrong - that a save written with
+    /// them comes back with them, on the right numbers.
+    ///
+    /// That last one is why the save carries a name-to-number table. A modded good is handed
+    /// the next free number, so which number it gets depends on the order the mods were read;
+    /// without the table, the same save opened with the same mods in a different order would
+    /// quietly find one good where another had been. The check simulates exactly that by
+    /// moving the good before restoring.
+    /// </summary>
+    private static string AModCanAddAGood(Campaign world)
+    {
+        const string GoodId = "bench_alloy";
+        const string BuildingId = "bench_works";
+        try
+        {
+            if (!CommodityCatalog.Override(GoodId, "Bench alloy", "◆", 0.06f, 0.25f, "A good no enum names."))
+                return "the catalog refused a complete new good";
+            if (!CommodityCatalog.TryParse(GoodId, out var alloy))
+                return "the catalog accepted a new good and then could not find it by name";
+            if (!BuildingCatalog.Declare(BuildingId, "Bench works", 2.0f, 200, 1.0f, 0.1f, "A building no enum names."))
+                return "the catalog refused a complete new building";
+            if (!BuildingCatalog.TryParse(BuildingId, out var works))
+                return "the catalog accepted a new building and then could not find it by name";
+            if ((int)alloy < 20 || (int)works < 17)
+                return $"the new good and building took numbers {(int)alloy} and {(int)works}, " +
+                       "which are numbers the game already uses";
+
+            var problems = new List<string>();
+            ProductionChains.Merge($@"{{
+                ""bench_alloy_works"": {{
+                    ""good"": ""{GoodId}"",
+                    ""output"": {{ ""{BuildingId}"": 3.0, ""CivilianIndustry"": 0.4 }},
+                    ""demand"": {{ ""population"": 0.05 }}
+                }} }}", problems);
+            if (problems.Count > 0)
+                return $"a recipe naming the new good and building was rejected: {problems[0]}";
+
+            // On a copy of the world rather than on the world: this check plants buildings
+            // and ticks days, and every check after it would inherit that.
+            var seed = SaveSystem.ExportNetworkSnapshot(world, "bench");
+            if (seed is null || seed.Length == 0) return "the world would not export to copy";
+            var campaign = SaveSystem.ImportNetworkSnapshot(seed, "bench").Campaign;
+            if (campaign is null) return "the copy of the world would not load";
+            campaign.AttachProvinceTopology(world.ProvinceMap);
+            var nation = campaign.Nations.FirstOrDefault(candidate => candidate.Population > 0);
+            if (nation is null) return "the scenario made no country to test with";
+            var region = campaign.States.FirstOrDefault(state => state.NationMapIndex == nation.MapIndex);
+            if (region is null) return $"{nation.Tag} holds no region";
+            region.Buildings[works] = 6;
+
+            for (var day = 0; day < 30; day++) campaign.Tick();
+
+            if (!nation.Market.TryGetValue(alloy, out var quote))
+                return $"{nation.Tag} has no market quote for a good the catalog knows about";
+            if (quote.Production <= 0f)
+                return $"six of the new building produced {quote.Production:F3} of the new good - " +
+                       "the recipe reached the market pass but made nothing";
+
+            // Now move it, the way a different mod order would, and make sure the save
+            // brings it back where it belongs rather than where its number pointed.
+            var bytes = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
+            if (bytes is null || bytes.Length == 0) return "the campaign would not export";
+            var beforeMove = (int)alloy;
+            CommodityCatalog.ResetCatalog();
+            CommodityCatalog.Override("bench_spacer", "Spacer", "·", 0.01f, 0f, "Takes the number the alloy had.");
+            CommodityCatalog.Override(GoodId, "Bench alloy", "◆", 0.06f, 0.25f, "A good no enum names.");
+            if (!CommodityCatalog.TryParse(GoodId, out var moved) || (int)moved == beforeMove)
+                return "the test could not move the good, so it proves nothing about moving it";
+
+            var restored = SaveSystem.ImportNetworkSnapshot(bytes, "bench").Campaign;
+            if (restored is null) return "the campaign with a modded good would not load back";
+            var restoredNation = restored.Nations.FirstOrDefault(candidate => candidate.Id == nation.Id);
+            if (restoredNation is null) return "the country did not come back";
+            if (!restoredNation.Market.TryGetValue(moved, out var back))
+                return $"the new good was saved as {beforeMove} and the catalog now calls it " +
+                       $"{(int)moved}, and the save did not follow it";
+            if (Math.Abs(back.Production - quote.Production) > 0.001f)
+                return $"the good came back on the right number with the wrong figure: " +
+                       $"{back.Production:F3} against {quote.Production:F3}";
+
+            Console.WriteLine($"  moddability: a good and a building the enums never named took numbers " +
+                              $"{beforeMove} and {(int)works}, were built and produced, survived a save, and " +
+                              $"followed their own name to {(int)moved} when the numbering changed under them.");
+            return "";
+        }
+        finally
+        {
+            // Whatever happened, the next check gets the game's own catalogs back.
+            CommodityCatalog.ResetCatalog();
+            BuildingCatalog.ResetCatalog();
+            ProductionChains.ResetCatalog();
+        }
+    }
+
+    /// <summary>
     /// Whether the shipped production chains describe a world that works.
     ///
     /// They are data now, which is the point and also the risk: a factor spelled
@@ -2882,6 +2990,53 @@ public static class Program
         Console.WriteLine($"  production: {ProductionChains.RecipeCount} recipe(s) in common/production " +
                           $"make and consume all {made.Count} good(s), and a mod can retune any of them by name.");
         return "";
+    }
+
+    /// <summary>
+    /// Everything one template declares, declared - so the rest of it can be read.
+    ///
+    /// A template that invents a good and then writes a recipe for it is a correct template,
+    /// and judging its recipe against the base game's twenty goods would call it broken. So
+    /// the check does what the loader does: goods and buildings first, then the rest.
+    /// </summary>
+    private static void DeclareTemplateContent(string common, System.Text.Json.JsonDocumentOptions options)
+    {
+        Declare(Path.Combine(common, "goods"), (name, value) =>
+        {
+            string Text(string key) => value.TryGetProperty(key, out var e) &&
+                e.ValueKind == System.Text.Json.JsonValueKind.String ? e.GetString() : null;
+            float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
+            CommodityCatalog.Override(name, Text("name"), Text("icon"), Number("base_price"),
+                Number("essential_weight"), Text("description"));
+        });
+        Declare(Path.Combine(common, "buildings"), (name, value) =>
+        {
+            string Text(string key) => value.TryGetProperty(key, out var e) &&
+                e.ValueKind == System.Text.Json.JsonValueKind.String ? e.GetString() : null;
+            float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
+            int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
+            BuildingCatalog.Declare(name, Text("name"), Number("cost"), Integer("days"),
+                Number("gdp_gain"), Number("capacity_gain"), Text("description"));
+        });
+
+        void Declare(string folder, Action<string, System.Text.Json.JsonElement> apply)
+        {
+            if (!Directory.Exists(folder)) return;
+            foreach (var file in Directory.GetFiles(folder, "*.json")
+                         .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+            {
+                System.Text.Json.JsonDocument document;
+                try { document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file), options); }
+                catch { continue; }
+                using (document)
+                {
+                    if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                    foreach (var entry in document.RootElement.EnumerateObject())
+                        if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                            apply(entry.Name, entry.Value);
+                }
+            }
+        }
     }
 
     /// <summary>One template recipe, put through the loader that will have to read it.</summary>
@@ -2939,6 +3094,12 @@ public static class Program
 
             var common = Path.Combine(directory, "common");
             if (!Directory.Exists(common)) continue;
+
+            // Declare this package's own goods and buildings before judging anything, in the
+            // order the mod loader would, because a template is allowed to invent them and a
+            // recipe naming one has to be readable. The catalogs go back to the game's own
+            // at the end of the package.
+            DeclareTemplateContent(common, options);
             foreach (var category in Directory.GetDirectories(common))
             foreach (var file in Directory.GetFiles(category, "*.json"))
             {
@@ -2959,8 +3120,10 @@ public static class Program
                         var known = kind switch
                         {
                             "defines" => defines.Contains(Squash(entry.Name)),
-                            "goods" => Enum.TryParse<Commodity>(entry.Name, true, out _),
-                            "buildings" => Enum.TryParse<BuildingKind>(entry.Name, true, out _),
+                            // The catalog's rule, not the enum's: a template may invent a
+                            // good or a building, and by now this package's have been.
+                            "goods" => CommodityCatalog.TryParse(entry.Name, out _),
+                            "buildings" => BuildingCatalog.TryParse(entry.Name, out _),
                             // A recipe's name is its own, so what is checked is the recipe:
                             // the good it claims to make and every factor it asks for.
                             "production" => Recipe(entry, file, templates, complaints),
@@ -2976,6 +3139,9 @@ public static class Program
                     }
                 }
             }
+            CommodityCatalog.ResetCatalog();
+            BuildingCatalog.ResetCatalog();
+            ProductionChains.ResetCatalog();
         }
 
         if (complaints.Count > 0) return string.Join("; ", complaints);

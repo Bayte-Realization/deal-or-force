@@ -61,8 +61,13 @@ public static class ProductionChains
     private const int SlotTimberYield = 11;
     private const int FixedSlots = 12;
 
-    private static readonly int BuildingKinds = Enum.GetValues<BuildingKind>().Length;
-    private static readonly int CommodityKinds = Enum.GetValues<Commodity>().Length;
+    // Sized for what a mod might add rather than for what the enums name, because a good or
+    // a building declared in data is a number past the last one the enum has a name for, and
+    // it indexes this table like any other. Sixty-four spare of each is a table of a few
+    // hundred floats - nothing next to being unable to add a twenty-first good.
+    private const int ModdedHeadroom = 64;
+    private static readonly int BuildingKinds = Enum.GetValues<BuildingKind>().Length + ModdedHeadroom;
+    private static readonly int CommodityKinds = Enum.GetValues<Commodity>().Length + ModdedHeadroom;
 
     /// <summary>Staffed building count: the count times the nation's output factor.</summary>
     private static int StaffedSlot(BuildingKind kind) => FixedSlots + (int)kind;
@@ -312,17 +317,20 @@ public static class ProductionChains
         if (name.StartsWith("deposit:", StringComparison.OrdinalIgnoreCase) &&
             CommodityCatalog.TryParse(name["deposit:".Length..], out var commodity))
         {
+            if ((int)commodity >= CommodityKinds) return -1;
             DepositsSeen.Add(commodity);
             return DepositSlot(commodity);
         }
         if (name.StartsWith("raw:", StringComparison.OrdinalIgnoreCase) &&
-            Enum.TryParse<BuildingKind>(name["raw:".Length..], true, out var unstaffed))
+            BuildingCatalog.TryParse(name["raw:".Length..], out var unstaffed))
         {
+            if ((int)unstaffed >= BuildingKinds) return -1;
             RawSeen.Add(unstaffed);
             return RawSlot(unstaffed);
         }
-        if (Enum.TryParse<BuildingKind>(name, true, out var kind))
+        if (BuildingCatalog.TryParse(name, out var kind))
         {
+            if ((int)kind >= BuildingKinds) return -1;
             StaffedSeen.Add(kind);
             RawSeen.Add(kind);
             return StaffedSlot(kind);
