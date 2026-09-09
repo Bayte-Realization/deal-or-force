@@ -25,7 +25,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $project = Split-Path -Parent $PSScriptRoot
-$out = Join-Path $project "build\windows"
+# The folder that ships, named the way it should look on somebody else's desktop. It is also
+# the folder that goes into the archive whole - an archive whose entries sit at its root
+# empties 572 files into whatever directory it is opened next to, which is a poor first
+# impression and an easy way for somebody to end up running the game from their Downloads.
+$out = Join-Path $project "build\Deal or Force"
 $exe = Join-Path $out "Deal or Force.exe"
 
 if (-not (Test-Path $Godot)) {
@@ -123,12 +127,12 @@ if (-not $NoZip) {
     $zip = Join-Path $project "build\Deal or Force $stamp.zip"
     if (Test-Path $zip) { Remove-Item -Force $zip }
     Write-Host "== zipping ==" -ForegroundColor Cyan
-    Compress-Archive -Path (Join-Path $out "*") -DestinationPath $zip -CompressionLevel Optimal
+    Compress-Archive -Path $out -DestinationPath $zip -CompressionLevel Optimal
     $zipSize = [math]::Round((Get-Item $zip).Length / 1MB, 1)
     Write-Host "  $zip ($zipSize MB)" -ForegroundColor Green
 }
 
 Write-Host ""
-Write-Host "Done. Tell whoever you send it to: unzip the whole folder and run the .exe from" -ForegroundColor Cyan
-Write-Host "inside it - the game reads its data from the folders beside the executable, so" -ForegroundColor Cyan
-Write-Host "moving the .exe out on its own leaves it with no world to load." -ForegroundColor Cyan
+Write-Host "Done. The archive unpacks to a single folder called 'Deal or Force'; the game is" -ForegroundColor Cyan
+Write-Host "the .exe inside it. It reads its world from the folders beside itself, so moving" -ForegroundColor Cyan
+Write-Host "the .exe out on its own leaves it with nothing to load." -ForegroundColor Cyan
