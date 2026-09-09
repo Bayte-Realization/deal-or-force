@@ -3,7 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>DealOrForce</RootNamespace>
-    <AssemblyName>Deal or Force</AssemblyName>
+    <AssemblyName>DealOrForce</AssemblyName>
   </PropertyGroup>
   <!--
     The editor plays the Debug build, and Debug means the optimiser is switched off. For a

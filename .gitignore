@@ -1,7 +1,6 @@
 # --- Godot ---
 .godot/
 /android/
-export_presets.cfg
 
 # --- .NET build output ---
 bin/

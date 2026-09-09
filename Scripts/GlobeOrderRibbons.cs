@@ -33,18 +33,56 @@ void fragment() {
         var colors = new[] { new Color(1f, 0.78f, 0.22f), new Color(0.94f, 0.23f, 0.15f), new Color(1f, 0.46f, 0.24f) };
         for (var i = 0; i < kinds.Length; i++)
         {
-            // Load source PNGs directly as other moddable map textures do. No dependency
-            // on the editor having imported a new replacement before a runtime launch.
-            var image = Image.LoadFromFile(ProjectSettings.GlobalizePath($"res://game/gfx/globe/order_{kinds[i]}_ink_v2.png"));
-            // Thin map ribbons need a small tile, not three full-resolution art sources on the GPU.
-            image.Resize(512, 512, Image.Interpolation.Lanczos);
-            image.GenerateMipmaps();
+            // The source PNG if it is on disk, the imported copy if it is not.
+            //
+            // Loading the source directly is deliberate and worth keeping: it means somebody
+            // can replace the art and relaunch without the editor having imported it first.
+            // But `GlobalizePath` on a `res://` path only names a real file while the editor
+            // is what is running. In an exported game `res://` is a .pck, and this asked the
+            // filesystem for `game/gfx/globe/order_move_ink_v2.png` relative to wherever the
+            // player happened to launch from, got nothing, and dereferenced it - which is
+            // the exception the first exported build died of, on the second screen.
+            var image = OrderInk(kinds[i]);
             var material = new ShaderMaterial { Shader = shader };
-            material.SetShaderParameter("ink", ImageTexture.CreateFromImage(image));
+            // No ink is a plain ribbon rather than no game: the shader multiplies by this
+            // texture's red channel, so leaving it unset costs the paper grain and nothing
+            // else. A ribbon that is a little flat beats a title screen that will not open.
+            if (image is not null) material.SetShaderParameter("ink", ImageTexture.CreateFromImage(image));
             material.SetShaderParameter("order_color", colors[i]);
             material.SetShaderParameter("support_order", i == 2);
             _routeMaterials[i] = material;
         }
+    }
+
+    /// <summary>
+    /// The paper grain for one order ribbon, from wherever this build keeps it.
+    ///
+    /// Three places, in the order that respects a mod: the loose file beside the game, which
+    /// is what `game/` is and what somebody replacing the art would edit; then the copy
+    /// Godot imported into the pack, which is the only one an exported build is guaranteed
+    /// to have; then nothing, which the caller is expected to survive.
+    /// </summary>
+    private static Image OrderInk(string kind)
+    {
+        var name = $"order_{kind}_ink_v2.png";
+        var loose = Simulation.GameDataLoader.FindDataFile("gfx", "globe", name);
+        var image = string.IsNullOrEmpty(loose) ? null : Image.LoadFromFile(loose);
+
+        if (image is null)
+        {
+            var packed = GD.Load<Texture2D>($"res://game/gfx/globe/{name}");
+            image = packed?.GetImage();
+        }
+        if (image is null)
+        {
+            GD.PushWarning($"[dof] order ribbon ink {name} is missing; ribbons will draw without grain");
+            return null;
+        }
+
+        // Thin map ribbons need a small tile, not three full-resolution art sources on the GPU.
+        image.Resize(512, 512, Image.Interpolation.Lanczos);
+        image.GenerateMipmaps();
+        return image;
     }
 
     private Vector3 OnOrderSurface(Vector3 point) => _flatMap ? point : point.Normalized() * SurfaceLineRadius;

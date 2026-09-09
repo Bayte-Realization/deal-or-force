@@ -9,10 +9,12 @@
 # `game/`, which is the whole economy, the whole map and every scenario - is read through
 # System.IO by filesystem path, not through Godot's `res://`. In the editor that works
 # because the working directory is the project. In an exported build `res://` lives inside a
-# .pck that System.IO cannot see, so the data has to arrive as real files next to the
-# executable. It does, because the .csproj copies it - but if that ever stops being true the
-# symptom is a game that starts, shows an empty world and says nothing, on somebody else's
-# machine. So the build refuses to hand you a folder that would do that.
+# .pck that System.IO cannot see, so the data has to arrive as real files inside the build.
+# It does - the .csproj copies it into the published output, which Godot puts in the
+# data_DealOrForce_windows_x86_64 folder beside the executable, and the loader walks up from
+# its own assembly to find it. But if that ever stops being true the symptom is a game that
+# starts, shows an empty world and says nothing, on somebody else's machine. So the build
+# refuses to hand you a folder that would do that.
 
 param(
     [string]$Godot = "C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe",
@@ -30,14 +32,43 @@ if (-not (Test-Path $Godot)) {
     throw "Godot not found at $Godot. Pass -Godot <path to Godot_v4.7.2-stable_mono_win64.exe>."
 }
 
+# Godot's .NET export wants a solution file named after `dotnet/project/assembly_name`, and
+# without one it packs the game, reports a warning rather than an error, and hands you a
+# build with no managed assemblies in it - which starts and immediately does nothing.
+$solution = Join-Path $project "DealOrForce.sln"
+if (-not (Test-Path $solution)) {
+    throw "No DealOrForce.sln. Godot needs a solution named after dotnet/project/assembly_name " +
+          "in project.godot; without it the export silently produces a build with no C# in it."
+}
+
+# There are two dotnet installations on a lot of Windows machines and PATH often finds the
+# wrong one first: `C:\Program Files (x86)\dotnet` is a 32-bit host with no SDK at all. Godot
+# usually resolves the real one through hostfxr anyway, but making it certain costs a line.
+$sdk = "C:\Program Files\dotnet"
+if (Test-Path (Join-Path $sdk "dotnet.exe")) { $env:PATH = "$sdk;$env:PATH" }
+
 Write-Host "== exporting ($(if ($Debug) { 'debug' } else { 'release' })) ==" -ForegroundColor Cyan
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+# Godot will not create the export directory itself: "Prepare Template: The given export
+# path doesn't exist."
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 $mode = if ($Debug) { "--export-debug" } else { "--export-release" }
-& $Godot --headless --path $project $mode $Preset $exe
-if ($LASTEXITCODE -ne 0) { throw "Godot export failed with exit code $LASTEXITCODE." }
-if (-not (Test-Path $exe)) { throw "Godot reported success but produced no executable at $exe." }
+# Godot writes a good deal to stderr on a perfectly successful export - deprecation notes,
+# the "safe save" grumble, its own plugins' chatter - and with ErrorActionPreference set to
+# Stop that ends the script before any of the checks run. Its output is information here,
+# not failure, so the preference steps aside for exactly this one call.
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+& $Godot --headless --path $project $mode $Preset $exe 2>&1 | Out-Host
+$ErrorActionPreference = $previousPreference
+
+# Godot's exit code is not worth believing here: a headless export that finished perfectly
+# well leaves $LASTEXITCODE empty, and one that failed to build the C# still reports its own
+# failure as a warning. So it is noted and not acted on - what decides whether this build is
+# any good is the three checks below, which look at what is actually in the folder.
+if ($LASTEXITCODE) { Write-Host "  (Godot exited with $LASTEXITCODE)" -ForegroundColor DarkGray }
+if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
 
 # ---------------------------------------------------------------- the check that matters
 Write-Host "== checking the data came with it ==" -ForegroundColor Cyan
@@ -54,6 +85,17 @@ $needed = @(
     "game\map_data\definition.csv",
     "game\map_data\default.map"
 )
+
+$assemblies = Get-ChildItem -Path $out -Recurse -Force -Filter "DealOrForce.dll" -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $assemblies) {
+    Write-Host ""
+    Write-Host "The build has no managed assembly in it - the game is C# and would start into" -ForegroundColor Red
+    Write-Host "nothing. Godot reports this as a warning rather than an error, so read the export" -ForegroundColor Red
+    Write-Host "output above: the usual cause is a missing or misnamed .sln." -ForegroundColor Red
+    throw "Build has no C#."
+}
+Write-Host "  managed assembly present: $($assemblies.Directory.Name)" -ForegroundColor Green
 
 $missing = @()
 foreach ($item in $needed) {
