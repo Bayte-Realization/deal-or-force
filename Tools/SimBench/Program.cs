@@ -145,6 +145,8 @@ public static class Program
         failures += Check("a category folder is read whole and later files win",
             ACategoryFolderIsReadWhole());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
+        failures += Check("the English table indexes every string the game shows",
+            TheEnglishTableIsAnIndex());
         failures += Check("every good is made by something and eaten by something",
             TheChainsHangTogether());
         failures += Check("every mod template names something the game actually has",
@@ -2690,6 +2692,151 @@ public static class Program
     /// good and a building against their enumerations - so that renaming any of them breaks
     /// the build of the documentation as loudly as it breaks the code.
     /// </summary>
+    /// <summary>
+    /// Whether the English table still indexes every caption the interface shows.
+    ///
+    /// The keys of a localization table here are the English text itself, so a lookup that
+    /// misses falls through to the key and renders as its own English source. That is a good
+    /// property - a half-finished translation reads as slightly odd rather than as an empty
+    /// panel - and it had one bad consequence: the English table did not have to exist for
+    /// the game to look right, so it did not. It was three rows long.
+    ///
+    /// What that cost was not cosmetic. `Loc.MissingKeys` exists to be a translator's to-do
+    /// list, and the developer console's `loc &lt;language&gt;` command prints it. Both compared
+    /// every language against those three rows, so both always answered that nothing was
+    /// missing, however much was.
+    ///
+    /// So English is now the index of what there is to translate, and this check is what
+    /// keeps it one. Every caption the source hands to a lookup has to be in it - which is
+    /// how the next screen somebody writes gets indexed rather than quietly not.
+    /// </summary>
+    private static string TheEnglishTableIsAnIndex()
+    {
+        var scripts = FindScripts();
+        if (scripts is null) return "";
+        var english = ReadLocalizationTable("english");
+        if (english is null) return "game/localization/english has no table";
+        if (english.Count < 2) return $"the English table has {english.Count} row(s), so it indexes nothing";
+
+        // Only the captions a reader of the source can be sure about: a literal handed
+        // straight to one of the three lookups. A caption that arrives through a parameter,
+        // or is assembled from a country's name and a number, cannot be found this way and
+        // is not expected to be - which is why this check is one-directional.
+        var captions = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains("LegacySourceMap")) continue;
+            foreach (var caption in Captions(File.ReadAllText(file)))
+                if (caption.Length > 0) captions.Add(caption);
+        }
+        if (captions.Count == 0) return "found no interface captions in the source at all";
+
+        var absent = new List<string>();
+        foreach (var caption in captions)
+            if (!english.ContainsKey(caption)) absent.Add(caption);
+        if (absent.Count > 0)
+            return $"{absent.Count} caption(s) the interface shows are missing from the English " +
+                   $"table, starting with: {string.Join(" | ", absent.Take(4))}";
+
+        var report = new List<string>();
+        foreach (var language in Directory.GetDirectories(
+                     Path.Combine(Path.GetDirectoryName(scripts)!, "game", "localization")))
+        {
+            var name = Path.GetFileName(language);
+            if (string.Equals(name, "english", StringComparison.OrdinalIgnoreCase)) continue;
+            var table = ReadLocalizationTable(name);
+            if (table is null) continue;
+            var translated = 0;
+            foreach (var key in english.Keys) if (table.ContainsKey(key)) translated++;
+            var orphans = 0;
+            foreach (var key in table.Keys) if (!english.ContainsKey(key)) orphans++;
+            report.Add($"{name} {translated}/{english.Count - 1} ({orphans} row(s) naming nothing indexed)");
+        }
+
+        Console.WriteLine($"  localization: the English table indexes {english.Count - 1:N0} string(s), " +
+                          $"{captions.Count:N0} of them found in the source by name" +
+                          (report.Count == 0 ? "." : $"; {string.Join(", ", report)}."));
+        return "";
+    }
+
+    /// <summary>Every literal this file hands straight to a translation lookup.</summary>
+    private static IEnumerable<string> Captions(string source)
+    {
+        foreach (var call in new[] { "Title(", "ActionButton(", "Tr(" })
+        {
+            var at = 0;
+            while ((at = source.IndexOf(call, at, StringComparison.Ordinal)) >= 0)
+            {
+                var cursor = at + call.Length;
+                at = cursor;
+                while (cursor < source.Length && (source[cursor] == ' ' || source[cursor] == '\n' ||
+                                                  source[cursor] == '\r' || source[cursor] == '\t')) cursor++;
+                if (cursor >= source.Length || source[cursor] != '"') continue;
+                var text = new System.Text.StringBuilder();
+                cursor++;
+                var closed = false;
+                while (cursor < source.Length)
+                {
+                    var character = source[cursor++];
+                    if (character == '\\' && cursor < source.Length)
+                    {
+                        var escaped = source[cursor++];
+                        text.Append(escaped switch
+                        {
+                            'n' => '\n', 't' => '\t', 'r' => '\r',
+                            _ => escaped
+                        });
+                        continue;
+                    }
+                    if (character == '"') { closed = true; break; }
+                    if (character == '\n') break;
+                    text.Append(character);
+                }
+                if (closed) yield return text.ToString();
+            }
+        }
+    }
+
+    /// <summary>One language's table, read the layered way the game reads it.</summary>
+    private static Dictionary<string, string> ReadLocalizationTable(string language)
+    {
+        var scripts = FindScripts();
+        if (scripts is null) return null;
+        var folder = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "localization", language);
+        if (!Directory.Exists(folder)) return null;
+
+        var table = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var file in Directory.GetFiles(folder, "*.json").OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file),
+                new System.Text.Json.JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = System.Text.Json.JsonCommentHandling.Skip
+                });
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+            foreach (var entry in document.RootElement.EnumerateObject())
+                if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                    table[entry.Name] = entry.Value.GetString() ?? "";
+        }
+        return table;
+    }
+
+    /// <summary>The interface source, found the same way the mod templates are.</summary>
+    private static string FindScripts()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            var scripts = Path.Combine(directory.FullName, "Scripts");
+            if (Directory.Exists(scripts) &&
+                Directory.Exists(Path.Combine(directory.FullName, "game", "localization")))
+                return scripts;
+            directory = directory.Parent;
+        }
+        return null;
+    }
+
     /// <summary>
     /// Whether the shipped production chains describe a world that works.
     ///
