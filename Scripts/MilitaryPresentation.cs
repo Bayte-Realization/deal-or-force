@@ -254,7 +254,7 @@ public sealed partial class GlobePresentation
     /// <summary>Which markers the camera can see. Cheap, and camera-dependent, so per frame.</summary>
     private void FinishBattleMarkers()
     {
-        _battleRoot.Visible = _flatMap ? _flatZoom <= 9.4f : _distance <= 14f;
+        _battleRoot.Visible = ViewDistance <= 14f;
         if (!_flatMap && _battleRoot.Visible)
         {
             var view = _camera.GlobalPosition.Normalized();
@@ -285,7 +285,7 @@ public sealed partial class GlobePresentation
     private bool TryPickBattle(Vector2 pixel, out LandBattle battle)
     {
         battle = null;
-        if (!IsInstanceValid(_camera) || (_flatMap ? _flatZoom > 9.4f : _distance > 14f)) return false;
+        if (!IsInstanceValid(_camera) || ViewDistance > 14f) return false;
         var best = 34f * 34f;
         foreach (var (battleId, marker) in _battleMarkers)
         {

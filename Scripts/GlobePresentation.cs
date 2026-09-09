@@ -416,8 +416,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
         _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
         UpdateFogVisibility();
-        UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, _distance <= 13.8f);
-        var armyLod = _flatMap ? _flatZoom <= 7.4f : _distance <= 10.8f;
+        UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f);
+        var armyLod = ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
         if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
         {
@@ -433,7 +433,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         if (MilitaryMarkersEnabled)
             using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
-        UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && _distance <= 13.5f);
+        UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && ViewDistance <= 13.5f);
         if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
@@ -719,6 +719,26 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return true;
     }
 
+    /// <summary>
+    /// How far away the camera is, on a scale both projections agree on.
+    ///
+    /// A dozen visibility thresholds in this file are written as "closer than 13.5", and
+    /// several of them were reading `_distance` - the orbit rig's distance - while the flat
+    /// map was the thing on screen. `_distance` does not change in flat mode: the wheel
+    /// drives `_flatZoom` instead. So whether the flat map showed its capital markers and
+    /// its fleets depended on how far out the globe happened to be when the player left it,
+    /// and no amount of zooming in on the flat map would bring them back.
+    ///
+    /// Rather than write `_flatMap ? a : b` at each site and let the pairs drift out of step
+    /// again, there is one conversion. Its two constants are read off the two thresholds
+    /// somebody had already tuned by eye in both projections - army counters at 7.4 flat
+    /// against 10.8 orbital, battle markers at 9.4 against 14.0 - so the line through them is
+    /// the game's own answer to what a flat zoom is worth in orbital distance, rather than a
+    /// number I chose. The two pairs that calibrated it come out unchanged, which is the
+    /// arithmetic checking itself.
+    /// </summary>
+    private float ViewDistance => _flatMap ? _flatZoom * 1.6f - 1.04f : _distance;
+
     private float _counterScale = 1f;
     private float _counterWorldPixel;
     public bool MilitaryMarkersEnabled { get; set; } = true;
@@ -754,6 +774,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             marker.Count.Position = _flatMap ? new Vector3(10f, -1f, 4f) : new Vector3(0f, -.004f, .004f);
             marker.Compact = false;
             marker.Plate.Scale = Vector3.One;
+            marker.Plate.Visible = true;
             marker.Count.Visible = true;
         }
         if (_flatMap) marker.Node.Scale = Vector3.One * _counterWorldPixel;
@@ -1241,10 +1262,29 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _dragDistance += delta.Length();
         if (_flatMap)
         {
-            var unitsPerPixel = _targetFlatZoom / Math.Max(1f, Size.Y);
+            // The current zoom, not the one being lerped towards: what a pixel is worth is
+            // decided by what is on the screen now, so dragging while the wheel is still
+            // settling moves the ground by the distance the hand moved rather than by the
+            // distance it will be worth in a moment.
+            var unitsPerPixel = _flatZoom / Math.Max(1f, Size.Y);
             _targetFlatX -= delta.X * unitsPerPixel;
             _targetFlatY += delta.Y * unitsPerPixel;
             ClampFlatCamera();
+
+            // And the camera goes there, rather than being asked to.
+            //
+            // A drag is direct manipulation: the ground you took hold of has to stay under
+            // the pointer. Moving only the target left the camera closing eleven per cent of
+            // the gap per frame - a hundred and forty milliseconds of lag, measured, with the
+            // whole of a drag's distance still outstanding at the end of it - so the map
+            // trailed the hand and kept sliding after the button came up. Which is exactly
+            // what a map that "moves more slowly" feels like, even though the arithmetic
+            // moving the target was right to six decimal places.
+            //
+            // The wheel and the keyboard keep their smoothing: nobody expects a zoom to
+            // snap, and WASD adds a little every frame, which is what the lerp is for.
+            _flatX = _targetFlatX;
+            _flatY = _targetFlatY;
             return;
         }
         var scale = Mathf.Lerp(0.22f, 0.65f, (_targetDistance - MinimumDistance) / (MaximumDistance - MinimumDistance));
@@ -2432,7 +2472,7 @@ void fragment() {
     private bool TryPickFleet(Vector2 pixel, out Simulation.Fleet fleet)
     {
         fleet = null;
-        if (_distance > 13.5f || !IsInstanceValid(_camera)) return false;
+        if (ViewDistance > 13.5f || !IsInstanceValid(_camera)) return false;
         var bestDistance = 26f * 26f;
         foreach (var (node, candidate) in _fleetByMarker)
         {
