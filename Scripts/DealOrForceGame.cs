@@ -39,6 +39,7 @@ public partial class DealOrForceGame : Control
     private Button _pause = null!;
     private Button _mainProjectionButton = null!;
     private Button _languageButton = null!;
+    private Button _smoothingButton = null!;
     private Label _navigationHint = null!;
     private Label _scenarioSummary = null!;
     private Nation _selectedNation;
@@ -50,6 +51,10 @@ public partial class DealOrForceGame : Control
     public override void _Ready()
     {
         StartDiagnostics();
+        // `user://` is the engine's idea of where a player's own files go, and the simulation
+        // layer does not import Godot - so it is told rather than asked. Read before the
+        // interface is built, because the interface shows what was chosen last time.
+        Simulation.PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // The interface is built next and asks for its pictures by name, so the names have
         // to mean something first. Mods layer their own over these when a campaign starts.
@@ -161,6 +166,9 @@ public partial class DealOrForceGame : Control
         // console command typed out first is one nobody reaches for. F10 flies - not F8,
         // which the Godot editor already uses to stop the running project.
         if (key.Keycode == Key.F10) { ToggleFreeCamera(); GetViewport().SetInputAsHandled(); return; }
+        // Next to F2, which swaps the projection: both are things a player flips while
+        // looking at the map to see which they prefer, and neither is worth a menu trip.
+        if (key.Keycode == Key.F3) { ToggleMapSmoothing(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.Escape && _globe is { FreeCamera: true })
         {
             ToggleFreeCamera();
@@ -360,6 +368,12 @@ public partial class DealOrForceGame : Control
         _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 42);
         _mainProjectionButton.TooltipText = "Switch between globe and classic infinitely wrapping map (F2).";
         rows.AddChild(_mainProjectionButton);
+        _smoothingButton = ActionButton(SmoothingButtonLabel(), ToggleMapSmoothing, 330, 42);
+        _smoothingButton.TooltipText =
+            "Smoothing rebuilds country, region and terrain boundaries so the map has no visible " +
+            "texel grid. Turn it off for the raster exactly as authored - pixels and all - which " +
+            "is also the cheaper picture on a slower machine (F3).";
+        rows.AddChild(_smoothingButton);
         _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
         _languageButton.TooltipText = "Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.";
         rows.AddChild(_languageButton);
@@ -1246,6 +1260,24 @@ public partial class DealOrForceGame : Control
     /// <summary>
     /// Steps through every language that actually has a table loaded, base game or mod.
     /// </summary>
+    private string SmoothingButtonLabel() =>
+        $"Map smoothing: {(_globe is null || _globe.MapSmoothing ? "on" : "off")}";
+
+    private void ToggleMapSmoothing()
+    {
+        if (_globe is null) return;
+        _globe.MapSmoothing = !_globe.MapSmoothing;
+        if (_smoothingButton is not null && GodotObject.IsInstanceValid(_smoothingButton))
+        {
+            // Written straight onto the button rather than through the localisation sweep,
+            // for the same reason the language button is: the caption is built from a state
+            // rather than from a source string, so a generic refresh would overwrite it.
+            var label = Tr(SmoothingButtonLabel());
+            _smoothingButton.Text = label;
+            _smoothingButton.SetMeta(LocAppliedMeta, label);
+        }
+    }
+
     private void CycleLanguage()
     {
         var languages = Simulation.Loc.Languages;

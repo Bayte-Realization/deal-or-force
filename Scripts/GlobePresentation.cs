@@ -309,6 +309,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _stateByMapIndex[state.MapIndex] = state;
 
         BuildNationPalette();
+        ApplyMapSmoothing();
         BuildCapitalMarkers(campaign);
         ReconcileArmyMarkers(campaign);
         BuildFleetMarkers(campaign);
@@ -742,6 +743,32 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _counterScale = 1f;
     private float _counterWorldPixel;
     public bool MilitaryMarkersEnabled { get; set; } = true;
+
+    private bool _mapSmoothing = Simulation.PlayerSettings.Bool("map_smoothing", true);
+
+    /// <summary>
+    /// Whether the map is smoothed, or shown as the raster it is.
+    ///
+    /// Off is a different picture rather than a worse one: the ids sampled at the nearest
+    /// texel, the ground switching at the texel edge, and the grid visible - which is a
+    /// legitimate thing to want on a game whose data is meant to be legible to the person
+    /// modding it. It is also the cheaper picture: the noise that takes the boundaries off
+    /// the grid is not evaluated, and the ground costs one texture fetch instead of two.
+    /// </summary>
+    public bool MapSmoothing
+    {
+        get => _mapSmoothing;
+        set
+        {
+            if (_mapSmoothing == value) return;
+            _mapSmoothing = value;
+            Simulation.PlayerSettings.Set("map_smoothing", value);
+            ApplyMapSmoothing();
+        }
+    }
+
+    private void ApplyMapSmoothing() =>
+        _globeMaterial?.SetShaderParameter("map_smoothing", _mapSmoothing ? 1f : 0f);
     private bool _fogOfWarActive;
     private int _fogViewer = -1;
     public bool FogOfWarActive
@@ -1438,6 +1465,15 @@ uniform float political_opacity = 0.68;
 uniform float terrain_repeat = 180.0;
 uniform float terrain_blend_texels = 1.15;
 uniform float id_wander_texels = 0.62;
+
+// Whether the map is smoothed at all, as a switch the player owns.
+//
+// Off is not a degraded version of on, it is a different picture: the raster exactly as it
+// was authored, sampled at the nearest texel, with the texel grid visible. That is a real
+// preference and this project has reasons to respect it - a map whose pixels you can count
+// is a map whose data a modder can see - and it is also the cheaper picture, because the two
+// octaves of value noise that take the boundaries off the grid are not evaluated at all.
+uniform float map_smoothing = 1.0;
 uniform float terrain_warp_texels = 2.20;
 uniform float relief_strength = 0.8;
 uniform float relief_color_opacity = 0.0;
@@ -1665,9 +1701,12 @@ void fragment() {
     // minus a half and a half, in no units at all, so each of the three can scale it into
     // its own texels and they all end up wandering the same way. Computed three times it
     // cost forty hashes a pixel; computed once it costs sixteen.
-    vec2 map_drift = vec2(grain(UV * id_size * 0.9), grain(UV * id_size * 0.9 + 71.3));
-    float drift_visible = clamp(1.0 - id_span, 0.0, 1.0);
-    vec2 map_uv = UV + map_drift * id_wander_texels * drift_visible / id_size;
+    vec2 map_drift = vec2(0.0);
+    vec2 map_uv = UV;
+    if (map_smoothing > 0.5) {
+        map_drift = vec2(grain(UV * id_size * 0.9), grain(UV * id_size * 0.9 + 71.3));
+        map_uv = UV + map_drift * id_wander_texels * clamp(1.0 - id_span, 0.0, 1.0) / id_size;
+    }
 
     // Far away the authored raster is right: a screen pixel covers many map texels and what
     // the eye wants is the average, mipmapped and anisotropic. Close up the raster is exactly
@@ -1698,7 +1737,12 @@ void fragment() {
     // The wander is what makes the compromise unnecessary. The boundary is no longer on the
     // grid, so there is no grid left to show, and the edge can be exactly as sharp as the
     // screen allows.
-    vec4 political_crisp = mix(nation_paint(other_nation), nation_paint(near_nation), nation_share);
+    // Smoothed, the colour is rebuilt across the reconstructed boundary. Unsmoothed, it is
+    // simply the nearest texel's country - which is what nearest sampling means, and what
+    // puts the texel grid back on the screen for anybody who wants it there.
+    vec4 political_crisp = map_smoothing > 0.5
+        ? mix(nation_paint(other_nation), nation_paint(near_nation), nation_share)
+        : nation_paint(near_nation);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     vec3 water = ocean_color * (0.72 + rim * 0.28);
@@ -1769,8 +1813,15 @@ void fragment() {
         float slot_share = smoothstep(0.5 - slot_band, 0.5 + slot_band, slot_cover);
 
         vec2 terrain_uv = UV * vec2(terrain_repeat, terrain_repeat * 0.5);
-        vec3 ground = mix(texture(terrain_tiles, vec3(terrain_uv, other_slot)).rgb,
-                          texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb, slot_share);
+        // One ground sample when unsmoothed rather than two mixed: the saving is a texture
+        // fetch per pixel on the largest surface the game draws, which is the half of this
+        // switch that matters on a machine that needed it.
+        vec3 ground;
+        if (map_smoothing > 0.5)
+            ground = mix(texture(terrain_tiles, vec3(terrain_uv, other_slot)).rgb,
+                         texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb, slot_share);
+        else
+            ground = texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb;
         vec3 relief_tint = texture(relief_color, UV).rgb;
         ground = mix(ground, relief_tint, relief_color_opacity);
         // Political tint is an albedo blend, not transparent 3D geometry.
