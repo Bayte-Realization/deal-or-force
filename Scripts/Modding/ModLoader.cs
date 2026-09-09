@@ -148,6 +148,7 @@ public sealed class ModLoader
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
+        ProductionChains.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
@@ -164,6 +165,7 @@ public sealed class ModLoader
             ApplyUnits(package);
             ApplyGoods(package);
             ApplyBuildings(package);
+            ApplyProduction(package);
             ApplyDecisions(package);
             ApplyEvents(package);
             ApplyModifiers(package);
@@ -603,6 +605,25 @@ public sealed class ModLoader
                         package.Errors.Add($"Unknown good '{good.Name}' in {Path.GetFileName(path)}");
                 }
             }
+            catch (Exception exception)
+            {
+                package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// What this mod says things are made of.
+    ///
+    /// Merged rather than replaced, recipe by recipe: a mod that wants electronics to need
+    /// uranium names `electronics_manufacture` and inherits the other thirty-nine chains,
+    /// and does not go stale when the base game retunes one of them next patch.
+    /// </summary>
+    private void ApplyProduction(ModPackage package)
+    {
+        foreach (var path in JsonFiles(package, "common", "production"))
+        {
+            try { ProductionChains.Merge(File.ReadAllText(path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");

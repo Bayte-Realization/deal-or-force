@@ -145,6 +145,8 @@ public static class Program
         failures += Check("a category folder is read whole and later files win",
             ACategoryFolderIsReadWhole());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
+        failures += Check("every good is made by something and eaten by something",
+            TheChainsHangTogether());
         failures += Check("every mod template names something the game actually has",
             TheTemplatesStillNameRealThings());
         failures += Check("every picture the interface asks for has a name a mod can rebind",
@@ -2687,6 +2689,62 @@ public static class Program
     /// good and a building against their enumerations - so that renaming any of them breaks
     /// the build of the documentation as loudly as it breaks the code.
     /// </summary>
+    /// <summary>
+    /// Whether the shipped production chains describe a world that works.
+    ///
+    /// They are data now, which is the point and also the risk: a factor spelled
+    /// `standard_of_life` instead of `standard_of_living`, or a good called `Aluminum`, used
+    /// to be a compiler error and is now a line in a file that quietly makes nothing. The
+    /// symptom would be a world that opens in a famine of one good, several hours of play
+    /// away from the typo that caused it.
+    ///
+    /// So the loader is asked to report, and every complaint is a failure here. Then two
+    /// things every good needs: somebody who makes it, and somebody who wants it. A good
+    /// nobody makes can only be imported from a world that has none either; a good nobody
+    /// wants piles up forever and is worth nothing to anybody, which is a strange thing for
+    /// a game about trade to ship.
+    /// </summary>
+    private static string TheChainsHangTogether()
+    {
+        var complaints = new List<string>();
+        ProductionChains.ResetCatalog(complaints);
+        if (complaints.Count > 0)
+            return $"common/production has {complaints.Count} problem(s): {string.Join("; ", complaints.Take(3))}";
+        if (ProductionChains.RecipeCount == 0) return "common/production describes no recipes at all";
+
+        var made = new HashSet<Commodity>(ProductionChains.GoodsProduced());
+        var eaten = new HashSet<Commodity>(ProductionChains.GoodsConsumed());
+        var unmade = new List<string>();
+        var unwanted = new List<string>();
+        foreach (var commodity in CommodityCatalog.All)
+        {
+            if (!made.Contains(commodity)) unmade.Add(CommodityCatalog.Get(commodity).Name);
+            if (!eaten.Contains(commodity)) unwanted.Add(CommodityCatalog.Get(commodity).Name);
+        }
+        if (unmade.Count > 0)
+            return $"nothing in the world makes {string.Join(", ", unmade)} - it can only be " +
+                   "imported from countries that have none either";
+        if (unwanted.Count > 0)
+            return $"nothing in the world wants {string.Join(", ", unwanted)}, so it piles up " +
+                   "forever and is worth nothing to anybody";
+
+        Console.WriteLine($"  production: {ProductionChains.RecipeCount} recipe(s) in common/production " +
+                          $"make and consume all {made.Count} good(s), and a mod can retune any of them by name.");
+        return "";
+    }
+
+    /// <summary>One template recipe, put through the loader that will have to read it.</summary>
+    private static bool Recipe(System.Text.Json.JsonProperty entry, string file, string templates,
+        List<string> complaints)
+    {
+        var problems = new List<string>();
+        ProductionChains.Validate(
+            System.Text.Json.JsonDocument.Parse($"{{\"{entry.Name}\":{entry.Value.GetRawText()}}}",
+                GameDataLoader.ForgivingJson).RootElement, problems);
+        foreach (var problem in problems) complaints.Add($"{Short(templates, file)}: {problem}");
+        return true;
+    }
+
     private static string TheTemplatesStillNameRealThings()
     {
         var templates = FindTemplates();
@@ -2752,6 +2810,9 @@ public static class Program
                             "defines" => defines.Contains(Squash(entry.Name)),
                             "goods" => Enum.TryParse<Commodity>(entry.Name, true, out _),
                             "buildings" => Enum.TryParse<BuildingKind>(entry.Name, true, out _),
+                            // A recipe's name is its own, so what is checked is the recipe:
+                            // the good it claims to make and every factor it asks for.
+                            "production" => Recipe(entry, file, templates, complaints),
                             "opinion_modifiers" =>
                                 entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                 entry.Value.TryGetProperty("opinion", out _),

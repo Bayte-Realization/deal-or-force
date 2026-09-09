@@ -1,0 +1,336 @@
+// What every good in the world is made out of, and who consumes it.
+//
+// This is the map of who needs whom. A chain is what makes a trade partner matter, and a
+// partner who matters is what makes an embargo a weapon and a war a decision - so this file
+// decides more about how the game plays than any other number in `common/`.
+//
+// A recipe reads:
+//
+//   "aluminium_smelting": {
+//     "good":     "Aluminium",              the good it makes
+//     "output":   { "Smelter": 1.90 },      a sum of weighted terms that make it
+//     "needs":    { "Energy": 0.70 },       goods whose supply last week scales the output
+//     "demand":   { "CivilianIndustry": 0.22 }   a sum of weighted terms that consume it
+//   }
+//
+// A term is a product of named factors written with `*`, so `population*urbanization` means
+// what it looks like and `deposit:Coal*extraction_efficiency` is what the mine actually digs
+// up. The factors available are:
+//
+//   population            millions of people in the region
+//   urbanization          0..1
+//   standard_of_living    0..1
+//   output_factor         how much of the demanded labour the country filled, times how
+//                         productive that labour is
+//   extraction_efficiency how good this region is at getting things out of its own ground
+//   timber_yield          the same for forestry, which answers to farms rather than to mines
+//   <BuildingName>        staffed count: the building count times output_factor
+//   raw:<BuildingName>    the count on its own, unstaffed - infrastructure and roads do not
+//                         stop working because a factory is short of hands
+//   deposit:<GoodName>    what is in the ground here, before anybody digs it up
+//
+// And for a recipe with `"scope": "nation"`, worked out once for the country rather than
+// once per region:
+//
+//   projects              construction projects under way
+//   divisions             field formations
+//   divisions_at_war      the same, but zero while at peace - so a wartime rate is written
+//                         as the peacetime weight plus the difference
+//   hulls                 warship hulls
+//   gdp                   the country's GDP
+//   arms_productivity     productivity, clamped to the range an arms industry can use
+//
+// Two more fields:
+//
+//   "needs"      multiplies the output by how well each input turned up last week, floored
+//                at the given value so a starved chain slows rather than stops
+//   "shortfall"  multiplies by (supply - 1), which is zero or negative: a penalty another
+//                chain's shortage inflicts on this one. The only way a recipe may produce a
+//                negative number, and how a country cut off from fertiliser loses part of a
+//                harvest it was already growing.
+//
+// Later files win, by recipe name. Drop `50_my_chains.json` in beside this one, name three
+// recipes, and inherit the rest.
+
+{
+  // ---- the first tier ---------------------------------------------------------------
+  //
+  // Ten goods a country either makes or does not. On their own they can be read as ten
+  // separate numbers; the second tier below is what turns them into a web.
+
+  "food_farming": {
+    "good": "Food",
+    "output": { "population": 0.35, "Agriculture": 2.70 },
+    "demand": { "population": 1.00 }
+  },
+
+  "consumer_goods_manufacture": {
+    "good": "ConsumerGoods",
+    "output": { "population": 0.28, "population*urbanization": 1.50, "CivilianIndustry": 6.00 },
+    "demand": { "population": 0.42, "population*standard_of_living": 0.46 }
+  },
+
+  "industrial_materials_works": {
+    "good": "IndustrialMaterials",
+    "output": { "CivilianIndustry": 5.00, "raw:Infrastructure": 1.50 },
+    "demand": { "population": 0.18 }
+  },
+
+  "energy_household": {
+    "good": "Energy",
+    "output": { "population": 0.53, "raw:Infrastructure": 2.00 },
+    "demand": { "population": 0.54, "population*urbanization": 0.34, "CivilianIndustry": 0.45 }
+  },
+
+  "arms_workshops": {
+    "good": "Arms",
+    "output": { "Barracks": 0.75, "CivilianIndustry": 0.48 }
+  },
+
+  "coal_mining": {
+    "good": "Coal",
+    "output": { "deposit:Coal*extraction_efficiency": 1.00 },
+    "demand": { "CivilianIndustry": 0.52, "PowerPlant": 0.85 }
+  },
+
+  "oil_extraction": {
+    "good": "Oil",
+    "output": { "deposit:Oil*extraction_efficiency": 1.00 },
+    "demand": { "population": 0.13, "CivilianIndustry": 0.18, "Barracks": 0.22 }
+  },
+
+  "iron_mining": {
+    "good": "IronOre",
+    "output": { "deposit:IronOre*extraction_efficiency": 1.00 },
+    "demand": { "CivilianIndustry": 0.72, "raw:ExtractionIndustry": 0.16 }
+  },
+
+  // Eight countries have these and everyone's electronics need them. Raise the demand and
+  // the one good with a genuinely lopsided geography becomes leverage; lower it and the
+  // world makes thirteen times what it uses, which is where this started.
+  "rare_earth_mining": {
+    "good": "RareEarths",
+    "output": { "deposit:RareEarths*extraction_efficiency": 1.00 },
+    "demand": { "CivilianIndustry": 1.05, "ArmsIndustry": 0.35 }
+  },
+
+  "machinery_manufacture": {
+    "good": "Machinery",
+    "output": { "CivilianIndustry": 1.45, "urbanization": 0.25 },
+    "demand": { "raw:ExtractionIndustry": 0.45, "Agriculture": 0.12 }
+  },
+
+  "energy_generation": {
+    "good": "Energy",
+    "output": {
+      "PowerPlant": 5.50,
+      "deposit:Coal*extraction_efficiency": 0.12,
+      "deposit:Oil*extraction_efficiency": 0.08
+    }
+  },
+
+  "arms_industry": {
+    "good": "Arms",
+    "output": { "ArmsIndustry": 4.50 }
+  },
+
+  "industrial_materials_from_ore": {
+    "good": "IndustrialMaterials",
+    "output": { "deposit:IronOre*extraction_efficiency": 0.38 }
+  },
+
+  // ---- the second tier --------------------------------------------------------------
+  //
+  // Every one of these is a chain: a thing made out of other things, some of which a
+  // country may not have. Bauxite is worthless without a smelter and cheap power,
+  // electronics need rare earths that eight countries have, and a harvest is made of gas.
+  // What a country cannot make it has to get from somebody - and who that somebody is
+  // becomes a foreign policy rather than a constant.
+  //
+  // The base terms matter as much as the buildings. A country in 2024 already refines its
+  // own fuel and rolls its own aluminium; the dedicated buildings are additional capacity,
+  // not permission. Strip the base terms out and the world opens in a famine of its own
+  // manufactured goods on day one.
+
+  "natural_gas_extraction": {
+    "good": "NaturalGas",
+    "output": { "deposit:NaturalGas*extraction_efficiency": 1.00 },
+    "demand": {
+      "population": 0.13, "PowerPlant": 0.62, "ChemicalPlant": 1.05, "CivilianIndustry": 0.16
+    }
+  },
+
+  "forestry": {
+    "good": "Timber",
+    "output": { "deposit:Timber*timber_yield": 1.00 },
+    "demand": { "population": 0.09, "CivilianIndustry": 0.30, "raw:Infrastructure": 0.22 }
+  },
+
+  "bauxite_mining": {
+    "good": "Bauxite",
+    "output": { "deposit:Bauxite*extraction_efficiency": 1.00 },
+    "demand": { "Smelter": 1.45, "CivilianIndustry": 0.36 }
+  },
+
+  "uranium_mining": {
+    "good": "Uranium",
+    "output": { "deposit:Uranium*extraction_efficiency": 1.00 },
+    "demand": { "population": 0.0105, "PowerPlant": 0.11 }
+  },
+
+  "aluminium_smelting": {
+    "good": "Aluminium",
+    "output": {
+      "CivilianIndustry": 0.65, "Smelter": 1.90, "deposit:Bauxite*extraction_efficiency": 0.30
+    },
+    "needs": { "Energy": 0.70 },
+    "demand": {
+      "CivilianIndustry": 0.22, "ElectronicsPlant": 0.55, "ArmsIndustry": 0.40, "Shipyard": 0.38
+    }
+  },
+
+  "chemical_industry": {
+    "good": "Chemicals",
+    "output": {
+      "CivilianIndustry": 0.62, "ChemicalPlant": 3.10, "Refinery": 0.80,
+      "deposit:Oil*extraction_efficiency": 0.14, "deposit:NaturalGas*extraction_efficiency": 0.16
+    },
+    "needs": { "Energy": 0.70 },
+    "demand": {
+      "CivilianIndustry": 0.30, "ArmsIndustry": 0.48, "ElectronicsPlant": 0.58, "Agriculture": 0.10
+    }
+  },
+
+  "fertiliser_production": {
+    "good": "Fertiliser",
+    "output": {
+      "Agriculture": 0.86, "ChemicalPlant": 1.25, "deposit:NaturalGas*extraction_efficiency": 0.14
+    },
+    "needs": { "Chemicals": 0.68 },
+    "demand": { "Agriculture": 0.78 }
+  },
+
+  // The one chain with a geography behind it: electronics run on rare earths, and rare
+  // earths are where they are rather than where they are wanted.
+  "electronics_manufacture": {
+    "good": "Electronics",
+    "output": { "CivilianIndustry": 4.05, "ElectronicsPlant": 3.30 },
+    "needs": { "Energy": 0.70, "Chemicals": 0.68, "RareEarths": 0.62 },
+    "demand": {
+      "population": 0.06, "population*urbanization": 0.17, "CivilianIndustry": 0.24,
+      "ArmsIndustry": 0.36, "ResearchLab": 0.50
+    }
+  },
+
+  "textile_manufacture": {
+    "good": "Textiles",
+    "output": {
+      "CivilianIndustry": 1.95, "population": 0.26, "deposit:Timber*timber_yield": 0.08
+    },
+    "demand": { "population": 0.26, "population*standard_of_living": 0.22 }
+  },
+
+  "pharmaceutical_manufacture": {
+    "good": "Pharmaceuticals",
+    "output": {
+      "CivilianIndustry": 1.95, "population": 0.15, "ChemicalPlant": 0.65, "ResearchLab": 1.05
+    },
+    "needs": { "Chemicals": 0.68 },
+    "demand": {
+      "population": 0.12, "population*standard_of_living": 0.16, "raw:Hospital": 0.28
+    }
+  },
+
+  // ---- what the second tier gives back to the first ----------------------------------
+  //
+  // Fertiliser is the sharpest of these on purpose: a country cut off from it does not
+  // starve, but it loses roughly a quarter of its harvest, which is the difference between
+  // exporting food and queueing for it.
+
+  "food_from_fertiliser": {
+    "good": "Food",
+    "output": { "Agriculture": 2.70 },
+    "shortfall": { "Fertiliser": 0.74 }
+  },
+
+  "energy_from_refining": {
+    "good": "Energy",
+    "output": {
+      "Refinery": 2.30,
+      "deposit:NaturalGas*extraction_efficiency": 0.42,
+      "deposit:Uranium*extraction_efficiency": 1.60
+    }
+  },
+
+  "industrial_materials_from_smelting": {
+    "good": "IndustrialMaterials",
+    "output": { "Smelter": 1.15 },
+    "needs": { "Energy": 0.70 }
+  },
+
+  "machinery_from_precision_industry": {
+    "good": "Machinery",
+    "output": { "ElectronicsPlant": 0.60, "Shipyard": 0.55 }
+  },
+
+  "consumer_goods_from_electronics": {
+    "good": "ConsumerGoods",
+    "output": { "CivilianIndustry": 0.90 },
+    "shortfall": { "Electronics": 0.80 }
+  },
+
+  // ---- what the country as a whole makes and spends ----------------------------------
+  //
+  // Worked out once per country rather than once per region, because construction projects
+  // and field armies belong to the state and not to a province.
+
+  "construction_industrial_materials": {
+    "good": "IndustrialMaterials", "scope": "nation",
+    "demand": { "projects": 2.20 }
+  },
+  "construction_machinery": {
+    "good": "Machinery", "scope": "nation",
+    "demand": { "projects": 0.85 }
+  },
+  "construction_timber": {
+    "good": "Timber", "scope": "nation",
+    "demand": { "projects": 0.70 }
+  },
+  "construction_aluminium": {
+    "good": "Aluminium", "scope": "nation",
+    "demand": { "projects": 0.30 }
+  },
+
+  "national_arms_output": {
+    "good": "Arms", "scope": "nation",
+    "output": { "gdp*arms_productivity": 0.004 }
+  },
+
+  // A modern army is an electronics consumer before it is anything else, and a war is where
+  // a chemical industry finds out whether it had one. Each of these is written as the
+  // peacetime rate plus the extra a war adds, so the two can be tuned apart.
+  "army_arms_upkeep": {
+    "good": "Arms", "scope": "nation",
+    "demand": { "divisions": 0.18, "divisions_at_war": 0.34, "hulls": 0.04 }
+  },
+  "army_fuel_upkeep": {
+    "good": "Oil", "scope": "nation",
+    "demand": { "divisions": 0.06, "divisions_at_war": 0.12, "hulls": 0.025 }
+  },
+  "army_electronics_upkeep": {
+    "good": "Electronics", "scope": "nation",
+    "demand": { "divisions": 0.03, "divisions_at_war": 0.06, "hulls": 0.012 }
+  },
+  "army_chemicals_upkeep": {
+    "good": "Chemicals", "scope": "nation",
+    "demand": { "divisions": 0.035, "divisions_at_war": 0.075 }
+  },
+  "army_aluminium_upkeep": {
+    "good": "Aluminium", "scope": "nation",
+    "demand": { "divisions": 0.02, "divisions_at_war": 0.04, "hulls": 0.02 }
+  },
+  "army_medical_upkeep": {
+    "good": "Pharmaceuticals", "scope": "nation",
+    "demand": { "divisions": 0.015, "divisions_at_war": 0.035 }
+  }
+}

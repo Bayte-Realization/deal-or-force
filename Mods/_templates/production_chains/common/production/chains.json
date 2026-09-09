@@ -1,0 +1,69 @@
+// Three changes to what things are made of, and one new chain.
+//
+// This is the file that decides who needs whom, which is the file that decides how the game
+// plays. Everything here is merged into the base game's chains by recipe name: name a recipe
+// and yours replaces it, leave one out and you inherit it. So this file is four recipes long
+// rather than forty.
+//
+// The vocabulary is documented at the top of the base game's
+// `game/common/production/00_chains.json`. Read that first; it is the reference.
+
+{
+  // ---- 1. retune a chain that exists -------------------------------------------------
+  //
+  // In the base game a smelter needs cheap electricity. Here it needs an industrial
+  // chemistry as well, and it minds a power cut more: the floor drops from 0.70 to 0.45, so
+  // a country whose grid is at half supply loses a third of its aluminium instead of a
+  // seventh. Aluminium is in airframes, warships and transmission lines, so this quietly
+  // makes electricity a strategic good and blackouts a war aim.
+  "aluminium_smelting": {
+    "good": "Aluminium",
+    "output": {
+      "CivilianIndustry": 0.65, "Smelter": 1.90, "deposit:Bauxite*extraction_efficiency": 0.30
+    },
+    "needs": { "Energy": 0.45, "Chemicals": 0.80 },
+    "demand": {
+      "CivilianIndustry": 0.22, "ElectronicsPlant": 0.55, "ArmsIndustry": 0.40, "Shipyard": 0.38
+    }
+  },
+
+  // ---- 2. add a second way to make something -----------------------------------------
+  //
+  // Recipes are not exclusive: several can name the same good and their outputs add. This
+  // one lets timber stand in for steel and cement, so a forested country with no ore is not
+  // simply poor. Because it consumes timber as well, it also gives the timber trade someone
+  // to sell to - which is what turns a cheap good into a chain.
+  "industrial_materials_from_timber": {
+    "good": "IndustrialMaterials",
+    "output": { "deposit:Timber*timber_yield": 0.45, "CivilianIndustry": 0.30 },
+    "needs": { "Timber": 0.60 }
+  },
+
+  // ---- 3. make a shortage bite somewhere else ----------------------------------------
+  //
+  // A `shortfall` term multiplies the output by (supply - 1), which is zero when supplied
+  // and negative when not. It is the only way a recipe may produce a negative number, and
+  // it is how one industry's shortage is charged to another's output.
+  //
+  // Here a machine-tool industry short of aluminium loses part of what it was already
+  // making. The floor of 0.70 sets how bad total starvation gets: at zero aluminium the
+  // penalty is 0.30 of the base term.
+  "machinery_needs_light_metal": {
+    "good": "Machinery",
+    "output": { "CivilianIndustry": 1.45 },
+    "shortfall": { "Aluminium": 0.70 }
+  },
+
+  // ---- 4. change what an army eats ---------------------------------------------------
+  //
+  // A `"scope": "nation"` recipe is worked out once for the country instead of once for each
+  // of its regions, and can read `divisions`, `divisions_at_war`, `hulls`, `projects`, `gdp`
+  // and `arms_productivity`.
+  //
+  // The wartime rate is written as the peacetime weight plus what a war adds, so the two can
+  // be tuned apart. This army burns three times the peacetime fuel once it is fighting.
+  "army_fuel_upkeep": {
+    "good": "Oil", "scope": "nation",
+    "demand": { "divisions": 0.06, "divisions_at_war": 0.12, "hulls": 0.025 }
+  }
+}
