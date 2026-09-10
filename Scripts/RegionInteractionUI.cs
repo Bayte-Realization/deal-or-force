@@ -30,13 +30,13 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 5);
         _regionControls.AddChild(actions);
         var develop = ActionButton("Develop", () => QueueRegionalBuilding(BuildingKind.Infrastructure), 92, 31, true);
-        develop.TooltipText = "Queue infrastructure in this region. Construction uses the national treasury, materials and construction capacity.";
+        develop.TooltipText = Tr("Queue infrastructure in this region. Construction uses the national treasury, materials and construction capacity.");
         actions.AddChild(develop);
         var industry = ActionButton("Industry", () => QueueRegionalBuilding(BuildingKind.CivilianIndustry), 92, 31);
-        industry.TooltipText = "Queue civilian industry in this region.";
+        industry.TooltipText = Tr("Queue civilian industry in this region.");
         actions.AddChild(industry);
         var raise = ActionButton("Raise army", RaiseRegionalArmy, 105, 31);
-        raise.TooltipText = "Choose a template, training region and paid recruitment batch.";
+        raise.TooltipText = Tr("Choose a template, training region and paid recruitment batch.");
         actions.AddChild(raise);
 
         var strategic = new HBoxContainer();
@@ -72,8 +72,9 @@ public partial class DealOrForceGame
 
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
         var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex;
-        _sideBody.Text = $"{_selectedState.Kind} of {owner?.Name ?? "an unknown state"}" +
-                         (owned ? "" : " · foreign ground, read-only");
+        _sideBody.Text = Simulation.Loc.Format("{0} of {1}",
+                             _selectedState.Kind, owner?.Name ?? Tr("an unknown state")) +
+                         (owned ? "" : Tr(" · foreign ground, read-only"));
 
         DetailHeading("PEOPLE");
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
@@ -176,13 +177,14 @@ public partial class DealOrForceGame
     {
         if (_selectedState is null) return;
         if (HideForeignRegionDetails()) return;
-        _sideTitle.Text = $"{_selectedState.Name} — people";
+        _sideTitle.Text = Simulation.Loc.Format("{0} — people", _selectedState.Name);
         _regionControls.Visible = true;
         ClearDetail();
 
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
         var total = Math.Max(1L, _selectedState.Population);
-        _sideBody.Text = $"{Fmt.People(_selectedState.Population)} people under {owner?.Name ?? "an unknown flag"}";
+        _sideBody.Text = Simulation.Loc.Format("{0} people under {1}",
+            Fmt.People(_selectedState.Population), owner?.Name ?? Tr("an unknown flag"));
 
         DetailHeading("THE REGION");
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
@@ -236,7 +238,7 @@ public partial class DealOrForceGame
         var topology = _campaign.ProvinceMap;
         if (topology is null || _selectedProvinceId <= 0 || _selectedProvinceId > topology.ProvinceCount)
         {
-            _sideBody.Text = "The province map is still being prepared.";
+            _sideBody.Text = Tr("The province map is still being prepared.");
             return;
         }
         _regionControls.Visible = true;
@@ -251,10 +253,11 @@ public partial class DealOrForceGame
         var crossings = adjacent.Count(province => topology.IsRiverCrossing(_selectedProvinceId, province));
         var centre = topology.CenterOf(_selectedProvinceId);
 
-        _sideTitle.Text = $"Province #{_selectedProvinceId:N0}";
-        _sideBody.Text = $"{_selectedState?.Name ?? "Unmapped ground"} · " +
-                         $"{MathF.Abs(centre.Latitude):0.0}°{(centre.Latitude >= 0 ? "N" : "S")} " +
-                         $"{MathF.Abs(centre.Longitude):0.0}°{(centre.Longitude >= 0 ? "E" : "W")}";
+        _sideTitle.Text = Simulation.Loc.Format("Province #{0:N0}", _selectedProvinceId);
+        _sideBody.Text = Simulation.Loc.Format("{0} · {1:0.0}°{2} {3:0.0}°{4}",
+            _selectedState?.Name ?? Tr("Unmapped ground"),
+            MathF.Abs(centre.Latitude), centre.Latitude >= 0 ? Tr("N") : Tr("S"),
+            MathF.Abs(centre.Longitude), centre.Longitude >= 0 ? Tr("E") : Tr("W"));
 
         DetailHeading("STANDING");
         DetailRow("Owner", owner?.Name ?? "unknown",
@@ -291,7 +294,7 @@ public partial class DealOrForceGame
     {
         if (_selectedState is null || _selectedState.NationMapIndex != _campaign.Player.MapIndex)
         {
-            _regionActionFeedback.Text = "Only an owned region can receive construction orders.";
+            _regionActionFeedback.Text = Tr("Only an owned region can receive construction orders.");
             return;
         }
         var before = _campaign.Construction.Count;
@@ -312,7 +315,7 @@ public partial class DealOrForceGame
     {
         if (_selectedState is null || _selectedState.NationMapIndex != _campaign.Player.MapIndex)
         {
-            _regionActionFeedback.Text = "Recruitment is available only in an owned region.";
+            _regionActionFeedback.Text = Tr("Recruitment is available only in an owned region.");
             return;
         }
         OpenRecruitment(_selectedState.MapIndex);

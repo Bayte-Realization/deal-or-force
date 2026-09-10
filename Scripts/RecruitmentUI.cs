@@ -96,12 +96,16 @@ public partial class DealOrForceGame
         var t = UnitTypeCatalog.Get(RecruitmentTemplateId());
         var count = (int)_recruitmentCount.Value;
         var reason = RecruitmentSystem.Validate(_campaign, _campaign.Player.Id, _recruitmentRegion.GetSelectedId(), t.Id, count);
-        _recruitmentDetails.Text = $"{count} × {t.Name} · {count * t.RecruitmentPersonnel:N0} personnel\n" +
-            $"Procurement & training: ${count * t.RecruitmentCost:0.00}B · {t.TrainingDays} days\n" +
-            $"Soft attack {t.SoftAttack:0.00} · Hard attack {t.HardAttack:0.00} · Armour {t.Armour:0.00}\n" +
-            $"Speed ×{t.Speed:0.00} · Combat width {t.CombatWidth:0} · Supply ×{t.SupplyUse:0.00}\n" +
-            $"Available: ${_campaign.Player.Treasury:0.00}B · {_campaign.Player.ManpowerReserve:N0} personnel\n" +
-            (reason.Length == 0 ? "Ready to fund training." : reason);
+        _recruitmentDetails.Text = Simulation.Loc.Format(
+            "{0} × {1} · {2:N0} personnel\n" +
+            "Procurement & training: ${3:0.00}B · {4} days\n" +
+            "Soft attack {5:0.00} · Hard attack {6:0.00} · Armour {7:0.00}\n" +
+            "Speed ×{8:0.00} · Combat width {9:0} · Supply ×{10:0.00}\n" +
+            "Available: ${11:0.00}B · {12:N0} personnel\n",
+            count, t.Name, count * t.RecruitmentPersonnel, count * t.RecruitmentCost, t.TrainingDays,
+            t.SoftAttack, t.HardAttack, t.Armour, t.Speed, t.CombatWidth, t.SupplyUse,
+            _campaign.Player.Treasury, _campaign.Player.ManpowerReserve) +
+            (reason.Length == 0 ? Tr("Ready to fund training.") : reason);
         _recruitmentSubmit.Disabled = reason.Length > 0;
         var queueState = _recruitmentViewer + ":" + string.Join(";", _campaign.Recruitment.Where(o => o.NationId == _recruitmentViewer)
             .Select(o => $"{o.Id}:{o.TrainedDays}:{RecruitmentSystem.DeploymentProvince(_campaign, o.NationId, o.StateMapIndex)}"));

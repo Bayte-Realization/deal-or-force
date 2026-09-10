@@ -52,17 +52,25 @@ public partial class DealOrForceGame
         var war = nation == _campaign.Player ? null : _campaign.Wars.Find(candidate =>
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text =
-            $"{nation.Name} ({nation.Tag})\n{location}\n\n" +
-            $"Capital: {nation.CapitalName}\n" +
-            (CanInspectNation(nation.Id) ? $"Population: {nation.Population:N0}\nGDP: ${nation.Gdp:0.00}B\nTreasury: ${nation.Treasury:0.00}B\n\n" : "Internal statistics: unknown (fog of war).\n\n") +
+            Simulation.Loc.Format("{0} ({1})\n{2}\n\nCapital: {3}\n",
+                nation.Name, nation.Tag, location, nation.CapitalName) +
+            (CanInspectNation(nation.Id)
+                ? Simulation.Loc.Format("Population: {0:N0}\nGDP: ${1:0.00}B\nTreasury: ${2:0.00}B\n\n",
+                    nation.Population, nation.Gdp, nation.Treasury)
+                : Tr("Internal statistics: unknown (fog of war).\n\n")) +
             relationText +
-            (war is null ? "" : $"\nAt war · score {(war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
+            (war is null
+                ? ""
+                : Simulation.Loc.Format("\nAt war · score {0:+0.0;-0.0;0.0}",
+                    war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore));
         _countryActions.Visible = nation != _campaign.Player;
         if (!_countryActions.Visible) return;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
         _declareWarButton.Disabled = !canDeclare;
         _declareWarButton.TooltipText = canDeclare ? "Requires a second click to confirm." : reason;
-        _declareWarButton.Text = _pendingWarTarget == nation.Id ? $"CONFIRM WAR ON {nation.Tag}" : "Declare war";
+        _declareWarButton.Text = _pendingWarTarget == nation.Id
+            ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
+            : Tr("Declare war");
         if (!canDeclare && string.IsNullOrWhiteSpace(_countryActionFeedback.Text))
             _countryActionFeedback.Text = reason;
     }
@@ -107,7 +115,7 @@ public partial class DealOrForceGame
         if (_pendingWarTarget != _selectedNation.Id)
         {
             _pendingWarTarget = _selectedNation.Id;
-            _countryActionFeedback.Text = "This begins an immediate land war. Click the highlighted button again to confirm.";
+            _countryActionFeedback.Text = Tr("This begins an immediate land war. Click the highlighted button again to confirm.");
             ShowCountryInteraction(_selectedNation, "War declaration prepared");
             return;
         }
@@ -122,7 +130,7 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         PlayStrategicCue("war_declared");
         _pendingWarTarget = -1;
-        _countryActionFeedback.Text = $"War declared on {_selectedNation.Name}. Select your armies and assign Advance front.";
+        _countryActionFeedback.Text = Simulation.Loc.Format("War declared on {0}. Select your armies and assign Advance front.", _selectedNation.Name);
         ShowCountryInteraction(_selectedNation, "WAR DECLARED");
     }
 
@@ -130,7 +138,7 @@ public partial class DealOrForceGame
     {
         if (_selectedNation is null || string.IsNullOrWhiteSpace(_selectedNation.CapitalName)) return;
         _globe.FocusOn(_selectedNation.CapitalLatitude, _selectedNation.CapitalLongitude, 7.1f);
-        _countryActionFeedback.Text = $"Focused on {_selectedNation.CapitalName}.";
+        _countryActionFeedback.Text = Simulation.Loc.Format("Focused on {0}.", _selectedNation.CapitalName);
     }
 
     private bool ValidForeignSelection() => _campaign?.Player is not null &&

@@ -71,7 +71,7 @@ public partial class DealOrForceGame
         _economyControls.AddChild(Title("NATIONAL MARKET", 12, Ui.Colour("text.caption")));
         _marketStatus = Title("Market data is recalculated every economic week.", 12, Ui.Colour("text.body_soft"));
         _marketStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _marketStatus.TooltipText = "Output + imports − demand − exports. Satisfaction below 100% is a real shortage that affects prices, GDP and living standards.";
+        _marketStatus.TooltipText = Tr("Output + imports − demand − exports. Satisfaction below 100% is a real shortage that affects prices, GDP and living standards.");
         _economyControls.AddChild(_marketStatus);
     }
 
@@ -79,7 +79,7 @@ public partial class DealOrForceGame
     {
         var definition = BuildingCatalog.Get(kind);
         var button = ActionButton(label, () => QueueBuilding(kind), 154, 32, kind == BuildingKind.CivilianIndustry);
-        button.TooltipText = $"{definition.Name}: {Fmt.Money(definition.Cost)}, {definition.Days} days. {definition.Description}";
+        button.TooltipText = Simulation.Loc.Format("{0}: {1}, {2} days. {3}", definition.Name, Fmt.Money(definition.Cost), definition.Days, definition.Description);
         row.AddChild(button);
     }
 
@@ -112,7 +112,7 @@ public partial class DealOrForceGame
         var state = _selectedState;
         var queue = _campaign.Construction.Where(project => project.NationId == player.Id).OrderBy(project => project.Id).ToArray();
 
-        _sideBody.Text = $"{player.Name} · {TradePolicyRules.Name(player.TradePolicy)}";
+        _sideBody.Text = Simulation.Loc.Format("{0} · {1}", player.Name, TradePolicyRules.Name(player.TradePolicy));
         ClearDetail();
 
         // Before the first economic week closes every one of these is genuinely zero, and
@@ -156,7 +156,7 @@ public partial class DealOrForceGame
 
         if (state is not null)
         {
-            DetailHeading($"REGION — {state.Name.ToUpperInvariant()}");
+            DetailHeading(Simulation.Loc.Format("REGION — {0}", state.Name.ToUpperInvariant()));
             DetailRow("Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
             DetailRow("Literacy", Fmt.Percent(state.Literacy), "Schooling here, against the national average.");
             DetailRow("Standard of living", Fmt.Percent(state.StandardOfLiving),

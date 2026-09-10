@@ -44,7 +44,7 @@ public partial class DealOrForceGame
         rows.AddChild(Title("THE WORLD IN 2024", 13, Ui.Colour("text.caption")));
         _pickerSearch = new LineEdit
         {
-            PlaceholderText = "Search countries or tags…",
+            PlaceholderText = Tr("Search countries or tags…"),
             CustomMinimumSize = new Vector2(0, 38),
             ClearButtonEnabled = true
         };
@@ -93,7 +93,7 @@ public partial class DealOrForceGame
         actionRow.AddChild(ActionButton("Random nation", PickRandomNation, 150, 38));
         var observe = ActionButton("Observe", () => { }, 100, 38);
         observe.Disabled = true;
-        observe.TooltipText = "Observer authority will be enabled with the multiplayer/session ownership slice.";
+        observe.TooltipText = Tr("Observer authority will be enabled with the multiplayer/session ownership slice.");
         actionRow.AddChild(observe);
     }
 
@@ -105,9 +105,9 @@ public partial class DealOrForceGame
         _hudLayer.Visible = false;
         _pickerLayer.Visible = true;
         _sidePanel.Visible = false;
-        _pickerSearch.Text = "";
-        _pickerHeading.Text = "SELECT A COUNTRY";
-        _pickerSubheading.Text = "1 January 2024 · click the political map or search";
+        _pickerSearch.Text = Tr("");
+        _pickerHeading.Text = Tr("SELECT A COUNTRY");
+        _pickerSubheading.Text = Tr("1 January 2024 · click the political map or search");
         _pickerSeats.Visible = false;
         _pickerSeatToggle.Visible = false;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
@@ -130,13 +130,10 @@ public partial class DealOrForceGame
         var divisions = armies.Sum(army => army.Divisions);
         _pickerName.Text = nation.Name;
         SetFlag(_pickerFlag, nation.Tag, 32);
-        _pickerTier.Text = $"{nation.Tag} · rank #{rank} · {tier}";
+        _pickerTier.Text = Simulation.Loc.Format("{0} · rank #{1} · {2}", nation.Tag, rank, tier);
         _pickerStats.Text =
-            $"Capital  {nation.CapitalName}\n" +
-            $"Population  {Fmt.People(nation.Population)}\n" +
-            $"GDP  {Fmt.Money(nation.Gdp)}    Treasury  {Fmt.Money(nation.Treasury)}\n" +
-            $"Regions  {states:N0}    Divisions  {divisions:0.#}";
-        _pickerLocation.Text = "Click the map to inspect a region and its tactical province.";
+            Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", nation.CapitalName, Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
+        _pickerLocation.Text = Tr("Click the map to inspect a region and its tactical province.");
         _pickerBegin.Text = _pickerHotseatMode
             ? $"START HOTSEAT · {_campaign.HumanSeats.Count} PLAYERS"
             : $"BEGIN AS {nation.Tag}";
@@ -208,9 +205,9 @@ public partial class DealOrForceGame
         _hudLayer.Visible = false;
         _pickerLayer.Visible = true;
         _sidePanel.Visible = false;
-        _pickerSearch.Text = "";
-        _pickerHeading.Text = "LOCAL MULTIPLAYER";
-        _pickerSubheading.Text = "Choose 2 or more countries · players share one deterministic world";
+        _pickerSearch.Text = Tr("");
+        _pickerHeading.Text = Tr("LOCAL MULTIPLAYER");
+        _pickerSubheading.Text = Tr("Choose 2 or more countries · players share one deterministic world");
         _pickerSeats.Visible = true;
         _pickerSeatToggle.Visible = true;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
@@ -253,6 +250,6 @@ public partial class DealOrForceGame
     {
         var region = pick.State is null ? "Unmapped region" : $"{pick.State.Name} · {pick.State.Kind}";
         var province = pick.ProvinceId > 0 ? $"tactical province #{pick.ProvinceId:N0}" : "province topology loading";
-        _pickerLocation.Text = $"Selected: {region} · {province}";
+        _pickerLocation.Text = Simulation.Loc.Format("Selected: {0} · {1}", region, province);
     }
 }

@@ -85,15 +85,17 @@ public partial class DealOrForceGame
         var mine = owner is not null && _campaign.Player is not null && owner.Id == _campaign.Player.Id;
 
         _fleetTitle.Text = fleet.Name;
-        _fleetSubtitle.Text = $"{owner?.Tag ?? "?"} · {fleet.Hulls:N0} hulls · {MissionName(fleet.Mission)}" +
-                              (fleet.IsMoving ? " · under way" : "") +
-                              (fleet.InAction ? " · in action" : "");
+        _fleetSubtitle.Text = Simulation.Loc.Format("{0} · {1:N0} hulls · {2}",
+                                  owner?.Tag ?? "?", fleet.Hulls, MissionName(fleet.Mission)) +
+                              (fleet.IsMoving ? Tr(" · under way") : "") +
+                              (fleet.InAction ? Tr(" · in action") : "");
         var carried = NavalInvasion.CarriedDivisions(_campaign, fleet);
         var capacity = NavalInvasion.Capacity(_campaign, fleet);
-        _fleetCondition.Text =
-            $"Strength {fleet.Strength:P0}    Cohesion {fleet.Organisation:P0}" + System.Environment.NewLine +
-            $"Stores {fleet.Supply:P0}    Readiness {fleet.Readiness:P0}" + System.Environment.NewLine +
-            $"Aboard {carried:0.#} of {capacity:0.#} divisions";
+        _fleetCondition.Text = Simulation.Loc.Format(
+            "Strength {0:P0}    Cohesion {1:P0}\n" +
+            "Stores {2:P0}    Readiness {3:P0}\n" +
+            "Aboard {4:0.#} of {5:0.#} divisions",
+            fleet.Strength, fleet.Organisation, fleet.Supply, fleet.Readiness, carried, capacity);
 
         foreach (var (mission, button) in _fleetMissionButtons)
         {
@@ -278,11 +280,11 @@ public partial class DealOrForceGame
         cargo.AddThemeConstantOverride("separation", 4);
         rows.AddChild(cargo);
         var load = ActionButton("Load troops", LoadTroops, 148, 32);
-        load.TooltipText = "Load troops\nTake aboard your divisions standing at this fleet's port. " +
-                           "What fits is set by the hulls.";
+        load.TooltipText = Tr("Load troops\nTake aboard your divisions standing at this fleet's port. " +
+                           "What fits is set by the hulls.");
         cargo.AddChild(load);
         var unload = ActionButton("Put ashore", UnloadTroops, 148, 32);
-        unload.TooltipText = "Put ashore\nLand what the fleet is carrying on the nearest friendly coast.";
+        unload.TooltipText = Tr("Put ashore\nLand what the fleet is carrying on the nearest friendly coast.");
         cargo.AddChild(unload);
 
         _fleetFeedback = Title("", 11, Ui.Colour("text.hint"));
@@ -293,7 +295,7 @@ public partial class DealOrForceGame
     private void AddMissionButton(Container parent, FleetMission mission, int width)
     {
         var button = ActionButton(MissionName(mission), () => IssueFleetMission(mission), width, 32);
-        button.TooltipText = $"{MissionName(mission)}\n{MissionHelp(mission)}";
+        button.TooltipText = Simulation.Loc.Format("{0}\n{1}", MissionName(mission), MissionHelp(mission));
         _fleetMissionButtons[mission] = button;
         parent.AddChild(button);
     }

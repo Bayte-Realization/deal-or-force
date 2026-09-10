@@ -30,7 +30,7 @@ public partial class DealOrForceGame
         margin.AddChild(row);
 
         _projectionButton = ActionButton("3D GLOBE", ToggleProjection, 104, 34, true);
-        _projectionButton.TooltipText = "Switch between the globe and an infinitely wrapping classic map (F2).";
+        _projectionButton.TooltipText = Tr("Switch between the globe and an infinitely wrapping classic map (F2).");
         row.AddChild(_projectionButton);
 
         AddMode(row, StrategicMapMode.Political, "POL", "Political: countries, controllers and occupied provinces.");
@@ -40,7 +40,7 @@ public partial class DealOrForceGame
         // A dropdown keeps all seven layers reachable without pushing the strip past its artwork.
         _mapModeLegend = new OptionButton { CustomMinimumSize = new Vector2(130, 34),
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, FitToLongestItem = false,
-            TooltipText = "All map layers, including diplomatic, population, economy and the moddable relief layer." };
+            TooltipText = Tr("All map layers, including diplomatic, population, economy and the moddable relief layer.") };
         foreach (StrategicMapMode mode in System.Enum.GetValues<StrategicMapMode>())
             _mapModeLegend.AddItem(mode.ToString(), (int)mode);
         _mapModeLegend.ItemSelected += index => _globe.SetMapMode((StrategicMapMode)_mapModeLegend.GetItemId((int)index));

@@ -282,7 +282,7 @@ public partial class DealOrForceGame : Control
         // authored 2024 figures. If this ever drifts, the calibration broke, not the map.
         GD.Print("[dof] " + Simulation.EconomySystem.LastCalibrationReport);
         if (IsInstanceValid(_scenarioSummary))
-            _scenarioSummary.Text = $"{_campaign.Nations.Count} nations · {_campaign.States.Count} states · deterministic campaign simulation";
+            _scenarioSummary.Text = Simulation.Loc.Format("{0} nations · {1} states · deterministic campaign simulation", _campaign.Nations.Count, _campaign.States.Count);
         BindCampaignMods();
         _campaign.Changed += Refresh;
         _campaign.IsPaused = true;
@@ -346,7 +346,7 @@ public partial class DealOrForceGame : Control
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
             CustomMinimumSize = new Vector2(0, 184),
             MouseFilter = Control.MouseFilterEnum.Ignore,
-            TooltipText = "Deal or Force"
+            TooltipText = Tr("Deal or Force")
         };
         rows.AddChild(logo);
         rows.AddChild(Title(
@@ -359,33 +359,33 @@ public partial class DealOrForceGame : Control
         rows.AddChild(_scenarioSummary);
 
         _modStatus = Title(_modLoader.StatusLine, 12, Ui.Colour("text.faint"));
-        _modStatus.TooltipText = "Development mods: res://Mods · installed mods: user://mods";
+        _modStatus.TooltipText = Tr("Development mods: res://Mods · installed mods: user://mods");
         rows.AddChild(_modStatus);
 
         rows.AddChild(ActionButton("Singleplayer", OpenCountryPicker, 330, 46, true));
         rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
 
         var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
-        multiplayer.TooltipText = "Host or join an authoritative ENet campaign over LAN, direct IPv4 or a virtual LAN such as Radmin VPN.";
+        multiplayer.TooltipText = Tr("Host or join an authoritative ENet campaign over LAN, direct IPv4 or a virtual LAN such as Radmin VPN.");
         rows.AddChild(multiplayer);
 
         _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 42);
-        _mainProjectionButton.TooltipText = "Switch between globe and classic infinitely wrapping map (F2).";
+        _mainProjectionButton.TooltipText = Tr("Switch between globe and classic infinitely wrapping map (F2).");
         rows.AddChild(_mainProjectionButton);
         _smoothingButton = ActionButton(SmoothingButtonLabel(), ToggleMapSmoothing, 330, 42);
         _smoothingButton.TooltipText =
-            "Smoothing rebuilds country, region and terrain boundaries so the map has no visible " +
+            Tr("Smoothing rebuilds country, region and terrain boundaries so the map has no visible " +
             "texel grid. Turn it off for the raster exactly as authored - pixels and all - which " +
-            "is also the cheaper picture on a slower machine (F3).";
+            "is also the cheaper picture on a slower machine (F3).");
         rows.AddChild(_smoothingButton);
         _globeDragButton = ActionButton(GlobeDragButtonLabel(), ToggleGlobeDrag, 330, 42);
         _globeDragButton.TooltipText =
-            "Which way a right-drag turns the globe. Move the globe means the ground follows " +
+            Tr("Which way a right-drag turns the globe. Move the globe means the ground follows " +
             "the hand, the way the flat map has always worked. Turn the camera swings the view " +
-            "around a globe that stays where it is (F4). The flat map is unaffected.";
+            "around a globe that stays where it is (F4). The flat map is unaffected.");
         rows.AddChild(_globeDragButton);
         _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
-        _languageButton.TooltipText = "Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.";
+        _languageButton.TooltipText = Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.");
         rows.AddChild(_languageButton);
         rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
 
@@ -444,10 +444,10 @@ public partial class DealOrForceGame : Control
         clock.AddChild(speeds);
 
         var menu = ActionButton("≡", ShowPauseMenu, 44, 34);
-        menu.TooltipText = "Pause menu (Esc) · F5 quick-saves, F9 loads, F10 flies the camera";
+        menu.TooltipText = Tr("Pause menu (Esc) · F5 quick-saves, F9 loads, F10 flies the camera");
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 44, 34, true);
-        _pause.TooltipText = "Pause and resume campaign time (Space). Space never activates a focused button.";
+        _pause.TooltipText = Tr("Pause and resume campaign time (Space). Space never activates a focused button.");
         speeds.AddChild(_pause);
         _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
@@ -534,7 +534,7 @@ public partial class DealOrForceGame : Control
             MinValue = 0,
             MaxValue = 1,
             Step = 0.01,
-            TooltipText = "Military allocation; submitted through the deterministic command queue."
+            TooltipText = Tr("Military allocation; submitted through the deterministic command queue.")
         };
         _militarySpending.ValueChanged += OnSpendingChanged;
         sideRows.AddChild(_militarySpending);
@@ -564,7 +564,7 @@ public partial class DealOrForceGame : Control
         _hudLayer.Visible = true;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _campaign.IsPaused = true;
-        _pause.Text = "▶";
+        _pause.Text = Tr("▶");
         StyleButton(_pause, true);
         UpdateHotseatHud();
         UpdateNetworkHud();
@@ -577,7 +577,7 @@ public partial class DealOrForceGame : Control
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
         _campaign.IsPaused = true;
-        _pause.Text = "▶";
+        _pause.Text = Tr("▶");
         _hudLayer.Visible = false;
         _pickerLayer.Visible = false;
         _menuLayer.Visible = true;
@@ -631,7 +631,7 @@ public partial class DealOrForceGame : Control
         switch (screen)
         {
             case "Nation":
-                _sideBody.Text = $"{nation.Name} ({nation.Tag}) · {nation.Region}, {nation.Continent}";
+                _sideBody.Text = Simulation.Loc.Format("{0} ({1}) · {2}, {3}", nation.Name, nation.Tag, nation.Region, nation.Continent);
                 DetailHeading("STATE");
                 DetailRow("Capital", nation.CapitalName);
                 DetailRow("States held", _campaign.StatesOf(nation).Length.ToString("N0"));
@@ -660,7 +660,7 @@ public partial class DealOrForceGame : Control
                 var divisions = armies.Sum(army => army.Divisions);
                 var fleets = _campaign.Fleets.Where(fleet => fleet.NationId == player.Id).ToArray();
                 var personnel = MilitaryBootstrap.Personnel(player.Tag, player.Population);
-                _sideBody.Text = $"{player.Name} armed forces";
+                _sideBody.Text = Simulation.Loc.Format("{0} armed forces", player.Name);
 
                 DetailHeading("FORCES");
                 _sideDetail.AddChild(ActionButton("Recruit & deploy", () => OpenRecruitment(), 180, 38, true));
@@ -777,7 +777,7 @@ public partial class DealOrForceGame : Control
     {
         if (IsNetworkClient)
         {
-            _networkHudStatus.Text = "Only the host controls campaign time.";
+            _networkHudStatus.Text = Tr("Only the host controls campaign time.");
             return;
         }
         _campaign.IsPaused = !_campaign.IsPaused;
@@ -790,14 +790,14 @@ public partial class DealOrForceGame : Control
     {
         if (IsNetworkClient)
         {
-            _networkHudStatus.Text = "Only the host controls campaign speed.";
+            _networkHudStatus.Text = Tr("Only the host controls campaign speed.");
             return;
         }
         _speed = Mathf.Clamp(speed, 1, 5);
         if (_campaign.IsPaused)
         {
             _campaign.IsPaused = false;
-            _pause.Text = "II";
+            _pause.Text = Tr("II");
             StyleButton(_pause, false);
         }
         Refresh();
@@ -821,7 +821,7 @@ public partial class DealOrForceGame : Control
         if (_campaign?.Player is null) return;
 
         var player = _campaign.Player;
-        _identity.Text = $"{player.Name} ({player.Tag})";
+        _identity.Text = Simulation.Loc.Format("{0} ({1})", player.Name, player.Tag);
         _identityTag.Text = _observerMode ? "OBS · observer mode" : $"{player.Tag} · player nation";
         SetFlag(_identityFlag, player.Tag, 34);
         _date.Text = _campaign.Date.ToString();
@@ -1012,7 +1012,7 @@ public partial class DealOrForceGame : Control
         if (_militarySpendingReadout is null || player is null) return;
         var annual = player.Gdp * player.MilitarySpending;
         _militarySpendingReadout.Text =
-            $"{Fmt.Percent(player.MilitarySpending)} of output · about {Fmt.Money(annual)} a year";
+            Simulation.Loc.Format("{0} of output · about {1} a year", Fmt.Percent(player.MilitarySpending), Fmt.Money(annual));
     }
 
     /// <summary>Forget the week of history behind the top bar - a new campaign has none.</summary>

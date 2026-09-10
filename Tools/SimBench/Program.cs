@@ -2900,42 +2900,146 @@ public static class Program
         return "";
     }
 
-    /// <summary>Every literal this file hands straight to a translation lookup.</summary>
+    /// <summary>
+    /// Which arguments of which calls end up in front of a player, translated.
+    ///
+    /// It used to be three, all of them taking their caption first, and that was enough
+    /// while the interface was three lookups deep. It is not: `DetailRow` builds every
+    /// caption/value row in the game and reaches `Tr` through `Title`, and so do
+    /// `DetailHeading`, `RowLabel`, `SliderRow` and `StateSection`. Every one of those
+    /// captions was translated at runtime and absent from the English table, which is the
+    /// worst of both - the machinery worked and no translator could see there was anything
+    /// to translate. `StateSection` is also why this now counts arguments rather than
+    /// assuming the first: its first argument is the container, and both of the others are
+    /// text.
+    /// </summary>
+    private static readonly (string Call, int[] Arguments)[] TranslatedCalls =
+    {
+        ("Title(", new[] { 0 }),
+        ("ActionButton(", new[] { 0 }),
+        ("Tr(", new[] { 0 }),
+        ("DetailRow(", new[] { 0 }),
+        ("DetailHeading(", new[] { 0 }),
+        ("RowLabel(", new[] { 0 }),
+        ("SliderRow(", new[] { 0 }),
+        ("StateSection(", new[] { 1, 2 }),
+        ("Loc.Get(", new[] { 0 }),
+        ("Loc.Format(", new[] { 0 })
+    };
+
+    /// <summary>Every literal this file hands to a translation lookup, however indirectly.</summary>
     private static IEnumerable<string> Captions(string source)
     {
-        foreach (var call in new[] { "Title(", "ActionButton(", "Tr(" })
+        foreach (var (call, wanted) in TranslatedCalls)
         {
             var at = 0;
             while ((at = source.IndexOf(call, at, StringComparison.Ordinal)) >= 0)
             {
-                var cursor = at + call.Length;
-                at = cursor;
-                while (cursor < source.Length && (source[cursor] == ' ' || source[cursor] == '\n' ||
-                                                  source[cursor] == '\r' || source[cursor] == '\t')) cursor++;
-                if (cursor >= source.Length || source[cursor] != '"') continue;
-                var text = new System.Text.StringBuilder();
-                cursor++;
-                var closed = false;
-                while (cursor < source.Length)
+                // `SomethingElseTr(` is not `Tr(`. A call name has to start on a boundary.
+                var before = at > 0 ? source[at - 1] : ' ';
+                at += call.Length;
+                if (char.IsLetterOrDigit(before) || before == '_') continue;
+
+                foreach (var index in wanted)
                 {
-                    var character = source[cursor++];
-                    if (character == '\\' && cursor < source.Length)
-                    {
-                        var escaped = source[cursor++];
-                        text.Append(escaped switch
-                        {
-                            'n' => '\n', 't' => '\t', 'r' => '\r',
-                            _ => escaped
-                        });
-                        continue;
-                    }
-                    if (character == '"') { closed = true; break; }
-                    if (character == '\n') break;
-                    text.Append(character);
+                    var argument = Argument(source, at, index);
+                    if (argument is not null) yield return argument;
                 }
-                if (closed) yield return text.ToString();
             }
         }
+    }
+
+    /// <summary>
+    /// The Nth argument of a call whose arguments start at `open`, if that argument is one
+    /// plain string literal and nothing else.
+    ///
+    /// Anything assembled - interpolated, concatenated, handed in through a variable -
+    /// returns null, which is the honest answer: a reader of the source cannot know what it
+    /// will say, and the English table is not expected to carry it.
+    /// </summary>
+    private static string Argument(string source, int open, int index)
+    {
+        var depth = 0;
+        var argument = 0;
+        var cursor = open;
+        var start = open;
+        while (cursor < source.Length)
+        {
+            var character = source[cursor];
+            if (character == '"')
+            {
+                cursor = SkipString(source, cursor);
+                continue;
+            }
+            if (character is '(' or '[' or '{') depth++;
+            else if (character is ')' or ']' or '}')
+            {
+                if (depth == 0 && character == ')')
+                    return argument == index ? Literal(source, start, cursor) : null;
+                depth--;
+            }
+            else if (character == ',' && depth == 0)
+            {
+                if (argument == index) return Literal(source, start, cursor);
+                argument++;
+                start = cursor + 1;
+            }
+            cursor++;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The text of `source[from..to]` when it is string literals and nothing else.
+    ///
+    /// A sentence too long for one line is written as `"half " + "the rest"`, and what the
+    /// player reads is the join, so the join is the key. Anything else in the expression -
+    /// a variable, a call, an interpolation - and there is no key a reader of the source
+    /// can be sure of, so this answers null and the caption is not expected in the table.
+    /// </summary>
+    private static string Literal(string source, int from, int to)
+    {
+        var span = source[from..to].Trim();
+        if (span.Length < 2 || span[0] != '"') return null;
+        var text = new System.Text.StringBuilder();
+        var cursor = 0;
+        while (true)
+        {
+            if (cursor >= span.Length || span[cursor] != '"') return null;
+            cursor++;
+            var closed = false;
+            while (cursor < span.Length)
+            {
+                var character = span[cursor++];
+                if (character == '\\' && cursor < span.Length)
+                {
+                    var escaped = span[cursor++];
+                    text.Append(escaped switch { 'n' => '\n', 't' => '\t', 'r' => '\r', _ => escaped });
+                    continue;
+                }
+                if (character == '"') { closed = true; break; }
+                text.Append(character);
+            }
+            if (!closed) return null;
+
+            while (cursor < span.Length && char.IsWhiteSpace(span[cursor])) cursor++;
+            if (cursor >= span.Length) return text.ToString();
+            if (span[cursor] != '+') return null;
+            cursor++;
+            while (cursor < span.Length && char.IsWhiteSpace(span[cursor])) cursor++;
+        }
+    }
+
+    private static int SkipString(string source, int quote)
+    {
+        var cursor = quote + 1;
+        while (cursor < source.Length)
+        {
+            if (source[cursor] == '\\') { cursor += 2; continue; }
+            if (source[cursor] == '"') return cursor + 1;
+            cursor++;
+        }
+        return cursor;
     }
 
     /// <summary>One language's table, read the layered way the game reads it.</summary>

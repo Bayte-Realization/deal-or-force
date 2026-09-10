@@ -58,10 +58,10 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 8);
         rows.AddChild(actions);
         _peaceOfferAccept = ActionButton("Sign it", () => AnswerPeaceOffer(true), 220, 46, true);
-        _peaceOfferAccept.TooltipText = "Accept the terms as written. The war ends today.";
+        _peaceOfferAccept.TooltipText = Tr("Accept the terms as written. The war ends today.");
         actions.AddChild(_peaceOfferAccept);
         _peaceOfferRefuse = ActionButton("Refuse", () => AnswerPeaceOffer(false), 220, 46);
-        _peaceOfferRefuse.TooltipText = "Send them away. The war goes on and they will not ask again for a while.";
+        _peaceOfferRefuse.TooltipText = Tr("Send them away. The war goes on and they will not ask again for a while.");
         actions.AddChild(_peaceOfferRefuse);
     }
 
@@ -89,8 +89,9 @@ public partial class DealOrForceGame
 
         var proposer = _campaign.NationById(war.PendingOfferFromId);
         _campaign.IsPaused = true;
-        _pause.Text = "▶";
-        _peaceOfferTitle.Text = $"{proposer?.Name?.ToUpperInvariant() ?? "THEY"} OFFER TERMS";
+        _pause.Text = Tr("▶");
+        _peaceOfferTitle.Text = Simulation.Loc.Format("{0} OFFER TERMS",
+            proposer?.Name?.ToUpperInvariant() ?? Tr("THEY"));
         _peaceOfferBody.Text = PeaceOffers.Describe(_campaign, war);
 
         var days = war.PendingOfferExpiresDay - _campaign.ElapsedDays;

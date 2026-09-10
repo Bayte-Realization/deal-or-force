@@ -159,13 +159,13 @@ public partial class DealOrForceGame
         execution.AddThemeConstantOverride("separation", 4);
         plansPage.AddChild(execution);
         var prepare = ActionButton("Prepare", () => IssuePlanExecution(false), 102, 32, false, Icon("plan_prepare"));
-        prepare.TooltipText = "Hold offensive formations on their sector so they entrench and accumulate a plan.";
+        prepare.TooltipText = Tr("Hold offensive formations on their sector so they entrench and accumulate a plan.");
         execution.AddChild(prepare);
         var execute = ActionButton("Execute", () => IssuePlanExecution(true), 104, 32, true, Icon("plan_execute"));
-        execute.TooltipText = "Activate the selected offensive plans. Front-line and reserve orders stay as they are.";
+        execute.TooltipText = Tr("Activate the selected offensive plans. Front-line and reserve orders stay as they are.");
         execution.AddChild(execute);
         var autoFront = ActionButton("Auto-deploy", AutoDeployFront, 118, 32, false, Icon("auto_deploy"));
-        autoFront.TooltipText = "Spread the selection across unique sectors of the active front.";
+        autoFront.TooltipText = Tr("Spread the selection across unique sectors of the active front.");
         execution.AddChild(autoFront);
 
         // ---- the brush ----------------------------------------------------------------
@@ -182,7 +182,7 @@ public partial class DealOrForceGame
         AddDrawButton(draw, "Fall back", "plan_fallback", FrontLineKind.Fallback, "Fallback line",
             "Draw the line to hold if the one in front gives way.");
         var dropLine = ActionButton("Erase", ClearDrawnLine, 82, 30, false, Icon("plan_erase"));
-        dropLine.TooltipText = "Take the selection off its drawn line and return it to the war's own front.";
+        dropLine.TooltipText = Tr("Take the selection off its drawn line and return it to the war's own front.");
         draw.AddChild(dropLine);
 
         _drawFeedback = Title("Pick a line, then drag along the map. Right button rubs out.",
@@ -226,29 +226,29 @@ public partial class DealOrForceGame
         grouping.AddThemeConstantOverride("separation", 4);
         organisationPage.AddChild(grouping);
         var newGroup = ActionButton("New HQ", CreateGroupFromSelection, 96, 30, true, Icon("hq_new"));
-        newGroup.TooltipText = "Raise a new army headquarters and attach every selected division to it.";
+        newGroup.TooltipText = Tr("Raise a new army headquarters and attach every selected division to it.");
         grouping.AddChild(newGroup);
         var nextGroup = ActionButton("Next HQ", AssignSelectionToNextGroup, 96, 30, false, Icon("hq_next"));
-        nextGroup.TooltipText = "Move the selection to the next existing army headquarters.";
+        nextGroup.TooltipText = Tr("Move the selection to the next existing army headquarters.");
         grouping.AddChild(nextGroup);
         var ungroup = ActionButton("Detach", () => AssignSelectionToGroup(-1), 90, 30, false, Icon("hq_detach"));
-        ungroup.TooltipText = "Remove the selection from its army while leaving it on the map.";
+        ungroup.TooltipText = Tr("Remove the selection from its army while leaving it on the map.");
         grouping.AddChild(ungroup);
         var selectHq = ActionButton("Whole HQ", SelectCurrentArmyGroup, 104, 30, false, Icon("hq_whole"));
-        selectHq.TooltipText = "Select every division attached to the lead division's army headquarters.";
+        selectHq.TooltipText = Tr("Select every division attached to the lead division's army headquarters.");
         grouping.AddChild(selectHq);
 
         var selection = new HBoxContainer();
         selection.AddThemeConstantOverride("separation", 4);
         organisationPage.AddChild(selection);
         var everything = ActionButton("Every division", SelectAllPlayerArmies, 124, 30, false, Icon("select_all"));
-        everything.TooltipText = "Take every field division your country has into the roster.";
+        everything.TooltipText = Tr("Take every field division your country has into the roster.");
         selection.AddChild(everything);
         var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 104, 30, false, Icon("drop_lead"));
-        dropLead.TooltipText = "Remove the lead division from the selection without moving or disbanding it.";
+        dropLead.TooltipText = Tr("Remove the lead division from the selection without moving or disbanding it.");
         selection.AddChild(dropLead);
         var region = ActionButton("Region", ShowSelectedArmyRegion, 96, 30, false, Icon("region"));
-        region.TooltipText = "Open the demographic and economic inspector for the ground this division is on.";
+        region.TooltipText = Tr("Open the demographic and economic inspector for the ground this division is on.");
         selection.AddChild(region);
 
         _armyCommandFeedback = Title("Right-click to march or attack · Shift+right-click queues a waypoint",
@@ -285,7 +285,7 @@ public partial class DealOrForceGame
     private void AddDrawButton(Container parent, string label, string icon, FrontLineKind kind, string name, string help)
     {
         var button = ActionButton(label, () => ToggleDrawing(kind), 96, 30, false, Icon(icon));
-        button.TooltipText = $"{name}\n{help}";
+        button.TooltipText = Simulation.Loc.Format("{0}\n{1}", name, help);
         _drawButtons[kind] = button;
         parent.AddChild(button);
     }
@@ -293,7 +293,7 @@ public partial class DealOrForceGame
     private void AddOrderButton(Container parent, string icon, ArmyOrder order, string name, string help)
     {
         var button = ActionButton("", () => IssueArmyOrder(order), 56, 36, false, Icon(icon));
-        button.TooltipText = $"{name}\n{help}";
+        button.TooltipText = Simulation.Loc.Format("{0}\n{1}", name, help);
         _armyOrderButtons[order] = button;
         parent.AddChild(button);
     }
@@ -382,11 +382,7 @@ public partial class DealOrForceGame
         {
             var template = UnitTypeCatalog.Get(group.Key);
             var entry = Title($"{CounterGlyph(template.CounterSymbol)} {group.Count()}", 13, Ui.Colour("text.body_soft"));
-            entry.TooltipText = $"{group.Count()} × {template.Name}\n" +
-                                $"Soft attack {template.SoftAttack:0.##} · hard attack {template.HardAttack:0.##}\n" +
-                                $"Defence {template.Defense:0.##} · breakthrough {template.Breakthrough:0.##}\n" +
-                                $"Armour {template.Armour:0.##} · piercing {template.Piercing:0.##}\n" +
-                                $"Frontage {template.CombatWidth:0.#} of the 80 a province gives";
+            entry.TooltipText = Simulation.Loc.Format("{0} × {1}\nSoft attack {2:0.##} · hard attack {3:0.##}\nDefence {4:0.##} · breakthrough {5:0.##}\nArmour {6:0.##} · piercing {7:0.##}\nFrontage {8:0.#} of the 80 a province gives", group.Count(), template.Name, template.SoftAttack, template.HardAttack, template.Defense, template.Breakthrough, template.Armour, template.Piercing, template.CombatWidth);
             entry.MouseFilter = MouseFilterEnum.Stop;
             entry.AutowrapMode = TextServer.AutowrapMode.Off;
             _armyComposition.AddChild(entry);
@@ -429,7 +425,7 @@ public partial class DealOrForceGame
                 ClipText = true,
                 TooltipText = DivisionTooltip(army),
                 Flat = true,
-                Text = $" {CounterGlyph(template.CounterSymbol)}  {Shorten(army.Name, 20)}"
+                Text = Simulation.Loc.Format(" {0}  {1}", CounterGlyph(template.CounterSymbol), Shorten(army.Name, 20))
             };
             row.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
             row.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));

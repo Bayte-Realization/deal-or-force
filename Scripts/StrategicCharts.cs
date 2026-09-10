@@ -49,8 +49,9 @@ public sealed partial class StrategicLineChart : Control
             return;
         var ratio = Mathf.Clamp((motion.Position.X - _plot.Position.X) / MathF.Max(1f, _plot.Size.X), 0f, 1f);
         _hoverIndex = Mathf.Clamp(Mathf.RoundToInt(ratio * (_days.Count - 1)), 0, _days.Count - 1);
-        TooltipText = $"Day {_days[_hoverIndex]:N0}\n" + string.Join("\n", _series.Select(series =>
-            $"{series.Name}: {Format(ValueAt(series, _hoverIndex), _format)}"));
+        TooltipText = Simulation.Loc.Format("Day {0:N0}\n", _days[_hoverIndex]) +
+                      string.Join("\n", _series.Select(series => Simulation.Loc.Format(
+                          "{0}: {1}", series.Name, Format(ValueAt(series, _hoverIndex), _format))));
         QueueRedraw();
     }
 
@@ -192,8 +193,9 @@ public sealed partial class StrategicBarChart : Control
         if (_hover >= 0 && _hover < _entries.Count)
         {
             var entry = _entries[_hover];
-            TooltipText = $"{entry.Name}: {StrategicLineChart.Format(entry.Value, _format)}" +
-                          (string.IsNullOrWhiteSpace(entry.Detail) ? "" : $"\n{entry.Detail}");
+            TooltipText = Simulation.Loc.Format("{0}: {1}", entry.Name,
+                              StrategicLineChart.Format(entry.Value, _format)) +
+                          (string.IsNullOrWhiteSpace(entry.Detail) ? "" : "\n" + entry.Detail);
         }
         QueueRedraw();
     }

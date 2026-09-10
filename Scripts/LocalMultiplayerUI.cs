@@ -61,9 +61,8 @@ public partial class DealOrForceGame
         _campaign.IsPaused = true;
         _pause.Text = "▶";
         UpdateHotseatHud();
-        _handoverTitle.Text = $"PLAYER {_campaign.ActiveSeat + 1}: {_campaign.Player.Name}";
-        _handoverHint.Text = $"Pass the device to the {_campaign.Player.Tag} player. " +
-                             "The previous country's panels and orders are hidden until they are ready.";
+        _handoverTitle.Text = Simulation.Loc.Format("PLAYER {0}: {1}", _campaign.ActiveSeat + 1, _campaign.Player.Name);
+        _handoverHint.Text = Simulation.Loc.Format("Pass the device to the {0} player. The previous country's panels and orders are hidden until they are ready.", _campaign.Player.Tag);
         _handoverLayer.Visible = true;
     }
 
@@ -79,6 +78,6 @@ public partial class DealOrForceGame
         if (_hotseatHud is null || _campaign is null) return;
         _hotseatHud.Visible = _hudLayer.Visible && _campaign.IsHotseat && !_networkConnected;
         if (!_campaign.IsHotseat || _networkConnected) return;
-        _hotseatStatus.Text = $"PLAYER {_campaign.ActiveSeat + 1} / {_campaign.HumanSeats.Count} · {_campaign.Player.Tag}";
+        _hotseatStatus.Text = Simulation.Loc.Format("PLAYER {0} / {1} · {2}", _campaign.ActiveSeat + 1, _campaign.HumanSeats.Count, _campaign.Player.Tag);
     }
 }

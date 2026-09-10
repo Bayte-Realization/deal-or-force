@@ -42,7 +42,7 @@ public partial class DealOrForceGame
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 SizeFlagsStretchRatio = Math.Max(0.004f, slice.Size / (float)shown),
                 CustomMinimumSize = new Vector2(2, 18),
-                TooltipText = $"{slice.Name} · {Fmt.People(slice.Size)} ({slice.Size / (double)shown:P1})"
+                TooltipText = Simulation.Loc.Format("{0} · {1} ({2:P1})", slice.Name, Fmt.People(slice.Size), slice.Size / (double)shown)
             };
             bar.AddChild(segment);
         }
@@ -56,14 +56,14 @@ public partial class DealOrForceGame
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 SizeFlagsStretchRatio = Math.Max(0.004f, (shown - covered) / (float)shown),
                 CustomMinimumSize = new Vector2(2, 18),
-                TooltipText = $"Everyone else · {Fmt.People(shown - covered)}"
+                TooltipText = Simulation.Loc.Format("Everyone else · {0}", Fmt.People(shown - covered))
             });
 
         foreach (var slice in kept.Take(rows))
             DetailSwatch(slice, shown);
         if (kept.Count > rows)
-            DetailRow($"…and {kept.Count - rows} more",
-                $"{Fmt.People(kept.Skip(rows).Sum(slice => slice.Size))}",
+            DetailRow(Simulation.Loc.Format("…and {0} more", kept.Count - rows),
+                Fmt.People(kept.Skip(rows).Sum(slice => slice.Size)),
                 "Groups too small to list separately. They are in the bar above.", "text.muted");
     }
 

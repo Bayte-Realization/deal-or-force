@@ -53,8 +53,8 @@ public partial class DealOrForceGame
         header.AddThemeConstantOverride("separation", 8);
         rows.AddChild(header);
         _ledgerTitle = Title("NATIONAL LEDGER", 25, Ui.Colour("text.accent"));
-        _ledgerTitle.TooltipText = "A record, for any country in the world. Nothing on this screen changes " +
-                                   "anything: what you can decide is in State Affairs.";
+        _ledgerTitle.TooltipText = Tr("A record, for any country in the world. Nothing on this screen changes " +
+                                   "anything: what you can decide is in State Affairs.");
         _ledgerTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(_ledgerTitle);
 
@@ -63,14 +63,14 @@ public partial class DealOrForceGame
             _ledgerViewedNationId = _campaign.Player.Id;
             RefreshLedger();
         }, 116, 32, true);
-        playerView.TooltipText = "Return every chart to the country you currently control.";
+        playerView.TooltipText = Tr("Return every chart to the country you currently control.");
         header.AddChild(playerView);
         var selectedView = ActionButton("Map selection", () =>
         {
             _ledgerViewedNationId = (_selectedNation ?? _campaign.Player).Id;
             RefreshLedger();
         }, 124, 32);
-        selectedView.TooltipText = "Compare the country most recently selected on the map. Policies remain read-only for foreign countries.";
+        selectedView.TooltipText = Tr("Compare the country most recently selected on the map. Policies remain read-only for foreign countries.");
         header.AddChild(selectedView);
         header.AddChild(ActionButton("×", CloseLedger, 38, 32));
 
@@ -215,8 +215,8 @@ public partial class DealOrForceGame
         _ledgerLineA.Visible = _ledgerLineB.Visible = _ledgerBarsA.Visible = _ledgerBarsB.Visible = known;
         if (!known)
         {
-            _ledgerTitle.Text = $"NATIONAL LEDGER · {nation.Name}";
-            _ledgerSummary.Text = "Fog of war — foreign internal statistics are unavailable. Choose Player nation.";
+            _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.Name);
+            _ledgerSummary.Text = Tr("Fog of war — foreign internal statistics are unavailable. Choose Player nation.");
             return;
         }
         var samples = _campaign.History.ForNation(nation.Id);
@@ -225,10 +225,12 @@ public partial class DealOrForceGame
         var gdpTrend = samples.Count > 1 && MathF.Abs(first.Gdp) > 0.001f ? nation.Gdp / first.Gdp - 1f : 0f;
         var populationTrend = samples.Count > 1 && first.PopulationMillions > 0.001f
             ? nation.Population / 1_000_000f / first.PopulationMillions - 1f : 0f;
-        _ledgerTitle.Text = $"NATIONAL LEDGER · {nation.Name.ToUpperInvariant()}";
-        _ledgerSummary.Text = $"{_ledgerTab.ToUpperInvariant()}  ·  GDP {SignedPercent(gdpTrend)}  ·  population {SignedPercent(populationTrend)}  ·  " +
-                              $"market access {nation.MarketAccess:P0}  ·  treasury {Fmt.Money(nation.Treasury)}  ·  " +
-                              $"{samples.Count} weekly observation{(samples.Count == 1 ? "" : "s")}";
+        _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.Name.ToUpperInvariant());
+        _ledgerSummary.Text = Simulation.Loc.Format(
+            "{0}  ·  GDP {1}  ·  population {2}  ·  market access {3:P0}  ·  " +
+            "treasury {4}  ·  {5} weekly observation(s)",
+            _ledgerTab.ToUpperInvariant(), SignedPercent(gdpTrend), SignedPercent(populationTrend),
+            nation.MarketAccess, Fmt.Money(nation.Treasury), samples.Count);
 
         // Named conditions belong where the player already reads the country's state -
         // a modifier nobody can see is a number changing for no visible reason.
@@ -334,8 +336,7 @@ public partial class DealOrForceGame
 
     private void ShowLedgerMarket(Nation nation, IReadOnlyList<NationHistorySample> samples, IReadOnlyList<int> days)
     {
-        _statePolicyFeedback.Text = $"Current: {TradePolicyRules.Name(nation.TradePolicy)} · tariffs " +
-                                     $"{TradePolicyRules.TariffRate(nation.TradePolicy):P0}";
+        _statePolicyFeedback.Text = Simulation.Loc.Format("Current: {0} · tariffs {1:P0}", TradePolicyRules.Name(nation.TradePolicy), TradePolicyRules.TariffRate(nation.TradePolicy));
         _ledgerLineA.SetData("Market health", "Access rises when domestic output and imports cover demand", days, new[]
         {
             Series("Access", Green, samples, sample => sample.MarketAccess),

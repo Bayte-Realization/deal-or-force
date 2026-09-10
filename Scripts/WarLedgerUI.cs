@@ -394,7 +394,7 @@ public partial class DealOrForceGame
         row.Score.AddThemeColorOverride("font_color",
             Mathf.Abs(war.WarScore) < 0.05f ? Ui.Colour("text.muted") : leader);
         row.Casualties.Text = Fmt.People(war.AttackerLosses + war.DefenderLosses);
-        row.Front.Text = $"{war.AttackerFront.Count + war.DefenderFront.Count:N0} front";
+        row.Front.Text = Simulation.Loc.Format("{0:N0} front", war.AttackerFront.Count + war.DefenderFront.Count);
         var days = Math.Max(0, _campaign.ElapsedDays - war.StartedDay);
         row.Age.Text = days >= 730 ? $"{days / 365f:0.#} yr" : $"{days:N0} d";
     }
@@ -414,7 +414,7 @@ public partial class DealOrForceGame
         var war = _campaign.Wars.Find(candidate => candidate.Id == _warLedgerOpenWarId);
         if (war is null)
         {
-            _warLedgerSummary.Text = "That war is over.";
+            _warLedgerSummary.Text = Tr("That war is over.");
             return;
         }
         // Nothing on this page changes inside a day.
@@ -427,9 +427,11 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var mine = player is not null && war.Involves(player.Id);
         var days = Math.Max(0, _campaign.ElapsedDays - war.StartedDay);
-        _warLedgerSummary.Text = $"{war.Name}  ·  " +
-                                 (war.Ended ? "settled" : $"{days:N0} day(s) of fighting") +
-                                 (mine ? "  ·  you are a belligerent" : "");
+        _warLedgerSummary.Text = war.Name + "  ·  " +
+                                 (war.Ended
+                                     ? Tr("settled")
+                                     : Simulation.Loc.Format("{0:N0} day(s) of fighting", days)) +
+                                 (mine ? Tr("  ·  you are a belligerent") : "");
 
         void Heading(string text) =>
             _warDetailRows.AddChild(RowLabel(text, 12, Ui.Colour("text.caption")));
@@ -501,8 +503,8 @@ public partial class DealOrForceGame
 
         _warDetailActions.AddChild(RowLabel("ENDING IT", 12, Ui.Colour("text.caption")));
         var conference = ActionButton("Open the peace conference", () => OpenPeaceConference(war), 320, 34, true);
-        conference.TooltipText = "Draw the settlement on the map: claim the ground you mean to keep, " +
-                                 "priced against what the war is actually worth.";
+        conference.TooltipText = Tr("Draw the settlement on the map: claim the ground you mean to keep, " +
+                                 "priced against what the war is actually worth.");
         _warDetailActions.AddChild(conference);
 
         var quick = new HBoxContainer();

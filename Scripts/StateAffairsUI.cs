@@ -91,7 +91,7 @@ public partial class DealOrForceGame
             CloseStateAffairs();
             OpenLedger();
         }, 148, 32);
-        toLedger.TooltipText = "The figures behind these decisions: charts, history and rankings, for any country.";
+        toLedger.TooltipText = Tr("The figures behind these decisions: charts, history and rankings, for any country.");
         header.AddChild(toLedger);
         header.AddChild(ActionButton("×", CloseStateAffairs, 38, 32));
 
@@ -150,11 +150,9 @@ public partial class DealOrForceGame
         if (_stateAffairsLayer is null || !_stateAffairsLayer.Visible || _campaign?.Player is null) return;
         var nation = _campaign.Player;
 
-        _stateAffairsTitle.Text = $"STATE AFFAIRS · {nation.Name.ToUpperInvariant()}";
+        _stateAffairsTitle.Text = Simulation.Loc.Format("STATE AFFAIRS · {0}", nation.Name.ToUpperInvariant());
         _stateAffairsSummary.Text =
-            $"Treasury {Fmt.Money(nation.Treasury)}  ·  balance {Fmt.Money(nation.WeeklyBalance)} a week  ·  " +
-            $"stability {nation.Stability:P0}  ·  war support {nation.WarSupport:P0}  ·  " +
-            $"literacy {nation.Literacy:P0}  ·  standard of living {nation.StandardOfLiving:P0}";
+            Simulation.Loc.Format("Treasury {0}  ·  balance {1} a week  ·  stability {2:P0}  ·  war support {3:P0}  ·  literacy {4:P0}  ·  standard of living {5:P0}", Fmt.Money(nation.Treasury), Fmt.Money(nation.WeeklyBalance), nation.Stability, nation.WarSupport, nation.Literacy, nation.StandardOfLiving);
         var spirits = DescribeModifiers(nation);
         if (!string.IsNullOrEmpty(spirits)) _stateAffairsSummary.Text += "\n" + spirits;
 
@@ -177,8 +175,7 @@ public partial class DealOrForceGame
             ApplyLedgerButtonState(button, policy == nation.TradePolicy);
         foreach (var (focus, button) in _stateFocusButtons)
             ApplyLedgerButtonState(button, focus == nation.GovernmentFocus);
-        _stateGovernanceFeedback.Text = $"{GovernmentFocusRules.Name(nation.GovernmentFocus)} · " +
-                                        $"welfare {nation.WelfareSpending:P1} · education {nation.EducationSpending:P1}";
+        _stateGovernanceFeedback.Text = Simulation.Loc.Format("{0} · welfare {1:P1} · education {2:P1}", GovernmentFocusRules.Name(nation.GovernmentFocus), nation.WelfareSpending, nation.EducationSpending);
     }
 
     /// <summary>
@@ -206,7 +203,7 @@ public partial class DealOrForceGame
             MaxValue = 0.55,
             Step = 0.01,
             CustomMinimumSize = new Vector2(190, 26),
-            TooltipText = "Higher taxes raise weekly revenue but slowly reduce living standards and private growth."
+            TooltipText = Tr("Higher taxes raise weekly revenue but slowly reduce living standards and private growth.")
         };
         _stateTaxRate.ValueChanged += OnStateTaxChanged;
         budget.AddChild(SliderRow("TAXATION", _stateTaxRate, out _stateTaxReading));
@@ -217,8 +214,8 @@ public partial class DealOrForceGame
             MaxValue = 0.30,
             Step = 0.005,
             CustomMinimumSize = new Vector2(190, 26),
-            TooltipText = "The share of output spent on the armed forces: reinforcement rate and readiness, " +
-                          "against everything else the money could have done."
+            TooltipText = Tr("The share of output spent on the armed forces: reinforcement rate and readiness, " +
+                          "against everything else the money could have done.")
         };
         _stateMilitarySpending.ValueChanged += OnStateMilitaryChanged;
         budget.AddChild(SliderRow("ARMED FORCES", _stateMilitarySpending, out _stateMilitaryReading));
@@ -242,7 +239,7 @@ public partial class DealOrForceGame
         foreach (var kind in BuildingCatalog.All)
         {
             var definition = BuildingCatalog.Get(kind);
-            _stateBuildingPicker.AddItem($"{definition.Name} · {Fmt.Money(definition.Cost)}");
+            _stateBuildingPicker.AddItem(Simulation.Loc.Format("{0} · {1}", definition.Name, Fmt.Money(definition.Cost)));
             _stateBuildingPicker.SetItemMetadata(_stateBuildingPicker.ItemCount - 1, (int)kind);
             _stateBuildingPicker.SetItemTooltip(_stateBuildingPicker.ItemCount - 1, definition.Description);
         }
@@ -425,7 +422,7 @@ public partial class DealOrForceGame
             slider.SetValueNoSignal(rate);
             if (!_policyReadings.TryGetValue(line.Id, out var reading)) continue;
             var amount = Simulation.BudgetCore.Amount(nation, line, weeklyOutput, atWar);
-            reading.Text = $"{rate:P1} · {Fmt.Money(amount)}";
+            reading.Text = Simulation.Loc.Format("{0:P1} · {1}", rate, Fmt.Money(amount));
         }
     }
     private void AddTradePolicyButton(string caption, TradePolicy policy, string tooltip)
@@ -468,7 +465,7 @@ public partial class DealOrForceGame
         if (_updatingStateAffairs || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetTaxRateCommand { IssuerId = _campaign.Player.Id, Value = (float)value });
         _campaign.Commands.ApplyAll(_campaign);
-        _stateFiscalFeedback.Text = $"Tax rate set to {value:P0}. Budget and growth update on the next economic week.";
+        _stateFiscalFeedback.Text = Simulation.Loc.Format("Tax rate set to {0:P0}. Budget and growth update on the next economic week.", value);
         RefreshStateAffairs();
     }
     private void OnStateMilitaryChanged(double value)
@@ -479,8 +476,7 @@ public partial class DealOrForceGame
             IssuerId = _campaign.Player.Id, Value = (float)value
         });
         _campaign.Commands.ApplyAll(_campaign);
-        _stateFiscalFeedback.Text = $"Armed forces set to {value:P1} of output. " +
-                                     "Reinforcement and readiness follow from the next economic week.";
+        _stateFiscalFeedback.Text = Simulation.Loc.Format("Armed forces set to {0:P1} of output. Reinforcement and readiness follow from the next economic week.", value);
         RefreshStateAffairs();
     }
     /// <summary>
@@ -496,7 +492,7 @@ public partial class DealOrForceGame
         if (nation is null) return;
         if (_stateBuildingPicker.Selected < 0 || _stateRegionPicker.Selected < 0)
         {
-            _stateFiscalFeedback.Text = "Choose what to build and where.";
+            _stateFiscalFeedback.Text = Tr("Choose what to build and where.");
             return;
         }
 
@@ -507,14 +503,12 @@ public partial class DealOrForceGame
         var running = _campaign.Construction.Count(project => project.NationId == nation.Id);
         if (running >= 12)
         {
-            _stateFiscalFeedback.Text = $"Twelve projects are already under way. " +
-                                         "Something has to finish before anything else starts.";
+            _stateFiscalFeedback.Text = Tr("Twelve projects are already under way. Something has to finish before anything else starts.");
             return;
         }
         if (nation.Treasury < MathF.Min(0.05f, definition.Cost))
         {
-            _stateFiscalFeedback.Text = $"The treasury holds {Fmt.Money(nation.Treasury)} and cannot open " +
-                                         $"a {Fmt.Money(definition.Cost)} site.";
+            _stateFiscalFeedback.Text = Simulation.Loc.Format("The treasury holds {0} and cannot open a {1} site.", Fmt.Money(nation.Treasury), Fmt.Money(definition.Cost));
             return;
         }
 
@@ -523,9 +517,7 @@ public partial class DealOrForceGame
             IssuerId = nation.Id, StateMapIndex = stateMapIndex, Building = kind
         });
         _campaign.Commands.ApplyAll(_campaign);
-        _stateFiscalFeedback.Text = $"{definition.Name} begun in " +
-                                     $"{_stateRegionPicker.GetItemText(_stateRegionPicker.Selected)} · " +
-                                     $"{Fmt.Money(definition.Cost)} over {definition.Days} days.";
+        _stateFiscalFeedback.Text = Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days.", definition.Name, _stateRegionPicker.GetItemText(_stateRegionPicker.Selected), Fmt.Money(definition.Cost), definition.Days);
         RefreshStateAffairs();
     }
     /// <summary>
@@ -541,9 +533,8 @@ public partial class DealOrForceGame
     {
         var tax = (float)_stateTaxRate.Value;
         var military = (float)_stateMilitarySpending.Value;
-        _stateTaxReading.Text = $"{tax:P0} · {Fmt.Money(EconomySystem.WeeklyTaxAt(nation, tax))} a week";
-        _stateMilitaryReading.Text = $"{military:P1} · " +
-                                      $"−{Fmt.Money(EconomySystem.WeeklyMilitaryAt(nation, military))} a week";
+        _stateTaxReading.Text = Simulation.Loc.Format("{0:P0} · {1} a week", tax, Fmt.Money(EconomySystem.WeeklyTaxAt(nation, tax)));
+        _stateMilitaryReading.Text = Simulation.Loc.Format("{0:P1} · −{1} a week", military, Fmt.Money(EconomySystem.WeeklyMilitaryAt(nation, military)));
 
         // The budget is settled once an economic week, so on day zero there is no week to
         // report. Printing its zeroes as "balance +$0, outgoings $0" is a country with no
@@ -551,16 +542,16 @@ public partial class DealOrForceGame
         var balance = nation.WeeklyBalance;
         if (nation.WeeklyExpenses <= 0f)
         {
-            _stateBudgetLine.Text = $"Treasury {Fmt.Money(nation.Treasury)}  ·  " +
-                                     "no economic week has closed yet";
+            _stateBudgetLine.Text = Simulation.Loc.Format("Treasury {0}  ·  no economic week has closed yet", Fmt.Money(nation.Treasury));
             _stateBudgetLine.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
         }
         else
         {
-            _stateBudgetLine.Text = $"Treasury {Fmt.Money(nation.Treasury)}  ·  balance " +
-                                     $"{(balance < 0f ? "−" : "+")}{Fmt.Money(MathF.Abs(balance))} a week  ·  " +
-                                     $"income {Fmt.Money(nation.WeeklyTaxIncome + nation.WeeklyTariffIncome)}  ·  " +
-                                     $"outgoings {Fmt.Money(nation.WeeklyExpenses)}";
+            _stateBudgetLine.Text = Simulation.Loc.Format(
+                "Treasury {0}  ·  balance {1}{2} a week  ·  income {3}  ·  outgoings {4}",
+                Fmt.Money(nation.Treasury), balance < 0f ? "−" : "+", Fmt.Money(MathF.Abs(balance)),
+                Fmt.Money(nation.WeeklyTaxIncome + nation.WeeklyTariffIncome),
+                Fmt.Money(nation.WeeklyExpenses));
             _stateBudgetLine.AddThemeColorOverride("font_color",
                 balance < 0f ? Ui.Colour("state.negative") : Ui.Colour("state.positive"));
         }
@@ -582,17 +573,18 @@ public partial class DealOrForceGame
         var projects = _campaign.Construction.Where(project => project.NationId == nation.Id).ToList();
         if (projects.Count == 0)
         {
-            _stateConstructionQueue.Text = "Nothing under construction. Twelve sites may run at once.";
+            _stateConstructionQueue.Text = Tr("Nothing under construction. Twelve sites may run at once.");
             return;
         }
-        _stateConstructionQueue.Text = $"{projects.Count} of 12 sites running · " +
+        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of 12 sites running · ", projects.Count) +
             string.Join("  ·  ", projects
                 .OrderByDescending(project => project.Progress)
                 .Take(4)
                 .Select(project =>
                 {
                     var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);
-                    return $"{BuildingCatalog.Get(project.Building).Name} in {place?.Name ?? "?"} {project.Progress:P0}";
+                    return Simulation.Loc.Format("{0} in {1} {2:P0}",
+                        BuildingCatalog.Get(project.Building).Name, place?.Name ?? "?", project.Progress);
                 }));
     }
     private void SetStateTradePolicy(TradePolicy policy)
@@ -600,7 +592,7 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null || _campaign.Player?.Id != _campaign.Player.Id) return;
         _campaign.Commands.Enqueue(new SetTradePolicyCommand { IssuerId = _campaign.Player.Id, Policy = policy });
         _campaign.Commands.ApplyAll(_campaign);
-        _statePolicyFeedback.Text = $"{TradePolicyRules.Name(policy)} selected · effective at the next market clearing.";
+        _statePolicyFeedback.Text = Simulation.Loc.Format("{0} selected · effective at the next market clearing.", TradePolicyRules.Name(policy));
         RefreshStateAffairs();
     }
     private void OnStateWelfareChanged(double value)
@@ -608,7 +600,7 @@ public partial class DealOrForceGame
         if (_updatingStateAffairs || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetWelfareSpendingCommand { IssuerId = _campaign.Player.Id, Value = (float)value });
         _campaign.Commands.ApplyAll(_campaign);
-        _stateGovernanceFeedback.Text = $"Welfare set to {value:P1} of weekly output.";
+        _stateGovernanceFeedback.Text = Simulation.Loc.Format("Welfare set to {0:P1} of weekly output.", value);
         RefreshStateAffairs();
     }
     private void OnStateEducationChanged(double value)
@@ -616,7 +608,7 @@ public partial class DealOrForceGame
         if (_updatingStateAffairs || _campaign?.Player is null) return;
         _campaign.Commands.Enqueue(new SetEducationSpendingCommand { IssuerId = _campaign.Player.Id, Value = (float)value });
         _campaign.Commands.ApplyAll(_campaign);
-        _stateGovernanceFeedback.Text = $"Education set to {value:P1} of weekly output.";
+        _stateGovernanceFeedback.Text = Simulation.Loc.Format("Education set to {0:P1} of weekly output.", value);
         RefreshStateAffairs();
     }
     private void SetStateGovernmentFocus(GovernmentFocus focus)
@@ -624,6 +616,6 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null || _campaign.Player?.Id != _campaign.Player.Id) return;
         _campaign.Commands.Enqueue(new SetGovernmentFocusCommand { IssuerId = _campaign.Player.Id, Focus = focus });
         _campaign.Commands.ApplyAll(_campaign);
-        _stateGovernanceFeedback.Text = $"{GovernmentFocusRules.Name(focus)} adopted.";
+        _stateGovernanceFeedback.Text = Simulation.Loc.Format("{0} adopted.", GovernmentFocusRules.Name(focus));
         RefreshStateAffairs();
     }}

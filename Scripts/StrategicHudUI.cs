@@ -327,9 +327,11 @@ public partial class DealOrForceGame
         var recent = string.Join("\n", battle.Rounds.TakeLast(6).Reverse().Select(round =>
             $"Day {round.Day - battle.StartedDay + 1}: {round.Note} · losses {round.AttackerLosses:N0}/{round.DefenderLosses:N0}"));
         _sideBody.Text =
-            $"{attacker?.Name ?? "?"}  vs  {defender?.Name ?? "?"}\n" +
-            $"{state?.Name ?? "Unmapped theatre"} · province #{battle.ProvinceId:N0}\n" +
-            $"Day {_campaign.ElapsedDays - battle.StartedDay + 1} · {(battle.Ended ? battle.Outcome : "Fighting")}\n\n" +
+            Simulation.Loc.Format("{0}  vs  {1}\n{2} · province #{3:N0}\nDay {4} · {5}\n\n",
+                attacker?.Name ?? "?", defender?.Name ?? "?",
+                state?.Name ?? Tr("Unmapped theatre"), battle.ProvinceId,
+                _campaign.ElapsedDays - battle.StartedDay + 1,
+                battle.Ended ? battle.Outcome : Tr("Fighting")) +
             $"Combat width: {battle.AttackerWidth:0}/{battle.DefenderWidth:0}\n" +
             (battle.RiverCrossingStrength > 0f
                 ? $"River crossing: {(battle.RiverCrossingStrength > 0.66f ? "major" : "ordinary")} · defender advantage active\n"
@@ -345,10 +347,13 @@ public partial class DealOrForceGame
         {
             _attackerOrganisation.Visible = false;
             _defenderOrganisation.Visible = false;
-            _sideBody.Text = $"{attacker?.Name} vs {defender?.Name}\n{state?.Name} · province #{battle.ProvinceId:N0}\n" +
-                $"{(battle.Ended ? battle.Outcome : "Fighting")} · Day {_campaign.ElapsedDays - battle.StartedDay + 1}\n\n" +
-                "Observed battle between foreign countries. Detailed combat reports unavailable.\n" +
-                (battle.RiverCrossingStrength > 0 ? "River crossing — defender advantage." : "");
+            _sideBody.Text = Simulation.Loc.Format(
+                    "{0} vs {1}\n{2} · province #{3:N0}\n{4} · Day {5}\n\n" +
+                    "Observed battle between foreign countries. Detailed combat reports unavailable.\n",
+                    attacker?.Name, defender?.Name, state?.Name, battle.ProvinceId,
+                    battle.Ended ? battle.Outcome : Tr("Fighting"),
+                    _campaign.ElapsedDays - battle.StartedDay + 1) +
+                (battle.RiverCrossingStrength > 0 ? Tr("River crossing — defender advantage.") : "");
         }
         else _attackerOrganisation.Visible = _defenderOrganisation.Visible = true;
         FocusProvince(battle.ProvinceId, 6.5f);

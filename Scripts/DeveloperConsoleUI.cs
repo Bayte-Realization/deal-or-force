@@ -49,7 +49,7 @@ public partial class DealOrForceGame
         closeHint.HorizontalAlignment = HorizontalAlignment.Right;
         header.AddChild(closeHint);
         var close = ActionButton("×", CloseDeveloperConsole, 28, 28);
-        close.TooltipText = "Close console (~ or Esc)";
+        close.TooltipText = Tr("Close console (~ or Esc)");
         header.AddChild(close);
 
         _developerConsoleOutput = new RichTextLabel
@@ -66,7 +66,7 @@ public partial class DealOrForceGame
 
         _developerConsoleInput = new LineEdit
         {
-            PlaceholderText = "Enter command…",
+            PlaceholderText = Tr("Enter command…"),
             CustomMinimumSize = new Vector2(0, 38),
             ClearButtonEnabled = true
         };
@@ -281,7 +281,7 @@ public partial class DealOrForceGame
         _campaign.HumanSeats.Clear();
         ClearArmySelectionAndClose();
         FrontPlanner.AssignAi(_campaign);
-        _identityTag.Text = "OBS · observer mode";
+        _identityTag.Text = Tr("OBS · observer mode");
         return "Observer mode enabled. Country AI controls every nation; use tag TAG to return.";
     }
 

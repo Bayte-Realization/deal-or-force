@@ -116,16 +116,16 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 6);
         rows.AddChild(actions);
         var clear = ActionButton("Clear", ClearPeaceDemand, 92, 34);
-        clear.TooltipText = "Drop every claim and start the settlement again.";
+        clear.TooltipText = Tr("Drop every claim and start the settlement again.");
         actions.AddChild(clear);
         var occupied = ActionButton("Claim held", ClaimOccupiedGround, 118, 34);
-        occupied.TooltipText = "Claim every province you currently occupy. The cheapest demand there is.";
+        occupied.TooltipText = Tr("Claim every province you currently occupy. The cheapest demand there is.");
         actions.AddChild(occupied);
         var propose = ActionButton("Propose", ProposeWrittenPeace, 108, 34, true);
-        propose.TooltipText = "Put the settlement to them.";
+        propose.TooltipText = Tr("Put the settlement to them.");
         actions.AddChild(propose);
         var cancel = ActionButton("Leave", ClosePeaceConference, 92, 34);
-        cancel.TooltipText = "Walk away from the table. The war continues.";
+        cancel.TooltipText = Tr("Walk away from the table. The war continues.");
         actions.AddChild(cancel);
     }
 
@@ -298,11 +298,11 @@ public partial class DealOrForceGame
 
         var player = _campaign.Player;
         var loser = _peaceLedgerModel.Loser;
-        _peaceTitle.Text = $"PEACE WITH {loser?.Name?.ToUpperInvariant() ?? "?"}";
+        _peaceTitle.Text = Simulation.Loc.Format("PEACE WITH {0}", loser?.Name?.ToUpperInvariant() ?? "?");
 
         var budget = _peaceLedgerModel.Budget;
         var cost = _peaceLedgerModel.Cost(_peaceDemand);
-        _peaceBudget.Text = $"This war is worth {budget:0.0} · you are asking for {cost:0.0}";
+        _peaceBudget.Text = Simulation.Loc.Format("This war is worth {0:0.0} · you are asking for {1:0.0}", budget, cost);
         _peaceBudget.AddThemeColorOverride("font_color",
             cost > budget ? Ui.Colour("state.negative") : Ui.Colour("state.positive"));
 

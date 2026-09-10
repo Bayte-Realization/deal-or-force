@@ -143,8 +143,8 @@ public partial class DealOrForceGame
         _hudLayer.Visible = false;
         _networkLayer.Visible = true;
         _networkCountryTag.Text = _campaign.Player?.Tag ?? "KOR";
-        _networkStatus.Text = "Choose a unique country tag, then host or join.";
-        _networkRoster.Text = "UDP must be allowed through Windows Firewall. Internet play also requires UDP port forwarding; virtual LAN normally does not.";
+        _networkStatus.Text = Tr("Choose a unique country tag, then host or join.");
+        _networkRoster.Text = Tr("UDP must be allowed through Windows Firewall. Internet play also requires UDP port forwarding; virtual LAN normally does not.");
     }
 
     private int RequestedNetworkPort() => int.TryParse(_networkPort.Text.Trim(), out var port)
@@ -156,14 +156,14 @@ public partial class DealOrForceGame
         var nation = RequestedNetworkNation();
         if (nation is null)
         {
-            _networkStatus.Text = "Unknown country tag. Use a three-letter tag such as KOR, USA or DEU.";
+            _networkStatus.Text = Tr("Unknown country tag. Use a three-letter tag such as KOR, USA or DEU.");
             return;
         }
         var peer = new ENetMultiplayerPeer();
         var error = peer.CreateServer(RequestedNetworkPort(), 8);
         if (error != Error.Ok)
         {
-            _networkStatus.Text = $"Could not host UDP {RequestedNetworkPort()}: {error}.";
+            _networkStatus.Text = Simulation.Loc.Format("Could not host UDP {0}: {1}.", RequestedNetworkPort(), error);
             peer.Close();
             return;
         }
@@ -175,7 +175,7 @@ public partial class DealOrForceGame
         _networkLocalNationId = nation.Id;
         _networkPeerNations[1] = nation.Id;
         _networkStart.Disabled = true;
-        _networkStatus.Text = $"Hosting on UDP {RequestedNetworkPort()}. Share this machine's LAN/Radmin IPv4 address.";
+        _networkStatus.Text = Simulation.Loc.Format("Hosting on UDP {0}. Share this machine's LAN/Radmin IPv4 address.", RequestedNetworkPort());
         RefreshNetworkRoster();
     }
 
@@ -184,7 +184,7 @@ public partial class DealOrForceGame
         ShutdownNetworkPeer();
         if (RequestedNetworkNation() is null)
         {
-            _networkStatus.Text = "Unknown country tag. Use a three-letter tag such as KOR, USA or DEU.";
+            _networkStatus.Text = Tr("Unknown country tag. Use a three-letter tag such as KOR, USA or DEU.");
             return;
         }
         var address = _networkAddress.Text.Trim();
@@ -193,7 +193,7 @@ public partial class DealOrForceGame
         var error = peer.CreateClient(address, RequestedNetworkPort());
         if (error != Error.Ok)
         {
-            _networkStatus.Text = $"Could not start connection: {error}.";
+            _networkStatus.Text = Simulation.Loc.Format("Could not start connection: {0}.", error);
             peer.Close();
             return;
         }
@@ -202,7 +202,7 @@ public partial class DealOrForceGame
         _networkIsHost = false;
         _networkConnected = false;
         _networkGameStarted = false;
-        _networkStatus.Text = $"Connecting to {address}:{RequestedNetworkPort()}…";
+        _networkStatus.Text = Simulation.Loc.Format("Connecting to {0}:{1}…", address, RequestedNetworkPort());
     }
 
     private Nation RequestedNetworkNation()
@@ -216,18 +216,18 @@ public partial class DealOrForceGame
         _networkConnected = true;
         var nation = RequestedNetworkNation();
         RpcId(1, nameof(ServerRegisterNetworkPlayer), _networkPlayerName.Text.Trim(), nation?.Tag ?? "");
-        _networkStatus.Text = "Connected. Waiting for the host to start the campaign.";
+        _networkStatus.Text = Tr("Connected. Waiting for the host to start the campaign.");
     }
 
     private void OnNetworkConnectionFailed()
     {
-        _networkStatus.Text = "Connection failed. Check IPv4 address, UDP port and firewall.";
+        _networkStatus.Text = Tr("Connection failed. Check IPv4 address, UDP port and firewall.");
         ShutdownNetworkPeer();
     }
 
     private void OnNetworkServerDisconnected()
     {
-        _networkStatus.Text = "Host disconnected.";
+        _networkStatus.Text = Tr("Host disconnected.");
         ShutdownNetworkPeer();
         _networkLayer.Visible = true;
         _hudLayer.Visible = false;
@@ -235,7 +235,7 @@ public partial class DealOrForceGame
 
     private void OnNetworkPeerConnected(long peerId)
     {
-        if (_networkIsHost) _networkStatus.Text = $"Peer {peerId} connected; waiting for country registration.";
+        if (_networkIsHost) _networkStatus.Text = Simulation.Loc.Format("Peer {0} connected; waiting for country registration.", peerId);
     }
 
     private void OnNetworkPeerDisconnected(long peerId)
@@ -258,7 +258,10 @@ public partial class DealOrForceGame
         if (assigned is null) return;
         _networkPeerNations[peerId] = assigned.Id;
         RpcId(peerId, nameof(ClientAssignedNetworkNation), assigned.Tag);
-        _networkStatus.Text = $"{(string.IsNullOrWhiteSpace(playerName) ? $"Peer {peerId}" : playerName)} joined as {assigned.Tag}.";
+        var joiner = string.IsNullOrWhiteSpace(playerName)
+            ? Simulation.Loc.Format("Peer {0}", peerId)
+            : playerName;
+        _networkStatus.Text = Simulation.Loc.Format("{0} joined as {1}.", joiner, assigned.Tag);
         RefreshNetworkRoster();
         if (_networkGameStarted)
         {
@@ -275,7 +278,7 @@ public partial class DealOrForceGame
         var nation = _campaign.NationByTag(tag);
         _networkLocalNationId = nation?.Id ?? -1;
         _networkCountryTag.Text = tag;
-        _networkStatus.Text = $"Registered as {tag}. Waiting for host.";
+        _networkStatus.Text = Simulation.Loc.Format("Registered as {0}. Waiting for host.", tag);
     }
 
     private void RefreshNetworkRoster()
@@ -284,9 +287,10 @@ public partial class DealOrForceGame
         var rows = _networkPeerNations.OrderBy(pair => pair.Key).Select(pair =>
         {
             var nation = _campaign.NationById(pair.Value);
-            return $"Peer {pair.Key}: {nation?.Tag ?? "?"} · {nation?.Name ?? "Unknown"}";
+            return Simulation.Loc.Format("Peer {0}: {1} · {2}",
+                pair.Key, nation?.Tag ?? "?", nation?.Name ?? Tr("Unknown"));
         });
-        _networkRoster.Text = "PLAYERS\n" + string.Join("\n", rows);
+        _networkRoster.Text = Tr("PLAYERS") + "\n" + string.Join("\n", rows);
         _networkStart.Disabled = _networkPeerNations.Count < 2;
     }
 
@@ -401,7 +405,7 @@ public partial class DealOrForceGame
         var name = typeName ?? "order";
         var cut = name.LastIndexOf('.');
         if (cut >= 0 && cut < name.Length - 1) name = name[(cut + 1)..];
-        _networkHudStatus.Text = $"REFUSED · the host did not accept your {name}";
+        _networkHudStatus.Text = Simulation.Loc.Format("REFUSED · the host did not accept your {0}", name);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
@@ -480,13 +484,13 @@ public partial class DealOrForceGame
         if (behind <= 0) return;
         if (behind < NetworkResyncGapDays)
         {
-            _networkHudStatus.Text = $"CATCHING UP · {behind:N0} day(s) behind the host";
+            _networkHudStatus.Text = Simulation.Loc.Format("CATCHING UP · {0:N0} day(s) behind the host", behind);
             return;
         }
         // Too far to replay, and every order arriving now would be applied to the wrong
         // world. Ask for the world itself instead - and say so, because a player who sees
         // nothing assumes nothing is wrong.
-        _networkHudStatus.Text = $"RESYNCHRONISING · {behind:N0} day(s) behind";
+        _networkHudStatus.Text = Simulation.Loc.Format("RESYNCHRONISING · {0:N0} day(s) behind", behind);
         RequestNetworkResync($"{behind:N0} days behind");
     }
 
@@ -539,7 +543,7 @@ public partial class DealOrForceGame
         // telling it so would send it a snapshot every ten days for no reason.
         if (_campaign.ElapsedDays != hostElapsedDays) return;
         if (CampaignFingerprint.Of(_campaign).ToString() == hostFingerprint) return;
-        _networkHudStatus.Text = $"DESYNCHRONISED on day {hostElapsedDays:N0} · asking the host for the world";
+        _networkHudStatus.Text = Simulation.Loc.Format("DESYNCHRONISED on day {0:N0} · asking the host for the world", hostElapsedDays);
         RequestNetworkResync($"checksum mismatch on day {hostElapsedDays}");
     }
 
@@ -550,7 +554,7 @@ public partial class DealOrForceGame
         _campaign.IsPaused = paused;
         _speed = Math.Clamp(speed, 1, 5);
         _pause.Text = paused ? "▶" : "II";
-        _networkHudStatus.Text = $"CLIENT · {_campaign.Player.Tag} · host day {elapsedDays:N0}";
+        _networkHudStatus.Text = Simulation.Loc.Format("CLIENT · {0} · host day {1:N0}", _campaign.Player.Tag, elapsedDays);
     }
 
     private void UpdateNetworkHud()

@@ -63,7 +63,7 @@ public partial class DealOrForceGame
     private void ShowSaveLoadInterface()
     {
         if (_campaign is not null) _campaign.IsPaused = true;
-        if (_pause is not null) _pause.Text = "▶";
+        if (_pause is not null) _pause.Text = Tr("▶");
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         RefreshSaveSlots();
         _saveLoadLayer.Visible = true;
@@ -96,13 +96,13 @@ public partial class DealOrForceGame
         {
             var metadata = SaveSystem.Save(SaveRoot, slot, _campaign, ModFingerprint,
                 $"{_campaign.Player.Name} · {_campaign.Date}", autosave);
-            _saveStatus.Text = $"Saved {metadata.NationName} on {metadata.GameDate}.";
+            _saveStatus.Text = Simulation.Loc.Format("Saved {0} on {1}.", metadata.NationName, metadata.GameDate);
             RefreshSaveSlots();
         }
         catch (Exception exception)
         {
             DiagnosticLogs.Write("errors", $"SAVE_EXCEPTION {exception}");
-            _saveStatus.Text = $"Save failed: {exception.Message}";
+            _saveStatus.Text = Simulation.Loc.Format("Save failed: {0}", exception.Message);
             GD.PushError(_saveStatus.Text);
         }
     }
@@ -165,7 +165,7 @@ public partial class DealOrForceGame
     private void LoadLatestSave()
     {
         var latest = SaveSystem.List(SaveRoot).FirstOrDefault();
-        if (latest is null) { ShowSaveLoadInterface(); _saveStatus.Text = "No saves exist yet."; return; }
+        if (latest is null) { ShowSaveLoadInterface(); _saveStatus.Text = Tr("No saves exist yet."); return; }
         LoadFromSlot(latest.Slot);
     }
 
