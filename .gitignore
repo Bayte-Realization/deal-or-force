@@ -3,6 +3,11 @@
 /android/
 
 # --- .NET build output ---
+# /build/ is where Tools\build.ps1 leaves the exported game and its archive: hundreds of
+# megabytes rebuilt from source in five minutes, which have no business in history. This
+# line was missing at first, so staging a commit meant deleting the folder by hand - and
+# twice that threw away the archive that was about to be sent to somebody.
+/build/
 bin/
 obj/
 *.user

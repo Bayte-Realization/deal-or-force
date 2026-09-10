@@ -52,6 +52,17 @@ $sdk = "C:\Program Files\dotnet"
 if (Test-Path (Join-Path $sdk "dotnet.exe")) { $env:PATH = "$sdk;$env:PATH" }
 
 Write-Host "== exporting ($(if ($Debug) { 'debug' } else { 'release' })) ==" -ForegroundColor Cyan
+
+# The build output lands inside the project, which is convenient and would otherwise be a
+# trap: Godot scans every folder under the project and would import three hundred and fifty
+# megabytes of finished game as though it were source art, then pack the result into the next
+# build. A `.gdignore` makes the editor skip the folder entirely, and it has to exist before
+# the editor ever sees the folder, so it is written on the way in rather than on the way out.
+$buildRoot = Join-Path $project "build"
+New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
+$ignore = Join-Path $buildRoot ".gdignore"
+if (-not (Test-Path $ignore)) { New-Item -ItemType File -Path $ignore | Out-Null }
+
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 # Godot will not create the export directory itself: "Prepare Template: The given export
 # path doesn't exist."
@@ -74,6 +85,21 @@ $ErrorActionPreference = $previousPreference
 if ($LASTEXITCODE) { Write-Host "  (Godot exited with $LASTEXITCODE)" -ForegroundColor DarkGray }
 if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
 
+# ---------------------------------------------------------------- somewhere to put a mod
+# The one folder in the build that belongs to the player rather than to us. Content packs
+# travel with the data because they are content, but a mod folder buried a level down among
+# `data_DealOrForce_windows_x86_64` is a mod folder nobody finds, so this one sits beside the
+# executable. The loader looks in both places.
+$modsSource = Join-Path $project "Mods"
+if (Test-Path $modsSource) {
+    Copy-Item -Path $modsSource -Destination $out -Recurse -Force
+    # A template that somebody once compiled leaves its bin and obj behind; they are not
+    # part of the template and they are not small.
+    Get-ChildItem -Path (Join-Path $out "Mods") -Recurse -Force -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq "bin" -or $_.Name -eq "obj" } |
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 # ---------------------------------------------------------------- the check that matters
 Write-Host "== checking the data came with it ==" -ForegroundColor Cyan
 
@@ -87,7 +113,13 @@ $needed = @(
     "game\history\provinces",
     "game\localization\english",
     "game\map_data\definition.csv",
-    "game\map_data\default.map"
+    "game\map_data\default.map",
+    # Content packs are read from disk like everything else, so they have to be on disk. The
+    # first build shipped without them and the game simply had no content packs at all - it
+    # said so quietly in the log and carried on, which is exactly how this goes unnoticed.
+    "dlc\entitlements.json",
+    "dlc\dof_iron_and_grain\dlc.json",
+    "Mods"
 )
 
 $assemblies = Get-ChildItem -Path $out -Recurse -Force -Filter "DealOrForce.dll" -ErrorAction SilentlyContinue |

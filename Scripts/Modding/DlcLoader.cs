@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DealOrForce.Simulation;
 using Godot;
 
 namespace DealOrForce.Modding;
@@ -82,14 +83,13 @@ public static class DlcEntitlements
         _unlockEverything = false;
         // The shipped file first, then the player's - so a real purchase always wins over
         // whatever a development build happened to leave lying about.
-        Read("res://dlc/entitlements.json");
-        Read("user://entitlements.json");
+        Read(GameDataLoader.InstallFile("dlc", "entitlements.json"));
+        Read(ProjectSettings.GlobalizePath("user://entitlements.json"));
     }
 
-    private static void Read(string virtualPath)
+    private static void Read(string path)
     {
-        var path = ProjectSettings.GlobalizePath(virtualPath);
-        if (!File.Exists(path)) return;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions
@@ -107,7 +107,7 @@ public static class DlcEntitlements
         }
         catch (Exception exception)
         {
-            GD.PushWarning($"[dlc] {virtualPath}: {exception.Message}");
+            GD.PushWarning($"[dlc] {path}: {exception.Message}");
         }
     }
 
@@ -162,9 +162,12 @@ public sealed class DlcLoader
         _packages.Clear();
         DlcEntitlements.Reload();
 
+        // Same reason as mods: `res://dlc` is a real folder only in the editor, and a pack
+        // is a folder of loose files rather than a resource, so it has to be found on disk.
         var found = new Dictionary<string, DlcPackage>(StringComparer.OrdinalIgnoreCase);
-        DiscoverRoot("res://dlc", found);
-        DiscoverRoot("user://dlc", found);
+        foreach (var root in GameDataLoader.InstallFolders("dlc"))
+            DiscoverRoot(root, "res://dlc", found);
+        DiscoverRoot(ProjectSettings.GlobalizePath("user://dlc"), "user://dlc", found);
 
         foreach (var package in found.Values)
             package.Owned = DlcEntitlements.Has(package.Manifest.Entitlement);
@@ -184,10 +187,9 @@ public sealed class DlcLoader
             .ThenBy(package => package.Manifest.Id, StringComparer.OrdinalIgnoreCase));
     }
 
-    private void DiscoverRoot(string virtualRoot, Dictionary<string, DlcPackage> found)
+    private void DiscoverRoot(string physicalRoot, string virtualRoot, Dictionary<string, DlcPackage> found)
     {
-        var physicalRoot = ProjectSettings.GlobalizePath(virtualRoot);
-        if (!Directory.Exists(physicalRoot)) return;
+        if (string.IsNullOrEmpty(physicalRoot) || !Directory.Exists(physicalRoot)) return;
 
         foreach (var directory in Directory.GetDirectories(physicalRoot)
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))

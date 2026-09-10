@@ -4,6 +4,14 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>DealOrForce</RootNamespace>
     <AssemblyName>DealOrForce</AssemblyName>
+    <!--
+      `build/` is the exported game, and the exported game now carries the mod templates -
+      which are C# - so the SDK's `**/*.cs` glob found them and tried to compile the build
+      into the thing that produced it. Excluding the folder from every default glob at once
+      is the honest fix; a `Compile Remove` would leave Content and None still pointing at
+      several hundred megabytes of output.
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);build\**</DefaultItemExcludes>
   </PropertyGroup>
   <!--
     The editor plays the Debug build, and Debug means the optimiser is switched off. For a
@@ -29,5 +37,16 @@
     <Content Include="game\**\*.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.map" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!--
+      Content packs are game content and travel with the data, the same way `game/` does.
+      Published only, not copied to the build output: in the editor the loader reads `dlc/`
+      out of the project itself, and a second copy under bin would shadow it and go stale
+      the moment a pack was edited.
+
+      `Mods/` is deliberately not here. It is the one folder a player writes into, so the
+      build script puts it beside the executable where it can be found, rather than a level
+      down among the data.
+    -->
+    <Content Include="dlc\**" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

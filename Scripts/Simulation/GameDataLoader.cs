@@ -132,6 +132,47 @@ public static class GameDataLoader
             .FirstOrDefault(Directory.Exists);
     }
 
+    /// <summary>
+    /// Every place a top-level installation folder - `Mods`, `dlc` - actually is, nearest
+    /// the data first.
+    ///
+    /// This exists because `res://` is a lie outside the editor. In the editor
+    /// `GlobalizePath("res://Mods")` names a real directory and everything works; in an
+    /// exported game `res://` is a `.pck`, and a mod folder is the one thing that cannot
+    /// live in a `.pck` - it is a folder a player drops files into after the game shipped.
+    /// So these are found the way `game/` is found: by walking out from the assembly until
+    /// the installation is recognised.
+    ///
+    /// It is recognised by `game/` being in it, which is stricter than it looks. `Mods` is
+    /// a common enough folder name that a bare upward search would sooner or later find
+    /// somebody else's. The exported layout puts `game/` one level below the executable, so
+    /// the folder holding `game/` and its parent both count: the first is where shipped
+    /// content travels, the second is the folder the player can actually see.
+    ///
+    /// Every match is returned rather than the first, because they are not alternatives. A
+    /// pack that ships with the game and a mod the player installed are both real, and it
+    /// is the caller that decides which one wins when they name the same thing.
+    /// </summary>
+    public static IEnumerable<string> InstallFolders(string name)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in InstallRoots())
+        {
+            string folder;
+            try { folder = Path.GetFullPath(Path.Combine(root, name)); }
+            catch (Exception) { continue; }
+            if (Directory.Exists(folder) && seen.Add(folder)) yield return folder;
+        }
+    }
+
+    /// <summary>One named file inside such a folder - the nearest copy of it, or null.</summary>
+    public static string InstallFile(string name, params string[] relativePath)
+    {
+        var suffix = Path.Combine(relativePath);
+        return InstallFolders(name).Select(folder => Path.Combine(folder, suffix))
+            .FirstOrDefault(File.Exists);
+    }
+
     private static object ConvertValue(JsonElement value, Type type)
     {
         if (type == typeof(float) && value.TryGetSingle(out var single)) return single;
@@ -172,5 +213,25 @@ public static class GameDataLoader
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         for (var depth = 0; depth < 7 && directory is not null; depth++, directory = directory.Parent)
             yield return directory.FullName;
+    }
+
+    /// <summary>The candidate roots that hold a `game/`, each followed by its parent.</summary>
+    private static IEnumerable<string> InstallRoots()
+    {
+        foreach (var root in CandidateRoots())
+        {
+            if (string.IsNullOrEmpty(root)) continue;
+            if (!Directory.Exists(Path.Combine(root, "game"))) continue;
+            yield return root;
+            // Through DirectoryInfo rather than Directory.GetParent, which is not the same
+            // thing when the path ends in a separator - and AppContext.BaseDirectory always
+            // does. `GetParent(@"C:\a\b\")` hands back `C:\a\b`: the folder itself, one
+            // level short of where it was going. That is the whole exported layout, so the
+            // folder beside the executable would never have been looked in.
+            DirectoryInfo parent;
+            try { parent = new DirectoryInfo(root).Parent; }
+            catch (Exception) { continue; }
+            if (parent is not null) yield return parent.FullName;
+        }
     }
 }

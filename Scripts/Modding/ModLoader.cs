@@ -90,9 +90,15 @@ public sealed class ModLoader
 
         // Development mods ship beside the project. Installed/user mods with the same
         // id win, allowing local updates without touching the base installation.
+        //
+        // An installed game has more than one folder called Mods - the one that travelled
+        // with the data and the one beside the executable, which is the one a player can
+        // actually find - and they arrive here nearest-first. Later wins by id, which is
+        // the right way round: what the player put there outranks what shipped.
         var candidates = new Dictionary<string, ModPackage>(StringComparer.OrdinalIgnoreCase);
-        DiscoverRoot("res://Mods", candidates);
-        DiscoverRoot("user://mods", candidates);
+        foreach (var root in GameDataLoader.InstallFolders("Mods"))
+            DiscoverRoot(root, "res://Mods", candidates);
+        DiscoverRoot(ProjectSettings.GlobalizePath("user://mods"), "user://mods", candidates);
 
         var enabled = candidates.Values.Where(package => package.Manifest.Enabled).ToList();
         foreach (var package in enabled.ToArray())
@@ -478,10 +484,9 @@ public sealed class ModLoader
                 Try(plugin.ModId, () => plugin.Instance.Call("on_day_advanced", _api));
     }
 
-    private void DiscoverRoot(string virtualRoot, Dictionary<string, ModPackage> candidates)
+    private void DiscoverRoot(string physicalRoot, string virtualRoot, Dictionary<string, ModPackage> candidates)
     {
-        var physicalRoot = ProjectSettings.GlobalizePath(virtualRoot);
-        if (!Directory.Exists(physicalRoot)) return;
+        if (string.IsNullOrEmpty(physicalRoot) || !Directory.Exists(physicalRoot)) return;
 
         foreach (var directory in Directory.GetDirectories(physicalRoot).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
