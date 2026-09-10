@@ -15,46 +15,28 @@ public enum GovernmentFocus
     NationalSecurity
 }
 
+/// <summary>
+/// What a cabinet priority is called and what it does, asked of `common/government_focus`.
+///
+/// These four used to be four switch statements here and five more scattered through the
+/// weekly economic tick, which meant retuning the cabinet was a hunt through two files for
+/// nine numbers that had to agree. They are one row each in the data now, and this class is
+/// what the rest of the game asks instead of switching on the enum itself - which is also
+/// what lets a mod declare a sixth cabinet and have it work everywhere at once.
+/// </summary>
 public static class GovernmentFocusRules
 {
-    public static string Name(GovernmentFocus focus) => focus switch
-    {
-        GovernmentFocus.EconomicExpansion => "Economic expansion",
-        GovernmentFocus.SocialCohesion => "Social cohesion",
-        GovernmentFocus.EducationAndScience => "Education & science",
-        GovernmentFocus.NationalSecurity => "National security",
-        _ => "Balanced cabinet"
-    };
+    public static string Name(GovernmentFocus focus) =>
+        Loc.Get(GovernmentFocusCatalog.Of(focus).Name);
 
-    public static string ShortName(GovernmentFocus focus) => focus switch
-    {
-        GovernmentFocus.EconomicExpansion => "Growth",
-        GovernmentFocus.SocialCohesion => "Cohesion",
-        GovernmentFocus.EducationAndScience => "Science",
-        GovernmentFocus.NationalSecurity => "Security",
-        _ => "Balanced"
-    };
+    public static string ShortName(GovernmentFocus focus) =>
+        Loc.Get(GovernmentFocusCatalog.Of(focus).ShortName);
 
-    public static string Description(GovernmentFocus focus) => focus switch
-    {
-        GovernmentFocus.EconomicExpansion =>
-            "+0.4 percentage points annual GDP growth; a small weekly living-standard and stability cost.",
-        GovernmentFocus.SocialCohesion =>
-            "Improves living standards and suppresses radicalism; -0.2 percentage points annual GDP growth.",
-        GovernmentFocus.EducationAndScience =>
-            "Accelerates literacy and raises the productivity target; benefits compound gradually.",
-        GovernmentFocus.NationalSecurity =>
-            "Builds stability and war support; -0.2 percentage points annual GDP growth and slightly more tension.",
-        _ => "No special modifier. Institutions pursue a broad, predictable compromise."
-    };
+    public static string Description(GovernmentFocus focus) =>
+        Loc.Get(GovernmentFocusCatalog.Of(focus).Description);
 
-    public static float AnnualGrowth(GovernmentFocus focus) => focus switch
-    {
-        GovernmentFocus.EconomicExpansion => 0.004f,
-        GovernmentFocus.SocialCohesion => -0.002f,
-        GovernmentFocus.NationalSecurity => -0.002f,
-        _ => 0f
-    };
+    public static float AnnualGrowth(GovernmentFocus focus) =>
+        GovernmentFocusCatalog.Of(focus).Growth;
 }
 
 public sealed partial class Campaign
@@ -78,7 +60,9 @@ public sealed partial class Campaign
     public void SetGovernmentFocus(int nationId, GovernmentFocus focus)
     {
         var nation = NationById(nationId);
-        if (nation is null || !Enum.IsDefined(focus)) return;
+        // The catalogue decides what a real focus is, not the enum: a cabinet a mod declared
+        // has a perfectly good enum value that `Enum.IsDefined` has never heard of.
+        if (nation is null || !GovernmentFocusCatalog.Knows(focus)) return;
         nation.GovernmentFocus = focus;
         Changed?.Invoke();
     }

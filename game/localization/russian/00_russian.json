@@ -617,5 +617,20 @@
   "Treasury {0}  ·  balance {1}{2} a week  ·  income {3}  ·  outgoings {4}": "Казна {0}  ·  баланс {1}{2} в неделю  ·  доходы {3}  ·  расходы {4}",
   "Unknown": "Неизвестно",
   "{0} of 12 sites running · ": "строек в работе: {0} из 12 · ",
-  "…and {0} more": "…и ещё {0}"
+  "…and {0} more": "…и ещё {0}",
+  "Balanced cabinet": "Сбалансированный кабинет",
+  "No special modifier. Institutions pursue a broad, predictable compromise.": "Никаких особых эффектов. Институты держатся широкого предсказуемого компромисса.",
+  "Economic expansion": "Экономический рост",
+  "+0.4 percentage points annual GDP growth; a small weekly living-standard and stability cost.": "+0,4 процентного пункта годового роста ВВП; небольшая недельная плата уровнем жизни и стабильностью.",
+  "Social cohesion": "Социальная сплочённость",
+  "Improves living standards and suppresses radicalism; -0.2 percentage points annual GDP growth.": "Поднимает уровень жизни и подавляет радикализм; −0,2 процентного пункта годового роста ВВП.",
+  "Education & science": "Образование и наука",
+  "Accelerates literacy and raises the productivity target; benefits compound gradually.": "Ускоряет рост грамотности и поднимает целевую производительность; выгода накапливается постепенно.",
+  "National security": "Национальная безопасность",
+  "Builds stability and war support; -0.2 percentage points annual GDP growth and slightly more tension.": "Наращивает стабильность и поддержку войны; −0,2 процентного пункта годового роста ВВП и чуть больше напряжённости.",
+  "Goods move freely both ways and the customs house collects almost nothing.": "Товары свободно идут в обе стороны, а таможня собирает почти ничего.",
+  "Balanced trade": "Сбалансированная торговля",
+  "Ordinary duties, ordinary access. What a country does when it has not decided.": "Обычные пошлины, обычный доступ. То, что страна делает, пока не решила.",
+  "Strategic autarky": "Стратегическая автаркия",
+  "The border is a policy instrument. Duty is heavy, and so is the cost of everything the country cannot make itself.": "Граница — инструмент политики. Пошлина тяжёлая, и так же тяжело обходится всё, чего страна не производит сама."
 }

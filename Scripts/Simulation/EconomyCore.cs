@@ -448,6 +448,9 @@ public static class EconomySystem
             // than eight multiplications written out here. The eight lines this replaced
             // are the first eight rows of that file and produce the same figures; what it
             // buys is that a ninth is a row rather than an edit to the weekly tick.
+            // Looked up once. Every one of the cabinet's seven effects used to be its own
+            // switch on the enum, in five different places in this method.
+            var cabinet = GovernmentFocusCatalog.Of(nation.GovernmentFocus);
             var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar);
             nation.WeeklyTaxIncome = budget.Taxation;
             nation.WeeklyExpenses = budget.Expenses;
@@ -511,34 +514,23 @@ public static class EconomySystem
                 GrowGroups(state, delta);
                 state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
                 var welfareRadicalism = budget.Radicalism;
-                var focusRadicalism = nation.GovernmentFocus switch
-                {
-                    GovernmentFocus.SocialCohesion => -0.00015f,
-                    GovernmentFocus.NationalSecurity => 0.00005f,
-                    _ => 0f
-                };
+                var focusRadicalism = cabinet.Radicalism;
                 state.Radicalism = M.Clamp01(state.Radicalism +
                     (0.46f - state.StandardOfLiving) * 0.002f + welfareRadicalism + focusRadicalism);
                 MinorityPressure(campaign, nation, state);
                 totalPopulation += state.Population;
             }
             if (states.Length > 0) nation.Population = totalPopulation;
-            var focusSol = nation.GovernmentFocus switch
-            {
-                GovernmentFocus.SocialCohesion => 0.00012f,
-                GovernmentFocus.EconomicExpansion => -0.00004f,
-                _ => 0f
-            };
+            var focusSol = cabinet.Living;
             nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + annualGrowth * 0.004f -
                 nation.ShortageIndex * campaign.Defines.ShortageSolWeeklyPenalty +
                 budget.Living + focusSol);
-            var focusLiteracy = nation.GovernmentFocus == GovernmentFocus.EducationAndScience ? 0.00008f : 0f;
+            var focusLiteracy = cabinet.Literacy;
             nation.Literacy = M.Clamp(nation.Literacy + budget.Literacy + focusLiteracy,
                 0.05f, 0.999f);
-            var productivityTarget = 0.72f + nation.Literacy * 0.50f +
-                                     (nation.GovernmentFocus == GovernmentFocus.EducationAndScience ? 0.04f : 0f);
+            var productivityTarget = 0.72f + nation.Literacy * 0.50f + cabinet.ProductivityTarget;
             nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
-            var securityStability = nation.GovernmentFocus == GovernmentFocus.NationalSecurity ? 0.00012f : 0f;
+            var securityStability = cabinet.Stability;
             var livingStandard = (nation.StandardOfLiving - 0.45f) * 0.001f;
             var settledStability = M.Clamp(
                 nation.Stability + livingStandard + securityStability + budget.Stability, 0.10f, 0.98f);
@@ -556,7 +548,7 @@ public static class EconomySystem
                     : settledStability <= 0.10f ? "held up off the floor" : "rounding");
             nation.Stability = settledStability;
 
-            var focusWarSupport = nation.GovernmentFocus == GovernmentFocus.NationalSecurity ? 0.00010f : 0f;
+            var focusWarSupport = cabinet.WarSupport;
             var settledWarSupport = M.Clamp01(nation.WarSupport + focusWarSupport);
             nation.WarSupportDrivers.Begin("War support, weekly", "share");
             nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);

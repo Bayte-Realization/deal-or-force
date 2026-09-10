@@ -1,0 +1,35 @@
+// How open a country is to the world market, and what that is worth.
+//
+//     import_access   multiplier on what the country can buy abroad
+//     export_access   multiplier on what it can sell abroad
+//     tariff          share of the value of trade the customs house keeps
+//
+// A stance is a trade-off with no free side: the country that buys most easily collects
+// almost no duty, and the one that collects most duty can barely buy. An id the game does
+// not ship with is a new stance and takes one of eight reserved slots.
+
+{
+  "open_markets": {
+    "name": "Open markets",
+    "description": "Goods move freely both ways and the customs house collects almost nothing.",
+    "import_access": 1.18,
+    "export_access": 1.08,
+    "tariff": 0.01
+  },
+
+  "balanced_trade": {
+    "name": "Balanced trade",
+    "description": "Ordinary duties, ordinary access. What a country does when it has not decided.",
+    "import_access": 1.0,
+    "export_access": 0.92,
+    "tariff": 0.05
+  },
+
+  "strategic_autarky": {
+    "name": "Strategic autarky",
+    "description": "The border is a policy instrument. Duty is heavy, and so is the cost of everything the country cannot make itself.",
+    "import_access": 0.58,
+    "export_access": 0.52,
+    "tariff": 0.14
+  }
+}

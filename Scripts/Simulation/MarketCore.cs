@@ -39,35 +39,26 @@ public enum Commodity
 
 public enum TradePolicy { OpenMarkets, BalancedTrade, StrategicAutarky }
 
+/// <summary>
+/// How open a country is to the world market, asked of `common/trade_policies` rather than
+/// answered by four switch statements that had to be kept in step by hand.
+/// </summary>
 public static class TradePolicyRules
 {
-    public static float ImportAccess(TradePolicy policy) => policy switch
-    {
-        TradePolicy.OpenMarkets => 1.18f,
-        TradePolicy.StrategicAutarky => 0.58f,
-        _ => 1f
-    };
+    public static float ImportAccess(TradePolicy policy) =>
+        TradePolicyCatalog.Of(policy).ImportAccess;
 
-    public static float ExportAccess(TradePolicy policy) => policy switch
-    {
-        TradePolicy.OpenMarkets => 1.08f,
-        TradePolicy.StrategicAutarky => 0.52f,
-        _ => 0.92f
-    };
+    public static float ExportAccess(TradePolicy policy) =>
+        TradePolicyCatalog.Of(policy).ExportAccess;
 
-    public static float TariffRate(TradePolicy policy) => policy switch
-    {
-        TradePolicy.OpenMarkets => 0.01f,
-        TradePolicy.StrategicAutarky => 0.14f,
-        _ => 0.05f
-    };
+    public static float TariffRate(TradePolicy policy) =>
+        TradePolicyCatalog.Of(policy).Tariff;
 
-    public static string Name(TradePolicy policy) => policy switch
-    {
-        TradePolicy.OpenMarkets => "Open markets",
-        TradePolicy.StrategicAutarky => "Strategic autarky",
-        _ => "Balanced trade"
-    };
+    public static string Name(TradePolicy policy) =>
+        Loc.Get(TradePolicyCatalog.Of(policy).Name);
+
+    public static string Description(TradePolicy policy) =>
+        Loc.Get(TradePolicyCatalog.Of(policy).Description);
 }
 
 public sealed class CommodityDefinition

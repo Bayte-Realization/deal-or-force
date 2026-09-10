@@ -156,6 +156,8 @@ public sealed class ModLoader
         CommodityCatalog.ResetCatalog();
         ProductionChains.ResetCatalog();
         BudgetCore.ResetCatalog();
+        GovernmentFocusCatalog.ResetCatalog();
+        TradePolicyCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
@@ -174,6 +176,7 @@ public sealed class ModLoader
             ApplyBuildings(package);
             ApplyProduction(package);
             ApplyBudget(package);
+            ApplyPolicies(package);
             ApplyDecisions(package);
             ApplyEvents(package);
             ApplyModifiers(package);
@@ -651,6 +654,32 @@ public sealed class ModLoader
     /// wants a tax the game never had gives it an id nothing else uses and gets a slider
     /// for it without touching a line of code.
     /// </summary>
+    /// <summary>
+    /// What this mod says a cabinet may pursue and how a country may trade.
+    ///
+    /// Both catalogues keep enum values clear for entries the game has never heard of, so a
+    /// mod may retune the five cabinets and three stances that ship, or declare its own.
+    /// </summary>
+    private void ApplyPolicies(ModPackage package)
+    {
+        foreach (var path in JsonFiles(package, "common", "government_focus"))
+        {
+            try { GovernmentFocusCatalog.Merge(File.ReadAllText(path), package.Errors); }
+            catch (Exception exception)
+            {
+                package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
+            }
+        }
+        foreach (var path in JsonFiles(package, "common", "trade_policies"))
+        {
+            try { TradePolicyCatalog.Merge(File.ReadAllText(path), package.Errors); }
+            catch (Exception exception)
+            {
+                package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
+            }
+        }
+    }
+
     private void ApplyBudget(ModPackage package)
     {
         foreach (var path in JsonFiles(package, "common", "budget"))

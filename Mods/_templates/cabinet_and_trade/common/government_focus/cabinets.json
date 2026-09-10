@@ -1,0 +1,33 @@
+// A cabinet the game has never had, and one of the five retuned.
+//
+// The vocabulary is documented at the top of `game/common/government_focus/00_focus.json`.
+
+{
+  // An id the base game does not use is a new cabinet. It takes one of sixteen reserved
+  // enum slots, appears as its own button on the state affairs screen, and every AI
+  // government in the world may adopt it - which is the interesting part: a mod that adds a
+  // priority adds it to two hundred and sixty countries, not only to the player's.
+  "industrial_mobilisation": {
+    "name": "Industrial mobilisation",
+    "short_name": "Mobilise",
+    "description": "Everything is bent towards output. Growth and war support climb; the people bear it, and say so.",
+    "effects": {
+      "growth": 0.006,
+      "war_support": 0.00014,
+      "living": -0.00010,
+      "radicalism": 0.00020
+    }
+  },
+
+  // Naming one the base game ships with replaces that cabinet and leaves the others alone.
+  "education_and_science": {
+    "name": "Education & science",
+    "short_name": "Science",
+    "description": "A generation of schooling, paid for now and collected on much later.",
+    "effects": {
+      "literacy": 0.00016,
+      "productivity_target": 0.07,
+      "growth": -0.003
+    }
+  }
+}

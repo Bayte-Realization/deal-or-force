@@ -273,12 +273,12 @@ public partial class DealOrForceGame
         tradeCaption.CustomMinimumSize = new Vector2(98, 0);
         tradeCaption.VerticalAlignment = VerticalAlignment.Center;
         _stateTradeControls.AddChild(tradeCaption);
-        AddTradePolicyButton("Open markets", TradePolicy.OpenMarkets,
-            "More imports and exports, minimal tariffs; best access during peaceful global supply.");
-        AddTradePolicyButton("Balanced", TradePolicy.BalancedTrade,
-            "Moderate access and tariffs without a strong structural bias.");
-        AddTradePolicyButton("Autarky", TradePolicy.StrategicAutarky,
-            "Restricts trade and raises tariffs; safer politically, but shortages become harder to cover.");
+        // From the catalogue rather than a list written here: a stance a mod declares in
+        // `common/trade_policies` gets a button, its own name and its own explanation
+        // without this file knowing it exists.
+        foreach (var policy in Simulation.TradePolicyCatalog.All)
+            AddTradePolicyButton(TradePolicyRules.Name(policy), policy,
+                TradePolicyRules.Description(policy));
         _statePolicyFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
         _statePolicyFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _stateTradeControls.AddChild(_statePolicyFeedback);
@@ -298,11 +298,8 @@ public partial class DealOrForceGame
         cabinetCaption.CustomMinimumSize = new Vector2(78, 0);
         cabinetCaption.VerticalAlignment = VerticalAlignment.Center;
         _stateCabinetControls.AddChild(cabinetCaption);
-        AddGovernmentFocusButton("Balanced", GovernmentFocus.Balanced);
-        AddGovernmentFocusButton("Growth", GovernmentFocus.EconomicExpansion);
-        AddGovernmentFocusButton("Cohesion", GovernmentFocus.SocialCohesion);
-        AddGovernmentFocusButton("Science", GovernmentFocus.EducationAndScience);
-        AddGovernmentFocusButton("Security", GovernmentFocus.NationalSecurity);
+        foreach (var focus in Simulation.GovernmentFocusCatalog.All)
+            AddGovernmentFocusButton(GovernmentFocusRules.ShortName(focus), focus);
         _stateGovernanceFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
         _stateGovernanceFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _stateCabinetControls.AddChild(_stateGovernanceFeedback);

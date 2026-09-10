@@ -1,0 +1,71 @@
+// What a cabinet is for, and what pursuing it costs.
+//
+// One priority at a time, and the AI governments of the world choose from this same list -
+// so a mod that adds a sixth is a mod every country in the world can adopt.
+//
+// `effects` are what the priority does each week, except `growth`, which is annual because
+// that is the cadence growth is quoted in:
+//     growth               added to the annual growth the economy converges on
+//     living               added to the standard of living, weekly
+//     literacy             added to literacy, weekly
+//     radicalism           added to regional radicalism, weekly
+//     stability            added to stability, weekly
+//     war_support          added to war support, weekly
+//     productivity_target  added to the productivity literacy is pulling the country towards
+//
+// The five here reproduce exactly what used to be nine switch statements scattered across
+// `GovernanceCore` and the weekly economic tick. An id the game does not ship with is a new
+// cabinet and takes one of sixteen reserved slots; everything that reads a focus asks this
+// file rather than the enum, so it works the day it is declared.
+
+{
+  "balanced": {
+    "name": "Balanced cabinet",
+    "short_name": "Balanced",
+    "description": "No special modifier. Institutions pursue a broad, predictable compromise.",
+    "effects": {}
+  },
+
+  "economic_expansion": {
+    "name": "Economic expansion",
+    "short_name": "Growth",
+    "description": "+0.4 percentage points annual GDP growth; a small weekly living-standard and stability cost.",
+    "effects": {
+      "growth": 0.004,
+      "living": -0.00004
+    }
+  },
+
+  "social_cohesion": {
+    "name": "Social cohesion",
+    "short_name": "Cohesion",
+    "description": "Improves living standards and suppresses radicalism; -0.2 percentage points annual GDP growth.",
+    "effects": {
+      "growth": -0.002,
+      "living": 0.00012,
+      "radicalism": -0.00015
+    }
+  },
+
+  "education_and_science": {
+    "name": "Education & science",
+    "short_name": "Science",
+    "description": "Accelerates literacy and raises the productivity target; benefits compound gradually.",
+    "effects": {
+      "literacy": 0.00008,
+      "productivity_target": 0.04
+    }
+  },
+
+  "national_security": {
+    "name": "National security",
+    "short_name": "Security",
+    "description": "Builds stability and war support; -0.2 percentage points annual GDP growth and slightly more tension.",
+    "effects": {
+      "growth": -0.002,
+      "radicalism": 0.00005,
+      "stability": 0.00012,
+      "war_support": 0.00010
+    }
+  }
+}

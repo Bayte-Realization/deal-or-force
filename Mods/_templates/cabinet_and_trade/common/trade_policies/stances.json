@@ -1,0 +1,23 @@
+// A fourth trade stance, and a harsher autarky.
+//
+// The vocabulary is documented at the top of
+// `game/common/trade_policies/00_trade_policies.json`.
+
+{
+  // A stance nothing else declares. Eight slots are reserved for these.
+  "imperial_preference": {
+    "name": "Imperial preference",
+    "description": "Trade is easy inside the bloc and dear outside it. Access holds up and the customs house still collects.",
+    "import_access": 1.04,
+    "export_access": 1.02,
+    "tariff": 0.09
+  },
+
+  "strategic_autarky": {
+    "name": "Strategic autarky",
+    "description": "The border is shut but for what the state itself moves.",
+    "import_access": 0.42,
+    "export_access": 0.40,
+    "tariff": 0.19
+  }
+}

@@ -151,6 +151,8 @@ public static class Program
             AModCanAddAGood(campaign));
         failures += Check("the budget is data, and still the budget it always was",
             TheBudgetIsData(campaign));
+        failures += Check("a mod can add a cabinet and a trade stance the game never had",
+            PolicyCataloguesTakeNewEntries());
         failures += Check("every good is made by something and eaten by something",
             TheChainsHangTogether());
         failures += Check("every mod template names something the game actually has",
@@ -2734,6 +2736,26 @@ public static class Program
     /// a factor nobody has, a basis that is not one of the four - which are more use than
     /// "budget: revenues" appearing on a list of unknown keys.
     /// </summary>
+    /// <summary>
+    /// One cabinet or one trade stance out of a template, judged by its own catalogue.
+    ///
+    /// The entry is wrapped back into a one-row object because both catalogues validate a
+    /// file's worth at a time, and a template is walked a row at a time. Nothing is kept:
+    /// validation reads and reports, so the bench never inherits a mod's cabinet.
+    /// </summary>
+    private static bool PolicyEntry(System.Text.Json.JsonProperty entry, string file,
+        string templates, List<string> complaints,
+        Action<System.Text.Json.JsonElement, List<string>> validate)
+    {
+        if (entry.Value.ValueKind != System.Text.Json.JsonValueKind.Object) return true;
+        var wrapped = $"{{ {System.Text.Json.JsonSerializer.Serialize(entry.Name)}: {entry.Value.GetRawText()} }}";
+        var problems = new List<string>();
+        using (var document = System.Text.Json.JsonDocument.Parse(wrapped, GameDataLoader.ForgivingJson))
+            validate(document.RootElement, problems);
+        foreach (var problem in problems) complaints.Add($"{Short(templates, file)}: {problem}");
+        return true;
+    }
+
     private static bool BudgetGroup(System.Text.Json.JsonProperty entry, string file,
         string templates, List<string> complaints)
     {
@@ -2848,6 +2870,83 @@ public static class Program
         return "";
     }
 
+    /// <summary>
+    /// The five cabinets and three trade stances are rows, and a sixth and a fourth are rows
+    /// somebody else may write.
+    ///
+    /// Both are enums underneath, because a country carries one of each in every save ever
+    /// written; what makes a mod's entry work anyway is that nothing switches on the enum any
+    /// more - the shipped effects come out of the catalogue exactly as a mod's do. This is
+    /// the check that would fail if somebody put a switch back.
+    /// </summary>
+    private static string PolicyCataloguesTakeNewEntries()
+    {
+        var shippedFocuses = GovernmentFocusCatalog.All.Count;
+        var shippedStances = TradePolicyCatalog.All.Count;
+        if (shippedFocuses < 5) return $"only {shippedFocuses} cabinet(s) in common/government_focus";
+        if (shippedStances < 3) return $"only {shippedStances} stance(s) in common/trade_policies";
+
+        // What the shipped five still are, so a retune that slips is caught here.
+        var science = GovernmentFocusCatalog.Of(GovernmentFocus.EducationAndScience);
+        if (MathF.Abs(science.Literacy - 0.00008f) > 1e-9f ||
+            MathF.Abs(science.ProductivityTarget - 0.04f) > 1e-6f)
+            return $"education & science is {science.Literacy} literacy and " +
+                   $"{science.ProductivityTarget} productivity where the code it replaced gave 8e-5 and 0.04";
+        if (MathF.Abs(TradePolicyRules.TariffRate(TradePolicy.StrategicAutarky) - 0.14f) > 1e-6f)
+            return "autarky's tariff is not the 14% the code it replaced charged";
+
+        var errors = new List<string>();
+        GovernmentFocusCatalog.Merge("""
+        {
+          "bench_war_economy": {
+            "name": "Bench war economy",
+            "short_name": "Bench",
+            "description": "A cabinet that exists for as long as this check runs.",
+            "effects": { "growth": 0.009, "war_support": 0.0002, "radicalism": 0.0003 }
+          }
+        }
+        """, errors);
+        TradePolicyCatalog.Merge("""
+        {
+          "bench_blockade_running": {
+            "name": "Bench blockade running",
+            "description": "A stance that exists for as long as this check runs.",
+            "import_access": 0.71, "export_access": 0.66, "tariff": 0.23
+          }
+        }
+        """, errors);
+        if (errors.Count > 0) return $"a sound entry was rejected: {errors[0]}";
+
+        if (GovernmentFocusCatalog.All.Count != shippedFocuses + 1)
+            return $"adding one cabinet took the catalogue to {GovernmentFocusCatalog.All.Count}";
+        if (TradePolicyCatalog.All.Count != shippedStances + 1)
+            return $"adding one stance took the catalogue to {TradePolicyCatalog.All.Count}";
+
+        var added = GovernmentFocusCatalog.All[^1];
+        if (!GovernmentFocusCatalog.Knows(added))
+            return "the catalogue lists a cabinet it does not know";
+        if ((int)added < shippedFocuses)
+            return $"the new cabinet took slot {(int)added}, which one the game ships already has";
+        if (MathF.Abs(GovernmentFocusRules.AnnualGrowth(added) - 0.009f) > 1e-6f)
+            return "a mod's cabinet does not reach the growth the weekly tick reads";
+
+        var stance = TradePolicyCatalog.All[^1];
+        if (MathF.Abs(TradePolicyRules.TariffRate(stance) - 0.23f) > 1e-6f ||
+            MathF.Abs(TradePolicyRules.ImportAccess(stance) - 0.71f) > 1e-6f)
+            return "a mod's trade stance does not reach the market";
+
+        GovernmentFocusCatalog.ResetCatalog();
+        TradePolicyCatalog.ResetCatalog();
+        if (GovernmentFocusCatalog.All.Count != shippedFocuses ||
+            TradePolicyCatalog.All.Count != shippedStances)
+            return "resetting the catalogues left the bench's entries behind";
+
+        Console.WriteLine($"  policy: {shippedFocuses} cabinet(s) and {shippedStances} trade stance(s) " +
+                          $"as data, with room for {GovernmentFocusCatalog.ModdedHeadroom} and " +
+                          $"{TradePolicyCatalog.ModdedHeadroom} more; a mod's cabinet reaches the weekly tick.");
+        return "";
+    }
+
     private static string TheEnglishTableIsAnIndex()
     {
         var scripts = FindScripts();
@@ -2869,8 +2968,31 @@ public static class Program
         }
         if (captions.Count == 0) return "found no interface captions in the source at all";
 
+        // And the captions that are not in the source at all any more.
+        //
+        // The budget's seventeen lines, the cabinets and the trade stances name and explain
+        // themselves in `common/`, which is the point of them being data - but it moved
+        // those words out of reach of a scan that only reads C#. A name a file gives
+        // something the player reads is a key exactly as much as a name the code gives it,
+        // and this is what keeps that true as more of the game becomes data.
+        var declared = new SortedSet<string>(StringComparer.Ordinal);
+        var common = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common");
+        foreach (var folder in new[] { "budget", "government_focus", "trade_policies" })
+        {
+            var directory = Path.Combine(common, folder);
+            if (!Directory.Exists(directory)) continue;
+            foreach (var file in Directory.EnumerateFiles(directory, "*.json"))
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(
+                    File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                CollectDeclaredNames(document.RootElement, declared);
+            }
+        }
+
         var absent = new List<string>();
         foreach (var caption in captions)
+            if (!english.ContainsKey(caption)) absent.Add(caption);
+        foreach (var caption in declared)
             if (!english.ContainsKey(caption)) absent.Add(caption);
         if (absent.Count > 0)
             return $"{absent.Count} caption(s) the interface shows are missing from the English " +
@@ -2926,6 +3048,34 @@ public static class Program
         ("Loc.Get(", new[] { 0 }),
         ("Loc.Format(", new[] { 0 })
     };
+
+    /// <summary>
+    /// Every `name`, `short_name` and `description` a data file gives something, at any
+    /// depth, because the layouts differ - the budget nests its lines under `revenues` and
+    /// `expenses`, the cabinets sit at the top level - and what matters is the words.
+    /// </summary>
+    private static void CollectDeclaredNames(System.Text.Json.JsonElement element, SortedSet<string> into)
+    {
+        switch (element.ValueKind)
+        {
+            case System.Text.Json.JsonValueKind.Object:
+                foreach (var field in element.EnumerateObject())
+                {
+                    if (field.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                        field.Name is "name" or "short_name" or "description")
+                    {
+                        var text = field.Value.GetString();
+                        if (!string.IsNullOrWhiteSpace(text)) into.Add(text);
+                        continue;
+                    }
+                    CollectDeclaredNames(field.Value, into);
+                }
+                return;
+            case System.Text.Json.JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray()) CollectDeclaredNames(item, into);
+                return;
+        }
+    }
 
     /// <summary>Every literal this file hands to a translation lookup, however indirectly.</summary>
     private static IEnumerable<string> Captions(string source)
@@ -3370,6 +3520,12 @@ public static class Program
                             // A budget line's name is its own, so what is checked is the
                             // line: its basis, its factors, its effects and its limits.
                             "budget" => BudgetGroup(entry, file, templates, complaints),
+                            // Same for a cabinet and a trade stance: the id is the mod's to
+                            // choose, and what has to be sound is what it says it does.
+                            "government_focus" => PolicyEntry(entry, file, templates, complaints,
+                                GovernmentFocusCatalog.Validate),
+                            "trade_policies" => PolicyEntry(entry, file, templates, complaints,
+                                TradePolicyCatalog.Validate),
                             "opinion_modifiers" =>
                                 entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                 entry.Value.TryGetProperty("opinion", out _),
