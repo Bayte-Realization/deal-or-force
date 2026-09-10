@@ -1,0 +1,11 @@
+{
+  "id": "example_budget_and_taxes",
+  "name": "Example: budget and taxes",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 100,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

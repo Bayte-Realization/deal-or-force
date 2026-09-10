@@ -155,6 +155,7 @@ public sealed class ModLoader
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
         ProductionChains.ResetCatalog();
+        BudgetCore.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
@@ -172,6 +173,7 @@ public sealed class ModLoader
             ApplyGoods(package);
             ApplyBuildings(package);
             ApplyProduction(package);
+            ApplyBudget(package);
             ApplyDecisions(package);
             ApplyEvents(package);
             ApplyModifiers(package);
@@ -634,6 +636,26 @@ public sealed class ModLoader
         foreach (var path in JsonFiles(package, "common", "production"))
         {
             try { ProductionChains.Merge(File.ReadAllText(path), package.Errors); }
+            catch (Exception exception)
+            {
+                package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// What this mod says a government may raise and must spend.
+    ///
+    /// Merged line by line, like the production chains: a mod that thinks income tax should
+    /// yield less names `income_tax` and inherits the other sixteen lines, and a mod that
+    /// wants a tax the game never had gives it an id nothing else uses and gets a slider
+    /// for it without touching a line of code.
+    /// </summary>
+    private void ApplyBudget(ModPackage package)
+    {
+        foreach (var path in JsonFiles(package, "common", "budget"))
+        {
+            try { BudgetCore.Merge(File.ReadAllText(path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");

@@ -149,6 +149,8 @@ public static class Program
             TheEnglishTableIsAnIndex());
         failures += Check("a mod can add a good and a building the game never had",
             AModCanAddAGood(campaign));
+        failures += Check("the budget is data, and still the budget it always was",
+            TheBudgetIsData(campaign));
         failures += Check("every good is made by something and eaten by something",
             TheChainsHangTogether());
         failures += Check("every mod template names something the game actually has",
@@ -2712,6 +2714,140 @@ public static class Program
     /// keeps it one. Every caption the source hands to a lookup has to be in it - which is
     /// how the next screen somebody writes gets indexed rather than quietly not.
     /// </summary>
+    /// <summary>
+    /// The budget moved out of the weekly tick and into `common/budget`, and did not change
+    /// on the way.
+    ///
+    /// Two halves, and the first is the one that matters. Eight multiplications used to sit
+    /// in EconomyCore; they are now eight rows in a file, and the expressions they replaced
+    /// are written out here so that a row whose yield somebody fat-fingers is caught by the
+    /// bench rather than by a player noticing that the treasury drains. Reproducing an old
+    /// formula is the only proof that a refactor of a balanced economy was a refactor.
+    ///
+    /// The second half is the reason for the first: a mod can add a tax the game has never
+    /// had, get a rate, an amount and a slider for it, and take it away again.
+    /// </summary>
+    /// <summary>
+    /// One `revenues` or `expenses` group out of a template, judged line by line.
+    ///
+    /// Always answers true because it reports its own complaints in the loader's own words -
+    /// a factor nobody has, a basis that is not one of the four - which are more use than
+    /// "budget: revenues" appearing on a list of unknown keys.
+    /// </summary>
+    private static bool BudgetGroup(System.Text.Json.JsonProperty entry, string file,
+        string templates, List<string> complaints)
+    {
+        var name = entry.Name.ToLowerInvariant();
+        if (name is not ("revenues" or "revenue" or "expenses" or "expense"))
+        {
+            complaints.Add($"{Short(templates, file)}: `{entry.Name}` is neither revenues nor expenses");
+            return true;
+        }
+        if (entry.Value.ValueKind != System.Text.Json.JsonValueKind.Object) return true;
+
+        var problems = new List<string>();
+        foreach (var line in entry.Value.EnumerateObject())
+            if (line.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                BudgetCore.ValidateLine(line.Name, line.Value, problems);
+        foreach (var problem in problems) complaints.Add($"{Short(templates, file)}: {problem}");
+        return true;
+    }
+
+    private static string TheBudgetIsData(Campaign world)
+    {
+        var nation = world?.Nations?.FirstOrDefault(candidate => candidate.Gdp > 0f);
+        if (nation is null) return "no country with any output to price a budget against";
+
+        var output = nation.Gdp / 52f;
+        const float tolerance = 1e-3f;
+
+        string Compare(string id, float expected)
+        {
+            var line = BudgetCore.Find(id);
+            if (line is null) return $"the budget has no line called `{id}`";
+            var actual = BudgetCore.Amount(nation, line, output, atWar: false);
+            var slack = MathF.Max(tolerance, MathF.Abs(expected) * 1e-4f);
+            return MathF.Abs(actual - expected) <= slack
+                ? ""
+                : $"`{id}` is worth {actual:0.####} where the formula it replaced gives {expected:0.####}";
+        }
+
+        // The eight expressions as they were written before any of this was data.
+        var shipped = new[]
+        {
+            Compare("income_tax", output * nation.TaxRate * 0.24f * (0.72f + nation.Stability * 0.22f)),
+            Compare("tariffs", nation.WeeklyTariffIncome),
+            Compare("trade", nation.WeeklyTradeBalance),
+            Compare("administration", output * 0.030f),
+            Compare("armed_forces", output * nation.MilitarySpending * 0.22f),
+            Compare("welfare", output * nation.WelfareSpending * 0.18f),
+            Compare("education", output * nation.EducationSpending * 0.14f),
+            Compare("policing", output * (1f - nation.Stability) * 0.025f)
+        };
+        foreach (var problem in shipped)
+            if (problem.Length > 0) return problem;
+
+        // Every line adds up to the balance the country is actually paid.
+        var outcome = BudgetCore.Evaluate(nation, output, atWar: false);
+        float revenue = 0f, expenses = 0f;
+        foreach (var line in BudgetCore.All)
+        {
+            var amount = BudgetCore.Amount(nation, line, output, atWar: false);
+            if (line.Side == BudgetSide.Revenue) revenue += amount; else expenses += amount;
+        }
+        if (MathF.Abs(outcome.Balance - (revenue - expenses)) > MathF.Max(tolerance, MathF.Abs(revenue) * 1e-4f))
+            return $"the itemised lines come to {revenue - expenses:0.##} and the week's balance is {outcome.Balance:0.##}";
+
+        // And a tax the game has never had.
+        var before = BudgetCore.All.Count;
+        var errors = new List<string>();
+        BudgetCore.Merge("""
+        {
+          "revenues": {
+            "bench_wealth_tax": {
+              "name": "Wealth tax",
+              "yield": 0.40,
+              "scale": { "constant": 1.0 },
+              "rate": { "default": 0.10, "min": 0.0, "max": 0.50, "neutral": 0.0, "player": true },
+              "effects": { "growth": -0.09 }
+            }
+          }
+        }
+        """, errors);
+        if (errors.Count > 0) return $"a sound mod line was rejected: {errors[0]}";
+
+        var added = BudgetCore.Find("bench_wealth_tax");
+        if (added is null) return "a mod added a budget line and the catalogue did not keep it";
+        if (BudgetCore.All.Count != before + 1)
+            return $"adding one line took the catalogue from {before} to {BudgetCore.All.Count}";
+        if (!BudgetCore.PlayerLines.Any(line => line.Id == "bench_wealth_tax"))
+            return "the mod's line is not offered to the government that would set it";
+
+        var modded = BudgetCore.Amount(nation, added, output, atWar: false);
+        var expectedModded = output * 0.10f * 0.40f;
+        if (MathF.Abs(modded - expectedModded) > MathF.Max(tolerance, expectedModded * 1e-4f))
+            return $"the mod's tax is worth {modded:0.##} where its own numbers say {expectedModded:0.##}";
+
+        BudgetCore.SetRate(nation, added, 0.25f);
+        if (MathF.Abs(BudgetCore.RateOf(nation, added) - 0.25f) > 1e-5f)
+            return "a rate set on a mod's line did not stick";
+        nation.PolicyRates.Remove("bench_wealth_tax");
+
+        // Put the catalogue back, so nothing downstream inherits a tax from the bench.
+        BudgetCore.ResetCatalog();
+        if (BudgetCore.Find("bench_wealth_tax") is not null)
+            return "resetting the catalogue left the bench's tax behind";
+        if (BudgetCore.All.Count != before)
+            return $"the catalogue came back with {BudgetCore.All.Count} line(s) instead of {before}";
+
+        var player = BudgetCore.PlayerLines.Count();
+        Console.WriteLine($"  budget: {before} line(s) - {BudgetCore.All.Count(line => line.Side == BudgetSide.Revenue)} " +
+                          $"raising, {BudgetCore.All.Count(line => line.Side == BudgetSide.Expense)} spending, " +
+                          $"{player} of them a government's to set. The eight the game shipped with " +
+                          "reproduce their old formulas exactly.");
+        return "";
+    }
+
     private static string TheEnglishTableIsAnIndex()
     {
         var scripts = FindScripts();
@@ -3127,6 +3263,9 @@ public static class Program
                             // A recipe's name is its own, so what is checked is the recipe:
                             // the good it claims to make and every factor it asks for.
                             "production" => Recipe(entry, file, templates, complaints),
+                            // A budget line's name is its own, so what is checked is the
+                            // line: its basis, its factors, its effects and its limits.
+                            "budget" => BudgetGroup(entry, file, templates, complaints),
                             "opinion_modifiers" =>
                                 entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                 entry.Value.TryGetProperty("opinion", out _),
@@ -3601,8 +3740,14 @@ public static class Program
     /// </summary>
     private static string ContentPacksAreLockedUntilOwned()
     {
-        var root = Path.Combine(Directory.GetCurrentDirectory(), "dlc");
-        if (!Directory.Exists(root)) return "there is no dlc/ folder; the content pack framework is gone";
+        // Through the same lookup the game uses, rather than off the working directory.
+        // Hanging it on the working directory meant this passed from the project root and
+        // reported the content pack framework missing from anywhere else - a check that
+        // says where it was run from rather than whether the packs are sound. It also means
+        // it now exercises the resolution an exported build depends on.
+        var root = GameDataLoader.InstallFolders("dlc").FirstOrDefault();
+        if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
+            return "there is no dlc/ folder; the content pack framework is gone";
 
         var packs = Directory.GetDirectories(root)
             .Where(directory => File.Exists(Path.Combine(directory, "dlc.json")))

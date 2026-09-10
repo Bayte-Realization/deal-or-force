@@ -47,6 +47,21 @@ public partial class DealOrForceGame
     private readonly Dictionary<TradePolicy, Button> _stateTradeButtons = new();
     private readonly Dictionary<GovernmentFocus, Button> _stateFocusButtons = new();
 
+    /// <summary>
+    /// A slider for every budget line the data declares and this screen has not already
+    /// built by hand.
+    ///
+    /// Four lines - taxation, the armed forces, welfare, education - keep their own
+    /// controls above, laid out the way a player already knows them. Everything else,
+    /// including every line a mod adds, gets a slider here without a line of code being
+    /// written for it, which is the whole point of the budget being a file.
+    /// </summary>
+    private readonly Dictionary<string, HSlider> _policySliders = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Label> _policyReadings = new(StringComparer.OrdinalIgnoreCase);
+    private VBoxContainer _policyRevenueControls = null!;
+    private VBoxContainer _policyExpenseControls = null!;
+    private Label _policyFeedback = null!;
+
     private void BuildStateAffairsInterface()
     {
         _stateAffairsLayer = FullLayer("StateAffairs");
@@ -153,6 +168,8 @@ public partial class DealOrForceGame
         _stateMilitarySpending.SetValueNoSignal(nation.MilitarySpending);
         _stateWelfareSpending.SetValueNoSignal(nation.WelfareSpending);
         _stateEducationSpending.SetValueNoSignal(nation.EducationSpending);
+        _updatingStateAffairs = true;
+        RefreshPolicyRates(nation);
         _updatingStateAffairs = false;
 
         RefreshStateBudget(nation);
@@ -308,6 +325,108 @@ public partial class DealOrForceGame
             0.18f, out _stateWelfareSpending, OnStateWelfareChanged);
         AddSocialSpendingSlider("EDUCATION", "Education spending raises national literacy and the long-run productivity target every economic week.",
             0.15f, out _stateEducationSpending, OnStateEducationChanged);
+
+        BuildPolicyRates(rows);
+    }
+
+    /// <summary>
+    /// Everything else a government raises and spends, straight out of `common/budget`.
+    ///
+    /// Nothing here names a tax. The screen asks the catalogue what lines exist, skips the
+    /// four that already have controls of their own further up, and builds a slider for
+    /// each of the rest - which means a mod that adds a wealth tax gets a wealth tax slider,
+    /// with its own name, its own limits and its own explanation, without touching this
+    /// file. That is the difference between a game with a budget in it and a game whose
+    /// budget is data.
+    /// </summary>
+    private void BuildPolicyRates(VBoxContainer rows)
+    {
+        StateSection(rows, "REVENUE",
+            "What the state levies besides income tax. Every one of them raises money and costs " +
+            "something else - investment, living standards, or the patience of the people paying.");
+        _policyRevenueControls = new VBoxContainer { Visible = false };
+        _policyRevenueControls.AddThemeConstantOverride("separation", 3);
+        rows.AddChild(_policyRevenueControls);
+
+        StateSection(rows, "SPENDING",
+            "What the state buys besides soldiers, schools and transfers. Health and pensions are " +
+            "felt this year; roads and laboratories are felt in ten.");
+        _policyExpenseControls = new VBoxContainer { Visible = false };
+        _policyExpenseControls.AddThemeConstantOverride("separation", 3);
+        rows.AddChild(_policyExpenseControls);
+
+        _policyFeedback = RowLabel("", 11, Ui.Colour("text.accent_dim"));
+        rows.AddChild(_policyFeedback);
+
+        foreach (var line in Simulation.BudgetCore.PlayerLines)
+        {
+            // The four with hand-built controls above. Building a second slider for them
+            // would give a player two of everything and no clue which one wins.
+            if (line.Store != Simulation.BudgetStore.Policy) continue;
+            AddPolicySlider(line);
+        }
+    }
+
+    private void AddPolicySlider(Simulation.BudgetLine line)
+    {
+        var parent = line.Side == Simulation.BudgetSide.Revenue
+            ? _policyRevenueControls
+            : _policyExpenseControls;
+
+        var slider = new HSlider
+        {
+            MinValue = line.Minimum,
+            MaxValue = line.Maximum,
+            Step = 0.005,
+            CustomMinimumSize = new Vector2(210, 26),
+            TooltipText = Tr(line.Description)
+        };
+        var id = line.Id;
+        slider.ValueChanged += value => OnPolicyRateChanged(id, value);
+        parent.AddChild(SliderRow(Tr(line.Name).ToUpperInvariant(), slider, out var reading));
+        _policySliders[id] = slider;
+        _policyReadings[id] = reading;
+    }
+
+    private void OnPolicyRateChanged(string lineId, double value)
+    {
+        if (_updatingStateAffairs || _campaign?.Player is null) return;
+        _campaign.Commands.Enqueue(new Simulation.SetPolicyRateCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            LineId = lineId,
+            Value = (float)value
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        var line = Simulation.BudgetCore.Find(lineId);
+        _policyFeedback.Text = Simulation.Loc.Format("{0} set to {1}. The budget updates on the next economic week.",
+            Tr(line?.Name ?? lineId), value.ToString("P1", System.Globalization.CultureInfo.CurrentCulture));
+        RefreshStateAffairs();
+    }
+
+    /// <summary>
+    /// Put the sliders where the country actually has them, and say what each is worth this
+    /// week beside it - a rate with no money against it is a number a player cannot price.
+    /// </summary>
+    private void RefreshPolicyRates(Nation nation)
+    {
+        if (_policyRevenueControls is null) return;
+        _policyRevenueControls.Visible = true;
+        _policyExpenseControls.Visible = true;
+
+        var atWar = _campaign is not null &&
+                    _campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+        var weeklyOutput = nation.Gdp / 52f;
+
+        foreach (var line in Simulation.BudgetCore.PlayerLines)
+        {
+            if (!_policySliders.TryGetValue(line.Id, out var slider)) continue;
+            var rate = Simulation.BudgetCore.RateOf(nation, line);
+            slider.SetValueNoSignal(rate);
+            if (!_policyReadings.TryGetValue(line.Id, out var reading)) continue;
+            var amount = Simulation.BudgetCore.Amount(nation, line, weeklyOutput, atWar);
+            reading.Text = $"{rate:P1} · {Fmt.Money(amount)}";
+        }
     }
     private void AddTradePolicyButton(string caption, TradePolicy policy, string tooltip)
     {

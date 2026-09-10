@@ -82,6 +82,32 @@ public sealed partial class Campaign
         nation.GovernmentFocus = focus;
         Changed?.Invoke();
     }
+
+    /// <summary>
+    /// Set any budget line by the id the data gave it.
+    ///
+    /// One command for every line there will ever be, the ones a mod invents included,
+    /// rather than a command per lever. The four levers that already have their own command
+    /// keep it, because three sliders and a good deal of the AI name them; this routes to
+    /// the same fields through <see cref="BudgetCore.SetRate"/>, so both roads end in one
+    /// place and a rate can only be set one way.
+    /// </summary>
+    public void SetPolicyRate(int nationId, string lineId, float value)
+    {
+        var nation = NationById(nationId);
+        var line = BudgetCore.Find(lineId);
+        if (nation is null || line is null || !line.PlayerSet) return;
+        BudgetCore.SetRate(nation, line, value);
+        Changed?.Invoke();
+    }
+}
+
+public sealed class SetPolicyRateCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public string LineId { get; init; } = "";
+    public float Value { get; init; }
+    public void Apply(Campaign campaign) => campaign.SetPolicyRate(IssuerId, LineId, Value);
 }
 
 public sealed class SetWelfareSpendingCommand : ICampaignCommand

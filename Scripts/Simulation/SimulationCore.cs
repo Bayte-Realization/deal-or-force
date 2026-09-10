@@ -194,6 +194,19 @@ public sealed partial class Nation
     public float WeeklyTradeBalance;
     public float WeeklyTariffIncome;
     public TradePolicy TradePolicy = TradePolicy.BalancedTrade;
+
+    /// <summary>
+    /// What this government has set every budget line to, except the four that have fields
+    /// of their own above.
+    ///
+    /// Those four - taxation, the armed forces, welfare, education - are named directly by
+    /// three sliders, the AI cabinet, four campaign commands, every scripted effect and
+    /// every save ever written, and moving them in here would be a rename with no gain. A
+    /// line the data adds has none of that history, so it lives here and costs a country
+    /// one dictionary entry. See <see cref="BudgetCore.RateOf"/>.
+    /// </summary>
+    public readonly Dictionary<string, float> PolicyRates = new(StringComparer.OrdinalIgnoreCase);
+
     public bool IsPlayer;
     public bool IsHuman;
 }

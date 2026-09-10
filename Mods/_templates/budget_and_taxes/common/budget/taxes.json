@@ -1,0 +1,69 @@
+// Two things this file shows: retuning a line the game ships with, and inventing one it
+// has never had. Both are the same gesture - name it and describe it - and neither needs a
+// line of code.
+//
+// The full vocabulary is documented at the top of `game/common/budget/00_budget.json`.
+// Read that file; it is the reference, and it is written to be read.
+
+{
+  "revenues": {
+
+    // Naming a line the base game already has replaces that line and leaves the other
+    // sixteen alone. Here income tax raises half again as much and is resented sooner,
+    // which is a different country to govern without being a different game.
+    "income_tax": {
+      "name": "Income tax",
+      "description": "A direct levy on incomes, collected by a state that is good at collecting.",
+      "order": 10,
+      "basis": "output",
+      "yield": 0.36,
+      "scale": { "constant": 0.60, "stability": 0.34 },
+      "rate": { "default": 0.20, "min": 0.0, "max": 0.60, "neutral": 0.22, "player": true },
+      "effects": { "growth": -0.045 },
+      "resented_above": { "threshold": 0.26, "living": -0.0011, "radicalism": 0.0007 }
+    },
+
+    // And a tax the game has never had. An id nothing else uses is all it takes: the
+    // government gets a slider for it, named and explained out of this file, and the
+    // weekly budget starts collecting it.
+    "wealth_tax": {
+      "name": "Wealth tax",
+      "description": "An annual charge on holdings rather than income. It is worth most where there is most to hold, and capital is very good at leaving.",
+      "order": 90,
+      "basis": "output",
+      "yield": 0.28,
+      "scale": { "constant": 0.20, "urbanisation": 0.50, "standard_of_living": 0.40 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.20, "neutral": 0.0, "player": true },
+      "effects": { "growth": -0.11, "radicalism": -0.0008 }
+    }
+  },
+
+  "expenses": {
+
+    // A line whose rate a government does not set - it simply happens to it. `"player":
+    // false` means no slider, a fixed rate of 1, and an amount that comes entirely from
+    // what the country is like. This one costs a fortune in a country nobody can read and
+    // almost nothing in one everybody can.
+    "civil_service_reform": {
+      "name": "Civil service reform",
+      "description": "The standing cost of running a state whose clerks cannot read the forms.",
+      "order": 95,
+      "basis": "output",
+      "yield": 0.045,
+      "scale": { "constant": 1.0, "literacy": -0.85 },
+      "rate": { "default": 1.0, "player": false }
+    },
+
+    // Wartime spending. `at_war` is 1 while the country is fighting and 0 otherwise, so
+    // this line is free in peace and expensive the week war is declared.
+    "war_bonds_service": {
+      "name": "War finance",
+      "description": "What borrowing for a war costs while the war is on.",
+      "order": 96,
+      "basis": "output",
+      "yield": 0.030,
+      "scale": { "constant": 0.0, "at_war": 1.0 },
+      "rate": { "default": 1.0, "player": false }
+    }
+  }
+}

@@ -1,0 +1,236 @@
+// The national budget: everything a government raises and everything it spends.
+//
+// Every line is the same arithmetic, so there is only one thing to learn:
+//
+//     amount = basis · rate · yield · (constant + Σ weight · factor)
+//
+// `basis`   what the line is charged against.
+//             output         one week of the country's output. Almost everything.
+//             debt           what the treasury owes, when it owes anything.
+//             tariffs        the customs the market already collected.
+//             trade_balance  the week's trade balance, which may be a loss.
+// `rate`    the policy. A slider for a line with "player": true, and a fixed 1 otherwise.
+// `yield`   what one whole point of rate is worth, as a share of the basis.
+// `scale`   what the country is like. `constant` plus any of:
+//             stability · literacy · standard_of_living · urbanisation ·
+//             employment · at_war · shortage
+//
+// `rate.neutral` is where the line stops pushing the country about; every effect below is
+// measured from there, so a line sitting at its neutral rate only moves money.
+//
+// `effects` are per whole point of (rate − neutral):
+//     growth      added to the annual growth the economy is converging on
+//     living      added to the standard of living, weekly
+//     literacy    added to literacy, weekly
+//     radicalism  added to regional radicalism, weekly
+//     stability   added to stability, weekly
+//
+// `resented_above` is for a rate people tolerate up to a point and then do not: nothing
+// below the threshold, and `living` / `radicalism` per point above it.
+//
+// To retune one line, a mod names that line and inherits every other. To add a tax the game
+// never had, give it an id nothing else uses. Nothing here is compiled in.
+//
+// The eight lines the game shipped with are marked "shipped"; they reproduce the budget
+// exactly as it was before any of this was data, and the bench proves it. The new lines all
+// start at a rate of zero: a government that wants them turns them on, and a campaign that
+// ignores them balances exactly as it always did.
+
+{
+  "revenues": {
+
+    "income_tax": {
+      "//": "shipped. A settled country pays its taxes; an unsettled one evades them.",
+      "name": "Income tax",
+      "description": "A direct levy on incomes. It is the most reliable money a government has and the most resented, and above a third of income it starts costing more than it raises.",
+      "order": 10,
+      "basis": "output",
+      "yield": 0.24,
+      "scale": { "constant": 0.72, "stability": 0.22 },
+      "rate": { "default": 0.20, "min": 0.0, "max": 0.60, "neutral": 0.22, "player": true },
+      "effects": { "growth": -0.030 },
+      "resented_above": { "threshold": 0.32, "living": -0.0006 }
+    },
+
+    "tariffs": {
+      "//": "shipped. Collected by the market, named here so the budget can show it.",
+      "name": "Tariffs",
+      "description": "Customs duty on what crosses the border, set by trade policy rather than here.",
+      "order": 20,
+      "basis": "tariffs",
+      "yield": 1.0,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 1.0, "player": false }
+    },
+
+    "trade": {
+      "//": "shipped. May be a loss, and is the one line allowed to be.",
+      "name": "Trade",
+      "description": "What the week's trade was worth, or cost.",
+      "order": 30,
+      "basis": "trade_balance",
+      "yield": 1.0,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 1.0, "player": false }
+    },
+
+    "corporate_tax": {
+      "name": "Corporate tax",
+      "description": "A share of what firms earn. Cities and full employment are where the profits are, and capital is the first thing to leave when the rate climbs.",
+      "order": 40,
+      "basis": "output",
+      "yield": 0.30,
+      "scale": { "constant": 0.35, "urbanisation": 0.45, "employment": 0.30 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.45, "neutral": 0.0, "player": true },
+      "effects": { "growth": -0.055 }
+    },
+
+    "value_added_tax": {
+      "name": "Value added tax",
+      "description": "A levy on consumption. It reaches everybody, which is what makes it lucrative and what makes it felt in every household.",
+      "order": 50,
+      "basis": "output",
+      "yield": 0.34,
+      "scale": { "constant": 0.55, "standard_of_living": 0.55 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.35, "neutral": 0.0, "player": true },
+      "effects": { "living": -0.0012, "radicalism": 0.0009 }
+    },
+
+    "payroll_levy": {
+      "name": "Payroll levy",
+      "description": "Contributions taken from wages. It follows employment closely, and it is a tax on hiring, which is the one thing a country short of work cannot afford to discourage.",
+      "order": 60,
+      "basis": "output",
+      "yield": 0.26,
+      "scale": { "constant": 0.30, "employment": 0.70 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.35, "neutral": 0.0, "player": true },
+      "effects": { "growth": -0.035 }
+    },
+
+    "resource_royalties": {
+      "name": "Resource royalties",
+      "description": "A charge on what comes out of the ground. It is worth most where the country is least urban, and it is the least resented tax there is, because the payer is a company and not a household.",
+      "order": 70,
+      "basis": "output",
+      "yield": 0.20,
+      "scale": { "constant": 0.55, "urbanisation": -0.45 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.60, "neutral": 0.0, "player": true },
+      "effects": { "growth": -0.012 }
+    },
+
+    "state_enterprise": {
+      "name": "State enterprise",
+      "description": "What the state's own share of industry hands back. It pays best in a working, urban economy, and every point of it is a point the private economy is not compounding.",
+      "order": 80,
+      "basis": "output",
+      "yield": 0.16,
+      "scale": { "constant": 0.30, "employment": 0.40, "urbanisation": 0.30 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.50, "neutral": 0.0, "player": true },
+      "effects": { "growth": -0.020 }
+    }
+  },
+
+  "expenses": {
+
+    "administration": {
+      "//": "shipped. The cost of being a state at all.",
+      "name": "Administration",
+      "description": "Ministries, courts, records, collection. Not optional and not adjustable.",
+      "order": 10,
+      "basis": "output",
+      "yield": 0.030,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 1.0, "player": false }
+    },
+
+    "armed_forces": {
+      "//": "shipped.",
+      "name": "Armed forces",
+      "description": "Pay, fuel, ammunition and replacement. What the army is able to do rests on this.",
+      "order": 20,
+      "basis": "output",
+      "yield": 0.22,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 1.0, "neutral": 0.0, "player": true }
+    },
+
+    "welfare": {
+      "//": "shipped.",
+      "name": "Welfare",
+      "description": "Transfers to households. They raise living standards and take the heat out of radical politics.",
+      "order": 30,
+      "basis": "output",
+      "yield": 0.18,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 0.055, "min": 0.0, "max": 0.18, "neutral": 0.055, "player": true },
+      "effects": { "living": 0.002, "radicalism": -0.0015 }
+    },
+
+    "education": {
+      "//": "shipped.",
+      "name": "Education",
+      "description": "Schools and universities. Literacy is slow to move and everything downstream of it is worth more than the spending.",
+      "order": 40,
+      "basis": "output",
+      "yield": 0.14,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 0.045, "min": 0.0, "max": 0.15, "neutral": 0.0, "player": true },
+      "effects": { "literacy": 0.0012 }
+    },
+
+    "policing": {
+      "//": "shipped. Costs exactly what stability fails to provide.",
+      "name": "Policing unrest",
+      "description": "What holding an unsettled country together costs. A settled country barely pays it.",
+      "order": 50,
+      "basis": "output",
+      "yield": 0.025,
+      "scale": { "constant": 1.0, "stability": -1.0 },
+      "rate": { "default": 1.0, "player": false }
+    },
+
+    "health_care": {
+      "name": "Health care",
+      "description": "Hospitals, clinics and the people in them. The most direct thing a budget can do to how a country actually lives.",
+      "order": 60,
+      "basis": "output",
+      "yield": 0.20,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.20, "neutral": 0.0, "player": true },
+      "effects": { "living": 0.0022, "radicalism": -0.0010, "stability": 0.0004 }
+    },
+
+    "infrastructure": {
+      "name": "Infrastructure",
+      "description": "Roads, rail, ports and power. It pays back as growth rather than as anything a citizen can point at, which is why it is the first thing cut.",
+      "order": 70,
+      "basis": "output",
+      "yield": 0.16,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.15, "neutral": 0.0, "player": true },
+      "effects": { "growth": 0.055 }
+    },
+
+    "research": {
+      "name": "Research",
+      "description": "Laboratories and the institutes around them. The slowest money in the budget and the only kind that compounds.",
+      "order": 80,
+      "basis": "output",
+      "yield": 0.12,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.12, "neutral": 0.0, "player": true },
+      "effects": { "growth": 0.030, "literacy": 0.0004 }
+    },
+
+    "debt_interest": {
+      "//": "Charged on what the treasury owes, and on nothing else. A solvent country never sees this line move.",
+      "name": "Debt interest",
+      "description": "What borrowing costs. It is charged on the outstanding debt each week, so a deficit that is never closed becomes an expense that grows on its own.",
+      "order": 90,
+      "basis": "debt",
+      "yield": 0.0011,
+      "scale": { "constant": 1.0 },
+      "rate": { "default": 1.0, "player": false }
+    }
+  }
+}

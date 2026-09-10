@@ -769,6 +769,24 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private void ApplyMapSmoothing() =>
         _globeMaterial?.SetShaderParameter("map_smoothing", _mapSmoothing ? 1f : 0f);
+
+    private bool _dragGrabsTheGlobe = Simulation.PlayerSettings.Bool("globe_drag_grabs_the_globe", true);
+
+    /// <summary>
+    /// Whether a right-drag on the globe moves the ground with the hand, or swings the
+    /// camera around it. Only the globe: the flat map has always done the first and there
+    /// was never anything to choose.
+    /// </summary>
+    public bool DragGrabsTheGlobe
+    {
+        get => _dragGrabsTheGlobe;
+        set
+        {
+            if (_dragGrabsTheGlobe == value) return;
+            _dragGrabsTheGlobe = value;
+            Simulation.PlayerSettings.Set("globe_drag_grabs_the_globe", value);
+        }
+    }
     private bool _fogOfWarActive;
     private int _fogViewer = -1;
     public bool FogOfWarActive
@@ -1315,8 +1333,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             return;
         }
         var scale = Mathf.Lerp(0.22f, 0.65f, (_targetDistance - MinimumDistance) / (MaximumDistance - MinimumDistance));
-        _targetYaw -= delta.X * 0.006f * scale;
-        _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale, -1.20f, 1.20f);
+        // Which way a drag turns the world. The flat map has only ever done one of these:
+        // the ground follows the hand, because that is what taking hold of a map means. The
+        // globe did the opposite, which reads as swinging the camera around a globe that is
+        // standing still - defensible, and still available, but not what the map beside it
+        // does and not what a hand expects. The difference is one sign, so it is a setting
+        // rather than an argument; what changed is which one a player gets without asking.
+        var grab = DragGrabsTheGlobe ? -1f : 1f;
+        _targetYaw -= delta.X * 0.006f * scale * grab;
+        _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale * grab, -1.20f, 1.20f);
     }
 
     public override string _GetTooltip(Vector2 atPosition)

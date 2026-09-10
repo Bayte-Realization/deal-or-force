@@ -425,12 +425,12 @@ public static class EconomySystem
     /// copies of a formula are two formulas: the second one is right until somebody edits
     /// the first, and then the panel quietly lies about the country's finances.
     /// </summary>
-    public static float WeeklyTaxAt(Nation nation, float rate) =>
-        nation.Gdp / 52f * rate * 0.24f * (0.72f + nation.Stability * 0.22f);
+    public static float WeeklyTaxAt(Nation nation, float rate, bool atWar = false) =>
+        BudgetCore.AmountAtRate(nation, BudgetCore.Find("income_tax"), nation.Gdp / 52f, atWar, rate);
 
     /// <summary>What a share of output spent on the armed forces costs in a week.</summary>
-    public static float WeeklyMilitaryAt(Nation nation, float share) =>
-        nation.Gdp / 52f * share * 0.22f;
+    public static float WeeklyMilitaryAt(Nation nation, float share, bool atWar = false) =>
+        BudgetCore.AmountAtRate(nation, BudgetCore.Find("armed_forces"), nation.Gdp / 52f, atWar, share);
 
     public static void Tick(Campaign campaign)
     {
@@ -443,36 +443,24 @@ public static class EconomySystem
             // GDP is total economic activity, not the taxable budget base. Only a
             // calibrated share reaches the treasury; this keeps modern states near a
             // plausible balanced budget instead of banking 10-15% of GDP every year.
-            nation.WeeklyTaxIncome = WeeklyTaxAt(nation, nation.TaxRate);
+            //
+            // What that share is, and what it is spent on, is now `common/budget` rather
+            // than eight multiplications written out here. The eight lines this replaced
+            // are the first eight rows of that file and produce the same figures; what it
+            // buys is that a ninth is a row rather than an edit to the weekly tick.
+            var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar);
+            nation.WeeklyTaxIncome = budget.Taxation;
+            nation.WeeklyExpenses = budget.Expenses;
+            nation.WeeklyBalance = budget.Balance;
 
-            // The budget is worked out in named pieces so the interface can show the
-            // player what it is made of. The arithmetic is the same arithmetic; it is only
-            // that the parts are kept instead of collapsed into one expression.
-            var administration = weeklyOutput * 0.030f;
-            var military = WeeklyMilitaryAt(nation, nation.MilitarySpending);
-            var welfare = weeklyOutput * nation.WelfareSpending * 0.18f;
-            var education = weeklyOutput * nation.EducationSpending * 0.14f;
-            var unrest = weeklyOutput * (1f - nation.Stability) * 0.025f;
-            nation.WeeklyExpenses = administration + military + welfare + education + unrest;
-            nation.WeeklyBalance = nation.WeeklyTaxIncome + nation.WeeklyTariffIncome -
-                                   nation.WeeklyExpenses + nation.WeeklyTradeBalance;
-
-            // Itemised for whoever is going to read it, which is a human. The four labels
-            // that carry a rate have to be composed fresh every week, and composing them
-            // for the two hundred and sixty cabinets nobody is looking at was fifty
-            // thousand sentences a simulated year written for an empty room.
+            // Itemised for whoever is going to read it, which is a human. The labels that
+            // carry a rate have to be composed fresh every week, and composing them for the
+            // two hundred and sixty cabinets nobody is looking at was fifty thousand
+            // sentences a simulated year written for an empty room.
             if (nation.IsHuman)
             {
-                nation.Budget.Begin("Weekly balance", "money");
-                nation.Budget.Add($"Taxation at {nation.TaxRate:P0}", nation.WeeklyTaxIncome);
-                nation.Budget.Add("Tariffs", nation.WeeklyTariffIncome);
-                nation.Budget.Add("Trade", nation.WeeklyTradeBalance);
-                nation.Budget.Add("Administration", -administration);
-                nation.Budget.Add($"Armed forces at {nation.MilitarySpending:P0}", -military);
-                nation.Budget.Add($"Welfare at {nation.WelfareSpending:P0}", -welfare);
-                nation.Budget.Add($"Education at {nation.EducationSpending:P0}", -education);
-                nation.Budget.Add("Policing unrest", -unrest);
-                nation.Budget.Settle(nation.WeeklyBalance, "rounding");
+                BudgetCore.Itemise(nation, weeklyOutput, atWar);
+                nation.Budget.Settle(nation.WeeklyBalance, Loc.Get("rounding"));
             }
 
             nation.Treasury += nation.WeeklyBalance;
@@ -488,9 +476,12 @@ public static class EconomySystem
             // value of that - rather than GDP being a free-running number with the
             // economy simulated alongside it.
             //
-            // Fiscal policy is still a real trade-off: rates below the neutral 22% leave
-            // more private investment, high rates fund the state now and cost output later.
-            var taxEffect = (0.22f - nation.TaxRate) * 0.030f;
+            // Fiscal policy is still a real trade-off, and now every line of it is: a tax
+            // above its neutral rate funds the state now and costs output later, and the
+            // three lines that buy growth - infrastructure, research, and the schools -
+            // pay it back over years rather than weeks. Each line says which by how much
+            // in `common/budget`; none of it is a constant here any more.
+            var taxEffect = budget.Growth;
             var conditions = 0.006f + (nation.Stability - 0.5f) * 0.018f - (atWar ? 0.018f : 0f) -
                              nation.ShortageIndex * campaign.Defines.ShortageAnnualGrowthPenalty + taxEffect +
                              GovernmentFocusRules.AnnualGrowth(nation.GovernmentFocus) -
@@ -519,7 +510,7 @@ public static class EconomySystem
                 state.Population = Math.Max(0, state.Population + delta);
                 GrowGroups(state, delta);
                 state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
-                var welfareRadicalism = (0.055f - nation.WelfareSpending) * 0.0015f;
+                var welfareRadicalism = budget.Radicalism;
                 var focusRadicalism = nation.GovernmentFocus switch
                 {
                     GovernmentFocus.SocialCohesion => -0.00015f,
@@ -539,18 +530,18 @@ public static class EconomySystem
                 _ => 0f
             };
             nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + annualGrowth * 0.004f -
-                nation.ShortageIndex * campaign.Defines.ShortageSolWeeklyPenalty -
-                MathF.Max(0f, nation.TaxRate - 0.32f) * 0.0006f +
-                (nation.WelfareSpending - 0.055f) * 0.002f + focusSol);
+                nation.ShortageIndex * campaign.Defines.ShortageSolWeeklyPenalty +
+                budget.Living + focusSol);
             var focusLiteracy = nation.GovernmentFocus == GovernmentFocus.EducationAndScience ? 0.00008f : 0f;
-            nation.Literacy = M.Clamp(nation.Literacy + nation.EducationSpending * 0.0012f + focusLiteracy,
+            nation.Literacy = M.Clamp(nation.Literacy + budget.Literacy + focusLiteracy,
                 0.05f, 0.999f);
             var productivityTarget = 0.72f + nation.Literacy * 0.50f +
                                      (nation.GovernmentFocus == GovernmentFocus.EducationAndScience ? 0.04f : 0f);
             nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
             var securityStability = nation.GovernmentFocus == GovernmentFocus.NationalSecurity ? 0.00012f : 0f;
             var livingStandard = (nation.StandardOfLiving - 0.45f) * 0.001f;
-            var settledStability = M.Clamp(nation.Stability + livingStandard + securityStability, 0.10f, 0.98f);
+            var settledStability = M.Clamp(
+                nation.Stability + livingStandard + securityStability + budget.Stability, 0.10f, 0.98f);
 
             // What is pushing stability this week, rather than only where it ended up. A
             // player who watches it fall for a year should be able to find out why in one
