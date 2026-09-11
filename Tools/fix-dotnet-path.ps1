@@ -83,12 +83,36 @@ Set-Content -Path $backup -Value $path -Encoding UTF8
 Write-Step "The old PATH is saved at $backup"
 
 $reordered = @($real) + @($entries | Where-Object { -not (Same $_ $real) })
-Set-ItemProperty -Path $key -Name Path -Value ($reordered -join ';')
+# ExpandString on purpose: the system PATH is REG_EXPAND_SZ, and a PATH written as a plain
+# string loses the ability to hold a `%SystemRoot%`-style entry - which this machine does not
+# have today and might tomorrow.
+Set-ItemProperty -Path $key -Name Path -Value ($reordered -join ';') -Type ExpandString
+
+# ------------------------------------------------------------------ tell Windows about it
+# Writing the registry changes nothing for anything already running, and that is not a
+# footnote: Explorer reads the environment when it starts, hands a copy to every program
+# launched from it, and on a machine nobody has restarted this month that copy can be weeks
+# old. Closing Godot and opening it again from Explorer therefore gets the *old* PATH, which
+# looks exactly like the fix not working, and is how the first version of this script wasted
+# an evening. WM_SETTINGCHANGE is the message that asks Explorer to read it again.
+Add-Type -Namespace Win32 -Name Env -MemberDefinition @'
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam,
+    string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+'@
+$answer = [UIntPtr]::Zero
+[void][Win32.Env]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$answer)
 
 Write-Host ""
-Write-Host "Done. $real is now the first dotnet on the system PATH." -ForegroundColor Green
+Write-Host "Done. $real is now the first dotnet on the system PATH," -ForegroundColor Green
+Write-Host "and Windows has been told to let running programs know." -ForegroundColor Green
 Write-Host ""
 Write-Host "Close Godot completely and open it again - a running program keeps the" -ForegroundColor Cyan
-Write-Host "environment it started with, so the editor has to be restarted to see this." -ForegroundColor Cyan
-Write-Host "Explorer and any open terminals need restarting for the same reason." -ForegroundColor Cyan
+Write-Host "environment it started with." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "If it still cannot build after that, Explorer did not take the hint. Then" -ForegroundColor Yellow
+Write-Host "either restart Explorer:" -ForegroundColor Yellow
+Write-Host "    Stop-Process -Name explorer -Force" -ForegroundColor Yellow
+Write-Host "(the taskbar comes back on its own), or reboot - or simply open the editor" -ForegroundColor Yellow
+Write-Host "through Tools\godot.cmd, which never depended on any of this." -ForegroundColor Yellow
 Read-Host "Press Enter to close"
