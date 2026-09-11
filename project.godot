@@ -13,8 +13,23 @@ config_version=5
 config/name="Deal or Force"
 run/main_scene="res://Scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
-config/icon="res://icon.png"
-config/windows_native_icon="res://icon.ico"
+; The window icon, which is what a taskbar shows.
+; Godot scales this down itself, and it does it crudely: the underline in the logo is a
+; hairline at 512 and simply disappears by 32, which is why the built game sat in the
+; taskbar next to the launcher with the line missing. icon_small.png is the 64-pixel
+; frame out of icon.ico - the same artwork, drawn for small sizes with a line thick
+; enough to survive - so there is nothing left to lose on the way down.
+; icon.png is still the 512 original and is what to edit if the logo itself changes.
+config/icon="res://icon_small.png"
+; Deliberately empty, and this is the line that was actually causing the trouble.
+; Godot takes the largest frame out of a .ico and rescales that itself, so pointing it
+; at icon.ico handed the window the 128-pixel frame - the one drawn with a hairline -
+; crushed to 32. The hand-drawn 32 and 48 frames inside that file, the ones with a line
+; thick enough to read, were never looked at. With this empty the window uses
+; config/icon above, which is already the small-size artwork. Measured both ways.
+; icon.ico is still the executable's own icon - see application/icon in
+; export_presets.cfg - where Windows picks the right frame per size itself.
+config/windows_native_icon=""
 
 [autoload]
 
