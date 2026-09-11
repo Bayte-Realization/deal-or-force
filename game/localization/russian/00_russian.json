@@ -269,8 +269,7 @@
   "Requires a second click to confirm.": "Требуется повторный клик для подтверждения.",
   "Language": "Язык",
   "The world as it stands in 2024 — its borders, its people and its economy.": "Мир таким, каков он в 2024 году — его границы, его люди и его экономика.",
-  "No external mods loaded · open user://mods or res://Mods": "Внешние моды не загружены · откройте user://mods или res://Mods",
-  "Development mods: res://Mods · installed mods: user://mods": "Моды разработчика: res://Mods · установленные моды: user://mods",
+  "Development mods: res://mods · installed mods: user://mods": "Моды разработчика: res://mods · установленные моды: user://mods",
   "Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.": "Переключение языка интерфейса. Моды добавляют свой язык файлом localization/<язык>.json в папке мода.",
   "BATTLE PLANS": "БОЕВЫЕ ПЛАНЫ",
   "POSTURE": "МАНЕРА БОЯ",
@@ -628,5 +627,6 @@
   "Balanced trade": "Сбалансированная торговля",
   "Ordinary duties, ordinary access. What a country does when it has not decided.": "Обычные пошлины, обычный доступ. То, что страна делает, пока не решила.",
   "Strategic autarky": "Стратегическая автаркия",
-  "The border is a policy instrument. Duty is heavy, and so is the cost of everything the country cannot make itself.": "Граница — инструмент политики. Пошлина тяжёлая, и так же тяжело обходится всё, чего страна не производит сама."
+  "The border is a policy instrument. Duty is heavy, and so is the cost of everything the country cannot make itself.": "Граница — инструмент политики. Пошлина тяжёлая, и так же тяжело обходится всё, чего страна не производит сама.",
+  "no external mods · open user://mods or res://mods": "внешних модов нет · откройте user://mods или res://mods"
 }

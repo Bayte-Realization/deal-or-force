@@ -90,12 +90,12 @@ if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
 # travel with the data because they are content, but a mod folder buried a level down among
 # `data_DealOrForce_windows_x86_64` is a mod folder nobody finds, so this one sits beside the
 # executable. The loader looks in both places.
-$modsSource = Join-Path $project "Mods"
+$modsSource = Join-Path $project "mods"
 if (Test-Path $modsSource) {
     Copy-Item -Path $modsSource -Destination $out -Recurse -Force
     # A template that somebody once compiled leaves its bin and obj behind; they are not
     # part of the template and they are not small.
-    Get-ChildItem -Path (Join-Path $out "Mods") -Recurse -Force -Directory -ErrorAction SilentlyContinue |
+    Get-ChildItem -Path (Join-Path $out "mods") -Recurse -Force -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -eq "bin" -or $_.Name -eq "obj" } |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -119,7 +119,7 @@ $needed = @(
     # said so quietly in the log and carried on, which is exactly how this goes unnoticed.
     "dlc\entitlements.json",
     "dlc\dof_iron_and_grain\dlc.json",
-    "Mods"
+    "mods"
 )
 
 $assemblies = Get-ChildItem -Path $out -Recurse -Force -Filter "DealOrForce.dll" -ErrorAction SilentlyContinue |

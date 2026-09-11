@@ -2689,7 +2689,7 @@ public static class Program
     }
 
     /// <summary>
-    /// Whether the worked examples in Mods/_templates still describe this game.
+    /// Whether the worked examples in mods/_templates still describe this game.
     ///
     /// A template that has rotted is worse than no template at all: somebody follows the
     /// guide, the mod loader reports "unknown define", and they reasonably conclude the
@@ -3544,7 +3544,7 @@ public static class Program
         }
 
         if (complaints.Count > 0) return string.Join("; ", complaints);
-        Console.WriteLine($"  templates: {packages:N0} worked example(s) in Mods/_templates, " +
+        Console.WriteLine($"  templates: {packages:N0} worked example(s) in mods/_templates, " +
                           $"{keys:N0} key(s) between them, every one naming something that exists.");
         return "";
     }
@@ -3558,7 +3558,7 @@ public static class Program
             roots.Add(directory.FullName);
         foreach (var root in roots)
         {
-            var candidate = Path.Combine(root, "Mods", "_templates");
+            var candidate = Path.Combine(root, "mods", "_templates");
             if (Directory.Exists(candidate)) return candidate;
         }
         return null;

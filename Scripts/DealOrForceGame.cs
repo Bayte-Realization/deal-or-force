@@ -355,7 +355,7 @@ public partial class DealOrForceGame : Control
         rows.AddChild(_scenarioSummary);
 
         _modStatus = Title(_modLoader.StatusLine, 12, Ui.Colour("text.faint"));
-        _modStatus.TooltipText = Tr("Development mods: res://Mods · installed mods: user://mods");
+        _modStatus.TooltipText = Tr("Development mods: res://mods · installed mods: user://mods");
         rows.AddChild(_modStatus);
 
         rows.AddChild(ActionButton("Singleplayer", OpenCountryPicker, 330, 46, true));

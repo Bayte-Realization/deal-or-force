@@ -74,7 +74,7 @@ A factor a recipe asks for has to be a quantity the simulation tracks, and that 
 fixed - letting a mod invent one would mean letting it ask a question the simulation cannot
 answer. What is open is how they are combined, which is where all the design is. Something
 genuinely new - a good whose output depends on the weather - needs a C# mod; see
-`Mods/_templates/csharp_mod`.
+`mods/_templates/csharp_mod`.
 
 ## Checking that it worked
 

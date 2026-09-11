@@ -34,7 +34,7 @@ Scripts/
   Simulation/    ядро симуляции — 32 файла, ни одного `using Godot`
   *UI.cs         интерфейс и презентация
   Modding/       загрузчик модов
-Mods/            моды; `_templates` — готовые шаблоны трёх уровней
+mods/            моды; `_templates` — готовые шаблоны трёх уровней
 Tools/
   MapDataCompiler  офлайн-сборка растровой карты
   SimBench         прогон кампании без движка + проверка инвариантов
@@ -82,7 +82,7 @@ dotnet run --project Tools/SimBench/SimBench.csproj -- 730
 Мод повторяет структуру базовой игры и накладывается поверх неё:
 
 ```
-Mods/my_mod/
+mods/my_mod/
   mod.json
   common/defines/economy.json     переопределяет только те ключи, что перечислил
   events/my_events.json

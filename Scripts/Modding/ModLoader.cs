@@ -77,7 +77,7 @@ public sealed class ModLoader
         {
             var packs = Dlc.Packages.Count == 0 ? "" : $"{Dlc.StatusLine} · ";
             var mods = EnabledCount == 0
-                ? "no external mods · open user://mods or res://Mods"
+                ? "no external mods · open user://mods or res://mods"
                 : $"{EnabledCount} mod(s) loaded";
             return packs + mods + (ErrorCount > 0 ? $" · {ErrorCount} warning(s)" : "");
         }
@@ -91,13 +91,13 @@ public sealed class ModLoader
         // Development mods ship beside the project. Installed/user mods with the same
         // id win, allowing local updates without touching the base installation.
         //
-        // An installed game has more than one folder called Mods - the one that travelled
+        // An installed game has more than one folder called mods - the one that travelled
         // with the data and the one beside the executable, which is the one a player can
         // actually find - and they arrive here nearest-first. Later wins by id, which is
         // the right way round: what the player put there outranks what shipped.
         var candidates = new Dictionary<string, ModPackage>(StringComparer.OrdinalIgnoreCase);
-        foreach (var root in GameDataLoader.InstallFolders("Mods"))
-            DiscoverRoot(root, "res://Mods", candidates);
+        foreach (var root in GameDataLoader.InstallFolders("mods"))
+            DiscoverRoot(root, "res://mods", candidates);
         DiscoverRoot(ProjectSettings.GlobalizePath("user://mods"), "user://mods", candidates);
 
         var enabled = candidates.Values.Where(package => package.Manifest.Enabled).ToList();

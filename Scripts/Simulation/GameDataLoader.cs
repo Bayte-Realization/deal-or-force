@@ -133,17 +133,17 @@ public static class GameDataLoader
     }
 
     /// <summary>
-    /// Every place a top-level installation folder - `Mods`, `dlc` - actually is, nearest
+    /// Every place a top-level installation folder - `mods`, `dlc` - actually is, nearest
     /// the data first.
     ///
     /// This exists because `res://` is a lie outside the editor. In the editor
-    /// `GlobalizePath("res://Mods")` names a real directory and everything works; in an
+    /// `GlobalizePath("res://mods")` names a real directory and everything works; in an
     /// exported game `res://` is a `.pck`, and a mod folder is the one thing that cannot
     /// live in a `.pck` - it is a folder a player drops files into after the game shipped.
     /// So these are found the way `game/` is found: by walking out from the assembly until
     /// the installation is recognised.
     ///
-    /// It is recognised by `game/` being in it, which is stricter than it looks. `Mods` is
+    /// It is recognised by `game/` being in it, which is stricter than it looks. `mods` is
     /// a common enough folder name that a bare upward search would sooner or later find
     /// somebody else's. The exported layout puts `game/` one level below the executable, so
     /// the folder holding `game/` and its parent both count: the first is where shipped

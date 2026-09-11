@@ -28,9 +28,9 @@
     <DebugType>portable</DebugType>
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
-  <!-- Mod source projects live below Mods but are compiled into their own DLLs. -->
+  <!-- Mod source projects live below mods but are compiled into their own DLLs. -->
   <ItemGroup>
-    <Compile Remove="Mods\**\*.cs" />
+    <Compile Remove="mods\**\*.cs" />
     <Compile Remove="Tools\**\*.cs" />
     <Content Include="game\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -43,7 +43,7 @@
       out of the project itself, and a second copy under bin would shadow it and go stale
       the moment a pack was edited.
 
-      `Mods/` is deliberately not here. It is the one folder a player writes into, so the
+      `mods/` is deliberately not here. It is the one folder a player writes into, so the
       build script puts it beside the executable where it can be found, rather than a level
       down among the data.
     -->
