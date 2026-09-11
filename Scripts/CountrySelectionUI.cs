@@ -99,6 +99,15 @@ public partial class DealOrForceGame
 
     private void OpenCountryPicker()
     {
+        // A new game is a new world.
+        //
+        // Returning to the main menu only hid the campaign, so picking a country again
+        // dropped the player into the one they had just left - same date, same armies, same
+        // war - which is not what "Singleplayer" says on the button. The world is rebuilt
+        // here rather than when the menu opens, so looking at the menu costs nothing and
+        // only actually starting a game throws the old campaign away.
+        if (_campaignInProgress) StartCampaign();
+
         _pickerHotseatMode = false;
         _campaign.IsPaused = true;
         _menuLayer.Visible = false;
@@ -194,11 +203,13 @@ public partial class DealOrForceGame
         {
             _campaign.ConfigureSinglePlayer(_pickerNation.Id);
         }
+        _campaignInProgress = true;
         BeginSession();
     }
 
     private void OpenLocalMultiplayer()
     {
+        if (_campaignInProgress) StartCampaign();
         _pickerHotseatMode = true;
         _campaign.IsPaused = true;
         _menuLayer.Visible = false;

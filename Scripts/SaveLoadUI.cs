@@ -7,14 +7,96 @@ using Godot;
 
 namespace DealOrForce;
 
+/// <summary>
+/// The campaign archive: as many saves as somebody cares to keep, in a folder they can find.
+///
+/// It used to be seven fixed slots - an autosave, a quicksave and five numbered ones - in
+/// `user://save_games`, which on Windows is a folder five levels inside AppData that nobody
+/// stumbles on. Both halves of that were wrong for a game meant to be played for a hundred
+/// hours: a campaign is not something to overwrite because slot four was the least recently
+/// used, and a save nobody can find is a save nobody can send to anybody.
+///
+/// So: any number of saves, each under a name of its own, listed newest first, in
+/// `Documents/Deal or Force/save games`. The autosave and the quicksave keep reserved names,
+/// because F5 has to land somewhere predictable.
+///
+/// The file is still named by a sanitised slug and the name a player typed lives in the
+/// metadata beside it. That is not fussiness: names in this game arrive in Russian as often
+/// as in English, and a file name is the one place that cannot be relied on to hold them.
+/// </summary>
 public partial class DealOrForceGame
 {
-    private static readonly string[] ManualSaveSlots = { "slot_1", "slot_2", "slot_3", "slot_4", "slot_5" };
     private Control _saveLoadLayer = null!;
     private Label _saveStatus = null!;
-    private readonly Dictionary<string, Label> _saveSlotLabels = new(StringComparer.OrdinalIgnoreCase);
+    private Label _saveFolderLine = null!;
+    private LineEdit _saveNameField = null!;
+    private VBoxContainer _saveList = null!;
 
-    private string SaveRoot => ProjectSettings.GlobalizePath("user://save_games");
+    private string _saveRoot;
+
+    /// <summary>
+    /// Where the saves live, with the old folder emptied into it once.
+    ///
+    /// `Documents` is where a player looks and where a support request can point. If the
+    /// system will not name a documents folder - it is allowed not to - this falls back to
+    /// `user://save_games`, which is where saves have always been: never wrong, only hard
+    /// to find.
+    /// </summary>
+    private string SaveRoot
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(_saveRoot)) return _saveRoot;
+
+            var legacy = ProjectSettings.GlobalizePath("user://save_games");
+            var documents = OS.GetSystemDir(OS.SystemDir.Documents);
+            if (string.IsNullOrWhiteSpace(documents) || !Directory.Exists(documents))
+            {
+                _saveRoot = legacy;
+                return _saveRoot;
+            }
+
+            // Godot hands back a path with forward slashes and Path.Combine adds backslashes,
+            // so without this the folder is shown to the player as
+            // `C:/Users/User/Documents\Deal or Force\save games`, which reads like a bug.
+            var chosen = Path.GetFullPath(Path.Combine(documents, "Deal or Force", "save games"));
+            try
+            {
+                Directory.CreateDirectory(chosen);
+                MigrateSaves(legacy, chosen);
+                _saveRoot = chosen;
+            }
+            catch (Exception exception)
+            {
+                // A documents folder that cannot be written to is a real situation - a
+                // redirected profile, a locked-down machine - and not worth losing the
+                // ability to save over.
+                DiagnosticLogs.Write("errors", $"SAVE_ROOT_FALLBACK {exception.Message}");
+                _saveRoot = legacy;
+            }
+            return _saveRoot;
+        }
+    }
+
+    /// <summary>Copy what is already saved into the folder saves live in now, once.</summary>
+    private static void MigrateSaves(string from, string to)
+    {
+        if (!Directory.Exists(from)) return;
+        foreach (var file in Directory.EnumerateFiles(from))
+        {
+            var target = Path.Combine(to, Path.GetFileName(file));
+            // Never overwrite. If both folders hold a quicksave, the one already in the new
+            // folder is the more recent decision.
+            if (File.Exists(target)) continue;
+            try { File.Copy(file, target); }
+            catch (Exception exception)
+            {
+                DiagnosticLogs.Write("errors",
+                    $"SAVE_MIGRATE_FAILED file={Path.GetFileName(file)} {exception.Message}");
+            }
+        }
+    }
+
     private string ModFingerprint => string.Join(";", _modLoader.Packages.Select(package =>
         $"{package.Manifest.Id}@{package.Manifest.Version}"));
 
@@ -31,33 +113,55 @@ public partial class DealOrForceGame
 
         var panel = TexturedPanel(_saveLoadLayer);
         Ui.Place(panel, "modal.save_load");
-        var rows = PanelRows(panel, 28, 24, 10);
+        var rows = ScrollablePanelRows(panel, 28, 24, 10);
         rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, Ui.Colour("text.accent")));
-        rows.AddChild(Title("Atomic compressed saves · scenario/mod compatibility checks · F5 quicksave / F9 quickload",
+        rows.AddChild(Title("As many campaigns as you care to keep · atomic compressed saves · F5 quicksaves, F9 loads it",
             13, Ui.Colour("text.muted")));
-        _saveStatus = Title("Choose a slot.", 13, Ui.Colour("text.accent_dim"));
+
+        var folderRow = new HBoxContainer();
+        folderRow.AddThemeConstantOverride("separation", 8);
+        rows.AddChild(folderRow);
+        _saveFolderLine = RowLabel("", 11, Ui.Colour("text.faint"));
+        _saveFolderLine.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        folderRow.AddChild(_saveFolderLine);
+        var openFolder = ActionButton("Open folder", OpenSaveFolder, 128, 32);
+        openFolder.TooltipText = Tr("Open the folder these are kept in, to copy a campaign somewhere or send one to somebody.");
+        folderRow.AddChild(openFolder);
+
+        var newRow = new HBoxContainer();
+        newRow.AddThemeConstantOverride("separation", 8);
+        rows.AddChild(newRow);
+        _saveNameField = new LineEdit
+        {
+            PlaceholderText = Tr("Name this campaign…"),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 34)
+        };
+        _saveNameField.TextSubmitted += _ => SaveAsNew();
+        newRow.AddChild(_saveNameField);
+        newRow.AddChild(ActionButton("Save", SaveAsNew, 110, 34, true));
+
+        _saveStatus = Title("", 13, Ui.Colour("text.accent_dim"));
         rows.AddChild(_saveStatus);
 
-        AddSaveSlotRow(rows, SaveSystem.AutoSlot, "AUTOSAVE", false);
-        AddSaveSlotRow(rows, SaveSystem.QuickSlot, "QUICKSAVE", true);
-        for (var index = 0; index < ManualSaveSlots.Length; index++)
-            AddSaveSlotRow(rows, ManualSaveSlots[index], $"CAMPAIGN {index + 1}", true);
+        _saveList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _saveList.AddThemeConstantOverride("separation", 4);
+        rows.AddChild(_saveList);
+
         rows.AddChild(ActionButton("Close", HideSaveLoadInterface, 160, 38));
     }
 
-    private void AddSaveSlotRow(Container parent, string slot, string title, bool allowSave)
+    private void OpenSaveFolder()
     {
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 8);
-        parent.AddChild(row);
-        var info = Title(title, 13, Ui.Colour("text.body_soft"));
-        info.CustomMinimumSize = new Vector2(405, 42);
-        info.VerticalAlignment = VerticalAlignment.Center;
-        row.AddChild(info);
-        _saveSlotLabels[slot] = info;
-        if (allowSave) row.AddChild(ActionButton("Save", () => SaveToSlot(slot), 84, 36, slot == SaveSystem.QuickSlot));
-        row.AddChild(ActionButton("Load", () => LoadFromSlot(slot), 84, 36));
-        row.AddChild(ActionButton("Delete", () => DeleteSave(slot), 84, 36));
+        try
+        {
+            Directory.CreateDirectory(SaveRoot);
+            OS.ShellOpen(SaveRoot);
+        }
+        catch (Exception exception)
+        {
+            _saveStatus.Text = Simulation.Loc.Format("Could not open the folder: {0}", exception.Message);
+        }
     }
 
     private void ShowSaveLoadInterface()
@@ -65,6 +169,8 @@ public partial class DealOrForceGame
         if (_campaign is not null) _campaign.IsPaused = true;
         if (_pause is not null) _pause.Text = Tr("▶");
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
+        if (_campaign?.Player is not null && string.IsNullOrWhiteSpace(_saveNameField.Text))
+            _saveNameField.Text = $"{_campaign.Player.Name} · {_campaign.Date}";
         RefreshSaveSlots();
         _saveLoadLayer.Visible = true;
         _saveLoadLayer.MoveToFront();
@@ -72,32 +178,90 @@ public partial class DealOrForceGame
 
     private void HideSaveLoadInterface() => _saveLoadLayer.Visible = false;
 
+    /// <summary>
+    /// Rebuild the list from the folder.
+    ///
+    /// Rebuilt rather than updated, because how many saves there are is now whatever the
+    /// player has made - and a fixed set of rows to update is exactly the assumption this
+    /// screen was rewritten to stop making.
+    /// </summary>
     private void RefreshSaveSlots()
     {
-        var saves = SaveSystem.List(SaveRoot).ToDictionary(item => item.Slot, StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in _saveSlotLabels)
+        _saveFolderLine.Text = SaveRoot;
+        foreach (var child in _saveList.GetChildren())
         {
-            var title = entry.Key switch
-            {
-                SaveSystem.AutoSlot => "AUTOSAVE",
-                SaveSystem.QuickSlot => "QUICKSAVE",
-                _ => $"CAMPAIGN {Array.IndexOf(ManualSaveSlots, entry.Key) + 1}"
-            };
-            entry.Value.Text = saves.TryGetValue(entry.Key, out var save)
-                ? $"{title}\n{save.NationName} · {save.GameDate} · {save.SavedUtc.ToLocalTime():g} · {save.CompressedBytes / 1024f:0} KiB"
-                : $"{title}\nEmpty slot";
+            _saveList.RemoveChild(child);
+            child.QueueFree();
         }
+
+        var saves = SaveSystem.List(SaveRoot);
+        if (saves.Count == 0)
+        {
+            _saveList.AddChild(RowLabel("No campaigns saved yet.", 13, Ui.Colour("text.muted")));
+            return;
+        }
+
+        foreach (var save in saves) AddSaveRow(save);
     }
 
-    private void SaveToSlot(string slot, bool autosave = false)
+    private void AddSaveRow(SaveMetadata save)
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        _saveList.AddChild(row);
+
+        var title = save.Slot switch
+        {
+            SaveSystem.AutoSlot => Tr("AUTOSAVE"),
+            SaveSystem.QuickSlot => Tr("QUICKSAVE"),
+            _ => string.IsNullOrWhiteSpace(save.DisplayName) ? save.Slot : save.DisplayName
+        };
+        var info = RowLabel(Simulation.Loc.Format("{0}\n{1} · {2} · {3} · {4} KiB",
+            title, save.NationName, save.GameDate,
+            save.SavedUtc.ToLocalTime().ToString("g"),
+            (save.CompressedBytes / 1024f).ToString("0")), 13, Ui.Colour("text.body_soft"));
+        info.AutowrapMode = TextServer.AutowrapMode.Off;
+        info.CustomMinimumSize = new Vector2(405, 42);
+        info.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        row.AddChild(info);
+
+        var slot = save.Slot;
+        var kept = save.DisplayName;
+        row.AddChild(ActionButton("Load", () => LoadFromSlot(slot), 84, 36));
+        // Overwriting keeps the name it already had: a campaign saved over is the same
+        // campaign later, and renaming it every time would turn the list into strangers.
+        row.AddChild(ActionButton("Overwrite", () => SaveToSlot(slot, displayName: kept), 104, 36));
+        row.AddChild(ActionButton("Delete", () => DeleteSave(slot), 84, 36));
+    }
+
+    /// <summary>
+    /// Write a new save under a name of its own.
+    ///
+    /// The file gets a slug made from the clock and the typed name is kept in the metadata.
+    /// Naming the file after what was typed would mean two campaigns called the same thing
+    /// overwrite each other, and a campaign named in Russian getting a file name with
+    /// nothing left in it.
+    /// </summary>
+    private void SaveAsNew()
+    {
+        if (_campaign?.Player is null) { _saveStatus.Text = Tr("No campaign."); return; }
+        var name = _saveNameField.Text.Trim();
+        if (string.IsNullOrWhiteSpace(name)) name = $"{_campaign.Player.Name} · {_campaign.Date}";
+        SaveToSlot($"campaign_{DateTime.Now:yyyyMMdd_HHmmss}", displayName: name);
+    }
+
+    private void SaveToSlot(string slot, bool autosave = false, string displayName = null)
     {
         if (_campaign?.Player is null) return;
         try
         {
             var metadata = SaveSystem.Save(SaveRoot, slot, _campaign, ModFingerprint,
-                $"{_campaign.Player.Name} · {_campaign.Date}", autosave);
+                string.IsNullOrWhiteSpace(displayName)
+                    ? $"{_campaign.Player.Name} · {_campaign.Date}"
+                    : displayName,
+                autosave);
             _saveStatus.Text = Simulation.Loc.Format("Saved {0} on {1}.", metadata.NationName, metadata.GameDate);
-            RefreshSaveSlots();
+            if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
         }
         catch (Exception exception)
         {
@@ -134,6 +298,9 @@ public partial class DealOrForceGame
         ClearDetail();
         ResetTrends();
         _lastAutosaveDay = -1;
+        // This is somebody's campaign now, so a new game started later has to build a new
+        // world rather than carry this one into it.
+        _campaignInProgress = true;
 
         _modApi.Bind(_campaign);
         _globe.BindCampaign(_campaign);
@@ -149,13 +316,13 @@ public partial class DealOrForceGame
         SetArmyPanelVisible(false);
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
         StyleButton(_pause, _campaign.IsPaused);
-        _saveStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? "Campaign restored." : result.Warning;
+        _saveStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? Tr("Campaign restored.") : result.Warning;
         Refresh();
     }
 
     private void DeleteSave(string slot)
     {
-        _saveStatus.Text = SaveSystem.Delete(SaveRoot, slot) ? "Save deleted." : "Slot was already empty.";
+        _saveStatus.Text = SaveSystem.Delete(SaveRoot, slot) ? Tr("Save deleted.") : Tr("Slot was already empty.");
         RefreshSaveSlots();
     }
 

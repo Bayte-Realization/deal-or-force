@@ -636,5 +636,13 @@
   "turning itself": "вращается сама",
   "turntable": "облёт точки",
   "{0} · lens {1:0}° · roll {2:0}° · {3} · {4}\nQE roll · R level · ZX lens · F lens back · G turntable · T self-turning · C smoothing · H hide": "{0} · объектив {1:0}° · крен {2:0}° · {3} · {4}\nQE крен · R выровнять · ZX объектив · F сброс объектива · G облёт · T авто-вращение · C сглаживание · H спрятать",
-  "Every levy is charged against the same week's output: {0:P0} of what is asked for is actually collected. A further tax on top of these raises less than the first one did.": "Все сборы берутся с одного и того же недельного выпуска: до казны доходит {0:P0} того, что начислено. Ещё один налог поверх этих принесёт меньше, чем принёс первый."
+  "Every levy is charged against the same week's output: {0:P0} of what is asked for is actually collected. A further tax on top of these raises less than the first one did.": "Все сборы берутся с одного и того же недельного выпуска: до казны доходит {0:P0} того, что начислено. Ещё один налог поверх этих принесёт меньше, чем принёс первый.",
+  "As many campaigns as you care to keep · atomic compressed saves · F5 quicksaves, F9 loads it": "Столько кампаний, сколько нужно · атомарные сжатые сохранения · F5 — быстрое сохранение, F9 — загрузка",
+  "Could not open the folder: {0}": "Не удалось открыть папку: {0}",
+  "Name this campaign…": "Назовите кампанию…",
+  "No campaigns saved yet.": "Сохранённых кампаний пока нет.",
+  "Open folder": "Открыть папку",
+  "Open the folder these are kept in, to copy a campaign somewhere or send one to somebody.": "Открыть папку, где они лежат, — скопировать кампанию или отправить её кому-нибудь.",
+  "Overwrite": "Перезаписать",
+  "{0}\n{1} · {2} · {3} · {4} KiB": "{0}\n{1} · {2} · {3} · {4} КиБ"
 }

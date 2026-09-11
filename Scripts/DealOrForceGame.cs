@@ -48,6 +48,14 @@ public partial class DealOrForceGame : Control
     private int _lastAutosaveDay = -1;
     private string _openScreen = "";
 
+    /// <summary>
+    /// Whether the campaign on the table is one somebody has actually been playing.
+    ///
+    /// The menu's globe is backed by a campaign too, so "is there a campaign" was never
+    /// the question; the question is whether throwing it away would lose anything.
+    /// </summary>
+    private bool _campaignInProgress;
+
     public override void _Ready()
     {
         StartDiagnostics();
@@ -55,6 +63,10 @@ public partial class DealOrForceGame : Control
         // layer does not import Godot - so it is told rather than asked. Read before the
         // interface is built, because the interface shows what was chosen last time.
         Simulation.PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
+        // Resolved at startup rather than when somebody first opens the archive: it is
+        // what creates the folder and moves an older installation's saves into it, and
+        // "where are my saves" is a question worth being able to answer from a log.
+        GD.Print($"[dof] saves: {SaveRoot}");
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // The interface is built next and asks for its pictures by name, so the names have
         // to mean something first. Mods layer their own over these when a campaign starts.
@@ -310,6 +322,7 @@ public partial class DealOrForceGame : Control
         _campaign = Campaign.CreateBootstrap(20260830);
         ResetTrends();
         _lastAutosaveDay = -1;
+        _campaignInProgress = false;
 
         // Day-zero proof that the emergent economy still reproduces the scenario's
         // authored 2024 figures. If this ever drifts, the calibration broke, not the map.
