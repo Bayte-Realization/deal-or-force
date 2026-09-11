@@ -333,7 +333,12 @@ public partial class DealOrForceGame
         if (_globe is not null && _globe.FreeCamera != enabled) ToggleFreeCamera();
         return enabled
             ? "Free camera on. Mouse looks, WASD flies, Space and Ctrl climb and descend, " +
-              "Shift is faster and Alt is slower, the wheel sets the throttle. F10 or Escape lands it."
+              "Shift is faster and Alt is slower, the wheel sets the throttle.\n" +
+              "Q and E roll the horizon, R levels it. Z and X are the lens, F puts it back.\n" +
+              "G hangs the camera on a turntable around whatever it is looking at; on it, " +
+              "A and D go round, W and S close and back off, Space and Ctrl raise and lower.\n" +
+              "T sets the turntable turning on its own. C is the smoothing that makes it " +
+              "footage rather than a hand on a mouse. H hides the readout. F10 or Escape lands it."
             : "Free camera off; the campaign HUD is back.";
     }
 

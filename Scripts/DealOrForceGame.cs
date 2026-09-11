@@ -71,6 +71,9 @@ public partial class DealOrForceGame : Control
     {
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false };
+        // The lens and the roll move while a key is held, so the line that reports them
+        // has to be written every frame rather than when something is pressed.
+        if (_freeCameraMode) RefreshFreeCameraReadout();
         NetworkProcess(delta);
         if (IsNetworkClient) { if (_campaign is not null) ReportFrameCost(delta); return; }
         if (_campaign is null) return;
@@ -166,6 +169,40 @@ public partial class DealOrForceGame : Control
         // console command typed out first is one nobody reaches for. F10 flies - not F8,
         // which the Godot editor already uses to stop the running project.
         if (key.Keycode == Key.F10) { ToggleFreeCamera(); GetViewport().SetInputAsHandled(); return; }
+
+        // Everything the flying camera does that is a switch rather than a movement. They
+        // are read here rather than polled with the rest because holding G down should not
+        // put the camera on and off a turntable sixty times a second - and they are guarded
+        // on the camera being up, so none of these letters mean anything to a campaign.
+        if (_globe is { FreeCamera: true })
+        {
+            switch (key.Keycode)
+            {
+                case Key.G:
+                    _globe.SetFreeOrbit(!_globe.FreeOrbiting);
+                    RefreshFreeCameraReadout();
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.T:
+                    // Hands off the mouse and the shot keeps turning, which is the whole
+                    // point: a slow circle nobody is steering has no wobble in it.
+                    _globe.SetFreeOrbit(true);
+                    _globe.SetFreeAutoOrbit(_globe.FreeAutoOrbit > 0.0001f ? 0f : 0.09f);
+                    RefreshFreeCameraReadout();
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.C:
+                    _globe.SetFreeSmoothing(!_globe.FreeSmoothing);
+                    RefreshFreeCameraReadout();
+                    GetViewport().SetInputAsHandled();
+                    return;
+                case Key.H:
+                    _freeCameraReadoutVisible = !_freeCameraReadoutVisible;
+                    RefreshFreeCameraReadout();
+                    GetViewport().SetInputAsHandled();
+                    return;
+            }
+        }
         // Next to F2, which swaps the projection: both are things a player flips while
         // looking at the map to see which they prefer, and neither is worth a menu trip.
         if (key.Keycode == Key.F3) { ToggleMapSmoothing(); GetViewport().SetInputAsHandled(); return; }
@@ -321,6 +358,7 @@ public partial class DealOrForceGame : Control
         BuildPeaceOfferInterface();
         BuildStrategicAudio();
         BuildDeveloperConsole();
+        BuildFreeCameraOverlay();
     }
 
     private void BuildMainMenu()
@@ -747,6 +785,48 @@ public partial class DealOrForceGame : Control
         if (pick.State is not null) ShowRegionOverview();
     }
 
+    private Control _freeCameraOverlay = null!;
+    private Label _freeCameraReadout = null!;
+    private bool _freeCameraReadoutVisible = true;
+
+    /// <summary>
+    /// One line in the corner saying what the flying camera is doing.
+    ///
+    /// A cinematic camera has more state than a player can hold in their head - a lens, a
+    /// roll, a turntable that may or may not be turning itself - and a shot ruined by not
+    /// knowing which of those was on is a shot taken twice. H hides it, because the one
+    /// thing that must not be in the footage is the readout.
+    /// </summary>
+    private void BuildFreeCameraOverlay()
+    {
+        _freeCameraOverlay = FullLayer("FreeCameraOverlay");
+        _freeCameraOverlay.Visible = false;
+        AddChild(_freeCameraOverlay);
+
+        _freeCameraReadout = Title("", 13, Ui.Colour("text.hint"));
+        _freeCameraReadout.AutowrapMode = TextServer.AutowrapMode.Off;
+        _freeCameraReadout.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
+        _freeCameraReadout.Position = new Vector2(22, -46);
+        _freeCameraOverlay.AddChild(_freeCameraReadout);
+    }
+
+    private void RefreshFreeCameraReadout()
+    {
+        if (_freeCameraOverlay is null || _globe is null) return;
+        var flying = _globe.FreeCamera;
+        _freeCameraOverlay.Visible = flying && _freeCameraReadoutVisible;
+        if (!_freeCameraOverlay.Visible) return;
+
+        _freeCameraReadout.Text = Simulation.Loc.Format(
+            "{0} · lens {1:0}° · roll {2:0}° · {3} · {4}\n" +
+            "QE roll · R level · ZX lens · F lens back · G turntable · T self-turning · C smoothing · H hide",
+            _globe.FreeOrbiting ? Tr("turntable") : Tr("free flight"),
+            _globe.FreeFieldOfView,
+            Mathf.RadToDeg(_globe.FreeRoll),
+            _globe.FreeSmoothing ? Tr("smoothed") : Tr("raw"),
+            _globe.FreeAutoOrbit > 0.0001f ? Tr("turning itself") : Tr("still"));
+    }
+
     /// <summary>Take the camera off its rig, or put it back and restore the interface.</summary>
     private void ToggleFreeCamera()
     {
@@ -754,6 +834,7 @@ public partial class DealOrForceGame : Control
         var enabled = !_globe.FreeCamera;
         _freeCameraMode = enabled;
         _globe.SetFreeCamera(enabled);
+        RefreshFreeCameraReadout();
         if (enabled && _peaceLayer is { Visible: true }) ClosePeaceConference();
         if (_hudLayer is not null) _hudLayer.Visible = !enabled && _campaign is not null && !_menuLayer.Visible;
         if (enabled)

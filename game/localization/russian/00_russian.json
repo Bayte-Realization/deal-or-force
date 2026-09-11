@@ -628,5 +628,12 @@
   "Ordinary duties, ordinary access. What a country does when it has not decided.": "Обычные пошлины, обычный доступ. То, что страна делает, пока не решила.",
   "Strategic autarky": "Стратегическая автаркия",
   "The border is a policy instrument. Duty is heavy, and so is the cost of everything the country cannot make itself.": "Граница — инструмент политики. Пошлина тяжёлая, и так же тяжело обходится всё, чего страна не производит сама.",
-  "no external mods · open user://mods or res://mods": "внешних модов нет · откройте user://mods или res://mods"
+  "no external mods · open user://mods or res://mods": "внешних модов нет · откройте user://mods или res://mods",
+  "free flight": "свободный полёт",
+  "raw": "без сглаживания",
+  "smoothed": "сглажено",
+  "still": "неподвижно",
+  "turning itself": "вращается сама",
+  "turntable": "облёт точки",
+  "{0} · lens {1:0}° · roll {2:0}° · {3} · {4}\nQE roll · R level · ZX lens · F lens back · G turntable · T self-turning · C smoothing · H hide": "{0} · объектив {1:0}° · крен {2:0}° · {3} · {4}\nQE крен · R выровнять · ZX объектив · F сброс объектива · G облёт · T авто-вращение · C сглаживание · H спрятать"
 }
