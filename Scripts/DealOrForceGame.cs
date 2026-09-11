@@ -40,7 +40,6 @@ public partial class DealOrForceGame : Control
     private Button _mainProjectionButton = null!;
     private Button _languageButton = null!;
     private Button _smoothingButton = null!;
-    private Button _globeDragButton = null!;
     private Label _navigationHint = null!;
     private Label _scenarioSummary = null!;
     private Nation _selectedNation;
@@ -170,9 +169,6 @@ public partial class DealOrForceGame : Control
         // Next to F2, which swaps the projection: both are things a player flips while
         // looking at the map to see which they prefer, and neither is worth a menu trip.
         if (key.Keycode == Key.F3) { ToggleMapSmoothing(); GetViewport().SetInputAsHandled(); return; }
-        // And F4 beside it, for the same reason: which way the globe turns under the hand is
-        // decided by dragging it both ways, not by reading a menu entry about it.
-        if (key.Keycode == Key.F4) { ToggleGlobeDrag(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.Escape && _globe is { FreeCamera: true })
         {
             ToggleFreeCamera();
@@ -378,18 +374,13 @@ public partial class DealOrForceGame : Control
             "texel grid. Turn it off for the raster exactly as authored - pixels and all - which " +
             "is also the cheaper picture on a slower machine (F3).");
         rows.AddChild(_smoothingButton);
-        _globeDragButton = ActionButton(GlobeDragButtonLabel(), ToggleGlobeDrag, 330, 42);
-        _globeDragButton.TooltipText =
-            Tr("Which way a right-drag turns the globe. Move the globe means the ground follows " +
-            "the hand, the way the flat map has always worked. Turn the camera swings the view " +
-            "around a globe that stays where it is (F4). The flat map is unaffected.");
-        rows.AddChild(_globeDragButton);
         _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
         _languageButton.TooltipText = Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.");
         rows.AddChild(_languageButton);
         rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
 
-        _navigationHint = Title(NavigationHint(), 13, Ui.Colour("text.hint"));
+        _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 13,
+            Ui.Colour("text.hint"));
         _navigationHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_navigationHint);
     }
@@ -1287,40 +1278,6 @@ public partial class DealOrForceGame : Control
             _smoothingButton.SetMeta(LocAppliedMeta, label);
         }
     }
-
-    private string GlobeDragButtonLabel() =>
-        _globe is null || _globe.DragGrabsTheGlobe
-            ? "Globe drag: move the globe"
-            : "Globe drag: turn the camera";
-
-    private void ToggleGlobeDrag()
-    {
-        if (_globe is null) return;
-        _globe.DragGrabsTheGlobe = !_globe.DragGrabsTheGlobe;
-        if (_globeDragButton is not null && GodotObject.IsInstanceValid(_globeDragButton))
-        {
-            var label = Tr(GlobeDragButtonLabel());
-            _globeDragButton.Text = label;
-            _globeDragButton.SetMeta(LocAppliedMeta, label);
-        }
-        if (_navigationHint is not null && GodotObject.IsInstanceValid(_navigationHint))
-        {
-            var hint = Tr(NavigationHint());
-            _navigationHint.Text = hint;
-            _navigationHint.SetMeta(LocSourceMeta, NavigationHint());
-            _navigationHint.SetMeta(LocAppliedMeta, hint);
-        }
-    }
-
-    /// <summary>
-    /// What the menu tells a player about moving the map. It has to follow the setting: a
-    /// hint that says "turn the globe" while the globe moves under the hand is worse than
-    /// no hint, because it is the one line a new player believes.
-    /// </summary>
-    private string NavigationHint() =>
-        _globe is null || _globe.DragGrabsTheGlobe
-            ? "Right-drag to move the globe · wheel to zoom · WASD to move."
-            : "Right-drag to turn the globe · wheel to zoom · WASD to move.";
 
     private void CycleLanguage()
     {
