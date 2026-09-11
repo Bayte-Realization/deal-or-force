@@ -64,6 +64,21 @@ public static class HistoryDataLoader
             SetFloat(value, "manpower", number => nation.ManpowerReserve = Math.Max(0f, number));
             if (value.TryGetProperty("trade_policy", out var policy) && policy.ValueKind == JsonValueKind.String &&
                 Enum.TryParse<TradePolicy>(policy.GetString(), true, out var parsed)) nation.TradePolicy = parsed;
+            // An id the catalogue does not have is a scenario naming a government or an
+            // ideology that a mod removed, and is worth complaining about rather than
+            // silently leaving the country as whatever it was.
+            if (value.TryGetProperty("government", out var government) && government.ValueKind == JsonValueKind.String)
+            {
+                var id = government.GetString() ?? "";
+                if (GovernmentCatalog.Knows(id)) nation.Government = id;
+                else errors?.Add($"{entry.Name}: no form of government called '{id}'.");
+            }
+            if (value.TryGetProperty("ideology", out var ideology) && ideology.ValueKind == JsonValueKind.String)
+            {
+                var id = ideology.GetString() ?? "";
+                if (IdeologyCatalog.Knows(id)) nation.Ideology = id;
+                else errors?.Add($"{entry.Name}: no ideology called '{id}'.");
+            }
         }
     }
 

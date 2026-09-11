@@ -77,7 +77,7 @@ public partial class DealOrForceGame
         var tabs = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
         tabs.AddThemeConstantOverride("separation", 6);
         rows.AddChild(tabs);
-        foreach (var tab in new[] { "Overview", "Government", "Economy", "Market", "Population", "Military", "Rankings" })
+        foreach (var tab in new[] { "Overview", "Economy", "Market", "Population", "Military", "Rankings" })
         {
             var captured = tab;
             var button = ActionButton(tab, () =>
@@ -87,8 +87,7 @@ public partial class DealOrForceGame
             }, 116, 32, tab == "Overview");
             button.TooltipText = tab switch
             {
-                "Overview" => "The country's long-term pulse and current national balance.",
-                "Government" => "What the cabinet has been doing, and what welfare and schooling have bought. Set them in State Affairs.",
+                "Overview" => "Who governs, what the country is doing, and what the week costs. Change any of it in State Affairs.",
                 "Economy" => "Fiscal history and the construction base. The budget itself is set in State Affairs.",
                 "Market" => "Prices, shortages, and what trade policy has done. Change it in State Affairs.",
                 "Population" => "Population growth, living standards, classes and the largest states.",
@@ -243,7 +242,6 @@ public partial class DealOrForceGame
         switch (_ledgerTab)
         {
             case "Economy": ShowLedgerEconomy(nation, samples, days); break;
-            case "Government": ShowLedgerGovernment(nation, samples, days); break;
             case "Market": ShowLedgerMarket(nation, samples, days); break;
             case "Population": ShowLedgerPopulation(nation, samples, days); break;
             case "Military": ShowLedgerMilitary(nation, samples, days); break;
@@ -259,9 +257,16 @@ public partial class DealOrForceGame
             Series("GDP", Gold, samples, sample => sample.Gdp),
             Series("Treasury", Green, samples, sample => sample.Treasury)
         }, StrategicChartFormat.MoneyBillions);
-        _ledgerLineB.SetData("Population", "Recorded every simulation week", days,
-            new[] { Series("Population", Blue, samples, sample => sample.PopulationMillions) }, StrategicChartFormat.Millions);
-        _ledgerBarsA.SetData("National pulse", "Hover any bar for its current value", new[]
+        // What the country is doing to itself, which used to be the whole of a separate
+        // tab. The population curve this replaces has a tab of its own and was the only
+        // thing on two pages at once.
+        _ledgerLineB.SetData("Social development", "Policy effects accumulate at each weekly economic tick", days, new[]
+        {
+            Series("Living standard", Gold, samples, sample => sample.StandardOfLiving),
+            Series("Literacy", Blue, samples, sample => sample.Literacy),
+            Series("Stability", Green, samples, sample => sample.Stability)
+        }, StrategicChartFormat.Percent);
+        _ledgerBarsA.SetData("National pulse", PoliticsSubtitle(nation), new[]
         {
             new StrategicBarEntry("Stability", nation.Stability, Green),
             new StrategicBarEntry("Living standard", nation.StandardOfLiving, Gold),
@@ -301,37 +306,6 @@ public partial class DealOrForceGame
             .Select(kind => new StrategicBarEntry(BuildingCatalog.Get(kind).Name,
                 states.Sum(state => state.Buildings.GetValueOrDefault(kind)), BuildingColor(kind))).ToArray(),
             StrategicChartFormat.Number);
-    }
-
-    private void ShowLedgerGovernment(Nation nation, IReadOnlyList<NationHistorySample> samples, IReadOnlyList<int> days)
-    {
-        _ledgerLineA.SetData("Social development", "Policy effects accumulate at each weekly economic tick", days, new[]
-        {
-            Series("Living standard", Gold, samples, sample => sample.StandardOfLiving),
-            Series("Literacy", Blue, samples, sample => sample.Literacy),
-            Series("Stability", Green, samples, sample => sample.Stability)
-        }, StrategicChartFormat.Percent);
-        _ledgerLineB.SetData("Public finances", "Social programmes compete with defence and construction for money", days, new[]
-        {
-            Series("Income", Green, samples, sample => sample.WeeklyIncome),
-            Series("Expenses", Red, samples, sample => sample.WeeklyExpenses),
-            Series("Balance", Blue, samples, sample => sample.WeeklyBalance)
-        }, StrategicChartFormat.MoneyBillions);
-        _ledgerBarsA.SetData("Cabinet direction", GovernmentFocusRules.Description(nation.GovernmentFocus), new[]
-        {
-            new StrategicBarEntry("Stability", nation.Stability, Green),
-            new StrategicBarEntry("Living standard", nation.StandardOfLiving, Gold),
-            new StrategicBarEntry("Literacy", nation.Literacy, Blue),
-            new StrategicBarEntry("Productivity", nation.Productivity / 1.5f, Violet, $"Raw productivity {nation.Productivity:0.00}"),
-            new StrategicBarEntry("War support", CurrentWarSupport(nation), Red)
-        }, StrategicChartFormat.Percent);
-        _ledgerBarsB.SetData("Weekly allocation", "Shares of total national output; the treasury pays a calibrated public cost", new[]
-        {
-            new StrategicBarEntry("Tax rate", nation.TaxRate, Gold),
-            new StrategicBarEntry("Welfare", nation.WelfareSpending, Green),
-            new StrategicBarEntry("Education", nation.EducationSpending, Blue),
-            new StrategicBarEntry("Military", nation.MilitarySpending, Red)
-        }, StrategicChartFormat.Percent);
     }
 
     private void ShowLedgerMarket(Nation nation, IReadOnlyList<NationHistorySample> samples, IReadOnlyList<int> days)
@@ -466,4 +440,15 @@ public partial class DealOrForceGame
     };
 
     private static void ApplyLedgerButtonState(Button button, bool selected) => StyleButton(button, selected);
+
+    /// <summary>
+    /// Who governs and what they are for, under the bars that show what it has amounted to.
+    ///
+    /// The Overview is the page somebody opens to find out what a country *is*, and until
+    /// the form of government existed it could answer that only in money and percentages.
+    /// </summary>
+    private string PoliticsSubtitle(Nation nation) => Simulation.Loc.Format("{0} · {1} · {2}",
+        Tr(PoliticsCore.GovernmentOf(nation).Name),
+        Tr(PoliticsCore.IdeologyOf(nation).Name),
+        Tr(GovernmentFocusRules.Name(nation.GovernmentFocus)));
 }

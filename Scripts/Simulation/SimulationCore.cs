@@ -128,6 +128,21 @@ public sealed partial class Nation
     public float WelfareSpending = 0.055f;
     public float EducationSpending = 0.045f;
     public GovernmentFocus GovernmentFocus = GovernmentFocus.Balanced;
+
+    /// <summary>
+    /// How the country is arranged, and what its government is trying to do.
+    ///
+    /// Two axes rather than one list: a parliamentary republic can be liberal or
+    /// socialist, and a one-party state can be socialist or fascist. Ids rather than
+    /// enums because both catalogues are files, and a mod inventing a fourteenth
+    /// ideology should not need a value reserved for it in the code.
+    /// </summary>
+    public string Government = "";
+
+    public string Ideology = "";
+
+    /// <summary>The day the last change of either landed, for the cooling-off period.</summary>
+    public int PoliticsChangedDay = -9999;
     public float WeeklyTaxIncome;
     public float WeeklyExpenses;
     public float WeeklyBalance;

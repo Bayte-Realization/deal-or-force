@@ -1,0 +1,121 @@
+// How a country is arranged: who decides, and by what right.
+//
+// A form of government is not an ideology, and the two are separate on purpose. A
+// parliamentary republic can be liberal or socialist; a one-party state can be socialist or
+// fascist; an absolute monarchy has an ideology whether or not it admits to one. Fold the
+// two together and you get a list of twenty things that are half of each, with nowhere to
+// put a conservative constitutional monarchy.
+//
+// `centralisation` runs from a federation of provinces at 0 to one office at 1. A
+// centralised state decides faster and is resented more; that is the whole trade, and it is
+// one number, so a new government is a matter of choosing where on it to sit.
+//
+// `change_cost` multiplies what walking away from this arrangement costs in stability.
+// Leaving a parliamentary republic is an election. Leaving an absolute monarchy is a
+// different kind of afternoon.
+//
+// `effects` are weekly, except `growth`, which is annual because growth is quoted annually:
+//     growth · stability · war_support · radicalism · living · literacy
+//
+// The first entry is what a country is when nothing has said otherwise.
+
+{
+  "parliamentary_republic": {
+    "name": "Parliamentary republic",
+    "description": "A head of government who holds office only while a chamber lets him. Slow to turn, hard to capture, and very difficult to make do anything unpopular in a hurry.",
+    "order": 10,
+    "centralisation": 0.42,
+    "change_cost": 0.8,
+    "effects": { "stability": 0.00010, "living": 0.00004 }
+  },
+
+  "presidential_republic": {
+    "name": "Presidential republic",
+    "description": "An executive elected in his own right and answerable to the country rather than to a chamber. Decides faster than a parliament and is harder to remove between elections.",
+    "order": 20,
+    "centralisation": 0.58,
+    "change_cost": 0.9,
+    "effects": { "war_support": 0.00006, "growth": 0.0008 }
+  },
+
+  "constitutional_monarchy": {
+    "name": "Constitutional monarchy",
+    "description": "A crown that reigns and a cabinet that governs. The oldest arrangement for making a modern state feel like an inheritance rather than an argument.",
+    "order": 30,
+    "centralisation": 0.46,
+    "change_cost": 1.1,
+    "effects": { "stability": 0.00014, "radicalism": -0.00006 }
+  },
+
+  "absolute_monarchy": {
+    "name": "Absolute monarchy",
+    "description": "One office, one family, no chamber that can say no. Nothing is faster while the country consents, and nothing has fewer ways to survive the day it stops.",
+    "order": 40,
+    "centralisation": 0.92,
+    "change_cost": 1.8,
+    "effects": { "stability": 0.00018, "radicalism": 0.00012, "literacy": -0.00004, "growth": -0.0012 }
+  },
+
+  "one_party_state": {
+    "name": "One-party state",
+    "description": "A party that is not one of several. It can do in a year what a parliament argues about for ten, and it cannot be told that it is wrong.",
+    "order": 50,
+    "centralisation": 0.95,
+    "change_cost": 2.0,
+    "effects": { "stability": 0.00016, "war_support": 0.00010, "radicalism": 0.00010, "living": -0.00005 }
+  },
+
+  "military_junta": {
+    "name": "Military junta",
+    "description": "The army holding the state until conditions permit its return, which they generally do not. Very good at the fortnight after a coup and poor at the decade after that.",
+    "order": 60,
+    "centralisation": 0.88,
+    "change_cost": 1.4,
+    "effects": { "war_support": 0.00016, "radicalism": 0.00020, "growth": -0.0024, "literacy": -0.00006 }
+  },
+
+  "theocracy": {
+    "name": "Theocracy",
+    "description": "Authority that answers to a doctrine rather than to an electorate. What it loses in flexibility it recovers in the kind of legitimacy no election confers.",
+    "order": 70,
+    "centralisation": 0.80,
+    "change_cost": 1.7,
+    "effects": { "stability": 0.00015, "radicalism": -0.00004, "growth": -0.0016, "literacy": -0.00008 }
+  },
+
+  "federation": {
+    "name": "Federation",
+    "description": "Provinces that kept most of what they had. The centre is a negotiation, which is slow and which is also why nothing that goes wrong in one province goes wrong everywhere.",
+    "order": 80,
+    "centralisation": 0.22,
+    "change_cost": 1.0,
+    "effects": { "radicalism": -0.00012, "living": 0.00005, "war_support": -0.00006 }
+  },
+
+  "technocracy": {
+    "name": "Technocracy",
+    "description": "Office by competence, awarded by people who are themselves competent. It is better at problems that have answers than at the ones that only have decisions.",
+    "order": 90,
+    "centralisation": 0.70,
+    "change_cost": 1.2,
+    "effects": { "growth": 0.0026, "literacy": 0.00010, "stability": -0.00006 }
+  },
+
+  "direct_democracy": {
+    "name": "Direct democracy",
+    "description": "The question put to everybody, every time. Nothing is more legitimate and nothing is slower, and a country at war finds out which of those it needed.",
+    "order": 100,
+    "centralisation": 0.12,
+    "change_cost": 0.9,
+    "effects": { "radicalism": -0.00018, "living": 0.00008, "war_support": -0.00014, "growth": -0.0008 }
+  },
+
+  "provisional_government": {
+    "name": "Provisional government",
+    "description": "Whoever is holding the ministries until the question of who should be is settled. Cheap to leave, because nobody believed it was permanent.",
+    "order": 110,
+    "centralisation": 0.55,
+    "change_cost": 0.35,
+    "effects": { "stability": -0.00020, "radicalism": 0.00018, "growth": -0.0020 }
+  }
+}

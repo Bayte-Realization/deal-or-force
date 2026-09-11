@@ -209,6 +209,20 @@ public static class OpinionSystem
             relation.OpinionDrivers.Add(reason.Stacks > 1 ? $"{name} (x{reason.Stacks})" : name, weight);
         }
 
+        // What the two of them make of each other's politics.
+        //
+        // Not a remembered reason like the rest: nobody has to be told that a country
+        // changed its government, because this is recomputed from what both countries are
+        // right now. A reason would have to be issued on every change by every observer,
+        // and would be wrong for everybody who was not watching.
+        var affinity = PoliticsCore.Affinity(campaign, relation.A, relation.B);
+        if (MathF.Abs(affinity) >= 0.05f)
+        {
+            total += affinity;
+            relation.OpinionDrivers.Add(
+                Loc.Get(affinity >= 0f ? "Politics we recognise" : "Politics we do not share"), affinity);
+        }
+
         relation.Opinion = M.Clamp(total, -100f, 100f);
         relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
     }

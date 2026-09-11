@@ -156,6 +156,7 @@ public partial class DealOrForceGame
 
         _updatingStateAffairs = true;
         RefreshPolicyRates(nation);
+        RefreshPolitics(nation);
         _updatingStateAffairs = false;
 
         RefreshStateBudget(nation);
@@ -274,6 +275,7 @@ public partial class DealOrForceGame
         _stateGovernanceFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _stateCabinetControls.AddChild(_stateGovernanceFeedback);
 
+        BuildPoliticsControls(rows);
         BuildPolicyRates(rows);
     }
 

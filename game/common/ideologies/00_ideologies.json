@@ -1,0 +1,154 @@
+// What a government is trying to do, placed on two axes rather than listed as a set of
+// mutually hostile boxes.
+//
+//     economic    -1 the state decides what is made  ·  +1 the market decides
+//     authority   -1 the person is left alone        ·  +1 the state's word is final
+//
+// Everything diplomatic that depends on ideology is built from the distance between two
+// positions. That is why it is a position and not a table: a table of opinions between
+// fifteen ideologies is two hundred and ten numbers nobody will keep in step, and a mod that
+// adds a sixteenth would have to write thirty more. Place an ideology and every other
+// ideology's opinion of it exists the moment it is placed.
+//
+// `prefers_governments` is where this ideology sits comfortably. Being outside the list is
+// not forbidden - a liberal absolute monarchy is a thing that has happened - it costs
+// `mismatch_stability` every week, which is the honest way to say "this is an unstable
+// arrangement" rather than "this is not allowed".
+//
+// `effects` are weekly, except `growth`, which is annual.
+//
+// The first entry is what a country believes when nothing has said otherwise.
+
+{
+  "liberalism": {
+    "name": "Liberalism",
+    "description": "The person first, the market mostly left alone, and a state whose main job is to be limited. Rich, argumentative and slow to agree on anything.",
+    "order": 10,
+    "colour": "#E0B341",
+    "economic": 0.55,
+    "authority": -0.55,
+    "prefers_governments": ["parliamentary_republic", "presidential_republic", "constitutional_monarchy", "federation", "direct_democracy"],
+    "effects": { "growth": 0.0022, "living": 0.00006, "literacy": 0.00006, "war_support": -0.00008 }
+  },
+
+  "conservatism": {
+    "name": "Conservatism",
+    "description": "What exists is presumed to work until shown otherwise. Order, continuity and a certain scepticism about the idea that a country can be redesigned.",
+    "order": 20,
+    "colour": "#4E79B5",
+    "economic": 0.38,
+    "authority": 0.22,
+    "prefers_governments": ["parliamentary_republic", "presidential_republic", "constitutional_monarchy", "absolute_monarchy"],
+    "effects": { "stability": 0.00014, "radicalism": -0.00008, "growth": 0.0006, "literacy": -0.00002 }
+  },
+
+  "social_democracy": {
+    "name": "Social democracy",
+    "description": "A market kept, and taxed hard enough to buy off the reasons people stop believing in it. The most expensive way of being stable that anyone has found that works.",
+    "order": 30,
+    "colour": "#D4685A",
+    "economic": -0.18,
+    "authority": -0.38,
+    "prefers_governments": ["parliamentary_republic", "presidential_republic", "constitutional_monarchy", "federation"],
+    "effects": { "living": 0.00012, "radicalism": -0.00014, "literacy": 0.00008, "growth": -0.0004 }
+  },
+
+  "socialism": {
+    "name": "Socialism",
+    "description": "The commanding heights held by the state on the argument that what everyone needs should not be sold to them. Equal, deliberate, and short of the things nobody planned for.",
+    "order": 40,
+    "colour": "#C1453C",
+    "economic": -0.70,
+    "authority": 0.10,
+    "prefers_governments": ["parliamentary_republic", "one_party_state", "federation", "direct_democracy"],
+    "effects": { "living": 0.00014, "radicalism": -0.00010, "growth": -0.0018, "literacy": 0.00010 }
+  },
+
+  "communism": {
+    "name": "Communism",
+    "description": "The plan instead of the price, and a party to hold the plan. It can build what nobody would have paid for and cannot find out what anybody wanted.",
+    "order": 50,
+    "colour": "#8E1B16",
+    "economic": -0.95,
+    "authority": 0.70,
+    "prefers_governments": ["one_party_state"],
+    "effects": { "literacy": 0.00014, "war_support": 0.00008, "growth": -0.0032, "living": -0.00004 }
+  },
+
+  "nationalism": {
+    "name": "Nationalism",
+    "description": "The nation as the thing the state is for. Cohesive, difficult to negotiate with, and a great deal more willing to be at war than its neighbours would like.",
+    "order": 60,
+    "colour": "#7A6A3A",
+    "economic": 0.15,
+    "authority": 0.60,
+    "prefers_governments": ["presidential_republic", "one_party_state", "military_junta", "absolute_monarchy"],
+    "effects": { "war_support": 0.00018, "stability": 0.00008, "radicalism": 0.00008, "growth": -0.0006 }
+  },
+
+  "fascism": {
+    "name": "Fascism",
+    "description": "The nation as an army and the state as its command. Everything is mobilised, nothing is negotiated, and the arrangement has no way of stopping that it survives.",
+    "order": 70,
+    "colour": "#4A4A42",
+    "economic": 0.05,
+    "authority": 0.98,
+    "prefers_governments": ["one_party_state", "military_junta"],
+    "effects": { "war_support": 0.00030, "stability": 0.00010, "radicalism": 0.00024, "living": -0.00010, "growth": -0.0014 }
+  },
+
+  "theocratic_rule": {
+    "name": "Theocratic rule",
+    "description": "A doctrine that is also a constitution. It answers questions an election cannot, and cannot be argued out of the answers.",
+    "order": 80,
+    "colour": "#3F7A5E",
+    "economic": -0.05,
+    "authority": 0.72,
+    "prefers_governments": ["theocracy", "absolute_monarchy"],
+    "effects": { "stability": 0.00016, "radicalism": -0.00006, "literacy": -0.00010, "growth": -0.0018 }
+  },
+
+  "libertarianism": {
+    "name": "Libertarianism",
+    "description": "The smallest state anybody has seriously proposed. Growth on one side of the ledger, and on the other everything a state was doing that nobody had noticed.",
+    "order": 90,
+    "colour": "#E3D26A",
+    "economic": 0.95,
+    "authority": -0.90,
+    "prefers_governments": ["federation", "presidential_republic", "direct_democracy"],
+    "effects": { "growth": 0.0038, "living": -0.00010, "radicalism": 0.00010, "literacy": -0.00006 }
+  },
+
+  "technocratic_rule": {
+    "name": "Technocratic rule",
+    "description": "Policy as an engineering problem, decided by the people who can do the arithmetic. Excellent at questions with answers; it has no theory of the other kind.",
+    "order": 100,
+    "colour": "#5FA8A0",
+    "economic": -0.22,
+    "authority": 0.32,
+    "prefers_governments": ["technocracy", "one_party_state", "presidential_republic"],
+    "effects": { "growth": 0.0028, "literacy": 0.00012, "radicalism": 0.00006, "war_support": -0.00006 }
+  },
+
+  "monarchism": {
+    "name": "Monarchism",
+    "description": "Legitimacy by descent, argued for on the grounds that somebody has to have the last word and an inherited one is at least not campaigning for it.",
+    "order": 110,
+    "colour": "#8C6FA8",
+    "economic": 0.22,
+    "authority": 0.52,
+    "prefers_governments": ["absolute_monarchy", "constitutional_monarchy"],
+    "effects": { "stability": 0.00016, "radicalism": -0.00004, "growth": -0.0010 }
+  },
+
+  "agrarianism": {
+    "name": "Agrarianism",
+    "description": "The countryside as the country. Land, smallholders and a deep suspicion of the city that is buying the harvest.",
+    "order": 120,
+    "colour": "#6E8B3D",
+    "economic": -0.30,
+    "authority": -0.15,
+    "prefers_governments": ["parliamentary_republic", "federation", "direct_democracy"],
+    "effects": { "living": 0.00008, "stability": 0.00008, "growth": -0.0022, "literacy": -0.00004 }
+  }
+}

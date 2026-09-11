@@ -1,0 +1,28 @@
+// A form of government the game has never had, and one of the eleven retuned.
+//
+// The vocabulary is documented at the top of `game/common/governments/00_governments.json`.
+
+{
+  // An id the base game does not use is a new form of government. It appears as its own
+  // button on the state affairs screen, named and explained out of this file, and any
+  // ideology may name it in `prefers_governments`.
+  "corporate_state": {
+    "name": "Corporate state",
+    "description": "Office held by the industries rather than by the regions. Decisions are quick, and they are quick in the direction of whoever is largest.",
+    "order": 75,
+    "centralisation": 0.74,
+    "change_cost": 1.5,
+    "effects": { "growth": 0.0030, "radicalism": 0.00016, "living": -0.00008 }
+  },
+
+  // Naming one the base game ships with replaces that form and leaves the others alone.
+  // Here an absolute monarchy is harder to leave and better at holding the country still.
+  "absolute_monarchy": {
+    "name": "Absolute monarchy",
+    "description": "One office, one family, and a very long memory.",
+    "order": 40,
+    "centralisation": 0.96,
+    "change_cost": 2.6,
+    "effects": { "stability": 0.00026, "radicalism": 0.00016, "growth": -0.0020, "literacy": -0.00006 }
+  }
+}

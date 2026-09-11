@@ -451,6 +451,13 @@ public static class EconomySystem
             // Looked up once. Every one of the cabinet's seven effects used to be its own
             // switch on the enum, in five different places in this method.
             var cabinet = GovernmentFocusCatalog.Of(nation.GovernmentFocus);
+            // How the country is arranged, and what it is trying to do. Two more sources of
+            // the same six pressures the cabinet applies, looked up once for the same reason.
+            var government = PoliticsCore.GovernmentOf(nation);
+            var ideology = PoliticsCore.IdeologyOf(nation);
+            // An ideology living in a form of government it has no business in. Not
+            // forbidden - it is a real arrangement - but it costs every week it lasts.
+            var mismatch = PoliticsCore.IsMismatched(nation) ? ideology.MismatchStability : 0f;
             var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar);
             nation.WeeklyTaxIncome = budget.Taxation;
             nation.WeeklyExpenses = budget.Expenses;
@@ -487,7 +494,8 @@ public static class EconomySystem
             var taxEffect = budget.Growth;
             var conditions = 0.006f + (nation.Stability - 0.5f) * 0.018f - (atWar ? 0.018f : 0f) -
                              nation.ShortageIndex * campaign.Defines.ShortageAnnualGrowthPenalty + taxEffect +
-                             GovernmentFocusRules.AnnualGrowth(nation.GovernmentFocus) -
+                             GovernmentFocusRules.AnnualGrowth(nation.GovernmentFocus) +
+                             government.Growth + ideology.Growth -
                              (1f - marketOutput) * 0.020f;
             nation.Productivity = M.Clamp(nation.Productivity * (1f + conditions / 52f), 0.15f, 4f);
 
@@ -514,23 +522,23 @@ public static class EconomySystem
                 GrowGroups(state, delta);
                 state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
                 var welfareRadicalism = budget.Radicalism;
-                var focusRadicalism = cabinet.Radicalism;
+                var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
                 state.Radicalism = M.Clamp01(state.Radicalism +
                     (0.46f - state.StandardOfLiving) * 0.002f + welfareRadicalism + focusRadicalism);
                 MinorityPressure(campaign, nation, state);
                 totalPopulation += state.Population;
             }
             if (states.Length > 0) nation.Population = totalPopulation;
-            var focusSol = cabinet.Living;
+            var focusSol = cabinet.Living + government.Living + ideology.Living;
             nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + annualGrowth * 0.004f -
                 nation.ShortageIndex * campaign.Defines.ShortageSolWeeklyPenalty +
                 budget.Living + focusSol);
-            var focusLiteracy = cabinet.Literacy;
+            var focusLiteracy = cabinet.Literacy + government.Literacy + ideology.Literacy;
             nation.Literacy = M.Clamp(nation.Literacy + budget.Literacy + focusLiteracy,
                 0.05f, 0.999f);
             var productivityTarget = 0.72f + nation.Literacy * 0.50f + cabinet.ProductivityTarget;
             nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
-            var securityStability = cabinet.Stability;
+            var securityStability = cabinet.Stability + government.Stability + ideology.Stability + mismatch;
             var livingStandard = (nation.StandardOfLiving - 0.45f) * 0.001f;
             var settledStability = M.Clamp(
                 nation.Stability + livingStandard + securityStability + budget.Stability, 0.10f, 0.98f);
@@ -548,7 +556,7 @@ public static class EconomySystem
                     : settledStability <= 0.10f ? "held up off the floor" : "rounding");
             nation.Stability = settledStability;
 
-            var focusWarSupport = cabinet.WarSupport;
+            var focusWarSupport = cabinet.WarSupport + government.WarSupport + ideology.WarSupport;
             var settledWarSupport = M.Clamp01(nation.WarSupport + focusWarSupport);
             nation.WarSupportDrivers.Begin("War support, weekly", "share");
             nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);

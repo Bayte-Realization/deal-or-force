@@ -84,6 +84,49 @@ public sealed partial class Campaign
         BudgetCore.SetRate(nation, line, value);
         Changed?.Invoke();
     }
+
+    /// <summary>
+    /// Rearrange the state, or change what it is trying to do.
+    ///
+    /// Both go through one method because both cost the same thing: a country does not
+    /// reorganise itself for free, and a country that has just reorganised itself is in no
+    /// condition to do it again next week. The price is stability, multiplied by how hard
+    /// the form being left is to leave - an election and a palace are not the same afternoon
+    /// - and it is charged whether the change was wise or not.
+    ///
+    /// Returns false when the change was refused, so a screen can say why rather than
+    /// leaving a button that appears to do nothing.
+    /// </summary>
+    public bool ChangePolitics(int nationId, string government, string ideology, out string refusal)
+    {
+        var nation = NationById(nationId);
+        refusal = PoliticsCore.Refusal(this, nation, government, ideology);
+        if (refusal.Length > 0) return false;
+
+        var wantsGovernment = !string.IsNullOrEmpty(government) &&
+                              !string.Equals(government, nation.Government, StringComparison.OrdinalIgnoreCase);
+        var wantsIdeology = !string.IsNullOrEmpty(ideology) &&
+                            !string.Equals(ideology, nation.Ideology, StringComparison.OrdinalIgnoreCase);
+        var cost = PoliticsCore.ChangeCost(nation, government, ideology);
+
+        if (wantsGovernment) nation.Government = government;
+        if (wantsIdeology) nation.Ideology = ideology;
+        nation.PoliticsChangedDay = ElapsedDays;
+        nation.Stability = M.Clamp(nation.Stability - cost, 0.05f, 0.98f);
+        foreach (var state in StatesOf(nation))
+            state.Radicalism = M.Clamp01(state.Radicalism + cost * 0.5f);
+
+        Changed?.Invoke();
+        return true;
+    }
+}
+
+public sealed class ChangePoliticsCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public string Government { get; init; } = "";
+    public string Ideology { get; init; } = "";
+    public void Apply(Campaign campaign) => campaign.ChangePolitics(IssuerId, Government, Ideology, out _);
 }
 
 public sealed class SetPolicyRateCommand : ICampaignCommand

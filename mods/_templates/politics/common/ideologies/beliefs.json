@@ -1,0 +1,34 @@
+// Two new ideologies, placed rather than described against the others.
+//
+// The vocabulary is documented at the top of `game/common/ideologies/00_ideologies.json`.
+// The important part: an ideology is a position on two axes, and every other ideology's
+// opinion of it exists the moment it is placed. There is no table of rivalries to write and
+// none to keep in step.
+
+{
+  // Far left, far authority: every other ideology's distance from this is now defined, and
+  // so is what every country in the world makes of a country holding it.
+  "syndicalism": {
+    "name": "Syndicalism",
+    "description": "The union as the unit of the state. Industry runs itself and answers to the people in it, which is either the end of the boss or a new one with a committee.",
+    "order": 45,
+    "colour": "#B0453C",
+    "economic": -0.85,
+    "authority": -0.45,
+    "prefers_governments": ["direct_democracy", "federation", "one_party_state"],
+    "effects": { "living": 0.00016, "radicalism": -0.00012, "growth": -0.0026 }
+  },
+
+  // And one for the new form of government above, so the pair is a coherent country to play
+  // rather than two entries that never meet.
+  "corporatism": {
+    "name": "Corporatism",
+    "description": "The state and the industries as one body, each keeping the other in order. Nothing is nationalised and nothing is free either.",
+    "order": 75,
+    "colour": "#6B7C93",
+    "economic": 0.10,
+    "authority": 0.68,
+    "prefers_governments": ["corporate_state", "one_party_state", "presidential_republic"],
+    "effects": { "growth": 0.0022, "stability": 0.00010, "radicalism": 0.00014, "living": -0.00006 }
+  }
+}

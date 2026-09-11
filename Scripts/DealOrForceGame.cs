@@ -35,6 +35,7 @@ public partial class DealOrForceGame : Control
     private Control _identityFlag;
     private Label _sideBody = null!;
     private VBoxContainer _sideDetail = null!;
+    private HFlowContainer _sideLinks = null!;
     private HSlider _militarySpending = null!;
     private Button _pause = null!;
     private Button _mainProjectionButton = null!;
@@ -564,6 +565,17 @@ public partial class DealOrForceGame : Control
         _sideDetail.AddThemeConstantOverride("separation", 3);
         sideRows.AddChild(_sideDetail);
 
+        // Where to go next from whatever is being read.
+        //
+        // A number on this panel is almost always a number somebody wants to do something
+        // about, and until now doing something about it meant knowing which of eight buttons
+        // at the top of the screen owned it. These are the same destinations, put beside the
+        // figures that lead to them.
+        _sideLinks = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _sideLinks.AddThemeConstantOverride("h_separation", 5);
+        _sideLinks.AddThemeConstantOverride("v_separation", 4);
+        sideRows.AddChild(_sideLinks);
+
         
         BuildCountryActionControls(sideRows);
         BuildRegionInteractionControls(sideRows);
@@ -669,6 +681,7 @@ public partial class DealOrForceGame : Control
         _sideTitle.Text = screen;
         ShowSideFlag(screen is "Nation" or "Diplomacy" or "Economy" or "Military" ? nation.Tag : "");
         ClearDetail();
+        RefreshSideLinks(screen);
 
         switch (screen)
         {
@@ -685,6 +698,18 @@ public partial class DealOrForceGame : Control
                 DetailRow("Treasury", Fmt.Money(nation.Treasury), Fmt.MoneyExact(nation.Treasury),
                     nation.Treasury < 0f ? "state.negative" : "text.bright");
                 DetailRow("Tax rate", Fmt.Percent(nation.TaxRate));
+                DetailHeading("GOVERNMENT");
+                DetailRow("Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name),
+                    Tr(PoliticsCore.GovernmentOf(nation).Description));
+                DetailRow("Ideology", Tr(PoliticsCore.IdeologyOf(nation).Name),
+                    Tr(PoliticsCore.IdeologyOf(nation).Description));
+                if (nation != _campaign.Player)
+                    DetailRow("Politics", PoliticsCore.Affinity(_campaign, _campaign.Player.Id, nation.Id) >= 0f
+                            ? Tr("close to ours") : Tr("unlike ours"),
+                        Tr("How alike two governments are moves what they make of each other, every week, " +
+                           "whether or not anything has ever happened between them."),
+                        PoliticsCore.Affinity(_campaign, _campaign.Player.Id, nation.Id) >= 0f
+                            ? "state.positive" : "state.negative");
                 DetailHeading("SOCIETY");
                 DetailRow("Standard of living", Fmt.Percent(nation.StandardOfLiving));
                 DetailRow("Literacy", Fmt.Percent(nation.Literacy));

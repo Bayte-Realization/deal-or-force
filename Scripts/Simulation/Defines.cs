@@ -150,6 +150,15 @@ public sealed class Defines
 	public float ShortageAnnualGrowthPenalty { get; set; } = 0.08f;
 
     /// <summary>
+    /// How much two countries' politics count towards what they make of each other.
+    ///
+    /// Multiplied by how close their ideologies stand: identical politics are worth
+    /// about a third of this in goodwill and opposite ones rather more than that in
+    /// suspicion. Zero turns ideology into scenery.
+    /// </summary>
+    public float IdeologyOpinionWeight { get; set; } = 30f;
+
+    /// <summary>
     /// How fast GDP converges on the market value of what the country actually produced.
     /// Low on purpose: output is recomputed every economic week, and an economy that
     /// repriced itself completely each week would read as noise instead of as a trend a

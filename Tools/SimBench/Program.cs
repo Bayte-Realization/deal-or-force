@@ -153,6 +153,8 @@ public static class Program
             TheBudgetIsData(campaign));
         failures += Check("a mod can add a cabinet and a trade stance the game never had",
             PolicyCataloguesTakeNewEntries());
+        failures += Check("every country is governed by something, and minds what its neighbours are",
+            ThePoliticalWorldHangsTogether(campaign));
         failures += Check("every good is made by something and eaten by something",
             TheChainsHangTogether());
         failures += Check("every mod template names something the game actually has",
@@ -2646,12 +2648,17 @@ public static class Program
         var relation = CampaignDiplomacy.Get(campaign, first.Id, second.Id);
         relation.Reasons.Clear();
         OpinionSystem.Settle(campaign, relation);
-        if (Math.Abs(relation.Opinion) > 0.01f)
-            return $"a country with no history of another has an opinion of {relation.Opinion:0.0}";
+        // Two countries with no history of each other are not strangers any more: they can
+        // see what the other is. So what is left when the reasons are cleared has to be
+        // exactly what their politics are worth to each other, and nothing else.
+        var politics = PoliticsCore.Affinity(campaign, first.Id, second.Id);
+        if (Math.Abs(relation.Opinion - politics) > 0.01f)
+            return $"a country with no history of another has an opinion of {relation.Opinion:0.0}, " +
+                   $"where its politics account for {politics:0.0}";
 
         OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
         var remembered = relation.Opinion;
-        if (remembered > -50f)
+        if (remembered > -50f + politics)
             return $"a declaration of war moved opinion to {remembered:0.0}, which is barely a grudge";
 
         // What the screen shows has to equal what it is made of.
@@ -2985,6 +2992,111 @@ public static class Program
         return "";
     }
 
+    /// <summary>
+    /// Who governs, by what right, and what everyone else makes of it.
+    ///
+    /// Three things, and the third is the one worth having a check for. A government and an
+    /// ideology that only affect the country holding them are a label; what makes them a
+    /// system is that the rest of the world can see them, so this proves that two countries
+    /// with nothing else between them still have an opinion, that it is warm when their
+    /// politics are close and cold when they are opposite, and that the whole of it can be
+    /// switched off from `common/defines` by a mod that wants ideology to be scenery.
+    /// </summary>
+    private static string ThePoliticalWorldHangsTogether(Campaign world)
+    {
+        if (GovernmentCatalog.All.Count < 2) return "common/governments describes fewer than two governments";
+        if (IdeologyCatalog.All.Count < 2) return "common/ideologies describes fewer than two ideologies";
+
+        // Nobody is governed by something the catalogue has never heard of.
+        foreach (var nation in world.Nations)
+        {
+            if (!GovernmentCatalog.Knows(nation.Government))
+                return $"{nation.Tag} is a `{nation.Government}`, which no file describes";
+            if (!IdeologyCatalog.Knows(nation.Ideology))
+                return $"{nation.Tag} believes in `{nation.Ideology}`, which no file describes";
+        }
+
+        // And the scenario said something, rather than leaving the whole world identical.
+        var governments = world.Nations.Select(nation => nation.Government).Distinct().Count();
+        var ideologies = world.Nations.Select(nation => nation.Ideology).Distinct().Count();
+        if (governments < 5 || ideologies < 5)
+            return $"the world holds {governments} form(s) of government and {ideologies} ideolog(ies), " +
+                   "which is a scenario that has not been written";
+
+        // Two countries with the same politics think better of each other than two with
+        // opposite politics. This is the whole diplomatic consequence in one line.
+        var left = world.Nations.Find(nation => string.Equals(nation.Ideology, "liberalism", StringComparison.OrdinalIgnoreCase));
+        var right = world.Nations.Find(nation => nation != left &&
+            string.Equals(nation.Ideology, "liberalism", StringComparison.OrdinalIgnoreCase));
+        var opposite = world.Nations.Find(nation =>
+            string.Equals(nation.Ideology, "communism", StringComparison.OrdinalIgnoreCase));
+        if (left is null || right is null || opposite is null)
+            return "the scenario has no pair of like-minded countries and an opposite to compare them with";
+
+        var alike = PoliticsCore.Affinity(world, left.Id, right.Id);
+        var unalike = PoliticsCore.Affinity(world, left.Id, opposite.Id);
+        if (alike <= 0f) return $"two countries of the same politics regard each other at {alike:0.0}";
+        if (unalike >= 0f) return $"{left.Tag} and {opposite.Tag} are opposites and regard each other at {unalike:0.0}";
+        if (alike - unalike < 10f)
+            return $"politics move opinion by only {alike - unalike:0.0} between identical and opposite";
+
+        // A mod may turn it off entirely.
+        var kept = world.Defines.IdeologyOpinionWeight;
+        world.Defines.IdeologyOpinionWeight = 0f;
+        var silent = PoliticsCore.Affinity(world, left.Id, opposite.Id);
+        world.Defines.IdeologyOpinionWeight = kept;
+        if (Math.Abs(silent) > 0.0001f) return "ideology still counts after its weight was set to zero";
+
+        // Changing what a country is costs it, and cannot be done twice in a fortnight.
+        var subject = world.Nations.Find(nation =>
+            nation.Population > 0 && !world.Wars.Any(war => !war.Ended && war.Involves(nation.Id)));
+        if (subject is null) return "no country at peace to reorganise";
+        var wasGovernment = subject.Government;
+        var wasIdeology = subject.Ideology;
+        var wasStability = subject.Stability;
+        var wasChangedDay = subject.PoliticsChangedDay;
+
+        var target = GovernmentCatalog.All.First(entry =>
+            !string.Equals(entry.Id, subject.Government, StringComparison.OrdinalIgnoreCase)).Id;
+        if (!world.ChangePolitics(subject.Id, target, "", out var refusal))
+            return $"a country at peace could not change its government: {refusal}";
+        if (subject.Stability >= wasStability)
+            return $"{subject.Tag} rearranged itself and its stability went from {wasStability:P0} to {subject.Stability:P0}";
+        if (world.ChangePolitics(subject.Id, wasGovernment, "", out _))
+            return "a country changed its government twice on the same day";
+
+        subject.Government = wasGovernment;
+        subject.Ideology = wasIdeology;
+        subject.Stability = wasStability;
+        subject.PoliticsChangedDay = wasChangedDay;
+
+        // And a mod may add to both catalogues.
+        var governmentCount = GovernmentCatalog.All.Count;
+        var ideologyCount = IdeologyCatalog.All.Count;
+        var errors = new List<string>();
+        GovernmentCatalog.Merge("""
+        { "bench_stratocracy": { "name": "Bench stratocracy", "centralisation": 0.9,
+          "effects": { "war_support": 0.0002 } } }
+        """, errors);
+        IdeologyCatalog.Merge("""
+        { "bench_syndicalism": { "name": "Bench syndicalism", "economic": -0.8, "authority": -0.6,
+          "prefers_governments": ["bench_stratocracy"] } }
+        """, errors);
+        if (errors.Count > 0) return $"a sound entry was rejected: {errors[0]}";
+        if (!GovernmentCatalog.Knows("bench_stratocracy") || !IdeologyCatalog.Knows("bench_syndicalism"))
+            return "a mod added a government and an ideology and the catalogues did not keep them";
+
+        GovernmentCatalog.ResetCatalog();
+        IdeologyCatalog.ResetCatalog();
+        if (GovernmentCatalog.All.Count != governmentCount || IdeologyCatalog.All.Count != ideologyCount)
+            return "resetting the catalogues left the bench's politics behind";
+
+        Console.WriteLine($"  politics: {GovernmentCatalog.All.Count} form(s) of government and " +
+                          $"{IdeologyCatalog.All.Count} ideolog(ies); the world runs {governments} and " +
+                          $"{ideologies} of them. Like minds are worth {alike:0.0}, opposites {unalike:0.0}.");
+        return "";
+    }
+
     private static string TheEnglishTableIsAnIndex()
     {
         var scripts = FindScripts();
@@ -3015,7 +3127,7 @@ public static class Program
         // and this is what keeps that true as more of the game becomes data.
         var declared = new SortedSet<string>(StringComparer.Ordinal);
         var common = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common");
-        foreach (var folder in new[] { "budget", "government_focus", "trade_policies" })
+        foreach (var folder in new[] { "budget", "government_focus", "trade_policies", "governments", "ideologies" })
         {
             var directory = Path.Combine(common, folder);
             if (!Directory.Exists(directory)) continue;
@@ -3564,6 +3676,10 @@ public static class Program
                                 GovernmentFocusCatalog.Validate),
                             "trade_policies" => PolicyEntry(entry, file, templates, complaints,
                                 TradePolicyCatalog.Validate),
+                            "governments" => PolicyEntry(entry, file, templates, complaints,
+                                GovernmentCatalog.Validate),
+                            "ideologies" => PolicyEntry(entry, file, templates, complaints,
+                                IdeologyCatalog.Validate),
                             "opinion_modifiers" =>
                                 entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                 entry.Value.TryGetProperty("opinion", out _),
