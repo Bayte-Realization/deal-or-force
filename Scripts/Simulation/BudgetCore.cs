@@ -179,6 +179,25 @@ public static class BudgetCore
 
     private static readonly List<BudgetLine> Lines = new();
 
+    /// <summary>
+    /// The share of a week's output a government may take before anyone minds, and how
+    /// hard the base shrinks past it.
+    ///
+    /// These exist because the taxes were additive and should not have been. Every revenue
+    /// line charged its own rate against the whole economy, so switching all six on took
+    /// about seventy per cent of output to the treasury and the answer to every budget
+    /// problem was another tax. They are levied on the same money, and this is the shape of
+    /// that fact: one burden, summed across the lines, and a base that quietly stops being
+    /// there as the burden climbs.
+    ///
+    /// It is also a real decision rather than a cap. Nothing forbids a punitive rate; it
+    /// simply stops being worth what it costs, which is the trade-off the lines were
+    /// supposed to be about.
+    /// </summary>
+    private static float TaxTolerance = 0.10f;
+
+    private static float TaxEvasion = 2.4f;
+
     public static IReadOnlyList<BudgetLine> All => Lines;
 
     /// <summary>The lines a government actually sets, in the order a panel should show them.</summary>
@@ -227,6 +246,11 @@ public static class BudgetCore
         if (root.ValueKind != JsonValueKind.Object) return;
         foreach (var group in root.EnumerateObject())
         {
+            if (string.Equals(group.Name, "taxation", StringComparison.OrdinalIgnoreCase))
+            {
+                ReadTaxation(group.Value, errors);
+                continue;
+            }
             var side = group.Name.ToLowerInvariant() switch
             {
                 "revenues" or "revenue" => BudgetSide.Revenue,
@@ -241,6 +265,23 @@ public static class BudgetCore
                 if (line is null) continue;
                 Lines.RemoveAll(existing => string.Equals(existing.Id, line.Id, StringComparison.OrdinalIgnoreCase));
                 Lines.Add(line);
+            }
+        }
+    }
+
+    private static void ReadTaxation(JsonElement element, List<string> errors)
+    {
+        if (element.ValueKind != JsonValueKind.Object) return;
+        foreach (var entry in element.EnumerateObject())
+        {
+            if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+            switch (entry.Name.ToLowerInvariant())
+            {
+                case "tolerated": TaxTolerance = MathF.Max(0f, Number(entry.Value, TaxTolerance)); break;
+                case "evasion": TaxEvasion = MathF.Max(0f, Number(entry.Value, TaxEvasion)); break;
+                default:
+                    errors?.Add($"budget: `taxation.{entry.Name}` is not a field. Use tolerated or evasion.");
+                    break;
             }
         }
     }
@@ -523,7 +564,56 @@ public static class BudgetCore
     {
         if (nation is null || line is null) return 0f;
         FillSlots(nation, atWar);
-        return AmountFromSlots(nation, line, weeklyOutput);
+        return AmountFromSlots(nation, line, weeklyOutput, Compliance(nation, weeklyOutput));
+    }
+
+    private static float ScaleOf(BudgetLine line)
+    {
+        var scale = line.Constant;
+        for (var index = 0; index < line.Factors.Length; index++)
+            scale += line.Weights[index] * Slots[line.Factors[index]];
+        return scale;
+    }
+
+    /// <summary>A line the government levies on its own economy, as opposed to one it is paid.</summary>
+    private static bool IsLevy(BudgetLine line) =>
+        line.Side == BudgetSide.Revenue && line.Charge == BudgetBasis.Output;
+
+    /// <summary>
+    /// How much of what the taxes ask for actually arrives.
+    ///
+    /// The burden is what every levy together asks of one week's output; past what the
+    /// country tolerates, the base starts going missing. This is the one place the levies
+    /// know about each other, and it is the whole reason they are not six separate money
+    /// taps on the same economy.
+    ///
+    /// `overridden` lets a panel ask what a rate nobody has set yet would collect - and,
+    /// just as importantly, what it would do to the five lines already running, which is the
+    /// part a player needs to see before moving the slider rather than after.
+    ///
+    /// Slots must be filled for the country first.
+    /// </summary>
+    public static float Compliance(Nation nation, float weeklyOutput,
+        BudgetLine overridden = null, float overriddenRate = 0f)
+    {
+        if (nation is null || weeklyOutput <= 0f || TaxEvasion <= 0f) return 1f;
+        var burden = 0f;
+        foreach (var line in Lines)
+        {
+            if (!IsLevy(line)) continue;
+            var rate = ReferenceEquals(line, overridden) ? overriddenRate : RateOf(nation, line);
+            burden += rate * line.Yield * ScaleOf(line);
+        }
+        return 1f / (1f + TaxEvasion * MathF.Max(0f, burden - TaxTolerance));
+    }
+
+    /// <summary>The same question a panel asks, with the slots filled for it.</summary>
+    public static float ComplianceAt(Nation nation, float weeklyOutput, bool atWar,
+        BudgetLine overridden = null, float overriddenRate = 0f)
+    {
+        if (nation is null) return 1f;
+        FillSlots(nation, atWar);
+        return Compliance(nation, weeklyOutput, overridden, overriddenRate);
     }
 
     /// <summary>
@@ -539,20 +629,18 @@ public static class BudgetCore
     {
         if (nation is null || line is null) return 0f;
         FillSlots(nation, atWar);
-        var scale = line.Constant;
-        for (var index = 0; index < line.Factors.Length; index++)
-            scale += line.Weights[index] * Slots[line.Factors[index]];
-        var amount = BasisOf(nation, line, weeklyOutput) * rate * line.Yield * scale;
+        var amount = BasisOf(nation, line, weeklyOutput) * rate * line.Yield * ScaleOf(line);
+        // At the rate being asked about, not the one the country has set - otherwise the
+        // slider would promise money that the rate it is promising it for would evade.
+        if (IsLevy(line)) amount *= Compliance(nation, weeklyOutput, line, rate);
         return line.Charge == BudgetBasis.TradeBalance ? amount : MathF.Max(0f, amount);
     }
 
-    private static float AmountFromSlots(Nation nation, BudgetLine line, float weeklyOutput)
+    private static float AmountFromSlots(Nation nation, BudgetLine line, float weeklyOutput,
+        float compliance)
     {
-        var scale = line.Constant;
-        for (var index = 0; index < line.Factors.Length; index++)
-            scale += line.Weights[index] * Slots[line.Factors[index]];
-
-        var amount = BasisOf(nation, line, weeklyOutput) * RateOf(nation, line) * line.Yield * scale;
+        var amount = BasisOf(nation, line, weeklyOutput) * RateOf(nation, line) * line.Yield * ScaleOf(line);
+        if (IsLevy(line)) amount *= compliance;
         // A trade balance is allowed to be a loss; nothing else is allowed to be negative,
         // because a tax that pays money out because the country is miserable is a bug
         // wearing a formula's clothes.
@@ -567,13 +655,16 @@ public static class BudgetCore
     {
         if (nation is null) return default;
         FillSlots(nation, atWar);
+        // Once for the whole budget: every levy is charged against the same week's output,
+        // so what the country is willing to hand over is one number, not six.
+        var compliance = Compliance(nation, weeklyOutput);
 
         float revenue = 0f, taxation = 0f, expenses = 0f;
         float growth = 0f, living = 0f, literacy = 0f, radicalism = 0f, stability = 0f;
 
         foreach (var line in Lines)
         {
-            var amount = AmountFromSlots(nation, line, weeklyOutput);
+            var amount = AmountFromSlots(nation, line, weeklyOutput, compliance);
             if (line.Side == BudgetSide.Revenue)
             {
                 revenue += amount;
@@ -615,10 +706,11 @@ public static class BudgetCore
     {
         if (nation is null) return;
         FillSlots(nation, atWar);
+        var compliance = Compliance(nation, weeklyOutput);
         nation.Budget.Begin(Loc.Get("Weekly balance"), "money");
         foreach (var line in Lines)
         {
-            var amount = AmountFromSlots(nation, line, weeklyOutput);
+            var amount = AmountFromSlots(nation, line, weeklyOutput, compliance);
             var sign = line.Side == BudgetSide.Expense ? -1f : 1f;
             nation.Budget.Add(Label(nation, line), sign * amount);
         }

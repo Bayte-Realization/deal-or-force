@@ -178,6 +178,7 @@
   "Esc closes this menu": "Esc closes this menu",
   "EVENT": "EVENT",
   "Every division": "Every division",
+  "Every levy is charged against the same week's output: {0:P0} of what is asked for is actually collected. A further tax on top of these raises less than the first one did.": "Every levy is charged against the same week's output: {0:P0} of what is asked for is actually collected. A further tax on top of these raises less than the first one did.",
   "Every value affects the treasury": "Every value affects the treasury",
   "Every war": "Every war",
   "Everyone else · {0}": "Everyone else · {0}",

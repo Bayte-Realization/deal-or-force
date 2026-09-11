@@ -31,36 +31,30 @@ public partial class DealOrForceGame
     private HBoxContainer _stateBudgetControls = null!;
     private HBoxContainer _stateTradeControls = null!;
     private HBoxContainer _stateCabinetControls = null!;
-    private HBoxContainer _stateSocialControls = null!;
-    private HSlider _stateTaxRate = null!;
-    private HSlider _stateMilitarySpending = null!;
-    private Label _stateTaxReading = null!;
-    private Label _stateMilitaryReading = null!;
     private Label _stateBudgetLine = null!;
     private OptionButton _stateBuildingPicker = null!;
     private OptionButton _stateRegionPicker = null!;
     private Label _stateConstructionQueue = null!;
     private int _stateRegionListNationId = -1;
-    private HSlider _stateWelfareSpending = null!;
-    private HSlider _stateEducationSpending = null!;
     private Label _stateGovernanceFeedback = null!;
     private readonly Dictionary<TradePolicy, Button> _stateTradeButtons = new();
     private readonly Dictionary<GovernmentFocus, Button> _stateFocusButtons = new();
 
     /// <summary>
-    /// A slider for every budget line the data declares and this screen has not already
-    /// built by hand.
+    /// A slider for every budget line the data declares, and nothing built by hand.
     ///
-    /// Four lines - taxation, the armed forces, welfare, education - keep their own
-    /// controls above, laid out the way a player already knows them. Everything else,
-    /// including every line a mod adds, gets a slider here without a line of code being
-    /// written for it, which is the whole point of the budget being a file.
+    /// Four of them used to have controls of their own in two other sections, which made
+    /// income tax look like a different kind of thing from the five taxes beside it. They
+    /// are twelve rows of one file and they are twelve rows of one screen. A line a mod
+    /// adds gets its slider here for free, which is the whole point of the budget being
+    /// a file.
     /// </summary>
     private readonly Dictionary<string, HSlider> _policySliders = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Label> _policyReadings = new(StringComparer.OrdinalIgnoreCase);
     private VBoxContainer _policyRevenueControls = null!;
     private VBoxContainer _policyExpenseControls = null!;
     private Label _policyFeedback = null!;
+    private Label _policyCollection = null!;
 
     private void BuildStateAffairsInterface()
     {
@@ -159,13 +153,7 @@ public partial class DealOrForceGame
         _stateBudgetControls.Visible = true;
         _stateTradeControls.Visible = true;
         _stateCabinetControls.Visible = true;
-        _stateSocialControls.Visible = true;
 
-        _updatingStateAffairs = true;
-        _stateTaxRate.SetValueNoSignal(nation.TaxRate);
-        _stateMilitarySpending.SetValueNoSignal(nation.MilitarySpending);
-        _stateWelfareSpending.SetValueNoSignal(nation.WelfareSpending);
-        _stateEducationSpending.SetValueNoSignal(nation.EducationSpending);
         _updatingStateAffairs = true;
         RefreshPolicyRates(nation);
         _updatingStateAffairs = false;
@@ -197,29 +185,11 @@ public partial class DealOrForceGame
         _stateBudgetControls.AddChild(budget);
         budget.AddChild(RowLabel("BUDGET", 12, Ui.Colour("text.accent")));
 
-        _stateTaxRate = new HSlider
-        {
-            MinValue = 0.05,
-            MaxValue = 0.55,
-            Step = 0.01,
-            CustomMinimumSize = new Vector2(190, 26),
-            TooltipText = Tr("Higher taxes raise weekly revenue but slowly reduce living standards and private growth.")
-        };
-        _stateTaxRate.ValueChanged += OnStateTaxChanged;
-        budget.AddChild(SliderRow("TAXATION", _stateTaxRate, out _stateTaxReading));
-
-        _stateMilitarySpending = new HSlider
-        {
-            MinValue = 0.0,
-            MaxValue = 0.30,
-            Step = 0.005,
-            CustomMinimumSize = new Vector2(190, 26),
-            TooltipText = Tr("The share of output spent on the armed forces: reinforcement rate and readiness, " +
-                          "against everything else the money could have done.")
-        };
-        _stateMilitarySpending.ValueChanged += OnStateMilitaryChanged;
-        budget.AddChild(SliderRow("ARMED FORCES", _stateMilitarySpending, out _stateMilitaryReading));
-
+        // The sliders that used to sit here - taxation and the armed forces - are built from
+        // the catalogue with the rest of the budget, under REVENUE and SPENDING below. Two
+        // of the twelve levers having hand-made controls in a section of their own made
+        // income tax look like a different kind of thing from the five taxes beside it, and
+        // it is not: it is the first row of the same file.
         _stateBudgetLine = RowLabel("", 12, Ui.Colour("text.body_soft"));
         budget.AddChild(_stateBudgetLine);
         _stateFiscalFeedback = RowLabel("", 11, Ui.Colour("text.accent_dim"));
@@ -304,22 +274,6 @@ public partial class DealOrForceGame
         _stateGovernanceFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _stateCabinetControls.AddChild(_stateGovernanceFeedback);
 
-        StateSection(rows, "WELFARE AND EDUCATION",
-            "Transfers raise living standards and cool radicalism; schooling raises literacy, and literacy " +
-            "raises productivity for the rest of the campaign. Both are paid every week.");
-        _stateSocialControls = new HBoxContainer
-        {
-            Visible = false,
-            CustomMinimumSize = new Vector2(0, 38),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter
-        };
-        _stateSocialControls.AddThemeConstantOverride("separation", 9);
-        rows.AddChild(_stateSocialControls);
-        AddSocialSpendingSlider("WELFARE", "Public transfers improve regional living standards and reduce radicalism, but increase weekly expenses.",
-            0.18f, out _stateWelfareSpending, OnStateWelfareChanged);
-        AddSocialSpendingSlider("EDUCATION", "Education spending raises national literacy and the long-run productivity target every economic week.",
-            0.15f, out _stateEducationSpending, OnStateEducationChanged);
-
         BuildPolicyRates(rows);
     }
 
@@ -341,6 +295,10 @@ public partial class DealOrForceGame
         _policyRevenueControls = new VBoxContainer { Visible = false };
         _policyRevenueControls.AddThemeConstantOverride("separation", 3);
         rows.AddChild(_policyRevenueControls);
+        _policyCollection = RowLabel("", 11, Ui.Colour("state.negative"));
+        _policyCollection.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _policyCollection.Visible = false;
+        rows.AddChild(_policyCollection);
 
         StateSection(rows, "SPENDING",
             "What the state buys besides soldiers, schools and transfers. Health and pensions are " +
@@ -353,12 +311,7 @@ public partial class DealOrForceGame
         rows.AddChild(_policyFeedback);
 
         foreach (var line in Simulation.BudgetCore.PlayerLines)
-        {
-            // The four with hand-built controls above. Building a second slider for them
-            // would give a player two of everything and no clue which one wins.
-            if (line.Store != Simulation.BudgetStore.Policy) continue;
             AddPolicySlider(line);
-        }
     }
 
     private void AddPolicySlider(Simulation.BudgetLine line)
@@ -416,11 +369,27 @@ public partial class DealOrForceGame
         {
             if (!_policySliders.TryGetValue(line.Id, out var slider)) continue;
             var rate = Simulation.BudgetCore.RateOf(nation, line);
+            // A scenario or a scripted effect may set a rate past what the slider offers,
+            // and a slider that silently shows its maximum instead is a control lying about
+            // the country it is attached to. It grows to fit rather than crop.
+            if (rate > slider.MaxValue) slider.MaxValue = rate;
             slider.SetValueNoSignal(rate);
             if (!_policyReadings.TryGetValue(line.Id, out var reading)) continue;
             var amount = Simulation.BudgetCore.Amount(nation, line, weeklyOutput, atWar);
             reading.Text = Simulation.Loc.Format("{0:P1} · {1}", rate, Fmt.Money(amount));
         }
+
+        // What the levies ask for against what arrives. Silent while everything is being
+        // collected, because a line reading "100%" every week is a line nobody sees by the
+        // time it matters - and the moment it matters is the moment a player has stacked
+        // taxes and is wondering why the treasury did not move.
+        var compliance = Simulation.BudgetCore.ComplianceAt(nation, weeklyOutput, atWar);
+        _policyCollection.Visible = compliance < 0.999f;
+        if (_policyCollection.Visible)
+            _policyCollection.Text = Simulation.Loc.Format(
+                "Every levy is charged against the same week's output: {0:P0} of what is asked for is " +
+                "actually collected. A further tax on top of these raises less than the first one did.",
+                compliance);
     }
     private void AddTradePolicyButton(string caption, TradePolicy policy, string tooltip)
     {
@@ -438,43 +407,6 @@ public partial class DealOrForceGame
         button.TooltipText = GovernmentFocusRules.Description(focus);
         _stateCabinetControls.AddChild(button);
         _stateFocusButtons[focus] = button;
-    }
-    private void AddSocialSpendingSlider(string caption, string tooltip, float maximum,
-        out HSlider slider, Godot.Range.ValueChangedEventHandler handler)
-    {
-        var label = Title(caption, 11, Ui.Colour("text.caption"));
-        label.CustomMinimumSize = new Vector2(80, 0);
-        label.VerticalAlignment = VerticalAlignment.Center;
-        _stateSocialControls.AddChild(label);
-        slider = new HSlider
-        {
-            MinValue = 0,
-            MaxValue = maximum,
-            Step = 0.005,
-            CustomMinimumSize = new Vector2(225, 28),
-            TooltipText = tooltip
-        };
-        slider.ValueChanged += handler;
-        _stateSocialControls.AddChild(slider);
-    }
-    private void OnStateTaxChanged(double value)
-    {
-        if (_updatingStateAffairs || _campaign?.Player is null) return;
-        _campaign.Commands.Enqueue(new SetTaxRateCommand { IssuerId = _campaign.Player.Id, Value = (float)value });
-        _campaign.Commands.ApplyAll(_campaign);
-        _stateFiscalFeedback.Text = Simulation.Loc.Format("Tax rate set to {0:P0}. Budget and growth update on the next economic week.", value);
-        RefreshStateAffairs();
-    }
-    private void OnStateMilitaryChanged(double value)
-    {
-        if (_updatingStateAffairs || _campaign?.Player is null) return;
-        _campaign.Commands.Enqueue(new SetMilitarySpendingCommand
-        {
-            IssuerId = _campaign.Player.Id, Value = (float)value
-        });
-        _campaign.Commands.ApplyAll(_campaign);
-        _stateFiscalFeedback.Text = Simulation.Loc.Format("Armed forces set to {0:P1} of output. Reinforcement and readiness follow from the next economic week.", value);
-        RefreshStateAffairs();
     }
     /// <summary>
     /// Order a building, and say why when it cannot be ordered.
@@ -528,11 +460,6 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshStateBudget(Nation nation)
     {
-        var tax = (float)_stateTaxRate.Value;
-        var military = (float)_stateMilitarySpending.Value;
-        _stateTaxReading.Text = Simulation.Loc.Format("{0:P0} · {1} a week", tax, Fmt.Money(EconomySystem.WeeklyTaxAt(nation, tax)));
-        _stateMilitaryReading.Text = Simulation.Loc.Format("{0:P1} · −{1} a week", military, Fmt.Money(EconomySystem.WeeklyMilitaryAt(nation, military)));
-
         // The budget is settled once an economic week, so on day zero there is no week to
         // report. Printing its zeroes as "balance +$0, outgoings $0" is a country with no
         // expenses, which is a stranger claim than saying nothing has happened yet.
@@ -590,22 +517,6 @@ public partial class DealOrForceGame
         _campaign.Commands.Enqueue(new SetTradePolicyCommand { IssuerId = _campaign.Player.Id, Policy = policy });
         _campaign.Commands.ApplyAll(_campaign);
         _statePolicyFeedback.Text = Simulation.Loc.Format("{0} selected · effective at the next market clearing.", TradePolicyRules.Name(policy));
-        RefreshStateAffairs();
-    }
-    private void OnStateWelfareChanged(double value)
-    {
-        if (_updatingStateAffairs || _campaign?.Player is null) return;
-        _campaign.Commands.Enqueue(new SetWelfareSpendingCommand { IssuerId = _campaign.Player.Id, Value = (float)value });
-        _campaign.Commands.ApplyAll(_campaign);
-        _stateGovernanceFeedback.Text = Simulation.Loc.Format("Welfare set to {0:P1} of weekly output.", value);
-        RefreshStateAffairs();
-    }
-    private void OnStateEducationChanged(double value)
-    {
-        if (_updatingStateAffairs || _campaign?.Player is null) return;
-        _campaign.Commands.Enqueue(new SetEducationSpendingCommand { IssuerId = _campaign.Player.Id, Value = (float)value });
-        _campaign.Commands.ApplyAll(_campaign);
-        _stateGovernanceFeedback.Text = Simulation.Loc.Format("Education set to {0:P1} of weekly output.", value);
         RefreshStateAffairs();
     }
     private void SetStateGovernmentFocus(GovernmentFocus focus)

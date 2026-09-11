@@ -37,6 +37,25 @@
 // ignores them balances exactly as it always did.
 
 {
+  // Every levy below is charged against the same week's output, so they are not six taps on
+  // six different economies - they are six taps on one. `tolerated` is the share of a week's
+  // output a government may take before anybody minds; past it the base starts going
+  // missing, and `evasion` is how fast.
+  //
+  //     collected = asked · 1 / (1 + evasion · max(0, burden − tolerated))
+  //
+  // where `burden` is what all the levies together ask for. Nothing here forbids a punitive
+  // rate; it simply stops being worth what it costs, which is the decision the taxes were
+  // supposed to be about. Without this, switching on all six took about seventy per cent of
+  // output to the treasury and the answer to every budget problem was another tax.
+  //
+  // A country running only the income tax the game ships with sits well under `tolerated`,
+  // so this changes nothing about the 2024 start.
+  "taxation": {
+    "tolerated": 0.10,
+    "evasion": 2.4
+  },
+
   "revenues": {
 
     "income_tax": {
@@ -151,7 +170,8 @@
       "basis": "output",
       "yield": 0.22,
       "scale": { "constant": 1.0 },
-      "rate": { "default": 0.0, "min": 0.0, "max": 1.0, "neutral": 0.0, "player": true }
+      "//max": "A slider that reached 100% of output would be a slider nobody could use the near end of; 30% is where the hand-built control that preceded it stopped.",
+      "rate": { "default": 0.0, "min": 0.0, "max": 0.30, "neutral": 0.0, "player": true }
     },
 
     "welfare": {

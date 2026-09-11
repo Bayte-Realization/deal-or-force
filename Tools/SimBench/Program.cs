@@ -2809,6 +2809,40 @@ public static class Program
         foreach (var problem in shipped)
             if (problem.Length > 0) return problem;
 
+        // Nobody is evading anything at the 2024 start, which is what lets the eight above
+        // still reproduce their old formulas exactly. If a scenario ever raises a country's
+        // taxes past what it tolerates, that country's budget changes and this says so
+        // rather than leaving it to be discovered as a drifting calibration.
+        foreach (var country in world.Nations)
+        {
+            if (country.Gdp <= 0f) continue;
+            var compliance = BudgetCore.ComplianceAt(country, country.Gdp / 52f, atWar: false);
+            if (compliance < 0.99999f)
+                return $"{country.Tag} collects only {compliance:P1} of what it levies on day zero, " +
+                       "so the shipped budget is not the shipped budget any more";
+        }
+
+        // And the thing the levies were changed for: six taxes on one economy are not six
+        // times one tax. Each is charged against the same week's output, so asking all of
+        // them for everything at once has to collect less than the six asked for separately.
+        var levies = BudgetCore.PlayerLines.Where(line => line.Side == BudgetSide.Revenue).ToList();
+        if (levies.Count < 2) return "there is only one levy, so nothing can share a base with it";
+        var kept = levies.ToDictionary(line => line.Id, line => BudgetCore.RateOf(nation, line));
+        float naive = 0f;
+        foreach (var line in levies)
+        {
+            foreach (var other in levies) BudgetCore.SetRate(nation, other, other.Id == line.Id ? line.Maximum : 0f);
+            naive += BudgetCore.Amount(nation, line, output, atWar: false);
+        }
+        foreach (var line in levies) BudgetCore.SetRate(nation, line, line.Maximum);
+        var together = levies.Sum(line => BudgetCore.Amount(nation, line, output, atWar: false));
+        foreach (var line in levies) BudgetCore.SetRate(nation, line, kept[line.Id]);
+
+        if (together >= naive * 0.75f)
+            return $"every levy at its maximum collects {together:0.##} against {naive:0.##} levied one at a " +
+                   "time, which is close enough to additive that they are not sharing a tax base";
+        var squeeze = naive <= 0f ? 1f : together / naive;
+
         // Every line adds up to the balance the country is actually paid.
         var outcome = BudgetCore.Evaluate(nation, output, atWar: false);
         float revenue = 0f, expenses = 0f;
@@ -2846,7 +2880,10 @@ public static class Program
             return "the mod's line is not offered to the government that would set it";
 
         var modded = BudgetCore.Amount(nation, added, output, atWar: false);
-        var expectedModded = output * 0.10f * 0.40f;
+        // Its own numbers, and then what the country is actually willing to hand over: a
+        // seventh levy lands on the same economy as the other six.
+        var expectedModded = output * 0.10f * 0.40f *
+                             BudgetCore.ComplianceAt(nation, output, atWar: false);
         if (MathF.Abs(modded - expectedModded) > MathF.Max(tolerance, expectedModded * 1e-4f))
             return $"the mod's tax is worth {modded:0.##} where its own numbers say {expectedModded:0.##}";
 
@@ -2866,7 +2903,8 @@ public static class Program
         Console.WriteLine($"  budget: {before} line(s) - {BudgetCore.All.Count(line => line.Side == BudgetSide.Revenue)} " +
                           $"raising, {BudgetCore.All.Count(line => line.Side == BudgetSide.Expense)} spending, " +
                           $"{player} of them a government's to set. The eight the game shipped with " +
-                          "reproduce their old formulas exactly.");
+                          "reproduce their old formulas exactly, and every levy at once collects " +
+                          $"{squeeze:P0} of what the same rates would raise one at a time.");
         return "";
     }
 
