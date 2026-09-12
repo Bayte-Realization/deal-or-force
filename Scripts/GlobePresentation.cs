@@ -332,7 +332,33 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             var colors = new Dictionary<int, uint>(_colorByMapIndex);
             _mapTask = Task.Run(() => BuildPoliticalMap(colors));
+            return;
         }
+
+        // A second campaign in the same session, which is what returning to the menu and
+        // starting again produces.
+        //
+        // The map is built once and applied once, and everything that happens in that apply
+        // - the province topology reaching the campaign, and with it the deployment of every
+        // army in the world - happened to the FIRST campaign and to nothing else. A campaign
+        // started afterwards got no province map at all: no fronts, no movement, no combat,
+        // and every division in the world still standing on the capital it was created at,
+        // which is what a hundred stacked counters on Moscow actually were.
+        //
+        // Nothing needs rebuilding. The raster is the same raster; what has to happen is
+        // that this campaign is given it, in the state the scenario authored rather than the
+        // state the last campaign left it in.
+        if (!_mapApplied || _provinceTopology is null) return;
+        _provinceTopology.RestoreAuthoredBorders();
+        BindArmyTopology();
+        ReconcileArmyMarkers(campaign);
+        BuildFrontPreview();
+        // The overlay is keyed to a map revision, and the new campaign's starts again at a
+        // number this has already drawn. Forcing a repaint is what stops the second campaign
+        // wearing the first one's borders.
+        _controlRevision = -1;
+        _frontRevision = -1;
+        RefreshProvinceControllers();
     }
 
     public override void _Ready()
@@ -527,6 +553,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 // referenced: the simulation mutates this same array every time a border
                 // moves, and the whole point of keeping it is to be able to tell that it did.
                 _paintedOwner = (ushort[])result.Provinces.ProvinceToNation.Clone();
+
+                // And the topology keeps its own copy of the authored world, for the next
+                // campaign started this session: the simulation writes its borders into
+                // these same arrays, so without a copy taken now - before anything has
+                // played on the map - there is nothing left to start a second campaign in.
+                result.Provinces.RememberAuthoredBorders();
                 if (result.ProvinceRasterLoaded) GD.Print($"[dof] province data map loaded: {result.ProvinceSource}");
                 else GD.PushWarning($"[dof] province data map fallback: {result.ProvinceSource}");
                 GD.Print($"[dof] hydrology data source: {result.HydrologySource}");

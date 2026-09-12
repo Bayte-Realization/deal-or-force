@@ -175,6 +175,8 @@ public static class Program
             FlagsFollowWhatACountryIs());
         failures += Check("a country that is failing stops being what it was",
             GovernmentsChangeWithoutBeingTold());
+        failures += Check("a second campaign in one session starts in the authored world",
+            ASecondCampaignGetsTheMapToo());
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
         failures += Check("every explained number adds up to what the screen shows",
@@ -2650,6 +2652,106 @@ public static class Program
     /// changes constantly, a country changes into something it already was, or the player's
     /// own government is rearranged out from under them.
     /// </summary>
+    /// <summary>
+    /// Going back to the menu and playing again.
+    ///
+    /// The province map costs seconds and a great deal of memory to build, so it is built
+    /// once a session and handed to whichever campaign is running. Two things follow that
+    /// nothing tested, because this bench builds a fresh topology for every check and the
+    /// game does not:
+    ///
+    /// - the second campaign has to be GIVEN the map at all. It was not: the map was applied
+    ///   once, to the first campaign, and everything that happens in that apply - the
+    ///   topology reaching the campaign, and with it the deployment of every army in the
+    ///   world - happened to that campaign and to nothing else. A second campaign had no
+    ///   province map: no fronts, no movement, no combat, and every division in the world
+    ///   still standing on the capital it was created at.
+    /// - and it has to be given the AUTHORED map. The simulation writes borders into the
+    ///   topology's own arrays, so a second campaign handed it unchanged would open with the
+    ///   first campaign's conquests already made.
+    /// </summary>
+    private static string ASecondCampaignGetsTheMapToo()
+    {
+        MapRasterCatalog.ResetCatalog();
+        HydrologyCatalog.ResetCatalog();
+        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States,
+                Globality.EarthData.Control, Globality.EarthData.Width, Globality.EarthData.Height,
+                out var topology, out _))
+            return "";
+
+        // Taken before anything plays on it, which is the only moment it is the scenario's.
+        topology.RememberAuthoredBorders();
+
+        var first = Campaign.CreateBootstrap(20240909);
+        first.AttachProvinceTopology(topology);
+
+        // The baseline is day zero of a campaign, not the raw raster. Attaching legitimately
+        // changes the map: the 2024 borders cut nine regions across two owners, and the
+        // first thing any campaign does is split them. A second campaign must arrive at the
+        // same day zero - not at the same raster.
+        var authoredOwners = (ushort[])topology.ProvinceToNation.Clone();
+        var authoredStates = (ushort[])topology.ProvinceToState.Clone();
+        var spreadBefore = Spread(first, "RUS");
+        if (spreadBefore <= 1)
+            return "the first campaign put every Russian division in one province, so this " +
+                   "check cannot tell a deployed world from an undeployed one";
+
+        // Play it far enough to move a border and cut a region, which is what makes the
+        // topology stop describing 2024.
+        first.IsPaused = false;
+        for (var day = 0; day < 400; day++) first.Tick();
+
+        var moved = 0;
+        for (var province = 1; province < authoredOwners.Length; province++)
+            if (topology.ProvinceToNation[province] != authoredOwners[province]) moved++;
+
+        // Now the second campaign, given the same topology the way the game gives it.
+        var second = Campaign.CreateBootstrap(20240909);
+        if (!topology.RestoreAuthoredBorders())
+            return "the topology had no authored borders to put back";
+        second.AttachProvinceTopology(topology);
+
+        if (second.ProvinceMap is null)
+            return "the second campaign was never given a province map, so nothing in it " +
+                   "can march, fight or hold a front";
+
+        var spreadAfter = Spread(second, "RUS");
+        if (spreadAfter <= 1)
+            return $"the second campaign left every Russian division in one province " +
+                   $"({spreadAfter} occupied) where the first spread them over {spreadBefore:N0}";
+        if (spreadAfter < spreadBefore / 2)
+            return $"the second campaign deployed into {spreadAfter:N0} province(s) against " +
+                   $"the first campaign's {spreadBefore:N0}";
+
+        // And it is the authored world, not the one the first campaign left behind.
+        for (var province = 1; province < authoredOwners.Length; province++)
+            if (topology.ProvinceToNation[province] != authoredOwners[province])
+                return $"the second campaign opened with province {province} held by " +
+                       $"{topology.ProvinceToNation[province]} rather than the day-zero " +
+                       $"{authoredOwners[province]} - it inherited the first campaign's war";
+        for (var province = 1; province < authoredStates.Length; province++)
+            if (topology.ProvinceToState[province] != authoredStates[province])
+                return $"the second campaign opened with province {province} in region " +
+                       $"{topology.ProvinceToState[province]} rather than the day-zero " +
+                       $"{authoredStates[province]} - it inherited the first campaign's split regions";
+
+        Console.WriteLine($"  second campaign: the first moved {moved:N0} province(s) across the map " +
+                          $"in 400 days; the second opened in the authored world and deployed Russia " +
+                          $"over {spreadAfter:N0} province(s) rather than stacking it on one.");
+        return "";
+    }
+
+    /// <summary>How many different provinces a country's formations are actually standing in.</summary>
+    private static int Spread(Campaign campaign, string tag)
+    {
+        var nation = campaign.NationByTag(tag);
+        if (nation is null) return 0;
+        var provinces = new HashSet<int>();
+        foreach (var army in campaign.Armies)
+            if (army.NationId == nation.Id) provinces.Add(army.ProvinceId);
+        return provinces.Count;
+    }
+
     private static string GovernmentsChangeWithoutBeingTold()
     {
         GovernanceEvents.ResetCatalog();
