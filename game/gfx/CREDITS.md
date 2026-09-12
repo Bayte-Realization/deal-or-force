@@ -32,7 +32,6 @@ else was skipped rather than used.
 | `flag_bgr_absolute_monarchy.png` | [Flag of Kingdom of Bulgaria 1879–1947(23 civil).png](https://commons.wikimedia.org/wiki/File:Flag_of_Kingdom_of_Bulgaria_1879%E2%80%931947%2823_civil%29.png) | CC BY-SA 4.0 | 愛喝奶茶 |
 | `flag_blr_communism.png` | [Flag of the Byelorussian Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Byelorussian_Soviet_Socialist_Republic.svg) | Public domain | Zscout370 , reworked by Pianist |
 | `flag_bra_absolute_monarchy.png` | [Flag of Brazil (1870–1889).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Brazil_%281870%E2%80%931889%29.svg) | Public domain | Tonyjeff , based on work of Jean-Baptiste Debret |
-| `flag_che_absolute_monarchy.png` | [Flag of the Principality of Neuchâtel (1806-1814).png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Principality_of_Neuch%C3%A2tel_%281806-1814%29.png) | Public domain | Blason_Louis_Alexandre_Berthier_(1753-1815).svg : Jimmy44 derivative work: Orange Tuesday  |
 | `flag_chl_socialism.png` | [Flag of the Socialist Party of Chile.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Socialist_Party_of_Chile.svg) | Public domain | B1mbo |
 | `flag_chn_absolute_monarchy.png` | [Flag of China (1889–1912).svg](https://commons.wikimedia.org/wiki/File:Flag_of_China_%281889%E2%80%931912%29.svg) | Public domain | Original: zh:清朝政府 Vector: Sodacan |
 | `flag_chn_liberalism.png` | [Flag of the Republic of China.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_China.svg) | Public domain | Sun Yat-sen |
@@ -359,7 +358,6 @@ else was skipped rather than used.
 | `flag_idn_absolute_monarchy.png` | [Majapahit fictitious flag.svg](https://commons.wikimedia.org/wiki/File:Majapahit_fictitious_flag.svg) | Public domain | Inayubhagya |
 | `flag_idn_communism.png` | [Flag of the Communist Party of Indonesia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Communist_Party_of_Indonesia.svg) | Public domain | PKI |
 | `flag_ind_absolute_monarchy.png` | [British Raj Red Ensign.svg](https://commons.wikimedia.org/wiki/File:British_Raj_Red_Ensign.svg) | Public domain | Barryob |
-| `flag_ind_military_junta.png` | [Flag of the State of Hyderabad (18th century-1900).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_State_of_Hyderabad_%2818th_century-1900%29.svg) | CC BY-SA 4.0 | Dekodrak |
 | `flag_irl_absolute_monarchy.png` | [Green harp flag of Ireland.svg](https://commons.wikimedia.org/wiki/File:Green_harp_flag_of_Ireland.svg) | CC BY-SA 3.0 | Raymond1922A |
 | `flag_irl_constitutional_monarchy.png` | [Green harp flag of Ireland.svg](https://commons.wikimedia.org/wiki/File:Green_harp_flag_of_Ireland.svg) | CC BY-SA 3.0 | Raymond1922A |
 | `flag_irn_absolute_monarchy.png` | [Flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
@@ -411,13 +409,11 @@ else was skipped rather than used.
 | `flag_syr_socialism.png` | [Flag of Syria (1980–2024).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Syria_%281980%E2%80%932024%29.svg) | Public domain | See File history below for details. For further informations, see also: en:Syrian Arab Rep |
 | `flag_tjk_communism.png` | [Flag of the Tajik Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Tajik_Soviet_Socialist_Republic.svg) | Public domain | SVG by Pianist |
 | `flag_tkm_communism.png` | [Flag of the Turkmen Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Turkmen_Soviet_Socialist_Republic.svg) | Public domain | Denelson83 , Urmas , Nokka |
-| `flag_tun_absolute_monarchy.png` | [Flag of the Hafsid Dynasty, 1550.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Hafsid_Dynasty%2C_1550.png) | CC BY-SA 4.0 | Old!!man1234561234 |
 | `flag_tur_absolute_monarchy.png` | [Flag of the Ottoman Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ottoman_Empire.svg) | Public domain | User:Orwellianist |
 | `flag_tur_theocratic_rule.png` | [Flag of the Ottoman Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ottoman_Empire.svg) | Public domain | User:Orwellianist |
 | `flag_uga_absolute_monarchy.png` | [Flag of Buganda.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Buganda.svg) | Public domain | Mysid |
 | `flag_ukr_communism.png` | [Flag of the Ukrainian Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ukrainian_Soviet_Socialist_Republic.svg) | Public domain | Zscout370 and others. All authors are listed in the "File versions" section below. |
 | `flag_uzb_communism.png` | [Flag of the Uzbek Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Uzbek_Soviet_Socialist_Republic.svg) | Public domain | Denelson83 , Urmas , Nokka |
-| `flag_vat_theocratic_rule.png` | [Flag of the Papal States, ca. 1523.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Papal_States%2C_ca._1523.svg) | CC BY-SA 4.0 | Dahn |
 | `flag_vnm_communism.png` | [Flag of Vietnam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Vietnam.svg) | Public domain | See File history below for details. |
 | `flag_vnm_liberalism.png` | [Flag of South Vietnam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_South_Vietnam.svg) | Public domain | (many, see history) |
 | `flag_yem_absolute_monarchy.png` | [Flag of the Mutawakkilite Kingdom of Yemen.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Mutawakkilite_Kingdom_of_Yemen.png) | CC BY-SA 4.0 | Abo Yemen |
