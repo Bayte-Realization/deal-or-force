@@ -103,7 +103,13 @@ public struct GameDate
     /// language the game ships in happens to share; a language that does not would want a
     /// frame here rather than three pieces glued together.
     /// </summary>
-    public string Display() => Hour == 0
+    /// <param name="withTime">
+    /// Show the clock even at midnight. A campaign stepping six hours at a time spends three
+    /// quarters of its life at an hour worth printing and the other quarter at midnight, and
+    /// a clock that vanished for that quarter would read as a bug rather than as a tidiness.
+    /// A campaign stepping a whole day is never anywhere but midnight, so it says nothing.
+    /// </param>
+    public string Display(bool withTime = false) => Hour == 0 && !withTime
         ? $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}"
         : $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}, {Hour:00}:00";
 }
@@ -696,7 +702,6 @@ public sealed partial class Campaign
         if (!StabilityCore.IsCalibrated(this)) StabilityCore.Calibrate(this);
 
         MapRevision++;
-        Warfare.RebuildFronts(this);
 
         // Only a world that has not been played yet gets its orders handed out here.
         //
@@ -713,6 +718,7 @@ public sealed partial class Campaign
         {
             StrategicDeploymentPlanner.Deploy(this);
             InitialDeploymentCompleted = true;
+            Warfare.RebuildFronts(this);
             FrontPlanner.AssignAi(this);
         }
         Changed?.Invoke();

@@ -173,6 +173,8 @@ public static class Program
             AudioIsDeclaredRatherThanWiredIn());
         failures += Check("a country flies a flag that answers to what it has become",
             FlagsFollowWhatACountryIs());
+        failures += Check("every country knows where its capital is",
+            EveryCountryHasACapital(campaign));
         failures += Check("a country that is failing stops being what it was",
             GovernmentsChangeWithoutBeingTold());
         failures += Check("a second campaign in one session starts in the authored world",
@@ -1255,6 +1257,25 @@ public static class Program
         var quarter = Run(6, hours);
         if (quarter.Days != daily.Days)
             return $"a six-hour step reached day {quarter.Days:N0} where a daily step reached {daily.Days:N0}";
+
+        // The setting a player actually turns, against the value the code compiles with. They
+        // drifted apart in the worst possible way once already: the preference was applied
+        // only to a campaign that already existed, and it is chosen before there is one, so
+        // choosing six hours changed nothing at all and the clock never moved.
+        var declared = SettingsCatalog.Chosen("hours_per_tick");
+        if (!int.TryParse(declared, out var declaredHours) || declaredHours <= 0)
+            return $"common/settings offers '{declared}' as a step length, which is not hours";
+        if (declaredHours != new Defines().HoursPerTick)
+            return $"the settings screen defaults to {declaredHours} hours a step and the code " +
+                   $"to {new Defines().HoursPerTick}";
+
+        // And the clock has to be printable. A campaign stepping in fractions of a day
+        // spends part of it at midnight, and a clock that vanished then would read as a bug.
+        var midnight = new GameDate(2024, 1, 1);
+        if (midnight.Display(true) == midnight.Display(false))
+            return "the date reads the same whether or not it was asked to carry the time";
+        if (!midnight.Display(true).Contains("00:00", StringComparison.Ordinal))
+            return $"a date asked to carry the time printed '{midnight.Display(true)}'";
 
         Console.WriteLine($"  clock: {hours / 24} day(s) reached identically at 6, 24 and 72 hours a step " +
                           $"({daily.Date}); populations within {peopleDrift:P2}, armies within {armyDrift:P1}.");
@@ -2829,6 +2850,57 @@ public static class Program
                           $"across {byNation.Count:N0} countr(ies), by {kinds.Count:N0} of " +
                           $"{GovernanceEvents.All.Count:N0} declared route(s): " +
                           string.Join(", ", kinds.Take(5)) + ". The player's own was left alone.");
+        return "";
+    }
+
+    /// <summary>
+    /// Where each country's capital is, which nothing was checking.
+    ///
+    /// Forty-eight had no entry, and a country with no entry gets latitude and longitude
+    /// zero. That is not a cosmetic gap: the deployment planner posts a country's army to
+    /// whichever of its provinces is nearest its capital, so Taiwan, Israel, Hong Kong,
+    /// Somaliland, Palestine and Kosovo were all being garrisoned from whichever of their
+    /// provinces lies closest to a point in the Gulf of Guinea. Kosovo's capital had been
+    /// written down the whole time under the tag XKX while the country table calls it KOS.
+    /// </summary>
+    private static string EveryCountryHasACapital(Campaign campaign)
+    {
+        var nameless = new List<string>();
+        var lost = new List<string>();
+        foreach (var nation in campaign.Nations)
+        {
+            if (string.IsNullOrWhiteSpace(nation.CapitalName)) nameless.Add(nation.Tag);
+            // Nobody's capital is on the equator at the prime meridian. That point is what
+            // a country gets when nothing was written down for it.
+            else if (MathF.Abs(nation.CapitalLatitude) < 0.001f &&
+                     MathF.Abs(nation.CapitalLongitude) < 0.001f) lost.Add(nation.Tag);
+        }
+
+        if (nameless.Count > 0)
+            return $"{nameless.Count:N0} countr(ies) have no capital at all: " +
+                   string.Join(", ", nameless.Take(8));
+        if (lost.Count > 0)
+            return $"{lost.Count:N0} countr(ies) keep their capital at zero north, zero east, " +
+                   $"which is the Gulf of Guinea: {string.Join(", ", lost.Take(8))}";
+
+        // And the capital has to be somewhere on the country, not merely somewhere.
+        var stranded = 0;
+        var worst = "";
+        var furthest = 0f;
+        foreach (var nation in campaign.Nations)
+        {
+            var states = campaign.StatesOf(nation.MapIndex);
+            if (states.Length == 0) continue;
+            if (nation.CapitalStateMapIndex > 0) continue;
+            stranded++;
+            if (furthest <= 0f) worst = nation.Tag;
+        }
+        if (stranded > 0)
+            return $"{stranded:N0} countr(ies) hold ground but their capital is in none of it, " +
+                   $"starting with {worst}";
+
+        Console.WriteLine($"  capitals: all {campaign.Nations.Count:N0} countries know where " +
+                          "their capital is, and every one of them stands on their own ground.");
         return "";
     }
 
@@ -5762,6 +5834,21 @@ public static class Program
             return $"the regions the borders cut did not survive: {carved:N0} were carved";
         if (client.Nations.Count(nation => MathF.Abs(nation.StabilityBias) > 0.0001f) != biased)
             return $"the stability baselines did not survive: {biased:N0} countries had one";
+
+        // The fronts a war has reached, which the snapshot carries and the client must not
+        // recompute. They are not in the fingerprint - they are a set of province ids rather
+        // than a number - and they feed supply and combat, so a client that rebuilt them
+        // fought a slightly different war from the host and nothing said so.
+        foreach (var war in host.Wars)
+        {
+            var twin = client.Wars.Find(other => other.Id == war.Id);
+            if (twin is null) return $"war {war.Id} is missing from the client";
+            if (war.AttackerFront.Count != twin.AttackerFront.Count ||
+                war.DefenderFront.Count != twin.DefenderFront.Count)
+                return $"war {war.Id}'s front did not survive: the host holds " +
+                       $"{war.AttackerFront.Count}/{war.DefenderFront.Count} province(s) and the " +
+                       $"client {twin.AttackerFront.Count}/{twin.DefenderFront.Count}";
+        }
 
         var before = CampaignFingerprint.Of(host);
         var after = CampaignFingerprint.Of(client);

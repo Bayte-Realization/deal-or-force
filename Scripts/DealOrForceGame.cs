@@ -334,6 +334,16 @@ public partial class DealOrForceGame : Control
         if (IsInstanceValid(_scenarioSummary))
             _scenarioSummary.Text = Simulation.Loc.Format("{0} nations · {1} states · deterministic campaign simulation", _campaign.Nations.Count, _campaign.States.Count);
         BindCampaignMods();
+
+        // Every preference that reaches into the campaign, now that there is one.
+        //
+        // ApplyAllSettings runs once as the game comes up, and at that moment there is no
+        // campaign for it to reach into - so every setting written as "if there is a
+        // campaign, set this on it" was quietly doing nothing, and a fresh campaign got the
+        // compiled defaults however the player had set the game up. The step length was the
+        // visible half of that: choosing six hours changed nothing at all, because the
+        // campaign that was about to be created had not been told.
+        ApplyAllSettings();
         BindFlags(_campaign);
         Simulation.SpriteCatalog.Changed += ForgetFlags;
         _campaign.Changed += Refresh;
@@ -948,12 +958,16 @@ public partial class DealOrForceGame : Control
     private void Refresh()
     {
         if (_campaign?.Player is null) return;
+        _globe?.RefreshCountryNames();
 
         var player = _campaign.Player;
         _identity.Text = player.DisplayName;
         _identityTag.Text = _observerMode ? "OBS · observer mode" : $"{player.Tag} · player nation";
         SetFlag(_identityFlag, player.Tag, 34);
-        _date.Text = _campaign.Date.Display();
+        // The clock, whenever the campaign is running on something shorter than a day. At a
+        // whole-day step the hour is always midnight and printing it would be noise; below
+        // that it is the whole point, and it moves.
+        _date.Text = _campaign.Date.Display(_campaign.TickHours < 24);
 
         var day = _campaign.ElapsedDays;
         _treasuryTrend.Sample(day, player.Treasury);
