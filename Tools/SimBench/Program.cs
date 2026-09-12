@@ -173,6 +173,8 @@ public static class Program
             AudioIsDeclaredRatherThanWiredIn());
         failures += Check("a country flies a flag that answers to what it has become",
             FlagsFollowWhatACountryIs());
+        failures += Check("a country that is failing stops being what it was",
+            GovernmentsChangeWithoutBeingTold());
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
         failures += Check("every explained number adds up to what the screen shows",
@@ -2636,6 +2638,98 @@ public static class Program
     /// what makes it impossible for a compiler to check: nothing anywhere says that
     /// `flag_rus_communism.png` is looked for under exactly that name. This does.
     /// </summary>
+    /// <summary>
+    /// Whether the political layer is alive for anybody but the player.
+    ///
+    /// A player could rearrange their state at any time and no other country in the world
+    /// ever did - two hundred and sixty governments holding the same form and the same
+    /// ideology from 2024 onwards, through defeat, collapse and revolution. Everything
+    /// needed to change was already written; nothing called it.
+    ///
+    /// Four ways to be wrong, and the check looks for each: nothing ever changes, everything
+    /// changes constantly, a country changes into something it already was, or the player's
+    /// own government is rearranged out from under them.
+    /// </summary>
+    private static string GovernmentsChangeWithoutBeingTold()
+    {
+        GovernanceEvents.ResetCatalog();
+        if (GovernanceEvents.All.Count == 0)
+            return "common/governance declares no transitions, so no country can ever change";
+
+        var campaign = Campaign.CreateBootstrap(20240606);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var player = campaign.Player;
+        if (player is null) return "there is no player, so there is nobody this must not happen to";
+        var playerGovernment = player.Government;
+        var playerIdeology = player.Ideology;
+
+        var before = new Dictionary<int, (string Government, string Ideology)>();
+        foreach (var nation in campaign.Nations)
+            before[nation.Id] = (nation.Government, nation.Ideology);
+
+        var changes = new List<GovernanceReport>();
+        for (var day = 0; day < 365 * 15; day++)
+        {
+            campaign.Tick();
+            changes.AddRange(GovernanceEvents.Recent);
+        }
+
+        if (changes.Count == 0)
+            return "fifteen years of wars, collapses and secessions and not one government " +
+                   "anywhere became anything else";
+
+        // The player's country is theirs. A cabinet that rearranged the state out from under
+        // the person playing it would be the most annoying thing this game could do.
+        if (player.Government != playerGovernment || player.Ideology != playerIdeology)
+            return $"the player's own country was rearranged for them: {playerGovernment}/" +
+                   $"{playerIdeology} became {player.Government}/{player.Ideology}";
+
+        foreach (var report in changes)
+        {
+            if (report.Nation is null) return "a change was reported with no country attached";
+            // Against what it became, not against what it is now: a country that changed
+            // twice has a current state that says nothing about either change.
+            if (report.WasGovernment == report.NowGovernment &&
+                report.WasIdeology == report.NowIdeology)
+                return $"{report.Nation.Tag} was reported as changing into what it already was";
+            if (!GovernmentCatalog.Knows(report.NowGovernment))
+                return $"{report.Nation.Tag} ended up under '{report.NowGovernment}', " +
+                       "which nothing declares";
+            if (!IdeologyCatalog.Knows(report.NowIdeology))
+                return $"{report.Nation.Tag} ended up believing '{report.NowIdeology}', " +
+                       "which nothing declares";
+        }
+
+        // Nobody may do it twice inside the cooling-off period, because the cost of doing it
+        // is the only thing that makes it a decision rather than a twitch.
+        var byNation = new Dictionary<int, int>();
+        foreach (var report in changes)
+            byNation[report.Nation.Id] = byNation.GetValueOrDefault(report.Nation.Id) + 1;
+        var mostChanges = 0;
+        foreach (var count in byNation.Values) mostChanges = Math.Max(mostChanges, count);
+        var ceiling = 365 * 15 / PoliticsCore.ChangeCooldownDays + 1;
+        if (mostChanges > ceiling)
+            return $"one country changed {mostChanges} times in fifteen years, past the " +
+                   $"{ceiling} the cooling-off period allows";
+
+        // And it has to be rare. A world where half the governments turn over in a decade is
+        // not a simulation of politics, it is noise.
+        if (byNation.Count > campaign.Nations.Count / 3)
+            return $"{byNation.Count:N0} of {campaign.Nations.Count:N0} countries changed " +
+                   "regime in fifteen years, which is not politics, it is weather";
+
+        var kinds = new HashSet<string>();
+        foreach (var report in changes) kinds.Add(report.TransitionId);
+
+        Console.WriteLine($"  governance: {changes.Count:N0} change(s) of regime in fifteen years " +
+                          $"across {byNation.Count:N0} countr(ies), by {kinds.Count:N0} of " +
+                          $"{GovernanceEvents.All.Count:N0} declared route(s): " +
+                          string.Join(", ", kinds.Take(5)) + ". The player's own was left alone.");
+        return "";
+    }
+
     private static string FlagsFollowWhatACountryIs()
     {
         SpriteCatalog.Load();
