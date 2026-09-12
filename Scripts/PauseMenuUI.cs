@@ -31,6 +31,7 @@ public partial class DealOrForceGame
         rows.AddChild(ActionButton("Resume campaign", HidePauseMenu, 330, 46, true));
         rows.AddChild(ActionButton("Quick save  [F5]", QuickSave, 330, 42));
         rows.AddChild(ActionButton("Save / load campaign", ShowSaveLoadInterface, 330, 42));
+        rows.AddChild(ActionButton("Settings", ShowSettings, 330, 42));
         rows.AddChild(ActionButton("Return to main menu", ReturnToMainMenu, 330, 42));
         rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
         rows.AddChild(Title("Esc closes this menu", 12, Ui.Colour("text.hint")));

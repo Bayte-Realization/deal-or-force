@@ -206,6 +206,7 @@ public static class InterfaceSkin
         ("modal.pause",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -210f, -245f, 210f, 245f)),
         ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -225f, 310f, 225f)),
         ("modal.peace_offer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -330f, -200f, 330f, 200f)),
+        ("modal.settings",     new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -440f, -350f, 440f, 350f)),
         ("modal.save_load",    new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -420f, -360f, 420f, 360f)),
         ("modal.handover",     new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -250f, -160f, 250f, 160f)),
         ("modal.multiplayer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -285f, -340f, 285f, 340f)),

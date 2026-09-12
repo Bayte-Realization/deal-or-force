@@ -1,0 +1,136 @@
+// The options screen, as data.
+//
+// The screen is built out of this file - the categories, the order, the words, the ranges
+// and the defaults. The code's only job is to know what to *do* about an id it recognises,
+// so a mod can reorder the screen, rename anything, widen a range, change a default, or add
+// an option of its own and read it back in its own script.
+//
+//   category      which tab it sits under
+//   kind          "toggle", "choice" or "slider"
+//   default       true/false for a toggle, a number for a slider, a string for a choice
+//   values        a choice's values; `labels` are the words shown for them
+//   minimum/maximum/step   a slider's range
+//   unit          how a slider's number is written: percent, number, days, pixels
+//   needs_restart whether it takes effect now or at the next start
+//
+// To hide an option rather than fork this file, give it a category the screen does not show.
+{
+  // ---------------------------------------------------------------- the game itself -----
+  "autosave_interval": {
+    "category": "game", "order": 100, "kind": "choice",
+    "name": "Autosave",
+    "description": "How often the campaign saves itself. Autosaves are kept apart from your own and never overwrite them.",
+    "values": ["0", "7", "30", "90", "365"],
+    "labels": ["Never", "Weekly", "Monthly", "Quarterly", "Yearly"],
+    "default": "30"
+  },
+  "pause_on_event": {
+    "category": "game", "order": 110, "kind": "toggle",
+    "name": "Pause when something happens",
+    "description": "Stop time when an event arrives. Off is the honest setting in multiplayer, where one player's event should not stop everybody else's war.",
+    "default": true
+  },
+  "confirm_declaration": {
+    "category": "game", "order": 120, "kind": "toggle",
+    "name": "Confirm before declaring war",
+    "description": "Ask twice before starting a war. There is no undo and there is no peace button on the other side of it.",
+    "default": true
+  },
+  "hours_per_tick": {
+    "category": "game", "order": 130, "kind": "choice",
+    "name": "Length of a simulation step",
+    "description": "How much campaign time one step covers. Six hours moves armies in smaller pieces more often; seventy-two runs three days at once, which is a real fast-forward for a quiet decade. The answer does not change with it.",
+    "values": ["6", "12", "24", "48", "72"],
+    "labels": ["6 hours", "12 hours", "A day", "Two days", "Three days"],
+    "default": "24"
+  },
+
+  // ---------------------------------------------------------------- the interface --------
+  "language": {
+    "category": "interface", "order": 200, "kind": "choice",
+    "name": "Language",
+    "description": "Mods add their own by dropping localization/<language>/ into the mod folder.",
+    "values": [], "labels": [],
+    "default": "english"
+  },
+  "tooltip_width": {
+    "category": "interface", "order": 210, "kind": "slider",
+    "name": "Tooltip width",
+    "description": "How wide a tooltip is allowed to get before it wraps, counted in characters. Narrower reads more easily; wider fits more on a line.",
+    "minimum": 48, "maximum": 140, "step": 4, "default": 84, "unit": "number"
+  },
+  "dim_behind_events": {
+    "category": "interface", "order": 220, "kind": "toggle",
+    "name": "Darken the screen behind an event",
+    "description": "Off leaves the map readable while an event is open, and lets you drag the window out of the way and keep playing.",
+    "default": false
+  },
+  "region_names": {
+    "category": "interface", "order": 230, "kind": "toggle",
+    "name": "Country names on the map",
+    "description": "Draw each country's name across its territory.",
+    "default": true
+  },
+  "map_smoothing": {
+    "category": "interface", "order": 240, "kind": "toggle",
+    "name": "Smooth the map",
+    "description": "Rebuild country, region and terrain boundaries so the map has no visible texel grid. Off is the raster exactly as authored - pixels and all - and the cheaper picture on a slower machine.",
+    "default": true
+  },
+  "projection": {
+    "category": "interface", "order": 250, "kind": "choice",
+    "name": "Map view",
+    "description": "The globe, or the classic flat map that wraps around for ever.",
+    "values": ["globe", "flat"],
+    "labels": ["3D globe", "Flat map"],
+    "default": "globe"
+  },
+
+  // ---------------------------------------------------------------- what it looks like ---
+  "window_mode": {
+    "category": "video", "order": 300, "kind": "choice",
+    "name": "Window",
+    "description": "Borderless gives you fullscreen that you can alt-tab out of instantly.",
+    "values": ["fullscreen", "borderless", "windowed"],
+    "labels": ["Fullscreen", "Borderless", "Windowed"],
+    "default": "borderless"
+  },
+  "vsync": {
+    "category": "video", "order": 310, "kind": "toggle",
+    "name": "Wait for the monitor",
+    "description": "On stops the picture tearing; off lets the frame rate go as high as the machine can and costs a little latency.",
+    "default": true
+  },
+  "max_fps": {
+    "category": "video", "order": 320, "kind": "choice",
+    "name": "Frame rate limit",
+    "description": "A cap below what the machine can manage is a quieter fan and a cooler room for a strategy game that does not need 300 frames a second.",
+    "values": ["0", "30", "60", "120", "144", "240"],
+    "labels": ["Unlimited", "30", "60", "120", "144", "240"],
+    "default": "0"
+  },
+  "interface_scale": {
+    "category": "video", "order": 330, "kind": "slider",
+    "name": "Interface size",
+    "description": "Everything the interface draws, larger or smaller. Worth raising on a 4K display and lowering on a small one.",
+    "minimum": 0.75, "maximum": 1.75, "step": 0.05, "default": 1.0, "unit": "percent"
+  },
+
+  // ---------------------------------------------------------------- sound ----------------
+  "volume_master": {
+    "category": "audio", "order": 400, "kind": "slider",
+    "name": "Everything",
+    "description": "The volume every other one is measured against.",
+    "minimum": 0, "maximum": 1, "step": 0.05, "default": 0.85, "unit": "percent"
+  },
+  "volume_music": {
+    "category": "audio", "order": 410, "kind": "slider",
+    "name": "Music",
+    "minimum": 0, "maximum": 1, "step": 0.05, "default": 0.55, "unit": "percent"
+  },
+  "volume_effects": {
+    "category": "audio", "order": 420, "kind": "slider",
+    "name": "Effects",
+    "minimum": 0, "maximum": 1, "step": 0.05, "default": 0.80, "unit": "percent"
+  }
+}

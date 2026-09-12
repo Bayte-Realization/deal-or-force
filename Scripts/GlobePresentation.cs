@@ -3172,9 +3172,17 @@ void fragment() {
         return wrapped < 0 ? wrapped + width : wrapped;
     }
 
+    /// <summary>
+    /// Whether country names are drawn across the map at all. Some players want the
+    /// typography and some want to see the borders under it; it is not a decision the game
+    /// should make for them.
+    /// </summary>
+    public bool CountryLabelsEnabled { get; set; } = true;
+
     private void UpdateCountryLabelVisibility()
     {
         if (!IsInstanceValid(_countryLabelRoot) || !IsInstanceValid(_camera)) return;
+        if (!CountryLabelsEnabled) { _countryLabelRoot.Visible = false; return; }
         // At tactical zoom, country names yield to states/provinces and unit
         // counters. Keeping continent-scale typography there would cover the map.
         _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap

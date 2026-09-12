@@ -376,6 +376,12 @@ public partial class DealOrForceGame : Control
         BuildStrategicAudio();
         BuildDeveloperConsole();
         BuildFreeCameraOverlay();
+        BuildSettingsInterface();
+
+        // Last, because it reaches into everything the lines above have just built. From
+        // here on the screen and the running game cannot disagree: both go through
+        // ApplySetting, and this is the same call the screen makes when a row changes.
+        ApplyAllSettings();
     }
 
     private void BuildMainMenu()
@@ -429,6 +435,7 @@ public partial class DealOrForceGame : Control
             "texel grid. Turn it off for the raster exactly as authored - pixels and all - which " +
             "is also the cheaper picture on a slower machine (F3)."));
         rows.AddChild(_smoothingButton);
+        rows.AddChild(ActionButton("Settings", ShowSettings, 330, 42));
         _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
         _languageButton.TooltipText = Ui.Tip(Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder."));
         rows.AddChild(_languageButton);
@@ -1474,6 +1481,7 @@ public partial class DealOrForceGame : Control
             // rather than from a source string, so a generic refresh would overwrite it.
             var label = Tr(SmoothingButtonLabel());
             _smoothingButton.Text = label;
+            PlayerSettings.Set("map_smoothing", _globe.MapSmoothing);
             _smoothingButton.SetMeta(LocAppliedMeta, label);
         }
     }

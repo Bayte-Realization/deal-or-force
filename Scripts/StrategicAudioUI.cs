@@ -16,6 +16,37 @@ public partial class DealOrForceGame
     private readonly System.Random _musicOrder = new();
 
     /// <summary>
+    /// Put the player's three volumes onto the players.
+    ///
+    /// Each channel keeps the level the sound catalogue gave it - a battle report is meant
+    /// to be quieter than an alarm and that is a design decision, not a preference - and the
+    /// slider moves the whole channel from there. Multiplied rather than replaced, so a mod
+    /// that rebalances its cues is not silently overridden by whatever the player last
+    /// dragged.
+    ///
+    /// Decibels, because that is what ears and mixers both work in: a linear slider at a
+    /// half sounds like a half rather than like a quarter.
+    /// </summary>
+    private void ApplyVolumes()
+    {
+        var master = SettingsCatalog.Number("volume_master");
+        var music = SettingsCatalog.Number("volume_music");
+        var effects = SettingsCatalog.Number("volume_effects");
+
+        static float Decibels(float share) =>
+            share <= 0.0005f ? -80f : Mathf.LinearToDb(Mathf.Clamp(share, 0f, 1f));
+
+        foreach (var (name, player) in _audioChannels)
+        {
+            if (!GodotObject.IsInstanceValid(player)) continue;
+            var channel = SoundCatalog.GetChannel(name);
+            player.VolumeDb = channel.VolumeDb + Decibels(master * effects);
+        }
+        if (GodotObject.IsInstanceValid(_musicPlayer))
+            _musicPlayer.VolumeDb = SoundCatalog.GetChannel("music").VolumeDb + Decibels(master * music);
+    }
+
+    /// <summary>
     /// The channels and the cues both come out of `sound/`. The code below knows that a
     /// cue has a channel, a level, a cooldown and a manner; it does not know that there
     /// are three channels, or that a battle report waits four and a half seconds. Those

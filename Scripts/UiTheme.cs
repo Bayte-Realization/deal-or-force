@@ -50,7 +50,15 @@ internal static class Ui
     /// the Russian of one of these lines runs about a third longer than the English, so a
     /// measure tuned in pixels on the English would break in the language being read.
     /// </summary>
-    internal static string Tip(string text, int measure = 84)
+    /// <summary>
+    /// How wide a tooltip may get before it wraps, in characters. A preference, because
+    /// what is comfortable depends on the display and on the reader.
+    /// </summary>
+    internal static int TooltipMeasure { get; set; } = 84;
+
+    internal static string Tip(string text) => Tip(text, TooltipMeasure);
+
+    internal static string Tip(string text, int measure)
     {
         if (string.IsNullOrEmpty(text)) return text;
         // Looked up before it is wrapped, and only here: a good half of the tooltips in

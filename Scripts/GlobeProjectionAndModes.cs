@@ -87,6 +87,9 @@ public sealed partial class GlobePresentation
         }
     }
 
+    /// <summary>Whether the flat map is the one being drawn. The options screen asks.</summary>
+    public bool FlatProjection => _flatMap;
+
     public void ToggleProjection() => SetFlatMap(!_flatMap);
 
     public void SetFlatMap(bool enabled)

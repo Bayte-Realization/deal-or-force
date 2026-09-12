@@ -117,6 +117,7 @@ public partial class DealOrForceGame
                 "money" or "cash" => ConsoleMoney(argument),
                 "manpower" => ConsoleManpower(argument),
                 "stability" => ConsoleStability(argument),
+                "event" => ConsoleEvent(),
                 "freecam" => ConsoleFreeCamera(argument),
                 "mapmode" => ConsoleMapMode(argument),
                 "focus" => ConsoleFocus(argument),
@@ -312,6 +313,16 @@ public partial class DealOrForceGame
         _campaign.Player.ManpowerReserve = MathF.Max(0, _campaign.Player.ManpowerReserve + amount);
         Refresh();
         return $"Manpower reserve changed by {amount:N0}.";
+    }
+
+    /// <summary>Raise an event now, rather than playing until one turns up.</summary>
+    private string ConsoleEvent()
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var raised = Simulation.EventSystem.Raise(_campaign, _campaign.Player.Id);
+        if (raised is null) return "Nothing in the event catalogue matches this country right now.";
+        RefreshEventInterface();
+        return $"Raised '{raised.Title}'.";
     }
 
     private string ConsoleStability(string value)

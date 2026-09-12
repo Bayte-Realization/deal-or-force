@@ -404,6 +404,19 @@ public static class EventSystem
     /// draw is seeded from campaign state rather than a live RNG call, so replaying the
     /// same seed deals the same card on the same day.
     /// </summary>
+    /// <summary>
+    /// Raise one now, for whoever asks. The developer console uses it, and so does anything
+    /// else that needs an event to exist rather than to wait for one - a test of the event
+    /// window being the obvious case.
+    /// </summary>
+    public static PendingCampaignEvent Raise(Campaign campaign, int nationId)
+    {
+        if (campaign is null) return null;
+        var created = Create(campaign, nationId);
+        if (created is not null) campaign.PendingEvents.Add(created);
+        return created;
+    }
+
     private static PendingCampaignEvent Create(Campaign campaign, int nationId)
     {
         var nation = campaign.NationById(nationId);

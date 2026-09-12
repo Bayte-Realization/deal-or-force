@@ -15,9 +15,12 @@ namespace DealOrForce.Simulation;
 /// tomorrow.
 ///
 /// Deliberately small. One flat JSON file beside the saves, written when something changes,
-/// read once at boot, and unreadable-means-defaults rather than unreadable-means-crash. It is
-/// not a settings system and does not want to become one; it is a place to put the next
-/// preference without inventing this again.
+/// read once at boot, and unreadable-means-defaults rather than unreadable-means-crash.
+///
+/// It holds numbers and text as well as flags now, because the options screen is built out
+/// of it and a resolution is not a yes-or-no. What it still does not do is know anything
+/// about what any of the keys mean - that is `common/settings`, and this is only the drawer
+/// the answers are kept in.
 /// </summary>
 public static class PlayerSettings
 {
@@ -78,10 +81,68 @@ public static class PlayerSettings
         };
     }
 
-    public static void Set(string key, bool value)
+    public static int Int(string key, int fallback)
     {
         Load();
-        Values[key] = JsonDocument.Parse(value ? "true" : "false").RootElement.Clone();
+        return Values.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.Number &&
+               value.TryGetInt32(out var number)
+            ? number
+            : fallback;
+    }
+
+    public static float Float(string key, float fallback)
+    {
+        Load();
+        return Values.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.Number &&
+               value.TryGetSingle(out var number)
+            ? number
+            : fallback;
+    }
+
+    public static string Text(string key, string fallback)
+    {
+        Load();
+        return Values.TryGetValue(key, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? fallback
+            : fallback;
+    }
+
+    /// <summary>Whether the player has ever said anything about this key.</summary>
+    public static bool Has(string key)
+    {
+        Load();
+        return Values.ContainsKey(key);
+    }
+
+    public static void Set(string key, bool value) => Write(key, value ? "true" : "false");
+
+    public static void Set(string key, int value) =>
+        Write(key, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    public static void Set(string key, float value) =>
+        Write(key, value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+
+    public static void Set(string key, string value) => Write(key, JsonSerializer.Serialize(value ?? ""));
+
+    /// <summary>Forget one answer, so the option goes back to whatever the game defaults to.</summary>
+    public static void Clear(string key)
+    {
+        Load();
+        if (Values.Remove(key)) Save();
+    }
+
+    private static void Write(string key, string json)
+    {
+        Load();
+        try
+        {
+            Values[key] = JsonDocument.Parse(json).RootElement.Clone();
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLogs.Write("errors", $"SETTINGS_UNWRITABLE_VALUE key={key} error={exception.Message}");
+            return;
+        }
         Save();
     }
 

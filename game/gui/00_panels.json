@@ -265,6 +265,20 @@
         200
       ]
     },
+    "modal.settings": {
+      "anchors": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "offsets": [
+        -440,
+        -350,
+        440,
+        350
+      ]
+    },
     "modal.save_load": {
       "anchors": [
         0.5,

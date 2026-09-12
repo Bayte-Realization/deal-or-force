@@ -3571,7 +3571,7 @@ public static class Program
         // fails this check instead of quietly showing up in English.
         foreach (var folder in new[]
                  { "budget", "government_focus", "trade_policies", "governments", "ideologies",
-                   "countries", "units" })
+                   "countries", "units", "settings" })
         {
             var directory = Path.Combine(common, folder);
             if (!Directory.Exists(directory)) continue;
