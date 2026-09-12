@@ -76,8 +76,10 @@ public static class Program
             TheSameSeedGivesTheSameWorld(Math.Min(days, 90)));
         failures += Check("two worlds in one process do not read each other's notes",
             TwoWorldsDoNotShareNotes(Math.Min(days, 45)));
-        failures += Check("two worlds in one process do not read each other's notes",
-            TwoWorldsDoNotShareNotes(Math.Min(days, 45)));
+        failures += Check("a peer stepping differently is caught, and stepping alike is not",
+            PeersMustStepTheSameWay());
+        failures += Check("a client sent the world is in the world it was sent",
+            ASnapshotCarriesTheWholeWorld());
         failures += Check("a country that states a figure about itself gets that figure",
             TheStatedStatisticsCameTrue(campaign));
 
@@ -5138,6 +5140,191 @@ public static class Program
     /// So: run a campaign alone, then run it again interleaved with a different one, and
     /// require the two results to be identical to the bit.
     /// </summary>
+    /// <summary>
+    /// Multiplayer is lockstep: peers exchange orders, not worlds, and each runs the same
+    /// simulation over the same seed. That holds exactly as long as the two simulations do
+    /// the same arithmetic - and the moment the length of a step became a setting, two peers
+    /// could be doing different amounts of it without either of them knowing.
+    ///
+    /// So: two worlds stepped to the same date by different-sized steps must not fingerprint
+    /// alike, or the divergence is invisible; and two worlds stepped the same way must, or
+    /// the host would be sending snapshots to a client that is perfectly fine.
+    /// </summary>
+    /// <summary>
+    /// A client too far behind is sent the world and then trusted to be in it. If the
+    /// snapshot drops anything the simulation reads, it is not - and the next divergence
+    /// looks like a new desync rather than a snapshot that never worked.
+    /// </summary>
+    /// <summary>
+    /// The first thing two worlds disagree about, in words.
+    ///
+    /// Walks what the fingerprint walks, in the same order. A fingerprint that does not
+    /// match is a fact with no next step in it; this is the next step.
+    /// </summary>
+    private static string WhatDiffers(Campaign left, Campaign right)
+    {
+        if (left.ElapsedHours != right.ElapsedHours)
+            return $"the hour ({left.ElapsedHours:N0} against {right.ElapsedHours:N0})";
+        if (left.States.Count != right.States.Count)
+            return $"how many regions exist ({left.States.Count:N0} against {right.States.Count:N0})";
+        if (left.Nations.Count != right.Nations.Count)
+            return $"how many countries exist ({left.Nations.Count:N0} against {right.Nations.Count:N0})";
+        if (left.Armies.Count != right.Armies.Count)
+            return $"how many formations exist ({left.Armies.Count:N0} against {right.Armies.Count:N0})";
+
+        foreach (var mine in left.Nations)
+        {
+            var theirs = right.NationById(mine.Id);
+            if (theirs is null) return $"{mine.Tag} is missing from the client";
+            if (mine.Population != theirs.Population)
+                return $"{mine.Tag}'s population ({mine.Population:N0} against {theirs.Population:N0})";
+            foreach (var (what, a, b) in new[]
+                     {
+                         ("treasury", mine.Treasury, theirs.Treasury),
+                         ("output", mine.Gdp, theirs.Gdp),
+                         ("stability", mine.Stability, theirs.Stability),
+                         ("stability baseline", mine.StabilityBias, theirs.StabilityBias),
+                         ("governance", mine.StabilityGovernance, theirs.StabilityGovernance),
+                         ("war support", mine.WarSupport, theirs.WarSupport),
+                         ("manpower", mine.ManpowerReserve, theirs.ManpowerReserve)
+                     })
+                if (MathF.Abs(a - b) > 0.0000001f)
+                    return $"{mine.Tag}'s {what} ({a:0.######} against {b:0.######})";
+        }
+
+        foreach (var mine in left.Armies)
+        {
+            var theirs = right.Armies.Find(army => army.Id == mine.Id);
+            if (theirs is null) return $"formation {mine.Id} ({mine.Name}) is missing from the client";
+            if (mine.ProvinceId != theirs.ProvinceId)
+                return $"where formation {mine.Id} is ({mine.ProvinceId} against {theirs.ProvinceId})";
+            if (mine.Personnel != theirs.Personnel)
+                return $"formation {mine.Id}'s strength ({mine.Personnel:N0} against {theirs.Personnel:N0})";
+            foreach (var (what, a, b) in new[]
+                     {
+                         ("organisation", mine.Organisation, theirs.Organisation),
+                         ("strength", mine.Strength, theirs.Strength),
+                         ("entrenchment", mine.Entrenchment, theirs.Entrenchment)
+                     })
+                if (MathF.Abs(a - b) > 0.0000001f)
+                    return $"formation {mine.Id}'s {what} ({a:0.######} against {b:0.######})";
+            if (mine.Route.Count != theirs.Route.Count)
+                return $"formation {mine.Id}'s route ({mine.Route.Count} step(s) against {theirs.Route.Count})";
+        }
+
+        foreach (var mine in left.Wars)
+        {
+            var theirs = right.Wars.Find(war => war.Id == mine.Id);
+            if (theirs is null) return $"war {mine.Id} ({mine.Name}) is missing from the client";
+            if (mine.Ended != theirs.Ended) return $"whether war {mine.Id} has ended";
+            if (MathF.Abs(mine.OccupationScore - theirs.OccupationScore) > 0.0000001f)
+                return $"war {mine.Id}'s occupation score";
+            if (MathF.Abs(mine.BattleScore - theirs.BattleScore) > 0.0000001f)
+                return $"war {mine.Id}'s battle score";
+        }
+
+        var ours = left.ProvinceController;
+        var yours = right.ProvinceController;
+        if (ours is null || yours is null) return "one of them has no political map at all";
+        if (ours.Length != yours.Length)
+            return $"how many provinces there are ({ours.Length:N0} against {yours.Length:N0})";
+        for (var province = 0; province < ours.Length; province++)
+            if (ours[province] != yours[province])
+                return $"who holds province {province} ({ours[province]} against {yours[province]})";
+
+        return "nothing this check knows how to look at, which means the fingerprint reads " +
+               "something this does not";
+    }
+
+    private static string ASnapshotCarriesTheWholeWorld()
+    {
+        var host = Campaign.CreateBootstrap(20240808);
+        if (!AttachMap(host)) return "";
+        host.IsPaused = false;
+        // Long enough to have the state worth losing: regions cut by the 2024 borders,
+        // stability baselines taken, militia part-way towards standing up.
+        for (var day = 0; day < 120; day++) host.Tick();
+
+        var readiness = host.Nations.Sum(nation => nation.MilitiaReadiness.Count);
+        var carved = host.States.Count(state => state.ParentMapIndex != 0);
+        var biased = host.Nations.Count(nation => MathF.Abs(nation.StabilityBias) > 0.0001f);
+
+        var wire = SaveSystem.ExportNetworkSnapshot(host, "bench");
+        if (wire.Length == 0) return "the host produced an empty snapshot";
+        var result = SaveSystem.ImportNetworkSnapshot(wire, "bench");
+        if (result.Campaign is null)
+            return $"the snapshot would not load back: {result.Warning}";
+
+        var client = result.Campaign;
+        // The same thing the game does next: a restored campaign stashes its political layer
+        // and only puts it back when the map is attached, which on a client is the globe
+        // binding the topology. Comparing before that compares a world against half of one.
+        if (!AttachMap(client)) return "";
+        if (client.ElapsedHours != host.ElapsedHours)
+            return $"the clocks differ: hour {host.ElapsedHours:N0} against {client.ElapsedHours:N0}";
+
+        var lost = host.Nations.Sum(nation => nation.MilitiaReadiness.Count) - readiness;
+        if (lost != 0) return "exporting the world changed the world it was exported from";
+        if (client.Nations.Sum(nation => nation.MilitiaReadiness.Count) != readiness)
+            return $"militia readiness did not survive the snapshot: {readiness:N0} region(s) were " +
+                   "part-way to raising a formation, and the client would raise them on different days";
+        if (client.States.Count(state => state.ParentMapIndex != 0) != carved)
+            return $"the regions the borders cut did not survive: {carved:N0} were carved";
+        if (client.Nations.Count(nation => MathF.Abs(nation.StabilityBias) > 0.0001f) != biased)
+            return $"the stability baselines did not survive: {biased:N0} countries had one";
+
+        var before = CampaignFingerprint.Of(host);
+        var after = CampaignFingerprint.Of(client);
+        if (before != after)
+            return "the client is not in the world it was sent: " + WhatDiffers(host, client);
+
+        // And it has to stay that way: a snapshot that matches now and diverges on the next
+        // step has carried the numbers and not the state behind them.
+        client.IsPaused = false;
+        for (var day = 0; day < 10; day++) { host.Tick(); client.Tick(); }
+        if (CampaignFingerprint.Of(host) != CampaignFingerprint.Of(client))
+            return "the two worlds agreed at the moment of the snapshot and diverged within ten days, " +
+                   "so something the simulation reads is not in it";
+
+        Console.WriteLine($"  snapshot: a world of {host.States.Count:N0} region(s) ({carved:N0} carved by " +
+                          $"borders), {biased:N0} stability baselines and {readiness:N0} region(s) part-way " +
+                          "to militia went over the wire and came back identical, and stayed identical for " +
+                          "ten more days.");
+        return "";
+    }
+
+    private static string PeersMustStepTheSameWay()
+    {
+        static Campaign Run(int hoursPerTick, int hours)
+        {
+            var campaign = Campaign.CreateBootstrap(20240707);
+            campaign.Defines.HoursPerTick = hoursPerTick;
+            campaign.IsPaused = false;
+            for (var elapsed = 0; elapsed < hours; elapsed += hoursPerTick) campaign.Tick();
+            return campaign;
+        }
+
+        const int hours = 24 * 24;
+        var host = Run(24, hours);
+        var alike = Run(24, hours);
+        var apart = Run(72, hours);
+
+        var hostPrint = CampaignFingerprint.Of(host);
+        if (CampaignFingerprint.Of(alike) != hostPrint)
+            return "two peers stepping the same way came out with different worlds, so the host " +
+                   "would resynchronise a client that is perfectly fine";
+        if (host.ElapsedHours != apart.ElapsedHours)
+            return $"the two runs did not reach the same hour: {host.ElapsedHours:N0} against " +
+                   $"{apart.ElapsedHours:N0}, so this proves nothing about the fingerprint";
+        if (CampaignFingerprint.Of(apart) == hostPrint)
+            return "a peer stepping three days at a time fingerprints the same as one stepping " +
+                   "one, so a desynchronised client would never be told";
+
+        Console.WriteLine($"  lockstep: {hours / 24} day(s) at 24 hours a step agree with themselves " +
+                          $"and disagree with 72, which is what the fingerprint is for.");
+        return "";
+    }
+
     private static string TwoWorldsDoNotShareNotes(int days)
     {
         // Each world run by itself, first, so there is something to be different from.

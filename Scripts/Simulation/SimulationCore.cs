@@ -639,29 +639,35 @@ public sealed partial class Campaign
         // the map: a capital is a place on the globe rather than a region a scenario names,
         // and the regions under it can be redrawn by a war.
         LocateCapitals();
-        if (!_stabilityCalibrated)
-        {
-            StabilityCore.Calibrate(this);
-            _stabilityCalibrated = true;
-        }
+        // Only ever from the authored world. Whether that has happened is read from the
+        // world rather than remembered in a field, because a multiplayer client adopts a
+        // campaign it did not create: a flag in memory says "not yet" about a world that was
+        // calibrated on the host an hour ago, and recalibrating a world at war writes the
+        // war into every country's institutions.
+        if (!StabilityCore.IsCalibrated(this)) StabilityCore.Calibrate(this);
 
         MapRevision++;
         Warfare.RebuildFronts(this);
+
+        // Only a world that has not been played yet gets its orders handed out here.
+        //
+        // This used to run every time the map was attached, which is also what happens when
+        // a campaign arrives from somewhere else: a multiplayer client sent the host's world
+        // re-tasked every AI formation in it the moment it adopted it, and was a different
+        // world before it had simulated a single step. A loaded save had the same problem
+        // more quietly - the orders you saved were not the orders you got back.
+        //
+        // Nothing is lost by not repeating it. The AI reassigns its own fronts as the war
+        // moves, and a restored world keeps the orders it was saved with, which is the whole
+        // point of restoring it.
         if (!InitialDeploymentCompleted)
         {
             StrategicDeploymentPlanner.Deploy(this);
             InitialDeploymentCompleted = true;
+            FrontPlanner.AssignAi(this);
         }
-        FrontPlanner.AssignAi(this);
         Changed?.Invoke();
     }
-
-    /// <summary>
-    /// Set once. The baseline is the difference between the stability the scenario authored
-    /// and what conditions explain, so it has to be taken from the authored world - taking
-    /// it again from a world at war would write the war into the country's institutions.
-    /// </summary>
-    private bool _stabilityCalibrated;
 
     /// <summary>
     /// Find the region each capital stands in. Nearest province of the country's own ground

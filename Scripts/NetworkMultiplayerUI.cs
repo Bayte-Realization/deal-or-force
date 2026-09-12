@@ -455,7 +455,8 @@ public partial class DealOrForceGame
         _networkClockAccumulator += delta;
         if (_networkClockAccumulator < 0.50) return;
         _networkClockAccumulator = 0;
-        Rpc(nameof(ClientReceiveNetworkClock), _campaign.ElapsedDays, _campaign.IsPaused, _speed);
+        Rpc(nameof(ClientReceiveNetworkClock), _campaign.ElapsedDays, _campaign.IsPaused, _speed,
+            _campaign.TickHours);
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
@@ -463,11 +464,18 @@ public partial class DealOrForceGame
     {
         if (_networkIsHost || _campaign is null || hostElapsedDays <= _campaign.ElapsedDays) return;
 
-        // A day at a time, up to a budget, so a client that is momentarily behind catches
+        // Hours, not days. A day stopped being the unit a tick advances in: at seventy-two
+        // hours a step overshoots the day it was aiming at, and at six it takes four steps
+        // to move the day counter at all - so a loop that counts days either runs one step
+        // too many or spends its whole budget standing still.
+        var target = hostElapsedDays * 24L;
+
+        // A step at a time, up to a budget, so a client that is momentarily behind catches
         // up over the next few messages rather than freezing while it replays a month.
         var ticks = 0;
+        var budget = Math.Max(1, (int)(8 * 24 / Math.Max(1, _campaign.TickHours)));
         _applyingNetworkCommand = true;
-        while (_campaign.ElapsedDays < hostElapsedDays && ticks < 8)
+        while (_campaign.ElapsedHours < target && ticks < budget)
         {
             _campaign.Tick();
             _modLoader.OnDayAdvanced(_campaign);
@@ -548,9 +556,17 @@ public partial class DealOrForceGame
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
-    private void ClientReceiveNetworkClock(int elapsedDays, bool paused, int speed)
+    private void ClientReceiveNetworkClock(int elapsedDays, bool paused, int speed, int hostTickHours)
     {
         if (_networkIsHost || _campaign is null) return;
+        // The host's step, not this player's. `hours_per_tick` is a preference when playing
+        // alone and a rule when playing together: two worlds stepping different amounts do
+        // different arithmetic, and lockstep survives none of it.
+        if (hostTickHours > 0 && _campaign.Defines.HoursPerTick != hostTickHours)
+        {
+            _campaign.Defines.HoursPerTick = hostTickHours;
+            GD.Print($"[net] adopting the host's step of {hostTickHours} hour(s)");
+        }
         _campaign.IsPaused = paused;
         _speed = Math.Clamp(speed, 1, 5);
         _pause.Text = paused ? "▶" : "II";

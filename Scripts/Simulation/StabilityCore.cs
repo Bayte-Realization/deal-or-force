@@ -229,6 +229,22 @@ public static class StabilityCore
     /// carries forward. Without it, switching stability to a formula would quietly restate
     /// the settledness of all 261 countries on the first week.
     /// </summary>
+    /// <summary>
+    /// Whether this world has had its baselines taken.
+    ///
+    /// Asked of the world rather than remembered in a field, because a world can arrive from
+    /// somewhere else - a multiplayer snapshot, a save - already calibrated, and a flag that
+    /// lives in this process would say otherwise. A world nobody has calibrated has every
+    /// baseline at exactly zero, which no calibrated world does.
+    /// </summary>
+    public static bool IsCalibrated(Campaign campaign)
+    {
+        if (campaign is null) return true;
+        foreach (var nation in campaign.Nations)
+            if (MathF.Abs(nation.StabilityBias) > 0.0001f) return true;
+        return false;
+    }
+
     public static void Calibrate(Campaign campaign)
     {
         if (campaign is null) return;
