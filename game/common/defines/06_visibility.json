@@ -1,5 +1,27 @@
+// What a country can see, and what the map does about what it cannot.
+//
+// The two halves are separate on purpose. The first three decide what is HIDDEN - which
+// formations a player is shown, what a province report will say, whether a battle appears
+// at all - and they apply at every zoom, because hiding is the entire point of fog and a
+// player should not be able to learn anything by pulling the camera back.
+//
+// The last four are only the tint: the grey wash over ground nobody is watching. That is a
+// legibility device rather than a rule. It is worth having when a player is reading one
+// country up close, and it is a grey blanket over half the world when they are looking at
+// the globe - so it fades with distance and is gone well before the map is fully zoomed
+// out. What is hidden stays hidden either way.
 {
   "BorderVisionDepth": 3,
   "ArmyVisionDepth": 1,
-  "LandingVisionRangeDegrees": 1.0
+  "LandingVisionRangeDegrees": 1.0,
+
+  // The camera runs from 5.25 (as close as it goes) to 24 (the whole globe). Full tint at
+  // or below the first of these, none at or above the second, smooth between.
+  "FogTintFullDistance": 7.0,
+  "FogTintClearDistance": 12.0,
+
+  // And how strong "full" is. One would be untouched: the darkness multiplies the colour,
+  // and the saturation mixes it back towards grey.
+  "FogTintDarkness": 0.74,
+  "FogTintSaturation": 0.65
 }
