@@ -529,6 +529,14 @@ public sealed partial class Campaign
             Array.Copy(_pendingProvinceState, topology.ProvinceToState, _pendingProvinceState.Length);
         _pendingProvinceOwner = null;
         _pendingProvinceState = null;
+
+        // Now that the map knows who owns what, make the region list agree with it. Both
+        // passes are no-ops on a world that is already consistent, which is what makes them
+        // safe to run on a loaded save as well as a new campaign: a save that was written
+        // before regions could be split heals here instead of staying wrong for ever.
+        StatePartition.RepartitionWorld(this);
+        StatePartition.Reunify(this);
+
         MapRevision++;
         Warfare.RebuildFronts(this);
         if (!InitialDeploymentCompleted)

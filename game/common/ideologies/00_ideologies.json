@@ -130,15 +130,15 @@
     "effects": { "growth": 0.0028, "literacy": 0.00012, "radicalism": 0.00006, "war_support": -0.00006 }
   },
 
-  "monarchism": {
-    "name": "Monarchism",
-    "description": "Legitimacy by descent, argued for on the grounds that somebody has to have the last word and an inherited one is at least not campaigning for it.",
+  "traditionalism": {
+    "name": "Traditionalism",
+    "description": "Authority from custom, descent and faith rather than from a vote. Deeply stable while the custom holds, and with very little to say to anyone who has stopped believing in it.",
     "order": 110,
     "colour": "#8C6FA8",
-    "economic": 0.22,
-    "authority": 0.52,
-    "prefers_governments": ["absolute_monarchy", "constitutional_monarchy"],
-    "effects": { "stability": 0.00016, "radicalism": -0.00004, "growth": -0.0010 }
+    "economic": 0.20,
+    "authority": 0.50,
+    "prefers_governments": ["absolute_monarchy", "constitutional_monarchy", "theocracy"],
+    "effects": { "stability": 0.00016, "radicalism": -0.00004, "growth": -0.0010, "literacy": -0.00003 }
   },
 
   "agrarianism": {

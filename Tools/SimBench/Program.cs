@@ -193,8 +193,12 @@ public static class Program
                 sandbox.IsPaused = false;
                 // Long enough for a war score to exist, so the peace has something to price.
                 for (var day = 0; day < 220; day++) sandbox.Tick();
+                failures += Check("no region belongs to two countries at once",
+                    EveryRegionHasOneOwner(sandbox));
                 failures += Check("a region cut by a new border becomes two regions",
                     RegionsSplitAlongNewBorders(sandbox));
+                failures += Check("a region put back together again is one region",
+                    RegionsHealWhenTheBorderGoesAway(sandbox));
                 failures += Check("a redrawn border survives a save", BordersSurviveASave(sandbox));
                 // Deletes formations and puts others on trains, so it belongs on the copy.
                 failures += Check("a consolidation invents nobody and the railways are paid for",
@@ -1187,6 +1191,156 @@ public static class Program
     /// half is two regions with two populations and two sets of buildings, not one region
     /// with a note attached - and the arithmetic has to add back up to what it started as.
     /// </summary>
+    /// <summary>
+    /// The state the shipped map was actually in: nine regions whose provinces belonged to
+    /// two countries at once, because the only thing that ever split a region was a peace
+    /// treaty and no treaty had been signed yet. Kherson, Kharkiv, Donetsk, Zaporizhzhia
+    /// and Luhansk were the obvious ones - the region record said Ukraine, the ground under
+    /// half of it said Russia, and the interface had to pick one of them to believe.
+    /// </summary>
+    private static string EveryRegionHasOneOwner(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        var owner = new Dictionary<ushort, ushort>();
+        var divided = new Dictionary<ushort, HashSet<ushort>>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var region = topology.ProvinceToState[province];
+            if (region == 0) continue;
+            var flag = topology.ProvinceToNation[province];
+            if (!owner.TryGetValue(region, out var first)) { owner[region] = flag; continue; }
+            if (first == flag) continue;
+            if (!divided.TryGetValue(region, out var flags))
+                divided[region] = flags = new HashSet<ushort> { first };
+            flags.Add(flag);
+        }
+
+        if (divided.Count > 0)
+        {
+            var examples = divided.Take(3).Select(entry =>
+            {
+                var state = campaign.States.Find(candidate => candidate.MapIndex == entry.Key);
+                var tags = entry.Value.Select(flag =>
+                    campaign.Nations.Find(nation => nation.MapIndex == flag)?.Tag ?? flag.ToString());
+                return $"{state?.Name ?? entry.Key.ToString()} ({string.Join("/", tags)})";
+            });
+            return $"{divided.Count:N0} region(s) belong to more than one country: {string.Join(", ", examples)}";
+        }
+
+        // And the region record agrees with the ground, rather than naming an owner that
+        // lost the last province of it some time ago.
+        var wrong = new List<string>();
+        foreach (var state in campaign.States)
+        {
+            if (!owner.TryGetValue((ushort)state.MapIndex, out var flag)) continue;
+            if (state.NationMapIndex != flag)
+                wrong.Add($"{state.Name} says {state.NationMapIndex}, its ground says {flag}");
+        }
+        if (wrong.Count > 0)
+            return $"{wrong.Count:N0} region(s) name an owner their provinces do not: {string.Join("; ", wrong.Take(3))}";
+
+        // The case that started this: the occupied Ukrainian oblasts and Crimea, where the
+        // region record named Ukraine and the ground named Russia. Named here so a run says
+        // out loud that the ground and the ledger agree about them.
+        var watched = new[] { "Luhansk", "Donetsk", "Kherson", "Zaporizhzhia", "Kharkiv",
+                              "Autonomous Republic of Crimea" };
+        var report = new List<string>();
+        foreach (var state in campaign.States)
+        {
+            var stem = state.Name;
+            if (!watched.Any(name => stem.EndsWith(name, StringComparison.Ordinal))) continue;
+            var tag = campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex)?.Tag ?? "?";
+            report.Add($"{stem} {tag}");
+        }
+        report.Sort(StringComparer.Ordinal);
+
+        Console.WriteLine($"  borders: all {owner.Count:N0} region(s) on the map have exactly one owner" +
+                          (report.Count == 0 ? "." : $"; the contested ones are {string.Join(", ", report)}."));
+        return "";
+    }
+
+    /// <summary>
+    /// The other direction. A border that goes away should leave the map as it found it:
+    /// without this, a region cut in half by a war stayed two regions for the rest of the
+    /// campaign even after one country held every province of it again - two rows in the
+    /// ledger, two sets of buildings and two populations for one place.
+    /// </summary>
+    private static string RegionsHealWhenTheBorderGoesAway(Campaign campaign)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return "";
+
+        // A region held whole, big enough to cut and put back.
+        ScenarioState subject = null;
+        List<int> provinces = null;
+        foreach (var candidate in campaign.States.OrderByDescending(state => state.Population))
+        {
+            if (candidate.ParentMapIndex != 0) continue;
+            var owned = new List<int>();
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+                if (topology.ProvinceToState[province] == (ushort)candidate.MapIndex)
+                    owned.Add(province);
+            if (owned.Count < 6) continue;
+            if (owned.Any(province => topology.ProvinceToNation[province] != (ushort)candidate.NationMapIndex)) continue;
+            subject = candidate;
+            provinces = owned;
+            break;
+        }
+        if (subject is null) return "no region held whole is large enough to cut and heal";
+
+        var originalOwner = campaign.Nations.Find(nation => nation.MapIndex == subject.NationMapIndex);
+        var taker = campaign.Nations.FirstOrDefault(nation =>
+            nation.MapIndex != subject.NationMapIndex && nation.Population > 0);
+        if (originalOwner is null || taker is null) return "no pair of countries to move the ground between";
+
+        var name = subject.Name;
+        var peopleBefore = subject.Population;
+        var industryBefore = subject.Buildings.Values.Sum();
+        var regionsBefore = campaign.States.Count;
+        var literacyBefore = subject.Literacy;
+
+        var half = provinces.Take(provinces.Count / 2).ToList();
+        var created = StatePartition.Annex(campaign, half, taker);
+        if (created.Count == 0) return $"cutting {name} in half created no new region";
+        if (created.Any(piece => piece.ParentMapIndex != subject.MapIndex))
+            return "a piece does not remember the region it was cut from, so nothing can put it back";
+
+        // Hand every province of the original region back, including the ones that never
+        // moved: annexing to the owner that already holds them is a no-op for those.
+        StatePartition.Annex(campaign, provinces, originalOwner);
+
+        if (campaign.States.Count != regionsBefore)
+            return $"the region list did not return to its size: {regionsBefore:N0} before, " +
+                   $"{campaign.States.Count:N0} after";
+        var healed = campaign.States.Find(state => state.MapIndex == subject.MapIndex);
+        if (healed is null) return $"'{name}' no longer exists after being put back together";
+        if (campaign.States.Any(state => state.ParentMapIndex == subject.MapIndex))
+            return $"'{name}' still has pieces of itself listed separately";
+        if (healed.NationMapIndex != originalOwner.MapIndex)
+            return $"'{name}' came back under the wrong flag";
+
+        if (Math.Abs(healed.Population - peopleBefore) > Math.Max(4L, peopleBefore / 1000L))
+            return $"people went missing in the round trip: {peopleBefore:N0} before, {healed.Population:N0} after";
+        if (Math.Abs(healed.Buildings.Values.Sum() - industryBefore) > 2)
+            return $"buildings went missing in the round trip: {industryBefore:N0} before, " +
+                   $"{healed.Buildings.Values.Sum():N0} after";
+        if (Math.Abs(healed.Literacy - literacyBefore) > 0.01f)
+            return $"literacy drifted through the round trip: {literacyBefore:P1} before, {healed.Literacy:P1} after";
+
+        var known = campaign.States.Select(state => (ushort)state.MapIndex).ToHashSet();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (!known.Contains(topology.ProvinceToState[province]))
+                return $"province {province} belongs to region {topology.ProvinceToState[province]}, which does not exist";
+        if (provinces.Any(province => topology.ProvinceToState[province] != (ushort)subject.MapIndex))
+            return $"'{name}' did not take all of its ground back";
+
+        Console.WriteLine($"  healing: {name} was cut into {created.Count + 1} by {taker.Tag}, handed back, " +
+                          $"and is one region of {healed.Population:N0} again.");
+        return "";
+    }
+
     private static string RegionsSplitAlongNewBorders(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;

@@ -75,6 +75,11 @@ public static class StatePartition
             if (state is not null) created.AddRange(Repartition(campaign, state));
         }
 
+        // A border can put a region back together as easily as it can cut one: taking the
+        // last enemy province out of a region that was split years ago makes it one place
+        // again, and the ledger should say so.
+        Reunify(campaign);
+
         campaign.InvalidateStateIndex();
         campaign.MarkMapChanged();
         return created;
@@ -85,7 +90,8 @@ public static class StatePartition
     /// owner is its own region. Returns the regions this created; an empty list means the
     /// region was already whole and only its owner may have changed.
     /// </summary>
-    public static IReadOnlyList<ScenarioState> Repartition(Campaign campaign, ScenarioState state)
+    public static IReadOnlyList<ScenarioState> Repartition(Campaign campaign, ScenarioState state,
+        bool separatePockets = true)
     {
         var topology = campaign?.ProvinceMap;
         if (topology is null || state is null) return Array.Empty<ScenarioState>();
@@ -99,7 +105,7 @@ public static class StatePartition
         // break every save, war goal and history entry that names it.
         if (provinces.Count == 0) return Array.Empty<ScenarioState>();
 
-        var pieces = Components(topology, provinces);
+        var pieces = Components(topology, provinces, separatePockets);
         if (pieces.Count <= 1)
         {
             // Whole, but possibly under a new flag.
@@ -151,11 +157,200 @@ public static class StatePartition
     }
 
     /// <summary>
+    /// Cut every region the political map already divides, once, when the map is attached.
+    ///
+    /// The 2024 map ships nine of them - Kherson, Kharkiv, Donetsk, Zaporizhzhia and
+    /// Luhansk across the Russian front, Santa Cruz around the Patagonian ice field, the
+    /// Red Sea around Bir Tawil, and the two sides of the Cyprus buffer zone. Each one was
+    /// a region whose record named one owner while the ground under it named another.
+    ///
+    /// Owner only, without splitting pockets: this is fixing who owns what, not re-deciding
+    /// where places are.
+    /// </summary>
+    public static int RepartitionWorld(Campaign campaign)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null) return 0;
+
+        var owners = new Dictionary<int, ushort>();
+        var wrong = new HashSet<int>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var region = topology.ProvinceToState[province];
+            if (region == 0) continue;
+            var owner = topology.ProvinceToNation[province];
+            if (!owners.TryGetValue(region, out var first)) owners[region] = owner;
+            else if (first != owner) wrong.Add(region);
+        }
+
+        // A region can disagree with its ground without being divided at all: Crimea's
+        // provinces are Russian in the political map while the region record still said
+        // Ukraine, so nothing was there to split and nothing ever corrected it either.
+        // Repartitioning a whole region does not cut it - it just puts the right flag on.
+        foreach (var state in campaign.States)
+            if (owners.TryGetValue(state.MapIndex, out var ground) && state.NationMapIndex != ground)
+                wrong.Add(state.MapIndex);
+
+        if (wrong.Count == 0) return 0;
+
+        var created = 0;
+        foreach (var region in wrong)
+        {
+            var state = campaign.States.Find(candidate => candidate.MapIndex == region);
+            if (state is null) continue;
+            created += Repartition(campaign, state, separatePockets: false).Count;
+        }
+        // Invalidate whether or not a region was carved: a region that only changed flag
+        // changed nothing about the index, but a region that did is now in the list twice
+        // as far as anything holding the old index is concerned.
+        campaign.InvalidateStateIndex();
+        campaign.MarkMapChanged();
+        return created;
+    }
+
+    /// <summary>
+    /// Put back together every region whose pieces are all under one flag again.
+    ///
+    /// A border that goes away should leave the map as it found it. Without this a region
+    /// cut in half by a war stayed two regions for the rest of the campaign even after one
+    /// country held every province of it again - two entries in the ledger, two sets of
+    /// buildings, two populations, for one place.
+    ///
+    /// Everything countable is added back up; everything that is a rate is averaged by how
+    /// many people each piece brought, because a region that is nine tenths literate and a
+    /// region that is half literate do not make a region that is either.
+    /// </summary>
+    public static int Reunify(Campaign campaign)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null) return 0;
+
+        var families = new Dictionary<int, List<ScenarioState>>();
+        foreach (var state in campaign.States)
+        {
+            if (state.ParentMapIndex == 0) continue;
+            if (!families.TryGetValue(state.ParentMapIndex, out var children))
+                families[state.ParentMapIndex] = children = new List<ScenarioState>();
+            children.Add(state);
+        }
+        if (families.Count == 0) return 0;
+
+        var provincesOf = new Dictionary<int, List<int>>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var region = topology.ProvinceToState[province];
+            if (region == 0) continue;
+            if (!provincesOf.TryGetValue(region, out var list)) provincesOf[region] = list = new List<int>();
+            list.Add(province);
+        }
+
+        var merged = 0;
+        foreach (var (parentIndex, children) in families)
+        {
+            var parent = campaign.States.Find(candidate => candidate.MapIndex == parentIndex);
+            if (parent is null) continue;
+
+            // One flag over every piece, the parent's own ground included. A piece with no
+            // ground left has no opinion: it is an empty shell the merge will absorb.
+            ushort? flag = null;
+            var agreed = true;
+            foreach (var piece in children.Prepend(parent))
+            {
+                if (!provincesOf.TryGetValue(piece.MapIndex, out var owned) || owned.Count == 0) continue;
+                var owner = topology.ProvinceToNation[owned[0]];
+                foreach (var province in owned)
+                    if (topology.ProvinceToNation[province] != owner) { agreed = false; break; }
+                if (!agreed) break;
+                if (flag is null) flag = owner;
+                else if (flag != owner) { agreed = false; break; }
+            }
+            if (!agreed || flag is null) continue;
+
+            foreach (var child in children) Absorb(campaign, topology, parent, child, provincesOf);
+            parent.NationMapIndex = flag.Value;
+            parent.NationId = campaign.Nations.Find(nation => nation.MapIndex == flag.Value)?.Tag ?? parent.NationId;
+            merged += children.Count;
+        }
+
+        if (merged > 0)
+        {
+            RebindArmies(campaign, topology);
+            campaign.InvalidateStateIndex();
+            campaign.MarkMapChanged();
+        }
+        return merged;
+    }
+
+    /// <summary>One piece back into the region it was cut from.</summary>
+    private static void Absorb(Campaign campaign, ProvinceTopology topology, ScenarioState parent,
+        ScenarioState child, Dictionary<int, List<int>> provincesOf)
+    {
+        if (provincesOf.TryGetValue(child.MapIndex, out var owned))
+            foreach (var province in owned) topology.ProvinceToState[province] = (ushort)parent.MapIndex;
+
+        var here = parent.Population;
+        var there = child.Population;
+        var total = here + there;
+        float Blend(float left, float right) =>
+            total <= 0 ? MathF.Max(left, right) : (left * here + right * there) / total;
+
+        parent.Literacy = Blend(parent.Literacy, child.Literacy);
+        parent.StandardOfLiving = Blend(parent.StandardOfLiving, child.StandardOfLiving);
+        parent.Radicalism = Blend(parent.Radicalism, child.Radicalism);
+        parent.Urbanization = Blend(parent.Urbanization, child.Urbanization);
+        parent.Population = total;
+
+        foreach (var group in child.PopulationGroups)
+        {
+            var match = parent.PopulationGroups.Find(candidate =>
+                candidate.Class == group.Class && candidate.Culture == group.Culture &&
+                candidate.Religion == group.Religion && candidate.Profession == group.Profession);
+            if (match is null) { parent.PopulationGroups.Add(group); continue; }
+            var mine = match.Size;
+            var theirs = group.Size;
+            var both = mine + theirs;
+            float Mix(float left, float right) =>
+                both <= 0 ? MathF.Max(left, right) : (left * mine + right * theirs) / both;
+            match.Employment = Mix(match.Employment, group.Employment);
+            match.Wealth = Mix(match.Wealth, group.Wealth);
+            match.StandardOfLiving = Mix(match.StandardOfLiving, group.StandardOfLiving);
+            match.Radicalism = Mix(match.Radicalism, group.Radicalism);
+            match.Size = both;
+        }
+
+        foreach (var (building, count) in child.Buildings)
+            parent.Buildings[building] = parent.Buildings.TryGetValue(building, out var have) ? have + count : count;
+        foreach (var (deposit, amount) in child.ResourceDeposits)
+            parent.ResourceDeposits[deposit] = parent.ResourceDeposits.TryGetValue(deposit, out var had)
+                ? had + amount : amount;
+
+        campaign.States.Remove(child);
+    }
+
+    /// <summary>
     /// Connected groups of provinces that share an owner. Two pockets of the same country
     /// that cannot walk to each other are two places, not one.
     /// </summary>
-    private static List<List<int>> Components(ProvinceTopology topology, List<int> provinces)
+    private static List<List<int>> Components(ProvinceTopology topology, List<int> provinces,
+        bool separatePockets)
     {
+        // One piece per owner, and nothing said about geography. This is what the 2024 map
+        // wants: the question there is "who owns this region", not "is this region one
+        // place" - and answering the second at load would cut every archipelago in the
+        // world into one region per island, because islands are not neighbours in a graph
+        // built out of land borders.
+        if (!separatePockets)
+        {
+            var byOwner = new Dictionary<ushort, List<int>>();
+            foreach (var province in provinces)
+            {
+                var owner = topology.ProvinceToNation[province];
+                if (!byOwner.TryGetValue(owner, out var list)) byOwner[owner] = list = new List<int>();
+                list.Add(province);
+            }
+            return byOwner.Values.ToList();
+        }
+
         var members = new HashSet<int>(provinces);
         var seen = new HashSet<int>();
         var components = new List<List<int>>();
@@ -204,6 +399,9 @@ public static class StatePartition
             Name = name,
             Iso = $"{parent.Iso}-{mapIndex}",
             Kind = parent.Kind,
+            // The original, not the immediate parent: a region cut, cut again and then
+            // reunited should become one region rather than a chain of them.
+            ParentMapIndex = parent.ParentMapIndex != 0 ? parent.ParentMapIndex : parent.MapIndex,
             Literacy = parent.Literacy,
             StandardOfLiving = parent.StandardOfLiving,
             Radicalism = parent.Radicalism,

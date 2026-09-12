@@ -685,8 +685,6 @@
   "The smallest state anybody has seriously proposed. Growth on one side of the ledger, and on the other everything a state was doing that nobody had noticed.": "Самое маленькое государство, какое всерьёз кто-либо предлагал. По одну сторону книги — рост, по другую — всё, что государство делало и чего никто не замечал.",
   "Technocratic rule": "Технократическое правление",
   "Policy as an engineering problem, decided by the people who can do the arithmetic. Excellent at questions with answers; it has no theory of the other kind.": "Политика как инженерная задача, решаемая теми, кто умеет считать. Превосходно с вопросами, у которых есть ответы; о вопросах другого рода у неё нет теории.",
-  "Monarchism": "Монархизм",
-  "Legitimacy by descent, argued for on the grounds that somebody has to have the last word and an inherited one is at least not campaigning for it.": "Легитимность по происхождению, обоснованная тем, что последнее слово всё равно за кем-то останется, а унаследованное хотя бы не ведёт за него кампанию.",
   "Agrarianism": "Аграризм",
   "The countryside as the country. Land, smallholders and a deep suspicion of the city that is buying the harvest.": "Деревня как страна. Земля, мелкие хозяева и глубокое недоверие к городу, который скупает урожай.",
   "Politics we recognise": "Близкая нам политика",
@@ -802,5 +800,7 @@
   "BEGIN AS {0}": "ИГРАТЬ ЗА {0}",
   "START HOTSEAT · {0} PLAYERS": "НАЧАТЬ ХОТСИТ · ИГРОКОВ: {0}",
   "REMOVE {0}": "УБРАТЬ {0}",
-  "ADD {0} AS PLAYER": "ДОБАВИТЬ {0} ИГРОКОМ"
+  "ADD {0} AS PLAYER": "ДОБАВИТЬ {0} ИГРОКОМ",
+  "Traditionalism": "Традиционализм",
+  "Authority from custom, descent and faith rather than from a vote. Deeply stable while the custom holds, and with very little to say to anyone who has stopped believing in it.": "Власть от обычая, происхождения и веры, а не от голосования. Крайне устойчиво, пока обычай держится, и почти нечего сказать тому, кто в него перестал верить."
 }

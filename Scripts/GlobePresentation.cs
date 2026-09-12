@@ -76,6 +76,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private readonly Dictionary<int, uint> _colorByMapIndex = new();
     private readonly Dictionary<int, Simulation.Nation> _nationByMapIndex = new();
     private readonly Dictionary<int, Simulation.ScenarioState> _stateByMapIndex = new();
+
+    /// <summary>
+    /// Which revision of the map the region index was built for.
+    ///
+    /// The list of regions is no longer fixed at load: a border cut through one makes two,
+    /// and a border that goes away makes one again. An index built once and never looked at
+    /// again cannot find a region the campaign created this afternoon, and the panel simply
+    /// says nothing about the ground under the cursor.
+    /// </summary>
+    private int _stateIndexRevision = -1;
     private readonly List<(Node3D Node, Vector3 Normal)> _capitalMarkers = new();
     private readonly List<(Node3D Node, Vector3 Normal)> _armyMarkers = new();
     private readonly List<(Node3D Node, Vector3 Normal)> _fleetMarkers = new();
@@ -307,6 +317,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         foreach (var state in campaign.States)
             _stateByMapIndex[state.MapIndex] = state;
+        _stateIndexRevision = campaign.MapRevision;
 
         BuildNationPalette();
         ApplyMapSmoothing();
@@ -709,7 +720,17 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (nationMapIndex == 0 || !_nationByMapIndex.TryGetValue(nationMapIndex, out var nation))
             return false;
 
-        _stateByMapIndex.TryGetValue(SourceEarthData.States[cell], out var state);
+        // The live region, not the authored one. `SourceEarthData.States` is the raster as
+        // it was drawn: it still says the whole of Luhansk is one region long after a border
+        // has cut it in two, so reading the panel off it answers about a region the player
+        // is not standing in - which is how clicking on ground Russia holds produced
+        // Ukraine's fog of war.
+        var regionMapIndex = provinceId > 0 && _campaign?.ProvinceMap is { } liveRegions &&
+                             provinceId < liveRegions.ProvinceToState.Length
+            ? liveRegions.ProvinceToState[provinceId]
+            : SourceEarthData.States[cell];
+        EnsureStateIndex();
+        _stateByMapIndex.TryGetValue(regionMapIndex, out var state);
         if (updateSelection)
         {
             _globeMaterial.SetShaderParameter("selected_region_id", (float)SourceEarthData.States[cell]);
@@ -2784,6 +2805,15 @@ void fragment() {
             pixels[write + 3] = (byte)(color.A * 255f);
         }
         return ImageTexture.CreateFromImage(Image.CreateFromData(width, height, false, Image.Format.Rgba8, pixels));
+    }
+
+    /// <summary>Rebuild the region index when the campaign has redrawn the map since.</summary>
+    private void EnsureStateIndex()
+    {
+        if (_campaign is null || _campaign.MapRevision == _stateIndexRevision) return;
+        _stateByMapIndex.Clear();
+        foreach (var state in _campaign.States) _stateByMapIndex[state.MapIndex] = state;
+        _stateIndexRevision = _campaign.MapRevision;
     }
 
     private void BindArmyTopology()

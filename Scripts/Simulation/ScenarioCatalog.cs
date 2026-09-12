@@ -18,6 +18,17 @@ public sealed class ScenarioState
     public string NationId = "";
     public string Iso = "";
     public string Kind = "Region";
+
+    /// <summary>
+    /// The region this one was cut out of, or 0 for a region the scenario authored.
+    ///
+    /// A border that cuts a region in two makes two regions; a border that goes away again
+    /// has to be able to make one region back out of them, and that needs the pieces to
+    /// remember where they came from. Always the original rather than the immediate
+    /// parent, so a region cut three times still collapses in one step.
+    /// </summary>
+    public int ParentMapIndex;
+
     public long Population;
     public float Literacy;
     public float StandardOfLiving;
