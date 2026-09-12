@@ -172,6 +172,39 @@ public static class DemographyCatalog
             ? primary
             : Array.Empty<string>();
 
+    /// <summary>
+    /// Say who a country is for, for a country the scenario never declared.
+    ///
+    /// `history/pops` answers this for every country the world shipped with, and nothing
+    /// else ever needed to ask - until a country could be founded in the middle of a
+    /// campaign. A tag the file has never heard of is a state that is for nobody, which
+    /// makes every person inside it a minority of it: maximally restive the day it is born,
+    /// its own people rising against it, and gone into its own provinces inside a few years.
+    ///
+    /// That is not a rule anybody would write on purpose, and it is exactly what happened
+    /// the first time a country seceded here - Malay left Indonesia with four regions of
+    /// Kalimantan and all four of them promptly seceded from Malay.
+    ///
+    /// Declaring replaces what was there, because the country doing it is the authority on
+    /// the question, and it is idempotent so that restoring a save can simply do it again.
+    /// </summary>
+    public static void Declare(string countryTag, IEnumerable<string> cultures)
+    {
+        if (string.IsNullOrWhiteSpace(countryTag) || cultures is null) return;
+
+        var list = new List<string>();
+        foreach (var culture in cultures)
+        {
+            if (string.IsNullOrWhiteSpace(culture)) continue;
+            if (!list.Contains(culture, StringComparer.OrdinalIgnoreCase)) list.Add(culture);
+        }
+        if (list.Count == 0) return;
+
+        PrimaryByCountry[countryTag] = list;
+        PrimarySetByCountry[countryTag] = new HashSet<string>(list, StringComparer.OrdinalIgnoreCase);
+        FirstPrimaryByCountry[countryTag] = list[0];
+    }
+
     static DemographyCatalog() => ResetCatalog();
 
     public static void ResetCatalog()

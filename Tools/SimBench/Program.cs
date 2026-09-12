@@ -157,6 +157,8 @@ public static class Program
             StabilityIsWorkedOutRatherThanStored());
         failures += Check("people take up arms for a country they think is theirs",
             MilitiaRisesWhereItIsWanted());
+        failures += Check("a country can lose a part of itself, and it is a country afterwards",
+            RegionsThatAreNotTheirsCanLeave());
         failures += Check("a mod can add a cabinet and a trade stance the game never had",
             PolicyCataloguesTakeNewEntries());
         failures += Check("every country is governed by something, and minds what its neighbours are",
@@ -3083,6 +3085,143 @@ public static class Program
     /// which it did draw on at first, with the result that the country it was meant to help
     /// lost a quarter of its ground.
     /// </summary>
+    /// <summary>
+    /// The mechanic that lets a border move without a war.
+    ///
+    /// A country holding a region that is wholly somebody else's people, furious and
+    /// ungoverned, used to be able to do so for a century with nothing ever coming of it -
+    /// every border in the world that was not drawn by a war between two states had no
+    /// mechanism at all. This is that mechanism, and it has four ways to be wrong: nothing
+    /// leaves, what leaves is not a country, the parent loses more than it should, or two
+    /// peers disagree about any of it.
+    /// </summary>
+    private static string RegionsThatAreNotTheirsCanLeave()
+    {
+        var campaign = Campaign.CreateBootstrap(20240707);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var before = campaign.Nations.Count;
+        var tags = new HashSet<string>(campaign.Nations.Select(nation => nation.Tag), StringComparer.OrdinalIgnoreCase);
+        var indices = new HashSet<int>(campaign.Nations.Select(nation => nation.MapIndex));
+
+        // Fifteen years. The calibration says the worst region in the world goes in about
+        // ten under a state that governs itself, so this is that with room for the state to
+        // govern itself unusually well.
+        var born = new List<SecessionReport>();
+        for (var day = 0; day < 365 * 15; day++)
+        {
+            campaign.Tick();
+            born.AddRange(SecessionEvents.Recent);
+        }
+
+        if (born.Count == 0)
+            return "fifteen years of the 2024 world and not one region left the country holding it, " +
+                   "so the mechanic is calibrated out of existence";
+
+        foreach (var report in born)
+        {
+            var country = report.Seceded;
+            if (country is null) return "a secession reported no country";
+            if (!tags.Add(country.Tag))
+                return $"{country.Tag} was handed a tag somebody was already using";
+            if (!indices.Add(country.MapIndex))
+                return $"{country.Tag} was handed map index {country.MapIndex}, which is already painted";
+            if (string.IsNullOrWhiteSpace(country.Name))
+                return $"{country.Tag} has no name";
+            if (string.IsNullOrWhiteSpace(country.Government) || string.IsNullOrWhiteSpace(country.Ideology))
+                return $"{country.Tag} is governed by nothing";
+            if (report.Population < SecessionCore.Weights.MinimumPopulation)
+                return $"{country.Tag} was founded with {report.Population:N0} people, under the minimum";
+
+            // It cannot be a dissolution. The cap exists because a country losing four
+            // fifths of itself in one afternoon is not a secession, it is a bug with a flag.
+            //
+            // One region is the exception, and a real one: a single region that happens to be
+            // most of the country cannot be cut in half to fit a ceiling, and a country that
+            // is one big region and several small ones is entitled to lose the big one.
+            var share = report.ParentPopulation <= 0
+                ? 0f
+                : report.Population / (float)report.ParentPopulation;
+            if (report.Regions > 1 && share > SecessionCore.Weights.MaximumShare + 0.05f)
+                return $"{report.Parent.Tag} lost {share:P0} of itself across {report.Regions} " +
+                       $"region(s) at once, past the cap of {SecessionCore.Weights.MaximumShare:P0}";
+        }
+
+        // And the ground actually moved. A country in the nation list that owns nothing is
+        // the failure mode this whole path is most likely to produce.
+        foreach (var report in born)
+        {
+            var country = report.Seceded;
+            var held = campaign.StatesOf(country.MapIndex).Length;
+            var conquered = campaign.Wars.Any(war => war.Involves(country.Id));
+            if (held == 0 && !conquered)
+                return $"{country.Tag} ({country.Name}, map index {country.MapIndex}) exists, is at " +
+                       $"peace, and owns no ground: it was founded on {report.Regions} region(s) and " +
+                       $"{report.Population:N0} people from {report.Parent.Tag}, {report.Outcome}. " +
+                       $"Those regions are now held by " +
+                       string.Join(", ", report.Pieces.Select(piece =>
+                           campaign.States.FirstOrDefault(state => state.MapIndex == piece.MapIndex) is { } found
+                               ? $"{piece.Name}={campaign.Nations.FirstOrDefault(n => n.MapIndex == found.NationMapIndex)?.Tag ?? "?"}"
+                               : $"{piece.Name}=gone"));
+            if (held == 0) continue;
+
+            if (campaign.ProvinceController is { } control)
+            {
+                var provinces = 0;
+                for (var province = 1; province < control.Length; province++)
+                    if (control[province] == (ushort)country.MapIndex) provinces++;
+                if (provinces == 0)
+                    return $"{country.Tag} owns {held} region(s) and holds not one province of them";
+            }
+        }
+
+        // What the user asked for, and the thing that makes it look like a secession rather
+        // than a language map: at least some of what left went for its own reasons rather
+        // than its nationality. Reported rather than required, because a world where every
+        // secession happened to be one clean people is a legitimate world.
+        var joined = born.Sum(report => report.Pieces.Count(piece => piece.Cause == SecessionCause.Discontent));
+        var core = born.Sum(report => report.Pieces.Count(piece => piece.Cause == SecessionCause.Nationality));
+
+        // Two worlds, the same seed, the same answer. A mechanic that adds countries is the
+        // worst possible thing to be non-deterministic about: the peers agree for years and
+        // then one of them has a country the other has never heard of.
+        //
+        // Stepped side by side rather than one after the other, and deliberately. Side by
+        // side is the real case - a multiplayer client rebuilding from a snapshot beside the
+        // world it is replacing - and it is also the only one this can answer cleanly: two
+        // campaigns run one after the other in a single process already diverge slightly
+        // after three years with no secession anywhere in them, so something global outlives
+        // a campaign. That is a real bug and an older one, and testing against it here would
+        // only mean this check failed for somebody else's reason.
+        var left = Campaign.CreateBootstrap(20240808);
+        var right = Campaign.CreateBootstrap(20240808);
+        if (!AttachMap(left) || !AttachMap(right)) return "";
+        left.IsPaused = false;
+        right.IsPaused = false;
+        var founded = left.Nations.Count;
+        for (var day = 0; day < 365 * 15; day++) { left.Tick(); right.Tick(); }
+
+        if (left.Nations.Count == founded)
+            return "the world used to check that two peers come apart alike never came apart, " +
+                   "so the check proves nothing";
+        if (left.Nations.Count != right.Nations.Count)
+            return $"two peers stepping together produced {left.Nations.Count:N0} countries and " +
+                   $"{right.Nations.Count:N0}";
+        if (CampaignFingerprint.Of(left) != CampaignFingerprint.Of(right))
+            return "two peers stepping together came apart differently: " + WhatDiffers(left, right);
+
+        var accepted = born.Count(report => report.Outcome == SecessionOutcome.Accepted);
+        Console.WriteLine($"  secession: {born.Count:N0} country(ies) declared themselves in fifteen years " +
+                          $"({campaign.Nations.Count - before:N0} still on the list), {accepted:N0} let go and " +
+                          $"{born.Count - accepted:N0} fought over; {core:N0} region(s) left for their people " +
+                          $"and {joined:N0} went along for their own reasons.");
+        foreach (var report in born.Take(6))
+            Console.WriteLine($"    {report.Parent.Tag} -> {report.Seceded.Tag} ({report.Seceded.Name}): " +
+                              $"{report.Regions} region(s), {report.Population:N0} people, {report.Reason}");
+        return "";
+    }
+
     private static string MilitiaRisesWhereItIsWanted()
     {
         var campaign = Campaign.CreateBootstrap(20240505);

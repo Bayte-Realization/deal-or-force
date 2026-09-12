@@ -1,0 +1,29 @@
+// What two countries remember about the day one of them left the other.
+//
+// Separate file rather than rows in the main one, because the two sides of a secession are
+// not symmetrical and reading them next to each other is the only way that is obvious: the
+// state that lost something carries it for two generations, and the state that was let go
+// carries the fact that it was let go for about as long. A mod that wants a world where
+// nobody forgives a secession changes one number here.
+{
+  // Held by the country that left, about the country that let it. Not gratitude exactly -
+  // it is the absence of a war that both of them know could have happened, and that is
+  // worth more to a new state than anything anybody could have said.
+  "let_us_go": {
+    "name": "They let us go",
+    "opinion": 35,
+    "days": 5500,
+    "decays": true
+  },
+
+  // And the other side of it. Smaller than losing a war and longer than winning one: a
+  // state does not hate the province that left the way it hates an invader, and it does not
+  // stop minding either.
+  "seceded_from_us": {
+    "name": "Broke away from us",
+    "opinion": -40,
+    "days": 7300,
+    "decays": true,
+    "max_stacks": 2
+  }
+}

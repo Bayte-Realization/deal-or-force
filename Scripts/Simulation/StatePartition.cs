@@ -36,7 +36,14 @@ public static class StatePartition
     /// Move permanent ownership of provinces to a nation, then repartition every region
     /// the new border touched. Returns the regions that now exist because of it.
     /// </summary>
-    public static IReadOnlyList<ScenarioState> Annex(Campaign campaign, IEnumerable<int> provinces, Nation newOwner)
+    /// <param name="asConquest">
+    /// Whether the world should read this as land taken. True for every peace and every
+    /// annexation, and false for exactly one caller: a country seceding does not take the
+    /// ground it is standing on, and charging it notoriety for the land it already lived on
+    /// would have every new state born an international pariah.
+    /// </param>
+    public static IReadOnlyList<ScenarioState> Annex(Campaign campaign, IEnumerable<int> provinces,
+        Nation newOwner, bool asConquest = true)
     {
         var topology = campaign?.ProvinceMap;
         if (topology is null || newOwner is null || provinces is null) return Array.Empty<ScenarioState>();
@@ -66,7 +73,7 @@ public static class StatePartition
 
         // What the neighbours make of it. Scaled by people rather than provinces, because a
         // hundred square kilometres of tundra is not what makes a neighbourhood nervous.
-        Statecraft.RecordAnnexation(campaign, newOwner, peopleTaken);
+        if (asConquest) Statecraft.RecordAnnexation(campaign, newOwner, peopleTaken);
 
         var created = new List<ScenarioState>();
         foreach (var stateMapIndex in touched)

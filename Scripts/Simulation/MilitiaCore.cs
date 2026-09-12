@@ -234,6 +234,16 @@ public static class MilitiaCore
         MathF.Max(0f, PoliticsCore.GovernmentOf(nation).Militia * PoliticsCore.IdeologyOf(nation).Militia);
 
     /// <summary>
+    /// Stand a formation up outside the daily pass, for a country that has just declared
+    /// itself. <see cref="SecessionCore"/> is the only caller: a state born this morning has
+    /// exactly the condition the daily rules read, and the weeks they would take to answer
+    /// are the weeks it may not be given.
+    /// </summary>
+    public static bool Found(Campaign campaign, Nation nation, ScenarioState state) =>
+        campaign?.ProvinceMap is not null && nation is not null && state is not null &&
+        Raise(campaign, nation, state);
+
+    /// <summary>
     /// Stand one formation up on ground the country still holds.
     ///
     /// It costs no manpower. That is the point of it: these are not reservists the ministry

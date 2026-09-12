@@ -49,6 +49,17 @@ public sealed class ScenarioState
     public float Literacy;
     public float StandardOfLiving;
     public float Radicalism;
+
+    /// <summary>
+    /// How far this region has gone towards leaving the country, 0 to 1. Written weekly by
+    /// <see cref="SecessionCore"/>, and zero for the overwhelming majority of the world.
+    ///
+    /// It accumulates rather than being read fresh each week, which is the difference
+    /// between a mechanic a player can see coming and one that happens to them: a region
+    /// angry for three running years is nearly gone, and the map can say so before it is.
+    /// </summary>
+    public float SecessionPressure;
+
     public float Urbanization;
     public readonly List<PopulationGroup> PopulationGroups = new();
     public readonly Dictionary<BuildingKind, int> Buildings = new();

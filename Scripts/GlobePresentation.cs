@@ -318,6 +318,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         foreach (var state in campaign.States)
             _stateByMapIndex[state.MapIndex] = state;
         _stateIndexRevision = campaign.MapRevision;
+        _nationIndexCount = campaign.Nations.Count;
 
         BuildNationPalette();
         ApplyMapSmoothing();
@@ -2816,6 +2817,37 @@ void fragment() {
         _stateIndexRevision = _campaign.MapRevision;
     }
 
+    /// <summary>
+    /// Pick up countries the campaign founded after the map was bound.
+    ///
+    /// The country lists were read once, at bind, because the set of countries was fixed for
+    /// the length of a campaign - and it no longer is: a region can secede and what comes out
+    /// is a country nothing here has heard of. Without this it holds real ground and paints
+    /// in the fallback grey, has no name under the cursor, and is invisible on every map
+    /// mode that reads a colour.
+    ///
+    /// Cheap enough to do on the ordinary map-repaint path: it compares two counts, and does
+    /// real work only in the handful of frames across a whole campaign where a border was
+    /// drawn by something other than a war.
+    /// </summary>
+    private void EnsureNationIndex()
+    {
+        if (_campaign is null || _campaign.Nations.Count == _nationIndexCount) return;
+        foreach (var nation in _campaign.Nations)
+        {
+            if (_nationByMapIndex.ContainsKey(nation.MapIndex)) continue;
+            _colorByMapIndex[nation.MapIndex] = ParseHex(nation.Color, 0x6E7B8BFFu);
+            _nationByMapIndex[nation.MapIndex] = nation;
+        }
+        _nationIndexCount = _campaign.Nations.Count;
+        BuildNationPalette();
+        BuildCapitalMarkers(_campaign);
+        GD.Print($"[dof] political map now holds {_nationIndexCount:N0} countries");
+    }
+
+    /// <summary>How many countries the colour and name indexes were built for.</summary>
+    private int _nationIndexCount;
+
     private void BindArmyTopology()
     {
         if (_campaign is null || _provinceTopology is null) return;
@@ -2869,6 +2901,7 @@ void fragment() {
     private void RefreshProvinceControllers()
     {
         if (_campaign?.ProvinceMap is null || _campaign.ProvinceController is null || _globeMaterial is null) return;
+        EnsureNationIndex();
         var topology = _campaign.ProvinceMap;
         var pixels = _controlPixels ??= new byte[256 * 256 * 4];
         var ownerPixels = _ownerPixels ??= new byte[256 * 256 * 4];

@@ -209,6 +209,28 @@ public sealed partial class Nation
 
     /// <summary>The day the last change of either landed, for the cooling-off period.</summary>
     public int PoliticsChangedDay = -9999;
+
+    /// <summary>
+    /// The day this country last lost part of itself - or gained itself, by leaving.
+    ///
+    /// A state does not come apart in four pieces on the same afternoon, and a country three
+    /// weeks old is not yet somewhere anybody secedes from. One number serves both cases
+    /// because it is the same fact read from either side of the new border.
+    /// </summary>
+    public int LastSecessionDay = -9999;
+
+    /// <summary>
+    /// Who this country is for, when the scenario never said - which is every country the
+    /// campaign founds rather than loads.
+    ///
+    /// `history/pops` answers this for the 261 the world ships with, and a tag it has never
+    /// heard of is a state that is for nobody: every person inside it is a minority of it.
+    /// Held here as well as in the catalogue because the catalogue is a file and this is a
+    /// fact about a particular country in a particular save - and a country that forgot who
+    /// it was on reload would come apart on the strength of having been reloaded.
+    /// </summary>
+    public readonly List<string> FoundedCultures = new();
+
     public float WeeklyTaxIncome;
     public float WeeklyExpenses;
     public float WeeklyBalance;
@@ -426,6 +448,22 @@ public sealed partial class Campaign
     /// <summary>Drop the ownership index. Call after replacing or re-owning states.</summary>
     public void InvalidateStateIndex() => _statesByNation = null;
 
+    /// <summary>
+    /// Put every country the campaign founded back into the demography catalogue.
+    ///
+    /// The catalogue is loaded from files and knows nothing about a country that did not
+    /// exist when they were read. Restoring a save has to say it again, or a country that
+    /// seceded in 2031 reloads as a state that is for nobody and comes apart for having
+    /// been reloaded - which is the worst class of bug there is, because it only happens to
+    /// people who stopped playing and came back.
+    /// </summary>
+    public void DeclareFoundedPeoples()
+    {
+        foreach (var nation in Nations)
+            if (nation.FoundedCultures.Count > 0)
+                DemographyCatalog.Declare(nation.Tag, nation.FoundedCultures);
+    }
+
     public Nation NationById(int id) => id >= 0 && id < Nations.Count ? Nations[id] : null;
     public Nation NationByTag(string tag) => Nations.FirstOrDefault(n =>
         string.Equals(n.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
@@ -485,6 +523,12 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("statecraft")) AiStatecraft.Tick(this);
             using (SimProfiler.Measure("events")) EventSystem.Tick(this);
             using (SimProfiler.Measure("history")) History.Capture(this);
+
+            // Whether any part of any country has finished deciding it is not part of it.
+            // Last in the day, because it redraws the map the rest of the day was worked
+            // out on; it keeps its own weekly schedule, because it also has to clear its
+            // report list on the days it does nothing.
+            using (SimProfiler.Measure("secession")) SecessionEvents.Tick(this);
         }
         CampaignIntel.Invalidate(this);
         if (DiagnosticLogs.Enabled)

@@ -1,0 +1,133 @@
+// When a part of a country stops being part of it.
+//
+// A region does not secede because it is poor, or because it is angry, or because it is
+// foreign. It secedes because it is all three at once and because the state holding it has
+// stopped looking like it can stop them - which is why this reads four numbers off the
+// region and one off the country, and why none of them alone is enough.
+//
+// Each week a region adds to its pressure:
+//
+//     base
+//   * (foreign_share ^ nationality)    how far the state is not theirs
+//   * (radicalism_floor + radicalism * radicalism)
+//   * (1 - stability)                  how far the region has stopped being governed
+//   * (weakness_floor + weakness * (1 - national stability))
+//   * war_multiplier                   while the state is losing a war somewhere
+//
+// and when a contiguous group of regions that share a people passes 1, they go.
+//
+// Everything here is deliberately slow. A country coming apart should be something a player
+// watches happening and has time to act about - raise living standards, spend stability on
+// holding it, win the war that started it - rather than something that happens to them
+// between two clicks.
+{
+  // A week's pressure for a region that is wholly foreign, wholly radical, wholly
+  // ungoverned and held by a state with no stability left. Everything real is a fraction of
+  // that, so this is a few months for a region that is all four and never for a region that
+  // is only one of them.
+  //
+  // Calibrated against the 2024 world and then against what fifteen years of it actually
+  // does, rather than assumed. The worst region on the map is Chechnya: a Russia that
+  // governs itself holds it for about sixteen years, a Russia whose stability has slipped
+  // holds it for ten, and a Russia losing a war holds it for five. A region that is merely
+  // half foreign and reasonably governed is past a century, which is to say never.
+  //
+  // At this rate the world produces about one and a half new countries a year - India loses
+  // Maharashtra, Indonesia loses Kalimantan, Ethiopia loses the Ogaden, Iran and Armenia
+  // both lose Azerbaijani ground - which is a map that visibly changes across a long game
+  // without becoming unrecognisable in a decade. Double this and it is four a year and the
+  // world is gone by 2060.
+  "base": 0.009,
+
+  // How sharply being somebody else's people matters. A region that is half the state's
+  // own nationality is far less than half as likely to leave.
+  "nationality": 2.20,
+
+  // How much of this is about anger rather than nationality.
+  //
+  // The floor carries most of it, and that is a measurement rather than a preference:
+  // region radicalism in a world at peace sits at zero almost everywhere - the median
+  // region is 0.000 and the ninety-fifth percentile is 0.004 - because it is fed by
+  // minorities under a moved border and by budgets nobody has cut yet. A floor of 0.15
+  // therefore made this term a constant, and a constant that quietly divided the whole
+  // mechanic by seven. So the floor is what a grievance is worth on its own, and the
+  // remaining 0.65 is what radicalising a region on top of that buys - still nearly three
+  // times the rate, which is the whole range the stat can actually deliver.
+  "radicalism_floor": 0.35,
+  "radicalism": 0.65,
+
+  // How much a state that is visibly failing invites it. A settled country loses nothing;
+  // one at the floor of its stability loses whatever is least attached to it.
+  "weakness_floor": 0.20,
+  "weakness": 0.80,
+
+  // A state losing a war is a state that cannot spare a division for a province. Applied
+  // only while a war is actually going badly.
+  "war_multiplier": 1.80,
+
+  // Below this a region never accumulates anything at all, whatever else is true of it.
+  // A region that is half the state's own people is not a secession waiting to happen,
+  // however badly it is governed - that is a revolution, and a different mechanic.
+  "minimum_foreign_share": 0.55,
+
+  // And a region has to be worth being a country. One province and forty thousand people
+  // is a grievance, not a state.
+  "minimum_population": 300000,
+  "minimum_regions": 1,
+
+  // What goes with them.
+  //
+  // A secession is not tidy and never has been. There is a core - a people with a grievance,
+  // which is everything above - and then there is whatever was next to the core and had
+  // nothing left to lose. The second kind is frequently not the same nationality as the
+  // first, or anybody: a border moves, and a province that was already angry and already
+  // ungoverned simply finds itself on the far side of it and stays there.
+  //
+  // So the new country grows outward from the core, one region at a time, taking whichever
+  // neighbour is least attached. A region joins on either count - it was nearly gone itself,
+  // or it is simply discontented enough that nothing holds it.
+  "join_pressure": 0.55,
+  "join_discontent": 0.55,
+
+  // How many can come along. Six is a country with a shape; no limit is a country that ate
+  // half a continent because the week went badly.
+  "join_limit": 6,
+
+  // And the hard cap. Past this share of the parent's people the joiners are handed back,
+  // largest first, until what leaves is a secession rather than a dissolution. The core is
+  // never handed back: a people leaving is the thing that happened, whatever share of the
+  // country it turns out to be.
+  "maximum_share": 0.40,
+
+  // What the new country starts with.
+  //
+  // A state born out of a grievance is not a state with an army, but it is a state whose
+  // people have just decided something - and that is exactly the condition the militia
+  // rules read. It starts with these formations outright and raises more the ordinary way
+  // if anybody comes for it.
+  "militia_formations": 4,
+
+  // Where it starts politically. Stability is low because everything is new; war support is
+  // high because it has just been declared.
+  "stability": 0.42,
+  "war_support": 0.80,
+
+  // How likely the state it left is to simply accept it, before anything else is
+  // considered. The rest is worked out from the state of the country - see SecessionCore.
+  //
+  // Low, and it has to be: nearly every country this happens to is a country whose stability
+  // has already collapsed, and the stability term alone pushes acceptance towards two in
+  // three. At 0.25 the world let nine secessions in ten go peacefully, which made the whole
+  // "or fight about it" half of the mechanic something a player would rarely see.
+  "acceptance": 0.10,
+
+  // And how long before anybody else can leave the same country - counted from either side,
+  // so a country three weeks old is not yet somewhere anybody secedes from either.
+  //
+  // Two years rather than six months. A state does not come apart in four pieces on the same
+  // afternoon, and the shorter figure let Indonesia shed a country every winter. The regions
+  // waiting keep everything they have accumulated: the first thing that happens when the two
+  // years are up is the next one leaving, which is what a country genuinely coming apart
+  // looks like.
+  "cooldown_days": 730
+}

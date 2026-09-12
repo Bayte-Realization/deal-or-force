@@ -57,6 +57,19 @@ public static class CampaignFingerprint
             MixFloat(nation.StabilityGovernance);
             MixFloat(nation.WarSupport);
             MixFloat(nation.ManpowerReserve);
+            // When it last came apart, which is what decides whether it may again.
+            Mix(nation.LastSecessionDay);
+        }
+
+        // How far each region has gone towards leaving. Two peers that disagree about this
+        // agree about everything for years and then one of them loses Tatarstan - which is
+        // the worst shape a desync can take, because nothing before the moment it shows
+        // looks wrong at all.
+        foreach (var state in Ordered(campaign.States, state => state.MapIndex))
+        {
+            if (state.SecessionPressure <= 0f) continue;
+            Mix(state.MapIndex);
+            MixFloat(state.SecessionPressure);
         }
         foreach (var army in Ordered(campaign.Armies, army => army.Id))
         {

@@ -381,6 +381,10 @@ public static class SaveSystem
             // against the bootstrap campaign no longer describes it.
             campaign.InvalidateStateIndex();
 
+            // And any country this campaign founded rather than loaded says again who it is
+            // for. The demography catalogue is read from files and has never heard of it.
+            campaign.DeclareFoundedPeoples();
+
             // Before anything reads a good or a building out of the restored campaign.
             RemapContent(campaign);
 
