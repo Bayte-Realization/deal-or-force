@@ -111,8 +111,16 @@ public sealed class Defines
 	/// </summary>
 	public bool OceanReliefEnabled { get; set; } = false;
 
-	/// <summary>Texture repeated across the ocean shell, when the relief above is on.</summary>
-	public string OceanTexture { get; set; } = "ui/textures/ocean_vibrant.png";
+	/// <summary>
+	/// Texture repeated across the ocean shell, when the relief above is on.
+	///
+	/// A sprite name rather than a path, the way every other picture in the game is named,
+	/// so a mod changes the water by dropping `globe_ocean_relief.png` into its own gfx/.
+	/// It was a path - `ui/textures/ocean_vibrant.png` - and that path had not existed for
+	/// some time: the file it named lived beside the source code in `Assets/`, in a folder
+	/// nothing shipped and nothing could reach.
+	/// </summary>
+	public string OceanTexture { get; set; } = "globe_ocean_relief";
 
 	/// <summary>Number of horizontal texture repeats around the planet.</summary>
 	public float OceanTilesX { get; set; } = 48f;
