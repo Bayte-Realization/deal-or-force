@@ -2861,6 +2861,34 @@ public static class Program
         russia.Ideology = wasIdeology;
         russia.Government = wasGovernment;
 
+        // One file, many conditions - and the line that must not be crossed.
+        //
+        // A socialist Russia has no socialist flag of its own and should find the Soviet
+        // one, because a red banner with a star has served both and drawing it twice would
+        // be silly. A FASCIST Russia must not, however it is arranged: a one-party state
+        // may be communist and may equally be fascist, so the form of government is not
+        // evidence about the banner, and an alias that crossed from one to the other would
+        // hand a fascist state a red flag.
+        russia.Ideology = "socialism";
+        russia.Government = "one_party_state";
+        var shared = FlagCatalog.Resolve(campaign, russia);
+        if (shared != "flag_rus_communism")
+            return $"a socialist Russia resolved to '{shared}' rather than borrowing the " +
+                   "communist flag it has";
+
+        russia.Ideology = "fascism";
+        var wrong = FlagCatalog.Resolve(campaign, russia);
+        if (wrong == "flag_rus_communism")
+            return "a fascist one-party Russia was handed the Soviet flag, so an alias has " +
+                   "crossed from a form of government into an ideology";
+        foreach (var candidate in FlagCatalog.Candidates(campaign, russia))
+            if (candidate.Contains("communism", StringComparison.Ordinal) ||
+                candidate.Contains("socialism", StringComparison.Ordinal))
+                return $"a fascist Russia asked for '{candidate}', which is a banner it has " +
+                       "no claim on";
+        russia.Ideology = wasIdeology;
+        russia.Government = wasGovernment;
+
         // A country the scenario never declared - which is what a secession produces - has
         // no file of its own and must still come out with something.
         var invented = new Nation
@@ -2903,6 +2931,35 @@ public static class Program
                 if (name.StartsWith("flag_culture_", StringComparison.Ordinal)) peoples++;
                 else if (name.Count(character => character == '_') > 1) ideological++;
             }
+
+        // What the files actually cover, which is the number that matters. Every country
+        // against every ideology and every form of government is a few tens of thousands of
+        // conditions; the question is how many of them find something other than the plain
+        // national flag, and aliases are what make that number far larger than the file
+        // count. Measured rather than asserted - a coverage that falls is worth seeing.
+        var combinations = 0;
+        var answered = 0;
+        foreach (var nation in campaign.Nations)
+        {
+            var heldIdeology = nation.Ideology;
+            var heldGovernment = nation.Government;
+            foreach (var ideology in IdeologyCatalog.All)
+            foreach (var government in GovernmentCatalog.All)
+            {
+                nation.Ideology = ideology.Id;
+                nation.Government = government.Id;
+                combinations++;
+                var resolved = FlagCatalog.Resolve(campaign, nation);
+                if (resolved.Length > 0 && resolved != $"flag_{nation.Tag.ToLowerInvariant()}")
+                    answered++;
+            }
+            nation.Ideology = heldIdeology;
+            nation.Government = heldGovernment;
+        }
+        Console.WriteLine($"  flag coverage: {answered:N0} of {combinations:N0} country-ideology-" +
+                          $"government conditions find a flag of their own rather than the plain " +
+                          $"national one - {answered / (float)Math.Max(1, combinations):P1}, from " +
+                          $"{counted:N0} files.");
 
         Console.WriteLine($"  flags: {counted:N0} on disk - {peoples:N0} for peoples and " +
                           $"{ideological:N0} for a country in a particular condition; " +
