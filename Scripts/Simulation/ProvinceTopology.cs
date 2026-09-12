@@ -31,6 +31,23 @@ public sealed class ProvinceTopology
     public ushort[] CellToProvince { get; }
     public ushort[] ProvinceToState { get; }
     public ushort[] ProvinceToNation { get; }
+
+    /// <summary>
+    /// The borders as the scenario drew them, once somebody has asked to remember them.
+    ///
+    /// A topology costs seconds and a great deal of memory to build, so it is built once a
+    /// session and handed to whichever campaign is running. The simulation then writes its
+    /// own borders straight into <see cref="ProvinceToNation"/> and
+    /// <see cref="ProvinceToState"/> - an annexation moves provinces between countries, a
+    /// split moves them between regions - so by the time a player is back at the menu the
+    /// map is not the authored map, it is whatever their campaign did to it. A second
+    /// campaign handed that opens with the first one's conquests already made and its
+    /// regions already cut the way the first one's wars cut them.
+    /// </summary>
+    private ushort[] _authoredNation;
+
+    private ushort[] _authoredState;
+
     public int[] ProvinceCenterCell { get; }
     public int[][] Neighbors { get; }
     public int Width { get; }
@@ -435,6 +452,32 @@ public sealed class ProvinceTopology
                     neighbors[candidate] = neighbors.TryGetValue(candidate, out var count) ? count + 1 : 1;
             }
         }
+    }
+
+    /// <summary>
+    /// Take a copy of the borders as they stand, to be able to start a campaign in them
+    /// again. Called once, when the map is first built and nothing has played on it yet.
+    /// Calling it twice would remember a campaign rather than the scenario, so it does not.
+    /// </summary>
+    public void RememberAuthoredBorders()
+    {
+        if (_authoredNation is not null) return;
+        _authoredNation = (ushort[])ProvinceToNation.Clone();
+        _authoredState = (ushort[])ProvinceToState.Clone();
+    }
+
+    /// <summary>
+    /// Put the authored borders back, for a campaign that is starting rather than
+    /// continuing. Returns false when there is nothing remembered to put back.
+    /// </summary>
+    public bool RestoreAuthoredBorders()
+    {
+        if (_authoredNation is null || _authoredState is null) return false;
+        if (_authoredNation.Length != ProvinceToNation.Length ||
+            _authoredState.Length != ProvinceToState.Length) return false;
+        Array.Copy(_authoredNation, ProvinceToNation, _authoredNation.Length);
+        Array.Copy(_authoredState, ProvinceToState, _authoredState.Length);
+        return true;
     }
 
     public (float Latitude, float Longitude) CenterOf(int provinceId)
