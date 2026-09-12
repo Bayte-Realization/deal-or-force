@@ -32,6 +32,7 @@
 // `from` is where the value comes from, and it is the only part that is not free-form,
 // because each one is a question only the simulation can answer:
 //
+//     formable     a state it has proclaimed itself        yugoslavia, united_korea, ...
 //     ideology     what the government believes            communism, fascism, ...
 //     government   how the country is arranged             one_party_state, federation, ...
 //     culture      the people the state is for             russian, chechen, ...
@@ -47,6 +48,16 @@
 // `flag_fra`, not `flag_fra_at_peace`, so `at_peace` is declared silent and drops out.
 {
   "qualifiers": {
+    // A country that has proclaimed itself something - see common/formable_nations. First,
+    // because it is the most specific thing there is to know about a flag: Yugoslavia is
+    // not Serbia with a different cabinet, and a united Korea is neither of the two Koreas.
+    //
+    // `flag_formable_yugoslavia.png` is the whole of declaring one.
+    "formable": {
+      "from": "formable",
+      "order": 5
+    },
+
     // What a government believes is the thing that has historically changed a flag, and it
     // is first for that reason: Russia in 1917, Germany in 1933, Iran in 1979, Spain twice.
     "ideology": {
@@ -139,6 +150,54 @@
       "military_junta":          ["presidential_republic"],
       "one_party_state":         ["presidential_republic"]
     }
+  },
+
+  // ---------------------------------------------------------------------------------------
+  // Flags that belong to a regime rather than to a country
+  // ---------------------------------------------------------------------------------------
+  //
+  // A country's own flag is usually neutral: a tricolour is a tricolour whoever is
+  // governing, and France flies it as a republic, a monarchy or anything else. For a
+  // minority of countries it is not. The flag of the People's Republic is the flag of a
+  // communist one-party state, adopted in 1949 by the government still flying it. So is
+  // North Korea's, Cuba's, Saudi Arabia's, Iran's since 1980, the Taliban's since 2021.
+  //
+  // Those are listed here with the conditions their flag is FOR. While a country is still
+  // that thing, nothing changes and it flies its own flag. The moment it is not, the flag
+  // drops below everything else - its other flags, its people's, the banner of what it now
+  // believes - and is reached only if nothing at all has been drawn.
+  //
+  // This is the fix for a real complaint: China set to a conservative presidential republic
+  // went on flying the red banner with five stars, which is the one thing it certainly
+  // would not do.
+  "own_flag_is_for": {
+    // ONE condition each, and that is deliberate. China's flag is the flag of the communist
+    // state; whether that state is arranged as a one-party state or a presidential republic
+    // is not what the five stars are about. Requiring both put a communist presidential
+    // China in the Republic's flag, which is the opposite mistake from the one this fixes.
+    //
+    // `otherwise` is what it flies once its own flag is ruled out. Without it the search
+    // runs out of candidates and falls all the way back to the flag it just ruled out.
+    "chn": { "ideology": "communism",       "otherwise": "flag_chn_liberalism" },
+    "prk": { "ideology": "communism",       "otherwise": "flag_prk_liberalism" },
+    "vnm": { "ideology": "communism",       "otherwise": "flag_vnm_liberalism" },
+    "lao": { "ideology": "communism",       "otherwise": "flag_lao_absolute_monarchy" },
+
+    // The shahada and the Taliban's banner are not national colours; they are a claim about
+    // what the state is for.
+    "afg": { "ideology": "theocratic_rule", "otherwise": "flag_afg_liberalism" },
+    "irn": { "ideology": "theocratic_rule", "otherwise": "flag_irn_absolute_monarchy" },
+    "sau": { "ideology": "theocratic_rule" },
+    "vat": { "government": "theocracy" },
+
+    // Adopted by a party in power and carrying its emblem.
+    "eri": { "government": "one_party_state" },
+    "tkm": { "government": "one_party_state" },
+
+    // Spain's arms carry the crown. Most monarchies' flags do not - a Swedish cross and a
+    // Union Flag are what the country looks like rather than what its government is - so
+    // they are not listed, and go on flying their own flag whatever happens to them.
+    "esp": { "government": "constitutional_monarchy", "otherwise": "flag_esp_socialism" }
   },
 
   // What a country with no flag of its own flies, in order.

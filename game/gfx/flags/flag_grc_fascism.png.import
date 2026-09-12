@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cmprqvexnhjot"
-path="res://.godot/imported/flag_mmr_military_junta.png-c3ec8944a9a8c9fa8de0364d6407193a.ctex"
+uid="uid://3780xvcxnm2o"
+path="res://.godot/imported/flag_grc_fascism.png-1ee2165d52941c8b14c5246e9ca6b60f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://game/gfx/flags/flag_mmr_military_junta.png"
-dest_files=["res://.godot/imported/flag_mmr_military_junta.png-c3ec8944a9a8c9fa8de0364d6407193a.ctex"]
+source_file="res://game/gfx/flags/flag_grc_fascism.png"
+dest_files=["res://.godot/imported/flag_grc_fascism.png-1ee2165d52941c8b14c5246e9ca6b60f.ctex"]
 
 [params]
 
