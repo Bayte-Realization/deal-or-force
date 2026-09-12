@@ -107,7 +107,10 @@
       // separates them is what the government says rather than what is on the pole.
       "socialism":        ["communism", "social_democracy"],
       "communism":        ["socialism"],
-      "social_democracy": ["socialism", "communism"],
+      // Not as far as communism. A social democrat reaching past the red banner of the
+      // labour movement and landing on the Soviet flag is a distance no social democrat
+      // has ever travelled willingly.
+      "social_democracy": ["socialism"],
       "agrarianism":      ["socialism", "communism"],
 
       // The right, and the old right, which reach for the same crown and the same colours.

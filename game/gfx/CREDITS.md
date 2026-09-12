@@ -374,6 +374,7 @@ else was skipped rather than used.
 | `flag_ideology_fascism.png` | [Flag of the Italian Social Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Italian_Social_Republic.svg) | Public domain | F l a n k e r |
 | `flag_ideology_liberalism.png` | [Flag of the Mongolian Liberal Union Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Mongolian_Liberal_Union_Party.svg) | CC BY-SA 4.0 | Mongolian Liberal Union Party |
 | `flag_ideology_libertarianism.png` | [Gadsden flag.svg](https://commons.wikimedia.org/wiki/File:Gadsden_flag.svg) | Public domain | Christopher Gadsden (1724–1805), Lexicon , Vikrum |
+| `flag_ideology_socialism.png` | [Socialist red flag.svg](https://commons.wikimedia.org/wiki/File:Socialist_red_flag.svg) | Public domain | User:R-41 |
 | `flag_ideology_technocratic_rule.png` | [TechnocracyMonad.svg](https://commons.wikimedia.org/wiki/File:TechnocracyMonad.svg) | Public domain | Tsuruya |
 | `flag_ideology_theocratic_rule.png` | [Flag of the Papal States (1825-1870).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Papal_States_%281825-1870%29.svg) | CC BY-SA 3.0 | Tibetan Pop Rocks |
 | `flag_ideology_traditionalism.png` | [Flag of Cross of Burgundy.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cross_of_Burgundy.svg) | Public domain | Ningyou . |
