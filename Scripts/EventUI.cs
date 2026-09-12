@@ -55,9 +55,9 @@ public partial class DealOrForceGame
         _eventTitle.Text = pending.Title;
         _eventDescription.Text = pending.Description;
         _eventOptionA.Text = pending.Options[0].Title;
-        _eventOptionA.TooltipText = pending.Options[0].Consequence;
+        _eventOptionA.TooltipText = Ui.Tip(pending.Options[0].Consequence);
         _eventOptionB.Text = pending.Options[1].Title;
-        _eventOptionB.TooltipText = pending.Options[1].Consequence;
+        _eventOptionB.TooltipText = Ui.Tip(pending.Options[1].Consequence);
         _eventLayer.Visible = true;
         _eventLayer.MoveToFront();
         if (newlyShown) PlayStrategicCue("event_alert");

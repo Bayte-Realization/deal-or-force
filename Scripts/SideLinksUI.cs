@@ -78,7 +78,7 @@ public partial class DealOrForceGame
     private void AddSideLink(string caption, Action action, string help)
     {
         var button = ActionButton(caption, action, 168, 30);
-        button.TooltipText = Tr(help);
+        button.TooltipText = Ui.Tip(Tr(help));
         _sideLinks.AddChild(button);
     }
 }

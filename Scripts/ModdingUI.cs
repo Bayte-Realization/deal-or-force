@@ -39,6 +39,6 @@ public partial class DealOrForceGame
         lines.Add("");
         lines.Add("Content packs load after the base game and before mods, so a mod can");
         lines.Add("correct a pack exactly as it can correct the game. See dlc/README.md.");
-        _modStatus.TooltipText = string.Join(System.Environment.NewLine, lines);
+        _modStatus.TooltipText = Ui.Tip(string.Join(System.Environment.NewLine, lines));
     }
 }

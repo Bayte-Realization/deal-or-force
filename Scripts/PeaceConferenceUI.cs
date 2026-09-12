@@ -116,23 +116,23 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 6);
         rows.AddChild(actions);
         var clear = ActionButton("Clear", ClearPeaceDemand, 92, 34);
-        clear.TooltipText = Tr("Drop every claim and start the settlement again.");
+        clear.TooltipText = Ui.Tip(Tr("Drop every claim and start the settlement again."));
         actions.AddChild(clear);
         var occupied = ActionButton("Claim held", ClaimOccupiedGround, 118, 34);
-        occupied.TooltipText = Tr("Claim every province you currently occupy. The cheapest demand there is.");
+        occupied.TooltipText = Ui.Tip(Tr("Claim every province you currently occupy. The cheapest demand there is."));
         actions.AddChild(occupied);
         var propose = ActionButton("Propose", ProposeWrittenPeace, 108, 34, true);
-        propose.TooltipText = Tr("Put the settlement to them.");
+        propose.TooltipText = Ui.Tip(Tr("Put the settlement to them."));
         actions.AddChild(propose);
         var cancel = ActionButton("Leave", ClosePeaceConference, 92, 34);
-        cancel.TooltipText = Tr("Walk away from the table. The war continues.");
+        cancel.TooltipText = Ui.Tip(Tr("Walk away from the table. The war continues."));
         actions.AddChild(cancel);
     }
 
     private void AddPeaceTerm(Container parent, string key, string caption, string help)
     {
         var button = ActionButton(caption, () => TogglePeaceTerm(key), 300, 30);
-        button.TooltipText = help;
+        button.TooltipText = Ui.Tip(help);
         _peaceTermButtons[key] = button;
         parent.AddChild(button);
     }
@@ -375,13 +375,13 @@ public partial class DealOrForceGame
             row.Alignment = HorizontalAlignment.Left;
             row.ClipText = true;
             row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            row.TooltipText = (whole
+            row.TooltipText = Ui.Tip((whole
                     ? $"All {entry.Total} provinces of {name} are on the table. Click to give the region back."
                     : $"{entry.Claimed} of {entry.Total} provinces of {name}. Click to demand the whole region.") +
                 (unheld > 0
                     ? $"\nYou occupy {entry.Held}; the other {unheld} are still theirs on the ground, " +
                       "which is most of what this region is costing you."
-                    : "\nEvery province claimed here is already under your occupation, which is why it is cheap.");
+                    : "\nEvery province claimed here is already under your occupation, which is why it is cheap."));
             _peaceLedgerRows.AddChild(row);
         }
 

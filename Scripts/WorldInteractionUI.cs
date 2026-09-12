@@ -67,7 +67,7 @@ public partial class DealOrForceGame
         if (!_countryActions.Visible) return;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
         _declareWarButton.Disabled = !canDeclare;
-        _declareWarButton.TooltipText = canDeclare ? "Requires a second click to confirm." : reason;
+        _declareWarButton.TooltipText = Ui.Tip(canDeclare ? "Requires a second click to confirm." : reason);
         _declareWarButton.Text = _pendingWarTarget == nation.Id
             ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
             : Tr("Declare war");

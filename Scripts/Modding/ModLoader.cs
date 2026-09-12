@@ -158,6 +158,8 @@ public sealed class ModLoader
         BudgetCore.ResetCatalog();
         GovernmentFocusCatalog.ResetCatalog();
         TradePolicyCatalog.ResetCatalog();
+        GovernmentCatalog.ResetCatalog();
+        IdeologyCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();

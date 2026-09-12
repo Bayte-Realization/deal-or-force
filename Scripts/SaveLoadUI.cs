@@ -125,7 +125,7 @@ public partial class DealOrForceGame
         _saveFolderLine.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         folderRow.AddChild(_saveFolderLine);
         var openFolder = ActionButton("Open folder", OpenSaveFolder, 128, 32);
-        openFolder.TooltipText = Tr("Open the folder these are kept in, to copy a campaign somewhere or send one to somebody.");
+        openFolder.TooltipText = Ui.Tip(Tr("Open the folder these are kept in, to copy a campaign somewhere or send one to somebody."));
         folderRow.AddChild(openFolder);
 
         var newRow = new HBoxContainer();

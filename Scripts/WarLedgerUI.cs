@@ -503,8 +503,8 @@ public partial class DealOrForceGame
 
         _warDetailActions.AddChild(RowLabel("ENDING IT", 12, Ui.Colour("text.caption")));
         var conference = ActionButton("Open the peace conference", () => OpenPeaceConference(war), 320, 34, true);
-        conference.TooltipText = Tr("Draw the settlement on the map: claim the ground you mean to keep, " +
-                                 "priced against what the war is actually worth.");
+        conference.TooltipText = Ui.Tip(Tr("Draw the settlement on the map: claim the ground you mean to keep, " +
+                                 "priced against what the war is actually worth."));
         _warDetailActions.AddChild(conference);
 
         var quick = new HBoxContainer();
@@ -521,9 +521,9 @@ public partial class DealOrForceGame
             var acceptance = PeaceNegotiation.Acceptance(_campaign, war, player.Id, terms);
             var button = ActionButton(PeaceTermsName(terms), () => ProposePeace(war, captured), 150, 30);
             button.Disabled = blocked.Length > 0;
-            button.TooltipText = blocked.Length > 0
+            button.TooltipText = Ui.Tip(blocked.Length > 0
                 ? blocked
-                : $"{PeaceNegotiation.Description(terms)}\nAcceptance {acceptance:0}%.";
+                : $"{PeaceNegotiation.Description(terms)}\nAcceptance {acceptance:0}%.");
             quick.AddChild(button);
         }
     }

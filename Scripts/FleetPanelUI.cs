@@ -280,11 +280,11 @@ public partial class DealOrForceGame
         cargo.AddThemeConstantOverride("separation", 4);
         rows.AddChild(cargo);
         var load = ActionButton("Load troops", LoadTroops, 148, 32);
-        load.TooltipText = Tr("Load troops\nTake aboard your divisions standing at this fleet's port. " +
-                           "What fits is set by the hulls.");
+        load.TooltipText = Ui.Tip(Tr("Load troops\nTake aboard your divisions standing at this fleet's port. " +
+                           "What fits is set by the hulls."));
         cargo.AddChild(load);
         var unload = ActionButton("Put ashore", UnloadTroops, 148, 32);
-        unload.TooltipText = Tr("Put ashore\nLand what the fleet is carrying on the nearest friendly coast.");
+        unload.TooltipText = Ui.Tip(Tr("Put ashore\nLand what the fleet is carrying on the nearest friendly coast."));
         cargo.AddChild(unload);
 
         _fleetFeedback = Title("", 11, Ui.Colour("text.hint"));
@@ -295,7 +295,7 @@ public partial class DealOrForceGame
     private void AddMissionButton(Container parent, FleetMission mission, int width)
     {
         var button = ActionButton(MissionName(mission), () => IssueFleetMission(mission), width, 32);
-        button.TooltipText = Simulation.Loc.Format("{0}\n{1}", MissionName(mission), MissionHelp(mission));
+        button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0}\n{1}", MissionName(mission), MissionHelp(mission)));
         _fleetMissionButtons[mission] = button;
         parent.AddChild(button);
     }

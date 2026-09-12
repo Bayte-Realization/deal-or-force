@@ -394,7 +394,7 @@ public partial class DealOrForceGame : Control
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
             CustomMinimumSize = new Vector2(0, 184),
             MouseFilter = Control.MouseFilterEnum.Ignore,
-            TooltipText = Tr("Deal or Force")
+            TooltipText = Ui.Tip(Tr("Deal or Force"))
         };
         rows.AddChild(logo);
         rows.AddChild(Title(
@@ -407,27 +407,27 @@ public partial class DealOrForceGame : Control
         rows.AddChild(_scenarioSummary);
 
         _modStatus = Title(_modLoader.StatusLine, 12, Ui.Colour("text.faint"));
-        _modStatus.TooltipText = Tr("Development mods: res://mods · installed mods: user://mods");
+        _modStatus.TooltipText = Ui.Tip(Tr("Development mods: res://mods · installed mods: user://mods"));
         rows.AddChild(_modStatus);
 
         rows.AddChild(ActionButton("Singleplayer", OpenCountryPicker, 330, 46, true));
         rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
 
         var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
-        multiplayer.TooltipText = Tr("Host or join an authoritative ENet campaign over LAN, direct IPv4 or a virtual LAN such as Radmin VPN.");
+        multiplayer.TooltipText = Ui.Tip(Tr("Host or join an authoritative ENet campaign over LAN, direct IPv4 or a virtual LAN such as Radmin VPN."));
         rows.AddChild(multiplayer);
 
         _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 42);
-        _mainProjectionButton.TooltipText = Tr("Switch between globe and classic infinitely wrapping map (F2).");
+        _mainProjectionButton.TooltipText = Ui.Tip(Tr("Switch between globe and classic infinitely wrapping map (F2)."));
         rows.AddChild(_mainProjectionButton);
         _smoothingButton = ActionButton(SmoothingButtonLabel(), ToggleMapSmoothing, 330, 42);
-        _smoothingButton.TooltipText =
+        _smoothingButton.TooltipText = Ui.Tip(
             Tr("Smoothing rebuilds country, region and terrain boundaries so the map has no visible " +
             "texel grid. Turn it off for the raster exactly as authored - pixels and all - which " +
-            "is also the cheaper picture on a slower machine (F3).");
+            "is also the cheaper picture on a slower machine (F3)."));
         rows.AddChild(_smoothingButton);
         _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
-        _languageButton.TooltipText = Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder.");
+        _languageButton.TooltipText = Ui.Tip(Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder."));
         rows.AddChild(_languageButton);
         rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
 
@@ -487,10 +487,10 @@ public partial class DealOrForceGame : Control
         clock.AddChild(speeds);
 
         var menu = ActionButton("≡", ShowPauseMenu, 44, 34);
-        menu.TooltipText = Tr("Pause menu (Esc) · F5 quick-saves, F9 loads, F10 flies the camera");
+        menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc) · F5 quick-saves, F9 loads, F10 flies the camera"));
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 44, 34, true);
-        _pause.TooltipText = Tr("Pause and resume campaign time (Space). Space never activates a focused button.");
+        _pause.TooltipText = Ui.Tip(Tr("Pause and resume campaign time (Space). Space never activates a focused button."));
         speeds.AddChild(_pause);
         _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
@@ -532,7 +532,7 @@ public partial class DealOrForceGame : Control
             var button = ActionButton(screen, () => OpenScreen(captured), 118, 38,
                 false, SpriteCatalog.TextureOf($"icon_{icon}",
                     $"res://game/gfx/interface/icons/icon_{icon}.png"));
-            button.TooltipText = help;
+            Tip(button, help);
             _screenButtons[captured] = button;
             nav.AddChild(button);
         }
@@ -588,7 +588,8 @@ public partial class DealOrForceGame : Control
             MinValue = 0,
             MaxValue = 1,
             Step = 0.01,
-            TooltipText = Tr("Military allocation; submitted through the deterministic command queue.")
+            Scrollable = false,
+            TooltipText = Ui.Tip(Tr("Military allocation; submitted through the deterministic command queue."))
         };
         _militarySpending.ValueChanged += OnSpendingChanged;
         sideRows.AddChild(_militarySpending);
@@ -934,7 +935,7 @@ public partial class DealOrForceGame : Control
         _identity.Text = Simulation.Loc.Format("{0} ({1})", player.Name, player.Tag);
         _identityTag.Text = _observerMode ? "OBS · observer mode" : $"{player.Tag} · player nation";
         SetFlag(_identityFlag, player.Tag, 34);
-        _date.Text = _campaign.Date.ToString();
+        _date.Text = _campaign.Date.Display();
 
         var day = _campaign.ElapsedDays;
         _treasuryTrend.Sample(day, player.Treasury);
@@ -956,9 +957,11 @@ public partial class DealOrForceGame : Control
             balanced ? $"{Fmt.MoneyExact(player.WeeklyBalance)} a week" : "The first economic week has not closed yet.",
             balanced ? "a week" : "", balanced ? Fmt.Direction(player.WeeklyBalance, 0.005d) : 0);
         WriteStat(_stability, $"{player.Stability:P0}", $"Stability {player.Stability:P1}",
-            player.WarSupport > 0f ? $"war support {player.WarSupport:P0}" : "", 0);
+            player.WarSupport > 0f
+                ? Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport))
+                : "", 0);
         WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
-            $"{Fmt.People(player.ReinforcementCapacity)}/day", 0);
+            Simulation.Loc.Format("{0}/day", Fmt.People(player.ReinforcementCapacity)), 0);
 
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
         UpdateSpendingReadout(player);
@@ -996,10 +999,10 @@ public partial class DealOrForceGame : Control
         var box = new ExplainedStat
         {
             CustomMinimumSize = new Vector2(126, 0),
-            TooltipText = tooltip,
             Explain = explain,
-            Plain = explain is null ? "" : tooltip
+            Plain = explain is null ? "" : Tr(tooltip)
         };
+        Tip(box, tooltip);
         box.AddThemeConstantOverride("separation", 1);
         box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
@@ -1010,6 +1013,12 @@ public partial class DealOrForceGame : Control
             Value = Title("—", 17, Ui.Colour("text.bright")),
             Delta = Title("", 11, Ui.Colour("text.faint"))
         };
+        // Neither of these may wrap. The bar is one row tall and the column is sized to the
+        // widest thing in it, so a line that wraps grows downwards out of the bar instead of
+        // widening its column - which is what "war support 63 %" did the moment it became
+        // "поддержка войны 63 %".
+        readout.Value.AutowrapMode = TextServer.AutowrapMode.Off;
+        readout.Delta.AutowrapMode = TextServer.AutowrapMode.Off;
         box.AddChild(readout.Value);
         box.AddChild(readout.Delta);
         return readout;
@@ -1024,7 +1033,7 @@ public partial class DealOrForceGame : Control
     {
         if (stat is null) return;
         stat.Value.Text = compact;
-        stat.Value.TooltipText = exact;
+        stat.Value.TooltipText = Ui.Tip(exact);
         stat.Value.MouseFilter = MouseFilterEnum.Stop;
         stat.Delta.Text = delta;
         stat.Delta.AddThemeColorOverride("font_color", direction switch
@@ -1087,7 +1096,7 @@ public partial class DealOrForceGame : Control
         };
         if (!string.IsNullOrEmpty(tooltip) || explain is not null)
         {
-            row.TooltipText = tooltip ?? caption;
+            row.TooltipText = Ui.Tip(tooltip ?? caption);
             row.MouseFilter = MouseFilterEnum.Stop;
         }
 
@@ -1142,9 +1151,9 @@ public partial class DealOrForceGame : Control
             var button = _speedButtons[index];
             if (!GodotObject.IsInstanceValid(button)) continue;
             StyleButton(button, running && index + 1 == _speed);
-            button.TooltipText = _campaign is null
+            button.TooltipText = Ui.Tip(_campaign is null
                 ? $"Campaign speed {index + 1}"
-                : $"Campaign speed {index + 1} · {_campaign.Defines.SecondsForSpeed(index + 1):0.##}s per day";
+                : $"Campaign speed {index + 1} · {_campaign.Defines.SecondsForSpeed(index + 1):0.##}s per day");
         }
     }
 
@@ -1253,14 +1262,15 @@ public partial class DealOrForceGame : Control
     /// sites - and an untranslated string still renders as its English source.</summary>
     internal static string Tr(string text) => Simulation.Loc.Get(text);
 
-    private static Label Title(string text, int size, Color color)
+    private static Label Title(string text, int size, Color color, bool upper = false)
     {
         var label = new Label
         {
-            Text = Tr(text),
+            Text = upper ? Tr(text).ToUpperInvariant() : Tr(text),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         label.SetMeta(LocSourceMeta, text);
+        if (upper) label.SetMeta(LocUpperMeta, true);
         label.SetMeta(LocAppliedMeta, label.Text);
         label.AddThemeFontSizeOverride("font_size", size);
         label.AddThemeColorOverride("font_color", color);
@@ -1343,6 +1353,35 @@ public partial class DealOrForceGame : Control
     /// </summary>
     private const string LocAppliedMeta = "loc_applied";
 
+    /// <summary>
+    /// Marks a caption the interface shows in capitals. The shouting has to happen
+    /// after the lookup rather than before it: a caption uppercased at the call site
+    /// stores the shouted spelling as the string to translate from, and no table has a
+    /// row under that name.
+    /// </summary>
+    private const string LocUpperMeta = "loc_upper";
+
+    /// <summary>
+    /// A tooltip's untranslated source, and the translation last written from it.
+    ///
+    /// Captions have two factories they all pass through, and so keep their source for
+    /// free; tooltips are written straight onto a control from a hundred places. The
+    /// ones that matter here are the ones built once when the game starts - the top bar
+    /// and the screen buttons - because everything else is rewritten on the next refresh
+    /// anyway, in whatever language is current by then.
+    /// </summary>
+    private const string LocTipMeta = "loc_tip";
+    private const string LocTipAppliedMeta = "loc_tip_applied";
+
+    /// <summary>Give a control a tooltip that survives a change of language.</summary>
+    private static T Tip<T>(T control, string source) where T : Control
+    {
+        control.SetMeta(LocTipMeta, source);
+        control.TooltipText = Ui.Tip(source);
+        control.SetMeta(LocTipAppliedMeta, control.TooltipText);
+        return control;
+    }
+
     /// <summary>Re-translate every caption still showing its own translation, in place.</summary>
     private void RefreshLocalisedText() => RefreshLocalisedText(this);
 
@@ -1353,6 +1392,7 @@ public partial class DealOrForceGame : Control
             var source = node.GetMeta(LocSourceMeta).AsString();
             var applied = node.HasMeta(LocAppliedMeta) ? node.GetMeta(LocAppliedMeta).AsString() : null;
             var translated = Tr(source);
+            if (node.HasMeta(LocUpperMeta)) translated = translated.ToUpperInvariant();
 
             switch (node)
             {
@@ -1364,6 +1404,20 @@ public partial class DealOrForceGame : Control
                     label.Text = translated;
                     node.SetMeta(LocAppliedMeta, translated);
                     break;
+            }
+        }
+
+        if (node is Control control && node.HasMeta(LocTipMeta))
+        {
+            var applied = node.HasMeta(LocTipAppliedMeta)
+                ? node.GetMeta(LocTipAppliedMeta).AsString()
+                : null;
+            // Same discipline as a caption: a tooltip rewritten since must not be dragged
+            // back to the wording it was created with.
+            if (applied is null || control.TooltipText == applied)
+            {
+                control.TooltipText = Ui.Tip(node.GetMeta(LocTipMeta).AsString());
+                node.SetMeta(LocTipAppliedMeta, control.TooltipText);
             }
         }
 

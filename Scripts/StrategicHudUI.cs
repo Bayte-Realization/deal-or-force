@@ -201,7 +201,7 @@ public partial class DealOrForceGame
     private void AddAlert(string text, Action action, string tooltip, bool critical = false)
     {
         var button = ActionButton(text, action, 0, 30, critical);
-        button.TooltipText = tooltip;
+        button.TooltipText = Ui.Tip(tooltip);
         _alertRows.AddChild(button);
     }
 
@@ -232,7 +232,7 @@ public partial class DealOrForceGame
         button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         button.CustomMinimumSize = new Vector2(0, 29);
         button.ClipText = true;
-        button.TooltipText = tooltip;
+        button.TooltipText = Ui.Tip(tooltip);
         _outlinerRows.AddChild(button);
     }
 

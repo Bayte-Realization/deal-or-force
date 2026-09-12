@@ -49,7 +49,7 @@ public partial class DealOrForceGame
         closeHint.HorizontalAlignment = HorizontalAlignment.Right;
         header.AddChild(closeHint);
         var close = ActionButton("×", CloseDeveloperConsole, 28, 28);
-        close.TooltipText = Tr("Close console (~ or Esc)");
+        close.TooltipText = Ui.Tip(Tr("Close console (~ or Esc)"));
         header.AddChild(close);
 
         _developerConsoleOutput = new RichTextLabel

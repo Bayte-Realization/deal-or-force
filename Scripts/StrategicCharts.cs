@@ -39,7 +39,7 @@ public sealed partial class StrategicLineChart : Control
         _series = series ?? Array.Empty<StrategicChartSeries>();
         _format = format;
         _hoverIndex = -1;
-        TooltipText = subtitle;
+        TooltipText = Ui.Tip(subtitle);
         QueueRedraw();
     }
 
@@ -49,9 +49,9 @@ public sealed partial class StrategicLineChart : Control
             return;
         var ratio = Mathf.Clamp((motion.Position.X - _plot.Position.X) / MathF.Max(1f, _plot.Size.X), 0f, 1f);
         _hoverIndex = Mathf.Clamp(Mathf.RoundToInt(ratio * (_days.Count - 1)), 0, _days.Count - 1);
-        TooltipText = Simulation.Loc.Format("Day {0:N0}\n", _days[_hoverIndex]) +
+        TooltipText = Ui.Tip(Simulation.Loc.Format("Day {0:N0}\n", _days[_hoverIndex]) +
                       string.Join("\n", _series.Select(series => Simulation.Loc.Format(
-                          "{0}: {1}", series.Name, Format(ValueAt(series, _hoverIndex), _format))));
+                          "{0}: {1}", series.Name, Format(ValueAt(series, _hoverIndex), _format)))));
         QueueRedraw();
     }
 
@@ -181,7 +181,7 @@ public sealed partial class StrategicBarChart : Control
         _subtitle = subtitle;
         _entries = entries ?? Array.Empty<StrategicBarEntry>();
         _format = format;
-        TooltipText = subtitle;
+        TooltipText = Ui.Tip(subtitle);
         _hover = -1;
         QueueRedraw();
     }
@@ -193,9 +193,9 @@ public sealed partial class StrategicBarChart : Control
         if (_hover >= 0 && _hover < _entries.Count)
         {
             var entry = _entries[_hover];
-            TooltipText = Simulation.Loc.Format("{0}: {1}", entry.Name,
+            TooltipText = Ui.Tip(Simulation.Loc.Format("{0}: {1}", entry.Name,
                               StrategicLineChart.Format(entry.Value, _format)) +
-                          (string.IsNullOrWhiteSpace(entry.Detail) ? "" : "\n" + entry.Detail);
+                          (string.IsNullOrWhiteSpace(entry.Detail) ? "" : "\n" + entry.Detail));
         }
         QueueRedraw();
     }

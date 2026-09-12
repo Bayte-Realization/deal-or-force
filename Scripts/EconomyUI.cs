@@ -71,7 +71,7 @@ public partial class DealOrForceGame
         _economyControls.AddChild(Title("NATIONAL MARKET", 12, Ui.Colour("text.caption")));
         _marketStatus = Title("Market data is recalculated every economic week.", 12, Ui.Colour("text.body_soft"));
         _marketStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _marketStatus.TooltipText = Tr("Output + imports − demand − exports. Satisfaction below 100% is a real shortage that affects prices, GDP and living standards.");
+        _marketStatus.TooltipText = Ui.Tip(Tr("Output + imports − demand − exports. Satisfaction below 100% is a real shortage that affects prices, GDP and living standards."));
         _economyControls.AddChild(_marketStatus);
     }
 
@@ -79,7 +79,7 @@ public partial class DealOrForceGame
     {
         var definition = BuildingCatalog.Get(kind);
         var button = ActionButton(label, () => QueueBuilding(kind), 154, 32, kind == BuildingKind.CivilianIndustry);
-        button.TooltipText = Simulation.Loc.Format("{0}: {1}, {2} days. {3}", definition.Name, Fmt.Money(definition.Cost), definition.Days, definition.Description);
+        button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0}: {1}, {2} days. {3}", definition.Name, Fmt.Money(definition.Cost), definition.Days, definition.Description));
         row.AddChild(button);
     }
 

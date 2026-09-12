@@ -58,10 +58,10 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 8);
         rows.AddChild(actions);
         _peaceOfferAccept = ActionButton("Sign it", () => AnswerPeaceOffer(true), 220, 46, true);
-        _peaceOfferAccept.TooltipText = Tr("Accept the terms as written. The war ends today.");
+        _peaceOfferAccept.TooltipText = Ui.Tip(Tr("Accept the terms as written. The war ends today."));
         actions.AddChild(_peaceOfferAccept);
         _peaceOfferRefuse = ActionButton("Refuse", () => AnswerPeaceOffer(false), 220, 46);
-        _peaceOfferRefuse.TooltipText = Tr("Send them away. The war goes on and they will not ask again for a while.");
+        _peaceOfferRefuse.TooltipText = Ui.Tip(Tr("Send them away. The war goes on and they will not ask again for a while."));
         actions.AddChild(_peaceOfferRefuse);
     }
 

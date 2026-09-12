@@ -20,7 +20,7 @@ public partial class DealOrForceGame
             var captured = definition;
             var button = ActionButton(definition.Name, () => TakeDecision(captured.Id), 318, 30,
                 definition.Kind == DecisionKind.EconomicStimulus);
-            button.TooltipText = definition.Description;
+            button.TooltipText = Ui.Tip(definition.Description);
             _decisionControls.AddChild(button);
         }
         _decisionStatus = Title("", 12, Ui.Colour("text.accent"));

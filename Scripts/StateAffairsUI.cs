@@ -85,7 +85,7 @@ public partial class DealOrForceGame
             CloseStateAffairs();
             OpenLedger();
         }, 148, 32);
-        toLedger.TooltipText = Tr("The figures behind these decisions: charts, history and rankings, for any country.");
+        toLedger.TooltipText = Ui.Tip(Tr("The figures behind these decisions: charts, history and rankings, for any country."));
         header.AddChild(toLedger);
         header.AddChild(ActionButton("×", CloseStateAffairs, 38, 32));
 
@@ -93,8 +93,8 @@ public partial class DealOrForceGame
         _stateAffairsSummary.CustomMinimumSize = new Vector2(0, 34);
         rows.AddChild(_stateAffairsSummary);
 
-        StateSection(rows, "THE BUDGET AND WHAT IS BEING BUILT",
-            "What the state takes each week, what it spends on the armed forces, and the sites it has open.");
+        StateSection(rows, "THE WEEK'S BUDGET",
+            "What the country raised, what it spent, and every lever that decides both.");
         BuildStateControls(rows);
     }
 
@@ -176,31 +176,30 @@ public partial class DealOrForceGame
     /// </summary>
     private void BuildStateBudget(VBoxContainer rows)
     {
+        // What the week actually came to. One line, and the first thing on the screen,
+        // because it is the answer to the question anybody opens a budget to ask.
+        _stateBudgetLine = RowLabel("", 13, Ui.Colour("text.body_soft"));
+        _stateBudgetLine.TooltipText = Ui.Tip(Tr("The treasury is what the country has; the balance is what " +
+            "this week added to it or took out of it. Both settle once an economic week, so a slider " +
+            "moved now shows up here at the next one."));
+        rows.AddChild(_stateBudgetLine);
+        _stateFiscalFeedback = RowLabel("", 11, Ui.Colour("text.accent_dim"));
+        rows.AddChild(_stateFiscalFeedback);
+    }
+
+    /// <summary>
+    /// The building queue, which is a queue rather than a policy and so goes at the end with
+    /// the other things a player sets up once and leaves running.
+    /// </summary>
+    private void BuildConstructionControls(VBoxContainer rows)
+    {
         _stateBudgetControls = new HBoxContainer { Visible = false };
         _stateBudgetControls.AddThemeConstantOverride("separation", 22);
         rows.AddChild(_stateBudgetControls);
 
-        // ------------------------------------------------------------------ the budget
-        var budget = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        budget.AddThemeConstantOverride("separation", 4);
-        _stateBudgetControls.AddChild(budget);
-        budget.AddChild(RowLabel("BUDGET", 12, Ui.Colour("text.accent")));
-
-        // The sliders that used to sit here - taxation and the armed forces - are built from
-        // the catalogue with the rest of the budget, under REVENUE and SPENDING below. Two
-        // of the twelve levers having hand-made controls in a section of their own made
-        // income tax look like a different kind of thing from the five taxes beside it, and
-        // it is not: it is the first row of the same file.
-        _stateBudgetLine = RowLabel("", 12, Ui.Colour("text.body_soft"));
-        budget.AddChild(_stateBudgetLine);
-        _stateFiscalFeedback = RowLabel("", 11, Ui.Colour("text.accent_dim"));
-        budget.AddChild(_stateFiscalFeedback);
-
-        // ------------------------------------------------------------ what is being built
         var construction = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         construction.AddThemeConstantOverride("separation", 4);
         _stateBudgetControls.AddChild(construction);
-        construction.AddChild(RowLabel("CONSTRUCTION", 12, Ui.Colour("text.accent")));
 
         var order = new HBoxContainer();
         order.AddThemeConstantOverride("separation", 7);
@@ -227,7 +226,10 @@ public partial class DealOrForceGame
     }
     private void BuildStateControls(VBoxContainer rows)
     {
+        // The order is the order somebody works in.
         BuildStateBudget(rows);
+        BuildPolicyRates(rows);
+        BuildPoliticsControls(rows);
 
         StateSection(rows, "TRADE",
             "How open the country is to the world market. A change takes effect at the next weekly clearing.");
@@ -275,8 +277,10 @@ public partial class DealOrForceGame
         _stateGovernanceFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _stateCabinetControls.AddChild(_stateGovernanceFeedback);
 
-        BuildPoliticsControls(rows);
-        BuildPolicyRates(rows);
+        StateSection(rows, "CONSTRUCTION",
+            "Sites the country has open. A project draws on the treasury, on materials and on " +
+            "construction capacity for as long as it runs, and twelve may run at once.");
+        BuildConstructionControls(rows);
     }
 
     /// <summary>
@@ -292,8 +296,10 @@ public partial class DealOrForceGame
     private void BuildPolicyRates(VBoxContainer rows)
     {
         StateSection(rows, "REVENUE",
-            "What the state levies besides income tax. Every one of them raises money and costs " +
-            "something else - investment, living standards, or the patience of the people paying.");
+            "Everything the state levies. Each one raises money and costs something else - investment, " +
+            "living standards, or the patience of the people paying - and all of them are charged " +
+            "against the same week's output, so stacking them collects less than the sum. Hover any " +
+            "row to see what it is worth and what it is doing.");
         _policyRevenueControls = new VBoxContainer { Visible = false };
         _policyRevenueControls.AddThemeConstantOverride("separation", 3);
         rows.AddChild(_policyRevenueControls);
@@ -303,8 +309,8 @@ public partial class DealOrForceGame
         rows.AddChild(_policyCollection);
 
         StateSection(rows, "SPENDING",
-            "What the state buys besides soldiers, schools and transfers. Health and pensions are " +
-            "felt this year; roads and laboratories are felt in ten.");
+            "Everything the state buys. Soldiers, transfers and health are felt this year; roads and " +
+            "laboratories are felt in ten. Hover any row to see what it costs and what it buys.");
         _policyExpenseControls = new VBoxContainer { Visible = false };
         _policyExpenseControls.AddThemeConstantOverride("separation", 3);
         rows.AddChild(_policyExpenseControls);
@@ -328,11 +334,14 @@ public partial class DealOrForceGame
             MaxValue = line.Maximum,
             Step = 0.005,
             CustomMinimumSize = new Vector2(210, 26),
-            TooltipText = Tr(line.Description)
+            // The wheel scrolls the screen. Seventeen sliders sit inside a scrolling panel,
+            // and a wheel that changed the rate under the pointer meant a player reading
+            // their way down the budget raised their own taxes on the way past.
+            Scrollable = false
         };
         var id = line.Id;
         slider.ValueChanged += value => OnPolicyRateChanged(id, value);
-        parent.AddChild(SliderRow(Tr(line.Name).ToUpperInvariant(), slider, out var reading));
+        parent.AddChild(SliderRow(line.Name, slider, out var reading));
         _policySliders[id] = slider;
         _policyReadings[id] = reading;
     }
@@ -379,6 +388,11 @@ public partial class DealOrForceGame
             if (!_policyReadings.TryGetValue(line.Id, out var reading)) continue;
             var amount = Simulation.BudgetCore.Amount(nation, line, weeklyOutput, atWar);
             reading.Text = Simulation.Loc.Format("{0:P1} · {1}", rate, Fmt.Money(amount));
+            // Written fresh every refresh rather than once at build time: the whole value of
+            // it is that it quotes the country as it is now, and the country changes.
+            var explanation = PolicyTooltip(nation, line);
+            slider.TooltipText = Ui.Tip(explanation);
+            reading.TooltipText = Ui.Tip(explanation);
         }
 
         // What the levies ask for against what arrives. Silent while everything is being
@@ -398,7 +412,7 @@ public partial class DealOrForceGame
         var button = ActionButton(caption, () => SetStateTradePolicy(policy), 114, 30,
             policy == TradePolicy.BalancedTrade);
         button.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        button.TooltipText = tooltip;
+        button.TooltipText = Ui.Tip(tooltip);
         _stateTradeControls.AddChild(button);
         _stateTradeButtons[policy] = button;
     }
@@ -406,7 +420,7 @@ public partial class DealOrForceGame
     {
         var button = ActionButton(caption, () => SetStateGovernmentFocus(focus), 94, 30,
             focus == GovernmentFocus.Balanced);
-        button.TooltipText = GovernmentFocusRules.Description(focus);
+        button.TooltipText = Ui.Tip(GovernmentFocusRules.Description(focus));
         _stateCabinetControls.AddChild(button);
         _stateFocusButtons[focus] = button;
     }

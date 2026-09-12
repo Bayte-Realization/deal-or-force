@@ -39,6 +39,46 @@ internal static class Ui
     internal static float Metric(string token, float fallback) => InterfaceSkin.Metric(token, fallback);
 
     /// <summary>
+    /// A tooltip, broken into lines a person can read.
+    ///
+    /// Godot draws a tooltip one line per line it is handed and never wraps on its own, so a
+    /// sentence of any length arrives as a thousand pixels of text running off the side of
+    /// the screen. Every tooltip in the game goes through here for that reason.
+    ///
+    /// The measure is counted in characters rather than in pixels because a tooltip is
+    /// composed long before it is given a font, and because it has to survive translation:
+    /// the Russian of one of these lines runs about a third longer than the English, so a
+    /// measure tuned in pixels on the English would break in the language being read.
+    /// </summary>
+    internal static string Tip(string text, int measure = 84)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        // Looked up before it is wrapped, and only here: a good half of the tooltips in
+        // the game are handed a string that arrived as a variable and so never passed a
+        // Tr of their own. Text already translated, or composed at runtime out of several
+        // pieces, misses the table and comes back unchanged.
+        text = Loc.Get(text);
+        var wrapped = new List<string>();
+        foreach (var paragraph in text.Split('\n'))
+        {
+            if (paragraph.Length <= measure) { wrapped.Add(paragraph); continue; }
+            var line = new System.Text.StringBuilder();
+            foreach (var word in paragraph.Split(' '))
+            {
+                if (line.Length > 0 && line.Length + 1 + word.Length > measure)
+                {
+                    wrapped.Add(line.ToString());
+                    line.Clear();
+                }
+                if (line.Length > 0) line.Append(' ');
+                line.Append(word);
+            }
+            wrapped.Add(line.ToString());
+        }
+        return string.Join("\n", wrapped);
+    }
+
+    /// <summary>
     /// Put a panel where the layout says it goes. Sixty-four anchor and offset assignments
     /// used to be spread across a dozen files; a panel is a name now, and the rectangle
     /// behind the name is data a mod can move.

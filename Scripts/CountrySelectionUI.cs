@@ -93,7 +93,7 @@ public partial class DealOrForceGame
         actionRow.AddChild(ActionButton("Random nation", PickRandomNation, 150, 38));
         var observe = ActionButton("Observe", () => { }, 100, 38);
         observe.Disabled = true;
-        observe.TooltipText = Tr("Observer authority will be enabled with the multiplayer/session ownership slice.");
+        observe.TooltipText = Ui.Tip(Tr("Observer authority will be enabled with the multiplayer/session ownership slice."));
         actionRow.AddChild(observe);
     }
 

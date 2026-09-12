@@ -30,13 +30,13 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 5);
         _regionControls.AddChild(actions);
         var develop = ActionButton("Develop", () => QueueRegionalBuilding(BuildingKind.Infrastructure), 92, 31, true);
-        develop.TooltipText = Tr("Queue infrastructure in this region. Construction uses the national treasury, materials and construction capacity.");
+        develop.TooltipText = Ui.Tip(Tr("Queue infrastructure in this region. Construction uses the national treasury, materials and construction capacity."));
         actions.AddChild(develop);
         var industry = ActionButton("Industry", () => QueueRegionalBuilding(BuildingKind.CivilianIndustry), 92, 31);
-        industry.TooltipText = Tr("Queue civilian industry in this region.");
+        industry.TooltipText = Ui.Tip(Tr("Queue civilian industry in this region."));
         actions.AddChild(industry);
         var raise = ActionButton("Raise army", RaiseRegionalArmy, 105, 31);
-        raise.TooltipText = Tr("Choose a template, training region and paid recruitment batch.");
+        raise.TooltipText = Ui.Tip(Tr("Choose a template, training region and paid recruitment batch."));
         actions.AddChild(raise);
 
         var strategic = new HBoxContainer();

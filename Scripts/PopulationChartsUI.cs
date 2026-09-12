@@ -42,7 +42,7 @@ public partial class DealOrForceGame
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 SizeFlagsStretchRatio = Math.Max(0.004f, slice.Size / (float)shown),
                 CustomMinimumSize = new Vector2(2, 18),
-                TooltipText = Simulation.Loc.Format("{0} · {1} ({2:P1})", slice.Name, Fmt.People(slice.Size), slice.Size / (double)shown)
+                TooltipText = Ui.Tip(Simulation.Loc.Format("{0} · {1} ({2:P1})", slice.Name, Fmt.People(slice.Size), slice.Size / (double)shown))
             };
             bar.AddChild(segment);
         }
@@ -56,7 +56,7 @@ public partial class DealOrForceGame
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 SizeFlagsStretchRatio = Math.Max(0.004f, (shown - covered) / (float)shown),
                 CustomMinimumSize = new Vector2(2, 18),
-                TooltipText = Simulation.Loc.Format("Everyone else · {0}", Fmt.People(shown - covered))
+                TooltipText = Ui.Tip(Simulation.Loc.Format("Everyone else · {0}", Fmt.People(shown - covered)))
             });
 
         foreach (var slice in kept.Take(rows))
@@ -73,7 +73,7 @@ public partial class DealOrForceGame
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
         row.CustomMinimumSize = new Vector2(0, 20);
-        row.TooltipText = slice.Tooltip;
+        row.TooltipText = Ui.Tip(slice.Tooltip);
         _sideDetail.AddChild(row);
 
         row.AddChild(new ColorRect

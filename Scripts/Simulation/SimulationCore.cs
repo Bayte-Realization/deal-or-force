@@ -76,7 +76,19 @@ public struct GameDate
         Year++;
     }
 
+    /// <summary>
+    /// The invariant date. It is written into save files and printed by the bench, so it
+    /// stays in one language whatever the interface is set to - see <see cref="Display"/>
+    /// for the one a player reads.
+    /// </summary>
     public override string ToString() => $"{Day} {MonthNames[Month - 1]} {Year}";
+
+    /// <summary>
+    /// The date in the player's language. Day, month and year in that order, which every
+    /// language the game ships in happens to share; a language that does not would want a
+    /// frame here rather than three pieces glued together.
+    /// </summary>
+    public string Display() => $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}";
 }
 
 /// <summary>Commands are the only legal way UI and AI mutate the campaign.</summary>

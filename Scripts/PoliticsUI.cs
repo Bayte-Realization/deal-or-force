@@ -46,7 +46,7 @@ public partial class DealOrForceGame
         {
             var id = government.Id;
             var button = ActionButton(government.Name, () => ChangePolitics(id, ""), 172, 30);
-            button.TooltipText = Tr(government.Description);
+            button.TooltipText = Ui.Tip(GovernmentTooltip(government));
             _governmentButtons.AddChild(button);
             _governmentButtonById[id] = button;
         }
@@ -60,7 +60,7 @@ public partial class DealOrForceGame
         {
             var id = ideology.Id;
             var button = ActionButton(ideology.Name, () => ChangePolitics("", id), 172, 30);
-            button.TooltipText = Tr(ideology.Description);
+            button.TooltipText = Ui.Tip(IdeologyTooltip(ideology));
             _ideologyButtons.AddChild(button);
             _ideologyButtonById[id] = button;
         }

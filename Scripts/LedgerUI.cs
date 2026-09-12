@@ -53,8 +53,8 @@ public partial class DealOrForceGame
         header.AddThemeConstantOverride("separation", 8);
         rows.AddChild(header);
         _ledgerTitle = Title("NATIONAL LEDGER", 25, Ui.Colour("text.accent"));
-        _ledgerTitle.TooltipText = Tr("A record, for any country in the world. Nothing on this screen changes " +
-                                   "anything: what you can decide is in State Affairs.");
+        _ledgerTitle.TooltipText = Ui.Tip(Tr("A record, for any country in the world. Nothing on this screen changes " +
+                                   "anything: what you can decide is in State Affairs."));
         _ledgerTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(_ledgerTitle);
 
@@ -63,14 +63,14 @@ public partial class DealOrForceGame
             _ledgerViewedNationId = _campaign.Player.Id;
             RefreshLedger();
         }, 116, 32, true);
-        playerView.TooltipText = Tr("Return every chart to the country you currently control.");
+        playerView.TooltipText = Ui.Tip(Tr("Return every chart to the country you currently control."));
         header.AddChild(playerView);
         var selectedView = ActionButton("Map selection", () =>
         {
             _ledgerViewedNationId = (_selectedNation ?? _campaign.Player).Id;
             RefreshLedger();
         }, 124, 32);
-        selectedView.TooltipText = Tr("Compare the country most recently selected on the map. Policies remain read-only for foreign countries.");
+        selectedView.TooltipText = Ui.Tip(Tr("Compare the country most recently selected on the map. Policies remain read-only for foreign countries."));
         header.AddChild(selectedView);
         header.AddChild(ActionButton("×", CloseLedger, 38, 32));
 
@@ -85,7 +85,7 @@ public partial class DealOrForceGame
                 _ledgerTab = captured;
                 RefreshLedger();
             }, 116, 32, tab == "Overview");
-            button.TooltipText = tab switch
+            button.TooltipText = Ui.Tip(Tr(tab switch
             {
                 "Overview" => "Who governs, what the country is doing, and what the week costs. Change any of it in State Affairs.",
                 "Economy" => "Fiscal history and the construction base. The budget itself is set in State Affairs.",
@@ -93,7 +93,7 @@ public partial class DealOrForceGame
                 "Population" => "Population growth, living standards, classes and the largest states.",
                 "Military" => "Field strength, reserves, formations and active-war performance.",
                 _ => "Compare this country with the largest powers in the current world."
-            };
+            }));
             tabs.AddChild(button);
             _ledgerTabButtons[tab] = button;
         }
@@ -130,9 +130,10 @@ public partial class DealOrForceGame
     /// it. That is what the economy panel was doing - a sentence of hint text set
     /// vertically down the middle of the page, with the charts squeezed out below it.
     /// </summary>
-    private static Label RowLabel(string text, int size, Color colour, float minimumWidth = 0f)
+    private static Label RowLabel(string text, int size, Color colour, float minimumWidth = 0f,
+        bool upper = false)
     {
-        var label = Title(text, size, colour);
+        var label = Title(text, size, colour, upper);
         label.AutowrapMode = TextServer.AutowrapMode.Off;
         label.VerticalAlignment = VerticalAlignment.Center;
         if (minimumWidth > 0f) label.CustomMinimumSize = new Vector2(minimumWidth, 0);
@@ -144,7 +145,7 @@ public partial class DealOrForceGame
     {
         var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         row.AddThemeConstantOverride("separation", 9);
-        row.AddChild(RowLabel(caption, 12, Ui.Colour("text.caption"), 104));
+        row.AddChild(RowLabel(caption, 12, Ui.Colour("text.caption"), 104, upper: true));
         slider.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         slider.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         row.AddChild(slider);

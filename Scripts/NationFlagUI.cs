@@ -64,7 +64,7 @@ public partial class DealOrForceGame
         {
             CustomMinimumSize = new Vector2(Mathf.Round(width) + 2, Mathf.Round(height) + 2),
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            TooltipText = tooltip
+            TooltipText = Ui.Tip(tooltip)
         };
         var border = new StyleBoxFlat
         {
