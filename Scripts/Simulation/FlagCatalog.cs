@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
@@ -70,6 +71,22 @@ public static class FlagCatalog
     private static readonly List<string> Fallbacks = new();
 
     /// <summary>
+    /// What each value will answer to besides itself, in order of preference.
+    ///
+    /// This is what makes the whole thing affordable. Three hundred countries, twelve
+    /// ideologies and eleven forms of government is forty thousand things a country can
+    /// be, and there are a few thousand flags in the world - but most of those conditions
+    /// do not want a different flag from each other. A socialist republic and a communist
+    /// one fly the same red banner; a kingdom and an empire fly the same crown; a one-party
+    /// state looking for a flag is looking for the one the communist state found.
+    ///
+    /// So one file covers a class of conditions. The exact value is always tried first, so
+    /// a country that does have its own flag for a condition still gets it.
+    /// </summary>
+    private static readonly Dictionary<string, Dictionary<string, List<string>>> Aliases =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// How many qualifiers may appear in one name at once.
     ///
     /// Every combination is tried, so the cost of another qualifier doubles. Four is
@@ -89,6 +106,7 @@ public static class FlagCatalog
     {
         Qualifiers.Clear();
         Fallbacks.Clear();
+        Aliases.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "flags"))
             using (document)
                 Merge(document.RootElement, errors);
@@ -136,6 +154,48 @@ public static class FlagCatalog
                     foreach (var value in silent.EnumerateArray())
                         if (value.ValueKind == JsonValueKind.String)
                             qualifier.Silent.Add(value.GetString() ?? "");
+                }
+            }
+
+        if (root.TryGetProperty("also_answers_to", out var aliases) &&
+            aliases.ValueKind == JsonValueKind.Object)
+            foreach (var family in aliases.EnumerateObject())
+            {
+                // Grouped by the source the values come from, so an alias can only ever
+                // name something of the same kind. A form of government standing in for an
+                // ideology is the mistake this shape exists to make unwritable.
+                if (!IsKnownSource(family.Name))
+                {
+                    errors?.Add($"common/flags: '{family.Name}' is not something the game can " +
+                                "answer, so nothing can answer to it.");
+                    continue;
+                }
+                if (family.Value.ValueKind != JsonValueKind.Object)
+                {
+                    errors?.Add($"common/flags: the aliases for '{family.Name}' are not a table.");
+                    continue;
+                }
+
+                var table = Aliases.TryGetValue(family.Name, out var known)
+                    ? known
+                    : Aliases[family.Name] = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var entry in family.Value.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind != JsonValueKind.Array)
+                    {
+                        errors?.Add($"common/flags: '{entry.Name}' answers to something that is not a list.");
+                        continue;
+                    }
+                    var chain = new List<string>();
+                    foreach (var value in entry.Value.EnumerateArray())
+                    {
+                        if (value.ValueKind != JsonValueKind.String) continue;
+                        var id = Slug(value.GetString());
+                        if (id.Length > 0 && !chain.Contains(id, StringComparer.OrdinalIgnoreCase))
+                            chain.Add(id);
+                    }
+                    if (chain.Count > 0) table[Slug(entry.Name)] = chain;
                 }
             }
 
@@ -228,31 +288,34 @@ public static class FlagCatalog
         var tag = Slug(nation.Tag);
         if (tag.Length == 0) return names;
 
-        // The qualifiers that have something to say about this country today.
-        var live = new List<(FlagQualifier Qualifier, string Value)>();
+        // The qualifiers that have something to say about this country today, each as the
+        // chain of values it will answer to: what it actually is, then whatever that value
+        // has been declared to stand in for.
+        var live = new List<(FlagQualifier Qualifier, List<string> Chain)>();
         foreach (var qualifier in Qualifiers)
         {
             var value = ValueOf(qualifier.Source, campaign, nation);
             if (value.Length == 0 || qualifier.Silent.Contains(value)) continue;
-            live.Add((qualifier, value));
+            live.Add((qualifier, Chain(qualifier.Source, value)));
         }
 
         // Combinations of the first few, most parts first: a flag that answers to both the
         // ideology and the form of government beats one that answers to either alone.
+        //
+        // Within one combination, every mixture of the chains is tried, nearest first - so
+        // the country's own communist flag beats its socialist one, which beats nothing.
         var combined = Math.Min(live.Count, MaxCombined);
         for (var size = combined; size >= 1; size--)
             for (var mask = 0; mask < 1 << combined; mask++)
             {
                 if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
-                var name = "flag_" + tag;
-                for (var index = 0; index < combined; index++)
-                    if ((mask & (1 << index)) != 0) name += "_" + live[index].Value;
-                names.Add(name);
+                Spread(names, "flag_" + tag, live, combined, mask);
             }
 
         // Anything past the cap is still worth asking about on its own.
         for (var index = MaxCombined; index < live.Count; index++)
-            names.Add($"flag_{tag}_{live[index].Value}");
+            foreach (var value in live[index].Chain)
+                names.Add($"flag_{tag}_{value}");
 
         names.Add($"flag_{tag}");
 
@@ -282,14 +345,67 @@ public static class FlagCatalog
                 {
                     if ((mask & skip) != 0) continue;
                     if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
-                    var name = stem;
-                    for (var index = 0; index < combined; index++)
-                        if ((mask & (1 << index)) != 0) name += "_" + live[index].Value;
-                    names.Add(name);
+                    Spread(names, stem, live, combined, mask);
                 }
             names.Add(stem);
         }
         return names;
+    }
+
+    /// <summary>
+    /// Every value one qualifier will answer to, the real one first.
+    ///
+    /// Only ever values of the same source: what a government may stand in for is another
+    /// government, never an ideology. A one-party state can be communist and can just as
+    /// easily be fascist, so the form of government is not evidence about the banner - the
+    /// two are separate parts of the name and the search puts them together itself.
+    /// </summary>
+    public static List<string> Chain(string source, string value)
+    {
+        var chain = new List<string> { value };
+        if (!Aliases.TryGetValue(source ?? "", out var table)) return chain;
+        if (!table.TryGetValue(value, out var also)) return chain;
+        foreach (var alias in also)
+            if (!chain.Contains(alias, StringComparer.OrdinalIgnoreCase)) chain.Add(alias);
+        return chain;
+    }
+
+    /// <summary>
+    /// Every mixture of the chosen qualifiers' chains, nearest first.
+    ///
+    /// "Nearest" is the total number of steps taken away from what the country actually is,
+    /// so `flag_rus_communism_one_party_state` is asked for before `flag_rus_socialism_one_party_state`,
+    /// and both before anything two steps out. Ordering by distance rather than by
+    /// enumeration order is what stops an alias beating the real thing.
+    /// </summary>
+    private static void Spread(List<string> into, string stem,
+        List<(FlagQualifier Qualifier, List<string> Chain)> live, int combined, int mask)
+    {
+        var chosen = new List<int>();
+        for (var index = 0; index < combined; index++)
+            if ((mask & (1 << index)) != 0) chosen.Add(index);
+        if (chosen.Count == 0) return;
+
+        var longest = 0;
+        foreach (var index in chosen) longest = Math.Max(longest, live[index].Chain.Count);
+
+        for (var distance = 0; distance <= (longest - 1) * chosen.Count; distance++)
+            Walk(into, stem, live, chosen, 0, distance, "");
+    }
+
+    /// <summary>One mixture, built left to right, spending exactly `budget` steps.</summary>
+    private static void Walk(List<string> into, string stem,
+        List<(FlagQualifier Qualifier, List<string> Chain)> live, List<int> chosen,
+        int at, int budget, string name)
+    {
+        if (at == chosen.Count)
+        {
+            if (budget == 0) into.Add(stem + name);
+            return;
+        }
+        var chain = live[chosen[at]].Chain;
+        for (var step = 0; step < chain.Count && step <= budget; step++)
+            Walk(into, stem, live, chosen, at + 1, budget - step, name + "_" + chain[step]);
     }
 
     /// <summary>

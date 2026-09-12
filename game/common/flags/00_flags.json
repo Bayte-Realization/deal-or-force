@@ -72,6 +72,75 @@
     }
   },
 
+  // ---------------------------------------------------------------------------------------
+  // One flag, many conditions
+  // ---------------------------------------------------------------------------------------
+  //
+  // Three hundred countries, twelve ideologies and eleven forms of government is forty
+  // thousand things a country can be. There are a few thousand flags in the world. That gap
+  // does not close by drawing more of them - it closes by noticing that most of those
+  // conditions do not want a DIFFERENT flag from each other.
+  //
+  // A socialist republic and a communist one fly the same red banner. A kingdom and an
+  // empire fly the same crown. A one-party state looking for a flag is looking for exactly
+  // the file the communist state found. So a value may declare what else it will answer to,
+  // and one file then covers its whole class.
+  //
+  // The real value is always tried first: a country that HAS its own socialist flag gets it,
+  // and only a country that does not falls through to the communist one. Order matters -
+  // the first alias is tried before the second.
+  "also_answers_to": {
+    // What a government BELIEVES. Only other beliefs appear here - see the note below.
+    "ideology": {
+      // The left. A red banner with a star on it has served every one of these, and what
+      // separates them is what the government says rather than what is on the pole.
+      "socialism":        ["communism", "social_democracy"],
+      "communism":        ["socialism"],
+      "social_democracy": ["socialism", "communism"],
+      "agrarianism":      ["socialism", "communism"],
+
+      // The right, and the old right, which reach for the same crown and the same colours.
+      "traditionalism":   ["conservatism", "nationalism"],
+      "conservatism":     ["traditionalism"],
+      "nationalism":      ["traditionalism", "conservatism"],
+      "fascism":          ["nationalism"],
+
+      // And the liberal family, which has never had much iconography of its own.
+      "libertarianism":   ["liberalism"],
+      "liberalism":       ["social_democracy"]
+    },
+
+    // How a government is ARRANGED. Never an ideology, and the shape of this file is why.
+    //
+    // A one-party state may be communist. It may just as easily be fascist, nationalist, or
+    // a dictatorship with no belief worth the name - so the form of government is not
+    // evidence about the banner, and letting `one_party_state` answer to `communism` would
+    // hand a fascist state a red flag. The two questions are separate parts of the file
+    // name and the search puts them together itself: a country that is both flies
+    // `flag_xxx_communism_one_party_state` if that file exists, and falls back through each
+    // half alone if it does not.
+    "government": {
+      // A kingdom and an empire have never wanted different marks.
+      "absolute_monarchy":       ["constitutional_monarchy"],
+      "constitutional_monarchy": ["absolute_monarchy"],
+
+      // Four arrangements that differ in where the power sits and not at all in what they
+      // hang outside the building.
+      "presidential_republic":   ["parliamentary_republic"],
+      "parliamentary_republic":  ["presidential_republic"],
+      "federation":              ["presidential_republic", "parliamentary_republic"],
+      "direct_democracy":        ["parliamentary_republic"],
+
+      // A country that has not decided yet answers to what it is on its way to being.
+      "provisional_government":  ["parliamentary_republic"],
+
+      // And the two that borrow: a junta governs from the presidential palace it took, and
+      // a one-party state is a single party sitting where a parliament was.
+      "military_junta":          ["presidential_republic"],
+      "one_party_state":         ["presidential_republic"]
+    }
+  },
+
   // What a country with no flag of its own flies, in order.
   //
   // This is not a nicety. A country founded in the middle of a campaign - a region that
