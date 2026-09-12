@@ -291,7 +291,9 @@ public sealed class ModLoader
         ("militia", () => MilitiaCore.ResetCatalog(), MilitiaCore.Merge),
         ("secession", () => SecessionCore.ResetCatalog(), SecessionCore.Merge),
         ("settings", () => SettingsCatalog.ResetCatalog(), SettingsCatalog.Merge),
-        ("flags", () => FlagCatalog.ResetCatalog(), FlagCatalog.Merge)
+        ("flags", () => FlagCatalog.ResetCatalog(), FlagCatalog.Merge),
+        ("governance", () => GovernanceEvents.ResetCatalog(), GovernanceEvents.Merge),
+        ("formable_nations", () => FormableNations.ResetCatalog(), FormableNations.Merge)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>

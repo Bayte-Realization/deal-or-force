@@ -1,0 +1,148 @@
+// When a country stops being what it was.
+//
+// A player could rearrange their own state at any time. No other country in the world ever
+// did: two hundred and sixty governments held the same form and the same ideology from 2024
+// onwards, through defeat, collapse, revolution and famine. That made the entire political
+// layer decoration for everybody except the player - and it made the flags that answer to a
+// country's politics decoration too, because nothing would ever fly a different one.
+//
+// The rule is that a state changes when it is FAILING, not when it would be better off.
+// Every transition below says what has to be true before it is even possible; the ones
+// whose conditions hold compete by weight, and the whole thing is scaled by how hard the
+// week is actually pushing - a country at the floor of its stability with a furious
+// population changes some weeks, a country merely having a bad year almost never does.
+//
+// Conditions, all optional:
+//
+//   stability_below / stability_above    the country's own stability
+//   radicalism_above                     its population's, weighted by where they live
+//   war_support_below                    appetite for the war it is in
+//   living_below / living_above          standard of living
+//   literacy_above                       how educated it is
+//   at_war / losing_war                  true or false
+//   from_government / from_ideology      only out of these, any when absent
+//
+// A transition that sets only `government` leaves the ideology alone, and the other way
+// round. One that would change nothing is skipped.
+{
+  // A week's chance for a country under maximum pressure - no stability left and a wholly
+  // radicalised population. Everything real is a fraction of it, and the cooling-off period
+  // in PoliticsCore means no country does this twice in six months whatever happens.
+  "base": 0.0045,
+
+  "transitions": {
+    // ------------------------------------------------------------------ the army acts --
+    //
+    // The oldest and commonest of these. A state losing a war with its stability gone is
+    // the exact condition under which the people holding the rifles stop taking orders.
+    "military_coup": {
+      "name": "Military coup",
+      "government": "military_junta",
+      "stability_below": 0.35,
+      "losing_war": true,
+      "weight": 3.0,
+      "from_government": ["parliamentary_republic", "presidential_republic",
+                          "constitutional_monarchy", "federation", "direct_democracy",
+                          "technocracy", "provisional_government"]
+    },
+
+    // The same without a war to lose: a government that has simply stopped governing.
+    "quiet_coup": {
+      "name": "The army takes over",
+      "government": "military_junta",
+      "stability_below": 0.22,
+      "at_war": false,
+      "weight": 1.0,
+      "from_government": ["parliamentary_republic", "presidential_republic",
+                          "constitutional_monarchy", "federation", "provisional_government"]
+    },
+
+    // ----------------------------------------------------------------- the street acts --
+    //
+    // A radicalised population in a poor country, which is the other half of the twentieth
+    // century. What comes out is provisional, because that is what comes out first.
+    "revolution": {
+      "name": "Revolution",
+      "government": "provisional_government",
+      "ideology": "socialism",
+      "stability_below": 0.32,
+      "radicalism_above": 0.25,
+      "living_below": 0.45,
+      "weight": 2.5
+    },
+
+    // And what a provisional government usually becomes, once the people who made it have
+    // to govern with it.
+    "consolidation": {
+      "name": "The revolution consolidates",
+      "government": "one_party_state",
+      "ideology": "communism",
+      "from_government": ["provisional_government"],
+      "from_ideology": ["socialism", "communism"],
+      "stability_below": 0.55,
+      "weight": 2.0
+    },
+
+    // The other direction out of a provisional government: it holds the election it
+    // promised. Only where there is enough left to hold one with.
+    "restored_republic": {
+      "name": "Elections restored",
+      "government": "parliamentary_republic",
+      "ideology": "liberalism",
+      "from_government": ["provisional_government", "military_junta"],
+      "stability_above": 0.55,
+      "literacy_above": 0.70,
+      "weight": 1.5
+    },
+
+    // --------------------------------------------------------------- the right reacts --
+    //
+    // A country that is losing, poor and furious does not only go left. Requires the war
+    // to be going badly, because this is a politics of humiliation rather than of hunger.
+    "reaction": {
+      "name": "Nationalist reaction",
+      "ideology": "nationalism",
+      "government": "one_party_state",
+      "stability_below": 0.30,
+      "losing_war": true,
+      "radicalism_above": 0.18,
+      "weight": 1.5,
+      "from_ideology": ["liberalism", "conservatism", "social_democracy", "socialism"]
+    },
+
+    // ----------------------------------------------------------- the crown, both ways --
+    "restoration": {
+      "name": "The monarchy restored",
+      "government": "constitutional_monarchy",
+      "ideology": "traditionalism",
+      "from_government": ["provisional_government", "military_junta", "absolute_monarchy"],
+      "stability_below": 0.45,
+      "weight": 0.8
+    },
+
+    "abdication": {
+      "name": "The crown gives way",
+      "government": "constitutional_monarchy",
+      "from_government": ["absolute_monarchy"],
+      "stability_below": 0.40,
+      "radicalism_above": 0.15,
+      "weight": 1.2
+    },
+
+    // --------------------------------------------------- and the slow, comfortable one --
+    //
+    // The only transition here that is not a crisis. A rich, literate, settled country
+    // drifts towards a broader franchise, which is a thing that has also happened.
+    "liberalisation": {
+      "name": "Gradual liberalisation",
+      "government": "parliamentary_republic",
+      "ideology": "social_democracy",
+      "from_government": ["one_party_state", "military_junta", "absolute_monarchy",
+                          "theocracy", "technocracy"],
+      "stability_above": 0.62,
+      "living_above": 0.55,
+      "literacy_above": 0.75,
+      "weight": 1.0
+    }
+  }
+}

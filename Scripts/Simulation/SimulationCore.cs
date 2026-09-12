@@ -529,6 +529,11 @@ public sealed partial class Campaign
             // out on; it keeps its own weekly schedule, because it also has to clear its
             // report list on the days it does nothing.
             using (SimProfiler.Measure("secession")) SecessionEvents.Tick(this);
+
+            // And whether any country has stopped being what it was. After secession
+            // because a state that has just lost a province is a state in exactly the
+            // condition this reads.
+            using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
         }
         CampaignIntel.Invalidate(this);
         if (DiagnosticLogs.Enabled)
