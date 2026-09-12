@@ -334,6 +334,8 @@ public partial class DealOrForceGame : Control
         if (IsInstanceValid(_scenarioSummary))
             _scenarioSummary.Text = Simulation.Loc.Format("{0} nations · {1} states · deterministic campaign simulation", _campaign.Nations.Count, _campaign.States.Count);
         BindCampaignMods();
+        BindFlags(_campaign);
+        Simulation.SpriteCatalog.Changed += ForgetFlags;
         _campaign.Changed += Refresh;
         _campaign.IsPaused = true;
         _selectedNation = _campaign.Player;

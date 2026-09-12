@@ -158,9 +158,7 @@ public sealed class ModLoader
         BudgetCore.ResetCatalog();
         GovernmentFocusCatalog.ResetCatalog();
         TradePolicyCatalog.ResetCatalog();
-        StabilityCore.ResetCatalog();
-        MilitiaCore.ResetCatalog();
-        SettingsCatalog.ResetCatalog();
+        foreach (var (_, reset, _) in Tunables) reset();
         GovernmentCatalog.ResetCatalog();
         IdeologyCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
@@ -186,6 +184,7 @@ public sealed class ModLoader
             ApplyEvents(package);
             ApplyModifiers(package);
             ApplyOpinionModifiers(package);
+            ApplyTunables(package);
             reseed |= ApplyDemography(package);
             ApplyAiStrategies(package);
             ApplyMapData(package);
@@ -271,6 +270,45 @@ public sealed class ModLoader
         foreach (var path in JsonFiles(package, "events"))
         try { EventCatalog.Load(File.ReadAllText(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+    }
+
+    /// <summary>
+    /// The catalogues that are a folder of numbers rather than a folder of things.
+    ///
+    /// Stability, militia, secession, the settings screen and how flags are bound all
+    /// happen to have the same shape: a folder under common/, a Merge that takes one
+    /// document, and a Reset that reads the base game's copy. Each had a hand-written
+    /// loader, or - for the four newest - no loader at all, which meant a mod could put a
+    /// file in common/stability and the game would silently read only its own.
+    ///
+    /// One table instead. Adding the next tunable catalogue is one line here, which is the
+    /// whole point: the cost of making something moddable should not be three methods that
+    /// differ only in a string.
+    /// </summary>
+    private static readonly (string Folder, Action Reset, Action<JsonElement, List<string>> Merge)[] Tunables =
+    {
+        ("stability", () => StabilityCore.ResetCatalog(), StabilityCore.Merge),
+        ("militia", () => MilitiaCore.ResetCatalog(), MilitiaCore.Merge),
+        ("secession", () => SecessionCore.ResetCatalog(), SecessionCore.Merge),
+        ("settings", () => SettingsCatalog.ResetCatalog(), SettingsCatalog.Merge),
+        ("flags", () => FlagCatalog.ResetCatalog(), FlagCatalog.Merge)
+    };
+
+    /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>
+    private void ApplyTunables(ModPackage package)
+    {
+        foreach (var (folder, _, merge) in Tunables)
+        foreach (var path in JsonFiles(package, "common", folder))
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip
+            });
+            merge(document.RootElement, package.Errors);
+        }
+        catch (Exception exception) { package.Errors.Add($"{folder}/{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
     /// <summary>A mod's own reasons for one country to think ill of another.</summary>
@@ -394,12 +432,15 @@ public sealed class ModLoader
     {
         try
         {
+            // Each rooted at its own folder, so a path a mod writes means the same thing a
+            // path the base game writes means - which is how gfx/ has always worked and is
+            // why a mod could replace a picture but not a sound.
             SoundCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "sound"),
-                package.VirtualRoot, package.Errors);
+                $"{package.VirtualRoot}/sound", package.Errors);
             MusicCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "music"),
-                package.VirtualRoot, package.Errors);
+                $"{package.VirtualRoot}/music", package.Errors);
             FontCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "fonts"),
-                package.VirtualRoot, package.Errors);
+                $"{package.VirtualRoot}/fonts", package.Errors);
         }
         catch (Exception exception) { package.Errors.Add($"sound: {exception.Message}"); }
     }

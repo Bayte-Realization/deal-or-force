@@ -171,6 +171,8 @@ public static class Program
             ArtworkIsNamedRatherThanSpelledOut());
         failures += Check("every sound the game makes is declared where a mod can reach it",
             AudioIsDeclaredRatherThanWiredIn());
+        failures += Check("a country flies a flag that answers to what it has become",
+            FlagsFollowWhatACountryIs());
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
         failures += Check("every explained number adds up to what the screen shows",
@@ -2622,6 +2624,98 @@ public static class Program
     /// modder could look. The check holds the two halves apart: the six moments the code
     /// raises must all be declared, and the declaration has to be the thing that decides.
     /// </summary>
+    /// <summary>
+    /// Which flag a country flies, now that the answer can change.
+    ///
+    /// Every country had exactly one flag for the length of a campaign, which is a strange
+    /// rule for a game whose subject is countries changing: Russia going communist flew the
+    /// tricolour, a restored Irish monarchy flew the tricolour, and a country founded that
+    /// morning by a secession flew nothing at all because no file was named after it.
+    ///
+    /// The binding is entirely by file name, which is what makes it easy to add to and also
+    /// what makes it impossible for a compiler to check: nothing anywhere says that
+    /// `flag_rus_communism.png` is looked for under exactly that name. This does.
+    /// </summary>
+    private static string FlagsFollowWhatACountryIs()
+    {
+        SpriteCatalog.Load();
+        FlagCatalog.ResetCatalog();
+        if (FlagCatalog.All.Count == 0)
+            return "common/flags declares no qualifiers, so a flag can only ever be the country's";
+
+        var campaign = Campaign.CreateBootstrap(20240404);
+        var russia = campaign.NationByTag("RUS");
+        if (russia is null) return "RUS is missing, so there is nothing to change the politics of";
+
+        // What it flies now, and what it flies after a revolution. These have to differ, or
+        // the whole mechanism is decoration.
+        var before = FlagCatalog.Resolve(campaign, russia);
+        if (before != "flag_rus")
+            return $"RUS as it stands resolves to '{before}' rather than its own flag";
+
+        var wasIdeology = russia.Ideology;
+        var wasGovernment = russia.Government;
+        russia.Ideology = "communism";
+        russia.Government = "one_party_state";
+        var after = FlagCatalog.Resolve(campaign, russia);
+        if (after == before)
+            return "RUS went communist and went on flying exactly the same flag";
+        if (after != "flag_rus_communism" && after != "flag_rus_communism_one_party_state")
+            return $"RUS went communist and resolved to '{after}', which is not its communist flag";
+        russia.Ideology = wasIdeology;
+        russia.Government = wasGovernment;
+
+        // A country the scenario never declared - which is what a secession produces - has
+        // no file of its own and must still come out with something.
+        var invented = new Nation
+        {
+            Tag = "ZZZ", Iso = "ZZZ", Name = "Nowhere",
+            Ideology = "communism", Government = "provisional_government"
+        };
+        DemographyCatalog.Declare("ZZZ", new[] { "chechen" });
+        var borrowed = FlagCatalog.Resolve(campaign, invented);
+        if (borrowed != "flag_culture_chechen")
+            return $"a country founded by Chechens resolved to '{borrowed}' rather than their flag";
+
+        // And the same people, having decided something, may fly something else again.
+        DemographyCatalog.Declare("ZZZ", new[] { "kurdish" });
+        invented.Ideology = "socialism";
+        var variant = FlagCatalog.Resolve(campaign, invented);
+        if (variant != "flag_culture_kurdish_socialism")
+            return $"a socialist Kurdish state resolved to '{variant}' rather than its own banner";
+
+        // Every flag on disk has to be reachable by the name it is filed under: a picture
+        // nothing can ask for is a picture that is not in the game.
+        var unreachable = 0;
+        var counted = 0;
+        var folder = GameDataLoader.DataFolder("gfx", "flags");
+        if (folder is not null)
+            foreach (var file in Directory.EnumerateFiles(folder, "flag_*.png"))
+            {
+                counted++;
+                if (!SpriteCatalog.Has(Path.GetFileNameWithoutExtension(file))) unreachable++;
+            }
+        if (unreachable > 0)
+            return $"{unreachable:N0} of {counted:N0} flag file(s) cannot be asked for by name";
+
+        var ideological = 0;
+        var peoples = 0;
+        if (folder is not null)
+            foreach (var file in Directory.EnumerateFiles(folder, "flag_*.png"))
+            {
+                var name = Path.GetFileNameWithoutExtension(file);
+                if (name.StartsWith("flag_culture_", StringComparison.Ordinal)) peoples++;
+                else if (name.Count(character => character == '_') > 1) ideological++;
+            }
+
+        Console.WriteLine($"  flags: {counted:N0} on disk - {peoples:N0} for peoples and " +
+                          $"{ideological:N0} for a country in a particular condition; " +
+                          $"{FlagCatalog.All.Count} qualifier(s) and " +
+                          $"{FlagCatalog.FallbackSources.Count} fallback famil(ies) declared, " +
+                          "and a country with no flag of its own still flies one.");
+        return "";
+    }
+
     private static string AudioIsDeclaredRatherThanWiredIn()
     {
         SoundCatalog.Load();
@@ -2661,26 +2755,30 @@ public static class Program
         // whole declaration to change one number is how a mod goes stale next patch.
         var before = SoundCatalog.Get("battle_won");
         SoundCatalog.Merge("{ \"cues\": { \"battle_won\": { \"cooldown_ms\": 250 } } }",
-            "user://mods/example", "test", null);
+            "user://mods/example/sound", "test", null);
         var after = SoundCatalog.Get("battle_won");
         if (after.CooldownMs != 250) return "a mod could not retime a cue";
         if (after.File != before.File || after.Channel != before.Channel)
             return "retiming a cue lost the rest of its declaration";
 
-        // And a mod's own audio resolves inside the mod's own folder.
+        // And a mod's own audio resolves inside the mod's own sound folder - rooted there
+        // rather than at the mod's root, the way gfx/ has always been. Before that, a path
+        // in the base game's own cue file had to name `Assets/Audio/...` beside the source
+        // code, and the sound of this game was the one kind of content a mod could not
+        // reach without knowing where the executable had been built from.
         SoundCatalog.Merge("{ \"cues\": { \"battle_won\": \"audio/mine.wav\" } }",
-            "user://mods/example", "test", null);
+            "user://mods/example/sound", "test", null);
         var replaced = SoundCatalog.Get("battle_won");
-        if (replaced.File != "user://mods/example/audio/mine.wav")
-            return $"a mod's own sound resolved to '{replaced.File}' instead of inside the mod folder";
+        if (replaced.File != "user://mods/example/sound/audio/mine.wav")
+            return $"a mod's own sound resolved to '{replaced.File}' instead of inside its sound folder";
         if (replaced.CooldownMs != 250)
             return "replacing a cue's file discarded how the cue behaves";
 
         MusicCatalog.Merge("{ \"tracks\": { \"theme\": { \"file\": \"audio/theme.ogg\", \"when\": \"menu\" } } }",
-            "user://mods/example", "test", null);
+            "user://mods/example/music", "test", null);
         var menu = MusicCatalog.For(MusicCatalog.Moment.Menu);
         var campaign = MusicCatalog.For(MusicCatalog.Moment.Campaign);
-        if (menu.Count != 1 || menu[0].File != "user://mods/example/audio/theme.ogg")
+        if (menu.Count != 1 || menu[0].File != "user://mods/example/music/audio/theme.ogg")
             return "a mod could not add a track of its own";
         if (campaign.Count != 0)
             return "a menu track was offered to the campaign as well";

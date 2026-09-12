@@ -116,7 +116,7 @@ public static class SoundCatalog
         Cues.Clear();
         Channels.Clear();
         var root = GameDataLoader.DataFolder("sound");
-        if (root is not null) LoadTree(root, "res://", null);
+        if (root is not null) LoadTree(root, "res://game/sound", null);
         Changed?.Invoke();
     }
 

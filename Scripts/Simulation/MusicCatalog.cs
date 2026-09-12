@@ -73,7 +73,7 @@ public static class MusicCatalog
     {
         Tracks.Clear();
         var root = GameDataLoader.DataFolder("music");
-        if (root is not null) LoadTree(root, "res://", null);
+        if (root is not null) LoadTree(root, "res://game/music", null);
         Changed?.Invoke();
     }
 

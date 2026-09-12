@@ -54,7 +54,7 @@ public static class FontCatalog
     {
         Faces.Clear();
         var root = GameDataLoader.DataFolder("fonts");
-        if (root is not null) LoadTree(root, "res://", null);
+        if (root is not null) LoadTree(root, "res://game/fonts", null);
         Changed?.Invoke();
     }
 

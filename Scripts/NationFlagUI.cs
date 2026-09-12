@@ -32,18 +32,56 @@ public partial class DealOrForceGame
     {
         if (string.IsNullOrWhiteSpace(tag)) return null;
         var key = tag.ToLowerInvariant();
-        if (FlagCache.TryGetValue(key, out var cached)) return cached;
 
-        var path = SpriteCatalog.TextureOf($"flag_{key}", $"res://game/gfx/flags/flag_{key}.png");
+        // Which flag this country flies today, which is no longer a fixed answer: a country
+        // that has gone communist flies something else, a restored monarchy flies its old
+        // ensign, and a country founded this morning by a secession has no file named after
+        // it at all and falls back to the flag of the people who founded it. See
+        // <see cref="FlagCatalog"/>, where all of that is data.
+        var sprite = $"flag_{key}";
+        var nation = FlagWorld?.NationByTag(tag);
+        if (nation is not null)
+        {
+            var situation = $"{key}|{nation.Ideology}|{nation.Government}|{FlagWorld.MapRevision}";
+            if (!ResolvedFlags.TryGetValue(situation, out var resolved))
+                ResolvedFlags[situation] = resolved = FlagCatalog.Resolve(FlagWorld, nation);
+            if (!string.IsNullOrEmpty(resolved)) sprite = resolved;
+        }
+
+        if (FlagCache.TryGetValue(sprite, out var cached)) return cached;
+        var path = SpriteCatalog.TextureOf(sprite, $"res://game/gfx/flags/{sprite}.png");
         var texture = !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path)
             ? GD.Load<Texture2D>(path)
             : null;
-        FlagCache[key] = texture;
+        FlagCache[sprite] = texture;
         return texture;
     }
 
+    /// <summary>
+    /// The world the flags are being chosen for, and the answers already worked out for it.
+    ///
+    /// Which flag a country flies now depends on what that country is, so the interface has
+    /// to be able to ask the campaign - and asking per badge per refresh would walk the
+    /// candidate list a few hundred times a second. The answer only changes when the country
+    /// does, so it is kept against the things it was worked out from.
+    /// </summary>
+    private static Campaign FlagWorld;
+
+    private static readonly Dictionary<string, string> ResolvedFlags = new();
+
+    /// <summary>Point the flags at a campaign, forgetting what was worked out for the last one.</summary>
+    private static void BindFlags(Campaign campaign)
+    {
+        FlagWorld = campaign;
+        ForgetFlags();
+    }
+
     /// <summary>Drop the cache when the sprite catalogue changes under it - a mod reload.</summary>
-    private static void ForgetFlags() => FlagCache.Clear();
+    private static void ForgetFlags()
+    {
+        FlagCache.Clear();
+        ResolvedFlags.Clear();
+    }
 
     /// <summary>
     /// A flag at a given height, in its own proportions.

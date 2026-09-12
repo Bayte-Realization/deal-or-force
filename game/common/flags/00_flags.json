@@ -1,0 +1,85 @@
+// Which flag a country flies.
+//
+// ---------------------------------------------------------------------------------------
+// Adding a flag
+// ---------------------------------------------------------------------------------------
+//
+// You do not add it here. A flag is bound by its file name and nothing else:
+//
+//     gfx/flags/flag_rus.png                  Russia
+//     gfx/flags/flag_rus_communism.png        Russia, while it is communist
+//     gfx/flags/flag_irl_absolute_monarchy.png   Ireland, while it is a monarchy
+//     gfx/flags/flag_usa_communism_one_party_state.png   both at once
+//
+// Drop the file into any `gfx/flags/` folder - the base game's or a mod's - and it is in
+// the game. There is no list to join and no id to invent. The parts after the country tag
+// are the qualifiers declared below, spelled exactly as the id they come from: the twelve
+// ideologies in common/ideologies, the eleven forms of government in common/governments,
+// and so on.
+//
+// The most specific file that exists wins. A country with `flag_rus_communism` and
+// `flag_rus` flies the first while it is communist and the second otherwise, and one with
+// neither flies `flag_ideology_communism` - the generic banner at the bottom of the file.
+//
+// ---------------------------------------------------------------------------------------
+// What this file is for
+// ---------------------------------------------------------------------------------------
+//
+// The one thing a file name cannot carry: WHICH facts about a country may appear in a name,
+// and which of two candidates is the more specific. Both are data, so a mod can make flags
+// depend on something the base game never considered by declaring one qualifier here.
+//
+// `from` is where the value comes from, and it is the only part that is not free-form,
+// because each one is a question only the simulation can answer:
+//
+//     ideology     what the government believes            communism, fascism, ...
+//     government   how the country is arranged             one_party_state, federation, ...
+//     culture      the people the state is for             russian, chechen, ...
+//     continent    where it is                             europe, africa, ...
+//     war          whether it is fighting anybody          at_war / at_peace
+//     focus        what the cabinet is working on          Balanced, Military, ...
+//     tag          the country itself                      rus, fra, ...
+//
+// `order` is how specific the qualifier is, low first. It decides both where the part sits
+// in a file name and which of two flags wins when both exist.
+//
+// `silent` is the value that is not worth saying. A country at peace should look for
+// `flag_fra`, not `flag_fra_at_peace`, so `at_peace` is declared silent and drops out.
+{
+  "qualifiers": {
+    // What a government believes is the thing that has historically changed a flag, and it
+    // is first for that reason: Russia in 1917, Germany in 1933, Iran in 1979, Spain twice.
+    "ideology": {
+      "from": "ideology",
+      "order": 10
+    },
+
+    // And how it is arranged, which is the other half of it - a monarchy restored flies
+    // something different from a republic of the same politics.
+    "government": {
+      "from": "government",
+      "order": 20
+    },
+
+    // A wartime flag or a battle ensign. Nothing in the base game uses this; it is declared
+    // because it costs one line and it is the clearest possible example of a qualifier that
+    // has nothing to do with politics, for anybody reading this to work out how to add
+    // their own.
+    "at_war": {
+      "from": "war",
+      "order": 30,
+      "silent": ["at_peace"]
+    }
+  },
+
+  // What a country with no flag of its own flies, in order.
+  //
+  // This is not a nicety. A country founded in the middle of a campaign - a region that
+  // seceded - has no file named after it and never will, and without this it shows up as a
+  // grey rectangle in every panel it appears in for the rest of the game. Falling back to
+  // the flag of the people who founded it, or failing that to the banner of what it
+  // believes, is a better answer than nothing and usually the right one.
+  //
+  // Named `flag_<source>_<value>`: flag_culture_chechen, flag_ideology_communism.
+  "fallbacks": ["culture", "ideology", "government"]
+}

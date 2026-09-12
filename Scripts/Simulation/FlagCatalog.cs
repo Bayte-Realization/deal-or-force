@@ -1,0 +1,334 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+
+namespace DealOrForce.Simulation;
+
+/// <summary>One thing about a country that its flag is allowed to depend on.</summary>
+public sealed class FlagQualifier
+{
+    public string Id = "";
+
+    /// <summary>
+    /// Where the value comes from. The code understands a fixed handful - see
+    /// <see cref="FlagCatalog.ValueOf"/> - because each one is a question only the
+    /// simulation can answer. Everything else about a qualifier is data.
+    /// </summary>
+    public string Source = "";
+
+    /// <summary>
+    /// How specific this is, low first. It decides two things at once: the order the parts
+    /// appear in a file name, and which of two flags wins when both exist.
+    /// </summary>
+    public int Order;
+
+    /// <summary>
+    /// A value this qualifier is not worth mentioning for. A country that is not at war
+    /// should look for `flag_fra`, not `flag_fra_at_peace`, so the peacetime value is
+    /// declared as silent and simply drops out of the name.
+    /// </summary>
+    public readonly HashSet<string> Silent = new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// Which flag a country flies.
+///
+/// Every country had exactly one flag for the length of a campaign, which is a strange
+/// thing for a game whose entire subject is countries changing. Russia going communist flew
+/// the tricolour; a restored Irish monarchy flew the tricolour; a country founded this
+/// morning by people who had just seceded flew nothing at all, because no file was named
+/// after it.
+///
+/// The fix keeps the rule the rest of the art already follows: <b>the file is the
+/// declaration</b>. A flag is bound by its name and nothing else. Drop
+/// `flag_rus_communism.png` into any `gfx/flags/` folder and Russia flies it while it is
+/// communist; drop `flag_irl_absolute_monarchy.png` and an Irish monarchy has its harp.
+/// There is no list to add the file to and no id to invent - naming it is the whole of the
+/// work.
+///
+/// What this file adds is the part a file name cannot carry: <i>which</i> facts about a
+/// country may appear in a name, and which of two candidates wins. Both are data, so a mod
+/// can make a flag depend on something the base game never thought of - being in a
+/// coalition, holding a particular region, a scripted era - by declaring one qualifier.
+///
+/// The search runs most specific first:
+///
+///     flag_rus_communism_one_party_state   both, because both were declared
+///     flag_rus_communism                   the more specific qualifier alone
+///     flag_rus_one_party_state             the less specific alone
+///     flag_rus                             the country's own flag
+///     flag_ideology_communism              a generic banner for anyone who has nothing
+///     flag_culture_chechen                 or a people's flag, for a country just founded
+///
+/// The last two are what make a seceded country look like a country: it has no file named
+/// after it and never will, and falling back to the flag of the people who founded it is a
+/// better answer than a grey rectangle.
+/// </summary>
+public static class FlagCatalog
+{
+    private static readonly List<FlagQualifier> Qualifiers = new();
+    private static readonly List<string> Fallbacks = new();
+
+    /// <summary>
+    /// How many qualifiers may appear in one name at once.
+    ///
+    /// Every combination is tried, so the cost of another qualifier doubles. Four is
+    /// already sixteen candidates for one country, which is more distinctions than any
+    /// flag set has ever wanted; a fifth qualifier still works, it is simply tried on its
+    /// own rather than crossed with the other four.
+    /// </summary>
+    public const int MaxCombined = 4;
+
+    public static IReadOnlyList<FlagQualifier> All => Qualifiers;
+
+    public static IReadOnlyList<string> FallbackSources => Fallbacks;
+
+    static FlagCatalog() => ResetCatalog();
+
+    public static void ResetCatalog(List<string> errors = null)
+    {
+        Qualifiers.Clear();
+        Fallbacks.Clear();
+        foreach (var document in GameDataLoader.DataDocuments("common", "flags"))
+            using (document)
+                Merge(document.RootElement, errors);
+        Qualifiers.Sort((left, right) => left.Order.CompareTo(right.Order));
+    }
+
+    public static void Merge(string json, List<string> errors = null)
+    {
+        using var document = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
+        Merge(document.RootElement, errors);
+        Qualifiers.Sort((left, right) => left.Order.CompareTo(right.Order));
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+
+        if (root.TryGetProperty("qualifiers", out var qualifiers) &&
+            qualifiers.ValueKind == JsonValueKind.Object)
+            foreach (var entry in qualifiers.EnumerateObject())
+            {
+                if (entry.Value.ValueKind != JsonValueKind.Object)
+                {
+                    errors?.Add($"common/flags: qualifier '{entry.Name}' is not a declaration.");
+                    continue;
+                }
+
+                var qualifier = Find(entry.Name) ?? Add(entry.Name);
+                if (entry.Value.TryGetProperty("from", out var source) &&
+                    source.ValueKind == JsonValueKind.String)
+                {
+                    var id = source.GetString() ?? "";
+                    if (!IsKnownSource(id))
+                        errors?.Add($"common/flags: qualifier '{entry.Name}' reads '{id}', which " +
+                                    "is not something the game can answer.");
+                    qualifier.Source = id;
+                }
+                if (entry.Value.TryGetProperty("order", out var order) &&
+                    order.ValueKind == JsonValueKind.Number && order.TryGetInt32(out var rank))
+                    qualifier.Order = rank;
+                if (entry.Value.TryGetProperty("silent", out var silent) &&
+                    silent.ValueKind == JsonValueKind.Array)
+                {
+                    qualifier.Silent.Clear();
+                    foreach (var value in silent.EnumerateArray())
+                        if (value.ValueKind == JsonValueKind.String)
+                            qualifier.Silent.Add(value.GetString() ?? "");
+                }
+            }
+
+        if (!root.TryGetProperty("fallbacks", out var fallbacks) ||
+            fallbacks.ValueKind != JsonValueKind.Array) return;
+
+        Fallbacks.Clear();
+        foreach (var value in fallbacks.EnumerateArray())
+        {
+            if (value.ValueKind != JsonValueKind.String) continue;
+            var id = value.GetString() ?? "";
+            if (!IsKnownSource(id))
+            {
+                errors?.Add($"common/flags: fallback '{id}' is not something the game can answer.");
+                continue;
+            }
+            Fallbacks.Add(id);
+        }
+    }
+
+    private static FlagQualifier Find(string id)
+    {
+        foreach (var qualifier in Qualifiers)
+            if (string.Equals(qualifier.Id, id, StringComparison.OrdinalIgnoreCase)) return qualifier;
+        return null;
+    }
+
+    private static FlagQualifier Add(string id)
+    {
+        var qualifier = new FlagQualifier { Id = id, Order = Qualifiers.Count * 10 };
+        Qualifiers.Add(qualifier);
+        return qualifier;
+    }
+
+    /// <summary>
+    /// The questions a flag may be asked to depend on.
+    ///
+    /// Fixed, because each one is something only the simulation can answer, and a source a
+    /// mod invents would have nowhere to get its answer from. Adding one is a line here and
+    /// a line in <see cref="ValueOf"/>; everything else about flags is already data.
+    /// </summary>
+    public static bool IsKnownSource(string source) => source switch
+    {
+        "ideology" or "government" or "culture" or "continent" or
+        "war" or "tag" or "focus" => true,
+        _ => false
+    };
+
+    /// <summary>
+    /// What one qualifier says about one country right now. An empty answer means the
+    /// qualifier does not apply and drops out of every name.
+    /// </summary>
+    public static string ValueOf(string source, Campaign campaign, Nation nation)
+    {
+        if (nation is null) return "";
+        var value = source switch
+        {
+            "ideology" => nation.Ideology,
+            "government" => nation.Government,
+            "culture" => DemographyCatalog.PrimaryCulture(nation.Tag),
+            "continent" => nation.Continent,
+            "tag" => nation.Tag,
+            "focus" => nation.GovernmentFocus.ToString(),
+            "war" => AtWar(campaign, nation) ? "at_war" : "at_peace",
+            _ => ""
+        };
+        return Slug(value);
+    }
+
+    private static bool AtWar(Campaign campaign, Nation nation)
+    {
+        if (campaign is null) return false;
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.Involves(nation.Id)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Every sprite name that could be this country's flag, best first.
+    ///
+    /// The caller asks the art whether each one exists and takes the first that does, so
+    /// this never needs to know what has actually been drawn - which is what lets a mod add
+    /// a flag by adding a file.
+    /// </summary>
+    public static List<string> Candidates(Campaign campaign, Nation nation)
+    {
+        var names = new List<string>();
+        if (nation is null) return names;
+
+        var tag = Slug(nation.Tag);
+        if (tag.Length == 0) return names;
+
+        // The qualifiers that have something to say about this country today.
+        var live = new List<(FlagQualifier Qualifier, string Value)>();
+        foreach (var qualifier in Qualifiers)
+        {
+            var value = ValueOf(qualifier.Source, campaign, nation);
+            if (value.Length == 0 || qualifier.Silent.Contains(value)) continue;
+            live.Add((qualifier, value));
+        }
+
+        // Combinations of the first few, most parts first: a flag that answers to both the
+        // ideology and the form of government beats one that answers to either alone.
+        var combined = Math.Min(live.Count, MaxCombined);
+        for (var size = combined; size >= 1; size--)
+            for (var mask = 0; mask < 1 << combined; mask++)
+            {
+                if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
+                var name = "flag_" + tag;
+                for (var index = 0; index < combined; index++)
+                    if ((mask & (1 << index)) != 0) name += "_" + live[index].Value;
+                names.Add(name);
+            }
+
+        // Anything past the cap is still worth asking about on its own.
+        for (var index = MaxCombined; index < live.Count; index++)
+            names.Add($"flag_{tag}_{live[index].Value}");
+
+        names.Add($"flag_{tag}");
+
+        // And what a country with no flag of its own flies. This is the whole reason a
+        // country founded mid-campaign does not show up as a grey rectangle.
+        //
+        // A fallback family takes the qualifiers too, and for the same reason the country
+        // does: a Kurdish state that has gone communist is not flying the same thing as a
+        // Kurdish monarchy, and a mechanic that produces new countries constantly is
+        // exactly where that variety is worth having. `flag_culture_kurdish_communism`
+        // beats `flag_culture_kurdish`, which beats nothing.
+        foreach (var source in Fallbacks)
+        {
+            var family = ValueOf(source, campaign, nation);
+            if (family.Length == 0) continue;
+            var stem = $"flag_{Slug(source)}_{family}";
+
+            // Not the qualifier this family already is: `flag_ideology_communism` should
+            // not spawn a search for `flag_ideology_communism_communism`.
+            var skip = 0;
+            for (var index = 0; index < combined; index++)
+                if (string.Equals(live[index].Qualifier.Source, source, StringComparison.OrdinalIgnoreCase))
+                    skip |= 1 << index;
+
+            for (var size = combined; size >= 1; size--)
+                for (var mask = 0; mask < 1 << combined; mask++)
+                {
+                    if ((mask & skip) != 0) continue;
+                    if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
+                    var name = stem;
+                    for (var index = 0; index < combined; index++)
+                        if ((mask & (1 << index)) != 0) name += "_" + live[index].Value;
+                    names.Add(name);
+                }
+            names.Add(stem);
+        }
+        return names;
+    }
+
+    /// <summary>
+    /// The first candidate the art actually has, or an empty string.
+    ///
+    /// Here rather than in the interface so that the bench can ask the same question the
+    /// game asks, which is the only way a check on flags means anything.
+    /// </summary>
+    public static string Resolve(Campaign campaign, Nation nation)
+    {
+        foreach (var name in Candidates(campaign, nation))
+            if (SpriteCatalog.Has(name)) return name;
+        return "";
+    }
+
+    /// <summary>
+    /// A value as it is spelled in a file name: lower case, and anything that is not a
+    /// letter or a digit becomes an underscore. So "Middle East" is `middle_east` and a
+    /// mod does not have to guess.
+    /// </summary>
+    public static string Slug(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "";
+        Span<char> buffer = stackalloc char[value.Length];
+        var length = 0;
+        var lastWasBreak = true;
+        foreach (var character in value)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                buffer[length++] = char.ToLowerInvariant(character);
+                lastWasBreak = false;
+                continue;
+            }
+            if (lastWasBreak) continue;
+            buffer[length++] = '_';
+            lastWasBreak = true;
+        }
+        while (length > 0 && buffer[length - 1] == '_') length--;
+        return new string(buffer[..length]);
+    }
+}
