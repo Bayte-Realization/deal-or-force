@@ -2933,33 +2933,59 @@ public static class Program
         russia.Ideology = wasIdeology;
         russia.Government = wasGovernment;
 
-        // One file, many conditions - and the line that must not be crossed.
+        // One file, many conditions - and the two lines that must not be crossed.
         //
-        // A socialist Russia has no socialist flag of its own and should find the Soviet
-        // one, because a red banner with a star has served both and drawing it twice would
-        // be silly. A FASCIST Russia must not, however it is arranged: a one-party state
-        // may be communist and may equally be fascist, so the form of government is not
-        // evidence about the banner, and an alias that crossed from one to the other would
-        // hand a fascist state a red flag.
+        // The first: a country's OWN flag beats a borrowed one. Russia is nationalist in
+        // 2024 and flies a tricolour, and the moment a traditionalist flag existed for it to
+        // borrow, it flew the Imperial black-yellow-white instead. Exact matches are taken
+        // before the country's own flag; anything reached along an alias comes after it.
         russia.Ideology = "socialism";
-        russia.Government = "one_party_state";
-        var shared = FlagCatalog.Resolve(campaign, russia);
-        if (shared != "flag_rus_communism")
-            return $"a socialist Russia resolved to '{shared}' rather than borrowing the " +
-                   "communist flag it has";
+        russia.Government = "presidential_republic";
+        var borrowedTooEagerly = FlagCatalog.Resolve(campaign, russia);
+        if (borrowedTooEagerly != "flag_rus")
+            return $"a socialist Russia resolved to '{borrowedTooEagerly}' rather than its own " +
+                   "flag, so something borrowed is beating something owned";
 
+        // The second: an alias may not cross from a form of government into an ideology. A
+        // one-party state may be communist and may equally be fascist, so the arrangement is
+        // not evidence about the banner.
         russia.Ideology = "fascism";
-        var wrong = FlagCatalog.Resolve(campaign, russia);
-        if (wrong == "flag_rus_communism")
-            return "a fascist one-party Russia was handed the Soviet flag, so an alias has " +
-                   "crossed from a form of government into an ideology";
+        russia.Government = "one_party_state";
         foreach (var candidate in FlagCatalog.Candidates(campaign, russia))
             if (candidate.Contains("communism", StringComparison.Ordinal) ||
                 candidate.Contains("socialism", StringComparison.Ordinal))
-                return $"a fascist Russia asked for '{candidate}', which is a banner it has " +
-                       "no claim on";
+                return $"a fascist one-party Russia asked for '{candidate}', which is a banner " +
+                       "it has no claim on";
         russia.Ideology = wasIdeology;
         russia.Government = wasGovernment;
+
+        // And the complaint this whole mechanism exists for. China's flag is the flag of the
+        // communist state - five stars, the large one the Party - so a China that has stopped
+        // being communist must not go on flying it. It used to, because the country's own
+        // flag was the bottom of the chain and the bottom of the chain always answers.
+        var china = campaign.NationByTag("CHN");
+        if (china is not null)
+        {
+            var wasChineseIdeology = china.Ideology;
+            var wasChineseGovernment = china.Government;
+            if (FlagCatalog.Resolve(campaign, china) != "flag_chn")
+                return "China as it stands does not fly its own flag";
+
+            china.Ideology = "conservatism";
+            var afterwards = FlagCatalog.Resolve(campaign, china);
+            if (afterwards == "flag_chn")
+                return "a conservative China went on flying the flag of the communist state";
+            if (afterwards.Length == 0)
+                return "a conservative China was left with no flag at all";
+
+            // And a communist China arranged some other way still flies it: the five stars
+            // are about what the state believes, not about where the power sits.
+            china.Ideology = wasChineseIdeology;
+            china.Government = "presidential_republic";
+            if (FlagCatalog.Resolve(campaign, china) != "flag_chn")
+                return "a communist China that rearranged itself stopped flying its own flag";
+            china.Government = wasChineseGovernment;
+        }
 
         // A country the scenario never declared - which is what a secession produces - has
         // no file of its own and must still come out with something.

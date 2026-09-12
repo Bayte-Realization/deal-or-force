@@ -87,6 +87,34 @@ public static class FlagCatalog
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// What each country's own shipped flag is the flag OF.
+    ///
+    /// A country's flag is not a neutral thing that happens to belong to it. The flag of
+    /// the People's Republic is the flag of a communist one-party state, adopted by the
+    /// government still flying it; so is North Korea's, Cuba's, Saudi Arabia's, Iran's
+    /// since 1980. Treating `flag_chn` as the bottom of the chain - the answer whenever
+    /// nothing better is found - meant a conservative presidential China went on flying the
+    /// red banner with five stars, which is the one thing it certainly would not do.
+    ///
+    /// A country named here flies its own flag while it is still what that flag is for, and
+    /// drops to the bottom of everything the moment it is not.
+    /// </summary>
+    private static readonly Dictionary<string, (string Source, string Value)[]> Native =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// And what such a country flies instead, once its own flag is disqualified.
+    ///
+    /// Without this the search runs out: a conservative China has no conservative flag, no
+    /// traditionalist one to borrow, and its own flag has just been ruled out - so it falls
+    /// all the way through to the flag it was ruled out of, and flies the red banner after
+    /// all. Naming the obvious answer is one line, and for most of these countries the
+    /// obvious answer is the flag the other half of their own history uses.
+    /// </summary>
+    private static readonly Dictionary<string, string> Otherwise =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// How many qualifiers may appear in one name at once.
     ///
     /// Every combination is tried, so the cost of another qualifier doubles. Four is
@@ -107,6 +135,8 @@ public static class FlagCatalog
         Qualifiers.Clear();
         Fallbacks.Clear();
         Aliases.Clear();
+        Native.Clear();
+        Otherwise.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "flags"))
             using (document)
                 Merge(document.RootElement, errors);
@@ -197,6 +227,35 @@ public static class FlagCatalog
                     }
                     if (chain.Count > 0) table[Slug(entry.Name)] = chain;
                 }
+            }
+
+        if (root.TryGetProperty("own_flag_is_for", out var native) &&
+            native.ValueKind == JsonValueKind.Object)
+            foreach (var entry in native.EnumerateObject())
+            {
+                if (entry.Value.ValueKind != JsonValueKind.Object)
+                {
+                    errors?.Add($"common/flags: what '{entry.Name}' flies is not a declaration.");
+                    continue;
+                }
+                var conditions = new List<(string, string)>();
+                foreach (var field in entry.Value.EnumerateObject())
+                {
+                    if (field.Value.ValueKind != JsonValueKind.String) continue;
+                    if (string.Equals(field.Name, "otherwise", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Otherwise[Slug(entry.Name)] = field.Value.GetString() ?? "";
+                        continue;
+                    }
+                    if (!IsKnownSource(field.Name))
+                    {
+                        errors?.Add($"common/flags: '{entry.Name}' names '{field.Name}', which " +
+                                    "is not something the game can answer.");
+                        continue;
+                    }
+                    conditions.Add((field.Name, Slug(field.Value.GetString())));
+                }
+                if (conditions.Count > 0) Native[Slug(entry.Name)] = conditions.ToArray();
             }
 
         if (!root.TryGetProperty("fallbacks", out var fallbacks) ||
@@ -302,22 +361,42 @@ public static class FlagCatalog
         // Combinations of the first few, most parts first: a flag that answers to both the
         // ideology and the form of government beats one that answers to either alone.
         //
-        // Within one combination, every mixture of the chains is tried, nearest first - so
-        // the country's own communist flag beats its socialist one, which beats nothing.
+        // Exact first, every one of them, and only then anything borrowed. That order is the
+        // whole rule and it was wrong once: a flag reached one alias away used to beat the
+        // country's own, so Russia - which is nationalist in 2024 and has a tricolour - flew
+        // the Imperial black-yellow-white the moment a traditionalist flag existed to borrow.
+        // A country's own flag beats a borrowed one. Always.
         var combined = Math.Min(live.Count, MaxCombined);
         for (var size = combined; size >= 1; size--)
             for (var mask = 0; mask < 1 << combined; mask++)
             {
                 if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
-                Spread(names, "flag_" + tag, live, combined, mask);
+                Spread(names, "flag_" + tag, live, combined, mask, 0, 0);
             }
-
-        // Anything past the cap is still worth asking about on its own.
         for (var index = MaxCombined; index < live.Count; index++)
-            foreach (var value in live[index].Chain)
-                names.Add($"flag_{tag}_{value}");
+            names.Add($"flag_{tag}_{live[index].Chain[0]}");
 
-        names.Add($"flag_{tag}");
+        // The country's own flag, unless that flag is for something the country has stopped
+        // being - in which case it goes to the very bottom, after everything else has had a
+        // chance, because a communist banner over a conservative republic is worse than no
+        // flag at all.
+        var ownFlagStillFits = Fits(campaign, nation, tag);
+        if (ownFlagStillFits) names.Add($"flag_{tag}");
+        else if (Otherwise.TryGetValue(tag, out var instead) && instead.Length > 0)
+            names.Add(instead);
+
+        // And now what may be borrowed: the same combinations again, one or more steps out
+        // along the alias chains. A socialist country with no socialist flag reaches the
+        // communist one here, and a country that HAS its own flag has already taken it.
+        for (var size = combined; size >= 1; size--)
+            for (var mask = 0; mask < 1 << combined; mask++)
+            {
+                if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
+                Spread(names, "flag_" + tag, live, combined, mask, 1, int.MaxValue);
+            }
+        for (var index = MaxCombined; index < live.Count; index++)
+            for (var step = 1; step < live[index].Chain.Count; step++)
+                names.Add($"flag_{tag}_{live[index].Chain[step]}");
 
         // And what a country with no flag of its own flies. This is the whole reason a
         // country founded mid-campaign does not show up as a grey rectangle.
@@ -345,11 +424,39 @@ public static class FlagCatalog
                 {
                     if ((mask & skip) != 0) continue;
                     if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
-                    Spread(names, stem, live, combined, mask);
+                    Spread(names, stem, live, combined, mask, 0, int.MaxValue);
                 }
             names.Add(stem);
         }
+
+        // Last of all, for a country whose own flag no longer fits and which nothing else
+        // answered for: better the wrong flag than a grey rectangle, and a player can see
+        // that nothing has been drawn for this yet.
+        if (!ownFlagStillFits) names.Add($"flag_{tag}");
         return names;
+    }
+
+    /// <summary>
+    /// Whether a country's own flag is still the flag of what that country is.
+    ///
+    /// True for every country that has not declared otherwise, which is nearly all of them:
+    /// a tricolour is a tricolour whoever is governing. False for the ones whose flag was
+    /// adopted BY a regime and means it - and those are the countries where falling back to
+    /// the shipped flag is not a safe default but a wrong answer.
+    /// </summary>
+    public static bool Fits(Campaign campaign, Nation nation, string tag)
+    {
+        if (!Native.TryGetValue(tag, out var conditions)) return true;
+        foreach (var (source, value) in conditions)
+        {
+            var now = ValueOf(source, campaign, nation);
+            // Held if it matches, or if what it is now is something that answers to it -
+            // a socialist China is near enough to the flag a communist one flies.
+            if (string.Equals(now, value, StringComparison.OrdinalIgnoreCase)) continue;
+            if (Chain(source, now).Contains(value, StringComparer.OrdinalIgnoreCase)) continue;
+            return false;
+        }
+        return true;
     }
 
     /// <summary>
@@ -379,7 +486,8 @@ public static class FlagCatalog
     /// enumeration order is what stops an alias beating the real thing.
     /// </summary>
     private static void Spread(List<string> into, string stem,
-        List<(FlagQualifier Qualifier, List<string> Chain)> live, int combined, int mask)
+        List<(FlagQualifier Qualifier, List<string> Chain)> live, int combined, int mask,
+        int nearest, int furthest)
     {
         var chosen = new List<int>();
         for (var index = 0; index < combined; index++)
@@ -389,7 +497,8 @@ public static class FlagCatalog
         var longest = 0;
         foreach (var index in chosen) longest = Math.Max(longest, live[index].Chain.Count);
 
-        for (var distance = 0; distance <= (longest - 1) * chosen.Count; distance++)
+        var limit = Math.Min(furthest, (longest - 1) * chosen.Count);
+        for (var distance = nearest; distance <= limit; distance++)
             Walk(into, stem, live, chosen, 0, distance, "");
     }
 
