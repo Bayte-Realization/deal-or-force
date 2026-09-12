@@ -1,0 +1,64 @@
+// How settled a country is, and what decides it.
+//
+// Stability is no longer a number that drifts. Every region has one of its own, worked out
+// from what it lives on, what it thinks, who its people are and whose soldiers are standing
+// in it; the country's is what those add up to, plus what the war is costing and what the
+// country is beyond its conditions.
+//
+// The capital counts for far more than its size. That is the historically honest part - a
+// state survives a furious province and falls to a furious capital - but it is a choice,
+// and `capital_share` is where to disagree with it.
+//
+// A region's stability, 0 to 1:
+//
+//     base
+//     + (standard_of_living - living_tolerance) * living
+//     - radicalism        * radicalism
+//     - foreign_share     * minority
+//     + (literacy - 0.5)  * literacy
+//     - occupied_share    * occupation
+//
+// And the country's:
+//
+//     capital_region      * capital_share
+//   + rest by population  * (1 - capital_share)
+//   - (war + (1 - war_support) * war_support)     while it is at war
+//   + the country's own baseline
+//
+// That last term is set once when the scenario starts, to the difference between the
+// stability the scenario authored and what conditions alone explain. It is everything the
+// formula does not model - institutions, legitimacy, a century of habit - and it is what
+// keeps switching to a formula from restating the settledness of all 261 countries on the
+// first week. Government, ideology, cabinet and budget effects still accumulate into it,
+// which is why a decade of good government eventually shows.
+{
+  "base": 0.62,
+
+  "living": 0.55,
+  "living_tolerance": 0.45,
+
+  "radicalism": 0.85,
+  "minority": 0.30,
+  "occupation": 0.55,
+  "literacy": 0.04,
+
+  "capital_share": 0.35,
+
+  "war": 0.06,
+  "war_support": 0.10,
+
+  // How much of the gap to its target a country closes in a week. A tenth means a shock
+  // takes a season to arrive rather than a week, which is about how fast a country
+  // actually comes apart.
+  "approach": 0.10,
+
+  // The most that how a country is being governed can be worth, either way, and how much
+  // of it is given back each week. Bounded on purpose: a cabinet should be able to steady a
+  // country, not to make it permanently unfallable - and a bad decade should be something a
+  // country can come out of.
+  "governance_limit": 0.15,
+  "governance_decay": 0.004,
+
+  "floor": 0.05,
+  "ceiling": 0.98
+}

@@ -20,6 +20,12 @@ public sealed class ScenarioState
     public string Kind = "Region";
 
     /// <summary>
+    /// How settled this region is, 0 to 1. Written every economic week by
+    /// <see cref="StabilityCore"/> out of what the region lives on, thinks and is.
+    /// </summary>
+    public float Stability = 0.62f;
+
+    /// <summary>
     /// The region this one was cut out of, or 0 for a region the scenario authored.
     ///
     /// A border that cuts a region in two makes two regions; a border that goes away again

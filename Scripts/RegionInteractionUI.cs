@@ -89,6 +89,19 @@ public partial class DealOrForceGame
             _selectedState.Radicalism > 0.45f ? "state.negative" :
             _selectedState.Radicalism > 0.25f ? "state.warning" : "state.positive");
 
+        // A region has a settledness of its own now, and the country's is what these add
+        // up to - the capital weighing far above its size. It belongs next to the things
+        // that decide it rather than only as a national figure on another screen.
+        var isCapital = owner is not null && _selectedState.MapIndex == owner.CapitalStateMapIndex;
+        DetailRow("Stability", Fmt.Percent(_selectedState.Stability),
+            isCapital
+                ? Tr("How settled this region is - and it is the capital, so it decides far more "
+                     + "of the country's stability than its size alone would earn it.")
+                : Tr("How settled this region is: what it lives on, what it thinks, who its "
+                     + "people are, and whose soldiers are standing in it."),
+            _selectedState.Stability < 0.35f ? "state.negative" :
+            _selectedState.Stability < 0.55f ? "state.warning" : "state.positive");
+
         var cultures = EconomySystem.Cultures(_selectedState);
         if (cultures.Count > 0)
             DetailRow("Largest people", DemographyCatalog.CultureName(cultures[0].Culture),

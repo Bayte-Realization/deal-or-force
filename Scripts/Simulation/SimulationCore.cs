@@ -158,6 +158,31 @@ public sealed partial class Nation
     public string Region = "";
     public string Color = "#888888";
     public string CapitalName = "";
+
+    /// <summary>
+    /// The region the capital stands in, or 0 while the map is not attached.
+    ///
+    /// Worked out once from the capital's coordinates rather than authored, because the
+    /// capital is a place on the globe and the regions under it can be redrawn by a war.
+    /// </summary>
+    public int CapitalStateMapIndex;
+
+    /// <summary>
+    /// What this country is beyond its conditions: institutions, legitimacy, a century of
+    /// habit. Set once when the scenario starts, to the difference between the stability it
+    /// authored and what the formula explains, and fixed after that. See
+    /// <see cref="StabilityCore"/>.
+    /// </summary>
+    public float StabilityBias;
+
+    /// <summary>
+    /// How this government has been doing lately. Accumulates from the cabinet, the form of
+    /// government, the ideology and the budget, bounded tightly and decaying back towards
+    /// nothing - so a decade of good government is worth something real and not everything,
+    /// and a bad decade can be recovered from.
+    /// </summary>
+    public float StabilityGovernance;
+
     public float CapitalLatitude;
     public float CapitalLongitude;
     public int MapIndex;
@@ -596,6 +621,16 @@ public sealed partial class Campaign
         StatePartition.RepartitionWorld(this);
         StatePartition.Reunify(this);
 
+        // Where each capital actually stands, and what that makes of the country. Both need
+        // the map: a capital is a place on the globe rather than a region a scenario names,
+        // and the regions under it can be redrawn by a war.
+        LocateCapitals();
+        if (!_stabilityCalibrated)
+        {
+            StabilityCore.Calibrate(this);
+            _stabilityCalibrated = true;
+        }
+
         MapRevision++;
         Warfare.RebuildFronts(this);
         if (!InitialDeploymentCompleted)
@@ -605,6 +640,55 @@ public sealed partial class Campaign
         }
         FrontPlanner.AssignAi(this);
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Set once. The baseline is the difference between the stability the scenario authored
+    /// and what conditions explain, so it has to be taken from the authored world - taking
+    /// it again from a world at war would write the war into the country's institutions.
+    /// </summary>
+    private bool _stabilityCalibrated;
+
+    /// <summary>
+    /// Find the region each capital stands in. Nearest province of the country's own ground
+    /// to the capital's coordinates, which is also how the deployment planner finds it -
+    /// a capital that has been overrun still points at the region it is in.
+    /// </summary>
+    public void LocateCapitals()
+    {
+        var topology = ProvinceMap;
+        if (topology is null) return;
+
+        var byNation = new Dictionary<ushort, List<int>>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var owner = topology.ProvinceToNation[province];
+            if (owner == 0) continue;
+            if (!byNation.TryGetValue(owner, out var list)) byNation[owner] = list = new List<int>();
+            list.Add(province);
+        }
+
+        foreach (var nation in Nations)
+        {
+            nation.CapitalStateMapIndex = 0;
+            if (!byNation.TryGetValue((ushort)nation.MapIndex, out var provinces) || provinces.Count == 0)
+                continue;
+            var best = provinces[0];
+            var bestDistance = float.MaxValue;
+            var longitudeScale = MathF.Max(0.12f, MathF.Cos(nation.CapitalLatitude * M.Pi / 180f));
+            foreach (var province in provinces)
+            {
+                var centre = topology.CenterOf(province);
+                var dx = MathF.Abs(centre.Longitude - nation.CapitalLongitude);
+                dx = MathF.Min(dx, 360f - dx) * longitudeScale;
+                var dy = centre.Latitude - nation.CapitalLatitude;
+                var distance = dx * dx + dy * dy;
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                best = province;
+            }
+            nation.CapitalStateMapIndex = topology.ProvinceToState[best];
+        }
     }
 
     private ushort[] _pendingProvinceOwner;

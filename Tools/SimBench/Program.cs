@@ -151,6 +151,8 @@ public static class Program
             AModCanAddAGood(campaign));
         failures += Check("the budget is data, and still the budget it always was",
             TheBudgetIsData(campaign));
+        failures += Check("a country is as settled as its regions and its capital say",
+            StabilityIsWorkedOutRatherThanStored());
         failures += Check("a mod can add a cabinet and a trade stance the game never had",
             PolicyCataloguesTakeNewEntries());
         failures += Check("every country is governed by something, and minds what its neighbours are",
@@ -3064,6 +3066,82 @@ public static class Program
         return true;
     }
 
+    /// <summary>
+    /// Stability is a formula now rather than a stored number, and two things have to hold.
+    /// The scenario still says what it said - 261 countries did not quietly become more or
+    /// less settled on the day the formula was switched on - and the capital weighs more
+    /// than its size, which is the claim the whole model rests on.
+    /// </summary>
+    private static string StabilityIsWorkedOutRatherThanStored()
+    {
+        var campaign = Campaign.CreateBootstrap(20240202);
+        if (!AttachMap(campaign)) return "";
+
+        // What the scenario authored is what the formula returns, for everybody.
+        var worst = 0f;
+        Nation worstNation = null;
+        foreach (var nation in campaign.Nations)
+        {
+            var drift = MathF.Abs(StabilityCore.Target(campaign, nation) - nation.Stability);
+            if (drift <= worst) continue;
+            worst = drift;
+            worstNation = nation;
+        }
+        if (worst > 0.005f)
+            return $"the formula disagrees with the scenario by {worst:P1} for " +
+                   $"{worstNation?.Tag}: it is authored at {worstNation?.Stability:P1}";
+
+        // A country big enough to have a capital and somewhere else worth comparing it to.
+        var subject = campaign.Nations
+            .Where(nation => nation.CapitalStateMapIndex > 0 && nation.Population > 20_000_000)
+            .OrderByDescending(nation => campaign.StatesOf(nation.MapIndex).Length)
+            .FirstOrDefault();
+        if (subject is null) return "no country large enough to tell a capital from a province";
+
+        var states = campaign.StatesOf(subject.MapIndex);
+        var capital = states.FirstOrDefault(state => state.MapIndex == subject.CapitalStateMapIndex);
+        if (capital is null) return $"{subject.Tag}'s capital is not in one of its own regions";
+        var elsewhere = states
+            .Where(state => state.MapIndex != capital.MapIndex && state.Population > 0)
+            .OrderBy(state => MathF.Abs(state.Population - capital.Population))
+            .FirstOrDefault();
+        if (elsewhere is null) return $"{subject.Tag} has nowhere to compare its capital with";
+
+        float Upset(ScenarioState state)
+        {
+            var wasRadical = state.Radicalism;
+            var wasLiving = state.StandardOfLiving;
+            try
+            {
+                state.Radicalism = 1f;
+                state.StandardOfLiving = 0f;
+                return StabilityCore.Target(campaign, subject);
+            }
+            finally
+            {
+                state.Radicalism = wasRadical;
+                state.StandardOfLiving = wasLiving;
+            }
+        }
+
+        var settled = StabilityCore.Target(campaign, subject);
+        var withoutCapital = Upset(capital);
+        var withoutProvince = Upset(elsewhere);
+
+        if (withoutCapital >= settled)
+            return $"setting fire to {subject.Tag}'s capital region did not cost it any stability";
+        if (withoutCapital >= withoutProvince)
+            return $"{subject.Tag}'s capital ({capital.Name}, {capital.Population:N0}) is worth no more " +
+                   $"than {elsewhere.Name} ({elsewhere.Population:N0}): {withoutCapital:P1} against " +
+                   $"{withoutProvince:P1}";
+
+        Console.WriteLine($"  stability: all {campaign.Nations.Count:N0} countries agree with the scenario " +
+                          $"(worst {worst:P2}); for {subject.Tag}, losing {capital.Name} costs " +
+                          $"{settled - withoutCapital:P1} against {settled - withoutProvince:P1} for " +
+                          $"{elsewhere.Name} of the same size.");
+        return "";
+    }
+
     private static string TheBudgetIsData(Campaign world)
     {
         var nation = world?.Nations?.FirstOrDefault(candidate => candidate.Gdp > 0f);
@@ -3102,12 +3180,20 @@ public static class Program
         // still reproduce their old formulas exactly. If a scenario ever raises a country's
         // taxes past what it tolerates, that country's budget changes and this says so
         // rather than leaving it to be discovered as a drifting calibration.
-        foreach (var country in world.Nations)
+        //
+        // Against a campaign of its own, deliberately. The world handed in here has been
+        // running, and a running world has an AI in it that raises and lowers taxes: Bir
+        // Tawil sits at 46 % after a while and evades a little, which is the Laffer curve
+        // working rather than the shipped budget drifting. What this is for is the shipped
+        // state, so it asks the shipped state.
+        var start = Campaign.CreateBootstrap(20240101);
+        foreach (var country in start.Nations)
         {
             if (country.Gdp <= 0f) continue;
             var compliance = BudgetCore.ComplianceAt(country, country.Gdp / 52f, atWar: false);
             if (compliance < 0.99999f)
-                return $"{country.Tag} collects only {compliance:P1} of what it levies on day zero, " +
+                return $"{country.Tag} (stability {country.Stability:P1}, tax {country.TaxRate:P1}, " +
+                       $"gdp {country.Gdp:0.###}B) collects only {compliance:P1} of what it levies on day zero, " +
                        "so the shipped budget is not the shipped budget any more";
         }
 

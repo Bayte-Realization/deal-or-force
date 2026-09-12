@@ -538,23 +538,23 @@ public static class EconomySystem
                 0.05f, 0.999f);
             var productivityTarget = 0.72f + nation.Literacy * 0.50f + cabinet.ProductivityTarget;
             nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
+            // How a country is governed does not settle it this week; it builds up, slowly
+            // and only so far. Government, ideology, cabinet and budget keep the accumulating
+            // character they were written with, and accumulate into a bounded term that also
+            // gives itself back - so a good cabinet steadies a country rather than making it
+            // permanently unfallable, and a bad decade is something a country can come out of.
             var securityStability = cabinet.Stability + government.Stability + ideology.Stability + mismatch;
-            var livingStandard = (nation.StandardOfLiving - 0.45f) * 0.001f;
-            var settledStability = M.Clamp(
-                nation.Stability + livingStandard + securityStability + budget.Stability, 0.10f, 0.98f);
+            var limit = StabilityCore.Weights.GovernanceLimit;
+            var governance = nation.StabilityGovernance + securityStability + budget.Stability;
+            governance -= governance * M.Clamp01(StabilityCore.Weights.GovernanceDecay);
+            nation.StabilityGovernance = M.Clamp(governance, -limit, limit);
 
-            // What is pushing stability this week, rather than only where it ended up. A
-            // player who watches it fall for a year should be able to find out why in one
-            // hover instead of by experiment.
-            nation.StabilityDrivers.Begin("Stability, weekly", "share");
-            nation.StabilityDrivers.Add(
-                nation.StandardOfLiving >= 0.45f ? "Standard of living" : "Standard of living is poor",
-                livingStandard);
-            nation.StabilityDrivers.Add("Government focus on national security", securityStability);
-            nation.StabilityDrivers.Settle(settledStability - nation.Stability,
-                settledStability >= 0.98f ? "already as settled as a country gets"
-                    : settledStability <= 0.10f ? "held up off the floor" : "rounding");
-            nation.Stability = settledStability;
+            // And then the country is pulled towards what its regions, its capital and its
+            // wars actually add up to. A tenth of the gap a week: a shock arrives over a
+            // season rather than in an afternoon.
+            var settledStability = StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
+            nation.Stability = M.Lerp(nation.Stability, settledStability,
+                M.Clamp01(StabilityCore.Weights.Approach));
 
             var focusWarSupport = cabinet.WarSupport + government.WarSupport + ideology.WarSupport;
             var settledWarSupport = M.Clamp01(nation.WarSupport + focusWarSupport);

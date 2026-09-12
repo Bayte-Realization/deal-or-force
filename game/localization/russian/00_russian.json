@@ -802,5 +802,13 @@
   "REMOVE {0}": "УБРАТЬ {0}",
   "ADD {0} AS PLAYER": "ДОБАВИТЬ {0} ИГРОКОМ",
   "Traditionalism": "Традиционализм",
-  "Authority from custom, descent and faith rather than from a vote. Deeply stable while the custom holds, and with very little to say to anyone who has stopped believing in it.": "Власть от обычая, происхождения и веры, а не от голосования. Крайне устойчиво, пока обычай держится, и почти нечего сказать тому, кто в него перестал верить."
+  "Authority from custom, descent and faith rather than from a vote. Deeply stable while the custom holds, and with very little to say to anyone who has stopped believing in it.": "Власть от обычая, происхождения и веры, а не от голосования. Крайне устойчиво, пока обычай держится, и почти нечего сказать тому, кто в него перестал верить.",
+  "How settled this region is - and it is the capital, so it decides far more of the country's stability than its size alone would earn it.": "Насколько спокоен этот регион — и это столица, поэтому он решает куда больше в стабильности страны, чем заслуживал бы одним своим размером.",
+  "How settled this region is: what it lives on, what it thinks, who its people are, and whose soldiers are standing in it.": "Насколько спокоен этот регион: чем он живёт, что думает, кто в нём живёт и чьи солдаты в нём стоят.",
+  "What the country is settled at": "На чём страна держится",
+  "The capital and the region around it": "Столица и регион вокруг неё",
+  "The rest of the country, by population": "Остальная страна, по населению",
+  "The war": "Война",
+  "What this country is, beyond its conditions": "Чем эта страна является помимо своих условий",
+  "How it has been governed lately": "Как ею правили в последнее время"
 }
