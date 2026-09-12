@@ -351,7 +351,7 @@ public partial class DealOrForceGame
                 new[] { Orange, Blue, Violet, Gold }[index % 4])).ToArray(), StrategicChartFormat.Millions);
         _ledgerBarsB.SetData("Largest states", "Population centres determine construction and social weight", states
             .OrderByDescending(state => state.Population).Take(7)
-            .Select(state => new StrategicBarEntry(state.Name, state.Population / 1_000_000f, Blue,
+            .Select(state => new StrategicBarEntry(state.DisplayName, state.Population / 1_000_000f, Blue,
                 $"Living standard {state.StandardOfLiving:P0} · literacy {state.Literacy:P0}")).ToArray(),
             StrategicChartFormat.Millions);
     }

@@ -19,13 +19,6 @@ public partial class DealOrForceGame
         parent.AddChild(_regionControls);
         _regionControls.AddChild(Title("REGION & PROVINCE", 12, Ui.Colour("text.caption")));
 
-        var tabs = new HBoxContainer();
-        tabs.AddThemeConstantOverride("separation", 5);
-        _regionControls.AddChild(tabs);
-        tabs.AddChild(ActionButton("Overview", ShowRegionOverview, 92, 31, true));
-        tabs.AddChild(ActionButton("Population", ShowRegionPopulation, 105, 31));
-        tabs.AddChild(ActionButton("Province", ShowProvinceOverview, 92, 31));
-
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 5);
         _regionControls.AddChild(actions);
@@ -65,8 +58,11 @@ public partial class DealOrForceGame
     private void ShowRegionOverview()
     {
         if (_selectedState is null || _selectedNation is null) return;
+        PrepareDossierTabs("Region");
+        _dossierTab = "Overview";
+        ApplyDossierTab();
         if (HideForeignRegionDetails()) return;
-        _sideTitle.Text = _selectedState.Name;
+        _sideTitle.Text = _selectedState.DisplayName;
         _regionControls.Visible = true;
         ClearDetail();
 
@@ -189,8 +185,11 @@ public partial class DealOrForceGame
     private void ShowRegionPopulation()
     {
         if (_selectedState is null) return;
+        PrepareDossierTabs("Region");
+        _dossierTab = "Population";
+        ApplyDossierTab();
         if (HideForeignRegionDetails()) return;
-        _sideTitle.Text = Simulation.Loc.Format("{0} — people", _selectedState.Name);
+        _sideTitle.Text = Simulation.Loc.Format("{0} — people", _selectedState.DisplayName);
         _regionControls.Visible = true;
         ClearDetail();
 
@@ -248,6 +247,9 @@ public partial class DealOrForceGame
     /// <summary>One tactical province: who owns it, who holds it, and what it is made of.</summary>
     private void ShowProvinceOverview()
     {
+        PrepareDossierTabs("Region");
+        _dossierTab = "Province";
+        ApplyDossierTab();
         var topology = _campaign.ProvinceMap;
         if (topology is null || _selectedProvinceId <= 0 || _selectedProvinceId > topology.ProvinceCount)
         {
@@ -319,7 +321,7 @@ public partial class DealOrForceGame
         });
         _campaign.Commands.ApplyAll(_campaign);
         _regionActionFeedback.Text = _campaign.Construction.Count > before
-            ? $"{BuildingCatalog.Get(kind).Name} added to the {_selectedState.Name} queue."
+            ? $"{Tr(BuildingCatalog.Get(kind).Name)} added to the {_selectedState.DisplayName} queue."
             : "Could not queue the project: check treasury or the national construction limit.";
         ShowRegionOverview();
     }

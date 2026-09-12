@@ -21,7 +21,7 @@ public partial class DealOrForceGame
         if (owner is null || CanInspectNation(owner.Id)) return false;
         if (PlayerHoldsMostOf(_selectedState)) return false;
         ClearDetail();
-        _sideTitle.Text = _selectedState.Name;
+        _sideTitle.Text = _selectedState.DisplayName;
         _sideBody.Text = Simulation.Loc.Format("{0}\n\nFog of war — regional population, industry and military intelligence are unavailable.", owner.DisplayName);
         SetRegionalActionsEnabled(false);
         return true;

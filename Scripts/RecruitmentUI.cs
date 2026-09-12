@@ -79,7 +79,7 @@ public partial class DealOrForceGame
         _recruitmentRegion.Clear();
         foreach (var state in _campaign.StatesOf(_campaign.Player).OrderBy(s => s.Name))
         {
-            _recruitmentRegion.AddItem(state.Name, state.MapIndex);
+            _recruitmentRegion.AddItem(state.DisplayName, state.MapIndex);
             if (state.MapIndex == region) _recruitmentRegion.Select(_recruitmentRegion.ItemCount - 1);
         }
         _recruitmentLayer.Show();

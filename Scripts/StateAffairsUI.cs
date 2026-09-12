@@ -502,9 +502,9 @@ public partial class DealOrForceGame
         {
             _stateRegionListNationId = nation.Id;
             _stateRegionPicker.Clear();
-            foreach (var state in _campaign.StatesOf(nation).OrderBy(state => state.Name, StringComparer.CurrentCulture))
+            foreach (var state in _campaign.StatesOf(nation).OrderBy(state => state.DisplayName, StringComparer.CurrentCulture))
             {
-                _stateRegionPicker.AddItem(state.Name);
+                _stateRegionPicker.AddItem(state.DisplayName);
                 _stateRegionPicker.SetItemMetadata(_stateRegionPicker.ItemCount - 1, state.MapIndex);
             }
             if (_stateRegionPicker.ItemCount > 0) _stateRegionPicker.Selected = 0;

@@ -157,7 +157,7 @@ public partial class DealOrForceGame
 
         if (state is not null)
         {
-            DetailHeading(Simulation.Loc.Format("REGION — {0}", state.Name.ToUpperInvariant()));
+            DetailHeading(Simulation.Loc.Format("REGION — {0}", state.DisplayName.ToUpperInvariant()));
             DetailRow("Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
             DetailRow("Literacy", Fmt.Percent(state.Literacy), "Schooling here, against the national average.");
             DetailRow("Standard of living", Fmt.Percent(state.StandardOfLiving),
@@ -172,7 +172,7 @@ public partial class DealOrForceGame
                 var size = GroupSize(state, socialClass);
                 if (size <= 0) continue;
                 DetailRow(ClassName(socialClass), Fmt.People(size),
-                    $"{Fmt.PeopleExact(size)} people of this class live in {state.Name}.");
+                    $"{Fmt.PeopleExact(size)} people of this class live in {state.DisplayName}.");
             }
         }
 

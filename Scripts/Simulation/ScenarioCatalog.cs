@@ -26,6 +26,16 @@ public sealed class ScenarioState
     public float Stability = 0.62f;
 
     /// <summary>
+    /// The region's name as a player reads it, the same way a country has one.
+    ///
+    /// No table answers for these yet: there are 1,730 of them and they are proper nouns,
+    /// which is a translator's job rather than an afternoon's. The lookup is here so that
+    /// the day somebody writes those rows they work, and so a mod that renames a region can
+    /// ship its own translation the same day it ships the rename.
+    /// </summary>
+    public string DisplayName => Loc.Get(Name);
+
+    /// <summary>
     /// The region this one was cut out of, or 0 for a region the scenario authored.
     ///
     /// A border that cuts a region in two makes two regions; a border that goes away again

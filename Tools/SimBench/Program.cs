@@ -3564,16 +3564,28 @@ public static class Program
         // something the player reads is a key exactly as much as a name the code gives it,
         // and this is what keeps that true as more of the game becomes data.
         var declared = new SortedSet<string>(StringComparer.Ordinal);
-        var common = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common");
-        // `countries` is in here for the same reason as the rest, and matters more than any
-        // of them: it is 261 names, it is the first thing anybody sees, and it is the list
-        // most likely to grow. A country added to the data without a row in the table now
-        // fails this check instead of quietly showing up in English.
-        foreach (var folder in new[]
-                 { "budget", "government_focus", "trade_policies", "governments", "ideologies",
-                   "countries", "units", "settings" })
+        var game = Path.Combine(Path.GetDirectoryName(scripts)!, "game");
+
+        // Every folder that names something a player reads. This used to be six of them,
+        // which is how 2,260 strings accumulated in the data with nobody translating them:
+        // a check that covers a third of the content is a check that reports a third of the
+        // problem and reads like it reported all of it.
+        //
+        // `common/states` is the one exception and it is deliberate. There are 1,730 region
+        // names, they are proper nouns, and translating them is a translator's job rather
+        // than an afternoon's - `ScenarioState.DisplayName` looks them up so the rows work
+        // the day somebody writes them, and until then they read as authored.
+        var folders = new[]
         {
-            var directory = Path.Combine(common, folder);
+            "common/budget", "common/government_focus", "common/trade_policies",
+            "common/governments", "common/ideologies", "common/countries", "common/units",
+            "common/settings", "common/goods", "common/buildings", "common/terrain",
+            "common/professions", "common/religions", "common/cultures", "common/decisions",
+            "common/modifiers", "common/opinion_modifiers", "events"
+        };
+        foreach (var folder in folders)
+        {
+            var directory = Path.Combine(game, folder.Replace('/', Path.DirectorySeparatorChar));
             if (!Directory.Exists(directory)) continue;
             foreach (var file in Directory.EnumerateFiles(directory, "*.json"))
             {

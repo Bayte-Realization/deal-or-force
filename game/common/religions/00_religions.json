@@ -15,7 +15,9 @@
   "shia": { "name": "Shia", "group": "muslim", "colour": "#1f6f7f" },
   "ibadi": { "name": "Ibadi", "group": "muslim", "colour": "#3f9f8f" },
   "druze": { "name": "Druze", "group": "muslim", "colour": "#6faf9f" },
-  "jewish": { "name": "Jewish", "group": "abrahamic", "colour": "#4f6fc0" },
+  // The faith, not the people - `common/cultures` has "Jewish" for those, and the
+  // localisation tables are keyed by the English text, so the two cannot share a word.
+  "jewish": { "name": "Judaism", "group": "abrahamic", "colour": "#4f6fc0" },
   "hindu": { "name": "Hindu", "group": "dharmic", "colour": "#d4762f" },
   "buddhist": { "name": "Buddhist", "group": "dharmic", "colour": "#d4a02f" },
   "sikh": { "name": "Sikh", "group": "dharmic", "colour": "#c85f3f" },
