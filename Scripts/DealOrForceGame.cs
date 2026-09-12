@@ -459,8 +459,13 @@ public partial class DealOrForceGame : Control
         identityBox.AddThemeConstantOverride("separation", 2);
         row.AddChild(identityBox);
         _identity = Title("South Korea", 21, Ui.Colour("text.accent"));
+        // The bar is two lines tall and no more. A name too wide for the column has to
+        // widen the column, not wrap into the line underneath it - which is what
+        // "South Korea" did the moment it became "Южная Корея".
+        _identity.AutowrapMode = TextServer.AutowrapMode.Off;
         identityBox.AddChild(_identity);
         _identityTag = Title("KOR · player nation", 13, Ui.Colour("text.muted"));
+        _identityTag.AutowrapMode = TextServer.AutowrapMode.Off;
         identityBox.AddChild(_identityTag);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -687,7 +692,8 @@ public partial class DealOrForceGame : Control
         switch (screen)
         {
             case "Nation":
-                _sideBody.Text = Simulation.Loc.Format("{0} ({1}) · {2}, {3}", nation.Name, nation.Tag, nation.Region, nation.Continent);
+                _sideBody.Text = Simulation.Loc.Format("{0} ({1}) · {2}, {3}", nation.DisplayName, nation.Tag,
+            Tr(nation.Region), Tr(nation.Continent));
                 DetailHeading("STATE");
                 DetailRow("Capital", nation.CapitalName);
                 DetailRow("States held", _campaign.StatesOf(nation).Length.ToString("N0"));
@@ -728,7 +734,7 @@ public partial class DealOrForceGame : Control
                 var divisions = armies.Sum(army => army.Divisions);
                 var fleets = _campaign.Fleets.Where(fleet => fleet.NationId == player.Id).ToArray();
                 var personnel = MilitaryBootstrap.Personnel(player.Tag, player.Population);
-                _sideBody.Text = Simulation.Loc.Format("{0} armed forces", player.Name);
+                _sideBody.Text = Simulation.Loc.Format("{0} armed forces", player.DisplayName);
 
                 DetailHeading("FORCES");
                 _sideDetail.AddChild(ActionButton("Recruit & deploy", () => OpenRecruitment(), 180, 38, true));
@@ -816,7 +822,7 @@ public partial class DealOrForceGame : Control
         _decisionControls.Visible = false;
         _battleDetailControls.Visible = false;
         _militarySpending.Visible = false;
-        _sideTitle.Text = pick.Nation.Name;
+        _sideTitle.Text = pick.Nation.DisplayName;
         ShowSideFlag(pick.Nation.Tag);
         var state = pick.State is null ? "Unmapped land" : $"{pick.State.Name} ({pick.State.Kind})";
         var province = pick.ProvinceId > 0 ? $"Tactical province #{pick.ProvinceId:N0}" : "Province topology loading";
@@ -932,7 +938,7 @@ public partial class DealOrForceGame : Control
         if (_campaign?.Player is null) return;
 
         var player = _campaign.Player;
-        _identity.Text = Simulation.Loc.Format("{0} ({1})", player.Name, player.Tag);
+        _identity.Text = player.DisplayName;
         _identityTag.Text = _observerMode ? "OBS · observer mode" : $"{player.Tag} · player nation";
         SetFlag(_identityFlag, player.Tag, 34);
         _date.Text = _campaign.Date.Display();
@@ -1370,6 +1376,20 @@ public partial class DealOrForceGame : Control
     /// and the screen buttons - because everything else is rewritten on the next refresh
     /// anyway, in whatever language is current by then.
     /// </summary>
+    private const string LocHintMeta = "loc_hint";
+
+    /// <summary>
+    /// Give a text field a placeholder that survives a change of language. The sweep
+    /// knows about a Label's text and a Button's; a placeholder is neither, which is why
+    /// the country picker still said "Search countries or tags" to a Russian player.
+    /// </summary>
+    private static LineEdit Placeholder(LineEdit field, string source)
+    {
+        field.SetMeta(LocHintMeta, source);
+        field.PlaceholderText = Tr(source);
+        return field;
+    }
+
     private const string LocTipMeta = "loc_tip";
     private const string LocTipAppliedMeta = "loc_tip_applied";
 
@@ -1406,6 +1426,9 @@ public partial class DealOrForceGame : Control
                     break;
             }
         }
+
+        if (node is LineEdit field && node.HasMeta(LocHintMeta))
+            field.PlaceholderText = Tr(node.GetMeta(LocHintMeta).AsString());
 
         if (node is Control control && node.HasMeta(LocTipMeta))
         {

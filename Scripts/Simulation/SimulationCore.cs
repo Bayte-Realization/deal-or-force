@@ -125,6 +125,18 @@ public sealed partial class Nation
     public string Tag = "";
     public string Iso = "";
     public string Name = "";
+
+    /// <summary>
+    /// The country's name as a player reads it.
+    ///
+    /// <see cref="Name"/> is what `common/countries` calls it, and stays that in save
+    /// files, logs and the bench, where a value that changed with the interface language
+    /// would be a value nothing could compare. This is the same name looked up in the
+    /// player's table - and because a missing row comes back unchanged, a country a mod
+    /// invented reads as whatever the mod called it until the mod also translates it.
+    /// </summary>
+    public string DisplayName => Loc.Get(Name);
+
     public string Continent = "";
     public string Region = "";
     public string Color = "#888888";

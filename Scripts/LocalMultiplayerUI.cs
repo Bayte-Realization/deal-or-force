@@ -61,7 +61,7 @@ public partial class DealOrForceGame
         _campaign.IsPaused = true;
         _pause.Text = "▶";
         UpdateHotseatHud();
-        _handoverTitle.Text = Simulation.Loc.Format("PLAYER {0}: {1}", _campaign.ActiveSeat + 1, _campaign.Player.Name);
+        _handoverTitle.Text = Simulation.Loc.Format("PLAYER {0}: {1}", _campaign.ActiveSeat + 1, _campaign.Player.DisplayName);
         _handoverHint.Text = Simulation.Loc.Format("Pass the device to the {0} player. The previous country's panels and orders are hidden until they are ready.", _campaign.Player.Tag);
         _handoverLayer.Visible = true;
     }

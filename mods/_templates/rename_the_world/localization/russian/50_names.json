@@ -1,0 +1,21 @@
+// The names this mod invented, in Russian.
+//
+// A name a mod gives something is a localisation key exactly as much as a name the base
+// game gives it: the game looks the English up in the player's table and shows whatever
+// comes back, and a name with no row simply shows as written. So a mod that renames six
+// countries and wants them to read properly in another language ships this file too.
+//
+// Drop an `english/` folder beside this one if the mod's own names need adjusting there.
+{
+  "Albion": "Альбион",
+  "Gaul": "Галлия",
+  "Germania": "Германия",
+  "Latium": "Лаций",
+  "Hispania": "Испания",
+  "Hellas": "Эллада",
+
+  "Augusta Taurinorum": "Августа Тауринорум",
+  "Pedemontium": "Педемонтиум",
+  "Mediomatrici": "Медиоматрики",
+  "Powysia": "Повизия"
+}

@@ -144,7 +144,7 @@ public partial class DealOrForceGame
         if (_stateAffairsLayer is null || !_stateAffairsLayer.Visible || _campaign?.Player is null) return;
         var nation = _campaign.Player;
 
-        _stateAffairsTitle.Text = Simulation.Loc.Format("STATE AFFAIRS · {0}", nation.Name.ToUpperInvariant());
+        _stateAffairsTitle.Text = Simulation.Loc.Format("STATE AFFAIRS · {0}", nation.DisplayName.ToUpperInvariant());
         _stateAffairsSummary.Text =
             Simulation.Loc.Format("Treasury {0}  ·  balance {1} a week  ·  stability {2:P0}  ·  war support {3:P0}  ·  literacy {4:P0}  ·  standard of living {5:P0}", Fmt.Money(nation.Treasury), Fmt.Money(nation.WeeklyBalance), nation.Stability, nation.WarSupport, nation.Literacy, nation.StandardOfLiving);
         var spirits = DescribeModifiers(nation);

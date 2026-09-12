@@ -111,7 +111,7 @@ mods/my_mod/
 
 Код — **GNU General Public License v3.0 или новее**. Полный текст в [`LICENSE`](LICENSE).
 
-    Copyright (C) 2026 Steppe Imperialist
+    Copyright (C) 2026 Bayte Realization
 
     This program is free software: you can redistribute it and/or modify it under the
     terms of the GNU General Public License as published by the Free Software Foundation,

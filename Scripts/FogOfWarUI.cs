@@ -9,7 +9,7 @@ public partial class DealOrForceGame
         if (owner is null || CanInspectNation(owner.Id)) return false;
         ClearDetail();
         _sideTitle.Text = _selectedState.Name;
-        _sideBody.Text = Simulation.Loc.Format("{0}\n\nFog of war — regional population, industry and military intelligence are unavailable.", owner.Name);
+        _sideBody.Text = Simulation.Loc.Format("{0}\n\nFog of war — regional population, industry and military intelligence are unavailable.", owner.DisplayName);
         SetRegionalActionsEnabled(false);
         return true;
     }

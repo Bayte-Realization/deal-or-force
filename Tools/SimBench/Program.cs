@@ -217,6 +217,8 @@ public static class Program
                     ADrawnLineCommandsTheFormationsOnIt(sandbox));
                 failures += Check("a mod can rewrite a country's army, navy and typeface",
                     TheOrderOfBattleIsAModsToRewrite(sandbox));
+                failures += Check("every region of the world is a line a mod can edit",
+                    TheRegionsOfTheWorldAreData());
                 failures += Check("a country remembers why it dislikes another",
                     OpinionIsRememberedAndForgotten(sandbox));
                 failures += Check("the peace an AI writes hangs together",
@@ -2492,6 +2494,83 @@ public static class Program
     /// translate every string in the game and render a screen of empty boxes, since the
     /// face the interface is set in was the engine's and nothing could say otherwise.
     /// </summary>
+    /// <summary>
+    /// The world's 1,826 regions were a C# array until the day this check was written, and
+    /// the thing worth guarding is not that they moved but that they stayed moved: a
+    /// generated file nothing verifies is a file that drifts from the game the first time
+    /// somebody edits the generator.
+    /// </summary>
+    private static string TheRegionsOfTheWorldAreData()
+    {
+        // Its own world rather than the shared sandbox: by the time this runs, earlier
+        // checks have partitioned Gujarat to see what a treaty does to a national minority,
+        // and a region invented at runtime is legitimately not in a file that ships.
+        var campaign = Campaign.CreateBootstrap(20240301);
+        var scripts = FindScripts();
+        if (scripts is null) return "";
+        var folder = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common", "states");
+        if (!Directory.Exists(folder)) return "game/common/states does not exist";
+
+        var files = Directory.GetFiles(folder, "*.json");
+        if (files.Length == 0) return "game/common/states describes no regions at all";
+
+        var declared = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files.OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(
+                File.ReadAllText(file), GameDataLoader.ForgivingJson);
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+            foreach (var entry in document.RootElement.EnumerateObject())
+                if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    entry.Value.TryGetProperty("name", out var name) &&
+                    name.ValueKind == System.Text.Json.JsonValueKind.String)
+                    declared[entry.Name] = name.GetString() ?? "";
+        }
+
+        // Every region on the map is named by the file, under the id the game gives it.
+        var missing = campaign.States.Where(state => !declared.ContainsKey(state.Id)).ToList();
+        if (missing.Count > 0)
+            return $"{missing.Count:N0} region(s) of {campaign.States.Count:N0} are not in " +
+                   $"common/states, starting with {string.Join(", ", missing.Take(3).Select(state => $"{state.Id} ({state.Name})"))}";
+
+        // And it names them what they are called, so the file is the world rather than a
+        // description of an older one.
+        var drifted = campaign.States
+            .Where(state => !string.Equals(declared[state.Id], state.Name, StringComparison.Ordinal))
+            .ToList();
+        if (drifted.Count > 0)
+            return $"{drifted.Count:N0} region(s) are called something else in common/states, " +
+                   $"starting with {string.Join(", ", drifted.Take(3).Select(state => $"{state.Id}: file says {declared[state.Id]}, game says {state.Name}"))}";
+
+        // One line, one region. A mod that renames Entre Ríos renames Entre Ríos.
+        var subject = campaign.States.FirstOrDefault(state => state.Id.Length > 0);
+        if (subject is null) return "the campaign has no regions to test with";
+        var was = subject.Name;
+        var wasKind = subject.Kind;
+        var neighbours = campaign.States.Where(state => !ReferenceEquals(state, subject))
+            .Take(64).Select(state => (state, state.Name)).ToList();
+        try
+        {
+            var applied = StateDefinitions.Apply(campaign,
+                "{ \"" + subject.Id + "\": { \"name\": \"Bench Region\", \"kind\": \"Bench\" } }");
+            if (applied != 1) return $"a one-region file spoke for {applied} region(s)";
+            if (subject.Name != "Bench Region" || subject.Kind != "Bench")
+                return $"a mod could not rename a region: {subject.Id} is still {subject.Name}";
+            var disturbed = neighbours.Where(pair => pair.state.Name != pair.Name).ToList();
+            if (disturbed.Count > 0)
+                return $"renaming one region also renamed {disturbed.Count:N0} other(s)";
+        }
+        finally
+        {
+            subject.Name = was;
+            subject.Kind = wasKind;
+        }
+
+        Console.WriteLine($"  regions: {declared.Count:N0} named in common/states, " +
+                          $"all {campaign.States.Count:N0} on the map among them.");
+        return "";
+    }
+
     private static string TheOrderOfBattleIsAModsToRewrite(Campaign campaign)
     {
         var britain = campaign.NationByTag("GBR");
@@ -3127,7 +3206,12 @@ public static class Program
         // and this is what keeps that true as more of the game becomes data.
         var declared = new SortedSet<string>(StringComparer.Ordinal);
         var common = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common");
-        foreach (var folder in new[] { "budget", "government_focus", "trade_policies", "governments", "ideologies" })
+        // `countries` is in here for the same reason as the rest, and matters more than any
+        // of them: it is 261 names, it is the first thing anybody sees, and it is the list
+        // most likely to grow. A country added to the data without a row in the table now
+        // fails this check instead of quietly showing up in English.
+        foreach (var folder in new[]
+                 { "budget", "government_focus", "trade_policies", "governments", "ideologies", "countries" })
         {
             var directory = Path.Combine(common, folder);
             if (!Directory.Exists(directory)) continue;

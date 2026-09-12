@@ -170,7 +170,7 @@ public partial class DealOrForceGame
         if (_pause is not null) _pause.Text = Tr("▶");
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         if (_campaign?.Player is not null && string.IsNullOrWhiteSpace(_saveNameField.Text))
-            _saveNameField.Text = $"{_campaign.Player.Name} · {_campaign.Date}";
+            _saveNameField.Text = $"{_campaign.Player.DisplayName} · {_campaign.Date.Display()}";
         RefreshSaveSlots();
         _saveLoadLayer.Visible = true;
         _saveLoadLayer.MoveToFront();
@@ -246,7 +246,7 @@ public partial class DealOrForceGame
     {
         if (_campaign?.Player is null) { _saveStatus.Text = Tr("No campaign."); return; }
         var name = _saveNameField.Text.Trim();
-        if (string.IsNullOrWhiteSpace(name)) name = $"{_campaign.Player.Name} · {_campaign.Date}";
+        if (string.IsNullOrWhiteSpace(name)) name = $"{_campaign.Player.DisplayName} · {_campaign.Date.Display()}";
         SaveToSlot($"campaign_{DateTime.Now:yyyyMMdd_HHmmss}", displayName: name);
     }
 
@@ -257,7 +257,7 @@ public partial class DealOrForceGame
         {
             var metadata = SaveSystem.Save(SaveRoot, slot, _campaign, ModFingerprint,
                 string.IsNullOrWhiteSpace(displayName)
-                    ? $"{_campaign.Player.Name} · {_campaign.Date}"
+                    ? $"{_campaign.Player.DisplayName} · {_campaign.Date.Display()}"
                     : displayName,
                 autosave);
             _saveStatus.Text = Simulation.Loc.Format("Saved {0} on {1}.", metadata.NationName, metadata.GameDate);

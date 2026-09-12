@@ -190,6 +190,7 @@ public static class ScenarioCatalog
         campaign.InvalidateStateIndex();
         // Names, then the country's own figures, then the deal, then the corrections to it.
         CountryDefinitions.Apply(campaign);
+        StateDefinitions.Apply(campaign);
         // Every country has a government and an ideology before history is read, so
         // the scenario only has to name the ones that are not the ordinary case.
         foreach (var nation in campaign.Nations)

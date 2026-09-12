@@ -112,7 +112,8 @@ public partial class DealOrForceGame
         var state = _selectedState;
         var queue = _campaign.Construction.Where(project => project.NationId == player.Id).OrderBy(project => project.Id).ToArray();
 
-        _sideBody.Text = Simulation.Loc.Format("{0} · {1}", player.Name, TradePolicyRules.Name(player.TradePolicy));
+        _sideBody.Text = Simulation.Loc.Format("{0} · {1}", player.DisplayName,
+            Tr(TradePolicyRules.Name(player.TradePolicy)));
         ClearDetail();
 
         // Before the first economic week closes every one of these is genuinely zero, and

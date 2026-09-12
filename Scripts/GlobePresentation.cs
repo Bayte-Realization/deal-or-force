@@ -1363,7 +1363,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             ? (_provinceTopology.HasRiver(pick.ProvinceId) ? "\nRiver terrain · crossings affect march and attack" : "") +
               (_provinceTopology.HasLakeAccess(pick.ProvinceId) ? "\nLake shore · local supply access" : "")
             : "";
-        return $"{pick.Nation.Name} ({pick.Nation.Tag})\n{state}\nProvince #{pick.ProvinceId:N0}" +
+        return $"{pick.Nation.DisplayName} ({pick.Nation.Tag})\n{state}\nProvince #{pick.ProvinceId:N0}" +
                (controller is null || controller == pick.Nation ? "" : $"\nControlled by {controller.Name} · occupation {occupation:P0}") +
                hydrology + (pick.ProvinceId > 0 && _provinceTopology is not null
                    ? TerrainDescription(_provinceTopology.TerrainAt(pick.ProvinceId)) : "");
@@ -2971,7 +2971,7 @@ void fragment() {
             if (!_nationByMapIndex.TryGetValue(mapIndex, out var nation) || anchor.Cells < 80)
                 continue;
 
-            var text = nation.Name.ToUpperInvariant();
+            var text = nation.DisplayName.ToUpperInvariant();
             if (text.Length == 0) continue;
             var group = new Node3D { Name = $"CountryLabel_{nation.Tag}" };
             _countryLabelRoot.AddChild(group);

@@ -1,0 +1,18 @@
+// Six countries, renamed and repainted.
+//
+// Only the six are named, and the other 255 are inherited: every file in
+// `common/countries/` is read in name order and later files win by tag, so a mod never
+// copies the base game's file and so never goes stale against it. `50_` puts this after
+// the game's own `00_` and before anything a load-order 200 mod ships.
+//
+// `name` is also the localisation key. A mod that renames a country and wants that name
+// translated ships a row for it in its own `localization/<language>/` file - see
+// `localization/` below.
+{
+  "GBR": { "name": "Albion", "color": "#8a2f42", "capital_name": "Londinium" },
+  "FRA": { "name": "Gaul", "color": "#3659c4", "capital_name": "Lutetia" },
+  "DEU": { "name": "Germania", "color": "#5a5a5a" },
+  "ITA": { "name": "Latium", "color": "#459669", "capital_name": "Roma" },
+  "ESP": { "name": "Hispania", "color": "#c59639" },
+  "GRC": { "name": "Hellas", "color": "#3596b0", "capital_name": "Athenai" }
+}

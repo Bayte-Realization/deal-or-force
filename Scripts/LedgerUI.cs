@@ -215,7 +215,7 @@ public partial class DealOrForceGame
         _ledgerLineA.Visible = _ledgerLineB.Visible = _ledgerBarsA.Visible = _ledgerBarsB.Visible = known;
         if (!known)
         {
-            _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.Name);
+            _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.DisplayName);
             _ledgerSummary.Text = Tr("Fog of war — foreign internal statistics are unavailable. Choose Player nation.");
             return;
         }
@@ -225,7 +225,7 @@ public partial class DealOrForceGame
         var gdpTrend = samples.Count > 1 && MathF.Abs(first.Gdp) > 0.001f ? nation.Gdp / first.Gdp - 1f : 0f;
         var populationTrend = samples.Count > 1 && first.PopulationMillions > 0.001f
             ? nation.Population / 1_000_000f / first.PopulationMillions - 1f : 0f;
-        _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.Name.ToUpperInvariant());
+        _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.DisplayName.ToUpperInvariant());
         _ledgerSummary.Text = Simulation.Loc.Format(
             "{0}  ·  GDP {1}  ·  population {2}  ·  market access {3:P0}  ·  " +
             "treasury {4}  ·  {5} weekly observation(s)",

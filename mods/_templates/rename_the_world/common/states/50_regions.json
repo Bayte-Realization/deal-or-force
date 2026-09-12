@@ -1,0 +1,20 @@
+// Four regions, renamed. The other 1,822 are inherited.
+//
+// Same rules as `common/countries/`: read in name order, later files win, and a mod names
+// only what it is changing. The key is the region's id, which is what
+// `game/common/states/00_states.json` lists them under - open it and search for the name
+// you want. It is a slug of the published subdivision code, or of the country and the
+// name where no code was published.
+//
+// The code itself is deliberately not the key: nine codes are shared by more than one
+// region (MG-F alone covers five Madagascan provinces), so keying by code would rename a
+// region you did not mean.
+//
+// `kind` is the word the interface uses for what sort of unit it is - Province, Oblast,
+// Department, Canton, whatever your world calls them.
+{
+  "it_to": { "name": "Augusta Taurinorum", "kind": "Province" },
+  "it_cn": { "name": "Pedemontium", "kind": "Province" },
+  "fr_57": { "name": "Mediomatrici", "kind": "Civitas" },
+  "gb_pow": { "name": "Powysia", "kind": "Cantref" }
+}

@@ -35,7 +35,7 @@ public partial class DealOrForceGame
     {
         if (nation is null || _campaign?.Player is null) return;
         _selectedNation = nation;
-        _sideTitle.Text = nation.Name;
+        _sideTitle.Text = nation.DisplayName;
         var relation = nation == _campaign.Player ? null : CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, nation.Id);
         // The number, and then what it is made of. An opinion nobody can account for is a
         // number the player has no way to act on: "they dislike you" is not a fact you can
@@ -53,7 +53,7 @@ public partial class DealOrForceGame
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text =
             Simulation.Loc.Format("{0} ({1})\n{2}\n\nCapital: {3}\n",
-                nation.Name, nation.Tag, location, nation.CapitalName) +
+                nation.DisplayName, nation.Tag, location, nation.CapitalName) +
             (CanInspectNation(nation.Id)
                 ? Simulation.Loc.Format("Population: {0:N0}\nGDP: ${1:0.00}B\nTreasury: ${2:0.00}B\n\n",
                     nation.Population, nation.Gdp, nation.Treasury)

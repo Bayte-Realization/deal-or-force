@@ -44,10 +44,10 @@ public partial class DealOrForceGame
         rows.AddChild(Title("THE WORLD IN 2024", 13, Ui.Colour("text.caption")));
         _pickerSearch = new LineEdit
         {
-            PlaceholderText = Tr("Search countries or tags…"),
             CustomMinimumSize = new Vector2(0, 38),
             ClearButtonEnabled = true
         };
+        Placeholder(_pickerSearch, "Search countries or tags…");
         _pickerSearch.TextChanged += _ => RebuildPickerResults();
         rows.AddChild(_pickerSearch);
 
@@ -130,26 +130,29 @@ public partial class DealOrForceGame
         _selectedNation = nation;
 
         var rank = 1 + _campaign.Nations.Count(other => other.Gdp > nation.Gdp);
-        var tier = rank <= 8 ? "great power" : rank <= 24 ? "major power" : rank <= 80 ? "regional power" : "minor power";
+        var tier = Tr(rank <= 8 ? "great power"
+            : rank <= 24 ? "major power"
+            : rank <= 80 ? "regional power"
+            : "minor power");
         var states = _campaign.States.Count(state => state.NationMapIndex == nation.MapIndex);
         if (focus && !string.IsNullOrWhiteSpace(nation.CapitalName))
             _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude,
                 states <= 2 ? 6.5f : states <= 5 ? 7.3f : 8.4f);
         var armies = _campaign.Armies.Where(army => army.NationId == nation.Id).ToArray();
         var divisions = armies.Sum(army => army.Divisions);
-        _pickerName.Text = nation.Name;
+        _pickerName.Text = nation.DisplayName;
         SetFlag(_pickerFlag, nation.Tag, 32);
         _pickerTier.Text = Simulation.Loc.Format("{0} · rank #{1} · {2}", nation.Tag, rank, tier);
         _pickerStats.Text =
             Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", nation.CapitalName, Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
         _pickerLocation.Text = Tr("Click the map to inspect a region and its tactical province.");
         _pickerBegin.Text = _pickerHotseatMode
-            ? $"START HOTSEAT · {_campaign.HumanSeats.Count} PLAYERS"
-            : $"BEGIN AS {nation.Tag}";
+            ? Simulation.Loc.Format("START HOTSEAT · {0} PLAYERS", _campaign.HumanSeats.Count)
+            : Simulation.Loc.Format("BEGIN AS {0}", nation.Tag);
         _pickerBegin.Disabled = _pickerHotseatMode && _campaign.HumanSeats.Count < 2;
         _pickerSeatToggle.Text = _campaign.HumanSeats.Contains(nation.Id)
-            ? $"REMOVE {nation.Tag}"
-            : $"ADD {nation.Tag} AS PLAYER";
+            ? Simulation.Loc.Format("REMOVE {0}", nation.Tag)
+            : Simulation.Loc.Format("ADD {0} AS PLAYER", nation.Tag);
         RefreshPickerSeats();
         RebuildPickerResults();
     }
@@ -167,6 +170,7 @@ public partial class DealOrForceGame
         var matches = _campaign.Nations
             .Where(nation => query.Length == 0 ||
                 nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(nation => nation.Gdp)
             .Take(4)
@@ -175,7 +179,7 @@ public partial class DealOrForceGame
         foreach (var nation in matches)
         {
             var captured = nation;
-            var button = ActionButton($"{nation.Tag}   {nation.Name}", () => SetPickerNation(captured, true), 0, 31,
+            var button = ActionButton($"{nation.Tag}   {nation.DisplayName}", () => SetPickerNation(captured, true), 0, 31,
                 _pickerHotseatMode ? _campaign.HumanSeats.Contains(nation.Id) : nation == _pickerNation);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             _pickerResults.AddChild(button);
