@@ -46,6 +46,12 @@ public sealed class GovernmentDefinition
     /// monarchy is a different kind of afternoon.
     /// </summary>
     public float ChangeCost = 1f;
+
+    /// <summary>
+    /// How readily this country's people take up arms without being told to, as a
+    /// multiple. One is the ordinary case. See <see cref="MilitiaCore"/>.
+    /// </summary>
+    public float Militia = 1f;
 }
 
 /// <summary>
@@ -80,6 +86,12 @@ public sealed class IdeologyDefinition
     public float Radicalism;
     public float Living;
     public float Literacy;
+
+    /// <summary>
+    /// How readily this country's people take up arms without being told to, as a
+    /// multiple. One is the ordinary case. See <see cref="MilitiaCore"/>.
+    /// </summary>
+    public float Militia = 1f;
 
     /// <summary>
     /// The forms of government this ideology is comfortable in.
@@ -186,6 +198,7 @@ public static class GovernmentCatalog
                     definition.Centralisation = Math.Clamp(Number(field.Value, 0.5f), 0f, 1f);
                     break;
                 case "change_cost": definition.ChangeCost = MathF.Max(0f, Number(field.Value, 1f)); break;
+                case "militia": definition.Militia = MathF.Max(0f, Number(field.Value, 1f)); break;
                 case "effects" when field.Value.ValueKind == JsonValueKind.Object:
                     foreach (var effect in field.Value.EnumerateObject())
                     {
@@ -318,6 +331,9 @@ public static class IdeologyCatalog
                     break;
                 case "mismatch_stability":
                     definition.MismatchStability = GovernmentCatalog.Number(field.Value, definition.MismatchStability);
+                    break;
+                case "militia":
+                    definition.Militia = MathF.Max(0f, GovernmentCatalog.Number(field.Value, 1f));
                     break;
                 case "prefers_governments" when field.Value.ValueKind == JsonValueKind.Array:
                     definition.PrefersGovernments.Clear();

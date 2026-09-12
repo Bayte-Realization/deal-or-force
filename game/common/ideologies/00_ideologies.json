@@ -28,6 +28,7 @@
     "economic": 0.55,
     "authority": -0.55,
     "prefers_governments": ["parliamentary_republic", "presidential_republic", "constitutional_monarchy", "federation", "direct_democracy"],
+    "militia": 0.95,
     "effects": { "growth": 0.0022, "living": 0.00006, "literacy": 0.00006, "war_support": -0.00008 }
   },
 
@@ -39,6 +40,7 @@
     "economic": 0.38,
     "authority": 0.22,
     "prefers_governments": ["parliamentary_republic", "presidential_republic", "constitutional_monarchy", "absolute_monarchy"],
+    "militia": 1.0,
     "effects": { "stability": 0.00014, "radicalism": -0.00008, "growth": 0.0006, "literacy": -0.00002 }
   },
 
@@ -50,6 +52,7 @@
     "economic": -0.18,
     "authority": -0.38,
     "prefers_governments": ["parliamentary_republic", "presidential_republic", "constitutional_monarchy", "federation"],
+    "militia": 1.0,
     "effects": { "living": 0.00012, "radicalism": -0.00014, "literacy": 0.00008, "growth": -0.0004 }
   },
 
@@ -61,6 +64,7 @@
     "economic": -0.70,
     "authority": 0.10,
     "prefers_governments": ["parliamentary_republic", "one_party_state", "federation", "direct_democracy"],
+    "militia": 1.1,
     "effects": { "living": 0.00014, "radicalism": -0.00010, "growth": -0.0018, "literacy": 0.00010 }
   },
 
@@ -72,6 +76,7 @@
     "economic": -0.95,
     "authority": 0.70,
     "prefers_governments": ["one_party_state"],
+    "militia": 1.25,
     "effects": { "literacy": 0.00014, "war_support": 0.00008, "growth": -0.0032, "living": -0.00004 }
   },
 
@@ -83,6 +88,7 @@
     "economic": 0.15,
     "authority": 0.60,
     "prefers_governments": ["presidential_republic", "one_party_state", "military_junta", "absolute_monarchy"],
+    "militia": 1.3,
     "effects": { "war_support": 0.00018, "stability": 0.00008, "radicalism": 0.00008, "growth": -0.0006 }
   },
 
@@ -94,6 +100,7 @@
     "economic": 0.05,
     "authority": 0.98,
     "prefers_governments": ["one_party_state", "military_junta"],
+    "militia": 1.3,
     "effects": { "war_support": 0.00030, "stability": 0.00010, "radicalism": 0.00024, "living": -0.00010, "growth": -0.0014 }
   },
 
@@ -105,6 +112,7 @@
     "economic": -0.05,
     "authority": 0.72,
     "prefers_governments": ["theocracy", "absolute_monarchy"],
+    "militia": 1.15,
     "effects": { "stability": 0.00016, "radicalism": -0.00006, "literacy": -0.00010, "growth": -0.0018 }
   },
 
@@ -116,6 +124,7 @@
     "economic": 0.95,
     "authority": -0.90,
     "prefers_governments": ["federation", "presidential_republic", "direct_democracy"],
+    "militia": 0.9,
     "effects": { "growth": 0.0038, "living": -0.00010, "radicalism": 0.00010, "literacy": -0.00006 }
   },
 
@@ -127,6 +136,7 @@
     "economic": -0.22,
     "authority": 0.32,
     "prefers_governments": ["technocracy", "one_party_state", "presidential_republic"],
+    "militia": 0.85,
     "effects": { "growth": 0.0028, "literacy": 0.00012, "radicalism": 0.00006, "war_support": -0.00006 }
   },
 
@@ -138,6 +148,7 @@
     "economic": 0.20,
     "authority": 0.50,
     "prefers_governments": ["absolute_monarchy", "constitutional_monarchy", "theocracy"],
+    "militia": 0.95,
     "effects": { "stability": 0.00016, "radicalism": -0.00004, "growth": -0.0010, "literacy": -0.00003 }
   },
 
@@ -149,6 +160,7 @@
     "economic": -0.30,
     "authority": -0.15,
     "prefers_governments": ["parliamentary_republic", "federation", "direct_democracy"],
+    "militia": 1.05,
     "effects": { "living": 0.00008, "stability": 0.00008, "growth": -0.0022, "literacy": -0.00004 }
   }
 }

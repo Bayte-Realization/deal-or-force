@@ -159,6 +159,7 @@ public sealed class ModLoader
         GovernmentFocusCatalog.ResetCatalog();
         TradePolicyCatalog.ResetCatalog();
         StabilityCore.ResetCatalog();
+        MilitiaCore.ResetCatalog();
         GovernmentCatalog.ResetCatalog();
         IdeologyCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();

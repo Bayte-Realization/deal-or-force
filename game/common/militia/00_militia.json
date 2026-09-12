@@ -1,0 +1,67 @@
+// When people take up arms without being told to.
+//
+// Nobody recruits militia. A region raises it when there is an enemy on or near its ground,
+// and how readily depends on whether it thinks the state is theirs. A region of the
+// country's own people, that lives decently and still believes in the war, fills a
+// formation in weeks; a region held down by a state it does not recognise fills none at
+// all, however many people live in it. That asymmetry is the whole point - it is the same
+// number the secession rules read, from the other side.
+//
+// Each day a threatened region adds to its readiness:
+//
+//     base
+//   * (own_people_share ^ nationality)      who the people think the state is for
+//   * (war_support_floor + war_support * national war support)
+//   * (stability_floor + stability * regional stability)
+//   * (threat_floor + threat * how close the enemy is)
+//   * (population / population_per_point)
+//   * whatever the government and the ideology are worth
+//
+// and when readiness passes 1 a formation stands up, paid for in manpower and nothing else.
+{
+  // A day's readiness for a region of `population_per_point` people with everything else
+  // at one. The multipliers below only ever make it slower, and they compound: a front-line
+  // oblast of a million people that is threatened but not occupied comes out around a
+  // fiftieth a day, which is a formation in about two months. One actually overrun raises
+  // one in three weeks.
+  "base": 0.100,
+  "population_per_point": 1000000,
+
+  // How sharply the share of the country's own people matters. Above 1 it bites: a region
+  // that is two thirds the state's own nationality raises less than two thirds as much.
+  "nationality": 1.60,
+
+  // Nobody rises for a war the country has given up on, but an invasion does not need
+  // enthusiasm either - hence the floors.
+  "war_support_floor": 0.25,
+  "war_support": 0.75,
+
+  "stability_floor": 0.45,
+  "stability": 0.55,
+
+  // How close the enemy has to be. Ground the enemy already holds counts fully; a region
+  // with even one province facing them counts for the floor, because a border is not a
+  // fraction - a region with an enemy army on one edge knows the enemy is there.
+  "threat_floor": 0.35,
+  "threat": 0.65,
+
+  // The most militia formations one region will ever have standing at once, and the most a
+  // country will. A country does not become a hundred militia divisions.
+  "per_region": 3,
+  "per_country": 40,
+
+  // How many people one formation is, and how many a region needs before it can field one.
+  // A village does not raise a division however frightened it is.
+  //
+  // It costs no manpower. That is the point: these are not reservists the ministry called
+  // up, they are the people who already live there. Drawing them from the national reserve
+  // produced exactly the opposite of the intent - a country that raised militia and then
+  // could not replace its line divisions.
+  "formation": 9000,
+  "population_per_formation": 250000,
+
+  // And how it goes home. Once no enemy has been near the region for this many days, the
+  // formation dissolves - otherwise a war fought in 2026 leaves a country carrying forty
+  // free divisions in 2040. The men go back to the region they were always in.
+  "stand_down_days": 30
+}

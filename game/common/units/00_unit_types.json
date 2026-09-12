@@ -34,6 +34,29 @@
     "supply_use": 0.95,
     "amphibious": 0.85
   },
+  // People who were not soldiers last week. Weak at everything except standing in the way
+  // of somebody on their own street: poor attack, no armour worth the word, and defence
+  // that is respectable because the ground is theirs and they are not going anywhere.
+  // Narrow frontage, so six of them fit where four line divisions do.
+  "militia": {
+    "name": "Militia",
+    "counter_symbol": "infantry",
+    "attack": 0.42,
+    "soft_attack": 0.44,
+    "hard_attack": 0.07,
+    "defense": 0.72,
+    "breakthrough": 0.16,
+    "armour": 0.02,
+    "piercing": 0.12,
+    "hardness": 0.01,
+    "organisation": 0.52,
+    "recovery": 0.85,
+    "speed": 0.80,
+    "combat_width": 12.00,
+    "supply_use": 0.60,
+    "amphibious": 0.00
+  },
+
   "line_infantry": {
     "name": "Line infantry",
     "counter_symbol": "infantry",

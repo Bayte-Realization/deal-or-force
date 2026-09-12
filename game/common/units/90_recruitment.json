@@ -1,4 +1,7 @@
 {
+  // Nobody recruits militia - it raises itself. The figures are here so the rest of the
+  // game knows how many people one of them is and what it would cost if somebody did.
+  "militia": { "recruitment_cost": 0.10, "training_days": 14, "recruitment_personnel": 9000 },
   "marine_brigade": { "recruitment_cost": 0.85, "training_days": 90, "recruitment_personnel": 8000 },
   "line_infantry": { "recruitment_cost": 0.60, "training_days": 60, "recruitment_personnel": 15000 },
   "motorized_corps": { "recruitment_cost": 0.95, "training_days": 75, "recruitment_personnel": 15000 },

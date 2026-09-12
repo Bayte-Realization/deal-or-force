@@ -264,6 +264,19 @@ public sealed partial class Nation
     public readonly Dictionary<string, int> DecisionAvailableDay = new(StringComparer.Ordinal);
     public float WarSupport = 1f;
     public float ManpowerReserve;
+
+    /// <summary>
+    /// How far each of this country's regions is towards standing a militia formation up,
+    /// and the day each of its militia formations last had an enemy near it.
+    ///
+    /// On the country rather than on <see cref="MilitiaCore"/>, because two campaigns can
+    /// exist in one process - a multiplayer client rebuilding from a snapshot beside the
+    /// one it is replacing - and a static keyed by a region index belongs to whichever
+    /// world wrote to it last. That is exactly how two worlds start reading each other's
+    /// notes, and the bench checks for it.
+    /// </summary>
+    public readonly Dictionary<int, float> MilitiaReadiness = new();
+    public readonly Dictionary<int, int> MilitiaQuietSince = new();
     public float ReinforcementCapacity;
     public float ReinforcedLastWeek;
     /// <summary>Named conditions currently attached to this country - see ModifierCore.</summary>
@@ -464,6 +477,7 @@ public sealed partial class Campaign
         for (var day = 0; day < daysCrossed; day++)
         {
             RecruitmentSystem.Tick(this);
+            using (SimProfiler.Measure("militia")) MilitiaCore.Tick(this);
             using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);

@@ -128,35 +128,39 @@ public static class StabilityCore
     /// </summary>
     public static float RegionStability(Campaign campaign, Nation owner, ScenarioState state)
     {
+        Tally.Clear();
+        ControlTally.Of(campaign, owner, NoEnemies, Tally);
+        return RegionStability(owner, state, Tally);
+    }
+
+    /// <summary>The same, against a tally already taken. Used inside the weekly pass.</summary>
+    private static float RegionStability(Nation owner, ScenarioState state,
+        Dictionary<int, RegionControl> tally)
+    {
         if (state is null || owner is null) return Weights.Base;
         var weights = Weights;
+        tally.TryGetValue(state.MapIndex, out var control);
         var value = weights.Base
                     + (state.StandardOfLiving - weights.LivingTolerance) * weights.Living
                     - state.Radicalism * weights.Radicalism
                     - EconomySystem.ForeignShare(state, owner.Tag) * weights.Minority
                     + (state.Literacy - 0.5f) * weights.Literacy
-                    - OccupiedShare(campaign, state, owner) * weights.Occupation;
+                    - control.OccupiedShare * weights.Occupation;
         return M.Clamp(value, 0f, 1f);
     }
 
     /// <summary>How much of a region is under somebody else's flag right now.</summary>
     public static float OccupiedShare(Campaign campaign, ScenarioState state, Nation owner)
     {
-        var topology = campaign?.ProvinceMap;
-        var control = campaign?.ProvinceController;
-        if (topology is null || control is null || state is null || owner is null) return 0f;
-
-        var held = 0;
-        var all = 0;
-        var flag = (ushort)owner.MapIndex;
-        for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
-        {
-            if (topology.ProvinceToState[province] != (ushort)state.MapIndex) continue;
-            all++;
-            if (control[province] != flag) held++;
-        }
-        return all == 0 ? 0f : held / (float)all;
+        Tally.Clear();
+        ControlTally.Of(campaign, owner, NoEnemies, Tally);
+        Tally.TryGetValue(state?.MapIndex ?? 0, out var control);
+        return control.OccupiedShare;
     }
+
+    // Scratch, rebuilt on the way in and never read between calls.
+    private static readonly Dictionary<int, RegionControl> Tally = new();
+    private static readonly HashSet<ushort> NoEnemies = new();
 
     /// <summary>
     /// What the country's stability is being pulled towards: its capital, weighted far
@@ -171,9 +175,11 @@ public static class StabilityCore
         var capitalStability = -1f;
         double weighted = 0;
         long people = 0;
+        Tally.Clear();
+        ControlTally.Of(campaign, nation, NoEnemies, Tally);
         foreach (var state in campaign.StatesOf(nation.MapIndex))
         {
-            var settled = RegionStability(campaign, nation, state);
+            var settled = RegionStability(nation, state, Tally);
             state.Stability = settled;
             if (state.MapIndex == nation.CapitalStateMapIndex) capitalStability = settled;
             if (state.Population <= 0) continue;

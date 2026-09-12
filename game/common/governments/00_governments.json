@@ -26,6 +26,7 @@
     "order": 10,
     "centralisation": 0.42,
     "change_cost": 0.8,
+    "militia": 1.05,
     "effects": { "stability": 0.00010, "living": 0.00004 }
   },
 
@@ -35,6 +36,7 @@
     "order": 20,
     "centralisation": 0.58,
     "change_cost": 0.9,
+    "militia": 1.05,
     "effects": { "war_support": 0.00006, "growth": 0.0008 }
   },
 
@@ -44,6 +46,7 @@
     "order": 30,
     "centralisation": 0.46,
     "change_cost": 1.1,
+    "militia": 1.05,
     "effects": { "stability": 0.00014, "radicalism": -0.00006 }
   },
 
@@ -53,6 +56,7 @@
     "order": 40,
     "centralisation": 0.92,
     "change_cost": 1.8,
+    "militia": 0.85,
     "effects": { "stability": 0.00018, "radicalism": 0.00012, "literacy": -0.00004, "growth": -0.0012 }
   },
 
@@ -62,6 +66,7 @@
     "order": 50,
     "centralisation": 0.95,
     "change_cost": 2.0,
+    "militia": 1.15,
     "effects": { "stability": 0.00016, "war_support": 0.00010, "radicalism": 0.00010, "living": -0.00005 }
   },
 
@@ -71,6 +76,7 @@
     "order": 60,
     "centralisation": 0.88,
     "change_cost": 1.4,
+    "militia": 1.0,
     "effects": { "war_support": 0.00016, "radicalism": 0.00020, "growth": -0.0024, "literacy": -0.00006 }
   },
 
@@ -80,6 +86,7 @@
     "order": 70,
     "centralisation": 0.80,
     "change_cost": 1.7,
+    "militia": 1.1,
     "effects": { "stability": 0.00015, "radicalism": -0.00004, "growth": -0.0016, "literacy": -0.00008 }
   },
 
@@ -89,6 +96,7 @@
     "order": 80,
     "centralisation": 0.22,
     "change_cost": 1.0,
+    "militia": 0.95,
     "effects": { "radicalism": -0.00012, "living": 0.00005, "war_support": -0.00006 }
   },
 
@@ -98,6 +106,7 @@
     "order": 90,
     "centralisation": 0.70,
     "change_cost": 1.2,
+    "militia": 0.85,
     "effects": { "growth": 0.0026, "literacy": 0.00010, "stability": -0.00006 }
   },
 
@@ -107,6 +116,7 @@
     "order": 100,
     "centralisation": 0.12,
     "change_cost": 0.9,
+    "militia": 1.15,
     "effects": { "radicalism": -0.00018, "living": 0.00008, "war_support": -0.00014, "growth": -0.0008 }
   },
 
@@ -116,6 +126,7 @@
     "order": 110,
     "centralisation": 0.55,
     "change_cost": 0.35,
+    "militia": 0.7,
     "effects": { "stability": -0.00020, "radicalism": 0.00018, "growth": -0.0020 }
   }
 }

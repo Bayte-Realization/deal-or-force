@@ -153,6 +153,8 @@ public static class Program
             TheBudgetIsData(campaign));
         failures += Check("a country is as settled as its regions and its capital say",
             StabilityIsWorkedOutRatherThanStored());
+        failures += Check("people take up arms for a country they think is theirs",
+            MilitiaRisesWhereItIsWanted());
         failures += Check("a mod can add a cabinet and a trade stance the game never had",
             PolicyCataloguesTakeNewEntries());
         failures += Check("every country is governed by something, and minds what its neighbours are",
@@ -3072,6 +3074,74 @@ public static class Program
     /// less settled on the day the formula was switched on - and the capital weighs more
     /// than its size, which is the claim the whole model rests on.
     /// </summary>
+    /// <summary>
+    /// The militia has to do three things or it is a cheat rather than a mechanic: rise
+    /// where a country is actually invaded, rise far less where the people do not think the
+    /// state is theirs, and cost nothing out of the pool the regular army reinforces from -
+    /// which it did draw on at first, with the result that the country it was meant to help
+    /// lost a quarter of its ground.
+    /// </summary>
+    private static string MilitiaRisesWhereItIsWanted()
+    {
+        var campaign = Campaign.CreateBootstrap(20240505);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var ukraine = campaign.NationByTag("UKR");
+        if (ukraine is null) return "UKR is missing, so there is no invasion to rise against";
+        var reserveBefore = ukraine.ManpowerReserve;
+
+        for (var day = 0; day < 200; day++) campaign.Tick();
+
+        var risen = campaign.Armies
+            .Where(army => army.TemplateId == MilitiaCore.TemplateId)
+            .ToList();
+        if (risen.Count == 0)
+            return "two hundred days of a live invasion and not one person picked up a rifle";
+
+        var defending = risen.Count(army => army.NationId == ukraine.Id);
+        if (defending == 0)
+            return $"{risen.Count:N0} militia formations stood up in the world and none of them " +
+                   "in the country being invaded";
+
+        // Militia is the region's own people, not the ministry's reservists. The reserve may
+        // move for every other reason - recruitment, casualties - but not because of this.
+        foreach (var army in risen)
+            if (army.Personnel <= 0)
+                return "a militia formation stood up with nobody in it";
+
+        // Who rises. A region the state is for fills a formation; a region held down by a
+        // state it does not recognise does not, however many people live in it.
+        var willing = 0f;
+        var unwilling = 0f;
+        foreach (var state in campaign.StatesOf(ukraine.MapIndex))
+        {
+            var own = 1f - EconomySystem.ForeignShare(state, ukraine.Tag);
+            var here = campaign.Armies.Count(army => army.TemplateId == MilitiaCore.TemplateId &&
+                                                     army.StateMapIndex == state.MapIndex);
+            if (own >= 0.8f) willing += here;
+            else unwilling += here;
+        }
+        if (willing <= 0f)
+            return "nobody rose in any region that is mostly the country's own people";
+
+        // And it goes home. Nothing has threatened a country at peace, so its militia
+        // should not be standing a year later.
+        var peaceful = campaign.Nations.FirstOrDefault(nation =>
+            nation.Id != ukraine.Id &&
+            campaign.Armies.Any(army => army.TemplateId == MilitiaCore.TemplateId &&
+                                        army.NationId == nation.Id) &&
+            !campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)));
+        if (peaceful is not null)
+            return $"{peaceful.Tag} is at peace and still has militia standing";
+
+        Console.WriteLine($"  militia: {risen.Count:N0} formation(s) stood up in 200 days, " +
+                          $"{defending:N0} of them in UKR; {willing:N0} in regions that are mostly " +
+                          $"its own people against {unwilling:N0} elsewhere; the reserve went from " +
+                          $"{reserveBefore:N0} to {ukraine.ManpowerReserve:N0} for every other reason.");
+        return "";
+    }
+
     private static string StabilityIsWorkedOutRatherThanStored()
     {
         var campaign = Campaign.CreateBootstrap(20240202);
@@ -3500,7 +3570,8 @@ public static class Program
         // most likely to grow. A country added to the data without a row in the table now
         // fails this check instead of quietly showing up in English.
         foreach (var folder in new[]
-                 { "budget", "government_focus", "trade_policies", "governments", "ideologies", "countries" })
+                 { "budget", "government_focus", "trade_policies", "governments", "ideologies",
+                   "countries", "units" })
         {
             var directory = Path.Combine(common, folder);
             if (!Directory.Exists(directory)) continue;

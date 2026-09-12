@@ -287,7 +287,13 @@ public static partial class FrontPlanner
         var nation = campaign.NationById(nationId);
         if (nation is null || nation.IsHuman) return;
         var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
-        var armies = campaign.Armies.FindAll(army => army.NationId == nationId);
+        // Territorial defence is not part of the field army's order of battle. Militia holds
+        // the region it stood up in; sweeping it into the front shares distorted them badly -
+        // the counts here are shares of how many formations there are, so twenty-seven
+        // militia pushed real divisions out of defending and into attacking, and Ukraine lost
+        // two thirds of its ground to a mechanic written to help it hold.
+        var armies = campaign.Armies.FindAll(army =>
+            army.NationId == nationId && army.TemplateId != MilitiaCore.TemplateId);
         armies.Sort((a, b) => b.Power.CompareTo(a.Power));
         var advanceShare = attacking ? profile.AdvanceShareAttacker : profile.AdvanceShareDefender;
         var spearhead = armies.Count == 0 ? 0 : Math.Min((int)MathF.Round(armies.Count * advanceShare),
