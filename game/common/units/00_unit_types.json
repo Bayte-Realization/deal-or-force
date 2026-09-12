@@ -58,7 +58,7 @@
   },
 
   "line_infantry": {
-    "name": "Line infantry",
+    "name": "Leg infantry",
     "counter_symbol": "infantry",
     "attack": 1.00,
     "soft_attack": 1.00,

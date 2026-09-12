@@ -193,7 +193,7 @@ public static class UnitTypeCatalog
         // Compiled fallbacks, so the game is playable with no data files at all. These are
         // the same numbers game/common/units/unit_types.json ships.
         result.TryAdd("line_infantry", new UnitTypeDefinition(
-            "line_infantry", "Line infantry", "infantry", 1f, 1.10f, 1f, 20f, 0.95f)
+            "line_infantry", "Leg infantry", "infantry", 1f, 1.10f, 1f, 20f, 0.95f)
         {
             SoftAttack = 1.00f, HardAttack = 0.25f, Breakthrough = 0.55f, Armour = 0.30f,
             Piercing = 0.55f, Hardness = 0.05f, Organisation = 1.00f, Recovery = 1.00f
