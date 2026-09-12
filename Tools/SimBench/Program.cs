@@ -193,6 +193,8 @@ public static class Program
                 sandbox.IsPaused = false;
                 // Long enough for a war score to exist, so the peace has something to price.
                 for (var day = 0; day < 220; day++) sandbox.Tick();
+                failures += Check("the length of a step is a pace, not a difficulty",
+                    TheClockRunsAtAnyStep());
                 failures += Check("no region belongs to two countries at once",
                     EveryRegionHasOneOwner(sandbox));
                 failures += Check("a region cut by a new border becomes two regions",
@@ -1198,6 +1200,53 @@ public static class Program
     /// and Luhansk were the obvious ones - the region record said Ukraine, the ground under
     /// half of it said Russia, and the interface had to pick one of them to believe.
     /// </summary>
+    /// <summary>
+    /// Run the same month twice, once a day at a time and once three days at a time, and
+    /// see whether the two worlds recognise each other.
+    /// </summary>
+    private static string TheClockRunsAtAnyStep()
+    {
+        static (string Date, long Hours, int Days, long People, int Armies) Run(int hoursPerTick, int hours)
+        {
+            var campaign = Campaign.CreateBootstrap(20240404);
+            campaign.Defines.HoursPerTick = hoursPerTick;
+            campaign.IsPaused = false;
+            for (var elapsed = 0; elapsed < hours; elapsed += hoursPerTick) campaign.Tick();
+            return (campaign.Date.ToString(), campaign.ElapsedHours, campaign.ElapsedDays,
+                    campaign.Nations.Sum(nation => nation.Population), campaign.Armies.Count);
+        }
+
+        const int hours = 30 * 24;
+        var daily = Run(24, hours);
+        var thrice = Run(72, hours);
+
+        if (daily.Hours != thrice.Hours)
+            return $"the clocks disagree: {daily.Hours:N0} hours a day at a time, {thrice.Hours:N0} three at a time";
+        if (daily.Days != thrice.Days)
+            return $"the calendars disagree: day {daily.Days:N0} against day {thrice.Days:N0}";
+        if (!string.Equals(daily.Date, thrice.Date, StringComparison.Ordinal))
+            return $"the dates disagree: {daily.Date} against {thrice.Date}";
+
+        // The world itself only has to be recognisable. A day pass that ran the wrong
+        // number of times shows up here as a population or an army count that is out by
+        // a multiple, not by a rounding.
+        var peopleDrift = Math.Abs(daily.People - thrice.People) / (double)Math.Max(1L, daily.People);
+        if (peopleDrift > 0.01)
+            return $"the populations disagree by {peopleDrift:P2}: {daily.People:N0} against {thrice.People:N0}";
+        var armyDrift = Math.Abs(daily.Armies - thrice.Armies) / (double)Math.Max(1, daily.Armies);
+        if (armyDrift > 0.05)
+            return $"the armies disagree by {armyDrift:P1}: {daily.Armies:N0} against {thrice.Armies:N0}";
+
+        // And a step under a day has to be a fraction of one rather than a whole one.
+        var quarter = Run(6, hours);
+        if (quarter.Days != daily.Days)
+            return $"a six-hour step reached day {quarter.Days:N0} where a daily step reached {daily.Days:N0}";
+
+        Console.WriteLine($"  clock: {hours / 24} day(s) reached identically at 6, 24 and 72 hours a step " +
+                          $"({daily.Date}); populations within {peopleDrift:P2}, armies within {armyDrift:P1}.");
+        return "";
+    }
+
     private static string EveryRegionHasOneOwner(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;

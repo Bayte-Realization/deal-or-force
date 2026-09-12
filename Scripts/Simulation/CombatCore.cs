@@ -319,7 +319,7 @@ public static partial class Warfare
                 var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
                 // Progress belongs to the division, not a pooled province counter: a
                 // hundred divisions must not teleport one another across the border.
-                army.MoveProgress += campaign.Defines.UnopposedCapturePerDay *
+                army.MoveProgress += campaign.Defines.UnopposedCapturePerDay * campaign.TickScale *
                     UnitTypeCatalog.Get(army.TemplateId).Speed * MilitaryDoctrine.Movement(army.Stance) *
                     M.Clamp(army.SupplyLevel, 0.25f, 1f) * topology.TerrainAt(target).MovementSpeed *
                     riverAdvance * contested;

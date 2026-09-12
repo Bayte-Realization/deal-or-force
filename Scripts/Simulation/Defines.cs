@@ -34,6 +34,52 @@ public sealed class Defines
 	public float SecondsPerDay { get; set; } = 0.55f;
 
 	/// <summary>
+	/// Hours of campaign time one step of the simulation covers.
+	///
+	/// A day was both the smallest thing that could happen and the step the whole world
+	/// advanced in; those are two different decisions. Six hours makes armies march in four
+	/// smaller pieces a day instead of one, which is what "the armies feel slow" was partly
+	/// about - the same distance, arriving in view rather than in jumps. Seventy-two runs
+	/// three days in one step, which is a real fast-forward for a quiet decade.
+	///
+	/// Anything that accumulates at a rate per day takes its share of the step. Anything
+	/// that happens *on* a day - the weekly clearing, an event roll - runs once for each
+	/// whole day the step crossed, so the answer does not change with the step size.
+	/// Clamped to 1..240.
+	/// </summary>
+	public int HoursPerTick { get; set; } = 24;
+
+	// --- how fast an army is ---
+
+	/// <summary>
+	/// How much of a province a division crosses in a day at speed 1, before terrain,
+	/// supply, rivers and stance have their say.
+	///
+	/// 0.22 is four and a half days to cross one province - and there are thirty-eight
+	/// thousand of them, so a province is a district rather than a country. An army that
+	/// takes most of a week to walk across a district is an army the player watches rather
+	/// than commands, and that is a fair complaint.
+	///
+	/// It is left at 0.22 all the same, because the 2024 front turns out to be chaotically
+	/// sensitive to it: at 0.27 Ukraine keeps 56 % of its ground after two years of nobody
+	/// playing, at 0.32 it keeps 75 %, and the bench's stalemate check fails at both. The
+	/// number that makes armies feel right is not a number - it is a pass over entrenchment,
+	/// defence and how a front absorbs a breakthrough, and raising this alone just decides
+	/// the war for everybody. Raise it in a mod and see for yourself; that is what it is a
+	/// define for.
+	/// </summary>
+	public float MarchProgressPerDay { get; set; } = 0.22f;
+
+	/// <summary>Organisation a formation out of battle recovers in a day.</summary>
+	public float OrganisationRecoveryPerDay { get; set; } = 0.06f;
+
+	/// <summary>Strength a formation replaces from its own depots in a day.</summary>
+	public float StrengthRecoveryPerDay { get; set; } = 0.012f;
+
+	/// <summary>Organisation a formation in battle spends in a day.</summary>
+	public float OrganisationBurnPerDay { get; set; } = 0.16f;
+
+	/// <summary>
 	/// Milliseconds of a frame the simulation may spend catching up on days. One day is
 	/// always run so time never stops; beyond that the budget decides. Lower means a
 	/// steadier frame rate and slower time, higher the reverse.

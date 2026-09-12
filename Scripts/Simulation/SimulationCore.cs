@@ -63,7 +63,10 @@ public struct GameDate
     public int Month;
     public int Day;
 
-    public GameDate(int year, int month, int day) => (Year, Month, Day) = (year, month, day);
+    /// <summary>Hours into the day, 0-23. A campaign that steps a whole day never leaves 0.</summary>
+    public int Hour;
+
+    public GameDate(int year, int month, int day) => (Year, Month, Day, Hour) = (year, month, day, 0);
 
     public void Advance()
     {
@@ -74,6 +77,18 @@ public struct GameDate
         if (Month <= 12) return;
         Month = 1;
         Year++;
+    }
+
+    /// <summary>Move the clock on, rolling hours into days and days into months.</summary>
+    public void Advance(int hours)
+    {
+        if (hours <= 0) return;
+        Hour += hours;
+        while (Hour >= 24)
+        {
+            Hour -= 24;
+            Advance();
+        }
     }
 
     /// <summary>
@@ -88,7 +103,9 @@ public struct GameDate
     /// language the game ships in happens to share; a language that does not would want a
     /// frame here rather than three pieces glued together.
     /// </summary>
-    public string Display() => $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}";
+    public string Display() => Hour == 0
+        ? $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}"
+        : $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}, {Hour:00}:00";
 }
 
 /// <summary>Commands are the only legal way UI and AI mutate the campaign.</summary>
@@ -278,7 +295,29 @@ public sealed partial class Campaign
 
     public int Seed { get; }
     public GameDate Date;
-    public int ElapsedDays { get; private set; }
+    /// <summary>
+    /// Hours since the campaign began. The authoritative clock.
+    ///
+    /// Days are derived from it rather than counted alongside it, because two counters of
+    /// the same thing disagree the first time anything is restored, rounded or skipped.
+    /// </summary>
+    public long ElapsedHours { get; private set; }
+
+    /// <summary>Whole days since the campaign began. Every timestamp in the game is one of these.</summary>
+    public int ElapsedDays => (int)(ElapsedHours / 24);
+
+    /// <summary>
+    /// Hours one step of the simulation covers, as the defines ask for it. Clamped to
+    /// something a campaign can actually be run in: below an hour nothing accumulates
+    /// enough to see, and beyond ten days a single step hides a war.
+    /// </summary>
+    public int TickHours => Math.Clamp(Defines?.HoursPerTick ?? 24, 1, 240);
+
+    /// <summary>
+    /// How much of a day one step covers. Every rate written "per day" is multiplied by
+    /// this; at the default of 24 hours it is 1 and nothing changes.
+    /// </summary>
+    public float TickScale => TickHours / 24f;
     public bool IsPaused { get; set; } = true;
     public Nation Player { get; private set; }
     public int ActiveSeat { get; private set; }
@@ -361,33 +400,53 @@ public sealed partial class Campaign
         if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
         Commands.ApplyAll(this);
-        Date.Advance();
-        ElapsedDays++;
+
+        // What the step covers, and how many whole days it crosses. A day boundary is what
+        // the day pass is for; the hours are what everything that accumulates gets.
+        var hours = TickHours;
+        var before = ElapsedDays;
+        ElapsedHours += hours;
+        Date.Advance(hours);
+        var daysCrossed = ElapsedDays - before;
         DiagnosticLogs.SetDay(ElapsedDays);
 
         // Each pass is measured so both the in-game console (`sim`) and the headless
         // bench can say which system a slow day was actually spent in, rather than
         // leaving "the simulation is slow" as the whole diagnosis.
+        //
+        // These accumulate: marching, supply, organisation, the fighting itself and the
+        // building of things all happen at a rate per day, and a step that covers a
+        // fraction of a day gives them that fraction. They run once per step whatever the
+        // step is, which is what lets a six-hour tick move an army a quarter of the way
+        // instead of not at all.
         using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
         using (SimProfiler.Measure("military")) MilitaryOperations.Tick(this);
-        RecruitmentSystem.Tick(this);
         using (SimProfiler.Measure("naval"))
         {
             AiAdmiralty.Tick(this);
             NavalOperations.Tick(this);
         }
         using (SimProfiler.Measure("warfare")) Warfare.Tick(this);
-        // Right after the fighting: the day's broken formations are removed and the
+        // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
         using (SimProfiler.Measure("construction")) ConstructionSystem.Tick(this);
-        using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
-        using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
-        using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
-        using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);
-        using (SimProfiler.Measure("statecraft")) AiStatecraft.Tick(this);
-        using (SimProfiler.Measure("events")) EventSystem.Tick(this);
-        using (SimProfiler.Measure("history")) History.Capture(this);
+
+        // And these happen on a day rather than during one. An event either fires today or
+        // it does not; the economy clears on the week; history takes one sample. Running
+        // them once for each whole day the step crossed is what keeps the answer the same
+        // whether the campaign is stepping six hours at a time or three days.
+        for (var day = 0; day < daysCrossed; day++)
+        {
+            RecruitmentSystem.Tick(this);
+            using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
+            using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
+            using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
+            using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);
+            using (SimProfiler.Measure("statecraft")) AiStatecraft.Tick(this);
+            using (SimProfiler.Measure("events")) EventSystem.Tick(this);
+            using (SimProfiler.Measure("history")) History.Capture(this);
+        }
         CampaignIntel.Invalidate(this);
         if (DiagnosticLogs.Enabled)
             DiagnosticLogs.Write("simulation", $"DAY_END date={Date} player={Player?.Tag} divisions={Armies.Count} fleets={Fleets.Count} wars={Wars.Count(w => !w.Ended)} battles={Battles.Count(b => !b.Ended)} training={Recruitment.Count} construction={Construction.Count} treasury={DiagnosticLogs.N(Player?.Treasury ?? 0)} gdp={DiagnosticLogs.N(Player?.Gdp ?? 0)} map_revision={MapRevision}");
@@ -556,7 +615,7 @@ public sealed partial class Campaign
         int mapRevision, bool initialDeploymentCompleted, ushort[] controllers, float[] occupation, ushort[] owners, ushort[] states)
     {
         Date = date;
-        ElapsedDays = Math.Max(0, elapsedDays);
+        ElapsedHours = Math.Max(0, elapsedDays) * 24L + Math.Clamp(date.Hour, 0, 23);
         IsPaused = paused;
         Random.Restore(randomState);
         NextBattleId = Math.Max(0, nextBattleId);

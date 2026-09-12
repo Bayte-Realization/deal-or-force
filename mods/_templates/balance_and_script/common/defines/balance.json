@@ -1,5 +1,34 @@
+// Anything on Defines can be set here by its own name. These are the ones most worth
+// knowing about.
 {
   "supply_trace_range": 24,
   "occupation_daily_progress": 0.015,
-  "war_score_for_victory": 60.0
+  "war_score_for_victory": 60.0,
+
+  // How much campaign time one step of the simulation covers, in hours.
+  //
+  // 24 is a day and is what the game ships with. 72 runs three days in one step, which is
+  // a real fast-forward rather than a bigger frame budget - useful for a quiet decade.
+  // 6 makes a step a quarter of a day, so an army marches four smaller times a day instead
+  // of once and arrives in view rather than in jumps.
+  //
+  // The answer does not change with it: anything that accumulates at a rate per day takes
+  // its share of the step, and anything that happens *on* a day runs once for each whole
+  // day the step crossed.
+  "hours_per_tick": 24,
+
+  // How much of a province a division crosses in a day at speed 1. 0.22 is about four and
+  // a half days per province, and there are thirty-eight thousand provinces.
+  //
+  // Worth a warning before you raise it: the 2024 Russo-Ukrainian front turns out to be
+  // chaotically sensitive to this number, and not gradually. At 0.27 Ukraine keeps 56 % of
+  // its ground after two years of nobody playing; at 0.32 it keeps 75 %; at 0.22 the front
+  // holds. Faster armies want a matching pass over entrenchment and defence, or the
+  // simulation decides every war by itself.
+  "march_progress_per_day": 0.22,
+
+  // The other three that decide how an army behaves over time.
+  "organisation_recovery_per_day": 0.06,
+  "strength_recovery_per_day": 0.012,
+  "organisation_burn_per_day": 0.16
 }

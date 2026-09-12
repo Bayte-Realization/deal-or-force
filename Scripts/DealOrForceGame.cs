@@ -98,7 +98,10 @@ public partial class DealOrForceGame : Control
         if (_campaign.IsPaused) return;
 
         _dayAccumulator += delta;
-        var secondsPerDay = _campaign.Defines.SecondsForSpeed(_speed);
+        // Real seconds one step of the simulation is worth. The speed setting is still in
+        // days, because that is what a player thinks in; a campaign stepping six hours at a
+        // time simply takes four steps to spend one day's worth of them.
+        var secondsPerDay = _campaign.Defines.SecondsForSpeed(_speed) * _campaign.TickScale;
         var days = 0;
 
         // Time is given a slice of the frame rather than a number of days.

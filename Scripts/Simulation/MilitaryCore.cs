@@ -438,7 +438,8 @@ public static class MilitaryOperations
             ReturnWounded(campaign, army);
             if (!army.InBattle)
             {
-                var recovery = MilitaryBootstrap.OrganisationRecoveryPerDay * MilitaryDoctrine.Recovery(army.Stance) *
+                var recovery = campaign.Defines.OrganisationRecoveryPerDay * campaign.TickScale *
+                    MilitaryDoctrine.Recovery(army.Stance) *
                     M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f);
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
                 army.Organisation = M.Clamp01(army.Organisation + recovery);
@@ -457,11 +458,11 @@ public static class MilitaryOperations
             {
                 if (!army.InBattle)
                 {
-                    army.Entrenchment = M.Clamp01(army.Entrenchment + campaign.Defines.EntrenchmentPerDay *
+                    army.Entrenchment = M.Clamp01(army.Entrenchment + campaign.Defines.EntrenchmentPerDay * campaign.TickScale *
                         MilitaryDoctrine.Entrenchment(army.Stance));
                     if (army.AssignedWarId >= 0 &&
                         (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead))
-                        army.Planning = M.Clamp01(army.Planning + campaign.Defines.PlanningGainPerDay *
+                        army.Planning = M.Clamp01(army.Planning + campaign.Defines.PlanningGainPerDay * campaign.TickScale *
                             MilitaryDoctrine.Planning(army.Stance));
                 }
                 continue;
@@ -502,7 +503,7 @@ public static class MilitaryOperations
             }
             var crossingStrength = topology.RiverCrossingStrength(army.ProvinceId, nextProvince);
             var riverMovement = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier, crossingStrength);
-            army.MoveProgress += MilitaryBootstrap.MarchProgressPerDay * template.Speed *
+            army.MoveProgress += campaign.Defines.MarchProgressPerDay * campaign.TickScale * template.Speed *
                 MilitaryDoctrine.Movement(army.Stance) * M.Clamp(army.SupplyLevel, 0.25f, 1f) * riverMovement *
                 topology.TerrainAt(nextProvince).MovementSpeed *
                 StrategicRedeployment.DayOf(campaign, army);
@@ -550,11 +551,11 @@ public static class MilitaryOperations
         if (army.SupplyLevel < campaign.Defines.WoundedReturnMinimumSupply)
         {
             // Untreated, they stop being wounded and start being losses.
-            army.Recovering *= 1f - campaign.Defines.WoundedLostWhenUnsuppliedPerDay;
+            army.Recovering *= 1f - campaign.Defines.WoundedLostWhenUnsuppliedPerDay * campaign.TickScale;
             return;
         }
         var capacity = army.Divisions * MilitaryBootstrap.DivisionSize;
-        var returning = MathF.Min(army.Recovering * campaign.Defines.WoundedReturnPerDay,
+        var returning = MathF.Min(army.Recovering * campaign.Defines.WoundedReturnPerDay * campaign.TickScale,
             MathF.Max(0f, capacity * (1f - army.Strength)));
         if (returning <= 0f) return;
         army.Recovering -= returning;
@@ -835,6 +836,9 @@ public static class MilitaryBootstrap
     public const float DivisionSize = 15_000f;
     public const float DivisionsPerArmy = 12f;
     public const int MaxPerCountry = 14;
+    // Kept as the fallback the defines start from, and as what any caller without a
+    // campaign in its hand still gets. The live values are on Defines, where a mod can
+    // reach them.
     public const float OrganisationRecoveryPerDay = 0.06f;
     public const float StrengthRecoveryPerDay = 0.012f;
     public const float OrganisationBurnPerDay = 0.16f;
