@@ -12,6 +12,32 @@ public sealed class Defines
 	public int BorderVisionDepth { get; set; } = 3;
 	public int ArmyVisionDepth { get; set; } = 1;
 	public float LandingVisionRangeDegrees { get; set; } = 1f;
+
+	/// <summary>
+	/// How far in the map has to be zoomed before unseen ground is tinted at all, and how
+	/// far out before the tint is gone entirely.
+	///
+	/// What fog is FOR is hiding things - formations, their strength, what is happening in
+	/// a province - and none of that is the tint. That is decided by the vision model and
+	/// applies at every zoom, whatever the map looks like. The tint only says "you are not
+	/// being shown this", which is worth saying when a player is reading one country and is
+	/// a grey blanket over half the world when they are looking at the globe.
+	///
+	/// So it fades with distance: full at <see cref="FogTintFullDistance"/> and nothing
+	/// beyond <see cref="FogTintClearDistance"/>. The camera runs from 5.25 to 24.
+	/// </summary>
+	public float FogTintFullDistance { get; set; } = 7f;
+
+	public float FogTintClearDistance { get; set; } = 12f;
+
+	/// <summary>
+	/// How dark unseen ground goes at the closest zoom, and how much colour it keeps. One
+	/// is untouched; the darkness multiplies the colour and the saturation mixes it back
+	/// towards grey.
+	/// </summary>
+	public float FogTintDarkness { get; set; } = 0.74f;
+
+	public float FogTintSaturation { get; set; } = 0.65f;
 	// --- calendar ---
 
 	public int StartYear { get; set; } = 2024;

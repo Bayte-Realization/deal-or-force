@@ -454,6 +454,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var fogViewer = FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
         _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
+        UpdateFogTint();
         UpdateFogVisibility();
         UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f);
         var armyLod = ViewDistance <= 10.8f;
@@ -1716,6 +1717,12 @@ float planned_border(float province, vec2 uv) {
 }
 uniform float fog_viewer = -1.0;
 uniform sampler2D fog_visibility : filter_nearest, repeat_disable;
+// How much of the tint to apply, which is a function of how close the camera is. What fog
+// HIDES is not here and never was - that is the vision model, and it applies at every zoom.
+// This is only the grey wash, and a grey wash over half a globe helps nobody read it.
+uniform float fog_tint = 1.0;
+uniform float fog_darkness = 0.74;
+uniform float fog_saturation = 0.65;
 void fragment() {
     // One wander, and every boundary on the map reads through it.
     //
@@ -1994,8 +2001,8 @@ void fragment() {
     float selection_edge = max(region_edge * region_selected, province_edge * province_selected * province_detail);
     vec2 fog_lookup = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
     float known = texture(fog_visibility, fog_lookup).r;
-    float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, known)) * political.a;
-    base = mix(base, mix(vec3(dot(base, vec3(0.2126, 0.7152, 0.0722))), base, 0.50) * 0.60, fog);
+    float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, known)) * political.a * fog_tint;
+    base = mix(base, mix(vec3(dot(base, vec3(0.2126, 0.7152, 0.0722))), base, fog_saturation) * fog_darkness, fog);
     ALBEDO = mix(base, vec3(1.0, 0.84, 0.30), selection_edge * 0.92);
     EMISSION = mix(water * 0.025, vec3(0.28, 0.18, 0.025), selection_edge * 0.48) +
         plan_color * plan_on * 0.14 +
@@ -2838,6 +2845,37 @@ void fragment() {
             pixels[write + 3] = (byte)(color.A * 255f);
         }
         return ImageTexture.CreateFromImage(Image.CreateFromData(width, height, false, Image.Format.Rgba8, pixels));
+    }
+
+    /// <summary>
+    /// How much of the fog tint to draw at this zoom.
+    ///
+    /// Fog does two jobs and they used to be one number. The first is hiding: which
+    /// formations are drawn, what a province report says, whether a battle is on the map at
+    /// all. That is the vision model, it has nothing to do with the camera, and it must not
+    /// - a player who could learn something by pulling the camera back would not be playing
+    /// with fog at all.
+    ///
+    /// The second is the grey wash, which is only ever a legibility device: it says "you are
+    /// not being shown this" about ground the player is looking at. Up close that is worth
+    /// saying. At globe distance it is a grey blanket over most of the world, obscuring the
+    /// one thing a world map is for and telling the player nothing they did not know.
+    ///
+    /// So the wash fades out with distance. The hiding does not.
+    /// </summary>
+    private void UpdateFogTint()
+    {
+        if (_globeMaterial is null) return;
+        var defines = _campaign?.Defines;
+        var full = defines?.FogTintFullDistance ?? 7f;
+        var clear = defines?.FogTintClearDistance ?? 12f;
+
+        // A mod that puts the two the wrong way round gets no tint rather than an inverted
+        // one, which is the failure that would be hardest to recognise as a mistake.
+        var tint = clear <= full ? 0f : 1f - Mathf.SmoothStep(full, clear, ViewDistance);
+        _globeMaterial.SetShaderParameter("fog_tint", tint);
+        _globeMaterial.SetShaderParameter("fog_darkness", defines?.FogTintDarkness ?? 0.74f);
+        _globeMaterial.SetShaderParameter("fog_saturation", defines?.FogTintSaturation ?? 0.65f);
     }
 
     /// <summary>Rebuild the region index when the campaign has redrawn the map since.</summary>
