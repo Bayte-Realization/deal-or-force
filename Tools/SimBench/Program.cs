@@ -175,6 +175,8 @@ public static class Program
             FlagsFollowWhatACountryIs());
         failures += Check("every country knows where its capital is",
             EveryCountryHasACapital(campaign));
+        failures += Check("an army sent somewhere gets there more often than it is sent elsewhere",
+            OrdersHoldLongEnoughToBeObeyed());
         failures += Check("a country that is failing stops being what it was",
             GovernmentsChangeWithoutBeingTold());
         failures += Check("a second campaign in one session starts in the authored world",
@@ -2863,6 +2865,241 @@ public static class Program
     /// provinces lies closest to a point in the Gulf of Guinea. Kosovo's capital had been
     /// written down the whole time under the tag XKX while the country table calls it KOS.
     /// </summary>
+    /// <summary>
+    /// Whether the war is one a player can command.
+    ///
+    /// The complaint this exists for is "my troops refuse to advance and just walk about
+    /// for ever", and it turned out to be measurable: a division is re-posted whenever the
+    /// front list it was drawn from is rebuilt, which happens every time a single province
+    /// changes hands, so divisions were being sent somewhere new about twice for every time
+    /// one arrived anywhere.
+    ///
+    /// The numbers are printed every run and bounded loosely. They are not a balance target
+    /// - a war of movement re-tasks people - but an army that is re-tasked five times for
+    /// every arrival is an army nobody is commanding, and that is worth failing over.
+    /// </summary>
+    private static string OrdersHoldLongEnoughToBeObeyed()
+    {
+        var campaign = Campaign.CreateBootstrap(20241111);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var ukr = campaign.NationByTag("UKR");
+        var rus = campaign.NationByTag("RUS");
+        if (ukr is null || rus is null) return "";
+
+        Warfare.OutcomeTally.Clear();
+
+        // What the front looked like on day zero, so movement can be measured rather than
+        // eyeballed: how many provinces each side held of the ground either of them holds.
+        int HeldBy(Nation nation)
+        {
+            var held = 0;
+            var control = campaign.ProvinceController;
+            for (var province = 1; province < control.Length; province++)
+                if (control[province] == (ushort)nation.MapIndex) held++;
+            return held;
+        }
+
+        var ukrStart = HeldBy(ukr);
+        var rusStart = HeldBy(rus);
+
+        var idleDays = new Dictionary<int, int>();
+        var lastTarget = new Dictionary<int, int>();
+        var retargets = new Dictionary<int, int>();
+        var arrivals = new Dictionary<int, int>();
+        var lastProvince = new Dictionary<int, int>();
+        var visited = new Dictionary<int, Dictionary<int, int>>();
+        var everFought = new HashSet<int>();
+        var battlesSeen = new HashSet<int>();
+        var durations = new List<int>();
+        long engagedRounds = 0;
+        var stuckPeak = 0;
+
+        const int days = 365 * 3;
+        for (var day = 0; day < days; day++)
+        {
+            campaign.Tick();
+
+            var fighting = new HashSet<int>();
+            foreach (var battle in campaign.Battles)
+            {
+                if (battle.Ended) continue;
+                foreach (var id in battle.Attackers) fighting.Add(id);
+                foreach (var id in battle.Defenders) fighting.Add(id);
+                engagedRounds++;
+            }
+            foreach (var id in fighting) everFought.Add(id);
+
+            // A formation of a country at war, standing still, not fighting, with no route.
+            // Marching for ever without arriving, and walking in circles. A formation with a
+            // route was counted as busy, which is exactly how an army that never gets
+            // anywhere hides: it is always on its way somewhere.
+            foreach (var army in campaign.Armies)
+            {
+                // How often a formation is told to go somewhere ELSE. Route is a one-step
+                // queue and is refilled daily for anything that is moving, so counting days
+                // with a route measures nothing; what matters is how often the destination
+                // changes under a division that has not reached the last one.
+                if (!lastTarget.TryGetValue(army.Id, out var was2)) lastTarget[army.Id] = army.OrderProvinceId;
+                else if (was2 != army.OrderProvinceId)
+                {
+                    lastTarget[army.Id] = army.OrderProvinceId;
+                    if (army.OrderProvinceId > 0)
+                    {
+                        if (was2 > 0 && army.ProvinceId != was2) retargets[army.Id] = retargets.GetValueOrDefault(army.Id) + 1;
+                        else arrivals[army.Id] = arrivals.GetValueOrDefault(army.Id) + 1;
+                    }
+                }
+
+                if (!lastProvince.TryGetValue(army.Id, out var was)) lastProvince[army.Id] = army.ProvinceId;
+                else if (was != army.ProvinceId)
+                {
+                    lastProvince[army.Id] = army.ProvinceId;
+                    if (!visited.TryGetValue(army.Id, out var seen))
+                        visited[army.Id] = seen = new Dictionary<int, int>();
+                    seen[army.ProvinceId] = seen.GetValueOrDefault(army.ProvinceId) + 1;
+                }
+            }
+
+            var stuck = 0;
+            foreach (var army in campaign.Armies)
+            {
+                var owner = campaign.NationById(army.NationId);
+                if (owner is null) continue;
+                var atWar = false;
+                foreach (var war in campaign.Wars)
+                    if (!war.Ended && war.Involves(owner.Id)) { atWar = true; break; }
+                if (!atWar) { idleDays.Remove(army.Id); continue; }
+                if (fighting.Contains(army.Id) || army.Route.Count > 0)
+                {
+                    idleDays.Remove(army.Id);
+                    continue;
+                }
+                idleDays[army.Id] = idleDays.GetValueOrDefault(army.Id) + 1;
+                if (idleDays[army.Id] >= 120) stuck++;
+            }
+            stuckPeak = Math.Max(stuckPeak, stuck);
+
+            foreach (var battle in campaign.Battles)
+            {
+                if (!battle.Ended || !battlesSeen.Add(battle.Id)) continue;
+                durations.Add(Math.Max(0, campaign.ElapsedDays - battle.StartedDay));
+            }
+        }
+
+        var ukrEnd = HeldBy(ukr);
+        var rusEnd = HeldBy(rus);
+
+        durations.Sort();
+        var median = durations.Count == 0 ? 0 : durations[durations.Count / 2];
+        var longest = durations.Count == 0 ? 0 : durations[^1];
+        var oneDay = durations.Count(d => d <= 1);
+
+        var atWarArmies = 0;
+        foreach (var army in campaign.Armies)
+        {
+            var owner = campaign.NationById(army.NationId);
+            if (owner is null) continue;
+            foreach (var war in campaign.Wars)
+                if (!war.Ended && war.Involves(owner.Id)) { atWarArmies++; break; }
+        }
+
+        var neverFought = 0;
+        foreach (var army in campaign.Armies)
+            if ((army.NationId == ukr.Id || army.NationId == rus.Id) && !everFought.Contains(army.Id))
+                neverFought++;
+
+        Console.WriteLine($"  PROBE three years from 2024-11-11:");
+        Console.WriteLine($"    battles: {battlesSeen.Count:N0} finished, median {median} day(s), " +
+                          $"longest {longest}, {oneDay:N0} lasted a day or less");
+        Console.WriteLine($"    outcomes: " + string.Join(", ",
+            Warfare.OutcomeTally.OrderByDescending(entry => entry.Value)
+                   .Select(entry => $"{entry.Key} {entry.Value:N0}")));
+        Console.WriteLine($"    ground: UKR {ukrStart:N0} -> {ukrEnd:N0} province(s), " +
+                          $"RUS {rusStart:N0} -> {rusEnd:N0}");
+        Console.WriteLine($"    formations: {atWarArmies:N0} belong to countries at war; " +
+                          $"{neverFought:N0} of RUS/UKR never saw a battle in three years");
+        Console.WriteLine($"    idle: at worst {stuckPeak:N0} formation(s) stood still for 120+ days " +
+                          $"while their country was at war");
+
+        // Whose they are, and what they were told to do. "Idle" is only interesting if it
+        // is the big wars; a hundred small states at war with nobody nearby is not a bug.
+        var byNation = new Dictionary<string, int>();
+        var byOrder = new Dictionary<string, int>();
+        var frontless = 0;
+        foreach (var (armyId, stood) in idleDays)
+        {
+            if (stood < 120) continue;
+            var army = campaign.Armies.Find(a => a.Id == armyId);
+            if (army is null) continue;
+            var owner = campaign.NationById(army.NationId);
+            var tag = owner?.Tag ?? "??";
+            byNation[tag] = byNation.GetValueOrDefault(tag) + 1;
+            byOrder[army.OrderKind.ToString()] = byOrder.GetValueOrDefault(army.OrderKind.ToString()) + 1;
+
+            // Is there a front for it to be on at all?
+            var onFront = false;
+            foreach (var war in campaign.Wars)
+            {
+                if (war.Ended || owner is null || !war.Involves(owner.Id)) continue;
+                if (war.FriendlyFront(owner.Id).Count > 0) { onFront = true; break; }
+            }
+            if (!onFront) frontless++;
+        }
+        Console.WriteLine($"    idle by country: " + string.Join(", ",
+            byNation.OrderByDescending(e => e.Value).Take(8).Select(e => $"{e.Key} {e.Value}")));
+        Console.WriteLine($"    idle by order: " + string.Join(", ",
+            byOrder.OrderByDescending(e => e.Value).Select(e => $"{e.Key} {e.Value}")));
+        Console.WriteLine($"    of those, {frontless:N0} belong to a war with no front at all");
+        // Orders changed under a division that had not got where it was last sent.
+        var churn = retargets.Values.Sum();
+        var arrived = arrivals.Values.Sum();
+        var worstChurn = 0;
+        var worstChurnArmy = 0;
+        foreach (var (armyId, count) in retargets)
+            if (count > worstChurn) { worstChurn = count; worstChurnArmy = armyId; }
+        var churned = campaign.Armies.Find(a => a.Id == worstChurnArmy);
+        Console.WriteLine($"    orders: {churn:N0} re-target(s) of a division that had not arrived, " +
+                          $"against {arrived:N0} arrival(s) - worst division re-tasked {worstChurn:N0} times " +
+                          $"({campaign.NationById(churned?.NationId ?? -1)?.Tag}, {churned?.OrderKind})");
+
+        // Walking in circles: a province entered again and again is a formation being sent
+        // back somewhere it has just left.
+        var circlers = 0;
+        var worstRevisits = 0;
+        var worstArmy = 0;
+        foreach (var (armyId, seen) in visited)
+        {
+            var most = 0;
+            foreach (var count in seen.Values) most = Math.Max(most, count);
+            if (most >= 5) circlers++;
+            if (most > worstRevisits) { worstRevisits = most; worstArmy = armyId; }
+        }
+        var worst = campaign.Armies.Find(a => a.Id == worstArmy);
+        Console.WriteLine($"    circling: {circlers:N0} formation(s) entered the same province 5+ times; " +
+                          $"the worst re-entered one province {worstRevisits:N0} times " +
+                          $"({campaign.NationById(worst?.NationId ?? -1)?.Tag}, order {worst?.OrderKind})");
+
+        Console.WriteLine($"    engagement-days: {engagedRounds:N0} across {days} days");
+        Console.WriteLine($"    wars: {campaign.Wars.Count(war => !war.Ended):N0} running, " +
+                          $"{campaign.Wars.Count(war => war.Ended):N0} ended");
+
+        if (arrived == 0)
+            return "not one division reached the post it was sent to in three years";
+        var perArrival = churn / (float)arrived;
+        if (perArrival > 3.0f)
+            return $"divisions were sent somewhere new {perArrival:0.0} times for every one that " +
+                   $"arrived ({churn:N0} against {arrived:N0}), which is not an army anybody is commanding";
+        if (worstRevisits > 30)
+            return $"one division entered the same province {worstRevisits:N0} times, which is not " +
+                   "a march, it is a pendulum";
+        if (battlesSeen.Count < 100)
+            return $"only {battlesSeen.Count:N0} battles were fought in three years of a world with " +
+                   "a live invasion in it";
+        return "";
+    }
+
     private static string EveryCountryHasACapital(Campaign campaign)
     {
         var nameless = new List<string>();
@@ -5886,8 +6123,8 @@ public static class Program
         client.IsPaused = false;
         for (var day = 0; day < 10; day++) { host.Tick(); client.Tick(); }
         if (CampaignFingerprint.Of(host) != CampaignFingerprint.Of(client))
-            return "the two worlds agreed at the moment of the snapshot and diverged within ten days, " +
-                   "so something the simulation reads is not in it";
+            return "the two worlds agreed at the moment of the snapshot and diverged within ten " +
+                   "days, so something the simulation reads is not in it: " + WhatDiffers(host, client);
 
         Console.WriteLine($"  snapshot: a world of {host.States.Count:N0} region(s) ({carved:N0} carved by " +
                           $"borders), {biased:N0} stability baselines and {readiness:N0} region(s) part-way " +
