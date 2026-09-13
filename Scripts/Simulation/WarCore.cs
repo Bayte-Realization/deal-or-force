@@ -235,6 +235,21 @@ public static partial class FrontPlanner
                 continue;
             if (army.DirectOrder && army.OrderProvinceId > 0) continue;
             if (army.EmbarkedFleetId >= 0) continue;
+
+            // A division that was given somewhere to be, and is still on its way there, is
+            // left to get there.
+            //
+            // The test below asks whether the target is still on the front, and the front is
+            // rebuilt every time a province changes hands - so on a moving front a marching
+            // division fails that test almost every day and is handed a new target it will
+            // also never reach. That is measurable: three years of unbroken marching, and a
+            // hundred and twelve formations re-entering the same province five times or more.
+            //
+            // What still excuses an immediate re-task is the objective going away: ground we
+            // now hold ourselves is not somewhere to march to.
+            if (army.OrderProvinceId > 0 &&
+                campaign.ElapsedDays - army.OrderIssuedDay < campaign.Defines.OrderSettleDays &&
+                !OwnGround(campaign, army)) continue;
             var expected = BattlePlanning.Posts(campaign, war, army);
             if (expected.Count == 0 || expected.Contains(army.ProvinceId) ||
                 (army.OrderProvinceId > 0 && expected.Contains(army.OrderProvinceId)))
@@ -247,6 +262,23 @@ public static partial class FrontPlanner
                 ObjectiveStateMapIndex = army.ObjectiveStateMapIndex
             }.Apply(campaign);
         }
+    }
+
+    /// <summary>
+    /// Whether what a formation is marching towards is already its own side's ground, which
+    /// is the one thing that makes a march pointless rather than merely unfinished.
+    /// </summary>
+    private static bool OwnGround(Campaign campaign, Army army)
+    {
+        var control = campaign.ProvinceController;
+        var nation = campaign.NationById(army.NationId);
+        if (control is null || nation is null) return false;
+        if (army.OrderProvinceId <= 0 || army.OrderProvinceId >= control.Length) return false;
+        // Only for the orders that are about taking ground. A division posted to defend or
+        // to sit in reserve is supposed to be marching to somewhere its own side holds.
+        if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead)
+            return false;
+        return control[army.OrderProvinceId] == (ushort)nation.MapIndex;
     }
 
     public static void AssignAi(Campaign campaign)
@@ -294,7 +326,22 @@ public static partial class FrontPlanner
         // two thirds of its ground to a mechanic written to help it hold.
         var armies = campaign.Armies.FindAll(army =>
             army.NationId == nationId && army.TemplateId != MilitiaCore.TemplateId);
+        // Strongest first.
+        //
+        // Worth recording what does NOT work here, because it looks obviously right: Power
+        // moves every day with losses and recovery, so similar divisions trade places
+        // constantly, and roles are handed out by POSITION in this list - so a swap across
+        // the spearhead/advance boundary flips two divisions' orders and restarts both their
+        // marches. Bucketing the power to damp that was tried at two coarsenesses and made
+        // the war worse both times: the ties it creates are broken by id, which is unrelated
+        // to strength, so weak divisions lead attacks. Ukraine lost thirty provinces at 0.1
+        // and thirty at 0.02 where it gained eighteen without it.
+        //
+        // The churn is real - 8,000-odd orders in three years against 2,900 arrivals - but
+        // the cure is not here. It is that a division should be re-posted when its post has
+        // stopped being useful, not when the list it came from was rebuilt.
         armies.Sort((a, b) => b.Power.CompareTo(a.Power));
+
         var advanceShare = attacking ? profile.AdvanceShareAttacker : profile.AdvanceShareDefender;
         var spearhead = armies.Count == 0 ? 0 : Math.Min((int)MathF.Round(armies.Count * advanceShare),
             Math.Max(1, (int)MathF.Round(armies.Count * profile.SpearheadShare)));

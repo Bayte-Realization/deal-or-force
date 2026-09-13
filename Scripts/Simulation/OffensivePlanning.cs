@@ -100,6 +100,7 @@ public static class OffensivePlanning
             ? map.FindOperationalRoute(army.ProvinceId, target, (ushort)own.MapIndex, (ushort)enemy.MapIndex, control)
             : map.FindRoute(army.ProvinceId, target, (ushort)own.MapIndex, control);
         army.OrderProvinceId = target; army.OrderStateMapIndex = map.ProvinceToState[target];
+        army.OrderIssuedDay = c.ElapsedDays;
         army.PlannedRoute.AddRange(route);
         army.Route.AddRange(route.TakeWhile(p => control[p] == own.MapIndex));
         army.OrderRouteSteps = route.Length; army.OrderStepsCompleted = 0;

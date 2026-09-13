@@ -9,6 +9,17 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public sealed class Defines
 {
+	/// <summary>
+	/// How long a formation is left to reach the post it was sent to before the front
+	/// planner may send it somewhere else.
+	///
+	/// Without this the planner re-tasks a marching division every time the line shifts,
+	/// which on an active front is daily - so the division marches for ever and arrives
+	/// nowhere. Ten days is long enough to cross a few provinces and short enough that a
+	/// division is not left walking towards a sector that has genuinely moved on.
+	/// </summary>
+	public int OrderSettleDays { get; set; } = 10;
+
 	public int BorderVisionDepth { get; set; } = 3;
 	public int ArmyVisionDepth { get; set; } = 1;
 	public float LandingVisionRangeDegrees { get; set; } = 1f;
