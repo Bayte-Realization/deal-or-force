@@ -511,3 +511,30 @@ loading, or if the world stopped governing itself:
     dotnet run --project Tools/SimBench/SimBench.csproj -c Release -- 730
 
 A second argument reseeds the world, which is how to tell a real change from a lucky run.
+
+## Asking the running game
+
+The bench answers questions about a world nobody is looking at. The console answers them
+about the one on screen: press **`~`** and type `help`.
+
+Seventy-seven commands, grouped; `help NAME` explains one, Tab completes a name, Up and Down
+walk back through what you typed. Seven of them exist for the person editing `game/`:
+
+| ask | and it says |
+|---|---|
+| `validate` | every complaint your data made while loading, file by file |
+| `reload` | re-read every data file into the campaign already running |
+| `effects [filter]` | every key an effect may write to, which is otherwise guesswork |
+| `defines [filter]` | every tunable the simulation is running on, at its current value |
+| `settings [filter]` | every setting the game declares, and what it is set to |
+| `skin [filter]` | what the interface is painted with, and which tokens you have moved |
+| `flags [TAG]` | every flag name the resolver tries for a country, in order, marked with whether your art exists |
+
+`reload` is the one that changes how modding feels. A colour, a number, a translated line or
+a whole catalogue can be edited on disk and pulled into the campaign you are already playing,
+without going back to the menu. Panels already on screen take their new colours as they are
+rebuilt; everything else is live immediately.
+
+`selftest` runs every command once and reports the ones that threw. It is a check on the
+console rather than on your mod, and it perturbs the world it runs in, so give it a campaign
+you do not mind losing.

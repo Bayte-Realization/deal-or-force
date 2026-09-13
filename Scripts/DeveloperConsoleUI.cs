@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using DealOrForce.Simulation;
@@ -13,6 +14,17 @@ public partial class DealOrForceGame
     private LineEdit _developerConsoleInput = null!;
     private bool _observerMode;
     private bool _freeCameraMode;
+
+    /// <summary>
+    /// What has been typed, oldest first, and where Up and Down currently are in it.
+    ///
+    /// A console without this is one where testing the same command with a different number
+    /// means typing the whole line again, which is most of what a developer console is used
+    /// for. The index sits one past the end when nothing is being recalled.
+    /// </summary>
+    private readonly List<string> _consoleHistory = new();
+
+    private int _consoleHistoryAt;
 
     private void BuildDeveloperConsole()
     {
@@ -59,7 +71,10 @@ public partial class DealOrForceGame
             SelectionEnabled = true,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 260),
-            Text = Bb("text.accent") + "Deal or Force console[/color]\nType " + Bb("state.info") + "help[/color] for commands. Commands are local and deterministic."
+            Text = Bb("text.accent") + "Deal or Force console[/color]\n" +
+                   Bb("state.info") + "help[/color] lists everything · " +
+                   Bb("state.info") + "help NAME[/color] explains one · Tab completes · " +
+                   "Up and Down are the history\nCommands are local and deterministic."
         };
         _developerConsoleOutput.AddThemeFontSizeOverride("normal_font_size", 14);
         rows.AddChild(_developerConsoleOutput);
@@ -71,7 +86,9 @@ public partial class DealOrForceGame
             ClearButtonEnabled = true
         };
         _developerConsoleInput.TextSubmitted += ExecuteDeveloperCommand;
+        _developerConsoleInput.GuiInput += ConsoleInputKey;
         rows.AddChild(_developerConsoleInput);
+        EnsureConsoleCommands();
     }
 
     private void ToggleDeveloperConsole()
@@ -101,61 +118,106 @@ public partial class DealOrForceGame
         if (raw.Length == 0) return;
         _developerConsoleOutput.AppendText($"\n{Bb("text.caption")}> {EscapeBb(raw)}[/color]");
         _developerConsoleInput.Clear();
-        var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        // Remembered before it is run, so a command that throws is still one Up away.
+        if (_consoleHistory.Count == 0 || _consoleHistory[^1] != raw) _consoleHistory.Add(raw);
+        if (_consoleHistory.Count > 200) _consoleHistory.RemoveAt(0);
+        _consoleHistoryAt = _consoleHistory.Count;
+
+        EnsureConsoleCommands();
+        var parts = raw.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var command = parts[0].ToLowerInvariant();
-        var argument = parts.Length > 1 ? string.Join(' ', parts.Skip(1)) : "";
+        var argument = parts.Length > 1 ? parts[1] : "";
+        if (!_consoleByName.TryGetValue(command, out var entry))
+        {
+            _developerConsoleOutput.AppendText(
+                $"\n{Bb("state.warning")}No command '{EscapeBb(command)}'.[/color]{ConsoleSuggestion(command)}");
+            _developerConsoleInput.GrabFocus();
+            return;
+        }
+
         try
         {
-            var response = command switch
-            {
-                "help" or "?" => ConsoleHelp(),
-                "clear" or "cls" => ClearConsole(),
-                "tag" => ConsoleTag(argument),
-                "observe" => ConsoleObserve(),
-                "pause" => ConsolePause(),
-                "speed" => ConsoleSpeed(argument),
-                "money" or "cash" => ConsoleMoney(argument),
-                "manpower" => ConsoleManpower(argument),
-                "stability" => ConsoleStability(argument),
-                "event" => ConsoleEvent(),
-                "freecam" => ConsoleFreeCamera(argument),
-                "mapmode" => ConsoleMapMode(argument),
-                "focus" => ConsoleFocus(argument),
-                "teleport" or "tp" => ConsoleTeleport(argument),
-                "armies" or "divisions" => ConsoleArmies(),
-                "fronts" => ConsoleFronts(),
-                "province" => ConsoleProvince(),
-                "fps" => $"FPS: {Engine.GetFramesPerSecond()} · process {_ProcessTimeMs():0.00} ms",
-                "sim" => ConsoleSimulation(),
-                "logs" => $"Logging: {(DiagnosticLogs.Enabled ? "active" : "inactive")}\nFolder: {DiagnosticLogs.DirectoryPath}\nWritten lines: {DiagnosticLogs.WrittenLines}\nLast failure: {DiagnosticLogs.LastFailure}",
-                "economy" or "gdp" => ConsoleEconomy(),
-                "loc" or "localization" => ConsoleLocalization(argument),
-                "effects" => ConsoleEffectVocabulary(),
-                "skin" or "interface" => ConsoleSkin(argument),
-                "peace" or "conference" => ConsolePeaceConference(),
-                "date" => _campaign?.Date.ToString() ?? "No campaign",
-                _ => $"Unknown command '{command}'. Type help."
-            };
+            var response = entry.Run(argument);
             if (!string.IsNullOrEmpty(response)) _developerConsoleOutput.AppendText($"\n{response}");
         }
         catch (Exception exception)
         {
             DiagnosticLogs.Write("errors", $"CONSOLE_EXCEPTION command={command} error={exception}");
-            _developerConsoleOutput.AppendText($"\n{Bb("state.negative")}Command failed: {EscapeBb(exception.Message)}[/color]");
+            _developerConsoleOutput.AppendText(
+                $"\n{Bb("state.negative")}{EscapeBb(entry.Name)} failed: {EscapeBb(exception.Message)}[/color]" +
+                $"\n{Bb("text.muted")}{EscapeBb(entry.Usage)}[/color]");
         }
         _developerConsoleInput.GrabFocus();
     }
 
+    /// <summary>
+    /// Tab, Up and Down. Godot hands the line edit every key first, so these three have to be
+    /// taken here and swallowed, or Tab moves the focus out of the console and Up walks the
+    /// caret instead of the history.
+    /// </summary>
+    private void ConsoleInputKey(InputEvent @event)
+    {
+        if (@event is not InputEventKey { Pressed: true } key) return;
+        switch (key.Keycode)
+        {
+            case Key.Tab:
+                ConsoleComplete();
+                _developerConsoleInput.AcceptEvent();
+                break;
+            case Key.Up:
+                ConsoleRecall(-1);
+                _developerConsoleInput.AcceptEvent();
+                break;
+            case Key.Down:
+                ConsoleRecall(1);
+                _developerConsoleInput.AcceptEvent();
+                break;
+        }
+    }
+
+    private void ConsoleRecall(int step)
+    {
+        if (_consoleHistory.Count == 0) return;
+        _consoleHistoryAt = Math.Clamp(_consoleHistoryAt + step, 0, _consoleHistory.Count);
+        _developerConsoleInput.Text = _consoleHistoryAt >= _consoleHistory.Count
+            ? ""
+            : _consoleHistory[_consoleHistoryAt];
+        _developerConsoleInput.CaretColumn = _developerConsoleInput.Text.Length;
+    }
+
+    /// <summary>
+    /// Finish the command being typed. One match completes it; several print themselves and
+    /// fill in as far as they agree, which is the behaviour every shell has trained everybody
+    /// to expect.
+    /// </summary>
+    private void ConsoleComplete()
+    {
+        var typed = _developerConsoleInput.Text ?? "";
+        if (typed.Contains(' ')) return;
+        var matches = ConsoleCompletions(typed);
+        if (matches.Count == 0) return;
+        if (matches.Count == 1)
+        {
+            _developerConsoleInput.Text = matches[0] + " ";
+            _developerConsoleInput.CaretColumn = _developerConsoleInput.Text.Length;
+            return;
+        }
+
+        var shared = matches[0];
+        foreach (var match in matches)
+        {
+            var length = 0;
+            while (length < shared.Length && length < match.Length &&
+                   char.ToLowerInvariant(shared[length]) == char.ToLowerInvariant(match[length])) length++;
+            shared = shared[..length];
+        }
+        _developerConsoleInput.Text = shared;
+        _developerConsoleInput.CaretColumn = shared.Length;
+        _developerConsoleOutput.AppendText($"\n{Bb("text.muted")}{string.Join("  ", matches)}[/color]");
+    }
+
     /// <summary>BBCode markers that follow the skin, so the console recolours with the game.</summary>
     private static string Bb(string token) => "[color=" + Simulation.InterfaceSkin.Colour(token) + "]";
-
-    private static string ConsoleHelp() =>
-        Bb("text.accent") + "CONTROL[/color]  tag TAG · observe · pause · speed 1-5 · freecam [on/off]\n" +
-        Bb("text.accent") + "MAP[/color]  mapmode pol/dip/war/pop/gdp · focus LAT LON · teleport PROVINCE\n" +
-        Bb("text.accent") + "STATE[/color]  money AMOUNT · manpower AMOUNT · stability 0-100\n" +
-        Bb("text.accent") + "DEBUG[/color]  fps · sim · logs · armies · fronts · province · date · clear\n" +
-        Bb("text.accent") + "CONTENT[/color]  economy · effects · loc [language] · skin [token or panel]\n" +
-        Bb("text.accent") + "WAR[/color]  peace - open the conference for your current war";
 
     /// <summary>Open the peace conference for whatever war the player is fighting.</summary>
     /// <summary>
@@ -235,9 +297,20 @@ public partial class DealOrForceGame
     }
 
     /// <summary>Lists every key content can write to, so a modder never has to guess.</summary>
-    private static string ConsoleEffectVocabulary() => EscapeBb(string.Join(System.Environment.NewLine,
-        Simulation.ScriptedEffects.Vocabulary.Select(item => $"  {item.Key} - {item.Help}")
-            .Prepend("Scripted effect keys (suffix _percent, _mult or _set to change the operation):")));
+    private static string ConsoleEffectVocabulary(string filter)
+    {
+        var wanted = (filter ?? "").Trim();
+        var rows = Simulation.ScriptedEffects.Vocabulary
+            .Where(item => wanted.Length == 0 ||
+                           item.Key.Contains(wanted, StringComparison.OrdinalIgnoreCase) ||
+                           item.Help.Contains(wanted, StringComparison.OrdinalIgnoreCase))
+            .Select(item => $"  {item.Key} - {item.Help}")
+            .ToArray();
+        return rows.Length == 0
+            ? $"No effect key matches '{EscapeBb(wanted)}'."
+            : EscapeBb(string.Join(System.Environment.NewLine, rows.Prepend(
+                $"{rows.Length} scripted effect key(s) (suffix _percent, _mult or _set to change the operation):")));
+    }
 
     /// <summary>Translation coverage, the way a translator wants to see it.</summary>
     private static string ConsoleLocalization(string argument)
@@ -315,14 +388,40 @@ public partial class DealOrForceGame
         return $"Manpower reserve changed by {amount:N0}.";
     }
 
-    /// <summary>Raise an event now, rather than playing until one turns up.</summary>
-    private string ConsoleEvent()
+    /// <summary>
+    /// Raise an event now, rather than playing until one turns up.
+    ///
+    /// With an id it raises that event whether or not its trigger is satisfied, which is the
+    /// whole point: an event you can only see by arranging the world it fires in is an event
+    /// nobody tests. Without one it draws from what this country actually qualifies for.
+    /// </summary>
+    private string ConsoleEvent(string argument)
     {
         if (_campaign?.Player is null) return "No campaign.";
-        var raised = Simulation.EventSystem.Raise(_campaign, _campaign.Player.Id);
-        if (raised is null) return "Nothing in the event catalogue matches this country right now.";
+        var id = (argument ?? "").Trim();
+        if (id.Length == 0)
+        {
+            var drawn = Simulation.EventSystem.Raise(_campaign, _campaign.Player.Id);
+            if (drawn is null) return "Nothing in the event catalogue matches this country right now.";
+            RefreshEventInterface();
+            return $"Raised '{EscapeBb(drawn.Title)}'.";
+        }
+
+        var definition = Simulation.EventCatalog.All.FirstOrDefault(candidate =>
+            string.Equals(candidate.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (definition is null) return $"No event called '{EscapeBb(id)}'. Try `events`.";
+        _campaign.PendingEvents.Add(new Simulation.PendingCampaignEvent
+        {
+            Id = _campaign.ElapsedDays * 1000 + _campaign.Player.Id,
+            NationId = _campaign.Player.Id,
+            Title = definition.Title,
+            Description = definition.Description,
+            CreatedDay = _campaign.ElapsedDays,
+            ExpiresDay = _campaign.ElapsedDays + 182,
+            Options = definition.Options
+        });
         RefreshEventInterface();
-        return $"Raised '{raised.Title}'.";
+        return $"Raised '{EscapeBb(definition.Title)}' past its own trigger.";
     }
 
     private string ConsoleStability(string value)
@@ -402,29 +501,99 @@ public partial class DealOrForceGame
         return $"Teleported {targets.Length} division(s) to province #{province:N0}.";
     }
 
-    private string ConsoleArmies()
+    private string ConsoleArmies(string argument)
     {
-        if (_campaign?.Player is null) return "No campaign.";
-        var divisions = _campaign.Armies.Where(army => army.NationId == _campaign.Player.Id).ToArray();
-        return $"{_campaign.Player.Tag}: {divisions.Length} independent divisions · " +
-               $"{divisions.Sum(army => army.Personnel):N0} personnel · " +
-               $"{_campaign.ArmyGroups.Count(group => group.NationId == _campaign.Player.Id)} army headquarters.";
+        var nation = ConsoleNation(argument);
+        if (nation is null || _campaign is null) return "No such country.";
+        var divisions = _campaign.Armies.Where(army => army.NationId == nation.Id).ToArray();
+        if (divisions.Length == 0) return $"{nation.Tag} has nothing under arms.";
+
+        // Where the weight of an army actually is, which is the question "how many divisions"
+        // never answers: a country with forty divisions in one region and four spread over
+        // the rest of itself is two different countries to fight.
+        var byRegion = divisions.GroupBy(army => army.StateMapIndex)
+            .OrderByDescending(group => group.Sum(army => army.Personnel))
+            .Take(6)
+            .Select(group =>
+            {
+                var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == group.Key);
+                return $"      {state?.Name ?? "unknown"} · {group.Count()} division(s), " +
+                       $"{group.Sum(army => army.Personnel):N0} men";
+            });
+
+        return EscapeBb(
+            $"{nation.Tag}: {divisions.Length:N0} division(s) · {divisions.Sum(army => army.Personnel):N0} men · " +
+            $"{_campaign.ArmyGroups.Count(group => group.NationId == nation.Id)} headquarters\n" +
+            $"  fighting {divisions.Count(army => army.InBattle)} · marching {divisions.Count(army => army.IsMoving)} · " +
+            $"cut off {divisions.Count(army => army.CutOff)} · recovering {divisions.Count(army => army.Recovering > 0f)}\n" +
+            $"  average organisation {divisions.Average(army => army.Organisation):P0} · " +
+            $"strength {divisions.Average(army => army.Strength):P0} · " +
+            $"supply {divisions.Average(army => army.SupplyLevel):P0}\n" +
+            "  heaviest regions:\n" + string.Join("\n", byRegion));
     }
 
-    private string ConsoleFronts() => _campaign is null ? "No campaign." :
-        string.Join("\n", _campaign.Wars.Where(war => !war.Ended).Select(war =>
-            $"{EscapeBb(war.Name)}: {war.AttackerFront.Count}/{war.DefenderFront.Count} front provinces · score {war.WarScore:0.0}"));
-
-    private string ConsoleProvince() => _selectedProvinceId > 0 && _campaign?.ProvinceMap is not null
-        ? $"Province #{_selectedProvinceId:N0} · state {_campaign.ProvinceMap.ProvinceToState[_selectedProvinceId]} · " +
-          $"controller {_campaign.ProvinceController?[_selectedProvinceId]}"
-        : "No tactical province selected.";
-
-    private static string ConsoleSimulation()
+    private string ConsoleFronts()
     {
-        var samples = SimProfiler.All.OrderByDescending(sample => sample.AverageMilliseconds).Take(8).ToArray();
-        return samples.Length == 0 ? "No profiler samples yet; resume time first." : string.Join("\n",
-            samples.Select(sample => $"{sample.Name}: {sample.LastMilliseconds:0.000} ms last · {sample.AverageMilliseconds:0.000} ms avg"));
+        if (_campaign is null) return "No campaign.";
+        var running = _campaign.Wars.Where(war => !war.Ended).ToArray();
+        if (running.Length == 0) return "There are no fronts; the world is at peace.";
+        return string.Join("\n", running.Select(war =>
+        {
+            // A drawn line belongs to a country rather than to a war, so the honest count
+            // is the lines either belligerent is holding.
+            var drawn = _campaign.FrontLines.Count(line =>
+                line.NationId == war.AttackerId || line.NationId == war.DefenderId);
+            return EscapeBb($"{war.Name}: {war.AttackerFront.Count:N0}/{war.DefenderFront.Count:N0} front " +
+                            $"province(s) · {drawn} drawn line(s) · score {war.WarScore:0.0} · " +
+                            $"last rebuilt day {war.LastFrontDay:N0}");
+        }));
+    }
+
+    private string ConsoleProvince(string argument)
+    {
+        if (_campaign?.ProvinceMap is null) return "No campaign.";
+        var province = _selectedProvinceId;
+        if ((argument ?? "").Trim().Length > 0 && !int.TryParse(argument.Trim(), out province))
+            return "Usage: province [ID]";
+        var map = _campaign.ProvinceMap;
+        if (province <= 0 || province > map.ProvinceCount) return "Select a province, or give its number.";
+
+        var stateIndex = map.ProvinceToState[province];
+        var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == stateIndex);
+        var owner = _campaign.Nations.FirstOrDefault(nation => nation.MapIndex == map.ProvinceToNation[province]);
+        var holderIndex = _campaign.ProvinceController?[province] ?? 0;
+        var holder = _campaign.Nations.FirstOrDefault(nation => nation.MapIndex == holderIndex);
+        var centre = map.CenterOf(province);
+        var standing = _campaign.Armies.Where(army => army.ProvinceId == province).ToArray();
+        var battle = _campaign.Battles.FirstOrDefault(item => !item.Ended && item.ProvinceId == province);
+
+        return EscapeBb(
+            $"Province #{province:N0} · region {state?.Name ?? stateIndex.ToString()} · " +
+            $"{centre.Latitude:0.00}, {centre.Longitude:0.00}\n" +
+            $"  owner {owner?.Tag ?? "none"} · held by {holder?.Tag ?? "none"}" +
+            $" · occupation {_campaign.ProvinceOccupation?[province] ?? 0f:P0}\n" +
+            $"  ground {map.TerrainAt(province)?.Name ?? "unknown"}\n" +
+            $"  standing here: {(standing.Length == 0 ? "nobody" : string.Join(", ", standing.Take(8).Select(army => army.Name)))}" +
+            (battle is null ? "" : $"\n  a battle is being fought here, round {battle.Rounds.Count}"));
+    }
+
+    private static string ConsoleSimulation(string filter)
+    {
+        var wanted = (filter ?? "").Trim();
+        var samples = SimProfiler.All
+            .Where(sample => wanted.Length == 0 ||
+                             sample.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(sample => sample.AverageMilliseconds)
+            .Take(wanted.Length == 0 ? 14 : 40)
+            .ToArray();
+        if (samples.Length == 0)
+            return wanted.Length == 0
+                ? "No profiler samples yet; resume time first."
+                : $"No pass matches '{EscapeBb(wanted)}'.";
+        var total = samples.Sum(sample => sample.AverageMilliseconds);
+        return EscapeBb(string.Join("\n", samples.Select(sample =>
+            $"  {sample.Name,-34} {sample.LastMilliseconds,8:0.000} ms last · " +
+            $"{sample.AverageMilliseconds,8:0.000} ms avg · {sample.AverageMilliseconds / Math.Max(0.0001, total),5:P0}")));
     }
 
     private static bool TryFloat(string value, out float number) =>
