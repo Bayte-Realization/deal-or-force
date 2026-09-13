@@ -442,7 +442,7 @@ else was skipped rather than used.
 | `flag_pyf_absolute_monarchy.png` | [Flag of the Kingdom of Bora Bora (1837-1842).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Bora_Bora_%281837-1842%29.svg) | Public domain | Ivan Sache |
 | `flag_rou_absolute_monarchy.png` | [Flag of the Kingdom of Romania.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Romania.png) | CC BY-SA 3.0 | Gneisenauu |
 | `flag_rus_absolute_monarchy.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
-| `flag_rus_communism.png` | [Flag of the Soviet Union.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Soviet_Union.svg) | Public domain | СССР |
+| `flag_rus_communism.png` | [Flag of the Russian Soviet Federative Socialist Republic (1954–1991).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Russian_Soviet_Federative_Socialist_Republic_(1954%E2%80%931991).svg) | Public domain | Pianist |
 | `flag_rus_traditionalism.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
 | `flag_srb_communism.png` | [Flag of Yugoslavia (1946–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Yugoslavia_%281946%E2%80%931992%29.svg) | Public domain | Flag designed by Đorđe Andrejević-Kun [3] SVG coding: Zscout370 |
 | `flag_svk_communism.png` | [Flag of Slovakia (1939–1945).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovakia_%281939%E2%80%931945%29.svg) | Public domain | DarkEvil , PhiLiP |
