@@ -164,14 +164,14 @@ public static class HistoryDataLoader
         // The trades as they stand, so the swap changes who works rather than what work exists.
         var trades = state.PopulationGroups
             .Where(group => group.Size > 0)
-            .GroupBy(group => (group.Profession, group.Class))
-            .Select(group => (group.Key.Profession, group.Key.Class,
+            .GroupBy(group => (group.Profession, group.Class, group.Sector))
+            .Select(group => (group.Key.Profession, group.Key.Class, group.Key.Sector,
                 Weight: group.Sum(entry => entry.Size) / (double)Math.Max(1, state.Population),
                 Employment: group.Sum(entry => entry.Size * entry.Employment) / group.Sum(entry => entry.Size),
                 Wealth: group.Sum(entry => entry.Size * entry.Wealth) / group.Sum(entry => entry.Size)))
             .ToList();
         if (trades.Count == 0)
-            trades.Add(("labourers", SocialClass.Workers, 1.0, 0.9f, 0.38f));
+            trades.Add(("labourers", SocialClass.Lower, Sector.Industry, 1.0, 0.9f, 0.38f));
 
         state.PopulationGroups.Clear();
         long assigned = 0;
@@ -190,6 +190,7 @@ public static class HistoryDataLoader
                     Religion = religion,
                     Profession = trade.Profession,
                     Class = trade.Class,
+                    Sector = trade.Sector,
                     Size = size,
                     Employment = trade.Employment,
                     Wealth = trade.Wealth,

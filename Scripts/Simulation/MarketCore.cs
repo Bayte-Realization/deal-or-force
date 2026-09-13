@@ -358,8 +358,8 @@ public static class MarketSystem
         var workers = 0f;
         foreach (var group in state.PopulationGroups)
         {
-            // Owners run capital rather than filling a shift; everyone else can work.
-            var participation = group.Class == SocialClass.Owners ? 0.15f : 1f;
+            // The upper class runs capital rather than filling a shift; everyone else works.
+            var participation = group.Class == SocialClass.Upper ? 0.15f : 1f;
             workers += group.Size / 1_000_000f * WorkingAgeShare * group.Employment * participation;
         }
         return workers;

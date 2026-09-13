@@ -384,16 +384,32 @@ forty groups instead of a dozen would be one nobody can read and nobody can affo
 
 `common/professions/` is what people do for a living, and it is the bridge to the economy:
 
-    "subsistence_farmers": { "name": "Subsistence farmers", "class": "Farmers",
+    "subsistence_farmers": { "name": "Subsistence farmers",
+                             "class": "Lower", "sector": "Agriculture",
                              "rural_share": 0.720, "urban_share": 0.000,
                              "rural_falloff": 2.60, "urban_rise": 1.00,
                              "wealth": 0.16, "employment": 0.84, "colour": "#6f8a45" }
 
-Every trade names the social class whose wages and politics it shares, so the market did not
-have to be rewritten to gain a population screen - ten trades map onto the four classes it
-already priced. The two shares are the same trade in two different places: a farming region
-is mostly people working their own land, a city is mostly wage labour, counters and desks,
-and every region blends the two by how urban it actually is.
+Every trade answers two questions. `class` is how well off these people are - **Lower**,
+**Middle** or **Upper**. `sector` is what they live off - **Agriculture**, **Industry**,
+**Services** or **Ownership**.
+
+Be precise about what each currently decides, because it is less than the names suggest. The
+sector decides who works the land, and through that how much a country grows and how urban
+its regions read back. The class decides who turns up for work - the upper class supplies a
+seventh of itself to the labour force, because owning is not a shift - and otherwise it is
+what the population and ledger screens count by. Neither drives politics yet: radicalism
+belongs to a region and its people inherit it. That is the gap this split exists to make
+fillable, and a mod that wants class politics now has somewhere to hang it.
+
+Keep them apart when you add a trade. They are separate because a landowner and a peasant
+share a sector and share nothing else, while a machinist and a clerk share no sector and
+stand at nearly the same height. One field answering both questions is how an earlier version
+of this file came to treat landowners as townsfolk for every purpose farmland mattered for.
+
+The two shares are the same trade in two different places: a farming region is mostly people
+working their own land, a city is mostly wage labour, counters and desks, and every region
+blends the two by how urban it actually is.
 
 The two exponents say how fast each half arrives, and they exist because a straight line is
 wrong about the one thing it matters most for. Work on the land does not decline evenly as
@@ -405,9 +421,9 @@ what clerks and capital do.
 Note that there are two farming trades, not one. **Subsistence farmers** are people feeding
 themselves off their own land, largely outside the market - which is a true description of
 much of the Sahel and the Himalayas and no description at all of Denmark. **Farmers** are
-commercial agriculture: fewer people, machinery, selling a crop. Both are the Farmers class,
-so the economy sees no difference; the population screen does, and so does anyone reading
-it. A game that called the Danish countryside "peasants" would be using a nineteenth-century
+commercial agriculture: fewer people, machinery, selling a crop. Both are the Agriculture
+sector and both are the Lower class, so the economy sees no difference; the population screen
+does, and so does anyone reading it. A game that called the Danish countryside "peasants" would be using a nineteenth-century
 word for a twenty-first-century country.
 
 Shares are weights and are normalised, so you may add an eleventh trade without rebalancing

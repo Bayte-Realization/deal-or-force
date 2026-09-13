@@ -135,7 +135,11 @@ public partial class DealOrForceGame
         EconomySystem.Professions(state).Select(entry =>
         {
             var profession = DemographyCatalog.Profession(entry.Profession);
-            var social = profession is null ? "" : $"{ClassName(profession.Class)}\n";
+            // Both axes, on the trade itself. The two lists below the trades are these
+            // two fields added up, and saying so here is what makes that legible.
+            var social = profession is null
+                ? ""
+                : $"{ClassName(profession.Class)} · {SectorName(profession.Sector)}\n";
             return new Slice(DemographyCatalog.ProfessionName(entry.Profession), entry.Size,
                 Swatch(profession?.Colour), social + $"{Fmt.PeopleExact(entry.Size)} people" +
                 (profession is null ? "" : $"\nWealth {profession.Wealth:P0} · employed {profession.Employment:P0}"));

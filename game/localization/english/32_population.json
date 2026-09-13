@@ -1,0 +1,21 @@
+// Population: the two axes the same people are counted along.
+//
+// `class` is the rung of the ladder - lower, middle, upper - and `sector` is what a trade
+// lives off. The heading used to read SOCIAL CLASSES over a list that was secretly three
+// different axes at once; it still reads that way here, because in English it is now true.
+{
+  "PEOPLES": "PEOPLES",
+  "FAITHS": "FAITHS",
+  "TRADES": "TRADES",
+  "SOCIAL CLASSES": "SOCIAL CLASSES",
+  "SECTORS": "SECTORS",
+
+  "Lower class": "Lower class",
+  "Middle class": "Middle class",
+  "Upper class": "Upper class",
+
+  "Services": "Services",
+  "Ownership": "Ownership",
+
+  "Everyone the country has, by how well off they are": "Everyone the country has, by how well off they are"
+}

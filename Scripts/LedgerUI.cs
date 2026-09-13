@@ -345,10 +345,12 @@ public partial class DealOrForceGame
             Series("Stability", Green, samples, sample => sample.Stability)
         }, StrategicChartFormat.Percent);
         var states = _campaign.StatesOf(nation);
-        _ledgerBarsA.SetData("Social classes", "Actual population groups in owned states", Enum.GetValues<SocialClass>()
-            .Select((socialClass, index) => new StrategicBarEntry(SocialClassName(socialClass),
-                states.Sum(state => state.PopulationGroups.Where(group => group.Class == socialClass).Sum(group => group.Size)) / 1_000_000f,
-                new[] { Orange, Blue, Violet, Gold }[index % 4])).ToArray(), StrategicChartFormat.Millions);
+        _ledgerBarsA.SetData("Social classes", "Everyone the country has, by how well off they are",
+            Enum.GetValues<SocialClass>()
+                .Select((socialClass, index) => new StrategicBarEntry(SocialClassName(socialClass),
+                    states.Sum(state => state.PopulationGroups
+                        .Where(group => group.Class == socialClass).Sum(group => group.Size)) / 1_000_000f,
+                    new[] { Blue, Gold, Orange }[index % 3])).ToArray(), StrategicChartFormat.Millions);
         _ledgerBarsB.SetData("Largest states", "Population centres determine construction and social weight", states
             .OrderByDescending(state => state.Population).Take(7)
             .Select(state => new StrategicBarEntry(state.DisplayName, state.Population / 1_000_000f, Blue,
@@ -407,8 +409,9 @@ public partial class DealOrForceGame
     private static string SignedPercent(float value) => value >= 0f ? $"+{value:P1}" : $"{value:P1}";
     private static string SocialClassName(SocialClass socialClass) => socialClass switch
     {
-        SocialClass.MiddleClass => "Middle class",
-        _ => socialClass.ToString()
+        SocialClass.Lower => "Lower class",
+        SocialClass.Middle => "Middle class",
+        _ => "Upper class"
     };
 
     private static Color CommodityColor(Commodity commodity) => commodity switch

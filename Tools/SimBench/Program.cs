@@ -82,6 +82,8 @@ public static class Program
             ASnapshotCarriesTheWholeWorld());
         failures += Check("a country that states a figure about itself gets that figure",
             TheStatedStatisticsCameTrue(campaign));
+        failures += Check("the classes and the sectors count the same people",
+            TwoAxesOverOnePopulation(campaign));
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -5526,6 +5528,63 @@ public static class Program
     /// Regions vary around the national average on purpose, so this checks the country as a
     /// whole rather than any one region.
     /// </summary>
+    /// <summary>
+    /// The population screen lists a region by trade, then by class, then by sector, and
+    /// tells the player the last two are the first added up. This is that promise, checked.
+    /// </summary>
+    private static string TwoAxesOverOnePopulation(Campaign campaign)
+    {
+        // Every trade on a rung its wealth belongs to. The ladder has wide gaps - 0.42 to
+        // 0.55 and 0.70 to 0.88 - so a bound in the middle of each nags at nobody and still
+        // catches a trade filed on the wrong rung, which is the way these two axes would
+        // quietly become one again.
+        var misfiled = new List<string>();
+        foreach (var trade in DemographyCatalog.Professions)
+        {
+            var expected = trade.Wealth >= 0.79f ? SocialClass.Upper
+                : trade.Wealth >= 0.49f ? SocialClass.Middle
+                : SocialClass.Lower;
+            if (trade.Class != expected)
+                misfiled.Add($"{trade.Id} is worth {trade.Wealth:0.00} and is filed as {trade.Class}");
+        }
+        if (misfiled.Count > 0) return string.Join("; ", misfiled);
+
+        // And the sums. A region's rungs and its sectors are the same people twice.
+        var checkedStates = 0;
+        foreach (var state in campaign.States)
+        {
+            long people = 0, byClass = 0, bySector = 0;
+            foreach (var group in state.PopulationGroups)
+            {
+                if (group.Size <= 0) continue;
+                people += group.Size;
+                if (Enum.IsDefined(group.Class)) byClass += group.Size;
+                if (Enum.IsDefined(group.Sector)) bySector += group.Size;
+            }
+            if (people <= 0) continue;
+            checkedStates++;
+            if (byClass != people)
+                return $"{state.Id}: {people:N0} people but {byClass:N0} on a rung of the ladder";
+            if (bySector != people)
+                return $"{state.Id}: {people:N0} people but {bySector:N0} in a sector";
+        }
+        if (checkedStates < 100) return $"only {checkedStates} regions had anybody in them";
+
+        // What the split was for: a landowner works the land, so a country with good fields
+        // grows the people who own them. Under the old single axis they counted as townsfolk.
+        var world = campaign.States.SelectMany(state => state.PopulationGroups).ToList();
+        long land = world.Where(group => group.Sector == Sector.Agriculture).Sum(group => group.Size);
+        long upperOnTheLand = world
+            .Where(group => group.Sector == Sector.Agriculture && group.Class == SocialClass.Upper)
+            .Sum(group => group.Size);
+        if (upperOnTheLand <= 0) return "nobody owns any farmland anywhere in the world";
+
+        Console.WriteLine($"  strata: {checkedStates:N0} regions add up along both axes; " +
+                          $"{land / 1_000_000.0:N0}M live off the land, of whom " +
+                          $"{upperOnTheLand / 1_000_000.0:N1}M own it.");
+        return "";
+    }
+
     private static string TheStatedStatisticsCameTrue(Campaign campaign)
     {
         var stated = campaign.Nations.Where(nation => nation.AgricultureShare > 0f).ToList();
@@ -5543,7 +5602,7 @@ public static class Program
             {
                 if (group.Size <= 0) continue;
                 total += group.Size;
-                if (group.Class == SocialClass.Farmers) farming += group.Size;
+                if (group.Sector == Sector.Agriculture) farming += group.Size;
             }
             if (total < 100_000) continue;
             var actual = farming / (double)total;
@@ -5573,7 +5632,7 @@ public static class Program
                 {
                     if (group.Size <= 0) continue;
                     total += group.Size;
-                    if (group.Class == SocialClass.Farmers) farming += group.Size;
+                    if (group.Sector == Sector.Agriculture) farming += group.Size;
                 }
                 return $"{nation.Tag} {farming / (double)Math.Max(1, total):P0} (said {nation.AgricultureShare:P0})";
             });

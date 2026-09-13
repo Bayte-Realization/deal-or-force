@@ -1,8 +1,19 @@
 // What people do for a living.
 //
-// Each trade names the social class whose wages and politics it shares, so the market did
-// not have to be rewritten to gain a population screen: ten trades map onto the four
-// classes the economy already priced.
+// Each trade answers two questions, and they are deliberately two:
+//
+//     class    how well off these people are    Lower / Middle / Upper
+//     sector   what they live off               Agriculture / Industry / Services / Ownership
+//
+// One enum used to answer both, badly. `Workers` and `MiddleClass` were rungs of a ladder,
+// `Farmers` was a place of work and `Owners` was a relation to property, so "who here is
+// poor" could not be asked - half the poor sat under farming - and a landowner counted as a
+// townsman for every purpose the fields mattered for.
+//
+// Sorted by wealth the ten trades fall into three groups with real gaps between them: 0.16
+// to 0.42, then 0.55 to 0.70, then 0.88 to 0.92. Those gaps are the three classes. The
+// sector cuts across them, which is the whole point - a peasant and a landowner work the
+// same land from opposite ends of the country's wealth.
 //
 // The two shares are the same trade in two different places, and the two exponents say how
 // fast each half arrives. Work on the land does not decline evenly as towns grow - it
@@ -15,14 +26,24 @@
 // `agriculture` in history/countries overrides the curve for the two farming trades - the
 // curve gets the shape of a country right and the real level is worth looking up.
 {
-  "subsistence_farmers": { "name": "Subsistence farmers", "class": "Farmers", "rural_share": 0.720, "urban_share": 0.000, "rural_falloff": 2.60, "urban_rise": 1.00, "wealth": 0.16, "employment": 0.84, "colour": "#6f8a45" },
-  "farmers":             { "name": "Farmers",             "class": "Farmers", "rural_share": 0.130, "urban_share": 0.016, "rural_falloff": 1.10, "urban_rise": 1.00, "wealth": 0.40, "employment": 0.92, "colour": "#93ad5c" },
-  "labourers":           { "name": "Labourers",           "class": "Workers", "rural_share": 0.100, "urban_share": 0.240, "rural_falloff": 1.00, "urban_rise": 0.90, "wealth": 0.30, "employment": 0.88, "colour": "#8f6f4f" },
-  "machinists":          { "name": "Machinists",          "class": "Workers", "rural_share": 0.012, "urban_share": 0.170, "rural_falloff": 1.00, "urban_rise": 1.35, "wealth": 0.42, "employment": 0.93, "colour": "#5f7f9f" },
-  "service_workers":     { "name": "Service workers",     "class": "Workers", "rural_share": 0.020, "urban_share": 0.310, "rural_falloff": 1.00, "urban_rise": 0.95, "wealth": 0.36, "employment": 0.90, "colour": "#6f9fa8" },
-  "shopkeepers":         { "name": "Shopkeepers",         "class": "MiddleClass", "rural_share": 0.012, "urban_share": 0.100, "rural_falloff": 1.00, "urban_rise": 1.00, "wealth": 0.58, "employment": 0.95, "colour": "#c0a04f" },
-  "clerks":              { "name": "Clerks",              "class": "MiddleClass", "rural_share": 0.005, "urban_share": 0.140, "rural_falloff": 1.00, "urban_rise": 1.30, "wealth": 0.55, "employment": 0.96, "colour": "#9f8fbf" },
-  "professionals":       { "name": "Professionals",       "class": "MiddleClass", "rural_share": 0.004, "urban_share": 0.085, "rural_falloff": 1.00, "urban_rise": 1.30, "wealth": 0.70, "employment": 0.97, "colour": "#bf7f9f" },
-  "capitalists":         { "name": "Capitalists",         "class": "Owners", "rural_share": 0.001, "urban_share": 0.021, "rural_falloff": 1.00, "urban_rise": 1.40, "wealth": 0.92, "employment": 0.99, "colour": "#c85f4f" },
-  "landowners":          { "name": "Landowners",          "class": "Owners", "rural_share": 0.030, "urban_share": 0.004, "rural_falloff": 0.80, "urban_rise": 1.00, "wealth": 0.88, "employment": 0.99, "colour": "#a8863f" }
+  // The land. Two trades and not one: subsistence farmers feed themselves largely outside
+  // the market, which is true of much of the Sahel and no description at all of Denmark.
+  "subsistence_farmers": { "name": "Subsistence farmers", "class": "Lower",  "sector": "Agriculture", "rural_share": 0.720, "urban_share": 0.000, "rural_falloff": 2.60, "urban_rise": 1.00, "wealth": 0.16, "employment": 0.84, "colour": "#6f8a45" },
+  "farmers":             { "name": "Farmers",             "class": "Lower",  "sector": "Agriculture", "rural_share": 0.130, "urban_share": 0.016, "rural_falloff": 1.10, "urban_rise": 1.00, "wealth": 0.40, "employment": 0.92, "colour": "#93ad5c" },
+
+  // Wage work: the bottom rung of the ladder, in a town.
+  "labourers":           { "name": "Labourers",           "class": "Lower",  "sector": "Industry",    "rural_share": 0.100, "urban_share": 0.240, "rural_falloff": 1.00, "urban_rise": 0.90, "wealth": 0.30, "employment": 0.88, "colour": "#8f6f4f" },
+  "machinists":          { "name": "Machinists",          "class": "Lower",  "sector": "Industry",    "rural_share": 0.012, "urban_share": 0.170, "rural_falloff": 1.00, "urban_rise": 1.35, "wealth": 0.42, "employment": 0.93, "colour": "#5f7f9f" },
+  "service_workers":     { "name": "Service workers",     "class": "Lower",  "sector": "Services",    "rural_share": 0.020, "urban_share": 0.310, "rural_falloff": 1.00, "urban_rise": 0.95, "wealth": 0.36, "employment": 0.90, "colour": "#6f9fa8" },
+
+  // The counters and the desks. Same sector as the service workers above them and a rung up,
+  // which is exactly the pair of facts one axis could not hold.
+  "clerks":              { "name": "Clerks",              "class": "Middle", "sector": "Services",    "rural_share": 0.005, "urban_share": 0.140, "rural_falloff": 1.00, "urban_rise": 1.30, "wealth": 0.55, "employment": 0.96, "colour": "#9f8fbf" },
+  "shopkeepers":         { "name": "Shopkeepers",         "class": "Middle", "sector": "Services",    "rural_share": 0.012, "urban_share": 0.100, "rural_falloff": 1.00, "urban_rise": 1.00, "wealth": 0.58, "employment": 0.95, "colour": "#c0a04f" },
+  "professionals":       { "name": "Professionals",       "class": "Middle", "sector": "Services",    "rural_share": 0.004, "urban_share": 0.085, "rural_falloff": 1.00, "urban_rise": 1.30, "wealth": 0.70, "employment": 0.97, "colour": "#bf7f9f" },
+
+  // The top rung, split by what it owns. A landowner is the most rural trade in the game
+  // after farming itself - `sector` says so, and the farming weights now believe it.
+  "landowners":          { "name": "Landowners",          "class": "Upper",  "sector": "Agriculture", "rural_share": 0.030, "urban_share": 0.004, "rural_falloff": 0.80, "urban_rise": 1.00, "wealth": 0.88, "employment": 0.99, "colour": "#a8863f" },
+  "capitalists":         { "name": "Capitalists",         "class": "Upper",  "sector": "Ownership",   "rural_share": 0.001, "urban_share": 0.021, "rural_falloff": 1.00, "urban_rise": 1.40, "wealth": 0.92, "employment": 0.99, "colour": "#c85f4f" }
 }

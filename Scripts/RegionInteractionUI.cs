@@ -218,30 +218,63 @@ public partial class DealOrForceGame
 
         DetailComposition("PEOPLES", CultureSlices(_selectedState, owner), total);
         DetailComposition("FAITHS", ReligionSlices(_selectedState), total, 6);
-        DetailComposition("TRADES", ProfessionSlices(_selectedState), total, 9);
+        // Ten rows for ten trades. At nine the last one vanished into "and 1 more", and
+        // the two summaries below stopped adding up to anything a reader could check -
+        // which is exactly the complaint that led to splitting the axes in the first place.
+        DetailComposition("TRADES", ProfessionSlices(_selectedState), total, 10);
 
-        var classes = Enum.GetValues<SocialClass>().Select(socialClass =>
+        // The same people twice more. Neither list is a second census: both are the TRADES
+        // above added up, once by how well off each trade is and once by what it lives off.
+        // They are two lists because they are two questions - a landowner is the top of the
+        // first and shares the second with a peasant - and a single list trying to be both
+        // was the thing nobody could read.
+        DetailComposition("SOCIAL CLASSES",
+            Strata(Enum.GetValues<SocialClass>(), group => group.Class, ClassName, ClassColour),
+            total, 3);
+        DetailComposition("SECTORS",
+            Strata(Enum.GetValues<Sector>(), group => group.Sector, SectorName, SectorColour),
+            total, 4);
+    }
+
+    /// <summary>
+    /// One cut through a region's people: a slice per value of some axis, with what the
+    /// people on it earn and how they live.
+    ///
+    /// Written once and used for both cuts, because they are the same arithmetic over two
+    /// different fields. A reader comparing the classes with the sectors should be comparing
+    /// the population, not two implementations of the same sum.
+    /// </summary>
+    private IReadOnlyList<Slice> Strata<T>(IEnumerable<T> values, Func<PopulationGroup, T> axis,
+        Func<T, string> name, Func<T, string> colour) where T : struct, Enum =>
+        values.Select(value =>
         {
-            var groups = _selectedState.PopulationGroups.Where(group => group.Class == socialClass).ToArray();
+            var groups = _selectedState.PopulationGroups
+                .Where(group => EqualityComparer<T>.Default.Equals(axis(group), value)).ToArray();
             var size = groups.Sum(group => group.Size);
-            if (size <= 0) return new Slice(ClassName(socialClass), 0, Colors.Transparent, "");
+            if (size <= 0) return new Slice(name(value), 0, Colors.Transparent, "");
             var employed = groups.Sum(group => group.Size * group.Employment) / size;
             var wealth = groups.Sum(group => group.Size * group.Wealth) / size;
             var living = groups.Sum(group => group.Size * group.StandardOfLiving) / size;
-            return new Slice(ClassName(socialClass), size, Swatch(ClassColour(socialClass)),
+            return new Slice(name(value), size, Swatch(colour(value)),
                 $"{Fmt.PeopleExact(size)} people\n" +
                 $"Employed {employed:P0} · wealth {wealth:P0} · standard of living {living:P0}");
         }).ToList();
-        DetailComposition("SOCIAL CLASSES", classes, total, 4);
-    }
 
-    /// <summary>The four strata the market prices, in the colours the economy screens use.</summary>
+    /// <summary>The ladder, drawn as one: slate at the bottom, gold, then the owning red.</summary>
     private static string ClassColour(SocialClass socialClass) => socialClass switch
     {
-        SocialClass.Farmers => "#7f9c4f",
-        SocialClass.Workers => "#6f8fa8",
-        SocialClass.MiddleClass => "#bf9f5f",
-        _ => "#c06f5f"
+        SocialClass.Lower => "#5f7f8f",
+        SocialClass.Middle => "#bf9f5f",
+        _ => "#c05f5f"
+    };
+
+    /// <summary>The sectors, each in the colour of the trade that stands for it.</summary>
+    private static string SectorColour(Sector sector) => sector switch
+    {
+        Sector.Agriculture => "#7f9c4f",
+        Sector.Industry => "#8f6f5f",
+        Sector.Services => "#5f8fa8",
+        _ => "#a06fa8"
     };
 
     /// <summary>One tactical province: who owns it, who holds it, and what it is made of.</summary>
@@ -349,7 +382,10 @@ public partial class DealOrForceGame
 
     private static string ClassName(SocialClass socialClass) => socialClass switch
     {
-        SocialClass.MiddleClass => "Middle class",
-        _ => socialClass.ToString()
+        SocialClass.Lower => "Lower class",
+        SocialClass.Middle => "Middle class",
+        _ => "Upper class"
     };
+
+    private static string SectorName(Sector sector) => sector.ToString();
 }
