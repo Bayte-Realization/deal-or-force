@@ -660,7 +660,6 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         // post, a division that is perfectly well placed is handed a new one for no reason
         // at all, several times a week, for the whole war.
         var heldPost = army.OrderProvinceId;
-        var heldOrder = army.OrderKind;
 
         army.OrderKind = Order;
         army.DirectOrder = false;
@@ -721,7 +720,15 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         // The post it already had, if that post is still on the line and the duty has not
         // changed. A division ordered to do the same thing it was already doing, on a line
         // that still contains where it was going, has no reason to go anywhere else.
-        var keeping = heldPost > 0 && heldOrder == Order && orderedFront.Contains(heldPost);
+        // The post it already had, whether or not its JOB has changed.
+        //
+        // It used to require the order to be the same, which threw the march away every time
+        // a division was moved between spearhead and advance - and that happens constantly,
+        // because the roles are shares of a list sorted by a strength that moves daily. But
+        // a division standing on a good post on the line is standing on a good post whatever
+        // it has just been told to call itself; the two questions are separate, and only one
+        // of them is a reason to start walking somewhere else.
+        var keeping = heldPost > 0 && orderedFront.Contains(heldPost);
 
         var target = PreferredProvinceId > 0 && orderedFront.Contains(PreferredProvinceId)
             ? PreferredProvinceId
