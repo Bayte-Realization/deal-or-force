@@ -3088,10 +3088,13 @@ public static class Program
         if (arrived == 0)
             return "not one division reached the post it was sent to in three years";
         var perArrival = churn / (float)arrived;
-        if (perArrival > 3.0f)
-            return $"divisions were sent somewhere new {perArrival:0.0} times for every one that " +
+        // 1.25 as it stands, against 1.98 before a division was allowed to keep its post
+        // across a change of job. 1.8 is loose enough not to fail on the ordinary noise of
+        // a war and tight enough to catch a return to the old behaviour.
+        if (perArrival > 1.8f)
+            return $"divisions were sent somewhere new {perArrival:0.00} times for every one that " +
                    $"arrived ({churn:N0} against {arrived:N0}), which is not an army anybody is commanding";
-        if (worstRevisits > 30)
+        if (worstRevisits > 22)
             return $"one division entered the same province {worstRevisits:N0} times, which is not " +
                    "a march, it is a pendulum";
         if (battlesSeen.Count < 100)

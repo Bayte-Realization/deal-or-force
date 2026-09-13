@@ -314,6 +314,12 @@ public static partial class FrontPlanner
         }
     }
 
+    /// <summary>What the shares ask of the division standing at this place in the line.</summary>
+    private static ArmyOrder RoleAt(int index, int spearhead, int advance, int defend) =>
+        index < spearhead ? ArmyOrder.Spearhead :
+        index < advance ? ArmyOrder.AdvanceFront :
+        index < advance + defend ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
+
     private static void AssignSide(Campaign campaign, StrategicWar war, int nationId, bool attacking)
     {
         var nation = campaign.NationById(nationId);
@@ -350,9 +356,18 @@ public static partial class FrontPlanner
         for (var index = 0; index < armies.Count; index++)
         {
             var army = armies[index];
-            var order = index < spearhead ? ArmyOrder.Spearhead :
-                index < advance ? ArmyOrder.AdvanceFront :
-                index < advance + defend ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
+            var order = RoleAt(index, spearhead, advance, defend);
+
+            // Damping this is the wrong cure, and both attempts at it proved so. Bucketing
+            // the power made weak divisions lead attacks; holding a division in its job
+            // until it had moved two places in the order of battle cut the re-tasking by a
+            // tenth and cost Ukraine seventy-eight provinces, because an AI that answers a
+            // moving front slowly is an AI that loses.
+            //
+            // The churn is load-bearing. What is wrong is not that a division's job changes
+            // - it is that changing the job used to throw away the march, which is handled
+            // where the post is chosen.
+
             var stance = order == ArmyOrder.Spearhead || order == ArmyOrder.AdvanceFront
                 ? profile.OffensiveStance
                 : order == ArmyOrder.DefendFront ? profile.DefensiveStance : ArmyStance.Balanced;
