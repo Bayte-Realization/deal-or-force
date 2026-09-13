@@ -1532,18 +1532,34 @@ public partial class DealOrForceGame : Control
     /// </summary>
     internal static void StyleButton(Button button, bool primary)
     {
-        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0));
-        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1));
-        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2));
-        button.AddThemeStyleboxOverride("disabled", ButtonStyle(false, 3));
-        button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1));
+        // A button carrying a picture and no caption is centred on the picture, and two
+        // separate things stopped it being. Measured by rendering one and counting pixels:
+        // the icon landed three pixels left and one pixel high in a fifty-four pixel button.
+        //
+        // Three of those are `icon_alignment`, which defaults to the left because the usual
+        // button is a picture followed by words. The fourth is this stylebox: six pixels of
+        // margin above and eight below is the optical lift that makes a CAPTION sit right in
+        // a button, and applied to a picture it is simply a pixel of error.
+        //
+        // Asked of the button rather than passed in, so that the re-paints that mark a
+        // screen as open - UpdateScreenButtons calls this on every refresh - cannot quietly
+        // put the offset back.
+        var iconOnly = button.Icon is not null && string.IsNullOrEmpty(button.Text);
+        button.IconAlignment = iconOnly ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        button.VerticalIconAlignment = VerticalAlignment.Center;
+
+        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly));
+        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly));
+        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly));
+        button.AddThemeStyleboxOverride("disabled", ButtonStyle(false, 3, iconOnly));
+        button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1, iconOnly));
         button.AddThemeColorOverride("font_color", primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text"));
         button.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
         button.AddThemeColorOverride("font_disabled_color", Ui.Colour("button.text_disabled"));
     }
 
-    private static StyleBoxFlat ButtonStyle(bool primary, int state)
+    private static StyleBoxFlat ButtonStyle(bool primary, int state, bool iconOnly = false)
     {
         var background = state switch
         {
@@ -1577,8 +1593,10 @@ public partial class DealOrForceGame : Control
             ShadowOffset = new Vector2(0, state == 2 ? 0 : 2),
             ContentMarginLeft = 10,
             ContentMarginRight = 10,
-            ContentMarginTop = state == 2 ? 7 : 6,
-            ContentMarginBottom = state == 2 ? 5 : 8,
+            // A caption rests a pixel high and travels two pixels down when the button is
+            // pressed; a picture rests dead centre and travels the same two.
+            ContentMarginTop = iconOnly ? (state == 2 ? 9 : 7) : (state == 2 ? 7 : 6),
+            ContentMarginBottom = iconOnly ? (state == 2 ? 5 : 7) : (state == 2 ? 5 : 8),
             AntiAliasing = true
         };
     }
