@@ -6,7 +6,35 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
-public enum SocialClass { Workers, Farmers, MiddleClass, Owners }
+/// <summary>
+/// Which rung of the ladder a household stands on, and nothing else.
+///
+/// This used to be four names on three different axes: `Workers` and `MiddleClass` said how
+/// much you earned, `Farmers` said where you worked, `Owners` said whether you owned
+/// anything. Mixing them meant the one question a class is FOR - who in this region is poor
+/// - could not be asked, because half the poor were filed under farming. A peasant at 0.16
+/// wealth and a labourer at 0.30 stand on the same rung; what differs is the work, and the
+/// work is now <see cref="Sector"/>.
+///
+/// Three rungs and not four because that is what the trades already were. Sorted by wealth
+/// they fall into groups with real gaps between them - 0.16 to 0.42, then 0.55 to 0.70, then
+/// 0.88 to 0.92 - and those gaps are where the lines belong.
+/// </summary>
+public enum SocialClass { Lower, Middle, Upper }
+
+/// <summary>
+/// What a trade lives off: the other axis, and the one that decides who feeds the country.
+///
+/// Kept apart from the class on purpose. A landowner and a peasant both live off the land
+/// and could not be further apart in standing; a machinist and a clerk stand at much the
+/// same height and have nothing else in common. Asking one enum both questions is what made
+/// the farming weights treat landowners as townsfolk.
+///
+/// `Ownership` is the honest answer for people who live off owning rather than working - it
+/// is neither a field, a factory floor nor a counter. It is also not called `Capital`, which
+/// is already the word this game uses for the city a government sits in.
+/// </summary>
+public enum Sector { Agriculture, Industry, Services, Ownership }
 public enum BuildingKind
 {
     Agriculture,
@@ -46,7 +74,11 @@ public enum BuildingKind
 /// </summary>
 public sealed class PopulationGroup
 {
+    /// <summary>How well off they are. See <see cref="SocialClass"/>.</summary>
     public SocialClass Class;
+
+    /// <summary>What they live off. See <see cref="Sector"/>.</summary>
+    public Sector Sector;
 
     /// <summary>The people, by the id in common/cultures.</summary>
     public string Culture = "";
@@ -607,6 +639,10 @@ public static class EconomySystem
     public static IReadOnlyList<(string Class, long Size)> Classes(ScenarioState state) =>
         Tally(state, group => group.Class.ToString());
 
+    /// <summary>Every sector worked in a region, largest first.</summary>
+    public static IReadOnlyList<(string Sector, long Size)> Sectors(ScenarioState state) =>
+        Tally(state, group => group.Sector.ToString());
+
     private static IReadOnlyList<(string Key, long Size)> Tally(ScenarioState state, Func<PopulationGroup, string> of)
     {
         if (state is null) return Array.Empty<(string, long)>();
@@ -676,7 +712,8 @@ public static class EconomySystem
         {
             host = new PopulationGroup
             {
-                Class = SocialClass.Workers,
+                Class = SocialClass.Lower,
+                Sector = Sector.Industry,
                 Culture = into,
                 Religion = DemographyCatalog.FaithOf(into)[0].Religion,
                 Profession = "labourers",
@@ -809,15 +846,25 @@ public static class EconomySystem
         if (trades.Count == 0)
         {
             // Without a trade catalogue there is still a population; it simply has no
-            // occupations. The economy only needs the classes, so seed those directly.
+            // occupations. The economy only needs the ladder, so seed the three rungs
+            // directly - and with nobody working at anything there is no sector to report,
+            // so they all carry the residual one.
             foreach (var (culture, share) in composition)
-                foreach (var socialClass in Enum.GetValues<SocialClass>())
-                    Add(state, culture, "", socialClass.ToString(), socialClass,
-                        (long)(population * share * (socialClass == SocialClass.Owners ? 0.06f :
-                            socialClass == SocialClass.MiddleClass ? 0.22f :
-                            socialClass == SocialClass.Workers ? 0.38f : 0.34f)),
-                        socialClass == SocialClass.Farmers ? 0.82f : 0.90f,
-                        socialClass == SocialClass.Owners ? 0.86f : socialClass == SocialClass.MiddleClass ? 0.62f : 0.38f);
+                foreach (var rung in Enum.GetValues<SocialClass>())
+                    Add(state, culture, "", rung.ToString(), rung, Sector.Services,
+                        (long)(population * share * rung switch
+                        {
+                            SocialClass.Upper => 0.06f,
+                            SocialClass.Middle => 0.22f,
+                            _ => 0.72f
+                        }),
+                        rung == SocialClass.Lower ? 0.86f : 0.90f,
+                        rung switch
+                        {
+                            SocialClass.Upper => 0.86f,
+                            SocialClass.Middle => 0.62f,
+                            _ => 0.38f
+                        });
             return;
         }
 
@@ -827,7 +874,9 @@ public static class EconomySystem
         if (farming.Fields != 1f || farming.Town != 1f)
         {
             for (var index = 0; index < trades.Count; index++)
-                weights[index] *= trades[index].Class == SocialClass.Farmers ? farming.Fields : farming.Town;
+                weights[index] *= trades[index].Sector == Sector.Agriculture
+                    ? farming.Fields
+                    : farming.Town;
             weightTotal = weights.Sum();
             if (weightTotal <= 0f) return;
         }
@@ -849,8 +898,8 @@ public static class EconomySystem
                 {
                     var size = (long)(ofTrade * faithShare);
                     if (size < floor) continue;
-                    var group = Add(state, culture, religion, trade.Id, trade.Class, size,
-                        trade.Employment, trade.Wealth);
+                    var group = Add(state, culture, religion, trade.Id, trade.Class,
+                        trade.Sector, size, trade.Employment, trade.Wealth);
                     placed += size;
                     if (largest is null || group.Size > largest.Size) largest = group;
                 }
@@ -863,7 +912,8 @@ public static class EconomySystem
         {
             var (culture, _) = composition[0];
             largest = Add(state, culture, DemographyCatalog.FaithOf(culture)[0].Religion,
-                trades[0].Id, trades[0].Class, 0, trades[0].Employment, trades[0].Wealth);
+                trades[0].Id, trades[0].Class, trades[0].Sector, 0,
+                trades[0].Employment, trades[0].Wealth);
         }
         largest.Size += population - placed;
         if (largest.Size < 0) largest.Size = 0;
@@ -901,7 +951,7 @@ public static class EconomySystem
             {
                 var share = Math.Max(0f, trade.ShareAt(urban));
                 here += share;
-                if (trade.Class == SocialClass.Farmers) fields += share;
+                if (trade.Sector == Sector.Agriculture) fields += share;
             }
             if (here <= 0) continue;
             farmed += people * (fields / here);
@@ -917,11 +967,13 @@ public static class EconomySystem
     }
 
     private static PopulationGroup Add(ScenarioState state, string culture, string religion,
-        string profession, SocialClass socialClass, long size, float employment, float wealth)
+        string profession, SocialClass socialClass, Sector sector, long size,
+        float employment, float wealth)
     {
         var group = new PopulationGroup
         {
             Class = socialClass,
+            Sector = sector,
             Culture = culture,
             Religion = religion,
             Profession = profession,

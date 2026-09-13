@@ -34,8 +34,23 @@ public sealed class ReligionDefinition
 /// What people do for a living.
 ///
 /// A profession is the thing the population screen is actually about, and it is also the
-/// bridge to the economy: every profession names the social class whose wages, wealth and
-/// politics it shares, so adding a profession does not mean rewriting the market.
+/// bridge to the economy: a profession does not carry its own rules, it names the two groups
+/// whose rules it already shares, so adding a profession does not mean rewriting anything.
+///
+/// It names two things, because there are two questions and they are not the same question.
+/// The CLASS is how well off these people are; the SECTOR is what they live off. A landowner
+/// and a peasant share a sector and share nothing else; a machinist and a clerk share
+/// neither and stand at nearly the same height. A trade that answered only one of the two
+/// left the other unanswerable, which is how good farmland came to grow peasants without
+/// growing the people who owned the land.
+///
+/// What each one decides today, precisely, so that nobody assumes more: the SECTOR decides
+/// who works the fields, which sets how much a country grows and how urban its regions read.
+/// The CLASS decides who turns up for work - the upper class supplies a seventh of itself to
+/// the labour force and lives off what it owns - and beyond that it is what the population
+/// and ledger screens count by. Neither one drives politics yet. Radicalism is a property of
+/// a region that its people merely inherit, and the obvious next thing to build is the one
+/// this split makes possible: a demand that belongs to a class rather than to a place.
 ///
 /// The two shares are the same profession in two different countries. A farming country is
 /// mostly peasants; an industrial one is mostly wage labour and clerks. Rather than author
@@ -47,7 +62,8 @@ public sealed class ProfessionDefinition
     public string Id = "";
     public string Name = "";
     public string Colour = "#8a8f98";
-    public SocialClass Class = SocialClass.Workers;
+    public SocialClass Class = SocialClass.Lower;
+    public Sector Sector = Sector.Services;
     public float RuralShare;
     public float UrbanShare;
     public float Wealth = 0.4f;
@@ -305,6 +321,8 @@ public static class DemographyCatalog
             if (value.TryGetProperty("colour", out var colour)) profession.Colour = colour.GetString() ?? profession.Colour;
             if (value.TryGetProperty("class", out var social) &&
                 Enum.TryParse<SocialClass>(social.GetString(), true, out var parsed)) profession.Class = parsed;
+            if (value.TryGetProperty("sector", out var sector) &&
+                Enum.TryParse<Sector>(sector.GetString(), true, out var worked)) profession.Sector = worked;
             if (value.TryGetProperty("rural_share", out var rural) && rural.TryGetSingle(out var ruralShare))
                 profession.RuralShare = Math.Max(0f, ruralShare);
             if (value.TryGetProperty("urban_share", out var urban) && urban.TryGetSingle(out var urbanShare))

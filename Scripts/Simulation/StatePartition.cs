@@ -310,7 +310,8 @@ public static class StatePartition
         foreach (var group in child.PopulationGroups)
         {
             var match = parent.PopulationGroups.Find(candidate =>
-                candidate.Class == group.Class && candidate.Culture == group.Culture &&
+                candidate.Class == group.Class && candidate.Sector == group.Sector &&
+                candidate.Culture == group.Culture &&
                 candidate.Religion == group.Religion && candidate.Profession == group.Profession);
             if (match is null) { parent.PopulationGroups.Add(group); continue; }
             var mine = match.Size;
@@ -428,6 +429,7 @@ public static class StatePartition
             carved.PopulationGroups.Add(new PopulationGroup
             {
                 Class = group.Class,
+                Sector = group.Sector,
                 Culture = group.Culture,
                 Religion = group.Religion,
                 Profession = group.Profession,
