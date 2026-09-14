@@ -1,0 +1,41 @@
+// What one country has signed with another, where the player is looking at it.
+{
+  "PACTS": "PACTS",
+  "Offered": "Offered",
+  "Allied": "Allied",
+  "Allied to": "Allied to",
+  "Guarantees": "Guarantees",
+  "Guaranteed by": "Guaranteed by",
+  "Non-aggression pact": "Non-aggression pact",
+  "Signed with you": "Signed with you",
+  "with you": "with you",
+  "with you, since day {0}": "with you, since day {0}",
+  "{0} has offered an alliance": "{0} has offered an alliance",
+
+  "Alliance": "Alliance",
+  "Propose alliance": "Propose alliance",
+  "Accept alliance": "Accept alliance",
+  "Break alliance": "Break alliance",
+  "Guarantee": "Guarantee",
+  "Withdraw guarantee": "Withdraw guarantee",
+
+  "They would sign: {0} against {1} needed.": "They would sign: {0} against {1} needed.",
+  "They would refuse: {0} against {1} needed.": "They would refuse: {0} against {1} needed.",
+  "An attack on either of you is answered by the other.": "An attack on either of you is answered by the other.",
+  "Answer it from their own panel, where the alliance button accepts it.": "Answer it from their own panel, where the alliance button accepts it.",
+  "It has promised to fight for these countries if they are attacked.": "It has promised to fight for these countries if they are attacked.",
+  "These countries have promised to fight for it.": "These countries have promised to fight for it.",
+  "They asked. Accepting binds you to their wars and them to yours.": "They asked. Accepting binds you to their wars and them to yours.",
+  "Walk out. They remember it, and so does everybody watching.": "Walk out. They remember it, and so does everybody watching.",
+  "Promise to fight for them if they are attacked. It costs nothing until it costs everything.": "Promise to fight for them if they are attacked. It costs nothing until it costs everything.",
+  "Take back the promise. They will notice.": "Take back the promise. They will notice.",
+
+  "Allied with {0}.": "Allied with {0}.",
+  "Left the alliance with {0}.": "Left the alliance with {0}.",
+  "{0} accepted.": "{0} accepted.",
+  "{0} declined.": "{0} declined.",
+  "You guarantee {0}.": "You guarantee {0}.",
+  "You no longer guarantee {0}.": "You no longer guarantee {0}.",
+
+  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves."
+}

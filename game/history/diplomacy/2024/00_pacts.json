@@ -1,0 +1,92 @@
+// Deal or Force - what the world had already signed on 1 January 2024.
+//
+// ---------------------------------------------------------------------------------------
+// Why this file exists
+// ---------------------------------------------------------------------------------------
+//
+// Without it the scenario opens on three hundred countries that have never met: no NATO, no
+// CSTO, nobody guaranteeing anybody, every alliance in a campaign one the computer grew from
+// nothing over years. The map ran, but it was not the map the scenario is about.
+//
+// ---------------------------------------------------------------------------------------
+// What a row means
+// ---------------------------------------------------------------------------------------
+//
+//     alliances    a name and a list of members. Written out pairwise, because that is what
+//                  an alliance IS here: an attack on one is answered by everybody allied to
+//                  it, each through their own declaration. Nothing in the simulation reads
+//                  the name - it is so this file reads like what it describes.
+//
+//     guarantees   `by` promises to fight for each country in `to` if it is attacked. The
+//                  cheap half of an alliance: it commits nothing until it commits
+//                  everything, and it does not tie the guarantor's own foreign policy.
+//
+//     pacts        two countries that have agreed not to attack each other, and nothing
+//                  more than that.
+//
+// Every alliance and guarantee below is a treaty that was actually in force on the day, and
+// the members are the members it had then - Sweden is not in NATO here because it was not,
+// until 7 March 2024. A mod that wants a different world ships its own file beside this one;
+// later files win, and a bloc with an empty member list is a bloc that does not exist.
+{
+  "alliances": [
+    // The North Atlantic Treaty, thirty-one members on the day.
+    {
+      "name": "NATO",
+      "members": [
+        "USA", "CAN", "GBR", "FRA", "DEU", "ITA", "ESP", "PRT", "NLD", "BEL", "LUX",
+        "DNK", "NOR", "ISL", "FIN", "POL", "CZE", "SVK", "HUN", "SVN", "HRV", "ALB",
+        "MNE", "MKD", "ROU", "BGR", "EST", "LVA", "LTU", "GRC", "TUR"
+      ]
+    },
+
+    // The Collective Security Treaty Organisation. Armenia had frozen its participation by
+    // the end of 2023 and had not left, which is a distinction this engine has no way to
+    // express - so it is in, and the opinion arithmetic can take it out.
+    {
+      "name": "CSTO",
+      "members": ["RUS", "BLR", "KAZ", "KGZ", "TJK", "ARM"]
+    },
+
+    // The 1961 treaty of friendship, co-operation and mutual assistance, which is the only
+    // mutual defence treaty China is party to and has never been renounced.
+    {
+      "name": "Sino-North Korean Treaty",
+      "members": ["CHN", "PRK"]
+    },
+
+    // ANZUS, minus New Zealand in practice since 1986 - the treaty stands, the obligation
+    // between Wellington and Washington does not.
+    {
+      "name": "ANZUS",
+      "members": ["AUS", "NZL"]
+    }
+  ],
+
+  "guarantees": [
+    // What the United States has instead of alliances where it has no treaty, and alongside
+    // them where it has: a standing commitment to defend, without the other side being bound
+    // to anything in return.
+    { "by": "USA", "to": ["JPN", "KOR", "PHL", "ISR", "AUS", "TWN"] },
+
+    // Russia's own, in the countries where its garrisons already are.
+    { "by": "RUS", "to": ["ABK", "OST", "SYR"] },
+
+    // And France's, which are older than the republic that holds them.
+    { "by": "FRA", "to": ["MCO", "AND"] }
+  ],
+
+  "pacts": [
+    // Neighbours who have agreed on the one thing they agree on.
+    ["CHN", "RUS"],
+    ["IND", "RUS"],
+    ["IND", "JPN"],
+    ["SAU", "ARE"],
+    ["EGY", "SAU"],
+    ["BRA", "ARG"],
+    ["MEX", "USA"],
+    ["VNM", "CHN"],
+    ["IDN", "AUS"],
+    ["ZAF", "NGA"]
+  ]
+}

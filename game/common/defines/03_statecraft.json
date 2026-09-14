@@ -26,6 +26,17 @@
   "AiTradeThreshold": 18,
   "AiPactThreshold": 42,
   "AiAllianceThreshold": 66,
+
+  // An alliance is asked for and answered - see AllianceCore. What an offer has to be
+  // worth, how long one put to a player stands, how long a refusal is remembered, and the
+  // four things a country weighs when it is asked.
+  "AllianceWillingness": 0.5,
+  "AllianceOfferDays": 30,
+  "AllianceRefusalDays": 180,
+  "AllianceWarPenalty": 0.45,
+  "AllianceShelterWeight": 0.30,
+  "AllianceNotorietyWeight": 0.40,
+  "AllianceSharedRivalWeight": 0.12,
   "AiRivalryThreshold": -30,
   "AiTreasuryFloor": 0.02,
   "AiTreasuryComfort": 0.12,

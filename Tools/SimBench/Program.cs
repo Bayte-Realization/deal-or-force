@@ -90,6 +90,8 @@ public static class Program
             AWarCanEndInObedienceRatherThanAnnexation());
         failures += Check("answering to somebody has obligations both ways, and an end",
             AnsweringToSomebodyMeansSomething());
+        failures += Check("an alliance is asked for, answered and left",
+            AnAllianceIsAskedForAndAnswered());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -5679,6 +5681,7 @@ public static class Program
         if (big <= small)
             return $"a puppet costs {small:0.0} over LUX and {big:0.0} over DEU - size is not counted";
 
+        Estrange(campaign, winner, loser);
         var war = CampaignDiplomacy.DeclareWar(campaign, winner.Id, loser.Id);
         if (war is null) return "FRA could not declare on LUX";
         war.WarScore = 100f;
@@ -5742,6 +5745,9 @@ public static class Program
         var subject = campaign.NationByTag("LUX");
         var stranger = campaign.NationByTag("DEU");
         if (overlord is null || subject is null || stranger is null) return "";
+        Estrange(campaign, overlord, subject);
+        Estrange(campaign, overlord, stranger);
+        Estrange(campaign, subject, stranger);
         if (!SubjectSystem.Subjugate(campaign, overlord, subject, "puppet", out var refusal))
             return $"could not make LUX a puppet of FRA: {refusal}";
 
@@ -5832,7 +5838,141 @@ public static class Program
             : $"  dependencies: {total} country(ies) answer to another, as " +
               string.Join(", ", counted.OrderByDescending(pair => pair.Value)
                   .Select(pair => $"{pair.Value} {pair.Key}")) + ".");
+
+        // And the other thing two countries can sign. Reported rather than required: a world
+        // with no alliances in it is a legitimate world, and a world where nobody could ever
+        // sign one is a bug this line would show as a nought.
+        var allied = 0;
+        var guaranteed = 0;
+        var pacts = 0;
+        foreach (var relation in campaign.Relations.Values)
+        {
+            if (relation.Stance == DiplomaticStance.Allied) allied++;
+            if (relation.GuaranteeByA) guaranteed++;
+            if (relation.GuaranteeByB) guaranteed++;
+            if (relation.NonAggressionPact) pacts++;
+        }
+        Console.WriteLine($"  alliances: {allied:N0} alliance(s), {guaranteed:N0} guarantee(s) and " +
+                          $"{pacts:N0} non-aggression pact(s) stand in this world.");
         return "";
+    }
+
+    /// <summary>
+    /// An alliance is a thing two countries decide, and either of them can be a player.
+    ///
+    /// The stance has meant something for a long time - a call to arms answers it. What is
+    /// checked here is the door that was missing: that somebody can ask, that the answer is
+    /// worked out from things that move rather than from a threshold crossed in private,
+    /// that a refusal says which of the reasons it was, and that a country playing the game
+    /// is offered rather than signed for.
+    /// </summary>
+    private static string AnAllianceIsAskedForAndAnswered()
+    {
+        var campaign = Campaign.CreateBootstrap(20240501);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var small = campaign.NationByTag("LUX");
+        var large = campaign.NationByTag("FRA");
+        var third = campaign.NationByTag("DEU");
+        if (small is null || large is null || third is null) return "";
+
+        Estrange(campaign, small, large);
+        Estrange(campaign, small, third);
+        Estrange(campaign, large, third);
+
+        // Cold, they have no reason to sign anything.
+        var cold = AllianceSystem.Willingness(campaign, large, small);
+        if (AllianceSystem.Propose(campaign, small, large, out var refusedAnswer))
+            return $"FRA allied with LUX out of nowhere ({refusedAnswer})";
+
+        // Warm, the small country asking the large one is the commonest alliance there is.
+        var bond = CampaignDiplomacy.Get(campaign, small.Id, large.Id);
+        bond.AllianceRefusedDay = -9999;
+        for (var repeat = 0; repeat < 6; repeat++)
+            OpinionSystem.Remember(campaign, bond, "improved_relations");
+        OpinionSystem.Remember(campaign, bond, "trade_agreement");
+        OpinionSystem.Remember(campaign, bond, "non_aggression_pact");
+        OpinionSystem.Settle(campaign, bond);
+
+        var why = new Breakdown();
+        var warm = AllianceSystem.Willingness(campaign, large, small, why);
+        if (warm <= cold)
+            return $"courting LUX changed nothing: {cold:0.00} before and {warm:0.00} after";
+        if (!why.HasEntries) return "the answer was worked out from nothing the screen could show";
+        if (!AllianceSystem.Propose(campaign, small, large, out var answer))
+            return $"FRA would not sign at willingness {warm:0.00}: {answer}";
+        if (CampaignDiplomacy.Get(campaign, small.Id, large.Id).Stance != DiplomaticStance.Allied)
+            return "FRA accepted and the two are not allied";
+
+        // The refusals that are facts rather than failures.
+        if (AllianceSystem.CanPropose(campaign, small, large, out var already) || !already.Contains("already"))
+            return $"asking an ally to ally said '{already}'";
+        var puppet = campaign.NationByTag("BEL");
+        Estrange(campaign, small, puppet);
+        Estrange(campaign, third, puppet);
+        if (!SubjectSystem.Subjugate(campaign, third, puppet, "puppet", out _))
+            return "could not stage a dependency for the alliance check";
+        if (AllianceSystem.CanPropose(campaign, small, puppet, out var answersTo) ||
+            !answersTo.Contains("answers to"))
+            return $"a puppet was free to sign its own alliance: '{answersTo}'";
+
+        // A country somebody is playing is offered, never signed for.
+        var human = campaign.NationByTag("ITA");
+        Estrange(campaign, human, third);
+        var humanBond = CampaignDiplomacy.Get(campaign, human.Id, third.Id);
+        for (var repeat = 0; repeat < 8; repeat++)
+            OpinionSystem.Remember(campaign, humanBond, "improved_relations");
+        OpinionSystem.Settle(campaign, humanBond);
+        human.IsHuman = true;
+        if (AllianceSystem.Propose(campaign, third, human, out var waiting))
+            return "an alliance was signed on a player's behalf";
+        if (AllianceSystem.OfferedTo(campaign, human)?.Id != third.Id)
+            return $"DEU asked ITA and nothing reached ITA's table ({waiting})";
+        if (!AllianceSystem.Answer(campaign, human, true, out _))
+            return "ITA accepted an offer and no alliance came of it";
+        if (humanBond.Stance != DiplomaticStance.Allied) return "ITA accepted and is not allied";
+        human.IsHuman = false;
+
+        // And leaving, which is remembered.
+        var before = bond.Opinion;
+        if (!AllianceSystem.Break(campaign, small, large, out var blocked))
+            return $"LUX could not leave its own alliance: {blocked}";
+        if (bond.Stance == DiplomaticStance.Allied) return "LUX left and is still allied";
+        OpinionSystem.Settle(campaign, bond);
+        if (bond.Opinion >= before)
+            return $"walking out cost nothing: {before:0} before and {bond.Opinion:0} after";
+
+        Console.WriteLine($"  alliances: FRA would not sign with LUX at {cold:0.00} and did at {warm:0.00}; " +
+                          $"a puppet may not sign at all; a player is asked rather than signed for; " +
+                          $"leaving cost {before - bond.Opinion:0} points of opinion.");
+        return "";
+    }
+
+    /// <summary>
+    /// Two countries with nothing between them, whatever the scenario says they have.
+    ///
+    /// The 2024 world opens with NATO, the CSTO and a dozen guarantees in it, which is right
+    /// and which quietly broke three checks that had picked France and Luxembourg as two
+    /// countries that could fight. A check about tribute is not a check about whether its
+    /// two examples are in the same alliance, so it says which relationship it needs.
+    /// </summary>
+    private static void Estrange(Campaign campaign, Nation one, Nation two)
+    {
+        if (campaign is null || one is null || two is null) return;
+        var relation = CampaignDiplomacy.Get(campaign, one.Id, two.Id);
+        relation.Stance = DiplomaticStance.Neutral;
+        relation.AllianceSinceDay = -9999;
+        relation.AllianceOfferedBy = 0;
+        relation.AllianceRefusedDay = -9999;
+        relation.TruceUntil = 0;
+        relation.NonAggressionPact = false;
+        relation.GuaranteeByA = false;
+        relation.GuaranteeByB = false;
+        OpinionSystem.Forget(campaign, relation, "alliance");
+        OpinionSystem.Forget(campaign, relation, "non_aggression_pact");
+        OpinionSystem.Forget(campaign, relation, "guaranteed_us");
+        OpinionSystem.Settle(campaign, relation);
     }
 
     private static string ADependencyIsABargainAboutPower()
@@ -5848,6 +5988,9 @@ public static class Program
         var other = campaign.NationByTag("DEU");
         if (overlord is null || subject is null || other is null) return "";
 
+        Estrange(campaign, overlord, subject);
+        Estrange(campaign, overlord, other);
+        Estrange(campaign, subject, other);
         if (!SubjectSystem.Subjugate(campaign, overlord, subject, "puppet", out var refusal))
             return $"could not make LUX a puppet of FRA: {refusal}";
         if (subject.OverlordId != overlord.Id) return "LUX does not think it answers to FRA";

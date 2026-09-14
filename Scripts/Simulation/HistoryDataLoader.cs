@@ -38,6 +38,105 @@ public static class HistoryDataLoader
             ApplyOptional(campaign, file, false, null);
     }
 
+    /// <summary>
+    /// What the world had already signed when the scenario opens.
+    ///
+    /// Without this, 1 January 2024 is a world of three hundred countries that have never
+    /// met: no NATO, no CSTO, nobody guaranteeing anybody. Every alliance a campaign had
+    /// was one the computer grew from nothing over years, which is a world that runs but
+    /// is not the world the scenario is about.
+    ///
+    /// An alliance here is a list of members and a name, and it is written out pairwise,
+    /// because that is what an alliance IS in this engine: an attack on one is answered by
+    /// everybody allied to it. The name is for the file to read like what it describes -
+    /// nothing in the simulation needs it.
+    /// </summary>
+    public static void ApplyBaseDiplomacy(Campaign campaign)
+    {
+        foreach (var file in GameDataLoader.DataFiles("history", "diplomacy", "2024"))
+        {
+            if (file is null || !File.Exists(file)) continue;
+            try { ApplyDiplomacy(campaign, File.ReadAllText(file), null); }
+            catch (Exception exception)
+            {
+                DiagnosticLogs.Write("simulation",
+                    $"HISTORY_DIPLOMACY_FAILED file={Path.GetFileName(file)} error={exception.Message}");
+            }
+        }
+    }
+
+    public static void ApplyDiplomacy(Campaign campaign, string json, List<string> errors)
+    {
+        using var document = Parse(json);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object) return;
+
+        if (root.TryGetProperty("alliances", out var alliances) && alliances.ValueKind == JsonValueKind.Array)
+            foreach (var bloc in alliances.EnumerateArray())
+            {
+                if (!bloc.TryGetProperty("members", out var members) ||
+                    members.ValueKind != JsonValueKind.Array) continue;
+                var signatories = new List<Nation>();
+                foreach (var member in members.EnumerateArray())
+                {
+                    var nation = campaign.NationByTag(member.GetString() ?? "");
+                    if (nation is null) errors?.Add($"Unknown country '{member.GetString()}' in an alliance.");
+                    else signatories.Add(nation);
+                }
+                for (var one = 0; one < signatories.Count; one++)
+                for (var two = one + 1; two < signatories.Count; two++)
+                {
+                    var relation = CampaignDiplomacy.Get(campaign, signatories[one].Id, signatories[two].Id);
+                    relation.Stance = DiplomaticStance.Allied;
+                    relation.AllianceSinceDay = campaign.ElapsedDays;
+                    OpinionSystem.Remember(campaign, relation, "alliance");
+                }
+            }
+
+        if (root.TryGetProperty("guarantees", out var guarantees) && guarantees.ValueKind == JsonValueKind.Array)
+            foreach (var entry in guarantees.EnumerateArray())
+            {
+                if (!entry.TryGetProperty("by", out var byTag)) continue;
+                var guarantor = campaign.NationByTag(byTag.GetString() ?? "");
+                if (guarantor is null)
+                {
+                    errors?.Add($"Unknown country '{byTag.GetString()}' guaranteeing somebody.");
+                    continue;
+                }
+                if (!entry.TryGetProperty("to", out var targets) || targets.ValueKind != JsonValueKind.Array) continue;
+                foreach (var target in targets.EnumerateArray())
+                {
+                    var sheltered = campaign.NationByTag(target.GetString() ?? "");
+                    if (sheltered is null || sheltered.Id == guarantor.Id)
+                    {
+                        errors?.Add($"Unknown country '{target.GetString()}' being guaranteed.");
+                        continue;
+                    }
+                    var relation = CampaignDiplomacy.Get(campaign, guarantor.Id, sheltered.Id);
+                    if (guarantor.Id == relation.A) relation.GuaranteeByA = true;
+                    else relation.GuaranteeByB = true;
+                    OpinionSystem.Remember(campaign, relation, "guaranteed_us");
+                }
+            }
+
+        if (root.TryGetProperty("pacts", out var pacts) && pacts.ValueKind == JsonValueKind.Array)
+            foreach (var pair in pacts.EnumerateArray())
+            {
+                if (pair.ValueKind != JsonValueKind.Array) continue;
+                var tags = new List<Nation>();
+                foreach (var tag in pair.EnumerateArray())
+                {
+                    var nation = campaign.NationByTag(tag.GetString() ?? "");
+                    if (nation is null) errors?.Add($"Unknown country '{tag.GetString()}' in a pact.");
+                    else tags.Add(nation);
+                }
+                if (tags.Count != 2) continue;
+                var relation = CampaignDiplomacy.Get(campaign, tags[0].Id, tags[1].Id);
+                relation.NonAggressionPact = true;
+                OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
+            }
+    }
+
     public static void ApplyCountries(Campaign campaign, string json, List<string> errors)
     {
         using var document = Parse(json);

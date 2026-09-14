@@ -127,6 +127,17 @@
     "max_stacks": 2
   },
 
+  // Walking out of an alliance, which is the same promise broken at a cheaper moment than
+  // refusing a call to arms - so it costs a third of one and is forgotten in four years
+  // rather than fifteen.
+  "broke_our_alliance": {
+    "name": "Walked out of our alliance",
+    "opinion": -18,
+    "days": 1460,
+    "decays": true,
+    "max_stacks": 3
+  },
+
   "coalition_partner": {
     "name": "We are containing the same country",
     "opinion": 20,
