@@ -1,0 +1,151 @@
+// Имена, которые страны, регионы и соглашения дают себе сами в `common/`.
+//
+// Интерфейс переведён давно и полностью. Это другая половина: то, что игрок читает на
+// карте и в панелях, но что задано не в коде, а в данных — и потому никогда не попадало
+// ни в одну таблицу.
+{
+  // ------------------------------------------------------------ common/subjects --
+  "Protectorate": "Протекторат",
+  "It keeps its government and its flag. Its foreign policy is made somewhere else.": "Сохраняет своё правительство и свой флаг. Его внешнюю политику делают в другом месте.",
+  "Puppet": "Марионетка",
+  "A government installed and kept there. It fights the wars it is told to.": "Правительство, посаженное и удерживаемое на месте. Воюет там, где велят.",
+  "Satellite": "Сателлит",
+  "Its own party, its own army, its own five-year plan, and none of its own choices.": "Своя партия, своя армия, своя пятилетка — и ни одного собственного решения.",
+  "Dominion": "Доминион",
+  "Self-governing, and turns up when the senior partner is attacked. Usually.": "Управляет собой сам и приходит, когда нападают на старшего партнёра. Обычно.",
+  "Client state": "Клиентское государство",
+  "Nobody signed anything. The money and the weapons come from one direction.": "Никто ничего не подписывал. Деньги и оружие идут с одной стороны.",
+
+  // ----------------------------------------------------- common/formable_nations --
+  "United Korea": "Единая Корея",
+  "Unify the peninsula under one administration while retaining the founder's political institutions.": "Объединить полуостров под одним управлением, сохранив государственное устройство основателя.",
+
+  "Central Asian Union": "Центральноазиатский союз",
+  "A common state for the five Central Asian republics, with a unified internal administration.": "Общее государство пяти центральноазиатских республик с единым внутренним управлением.",
+
+  "Benelux Union": "Союз Бенилюкс",
+  "Unite the Low Countries into a single state and consolidate their closely connected economies.": "Соединить Нидерланды, Бельгию и Люксембург в одно государство и свести воедино их и без того сросшиеся экономики.",
+
+  "Nordic Union": "Северный союз",
+  "A shared Nordic state. The territorial checklist follows the active scenario, including its overseas regions.": "Общее северное государство. Список земель берётся из действующего сценария, включая заморские.",
+
+  "Iberian Union": "Иберийская уния",
+  "Bring Spain and Portugal under a common state while retaining the founder's political institutions.": "Свести Испанию и Португалию в общее государство, сохранив устройство основателя.",
+
+  "Baltic Union": "Балтийский союз",
+  "Consolidate the three Baltic republics into one state with a common administration.": "Свести три прибалтийские республики в одно государство с общим управлением.",
+
+  "Yugoslavia": "Югославия",
+  "The South Slavs under one state again. Held together by administration rather than by sentiment, which is the hard part and always was.": "Южные славяне снова в одном государстве. Держится управлением, а не чувствами, — и в этом всегда и была трудность.",
+
+  "Czechoslovakia": "Чехословакия",
+  "The velvet divorce, undone by agreement. Two economies that never really stopped being one.": "Бархатный развод, отменённый по согласию. Две экономики, которые по сути так и не перестали быть одной.",
+
+  "Greater Romania": "Великая Румыния",
+  "Romania and Moldova as one state - two halves of the same language that a river and a century of empires happened to divide.": "Румыния и Молдавия как одно государство — две половины одного языка, которые развела река и век империй.",
+
+  "Austria-Hungary": "Австро-Венгрия",
+  "The Danube under one crown once more: the one arrangement that ever governed this many peoples at once, and the one that failed most instructively.": "Дунай снова под одной короной: единственное устройство, которому удавалось разом управлять столькими народами, — и провалившееся поучительнее прочих.",
+
+  "Visegrád Union": "Вишеградский союз",
+  "The four of Central Europe as one state rather than one caucus - a bloc with a treasury instead of a communiqué.": "Четвёрка Центральной Европы как государство, а не как совещание: блок с казной вместо коммюнике.",
+
+  "Kalmar Union": "Кальмарская уния",
+  "Denmark, Norway and Sweden under one crown, as they were for a hundred and twenty-six years and have not been since.": "Дания, Норвегия и Швеция под одной короной — как это было сто двадцать шесть лет и не было ни разу с тех пор.",
+
+  "European Federation": "Европейская федерация",
+  "The end of the argument the Union has been having with itself since it started: one state, one treasury, one foreign policy.": "Конец спора, который Союз ведёт сам с собой с самого начала: одно государство, одна казна, одна внешняя политика.",
+
+  "Union State": "Союзное государство",
+  "The treaty of 1999, finally executed. Two states that have spent a quarter of a century agreeing to become one.": "Договор 1999 года, наконец исполненный. Два государства, четверть века договаривавшиеся стать одним.",
+
+  "Soviet Union": "Советский Союз",
+  "Every republic of the Union back inside it. Not nostalgia - an administrative fact, and the largest one anybody has attempted.": "Все республики Союза снова внутри него. Не ностальгия, а управленческий факт — и самый крупный, какой кто-либо предпринимал.",
+
+  "Eurasian Union": "Евразийский союз",
+  "The customs union made into a country. The members are the members; what changes is that there is one government of them.": "Таможенный союз, ставший страной. Участники те же; меняется лишь то, что правительство у них одно.",
+
+  "Transcaucasian Federation": "Закавказская федерация",
+  "Georgia, Armenia and Azerbaijan in one state - which lasted a month in 1918 and has not been tried since, for reasons everybody involved could list.": "Грузия, Армения и Азербайджан в одном государстве — продержалось месяц в 1918-м и с тех пор не пробовалось по причинам, которые каждый из участников перечислит сам.",
+
+  "Roman Empire": "Римская империя",
+  "Constantinople and the Aegean under one state, calling itself what the people who held it always called it.": "Константинополь и Эгеида в одном государстве, называющем себя так, как его всегда называли те, кто им владел.",
+
+  "Hispanidad": "Испанидад",
+  "Iberia and the islands as one state, the old Union with the Atlantic added.": "Иберия и острова как одно государство: старая уния плюс Атлантика.",
+
+  "Greater Italy": "Великая Италия",
+  "The peninsula and its enclaves as one administration - the last three sovereignties inside Italy folded into the state around them.": "Полуостров и его анклавы под одним управлением: три последних суверенитета внутри Италии, сложенные в окружающее их государство.",
+
+  "Union of the Isles": "Союз островов",
+  "Britain and Ireland in one state by agreement rather than by conquest, which is the only way it has never been tried.": "Британия и Ирландия в одном государстве по согласию, а не по завоеванию, — единственный способ, каким это ни разу не пробовали.",
+
+  "United Arab Republic": "Объединённая Арабская Республика",
+  "Egypt and Syria as one state, which they were from 1958 to 1961 and which neither has entirely stopped describing as unfinished.": "Египет и Сирия как одно государство — чем они и были с 1958 по 1961 год и что ни одна из сторон так и не перестала называть незавершённым.",
+
+  "Arab Federation": "Арабская Федерация",
+  "Iraq and Jordan under one throne - the Hashemite answer to the Republic, which lasted five months in 1958.": "Ирак и Иордания под одним престолом — хашимитский ответ Республике, продержавшийся пять месяцев 1958 года.",
+
+  "Greater Syria": "Великая Сирия",
+  "The Levant as one country, the way it was administered before the borders drawn in 1916 by two men with a map.": "Левант как одна страна — так, как им управляли до границ, проведённых в 1916 году двумя людьми с картой.",
+
+  "Gulf Union": "Союз Залива",
+  "The Council made into a country - a proposal its own members have put formally and never quite carried.": "Совет, ставший страной, — предложение, которое его же участники вносили официально и ни разу не довели до конца.",
+
+  "Caliphate": "Халифат",
+  "The office nobody has held since 1924, claimed by a state that holds the cities it would have to be claimed from.": "Сан, которого никто не носит с 1924 года, заявленный государством, владеющим теми городами, из которых его и пришлось бы заявлять.",
+
+  "Arab Maghreb Union": "Союз арабского Магриба",
+  "The 1989 treaty executed rather than shelved: five states from the Atlantic to the Libyan desert as one.": "Договор 1989 года, исполненный, а не отложенный: пять государств от Атлантики до ливийской пустыни как одно.",
+
+  "East African Federation": "Восточноафриканская федерация",
+  "The federation the Community has had on its own order paper since 2010, and a treaty text since 2023.": "Федерация, которая стоит в повестке Сообщества с 2010 года, а с 2023-го существует и текстом договора.",
+
+  "Unity of the Nile Valley": "Единство долины Нила",
+  "Egypt and Sudan as one state, which was the formal Egyptian position until 1956 and the actual arrangement before it.": "Египет и Судан как одно государство: официальная позиция Каира до 1956 года — и действительное устройство до неё.",
+
+  "Senegambia": "Сенегамбия",
+  "The confederation of 1982, which held for seven years - one country that entirely surrounds another, arranged as one.": "Конфедерация 1982 года, продержавшаяся семь лет: страна, целиком окружающая другую, устроенная как одна.",
+
+  "Greater Somalia": "Великое Сомали",
+  "The five points of the star as one state, which is what the star on the flag has meant since the flag was drawn.": "Пять лучей звезды как одно государство — именно это звезда на флаге и означает с того дня, как флаг нарисовали.",
+
+  "West African Union": "Западноафриканский союз",
+  "ECOWAS as a state: one currency that already half exists, one market, and one government of it.": "ЭКОВАС как государство: одна валюта, наполовину уже существующая, один рынок и одно правительство над ним.",
+
+  "Reunified China": "Воссоединённый Китай",
+  "One China, settled rather than asserted. Which of the two governments is doing the settling is the whole question.": "Один Китай — решённый, а не провозглашённый. Кто из двух правительств решает, и есть весь вопрос.",
+
+  "Indochinese Federation": "Индокитайская федерация",
+  "Vietnam, Laos and Cambodia as one state - proposed by the Party in 1930, and quietly by everyone who has governed the three since.": "Вьетнам, Лаос и Камбоджа как одно государство — предложено Партией в 1930 году и негласно всеми, кто управлял этими тремя с тех пор.",
+
+  "Maphilindo": "Мафилиндо",
+  "Malaya, the Philippines and Indonesia as one Malay state - agreed in principle at Manila in 1963 and overtaken by events within weeks.": "Малайя, Филиппины и Индонезия как одно малайское государство — согласовано в принципе в Маниле в 1963 году и смыто событиями за считаные недели.",
+
+  "Akhand Bharat": "Акханд Бхарат",
+  "The subcontinent under one administration, as it was until 1947. Every government in it has a position on this and none of them is quiet.": "Субконтинент под одним управлением, каким он был до 1947 года. Позиция есть у каждого правительства внутри него, и ни одна из них не тихая.",
+
+  "Turan": "Туран",
+  "The Organization of Turkic States as one country, from Anatolia to the Altai. Six governments that already meet as a bloc, arranged as a state.": "Организация тюркских государств как одна страна, от Анатолии до Алтая. Шесть правительств, которые и так собираются блоком, устроенные как государство.",
+
+  "Greater Iran": "Великий Иран",
+  "The Persianate world as one state: the plateau, the Hindu Kush and the Oxus, which were administered together more often than not.": "Персидский мир как одно государство: нагорье, Гиндукуш и Амударья — земли, которыми чаще управляли вместе, чем порознь.",
+
+  "Gran Colombia": "Великая Колумбия",
+  "Bolívar's republic, put back together. It governed this ground for eleven years and has been an argument in four countries ever since.": "Республика Боливара, собранная заново. Она управляла этой землёй одиннадцать лет и с тех пор остаётся предметом спора в четырёх странах.",
+
+  "Federal Republic of Central America": "Федеративная Республика Центральной Америки",
+  "The federation of 1823, which came apart in civil war and has been formally attempted three times since.": "Федерация 1823 года, распавшаяся в гражданской войне и трижды с тех пор официально возобновлявшаяся.",
+
+  "United Provinces of the Plate": "Объединённые провинции Ла-Платы",
+  "The Plate basin as one republic, as it was declared in 1816 before the provinces discovered how little they agreed.": "Бассейн Ла-Платы как одна республика — как её и провозгласили в 1816 году, прежде чем провинции выяснили, насколько мало они согласны друг с другом.",
+
+  "North American Union": "Североамериканский союз",
+  "The three economies of the trade agreement as one state. The market has been one for thirty years; this is the government catching up.": "Три экономики торгового соглашения как одно государство. Рынок един уже тридцать лет — здесь его догоняет правительство.",
+
+  "Federation of the West Indies": "Вест-Индская федерация",
+  "The federation of 1958, which lasted four years. Ten island governments that share a court, a university and a cricket team.": "Федерация 1958 года, продержавшаяся четыре года. Десять островных правительств с общим судом, общим университетом и общей сборной по крикету.",
+
+  "Australasia": "Австралазия",
+  "The seventh state that New Zealand was offered in 1901 and declined, taken up a century and a quarter late.": "Седьмой штат, который Новой Зеландии предложили в 1901 году и от которого она отказалась, — принятый с опозданием на век с четвертью."
+}
