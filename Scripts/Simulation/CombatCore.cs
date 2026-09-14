@@ -96,6 +96,33 @@ public static partial class Warfare
     /// </summary>
     private static bool _provinceIndexStale;
 
+    /// <summary>
+    /// Which campaign the scratch above was last filled from.
+    ///
+    /// The note on those indexes says the simulation is single-threaded, so one set is
+    /// enough. That is true of one campaign and there are two: a client rebuilding from a
+    /// snapshot beside the world it replaces, a bench stepping two peers to prove they
+    /// agree. The staleness flag was shared by both of them, so a campaign could find the
+    /// index fresh - because the OTHER campaign had just rebuilt it - and read somebody
+    /// else's armies out of it.
+    ///
+    /// It needed a day on which nothing changed hands to leave the flag clear, and a
+    /// landing to read the index before warfare's own pass rebuilt it. That is rare: two
+    /// peers ran fourteen years in step before it happened once, and then they were apart
+    /// by a rounding error in one division and never came back together. A determinism bug
+    /// looks exactly like this, which is why the check that found it steps two worlds side
+    /// by side rather than trusting that the code is deterministic because it is single
+    /// -threaded.
+    /// </summary>
+    private static Campaign _indexedCampaign;
+    private static Campaign _measuredCampaign;
+
+    /// <summary>The index, for the campaign asking - rebuilding it if it is somebody else's.</summary>
+    private static void EnsureIndexed(Campaign campaign)
+    {
+        if (_provinceIndexStale || !ReferenceEquals(_indexedCampaign, campaign)) IndexArmies(campaign);
+    }
+
     // How much ground each country originally owned, and how much of it somebody else is
     // standing on. Every war used to work this out for itself by walking all thirty-eight
     // thousand provinces - with fifty wars going stale on the same day that was two million
@@ -107,6 +134,7 @@ public static partial class Warfare
     {
         HomeProvinces.Clear();
         OccupiedPairs.Clear();
+        _measuredCampaign = campaign;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
@@ -144,6 +172,7 @@ public static partial class Warfare
                 ByWar[army.AssignedWarId] = fighting = new List<Army>();
             fighting.Add(army);
         }
+        _indexedCampaign = campaign;
         _provinceIndexStale = false;
     }
 
@@ -431,7 +460,7 @@ public static partial class Warfare
         var controllers = campaign.ProvinceController;
         if (controllers is null) return "no map";
 
-        if (_provinceIndexStale) IndexArmies(campaign);
+        EnsureIndexed(campaign);
         var invaderId = landed[0].NationId;
         var defenderId = invaderId == war.AttackerId ? war.DefenderId : war.AttackerId;
 
@@ -482,7 +511,7 @@ public static partial class Warfare
             // million comparisons a day - to answer a question the province index already
             // answers. The index is refreshed only after a capture has moved somebody, so
             // it says exactly what the walk said.
-            if (_provinceIndexStale) IndexArmies(campaign);
+            EnsureIndexed(campaign);
             foreach (var army in In(ByProvince, battle.ProvinceId))
                 if (!army.InBattle && army.NationId == battle.DefenderId && army.Divisions >= 0.1f)
                     Join(battle, army, false);
@@ -661,7 +690,7 @@ public static partial class Warfare
     {
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
-        if (_provinceIndexStale) IndexArmies(campaign);
+        EnsureIndexed(campaign);
         var adjacent = topology.Neighbors[battle.ProvinceId];
         var attackerAdded = 0;
         var defenderAdded = 0;
@@ -835,6 +864,7 @@ public static partial class Warfare
 
     private static void SecureOccupation(Campaign campaign)
     {
+        if (!ReferenceEquals(_measuredCampaign, campaign)) MeasureOccupation(campaign);
         var controllers = campaign.ProvinceController;
         var occupation = campaign.ProvinceOccupation;
         if (controllers is null || occupation is null) return;
@@ -842,7 +872,7 @@ public static partial class Warfare
         // over the whole army list, once per occupied province per day, was a thousand
         // occupied provinces times fourteen hundred divisions - and it made securing
         // occupations the single slowest thing the simulation did.
-        if (_provinceIndexStale) IndexArmies(campaign);
+        EnsureIndexed(campaign);
         foreach (var war in campaign.Wars)
         foreach (var pair in war.OriginalController)
         {
