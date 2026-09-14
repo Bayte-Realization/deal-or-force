@@ -86,6 +86,8 @@ public static class Program
             TwoAxesOverOnePopulation(campaign));
         failures += Check("a country can answer to another one, and stop",
             ADependencyIsABargainAboutPower());
+        failures += Check("a war can end in obedience rather than annexation",
+            AWarCanEndInObedienceRatherThanAnnexation());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -5643,6 +5645,81 @@ public static class Program
     /// same country held by a steady overlord and by a collapsing one must not want the
     /// same thing. If it does, the whole model is a timer with extra steps.
     /// </summary>
+    /// <summary>
+    /// A war can end with the loser still on the map and no longer deciding.
+    ///
+    /// Four things, because a demand nobody can price, nobody can refuse and no AI will
+    /// write is not a demand. The last of them is the one that decides whether the mechanic
+    /// is in the game: a dependency the player has to type into a console is a feature of
+    /// the console.
+    /// </summary>
+    private static string AWarCanEndInObedienceRatherThanAnnexation()
+    {
+        if (SubjectCatalog.All.Count == 0) return "common/subjects declared no kinds at all";
+
+        var campaign = Campaign.CreateBootstrap(20240501);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var winner = campaign.NationByTag("FRA");
+        var loser = campaign.NationByTag("LUX");
+        var large = campaign.NationByTag("DEU");
+        if (winner is null || loser is null || large is null) return "";
+
+        // Priced, and priced by who is being asked. Obedience is not a commodity: the same
+        // arrangement over a neighbour your own size is a different demand from the one
+        // over a country the size of a city.
+        var small = PeaceConference.SubjugationCost(campaign, winner, loser, "puppet");
+        var big = PeaceConference.SubjugationCost(campaign, winner, large, "puppet");
+        if (small <= 0f) return "a puppet costs nothing to impose";
+        if (big <= small)
+            return $"a puppet costs {small:0.0} over LUX and {big:0.0} over DEU - size is not counted";
+
+        var war = CampaignDiplomacy.DeclareWar(campaign, winner.Id, loser.Id);
+        if (war is null) return "FRA could not declare on LUX";
+        war.WarScore = 100f;
+        war.DefenderWarSupport = 0.1f;
+
+        // Refused for the reasons that matter, and refused with the reason said out loud.
+        var whole = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id, Subjugate = "puppet" };
+        foreach (var province in PeaceConference.Claimable(campaign, war, winner.Id))
+            whole.Provinces.Add(province);
+        var wholeBlock = PeaceConference.BlockReason(campaign, war, whole);
+        if (!wholeBlock.Contains("cannot also answer", StringComparison.OrdinalIgnoreCase))
+            return $"annexing LUX whole AND making it answer was refused as '{wholeBlock}'";
+
+        var nonsense = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id, Subjugate = "not_a_kind" };
+        if (!PeaceConference.BlockReason(campaign, war, nonsense).Contains("no such arrangement",
+                StringComparison.OrdinalIgnoreCase))
+            return "a kind that is not in common/subjects was accepted at the table";
+
+        // What the AI would write, given room for it and given none.
+        var ledger = new PeaceLedger(campaign, war, winner.Id);
+        var rich = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        AiStatecraft.ConsiderSubjugation(campaign, winner, war, ledger, rich, 400f);
+        if (rich.Subjugate.Length == 0)
+            return "the AI had four hundred points of war score and asked for nothing";
+        var poor = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+        AiStatecraft.ConsiderSubjugation(campaign, winner, war, ledger, poor, 1f);
+        if (poor.Subjugate.Length != 0)
+            return $"the AI demanded a {poor.Subjugate} with one point of war score";
+
+        // And the settlement itself.
+        var demand = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id, Subjugate = "puppet" };
+        var block = PeaceConference.BlockReason(campaign, war, demand);
+        if (block.Length > 0) return $"a puppet at a hundred war score was refused: {block}";
+        if (!PeaceConference.Resolve(campaign, war, demand)) return "the settlement would not resolve";
+        if (loser.OverlordId != winner.Id) return "LUX signed and does not answer to FRA";
+        if (!war.Ended) return "the war went on after the settlement that ended it";
+        if (FlagCatalog.ValueOf("subject", campaign, loser) != "puppet")
+            return "the flag search cannot see that LUX is a puppet";
+
+        Console.WriteLine($"  a peace that takes no ground: LUX is a {SubjectCatalog.Of(loser.SubjectType)?.Name} " +
+                          $"of FRA for {small:0.0} war score ({big:0.0} had it been DEU), " +
+                          $"and the AI with room for one asked for a {rich.Subjugate}.");
+        return "";
+    }
+
     private static string ADependencyIsABargainAboutPower()
     {
         if (SubjectCatalog.All.Count == 0) return "common/subjects declared no kinds at all";

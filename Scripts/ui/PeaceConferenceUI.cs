@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
@@ -111,6 +112,13 @@ public partial class DealOrForceGame
             "Read the terms out in public. Three years of lost war support, stability and quiet anger.");
         AddPeaceTerm(terms, "truce", "Ten-year truce",
             "Neither side may declare on the other for a decade instead of five years.");
+
+        // One row for each kind in common/subjects, so a mod that adds an arrangement gets
+        // a way to demand it without touching the interface. They exclude each other: a
+        // country answers to you one way or not at all.
+        foreach (var kind in SubjectCatalog.All)
+            AddPeaceTerm(terms, "subject:" + kind.Id, $"Make them a {kind.Name.ToLowerInvariant()}",
+                kind.Description);
 
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 6);
@@ -234,6 +242,14 @@ public partial class DealOrForceGame
             case "demilitarise": _peaceDemand.Demilitarise = !_peaceDemand.Demilitarise; break;
             case "humiliate": _peaceDemand.Humiliate = !_peaceDemand.Humiliate; break;
             case "truce": _peaceDemand.LongTruce = !_peaceDemand.LongTruce; break;
+            default:
+                if (key.StartsWith("subject:", StringComparison.Ordinal))
+                {
+                    var kind = key["subject:".Length..];
+                    _peaceDemand.Subjugate = string.Equals(_peaceDemand.Subjugate, kind,
+                        StringComparison.OrdinalIgnoreCase) ? "" : kind;
+                }
+                break;
         }
         RefreshPeaceConference();
     }
@@ -321,7 +337,9 @@ public partial class DealOrForceGame
                 "demilitarise" => _peaceDemand.Demilitarise,
                 "humiliate" => _peaceDemand.Humiliate,
                 "truce" => _peaceDemand.LongTruce,
-                _ => false
+                _ => key.StartsWith("subject:", StringComparison.Ordinal) &&
+                     string.Equals(_peaceDemand.Subjugate, key["subject:".Length..],
+                         StringComparison.OrdinalIgnoreCase)
             });
 
         RefreshPeaceLedgerRows();

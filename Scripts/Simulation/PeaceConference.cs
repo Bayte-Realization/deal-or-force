@@ -45,8 +45,18 @@ public sealed class PeaceDemand
     /// <summary>A long truce instead of the ordinary one.</summary>
     public bool LongTruce;
 
+    /// <summary>
+    /// The arrangement the loser is to answer under, by its id in `common/subjects`, or
+    /// empty for none.
+    ///
+    /// A string and not a flag, because the kinds are data: the conference can demand
+    /// whatever `common/subjects` declares, including a kind that did not exist when this
+    /// was written.
+    /// </summary>
+    public string Subjugate = "";
+
     public bool IsEmpty => Provinces.Count == 0 && !Reparations && !TradeConcessions &&
-                           !Demilitarise && !Humiliate && !LongTruce;
+                           !Demilitarise && !Humiliate && !LongTruce && Subjugate.Length == 0;
 }
 
 /// <summary>Pricing, acceptance and resolution for a written peace.</summary>
@@ -69,6 +79,21 @@ public static class PeaceConference
         var exhaustion = (1f - M.Clamp01(opponentSupport)) * 30f;
         var duration = M.Clamp((campaign.ElapsedDays - war.StartedDay) / 30f, 0f, 20f);
         return M.Max(0f, score + exhaustion + duration);
+    }
+
+    /// <summary>
+    /// What making them answer to you is worth, in war score.
+    ///
+    /// The kind sets the base and their size against yours moves it, because the thing
+    /// being bought is not an arrangement in the abstract - it is THIS country's obedience,
+    /// and a country your own size does not hand that over for what a minnow charges.
+    /// </summary>
+    public static float SubjugationCost(Campaign campaign, Nation winner, Nation loser, string kindId)
+    {
+        var kind = SubjectCatalog.Of(kindId);
+        if (kind is null || winner is null || loser is null) return 0f;
+        var size = M.Clamp(Math.Max(1L, loser.Population) / (float)Math.Max(1L, winner.Population), 0f, 1.5f);
+        return kind.DemandCost * (0.6f + 0.6f * size);
     }
 
     /// <summary>What one province costs. Builds a ledger; prefer a ledger for many.</summary>
@@ -97,6 +122,21 @@ public static class PeaceConference
             if (province <= 0 || province > topology.ProvinceCount ||
                 topology.ProvinceToNation[province] != (ushort)(loser?.MapIndex ?? -1))
                 return "The demand includes ground that is not theirs to give";
+
+        if (demand.Subjugate.Length > 0)
+        {
+            if (!SubjectCatalog.Knows(demand.Subjugate))
+                return $"There is no such arrangement as '{demand.Subjugate}'";
+            if (loser is null) return "There is nobody left to answer to you";
+            if (loser.OverlordId == demand.ProposerId)
+                return $"{loser.Name} already answers to you";
+            if (loser.OverlordId != 0)
+                return $"{loser.Name} answers to somebody else; that has to end first";
+            // A country you have taken entirely is not a country that can answer to you.
+            // The demand has to leave something standing for the arrangement to be about.
+            if (Claimable(campaign, war, demand.ProposerId).Count - demand.Provinces.Count <= 0)
+                return "A country you are annexing whole cannot also answer to you";
+        }
 
         var ledger = new PeaceLedger(campaign, war, demand.ProposerId);
         var budget = ledger.Budget;
@@ -166,6 +206,11 @@ public static class PeaceConference
             winner.WarSupport = M.Clamp01(winner.WarSupport + 0.08f);
             ModifierSystem.Grant(campaign, loser, "humiliated", 365 * 3);
         }
+
+        // Last, because it is the term that needs the loser to still exist: whatever was
+        // being annexed has been annexed by now, and what is left is what will answer.
+        if (demand.Subjugate.Length > 0)
+            SubjectSystem.Subjugate(campaign, winner, loser, demand.Subjugate, out _);
 
         war.Ended = true;
         war.EndedDay = campaign.ElapsedDays;
@@ -244,6 +289,9 @@ public static class PeaceConference
         if (demand.Demilitarise) parts.Add($"the {loser.Name} armed forces were partially demobilised");
         if (demand.Humiliate) parts.Add($"{loser.Name} was publicly humbled");
         if (demand.LongTruce) parts.Add("a ten-year truce was signed");
+        if (demand.Subjugate.Length > 0 && loser.OverlordId == winner.Id)
+            parts.Add($"{loser.Name} became a " +
+                      $"{SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate} of {winner.Name}");
         return parts.Count == 0
             ? $"{winner.Name} and {loser.Name} made peace on no terms at all."
             : char.ToUpperInvariant(parts[0][0]) + parts[0][1..] +
@@ -394,6 +442,8 @@ public sealed class PeaceLedger
         if (demand.Demilitarise) total += defines.PeaceCostDemilitarise;
         if (demand.Humiliate) total += defines.PeaceCostHumiliate;
         if (demand.LongTruce) total += defines.PeaceCostLongTruce;
+        if (demand.Subjugate.Length > 0)
+            total += PeaceConference.SubjugationCost(_campaign, _proposer, _loser, demand.Subjugate);
         return total;
     }
 }

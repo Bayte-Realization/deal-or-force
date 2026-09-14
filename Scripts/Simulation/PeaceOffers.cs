@@ -139,6 +139,9 @@ public static class PeaceOffers
         if (demand.Demilitarise) extras.Add("your army stripped of its equipment");
         if (demand.Humiliate) extras.Add("the terms read out in public");
         if (demand.LongTruce) extras.Add("a ten-year truce instead of five");
+        if (demand.Subjugate.Length > 0)
+            extras.Add($"your country to answer to theirs as a " +
+                       $"{SubjectCatalog.Of(demand.Subjugate)?.Name?.ToLowerInvariant() ?? demand.Subjugate}");
         if (extras.Count > 0) lines.Add($"They also want {string.Join(", ", extras)}.");
         if (lines.Count == 0) lines.Add("They propose an end to the war on the pre-war border.");
         return $"{name} has put a settlement to you.\n\n{string.Join("\n", lines)}";
