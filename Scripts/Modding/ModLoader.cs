@@ -166,6 +166,7 @@ public sealed class ModLoader
         OpinionCatalog.ResetCatalog();
         DemographyCatalog.ResetCatalog();
         AiStrategyCatalog.ResetCatalog();
+        DeploymentCatalog.ResetCatalog();
         MilitaryBootstrap.ResetPersonnel();
         var reseed = false;
         foreach (var package in _packages)
