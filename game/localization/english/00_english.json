@@ -616,6 +616,8 @@
   "Singleplayer": "Singleplayer",
   "Sites the country has open. A project draws on the treasury, on materials and on construction capacity for as long as it runs, and twelve may run at once.": "Sites the country has open. A project draws on the treasury, on materials and on construction capacity for as long as it runs, and twelve may run at once.",
   "Slot was already empty.": "Slot was already empty.",
+  "Stars behind the globe": "Stars behind the globe",
+  "The photographed sky the world hangs in. Off leaves the flat colour behind it, which is quieter to look at and one less texture to hold.": "The photographed sky the world hangs in. Off leaves the flat colour behind it, which is quieter to look at and one less texture to hold.",
   "Smooth the map": "Smooth the map",
   "smoothed": "smoothed",
   "Smoothing rebuilds country, region and terrain boundaries so the map has no visible texel grid. Turn it off for the raster exactly as authored - pixels and all - which is also the cheaper picture on a slower machine (F3).": "Smoothing rebuilds country, region and terrain boundaries so the map has no visible texel grid. Turn it off for the raster exactly as authored - pixels and all - which is also the cheaper picture on a slower machine (F3).",

@@ -858,6 +858,8 @@
   "Off leaves the map readable while an event is open, and lets you drag the window out of the way and keep playing.": "«Выкл» оставляет карту читаемой, пока открыто событие, и позволяет отодвинуть окно и продолжать играть.",
   "Country names on the map": "Названия стран на карте",
   "Draw each country's name across its territory.": "Рисовать название каждой страны поперёк её территории.",
+  "Stars behind the globe": "Звёзды за глобусом",
+  "The photographed sky the world hangs in. Off leaves the flat colour behind it, which is quieter to look at and one less texture to hold.": "Фотография неба, в котором висит мир. Выключенными остаётся плоский цвет за ним — спокойнее для глаза и одной текстурой меньше.",
   "Smooth the map": "Сглаживать карту",
   "Rebuild country, region and terrain boundaries so the map has no visible texel grid. Off is the raster exactly as authored - pixels and all - and the cheaper picture on a slower machine.": "Перестраивать границы стран, регионов и рельефа, чтобы на карте не было видно тексельной сетки. «Выкл» — растр ровно таким, каким его нарисовали, вместе с пикселями, и картинка дешевле на слабой машине.",
   "Map view": "Вид карты",
