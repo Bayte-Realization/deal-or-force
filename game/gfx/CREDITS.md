@@ -484,3 +484,17 @@ For further information |
 For further information |
 | `flag_vnm_absolute_monarchy.png` | [Flag of the Empire of Vietnam (1945).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Empire_of_Vietnam_(1945).svg) | Public domain | Great Brightstar |
 | `flag_yug_communism.png` | [Flag of Yugoslavia (1946-1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Yugoslavia_(1946-1992).svg) | Public domain | Flag designed by Đorđe Andrejević-Kun[3]SVG coding: Zscout37 |
+| `flag_bih_communism.png` | [Flag of Bosnia and Herzegovina (1946–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bosnia_and_Herzegovina_(1946%E2%80%931992).svg) | Public domain | Zscout370 |
+| `flag_can_traditionalism.png` | [Canadian Red Ensign (1957-1965).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Canada_(1957%E2%80%931965).svg) | Public domain | Denelson83 |
+| `flag_culture_aymara.png` | [Wiphala.svg](https://commons.wikimedia.org/wiki/File:Banner_of_the_Qulla_Suyu_(1979).svg) | Public domain | Huhsunqu |
+| `flag_culture_berber.png` | [Berber flag.svg](https://commons.wikimedia.org/wiki/File:Berber_flag.svg) | Public domain | Mysid |
+| `flag_culture_bosniak.png` | [Flag of Bosnia and Herzegovina (1992-1998).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bosnia_and_Herzegovina_(1992%E2%80%931998).svg) | Public domain | The authors of the final version of the officially adopted f |
+| `flag_culture_kanak.png` | [Flag of FLNKS.svg](https://commons.wikimedia.org/wiki/File:Flag_of_FLNKS.svg) | Public domain | User:WarX |
+| `flag_culture_mon.png` | [Flag of Mon State (2018).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mon_State_(2018).svg) | Public domain | Ninjastrikers |
+| `flag_culture_sorbian.png` | [Flag of Sorbs.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sorbs.svg) | Public domain | Mysid |
+| `flag_hrv_communism.png` | [Flag of the Socialist Republic of Croatia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Croatia_(1947%E2%80%931990).svg) | Public domain | Zscout370 |
+| `flag_mkd_communism.png` | [Flag of the Socialist Republic of Macedonia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Socialist_Republic_of_Macedonia_(1946%E2%80%931991);_Flag_of_North_Macedonia_(1991-1992).svg) | CC BY-SA 3.0 | Unknown authorUnknown author, but under the authority of the |
+| `flag_mne_communism.png` | [Flag of the Socialist Republic of Montenegro.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Montenegro_(1946%E2%80%931993),_Flag_of_Serbia_(1947%E2%80%931992).svg) | Public domain | User:CrnaGora |
+| `flag_phl_at_war.png` | [War Flag of the Philippines.svg](https://commons.wikimedia.org/wiki/File:War_Flag_of_the_Philippines.svg) | Public domain | See File history below for details. |
+| `flag_ser_communism.png` | [Flag of the Socialist Republic of Serbia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Montenegro_(1946%E2%80%931993),_Flag_of_Serbia_(1947%E2%80%931992).svg) | Public domain | User:CrnaGora |
+| `flag_svn_communism.png` | [Flag of the Socialist Republic of Slovenia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovenia_(1945%E2%80%931991).svg) | Public domain | No machine-readable author provided. Zscout370 assumed (base |
