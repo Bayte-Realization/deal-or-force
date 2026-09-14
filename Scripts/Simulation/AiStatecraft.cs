@@ -582,8 +582,9 @@ public static partial class AiStatecraft
         // Winning. Write the peace a country would actually write.
         var demand = new PeaceDemand { WarId = war.Id, ProposerId = nation.Id };
         WriteDemand(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
+        ConsiderSubjugation(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
 
-        if (demand.Provinces.Count == 0)
+        if (demand.Provinces.Count == 0 && demand.Subjugate.Length == 0)
         {
             // Ahead on points and holding none of their ground. A country in that position
             // does not stop - it pushes, because stopping converts a war it is winning into
@@ -596,6 +597,41 @@ public static partial class AiStatecraft
         }
 
         PeaceOffers.Put(campaign, war, nation, opponent, demand);
+    }
+
+    /// <summary>
+    /// Whether to ask for the country instead of asking for its provinces.
+    ///
+    /// A winner that can afford to annex a country annexes it. This is the other case, and
+    /// it is the commoner one: a war won against somebody too large to swallow, where the
+    /// choice used to be a strip of border provinces or nothing. What a state actually did
+    /// there was leave the country standing and take its decisions - and until the AI could
+    /// reach that, every dependency in the game had to be typed into the console by hand.
+    ///
+    /// Only for a war that is not already eating them. Half a country annexed and the other
+    /// half made to answer is not a settlement any foreign ministry has written; it is a
+    /// player with a budget left over.
+    /// </summary>
+    internal static void ConsiderSubjugation(Campaign campaign, Nation nation, StrategicWar war,
+        PeaceLedger ledger, PeaceDemand demand, float budget)
+    {
+        var loser = campaign.NationById(nation.Id == war.AttackerId ? war.DefenderId : war.AttackerId);
+        if (loser is null || loser.OverlordId != 0) return;
+
+        var claimable = PeaceConference.Claimable(campaign, war, nation.Id).Count;
+        if (claimable == 0 || demand.Provinces.Count * 2 >= claimable) return;
+
+        var left = budget - ledger.Cost(demand);
+        SubjectType best = null;
+        var bestCost = 0f;
+        foreach (var kind in SubjectCatalog.All)
+        {
+            var cost = PeaceConference.SubjugationCost(campaign, nation, loser, kind.Id);
+            if (cost > left || cost <= bestCost) continue;
+            best = kind;
+            bestCost = cost;
+        }
+        if (best is not null) demand.Subjugate = best.Id;
     }
 
     /// <summary>

@@ -27,6 +27,16 @@ public sealed class SubjectType
 
     /// <summary>How long it is given before it begins wanting out at all.</summary>
     public int GraceDays = 365;
+
+    /// <summary>
+    /// What imposing this arrangement costs at a peace conference, in war score.
+    ///
+    /// Here rather than in the defines because it is a fact about the kind: a mod that adds
+    /// a tributary should be able to say what a tributary is worth without editing a second
+    /// file, and a game that priced every kind the same would be saying that a dominion and
+    /// a puppet are the same demand.
+    /// </summary>
+    public float DemandCost = 55f;
 }
 
 /// <summary>The numbers that decide how a dependency ages, all of them from the same file.</summary>
@@ -105,6 +115,7 @@ public static class SubjectCatalog
             Flag(value2, "joins_wars", v => type.JoinsWars = v);
             Flag(value2, "dragged_into_wars", v => type.DraggedIntoWars = v);
             Flag(value2, "may_declare_war", v => type.MayDeclareWar = v);
+            Read(value2, "demand_cost", v => type.DemandCost = Math.Max(0f, v));
 
             if (type.Tribute > 0.9f)
                 errors?.Add($"subjects/{entry.Name}: a tribute of {type.Tribute:P0} leaves the subject nothing.");

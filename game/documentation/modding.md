@@ -578,6 +578,24 @@ Those four weights live in the `weights` block at the top of the same file, alon
 get there rather than announcing it next Tuesday, and the whole of that is two numbers you
 can change.
 
+### Where dependencies come from
+
+Mostly from a peace. A demand at the conference may name a kind, and it is priced in war
+score like everything else on that table:
+
+    "demand_cost": 62        what imposing this kind is worth, in war score
+
+What it actually costs is that figure moved by how large the loser is against the winner -
+obedience is not a commodity, and a neighbour your own size does not hand it over for what a
+city-state charges. The conference refuses the settlements that are not settlements: a
+country you are annexing whole cannot also answer to you, and one that already answers to
+somebody has to be released first.
+
+The AI writes the same demand. A winner that can afford to swallow a country swallows it;
+this is the other case, and the commoner one - a war won against somebody too large to
+annex, where the choice used to be a strip of border provinces or nothing. Set every
+`demand_cost` high enough and no AI will ever impose one, which is a legitimate mod.
+
 ### Flags
 
 `subject` is a flag qualifier, so the kind's id composes into a file name:

@@ -23,6 +23,7 @@
 //     may_declare_war    may it start a war of its own
 //     liberty_desire     how much it wants out, before circumstances are counted
 //     grace_days         how long after being made a subject before it starts wanting out
+//     demand_cost        what imposing it costs at a peace conference, in war score
 //
 // `liberty_desire` is the base, not the answer. What a subject actually feels is worked out
 // every week from its size against its overlord's, how stable the overlord is, and whether
@@ -60,7 +61,8 @@
     "dragged_into_wars": false,
     "may_declare_war": false,
     "liberty_desire": 0.20,
-    "grace_days": 730
+    "grace_days": 730,
+    "demand_cost": 46
   },
 
   "puppet": {
@@ -72,7 +74,8 @@
     "dragged_into_wars": true,
     "may_declare_war": false,
     "liberty_desire": 0.40,
-    "grace_days": 365
+    "grace_days": 365,
+    "demand_cost": 62
   },
 
   "satellite": {
@@ -84,7 +87,8 @@
     "dragged_into_wars": true,
     "may_declare_war": false,
     "liberty_desire": 0.30,
-    "grace_days": 1095
+    "grace_days": 1095,
+    "demand_cost": 58
   },
 
   "dominion": {
@@ -96,7 +100,8 @@
     "dragged_into_wars": false,
     "may_declare_war": true,
     "liberty_desire": 0.10,
-    "grace_days": 1825
+    "grace_days": 1825,
+    "demand_cost": 34
   },
 
   "client": {
@@ -108,6 +113,7 @@
     "dragged_into_wars": false,
     "may_declare_war": true,
     "liberty_desire": 0.15,
-    "grace_days": 365
+    "grace_days": 365,
+    "demand_cost": 22
   }
 }
