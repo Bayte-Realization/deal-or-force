@@ -3347,6 +3347,61 @@ public static class Program
         if (variant != "flag_culture_kurdish_socialism")
             return $"a socialist Kurdish state resolved to '{variant}' rather than its own banner";
 
+        // Who a country answers to, which outranks everything else a flag can know. The
+        // order in common/flags says so - subject at 7, ideology at 10 - and the reason is
+        // Vichy France, which flew neither the Republic's flag nor a fascist one but what an
+        // occupied France was allowed to fly. Worth checking now that twenty-five files hang
+        // off this qualifier.
+        var ceylon = campaign.NationByTag("LKA");
+        var britain = campaign.NationByTag("GBR");
+        if (ceylon is not null && britain is not null)
+        {
+            var heldOverlord = ceylon.OverlordId;
+            var heldKind = ceylon.SubjectType;
+            var heldPolitics = ceylon.Ideology;
+
+            ceylon.OverlordId = britain.Id;
+            ceylon.SubjectType = "dominion";
+            var asDominion = FlagCatalog.Resolve(campaign, ceylon);
+            if (asDominion != "flag_lka_dominion")
+                return $"Ceylon as a dominion resolved to '{asDominion}' rather than its dominion flag";
+
+            // A kind of dependency nothing has drawn a flag for falls back to the national
+            // flag rather than to nothing - a satellite flew its own flag, which is right.
+            ceylon.SubjectType = "satellite";
+            var asSatellite = FlagCatalog.Resolve(campaign, ceylon);
+            if (asSatellite != "flag_lka")
+                return $"a satellite with no flag of its own resolved to '{asSatellite}'";
+
+            ceylon.OverlordId = heldOverlord;
+            ceylon.SubjectType = heldKind;
+            ceylon.Ideology = heldPolitics;
+            if (FlagCatalog.Resolve(campaign, ceylon) != "flag_lka")
+                return "Ceylon stopped answering to anybody and did not go back to its own flag";
+        }
+
+        // And politics does not get to overrule it. China has a fascist flag on disk and a
+        // puppet flag on disk, and a fascist puppet is a puppet: that is what the order in
+        // common/flags is for.
+        if (china is not null && britain is not null)
+        {
+            var heldOverlord = china.OverlordId;
+            var heldKind = china.SubjectType;
+            var heldPolitics = china.Ideology;
+
+            china.OverlordId = britain.Id;
+            china.SubjectType = "puppet";
+            china.Ideology = "fascism";
+            var installed = FlagCatalog.Resolve(campaign, china);
+            if (installed != "flag_chn_puppet")
+                return $"a fascist puppet China flew '{installed}' rather than the flag of a " +
+                       "government somebody else installed";
+
+            china.OverlordId = heldOverlord;
+            china.SubjectType = heldKind;
+            china.Ideology = heldPolitics;
+        }
+
         // And the one condition that is not politics at all. The Philippines is the whole
         // reason the `at_war` qualifier exists: its flag is flown red-field-up, by law and
         // only, while the country is at war. Three other countries were filed under it once
