@@ -98,6 +98,14 @@
     "button.corner_radius": 3,
     "button.border_width": 1,
     "button.focus_width": 2,
-    "panel.texture_margin": 16
+    "panel.texture_margin": 16,
+
+    // Whether the globe hangs in a photographed sky or against flat `shell.space`.
+    //
+    // The code reading this treats a missing value as nothing-behind-the-globe, which is the
+    // right default for a mod that has not thought about it and the wrong one for the game:
+    // the backdrop is art we ship, and without this line nothing ever asked for it. Set it
+    // to 0 for the flat colour.
+    "shell.space_texture": 1
   }
 }
