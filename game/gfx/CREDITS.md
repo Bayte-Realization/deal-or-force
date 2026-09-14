@@ -384,7 +384,7 @@ else was skipped rather than used.
 | `flag_ind_absolute_monarchy.png` | [British Raj Red Ensign.svg](https://commons.wikimedia.org/wiki/File:British_Raj_Red_Ensign.svg) | Public domain | Barryob |
 | `flag_irl_absolute_monarchy.png` | [Green harp flag of Ireland.svg](https://commons.wikimedia.org/wiki/File:Green_harp_flag_of_Ireland.svg) | CC BY-SA 3.0 | Raymond1922A |
 | `flag_irl_constitutional_monarchy.png` | [Green harp flag of Ireland.svg](https://commons.wikimedia.org/wiki/File:Green_harp_flag_of_Ireland.svg) | CC BY-SA 3.0 | Raymond1922A |
-| `flag_irn_absolute_monarchy.png` | [Flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
+| `flag_irn_absolute_monarchy.png` | [State flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:State_flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
 | `flag_irn_liberalism.png` | [Civil flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:Civil_flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
 | `flag_irn_traditionalism.png` | [Flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
 | `flag_irq_absolute_monarchy.png` | [Flag of Iraq (1924–1959).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraq_%281924%E2%80%931959%29.svg) | Public domain | unattributed |
@@ -521,3 +521,18 @@ Coat of arms :Lokal_Profil and Myriam Thyes |
 | `flag_srb_puppet.png` | [Flag of the Government of National Salvation (occupied Yugoslavia).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Government_of_National_Salvation_(occupied_Yugoslavia).svg) | Public domain | File:Flag of serbia 1941 1944.JPG / derivative work: DIREKTO |
 | `flag_yem_federation.png` | [Flag of the Federation of South Arabia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federation_of_South_Arabia.svg) | Public domain | R-41 |
 | `flag_mmr_puppet.png` | [Flag of Burma 1943.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Burma_1943.svg) | CC BY-SA 3.0 | Flag of Burma 1943.gif: Jaume Ollé / derivative work: Rannph |
+| `flag_alb_puppet.png` | [Flag of Albania (1939–1943).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Albania_%281939%E2%80%931943%29.svg) | Public domain | F l a n k e r |
+| `flag_bfa_liberalism.png` | [Flag of Upper Volta.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Upper_Volta.svg) | Public domain | odder |
+| `flag_egy_protectorate.png` | [Flag of Egypt (1882–1922).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Egypt_%281882%E2%80%931922%29.svg) | Public domain | Converted to svg by Daniel78 |
+| `flag_eth_military_junta.png` | [Flag of Ethiopia (1975–1987).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ethiopia_%281975%E2%80%931987%29.svg) | Public domain | Johannes Rössel |
+| `flag_gbr_parliamentary_republic.png` | [Flag of the Commonwealth (1649-1651).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Commonwealth_%281649-1651%29.svg) | Public domain | Guilherme Paula |
+| `flag_khm_protectorate.png` | [Flag of Cambodia under French protection.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cambodia_under_French_protection.svg) | Public domain | No machine-readable author provided. Lexicon assumed (based |
+| `flag_lao_protectorate.png` | [Flag of Laos (1893–1952).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Laos_%281893%E2%80%931952%29.svg) | Public domain | Thommy |
+| `flag_lby_military_junta.png` | [Flag of Libya (1969–1972).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Libya_%281969%E2%80%931972%29.svg) | Public domain | F l a n k e r |
+| `flag_mng_absolute_monarchy.png` | [Flag of Bogd Khaanate Mongolia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bogd_Khaanate_Mongolia.svg) | CC BY-SA 4.0 | Joins2003 |
+| `flag_nld_parliamentary_republic.png` | [Flag of the Batavian Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Batavian_Republic.svg) | CC0 | Tom Lemmens |
+| `flag_tha_absolute_monarchy.png` | [Flag of Siam (1855).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Siam_%281855%29.svg) | Public domain | Xiengyod &amp; Sodacan 
+
+
+iThe source code of this  SVG is v |
+| `flag_ven_liberalism.png` | [Flag of Venezuela (1954–2006).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Venezuela_%281954%E2%80%932006%29.svg) | Public domain | See File history below for details. |

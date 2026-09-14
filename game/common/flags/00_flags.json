@@ -204,7 +204,7 @@
     // The shahada and the Taliban's banner are not national colours; they are a claim about
     // what the state is for.
     "afg": { "ideology": "theocratic_rule", "otherwise": "flag_afg_liberalism" },
-    "irn": { "ideology": "theocratic_rule", "otherwise": "flag_irn_absolute_monarchy" },
+    "irn": { "ideology": "theocratic_rule", "otherwise": "flag_irn_liberalism" },
     "sau": { "ideology": "theocratic_rule" },
     "vat": { "government": "theocracy" },
 
