@@ -280,8 +280,12 @@ public static partial class AiStatecraft
             }
             else if (relation.Stance != DiplomaticStance.Allied && bestOpinion >= defines.AiAllianceThreshold)
             {
-                relation.Stance = DiplomaticStance.Allied;
-                relation.LastActionDay = campaign.ElapsedDays;
+                // It used to set the stance itself, on both countries' behalf, which is how
+                // a player could watch alliances appear on the map and never be offered one.
+                // Now it asks, and what it asks goes through the same door a player's offer
+                // does: answered on the spot by another computer, and put on the table when
+                // the country being asked is somebody playing.
+                AllianceSystem.Propose(campaign, nation, bestFriend, out _);
             }
             else if (relation.Stance == DiplomaticStance.Neutral)
             {

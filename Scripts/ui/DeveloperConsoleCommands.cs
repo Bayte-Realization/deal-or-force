@@ -145,6 +145,19 @@ public partial class DealOrForceGame
         Add("occupy", "WAR", "occupy [PROVINCE]",
             "Hand a province to your country's control. The selected one unless a number is given.",
             ConsoleOccupy);
+        Add("alliances", "DIPLOMACY", "alliances [DEU]",
+            "Who a country is allied to, who it has guaranteed, and what is on its table.",
+            ConsoleAlliances, "allies");
+        Add("ally", "DIPLOMACY", "ally FRA",
+            "Offer an alliance, or accept the one you have been offered. What they answer " +
+            "and why is printed.", ConsoleAlly, "alliance");
+        Add("unally", "DIPLOMACY", "unally FRA",
+            "Walk out of one. They remember it.", ConsoleUnally, "breakalliance");
+        Add("guarantee", "DIPLOMACY", "guarantee LUX [off]",
+            "Promise to fight for a country that has not asked you to be its ally - the " +
+            "cheap half of an alliance, and the useful half of being a great power.",
+            ConsoleGuarantee);
+
         Add("subjects", "DIPLOMACY", "subjects [DEU]",
             "Who answers to a country, under what arrangement, and how badly each of them " +
             "wants out.", ConsoleSubjects, "puppets");
@@ -1155,6 +1168,101 @@ public partial class DealOrForceGame
         return EscapeBb($"{nation.Tag}: warmest and coldest of {rows.Length:N0} opinion(s)\n" +
                         string.Join("\n", rows.Take(8).Select(Row)) + "\n  …\n" +
                         string.Join("\n", rows.TakeLast(8).Select(Row)));
+    }
+
+    private string ConsoleAlliances(string argument)
+    {
+        if (_campaign is null) return "No campaign.";
+        var nation = ConsoleNation(argument);
+        if (nation is null) return "No such country.";
+
+        var lines = new List<string>();
+        foreach (var ally in AllianceSystem.AlliesOf(_campaign, nation))
+        {
+            var relation = CampaignDiplomacy.Get(_campaign, nation.Id, ally.Id);
+            var since = relation.AllianceSinceDay > -9000
+                ? $", since day {relation.AllianceSinceDay:N0}"
+                : "";
+            lines.Add($"  ally · {ally.Tag} {EscapeBb(ally.Name)} · opinion {relation.Opinion:+0;-0;0}{since}");
+        }
+        foreach (var other in _campaign.Nations)
+        {
+            if (other.Id == nation.Id) continue;
+            var relation = CampaignDiplomacy.Peek(_campaign, nation.Id, other.Id);
+            if (relation is null) continue;
+            if (relation.GuaranteedBy(nation.Id))
+                lines.Add($"  guarantees · {other.Tag} {EscapeBb(other.Name)}");
+            if (relation.GuaranteedBy(other.Id))
+                lines.Add($"  guaranteed by · {other.Tag} {EscapeBb(other.Name)}");
+            if (relation.NonAggressionPact)
+                lines.Add($"  pact · {other.Tag} {EscapeBb(other.Name)}");
+        }
+
+        var offered = AllianceSystem.OfferedTo(_campaign, nation);
+        if (offered is not null)
+            lines.Insert(0, $"  ON THE TABLE · {offered.Tag} {EscapeBb(offered.Name)} has offered an alliance. " +
+                            "`ally " + offered.Tag + "` accepts it.");
+        return lines.Count == 0
+            ? $"{nation.Tag} has signed nothing with anybody."
+            : string.Join("\n", lines);
+    }
+
+    private string ConsoleAlly(string argument)
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var target = ConsoleNation(argument);
+        if (target is null) return "Usage: ally FRA";
+
+        // Accepting what is already on the table is the same word as asking, because from
+        // the player's side it is the same intention.
+        var offered = AllianceSystem.OfferedTo(_campaign, _campaign.Player);
+        if (offered is not null && offered.Id == target.Id)
+        {
+            AllianceSystem.Answer(_campaign, _campaign.Player, true, out var outcome);
+            Refresh();
+            return EscapeBb(outcome);
+        }
+
+        var why = new Breakdown();
+        var willingness = AllianceSystem.Willingness(_campaign, target, _campaign.Player, why);
+        var signed = AllianceSystem.Propose(_campaign, _campaign.Player, target, out var answer);
+        Refresh();
+        var parts = new List<string> { EscapeBb(answer) };
+        if (!signed && why.HasEntries)
+        {
+            parts.Add($"  willingness {willingness:0.00} against {_campaign.Defines.AllianceWillingness:0.00} needed:");
+            foreach (var entry in why.Entries)
+                parts.Add($"    {EscapeBb(entry.Source)} {entry.Value:+0.00;-0.00;0.00}");
+        }
+        return string.Join("\n", parts);
+    }
+
+    private string ConsoleUnally(string argument)
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var target = ConsoleNation(argument);
+        if (target is null) return "Usage: unally FRA";
+        if (!AllianceSystem.Break(_campaign, _campaign.Player, target, out var refusal))
+            return $"Refused: {EscapeBb(refusal)}";
+        Refresh();
+        return $"{_campaign.Player.Tag} is no longer allied to {EscapeBb(target.Name)}.";
+    }
+
+    private string ConsoleGuarantee(string argument)
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var words = ConsoleWords(argument);
+        if (words.Length == 0) return "Usage: guarantee LUX [off]";
+        var target = ConsoleNation(words[0]);
+        if (target is null) return $"No country called '{EscapeBb(words[0])}'.";
+        var on = words.Length < 2 || !string.Equals(words[1], "off", StringComparison.OrdinalIgnoreCase);
+        new GuaranteeCommand { IssuerId = _campaign.Player.Id, TargetId = target.Id, Guarantee = on }
+            .Apply(_campaign);
+        Refresh();
+        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, target.Id);
+        return relation.GuaranteedBy(_campaign.Player.Id)
+            ? $"{_campaign.Player.Tag} guarantees {EscapeBb(target.Name)}."
+            : $"{_campaign.Player.Tag} no longer guarantees {EscapeBb(target.Name)}.";
     }
 
     private string ConsoleSubjects(string argument)

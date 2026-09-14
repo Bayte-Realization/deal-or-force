@@ -239,6 +239,9 @@ public static class ScenarioCatalog
         HistoryDataLoader.ApplyBaseCountries(campaign);
         EconomySystem.Seed(campaign);
         HistoryDataLoader.ApplyBaseStates(campaign);
+        // Last of the history, because an alliance is between countries and they all have to
+        // exist first.
+        HistoryDataLoader.ApplyBaseDiplomacy(campaign);
         campaign.SetPlayer(southKorea.Id);
         MilitaryBootstrap.Seed(campaign);
         NavalBootstrap.Seed(campaign);

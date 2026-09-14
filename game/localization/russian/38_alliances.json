@@ -1,0 +1,41 @@
+// Что одна страна подписала с другой — там, где игрок на это смотрит.
+{
+  "PACTS": "ДОГОВОРЫ",
+  "Offered": "Предложено",
+  "Allied": "Союз",
+  "Allied to": "В союзе с",
+  "Guarantees": "Гарантирует",
+  "Guaranteed by": "Гарантии от",
+  "Non-aggression pact": "Пакт о ненападении",
+  "Signed with you": "Подписан с вами",
+  "with you": "с вами",
+  "with you, since day {0}": "с вами, с {0}-го дня",
+  "{0} has offered an alliance": "{0} предлагает союз",
+
+  "Alliance": "Союз",
+  "Propose alliance": "Предложить союз",
+  "Accept alliance": "Принять союз",
+  "Break alliance": "Разорвать союз",
+  "Guarantee": "Гарантировать",
+  "Withdraw guarantee": "Отозвать гарантию",
+
+  "They would sign: {0} against {1} needed.": "Они подпишут: {0} при нужных {1}.",
+  "They would refuse: {0} against {1} needed.": "Они откажут: {0} при нужных {1}.",
+  "An attack on either of you is answered by the other.": "На нападение на любого из вас отвечает другой.",
+  "Answer it from their own panel, where the alliance button accepts it.": "Ответить можно на их панели — кнопка союза и означает согласие.",
+  "It has promised to fight for these countries if they are attacked.": "Обещала воевать за эти страны, если на них нападут.",
+  "These countries have promised to fight for it.": "Эти страны обещали воевать за неё.",
+  "They asked. Accepting binds you to their wars and them to yours.": "Они попросили. Согласие свяжет вас их войнами, а их — вашими.",
+  "Walk out. They remember it, and so does everybody watching.": "Выйти. Они это запомнят — и все, кто смотрит, тоже.",
+  "Promise to fight for them if they are attacked. It costs nothing until it costs everything.": "Обещать воевать за них, если на них нападут. Не стоит ничего, пока не стоит всего.",
+  "Take back the promise. They will notice.": "Забрать обещание назад. Они заметят.",
+
+  "Allied with {0}.": "Союз с {0} заключён.",
+  "Left the alliance with {0}.": "Союз с {0} разорван.",
+  "{0} accepted.": "{0} соглашается.",
+  "{0} declined.": "{0} отказывает.",
+  "You guarantee {0}.": "Вы гарантируете {0}.",
+  "You no longer guarantee {0}.": "Вы больше не гарантируете {0}.",
+
+  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "Чего она хочет на этой неделе, считается заново: насколько она выросла, способен ли сюзерен управлять собой и ведёт ли он войну. На ста процентах она просто уходит."
+}

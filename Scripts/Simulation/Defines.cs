@@ -712,6 +712,27 @@ public sealed class Defines
 	public float AiTradeThreshold { get; set; } = 18f;
 	public float AiPactThreshold { get; set; } = 42f;
 	public float AiAllianceThreshold { get; set; } = 66f;
+
+	/// <summary>What an offer of alliance has to be worth before a country signs it.</summary>
+	public float AllianceWillingness { get; set; } = 0.5f;
+
+	/// <summary>How long an offer put to a player stands before it lapses.</summary>
+	public int AllianceOfferDays { get; set; } = 30;
+
+	/// <summary>And how long a refusal is remembered, so that asking again is a decision.</summary>
+	public int AllianceRefusalDays { get; set; } = 180;
+
+	/// <summary>What it costs an offer that somebody is already fighting a war.</summary>
+	public float AllianceWarPenalty { get; set; } = 0.45f;
+
+	/// <summary>How much of an argument it is that they are larger than you.</summary>
+	public float AllianceShelterWeight { get; set; } = 0.30f;
+
+	/// <summary>And how much of one against them that the world thinks badly of them.</summary>
+	public float AllianceNotorietyWeight { get; set; } = 0.40f;
+
+	/// <summary>What each shared rival is worth, up to three of them.</summary>
+	public float AllianceSharedRivalWeight { get; set; } = 0.12f;
 	public float AiRivalryThreshold { get; set; } = -30f;
 
 	// ---- Economy: how a country governs itself between crises ----

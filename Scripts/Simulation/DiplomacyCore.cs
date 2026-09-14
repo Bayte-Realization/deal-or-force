@@ -39,6 +39,24 @@ public sealed class DiplomaticRelation
     public bool GuaranteeByA;
     public bool GuaranteeByB;
 
+    /// <summary>
+    /// An alliance somebody has offered and nobody has answered: who asked, and when.
+    ///
+    /// Only ever set when the country being asked is a player's, because the computer
+    /// answers where it stands. It is a field on the relationship rather than a queue
+    /// somewhere else for the same reason the truce is: it is a fact about these two
+    /// countries, and it has to survive a save, a snapshot and a reconnect without anybody
+    /// remembering to carry it.
+    /// </summary>
+    public int AllianceOfferedBy;
+    public int AllianceOfferedDay = -9999;
+
+    /// <summary>When they last said no, so that asking again is a decision and not a habit.</summary>
+    public int AllianceRefusedDay = -9999;
+
+    /// <summary>When the current alliance was signed, for the screen that shows it.</summary>
+    public int AllianceSinceDay = -9999;
+
     public bool EmbargoBy(int nationId) => nationId == A ? EmbargoByA : EmbargoByB;
     public bool GuaranteedBy(int nationId) => nationId == A ? GuaranteeByA : GuaranteeByB;
 

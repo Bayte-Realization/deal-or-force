@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
@@ -11,6 +12,8 @@ public partial class DealOrForceGame
     private Button _declareWarButton = null!;
     private HBoxContainer _subjectActions = null!;
     private Button _integrateButton = null!;
+    private Button _allianceButton = null!;
+    private Button _guaranteeButton = null!;
     private int _pendingWarTarget = -1;
 
     private void BuildCountryActionControls(VBoxContainer parent)
@@ -25,6 +28,14 @@ public partial class DealOrForceGame
         row.AddChild(ActionButton("Improve", ImproveSelectedRelations, 96, 32, true));
         row.AddChild(ActionButton("Denounce", DenounceSelected, 96, 32));
         row.AddChild(ActionButton("Capital", FocusSelectedCapital, 96, 32));
+        var pacts = new HBoxContainer();
+        pacts.AddThemeConstantOverride("separation", 5);
+        _countryActions.AddChild(pacts);
+        _allianceButton = ActionButton("Alliance", ToggleSelectedAlliance, 140, 32);
+        _guaranteeButton = ActionButton("Guarantee", ToggleSelectedGuarantee, 140, 32);
+        pacts.AddChild(_allianceButton);
+        pacts.AddChild(_guaranteeButton);
+
         _subjectActions = new HBoxContainer { Visible = false };
         _subjectActions.AddThemeConstantOverride("separation", 5);
         _countryActions.AddChild(_subjectActions);
@@ -38,6 +49,113 @@ public partial class DealOrForceGame
         _countryActionFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _countryActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _countryActions.AddChild(_countryActionFeedback);
+    }
+
+    /// <summary>
+    /// What this country has signed, and with whom.
+    ///
+    /// Who is allied to whom is public - it is the one thing about an alliance everybody is
+    /// meant to know, which is most of what an alliance is for. What is NOT public is an
+    /// offer nobody has answered, so that only ever appears on the table it was put on.
+    /// </summary>
+    private void ShowPacts(Nation nation)
+    {
+        var mine = nation.Id == _campaign.Player.Id
+            ? null
+            : CampaignDiplomacy.Peek(_campaign, _campaign.Player.Id, nation.Id);
+        var allies = AllianceSystem.AlliesOf(_campaign, nation);
+        var offered = nation.Id == _campaign.Player.Id
+            ? AllianceSystem.OfferedTo(_campaign, nation)
+            : null;
+        var guarantees = new List<string>();
+        var guarantors = new List<string>();
+        foreach (var other in _campaign.Nations)
+        {
+            if (other.Id == nation.Id) continue;
+            var relation = CampaignDiplomacy.Peek(_campaign, nation.Id, other.Id);
+            if (relation is null) continue;
+            if (relation.GuaranteedBy(nation.Id)) guarantees.Add(other.Tag);
+            if (relation.GuaranteedBy(other.Id)) guarantors.Add(other.Tag);
+        }
+
+        if (allies.Count == 0 && offered is null && guarantees.Count == 0 && guarantors.Count == 0 &&
+            mine is not { NonAggressionPact: true }) return;
+
+        DetailHeading("PACTS");
+        if (offered is not null)
+            DetailRow("Offered", Simulation.Loc.Format("{0} has offered an alliance", offered.DisplayName),
+                Tr("Answer it from their own panel, where the alliance button accepts it."),
+                "state.positive");
+        if (mine is { Stance: DiplomaticStance.Allied })
+            DetailRow("Allied", mine.AllianceSinceDay > -9000
+                    ? Simulation.Loc.Format("with you, since day {0}", $"{mine.AllianceSinceDay:N0}")
+                    : Tr("with you"),
+                Tr("An attack on either of you is answered by the other."), "state.positive");
+        if (mine is { NonAggressionPact: true })
+            DetailRow("Non-aggression pact", Tr("Signed with you"));
+        if (allies.Count > 0)
+            DetailRow("Allied to", string.Join(", ", allies.Take(8).Select(ally => ally.Tag)) +
+                                   (allies.Count > 8 ? $" +{allies.Count - 8:N0}" : ""));
+        if (guarantees.Count > 0)
+            DetailRow("Guarantees", string.Join(", ", guarantees.Take(8)) +
+                                    (guarantees.Count > 8 ? $" +{guarantees.Count - 8:N0}" : ""),
+                Tr("It has promised to fight for these countries if they are attacked."));
+        if (guarantors.Count > 0)
+            DetailRow("Guaranteed by", string.Join(", ", guarantors.Take(8)) +
+                                       (guarantors.Count > 8 ? $" +{guarantors.Count - 8:N0}" : ""),
+                Tr("These countries have promised to fight for it."));
+    }
+
+    /// <summary>Ask, accept, or walk out - whichever of the three this country is.</summary>
+    private void ToggleSelectedAlliance()
+    {
+        if (!ValidForeignSelection()) return;
+        var player = _campaign.Player;
+        var target = _selectedNation;
+        var relation = CampaignDiplomacy.Get(_campaign, player.Id, target.Id);
+
+        if (relation.Stance == DiplomaticStance.Allied)
+        {
+            _campaign.Commands.Enqueue(new BreakAllianceCommand { IssuerId = player.Id, TargetId = target.Id });
+            _campaign.Commands.ApplyAll(_campaign);
+            _countryActionFeedback.Text = Simulation.Loc.Format("Left the alliance with {0}.", target.DisplayName);
+        }
+        else if (AllianceSystem.OfferedTo(_campaign, player) is { } waiting && waiting.Id == target.Id)
+        {
+            _campaign.Commands.Enqueue(new AnswerAllianceCommand { IssuerId = player.Id, Accept = true });
+            _campaign.Commands.ApplyAll(_campaign);
+            _countryActionFeedback.Text = Simulation.Loc.Format("Allied with {0}.", target.DisplayName);
+        }
+        else if (!AllianceSystem.CanPropose(_campaign, player, target, out var refusal))
+        {
+            _countryActionFeedback.Text = refusal;
+        }
+        else
+        {
+            _campaign.Commands.Enqueue(new ProposeAllianceCommand { IssuerId = player.Id, TargetId = target.Id });
+            _campaign.Commands.ApplyAll(_campaign);
+            _countryActionFeedback.Text = relation.Stance == DiplomaticStance.Allied
+                ? Simulation.Loc.Format("{0} accepted.", target.DisplayName)
+                : Simulation.Loc.Format("{0} declined.", target.DisplayName);
+        }
+        ShowCountryInteraction(_selectedNation, "Diplomacy");
+    }
+
+    /// <summary>The cheap half of an alliance, which commits nothing until it commits everything.</summary>
+    private void ToggleSelectedGuarantee()
+    {
+        if (!ValidForeignSelection()) return;
+        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, _selectedNation.Id);
+        var on = !relation.GuaranteedBy(_campaign.Player.Id);
+        _campaign.Commands.Enqueue(new GuaranteeCommand
+        {
+            IssuerId = _campaign.Player.Id, TargetId = _selectedNation.Id, Guarantee = on
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        _countryActionFeedback.Text = relation.GuaranteedBy(_campaign.Player.Id)
+            ? Simulation.Loc.Format("You guarantee {0}.", _selectedNation.DisplayName)
+            : Simulation.Loc.Format("You no longer guarantee {0}.", _selectedNation.DisplayName);
+        ShowCountryInteraction(_selectedNation, "Diplomacy");
     }
 
     /// <summary>
@@ -89,6 +207,64 @@ public partial class DealOrForceGame
         }
         if (subjects.Count > 8)
             DetailRow("And", Simulation.Loc.Format("{0} more", $"{subjects.Count - 8:N0}"));
+    }
+
+    /// <summary>
+    /// What the alliance button is for right now, and what pressing it would get.
+    ///
+    /// The tooltip carries the answer before the asking: a country that would refuse says
+    /// so, with the parts of the judgement that made it refuse. An offer a player can only
+    /// discover by making it is a dice roll with a diplomatic theme.
+    /// </summary>
+    private void RefreshPactButtons(Nation nation)
+    {
+        if (nation == _campaign.Player) return;
+        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, nation.Id);
+        var offered = AllianceSystem.OfferedTo(_campaign, _campaign.Player);
+
+        if (relation.Stance == DiplomaticStance.Allied)
+        {
+            _allianceButton.Text = Tr("Break alliance");
+            _allianceButton.Disabled = false;
+            _allianceButton.TooltipText = Ui.Tip(Tr("Walk out. They remember it, and so does everybody watching."));
+        }
+        else if (offered is not null && offered.Id == nation.Id)
+        {
+            _allianceButton.Text = Tr("Accept alliance");
+            _allianceButton.Disabled = false;
+            _allianceButton.TooltipText = Ui.Tip(Tr("They asked. Accepting binds you to their wars and them to yours."));
+        }
+        else
+        {
+            _allianceButton.Text = Tr("Propose alliance");
+            var can = AllianceSystem.CanPropose(_campaign, _campaign.Player, nation, out var refusal);
+            _allianceButton.Disabled = !can;
+            if (!can) _allianceButton.TooltipText = Ui.Tip(refusal);
+            else
+            {
+                var why = new Simulation.Breakdown();
+                var willingness = AllianceSystem.Willingness(_campaign, nation, _campaign.Player, why);
+                var needed = _campaign.Defines.AllianceWillingness;
+                var parts = why.Entries
+                    .OrderByDescending(entry => System.Math.Abs(entry.Value))
+                    .Take(3)
+                    .Select(entry => $"{entry.Source} {entry.Value:+0.00;-0.00;0.00}");
+                _allianceButton.TooltipText = Ui.Tip(
+                    (willingness > needed
+                        ? Simulation.Loc.Format("They would sign: {0} against {1} needed.",
+                            $"{willingness:0.00}", $"{needed:0.00}")
+                        : Simulation.Loc.Format("They would refuse: {0} against {1} needed.",
+                            $"{willingness:0.00}", $"{needed:0.00}")) +
+                    "\n" + string.Join("\n", parts));
+            }
+        }
+
+        var guaranteed = relation.GuaranteedBy(_campaign.Player.Id);
+        _guaranteeButton.Text = guaranteed ? Tr("Withdraw guarantee") : Tr("Guarantee");
+        _guaranteeButton.Disabled = relation.Stance == DiplomaticStance.AtWar;
+        _guaranteeButton.TooltipText = Ui.Tip(guaranteed
+            ? Tr("Take back the promise. They will notice.")
+            : Tr("Promise to fight for them if they are attacked. It costs nothing until it costs everything."));
     }
 
     /// <summary>Let one go, or take it in - the two ends an arrangement has.</summary>
@@ -154,8 +330,10 @@ public partial class DealOrForceGame
                 DetailRow(entry.Source, $"{entry.Value:+0;-0;0}");
         }
         if (war is not null) DetailRow("War score", $"{(war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
+        ShowPacts(nation);
         ShowDependencies(nation);
         _countryActions.Visible = nation != _campaign.Player;
+        RefreshPactButtons(nation);
         _subjectActions.Visible = nation.OverlordId == _campaign.Player.Id;
         if (_subjectActions.Visible)
         {
