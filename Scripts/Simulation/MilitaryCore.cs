@@ -986,7 +986,6 @@ public static class MilitaryBootstrap
                 var angle = index * (MathF.PI * 2f / Math.Max(1, divisionCount));
                 var ring = divisionCount <= 1 ? 0f : 0.18f + 0.025f * (index % 4);
                 var templateId = UnitTypeCatalog.InitialTemplate(nation, index, personnel);
-                var deployed = DeploymentCatalog.PlaceOf(nation.Tag, index, divisionCount);
                 var variation = (nation.MapIndex * 97 + index * 37) & 255;
                 campaign.Armies.Add(new Army
                 {
@@ -1005,10 +1004,8 @@ public static class MilitaryBootstrap
                     Recon = templateId == "motorized_corps" ? 0.68f : 0.28f + variation % 16 / 100f,
                     Engineers = templateId == "line_infantry" ? 0.52f : 0.34f,
                     Artillery = templateId == "armored_corps" ? 0.70f : 0.38f + variation % 18 / 100f,
-                    // Forward if the scenario says where this army stands, and around the
-                    // capital if it does not - which is every country the war is not about.
-                    Latitude = deployed?.Latitude ?? nation.CapitalLatitude + MathF.Sin(angle) * ring,
-                    Longitude = deployed?.Longitude ?? nation.CapitalLongitude + MathF.Cos(angle) * ring
+                    Latitude = nation.CapitalLatitude + MathF.Sin(angle) * ring,
+                    Longitude = nation.CapitalLongitude + MathF.Cos(angle) * ring
                 });
             }
         }
