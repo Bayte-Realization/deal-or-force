@@ -201,8 +201,20 @@ public static class TerritorialTopology
         //
         // A box wide enough to reach Ordubad in the south-east also reached over Armenia
         // and swept in Azerbaijani ground on the far side, so the border is traced instead.
+        // The two scraps of Azerbaijani ground the border trace leaves out on the Armenian
+        // side - seven and eleven cells north-east of Nakhchivan proper. Without them they
+        // fall back to whichever district the source raster reached them with, which turned
+        // out to be Salyan: a Caspian district three and a half degrees east of them.
+        //
+        // Seeds and not a wider polygon. The polygon IS the border, and opening it far
+        // enough to reach these also takes the twenty-three-cell piece at 46.0-46.2E that
+        // is mainland Azerbaijan rather than Nakhchivan. A seed takes the cells it names
+        // and only cells Azerbaijan already holds.
         new(1720, "AZE", "AZE", "Nakhchivan", "AZ-NX", "Autonomous Republic", "", 462_500,
-            44.62f, 46.26f, 38.74f, 39.85f, NakhchivanBoundary, Array.Empty<RegionSeed>()),
+            44.62f, 46.26f, 38.74f, 39.85f, NakhchivanBoundary, new[]
+            {
+                new RegionSeed(45.71875f, 39.53125f, 1), new RegionSeed(45.90625f, 39.28125f, 1)
+            }),
 
         // Gibraltar. Same story at 6.8 km2: a seed cell taken from Cadiz, over-large for
         // the same reason Vatican City is.
