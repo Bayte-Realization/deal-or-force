@@ -536,3 +536,19 @@ Coat of arms :Lokal_Profil and Myriam Thyes |
 
 iThe source code of this  SVG is v |
 | `flag_ven_liberalism.png` | [Flag of Venezuela (1954–2006).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Venezuela_%281954%E2%80%932006%29.svg) | Public domain | See File history below for details. |
+| `flag_che_puppet.png` | [Flag of the Helvetic Republic (French).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Helvetic_Republic_%28French%29.svg) | Public domain | Made by Wikipedian Philippe317 |
+| `flag_cyp_protectorate.png` | [Flag of Cyprus (1922–1960).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cyprus_%281922%E2%80%931960%29.svg) | Public domain | Shandris |
+| `flag_cze_absolute_monarchy.png` | [Royal banner of the Kingdom of Bohemia.svg](https://commons.wikimedia.org/wiki/File:Royal_banner_of_the_Kingdom_of_Bohemia.svg) | CC BY-SA 3.0 | Samhanin |
+| `flag_formable_iberian_union.png` | [Flag of Cross of Burgundy.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cross_of_Burgundy.svg) | Public domain | Ningyou. |
+| `flag_gha_protectorate.png` | [Flag of the Gold Coast (1877–1957).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Gold_Coast_%281877%E2%80%931957%29.svg) | Public domain | No machine-readable author provided. Yaddah assumed (based o |
+| `flag_irq_military_junta.png` | [Flag of Iraq (1959–1963).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraq_%281959%E2%80%931963%29.svg) | Public domain | Orzetto~commonswiki (first-uploaded file version), AnonMoos, |
+| `flag_jor_protectorate.png` | [Flag of the Emirate of Transjordan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Emirate_of_Transjordan.svg) | Public domain | SKopp |
+| `flag_ken_protectorate.png` | [Flag of Kenya (1921–1963).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kenya_%281921%E2%80%931963%29.svg) | CC BY-SA 3.0 | Oren neu dag |
+| `flag_lka_protectorate.png` | [Flag of Ceylon (1875–1948).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ceylon_%281875%E2%80%931948%29.svg) | Public domain | Samhanin (original) |
+| `flag_mlt_protectorate.png` | [Flag of Malta (1943-1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Malta_%281943-1964%29.svg) | Public domain | Orange Tuesday (talk) |
+| `flag_mys_protectorate.png` | [Flag of the Federated Malay States (1895–1946).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federated_Malay_States_%281895%E2%80%931946%29.svg) | Public domain | Unknown authorUnknown author |
+| `flag_nga_protectorate.png` | [Flag of Nigeria (1914–1952).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nigeria_%281914%E2%80%931952%29.svg) | CC BY-SA 4.0 | Benchill (original) |
+| `flag_sgp_protectorate.png` | [Flag of the British Straits Settlements (1925–1946).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_British_Straits_Settlements_%281925%E2%80%931946%29.svg) | Public domain | Flag_of_the_British_Straits_Settlements_(1874-1942).svg: Him |
+| `flag_syr_absolute_monarchy.png` | [Flag of Kingdom of Syria (1920-03-08 to 1920-07-24).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kingdom_of_Syria_%281920-03-08_to_1920-07-24%29.svg) | Public domain | Ch1902 |
+| `flag_twn_provisional_government.png` | [Flag of the Republic of Formosa (1895).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_Formosa_%281895%29.svg) | Public domain | Henry Szytko, vectorised by cypp0847 |
+| `flag_usa_traditionalism.png` | [Flag of the United States (1777-1795).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_States_%281777-1795%29.svg) | Public domain | Jacobolus (SVG file) |
