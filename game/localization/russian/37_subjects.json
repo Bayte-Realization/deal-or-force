@@ -1,0 +1,32 @@
+// Панель, где одна страна отвечает перед другой, и два конца этого соглашения.
+{
+  "ARRANGEMENTS": "СОГЛАШЕНИЯ",
+  "Answers to": "Отвечает перед",
+  "Arranged": "Заключено",
+  "Tribute": "Дань",
+  "Wants out": "Хочет уйти",
+  "And": "И ещё",
+
+  "{0} year(s) ago": "{0} г. назад",
+  "of its taxes, {0} last week": "её налогов, {0} за прошлую неделю",
+  "wants out {0}": "хочет уйти на {0}",
+  "{0} more": "ещё {0}",
+  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "Чего она хочет на этой неделе, считается заново: насколько она выросла, способен ли сюзерен управлять собой и ведёт ли он войну. На ста процентах она просто уходит.",
+
+  "Release": "Отпустить",
+  "Integrate": "Включить в состав",
+  "Take it into your country. Its regions become yours.": "Принять её в состав своей страны. Её регионы станут вашими.",
+  "{0} answers to nobody now.": "{0} больше ни перед кем не отвечает.",
+  "{0} is part of your country now.": "{0} теперь часть вашей страны.",
+
+  "COUNTRY": "СТРАНА",
+  "RELATIONS": "ОТНОШЕНИЯ",
+  "Opinion": "Отношение",
+  "Stance": "Позиция",
+  "Status": "Статус",
+  "Your country": "Ваша страна",
+  "War score": "Очки войны",
+  "Intelligence": "Разведка",
+  "Unknown (fog of war)": "Неизвестно (туман войны)",
+  "How this government regards you.": "Как это правительство относится к вам."
+}

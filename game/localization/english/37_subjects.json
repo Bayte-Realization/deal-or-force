@@ -1,0 +1,36 @@
+// The panel where one country answers to another, and the two ends of that arrangement.
+//
+// The rows above the dependency block have been on that panel since it was written and were
+// never indexed. They are here because they belong to the same screen: a translator opening
+// this file gets a panel they can finish rather than half of one.
+{
+  "ARRANGEMENTS": "ARRANGEMENTS",
+  "Answers to": "Answers to",
+  "Arranged": "Arranged",
+  "Tribute": "Tribute",
+  "Wants out": "Wants out",
+  "And": "And",
+
+  "{0} year(s) ago": "{0} year(s) ago",
+  "of its taxes, {0} last week": "of its taxes, {0} last week",
+  "wants out {0}": "wants out {0}",
+  "{0} more": "{0} more",
+  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.",
+
+  "Release": "Release",
+  "Integrate": "Integrate",
+  "Take it into your country. Its regions become yours.": "Take it into your country. Its regions become yours.",
+  "{0} answers to nobody now.": "{0} answers to nobody now.",
+  "{0} is part of your country now.": "{0} is part of your country now.",
+
+  "COUNTRY": "COUNTRY",
+  "RELATIONS": "RELATIONS",
+  "Opinion": "Opinion",
+  "Stance": "Stance",
+  "Status": "Status",
+  "Your country": "Your country",
+  "War score": "War score",
+  "Intelligence": "Intelligence",
+  "Unknown (fog of war)": "Unknown (fog of war)",
+  "How this government regards you.": "How this government regards you."
+}
