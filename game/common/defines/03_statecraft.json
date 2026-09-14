@@ -27,6 +27,10 @@
   "AiPactThreshold": 42,
   "AiAllianceThreshold": 66,
 
+  // How many countries everybody has an opinion about, whether they border them or
+  // not. Set it to nought and diplomacy is between neighbours again.
+  "AiGreatPowers": 12,
+
   // An alliance is asked for and answered - see AllianceCore. What an offer has to be
   // worth, how long one put to a player stands, how long a refusal is remembered, and the
   // four things a country weighs when it is asked.

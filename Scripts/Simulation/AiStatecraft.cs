@@ -39,6 +39,19 @@ public static partial class AiStatecraft
 
     /// <summary>Regions each country holds, by map index. Rebuilt with the strength table.</summary>
     private static readonly Dictionary<int, int> RegionCount = new();
+
+    /// <summary>
+    /// The countries everybody has an opinion about, and who has already signed what.
+    ///
+    /// Both are here rather than worked out inside the weekly pass because both are
+    /// questions about the whole world: the great powers are one sort over three hundred
+    /// countries, and the signatures are one walk of every relationship there is. Asked once
+    /// a day they are free; asked by each country for each of its neighbours they were the
+    /// most expensive thing the AI did, which is the mistake the tables above already fixed
+    /// once.
+    /// </summary>
+    private static readonly List<Nation> GreatPowers = new();
+    private static readonly Dictionary<int, List<int>> SignedWith = new();
     private static int _cacheDay = -1;
 
     /// <summary>
@@ -103,6 +116,72 @@ public static partial class AiStatecraft
             if (StrengthCache.ContainsKey(army.NationId))
                 StrengthCache[army.NationId] += army.Divisions * army.Strength *
                                                 M.Max(0.15f, army.Organisation);
+
+        GreatPowers.Clear();
+        foreach (var candidate in campaign.Nations)
+        {
+            if (candidate.Population <= 0) continue;
+            GreatPowers.Add(candidate);
+        }
+        GreatPowers.Sort((left, right) =>
+        {
+            var difference = StrengthCache.GetValueOrDefault(right.Id)
+                .CompareTo(StrengthCache.GetValueOrDefault(left.Id));
+            return difference != 0 ? difference : left.Id.CompareTo(right.Id);
+        });
+        if (GreatPowers.Count > campaign.Defines.AiGreatPowers)
+            GreatPowers.RemoveRange(campaign.Defines.AiGreatPowers,
+                GreatPowers.Count - campaign.Defines.AiGreatPowers);
+
+        SignedWith.Clear();
+        foreach (var relation in campaign.Relations.Values)
+        {
+            var signed = relation.Stance == DiplomaticStance.Allied ||
+                         relation.NonAggressionPact || relation.TradeAgreement ||
+                         relation.GuaranteeByA || relation.GuaranteeByB;
+            if (!signed) continue;
+            if (!SignedWith.TryGetValue(relation.A, out var forA))
+                SignedWith[relation.A] = forA = new List<int>();
+            forA.Add(relation.B);
+            if (!SignedWith.TryGetValue(relation.B, out var forB))
+                SignedWith[relation.B] = forB = new List<int>();
+            forB.Add(relation.A);
+        }
+    }
+
+    /// <summary>
+    /// The countries this one has an opinion about this week.
+    ///
+    /// Four reasons, in the order a foreign ministry would give them: we share a border, we
+    /// have already signed something, they are large enough that everybody has a view, and
+    /// they are fighting the country we like least. A country with none of the four - and
+    /// there are a few, mostly islands - has no foreign policy this week, which is honest.
+    /// </summary>
+    private static readonly List<Nation> Circle = new();
+    private static readonly HashSet<int> CircleSeen = new();
+
+    private static void BuildCircle(Campaign campaign, Nation nation, Nation worstRival)
+    {
+        Circle.Clear();
+        CircleSeen.Clear();
+        CircleSeen.Add(nation.Id);
+
+        void Consider(Nation other)
+        {
+            if (other is null || other.Population <= 0 || !CircleSeen.Add(other.Id)) return;
+            Circle.Add(other);
+        }
+
+        foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex)) Consider(ByMapIndex(mapIndex));
+        if (SignedWith.TryGetValue(nation.Id, out var partners))
+            foreach (var partner in partners) Consider(campaign.NationById(partner));
+        foreach (var power in GreatPowers) Consider(power);
+        if (worstRival is not null)
+            foreach (var war in campaign.Wars)
+            {
+                if (war.Ended || !war.Involves(worstRival.Id)) continue;
+                Consider(campaign.NationById(war.AttackerId == worstRival.Id ? war.DefenderId : war.AttackerId));
+            }
     }
 
     /// <summary>How much ground a country holds, from the day's table.</summary>
@@ -226,8 +305,6 @@ public static partial class AiStatecraft
     /// </summary>
     private static void Diplomacy(Campaign campaign, Nation nation)
     {
-        var neighbours = NeighboursOf(campaign, nation.MapIndex);
-        if (neighbours.Count == 0) return;
         var defines = campaign.Defines;
 
         Nation bestFriend = null;
@@ -235,9 +312,14 @@ public static partial class AiStatecraft
         var bestOpinion = float.MinValue;
         var worstOpinion = float.MaxValue;
 
-        foreach (var mapIndex in neighbours)
+        // Last week's worst relationship decides who counts as "fighting our enemy" this
+        // week, which is the one term of the circle that needs an answer before it is built.
+        BuildCircle(campaign, nation, campaign.NationById(nation.WarPlanTargetId));
+        if (Circle.Count == 0) return;
+        var neighbours = NeighboursOf(campaign, nation.MapIndex);
+
+        foreach (var other in Circle)
         {
-            var other = ByMapIndex(mapIndex);
             if (other is null || other.Id == nation.Id) continue;
             var relation = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
             if (relation.Stance == DiplomaticStance.AtWar) continue;
@@ -246,7 +328,9 @@ public static partial class AiStatecraft
             // war or a denunciation is written in - so the standing part of an opinion can
             // be explained to the player and retuned by a mod, rather than being five
             // numbers in Defines.cs that nothing on any screen accounts for.
-            OpinionSystem.Remember(campaign, relation, "shared_border");
+            if (neighbours.Contains(other.MapIndex))
+                OpinionSystem.Remember(campaign, relation, "shared_border");
+            else OpinionSystem.Forget(campaign, relation, "shared_border");
             if (relation.Stance == DiplomaticStance.Allied)
                 OpinionSystem.Remember(campaign, relation, "alliance");
             else OpinionSystem.Forget(campaign, relation, "alliance");

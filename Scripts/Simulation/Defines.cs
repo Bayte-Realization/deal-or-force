@@ -735,6 +735,15 @@ public sealed class Defines
 	public float AllianceSharedRivalWeight { get; set; } = 0.12f;
 	public float AiRivalryThreshold { get; set; } = -30f;
 
+	/// <summary>
+	/// How many countries are large enough that everybody has an opinion about them.
+	///
+	/// The weekly diplomatic pass walks a country's neighbours, whoever it has signed
+	/// something with, and these - so this is the number that decides whether a small
+	/// country can look for a friend beyond its own borders at all.
+	/// </summary>
+	public int AiGreatPowers { get; set; } = 12;
+
 	// ---- Economy: how a country governs itself between crises ----
 
 	public float AiTreasuryFloor { get; set; } = 0.02f;
