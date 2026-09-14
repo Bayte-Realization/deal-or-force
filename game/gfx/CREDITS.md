@@ -509,3 +509,9 @@ Coat of arms :Lokal_Profil and Myriam Thyes |
 | `flag_omn_absolute_monarchy.png` | [Flag of Muscat.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Muscat.svg) | Public domain | Wikimedia Commons |
 | `flag_sdn_traditionalism.png` | [Flag of Sudan (1956-1970).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sudan_(1956%E2%80%931970).svg) | Public domain | Mysid |
 | `flag_tza_traditionalism.png` | [Flag of Tanganyika (1961-1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tanganyika_(1961%E2%80%931964).svg) | CC BY-SA 3.0 | Mysid |
+| `flag_bol_at_war.png` | [Flag of Bolivia (state).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bolivia_(state).svg) | Public domain | See file history below for details. |
+| `flag_deu_traditionalism.png` | [Flag of Germany (1867-1918).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Germany_(1867-1918).svg) | CC0 | 1919Wikii |
+| `flag_gha_traditionalism.png` | [Flag of Ghana (1964-1966).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ghana_(1964%E2%80%931966).svg) | Public domain | Wikimedia Commons |
+| `flag_jpn_at_war.png` | [Naval ensign of Japan.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Japan.svg) | Public domain | David Newton, uploader was Denelson83 |
+| `flag_mrt_traditionalism.png` | [Flag of Mauritania (1959-2017).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mauritania_(1959%E2%80%932017).svg) | Public domain | See File history for details. |
+| `flag_per_at_war.png` | [Flag of Peru (war).svg](https://commons.wikimedia.org/wiki/File:State_flag_of_Peru.svg) | Public domain | Republic of Peru / Republica del Peru |
