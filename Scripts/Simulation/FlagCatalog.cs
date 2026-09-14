@@ -299,7 +299,7 @@ public static class FlagCatalog
     public static bool IsKnownSource(string source) => source switch
     {
         "ideology" or "government" or "culture" or "continent" or
-        "war" or "tag" or "focus" or "formable" => true,
+        "war" or "tag" or "focus" or "formable" or "revolt" => true,
         _ => false
     };
 
@@ -323,6 +323,10 @@ public static class FlagCatalog
             // which is why it is declared first in common/flags.
             "formable" => nation.FormedNationId,
             "war" => AtWar(campaign, nation) ? "at_war" : "at_peace",
+            // What kind of revolt founded it, for the countries a campaign creates. Empty
+            // for every country that was on the map when it started, which is what keeps
+            // this out of the way of the three hundred flags that do not need it.
+            "revolt" => nation.FoundedInRevolt,
             _ => ""
         };
         return Slug(value);

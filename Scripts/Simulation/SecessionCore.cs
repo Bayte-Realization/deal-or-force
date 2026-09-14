@@ -102,6 +102,11 @@ public sealed class SecessionReport
     public string Reason = "";
 
     /// <summary>
+    /// `national`, `sectarian` or `discontent` - see <see cref="Nation.FoundedInRevolt"/>.
+    /// </summary>
+    public string Revolt = "";
+
+    /// <summary>
     /// Every region that left, and which of the two reasons put it there. The interface
     /// needs this to be able to say the true thing - that the core went for its people and
     /// the rest went because it was next door and had had enough - rather than implying one

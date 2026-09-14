@@ -1,0 +1,14 @@
+// What a country is told when part of it leaves, and what it may answer.
+{
+  "{0} has declared independence": "{0} has declared independence",
+  "{0} has proclaimed itself out of {1}, taking {2} and {3} people - {4} of the country. Militia are already under arms there. The cabinet is waiting.": "{0} has proclaimed itself out of {1}, taking {2} and {3} people - {4} of the country. Militia are already under arms there. The cabinet is waiting.",
+
+  "Recognise the new border": "Recognise the new border",
+  "The war nobody wanted does not happen. The country is smaller, and every other region has watched it work.": "The war nobody wanted does not happen. The country is smaller, and every other region has watched it work.",
+
+  "Refuse to recognise it": "Refuse to recognise it",
+  "No war, no acceptance. The claim stands and so does the resentment on both sides of it.": "No war, no acceptance. The claim stands and so does the resentment on both sides of it.",
+
+  "Send the army": "Send the army",
+  "War, against a state that has just raised militia on its own ground and has nothing left to lose.": "War, against a state that has just raised militia on its own ground and has nothing left to lose."
+}

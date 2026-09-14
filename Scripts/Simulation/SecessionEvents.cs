@@ -388,12 +388,106 @@ public static class SecessionEvents
     }
 
     /// <summary>Make the country, move the ground, and find out what the old state does.</summary>
+    /// <summary>
+    /// Which of the three things this was.
+    ///
+    /// The order is the order the facts rank in. If most of what left went for its own
+    /// reasons rather than a people's, it was a revolt about conditions whatever else was
+    /// true of it. Otherwise a people that the state is not for is the defining fact. Only
+    /// when the people IS the state's own - a secession by the majority's own kin - does the
+    /// faith become the thing that explains it, which is what a sectarian split actually is.
+    /// </summary>
+    private static string RevoltKind(Nation parent, IReadOnlyList<SecessionPiece> leaving,
+        string culture, long people)
+    {
+        long national = 0;
+        foreach (var piece in leaving)
+            if (piece.Cause == SecessionCause.Nationality) national += piece.Population;
+        if (people <= 0 || national / (double)people < 0.5) return "discontent";
+
+        var theirs = DemographyCatalog.PrimaryCultures(parent.Tag);
+        var ours = Slug(culture);
+        var shared = false;
+        foreach (var mine in theirs)
+            if (string.Equals(Slug(mine), ours, StringComparison.OrdinalIgnoreCase)) { shared = true; break; }
+        if (!shared) return "national";
+
+        var parentFaith = theirs.Count > 0 ? DemographyCatalog.FaithOf(theirs[0]) : null;
+        var ourFaith = DemographyCatalog.FaithOf(culture);
+        if (parentFaith is { Count: > 0 } && ourFaith is { Count: > 0 } &&
+            !string.Equals(parentFaith[0].Religion, ourFaith[0].Religion, StringComparison.OrdinalIgnoreCase))
+            return "sectarian";
+        return "discontent";
+    }
+
+    /// <summary>
+    /// Put it to the player, and take the border as it stands until they answer.
+    ///
+    /// Accepted is the honest interim state rather than a default: the region HAS left, and
+    /// the parent has not yet decided to do anything about it. Choosing to send the army is
+    /// what turns that into a war, and until then the world is simply a country smaller than
+    /// it was this morning.
+    /// </summary>
+    private static SecessionOutcome Ask(Campaign campaign, Nation parent, Nation born,
+        IReadOnlyList<SecessionPiece> leaving, long people, long was, out string reason)
+    {
+        var share = was <= 0 ? 0f : people / (float)was;
+        var names = string.Join(", ", leaving.Take(4).Select(piece => piece.Name));
+        if (leaving.Count > 4) names += $" and {leaving.Count - 4} more";
+
+        campaign.PendingEvents.Add(new PendingCampaignEvent
+        {
+            Id = campaign.ElapsedDays * 1000 + parent.Id,
+            NationId = parent.Id,
+            Title = Loc.Format("{0} has declared independence", born.Name),
+            Description = Loc.Format(
+                "{0} has proclaimed itself out of {1}, taking {2} and {3} people - {4} of the " +
+                "country. Militia are already under arms there. The cabinet is waiting.",
+                born.Name, parent.Name, names, people.ToString("N0"), share.ToString("P0")),
+            CreatedDay = campaign.ElapsedDays,
+            ExpiresDay = campaign.ElapsedDays + 60,
+            Options = new[]
+            {
+                new CampaignEventOption
+                {
+                    Title = "Recognise the new border",
+                    Consequence = "The war nobody wanted does not happen. The country is " +
+                                  "smaller, and every other region has watched it work.",
+                    Effect = ScriptedEffects.From(("stability", 0.03f), ("war_support", -0.05f))
+                },
+                new CampaignEventOption
+                {
+                    Title = "Refuse to recognise it",
+                    Consequence = "No war, no acceptance. The claim stands and so does the " +
+                                  "resentment on both sides of it.",
+                    Effect = ScriptedEffects.From(("stability", -0.02f), ("war_support", 0.04f))
+                },
+                new CampaignEventOption
+                {
+                    Title = "Send the army",
+                    Consequence = "War, against a state that has just raised militia on its " +
+                                  "own ground and has nothing left to lose.",
+                    Effect = ScriptedEffects.From(("war_support", 0.08f), ("stability", -0.05f)),
+                    DeclareWarOn = born.Id
+                }
+            }
+        });
+
+        reason = $"put to the player ({share:P0} of the country going)";
+        return SecessionOutcome.Accepted;
+    }
+
+    private static string Slug(string value) =>
+        string.IsNullOrWhiteSpace(value) ? "" : value.Trim().ToLowerInvariant().Replace(' ', '_');
+
     private static SecessionReport Secede(Campaign campaign, Nation parent,
         List<SecessionPiece> leaving, string culture, long people)
     {
         var was = parent.Population;
+        var revolt = RevoltKind(parent, leaving, culture, people);
         var born = Found(campaign, parent, leaving, culture, people);
         if (born is null) return null;
+        born.FoundedInRevolt = revolt;
 
         var going = new HashSet<int>();
         foreach (var piece in leaving) going.Add(piece.MapIndex);
@@ -422,7 +516,13 @@ public static class SecessionEvents
         born.StabilityBias = born.Stability - StabilityCore.Target(campaign, born);
 
         var raised = RaiseFoundingMilitia(campaign, born);
-        var outcome = SecessionCore.Response(campaign, parent, leaving, out var reason);
+
+        // A country nobody is playing answers the way it always has. A country somebody is
+        // playing is asked, because this is the largest thing that happens to a state and
+        // rolling for it is the game playing that turn instead of the player.
+        var outcome = parent.IsHuman
+            ? Ask(campaign, parent, born, leaving, people, was, out var reason)
+            : SecessionCore.Response(campaign, parent, leaving, out reason);
         if (outcome == SecessionOutcome.Contested)
         {
             var war = CampaignDiplomacy.DeclareWar(campaign, parent.Id, born.Id,
@@ -440,7 +540,7 @@ public static class SecessionEvents
         DiagnosticLogs.Write("simulation",
             $"SECESSION parent={parent.Tag} born={born.Tag} culture={culture} " +
             $"regions={leaving.Count} core={leaving.Count(p => p.Cause == SecessionCause.Nationality)} " +
-            $"people={people} militia={raised} outcome={outcome} reason={reason}");
+            $"people={people} militia={raised} revolt={revolt} outcome={outcome} reason={reason}");
 
         return new SecessionReport
         {
@@ -452,6 +552,7 @@ public static class SecessionEvents
             Population = people,
             ParentPopulation = was,
             Reason = reason,
+            Revolt = revolt,
             Pieces = leaving
         };
     }
