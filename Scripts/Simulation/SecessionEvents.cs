@@ -405,19 +405,17 @@ public static class SecessionEvents
             if (piece.Cause == SecessionCause.Nationality) national += piece.Population;
         if (people <= 0 || national / (double)people < 0.5) return "discontent";
 
+        // Faith, not language, is what separates the remaining two - and the first draft of
+        // this asked whether the seceding culture was one of the parent's own, which can
+        // never be true: the core is BUILT from a people the state is not for, so that
+        // branch was unreachable and `sectarian` was dead in twenty-seven secessions.
         var theirs = DemographyCatalog.PrimaryCultures(parent.Tag);
-        var ours = Slug(culture);
-        var shared = false;
-        foreach (var mine in theirs)
-            if (string.Equals(Slug(mine), ours, StringComparison.OrdinalIgnoreCase)) { shared = true; break; }
-        if (!shared) return "national";
-
         var parentFaith = theirs.Count > 0 ? DemographyCatalog.FaithOf(theirs[0]) : null;
         var ourFaith = DemographyCatalog.FaithOf(culture);
         if (parentFaith is { Count: > 0 } && ourFaith is { Count: > 0 } &&
             !string.Equals(parentFaith[0].Religion, ourFaith[0].Religion, StringComparison.OrdinalIgnoreCase))
             return "sectarian";
-        return "discontent";
+        return "national";
     }
 
     /// <summary>
