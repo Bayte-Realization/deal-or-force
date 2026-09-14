@@ -478,6 +478,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
             using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
+        if (_mapApplied && _campaign is not null &&
+            (_labelTask is not null || _labelRevision != _campaign.MapRevision))
+            using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
         if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
         using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
         if (_flatMap)
@@ -554,6 +557,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 // referenced: the simulation mutates this same array every time a border
                 // moves, and the whole point of keeping it is to be able to tell that it did.
                 _paintedOwner = (ushort[])result.Provinces.ProvinceToNation.Clone();
+                _labelOwner = (ushort[])result.Provinces.ProvinceToNation.Clone();
 
                 // And the topology keeps its own copy of the authored world, for the next
                 // campaign started this session: the simulation writes its borders into
@@ -3092,6 +3096,71 @@ void fragment() {
         }
     }
 
+    /// <summary>
+    /// Who owned what when the names were last placed, and the campaign revision that scan
+    /// was made at.
+    ///
+    /// Separate from `_paintedOwner`, which is deliberately frozen at what the raster was
+    /// painted with and is how a moved border is coloured in. This one moves forward every
+    /// time the names are re-laid, because its only job is to answer "has anything changed
+    /// since the last time we asked".
+    /// </summary>
+    private ushort[] _labelOwner;
+
+    private int _labelRevision = -1;
+    private Task<Dictionary<int, TerritoryLabelAnchor>> _labelTask;
+
+    /// <summary>
+    /// Put the names back where the borders are now.
+    ///
+    /// Two passes, because they cost different amounts. Noticing that ownership moved is a
+    /// walk over thirty-eight thousand province owners and happens only when the campaign
+    /// says its map changed. Working out where a name goes is a flood fill over sixteen
+    /// million cells, and that goes on a task - a peace treaty should not drop a frame, and
+    /// a name arriving a moment after the colour does is not something anybody can see.
+    /// </summary>
+    private void RefreshCountryLabelPlacement()
+    {
+        if (_labelTask is not null)
+        {
+            if (!_labelTask.IsCompleted) return;
+            if (_labelTask.IsCompletedSuccessfully) BuildCountryLabels(_labelTask.Result);
+            else if (_labelTask.IsFaulted)
+                GD.PushWarning("[dof] country names could not be re-placed: " +
+                               _labelTask.Exception?.GetBaseException().Message);
+            _labelTask = null;
+            return;
+        }
+
+        if (_campaign is null || _provinceTopology is null || _labelOwner is null) return;
+        _labelRevision = _campaign.MapRevision;
+
+        var owners = _provinceTopology.ProvinceToNation;
+        var moved = false;
+        for (var province = 1; province < owners.Length && province < _labelOwner.Length; province++)
+            if (owners[province] != _labelOwner[province]) { moved = true; break; }
+        if (!moved) return;
+
+        // Copied here, on the main thread, so the task reads a world that cannot move
+        // underneath it - and recorded as the new baseline now rather than when the task
+        // finishes, so a border that moves again while it runs is still noticed afterwards.
+        var snapshot = (ushort[])owners.Clone();
+        _labelOwner = snapshot;
+        var cells = _provinceTopology.CellToProvince;
+        var width = _provinceTopology.Width;
+        var height = _provinceTopology.Height;
+        _labelTask = Task.Run(() =>
+        {
+            var control = new ushort[cells.Length];
+            for (var index = 0; index < cells.Length; index++)
+            {
+                var province = cells[index];
+                control[index] = province > 0 && province < snapshot.Length ? snapshot[province] : (ushort)0;
+            }
+            return BuildTerritoryLabelAnchors(control, width, height);
+        });
+    }
+
     private void BuildCountryLabels(Dictionary<int, TerritoryLabelAnchor> anchors)
     {
         if (!IsInstanceValid(_countryLabelRoot)) return;
@@ -3535,14 +3604,21 @@ void fragment() {
                 minMajor - padMajor, maxMajor + padMajor,
                 minMinor - padMinor, maxMinor + padMinor);
 
-            anchors[nation] = new TerritoryLabelAnchor(
-                (float)chord.CentreX,
-                (float)chord.CentreY,
-                chord.AxisX,
-                chord.AxisY,
-                Math.Max(3f, chord.Length * 0.5f),
-                Math.Max(2f, chord.Thickness),
-                queue.Count);
+            // The largest piece keeps the name, not the last one scanned.
+            //
+            // This used to assign unconditionally, which is the same thing while a country is
+            // in one piece and stops being the same thing the moment one is not: a China that
+            // has annexed North America has two pieces, and row-major scanning would have
+            // handed the name to whichever of them ended furthest down the raster.
+            if (!anchors.TryGetValue(nation, out var existing) || queue.Count > existing.Cells)
+                anchors[nation] = new TerritoryLabelAnchor(
+                    (float)chord.CentreX,
+                    (float)chord.CentreY,
+                    chord.AxisX,
+                    chord.AxisY,
+                    Math.Max(3f, chord.Length * 0.5f),
+                    Math.Max(2f, chord.Thickness),
+                    queue.Count);
 
             void TryAdd(int next)
             {
