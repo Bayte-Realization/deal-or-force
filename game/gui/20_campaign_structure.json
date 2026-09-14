@@ -26,5 +26,10 @@
     }
   },
   "colors":{"shell.background":"#101d28f7","shell.border":"#536775","shell.row":"#152532","shell.row_alternate":"#1b2d3b","shell.space":"#080f18"},
-  "metrics":{"shell.navigation_size":54,"shell.tab_height":34,"shell.row_padding":9,"shell.outliner_height":600,"shell.outliner_collapsed":48,"shell.space_texture":0}
+  // `shell.space_texture` is deliberately NOT here. It is declared once, in
+  // interface/00_skin.json, with the rest of the metrics - and this folder is read AFTER
+  // that one, so a copy here silently wins whatever it says. A zero sat here for a while
+  // and the sky behind the globe simply stopped being drawn, with the right value sitting
+  // in the right file the whole time.
+  "metrics":{"shell.navigation_size":54,"shell.tab_height":34,"shell.row_padding":9,"shell.outliner_height":600,"shell.outliner_collapsed":48}
 }
