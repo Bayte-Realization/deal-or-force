@@ -464,3 +464,23 @@ else was skipped rather than used.
 | `flag_yem_communism.png` | [Flag of South Yemen.svg](https://commons.wikimedia.org/wiki/File:Flag_of_South_Yemen.svg) | Public domain | National Front - الجبهة القومية |
 | `flag_yem_socialism.png` | [Flag of South Yemen.svg](https://commons.wikimedia.org/wiki/File:Flag_of_South_Yemen.svg) | Public domain | National Front - الجبهة القومية |
 | `flag_zwe_absolute_monarchy.png` | [Flag of Rhodesia (1968–1979).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Rhodesia_%281968%E2%80%931979%29.svg) | Public domain | Actarux (original) |
+| `flag_bgd_provisional_government.png` | [Flag of Bangladesh (1971).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bangladesh_(1971).svg) | CC BY-SA 3.0 | Himasaram / Nirvik12 (Valid SVG Version) |
+| `flag_bgr_communism.png` | [Flag of Bulgaria (1971–1990).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bulgaria_(1971%E2%80%931990).svg) | CC BY-SA 3.0 | Scroch |
+| `flag_cod_one_party_state.png` | [Flag of Zaire (1971–1997).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Zaire_(1971%E2%80%931997).svg) | Public domain | User:Moyogo |
+| `flag_egy_one_party_state.png` | [Flag of the United Arab Republic (1958–1971).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Arab_Republic_(1958%E2%80%931971),_Flag_of_Syria_(1980%E2%80%932024).svg) | Public domain | See File history below for details.
+
+For further information |
+| `flag_esp_fascism_one_party_state.png` | [Flag of Spain (1945–1977).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Spain_(1945%E2%80%931977).svg) | CC BY-SA 4.0 | SanchoPanzaXXI |
+| `flag_eth_liberalism.png` | [Flag of Ethiopia (1897-1936; 1941-1974).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ethiopia_(1897%E2%80%931974).svg) | Public domain | Oren neu dag |
+| `flag_fra_provisional_government.png` | [Flag of Free France (1940-1944).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Free_France_(1940-1944).svg) | Public domain | See File history below for details. |
+| `flag_irq_one_party_state.png` | [Flag of Iraq (1963–1991).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraq_(1963%E2%80%931991).svg) | Public domain | See File history below for details. |
+| `flag_kor_provisional_government.png` | [Flag of the Provisional Government of the Republic of Korea.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Provisional_Government_of_the_Republic_of_Korea.svg) | Public domain | Lumia1234 |
+| `flag_lby_one_party_state.png` | [Flag of Libya (1977–2011).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Libya_(1977%E2%80%932011).svg) | Public domain | Zscout370 |
+| `flag_mmr_one_party_state.png` | [Flag of Myanmar (1974–2010).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Myanmar_(1974%E2%80%932010).svg) | Public domain | See File history below for details. |
+| `flag_rou_communism.png` | [Flag of Romania (1965–1989).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Romania_(1965%E2%80%931989).svg) | Public domain | Various, see File History below for details. |
+| `flag_srb_absolute_monarchy.png` | [State Flag of Serbia (1882-1918).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Serbia_(1882%E2%80%931918).svg) | CC BY-SA 3.0 | Guilherme Paula |
+| `flag_syr_one_party_state.png` | [Flag of Syria (1980–2024).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Arab_Republic_(1958%E2%80%931971),_Flag_of_Syria_(1980%E2%80%932024).svg) | Public domain | See File history below for details.
+
+For further information |
+| `flag_vnm_absolute_monarchy.png` | [Flag of the Empire of Vietnam (1945).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Empire_of_Vietnam_(1945).svg) | Public domain | Great Brightstar |
+| `flag_yug_communism.png` | [Flag of Yugoslavia (1946-1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Yugoslavia_(1946-1992).svg) | Public domain | Flag designed by Đorđe Andrejević-Kun[3]SVG coding: Zscout37 |
