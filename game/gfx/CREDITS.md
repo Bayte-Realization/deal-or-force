@@ -515,3 +515,8 @@ Coat of arms :Lokal_Profil and Myriam Thyes |
 | `flag_jpn_at_war.png` | [Naval ensign of Japan.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Japan.svg) | Public domain | David Newton, uploader was Denelson83 |
 | `flag_mrt_traditionalism.png` | [Flag of Mauritania (1959-2017).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mauritania_(1959%E2%80%932017).svg) | Public domain | See File history for details. |
 | `flag_per_at_war.png` | [Flag of Peru (war).svg](https://commons.wikimedia.org/wiki/File:State_flag_of_Peru.svg) | Public domain | Republic of Peru / Republica del Peru |
+| `flag_egy_military_junta.png` | [Flag of Egypt (1953-1958).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Egypt_(1953-1958).svg) | Public domain | Dylam X |
+| `flag_gnq_one_party_state.png` | [Flag of Equatorial Guinea (1973–1979).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Equatorial_Guinea_(1973%E2%80%931979).svg) | CC BY-SA 3.0 | Fornax |
+| `flag_jam_federation.png` | [Flag of the West Indies Federation (1958–1962).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_West_Indies_Federation_(1958%E2%80%931962).svg) | Public domain | Stepshep |
+| `flag_srb_fascism.png` | [Flag of the Government of National Salvation (occupied Yugoslavia).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Government_of_National_Salvation_(occupied_Yugoslavia).svg) | Public domain | File:Flag of serbia 1941 1944.JPG / derivative work: DIREKTO |
+| `flag_yem_federation.png` | [Flag of the Federation of South Arabia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federation_of_South_Arabia.svg) | Public domain | R-41 |
