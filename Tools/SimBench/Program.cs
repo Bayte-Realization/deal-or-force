@@ -88,6 +88,8 @@ public static class Program
             ADependencyIsABargainAboutPower());
         failures += Check("a war can end in obedience rather than annexation",
             AWarCanEndInObedienceRatherThanAnnexation());
+        failures += Check("answering to somebody has obligations both ways, and an end",
+            AnsweringToSomebodyMeansSomething());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -144,6 +146,8 @@ public static class Program
         failures += Check("a campaign day does not bury the collector",
             ADayDoesNotBuryTheCollector(allocated / (double)days));
         failures += Check("the economy actually moved", EconomyMoved(campaign));
+        failures += Check("every dependency in the world is one a country could be in",
+            DependenciesInAWorldNobodySteered(campaign));
         failures += Check("scripted content parses and applies", ScriptedContentWorks(campaign));
         failures += Check("modifiers grant, tick and expire", ModifiersWork(campaign));
         failures += Check("no nation ran to a nonsense GDP", GdpSane(campaign));
@@ -5717,6 +5721,117 @@ public static class Program
         Console.WriteLine($"  a peace that takes no ground: LUX is a {SubjectCatalog.Of(loser.SubjectType)?.Name} " +
                           $"of FRA for {small:0.0} war score ({big:0.0} had it been DEU), " +
                           $"and the AI with room for one asked for a {rich.Subjugate}.");
+        return "";
+    }
+
+    /// <summary>
+    /// The obligations, both ways, and the end of the arrangement.
+    ///
+    /// A dependency that only takes is a tax with a flag on it. What makes it a bargain is
+    /// the half running the other way - the master answering for what it holds - and what
+    /// makes it a story is that it can end with the subject inside the overlord rather than
+    /// only by slipping out of its hands.
+    /// </summary>
+    private static string AnsweringToSomebodyMeansSomething()
+    {
+        var campaign = Campaign.CreateBootstrap(20240501);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var overlord = campaign.NationByTag("FRA");
+        var subject = campaign.NationByTag("LUX");
+        var stranger = campaign.NationByTag("DEU");
+        if (overlord is null || subject is null || stranger is null) return "";
+        if (!SubjectSystem.Subjugate(campaign, overlord, subject, "puppet", out var refusal))
+            return $"could not make LUX a puppet of FRA: {refusal}";
+
+        // No foreign policy of its own - and no rebellion by declaration either.
+        if (CampaignDiplomacy.CanDeclareWar(campaign, subject.Id, stranger.Id, out _))
+            return "a puppet declared a war of its own";
+        if (CampaignDiplomacy.CanDeclareWar(campaign, subject.Id, overlord.Id, out _, onOwnInitiative: false))
+            return "a puppet was brought into a war against its own overlord";
+        if (!CampaignDiplomacy.CanDeclareWar(campaign, subject.Id, stranger.Id, out var why,
+                onOwnInitiative: false))
+            return $"a puppet could not be brought into somebody else's war: {why}";
+
+        // The half running the other way. DEU attacks the puppet; FRA is in the war.
+        CampaignDiplomacy.Get(campaign, stranger.Id, subject.Id).TruceUntil = 0;
+        if (CampaignDiplomacy.DeclareWar(campaign, stranger.Id, subject.Id) is null)
+            return "DEU could not attack LUX at all";
+        if (!CampaignDiplomacy.AtWar(campaign, overlord.Id, stranger.Id))
+            return "DEU attacked FRA's puppet and FRA was not in the war";
+
+        // And the end of it. Too soon, and then not too soon.
+        if (SubjectSystem.MayAnnex(campaign, overlord, subject, out var tooSoon))
+            return "a puppet made this week was absorbed this week";
+        if (!tooSoon.Contains("year", StringComparison.OrdinalIgnoreCase))
+            return $"the refusal does not say what is missing: {tooSoon}";
+
+        var kind = SubjectCatalog.Of("puppet");
+        subject.SubjectSinceDay = campaign.ElapsedDays - kind.AnnexAfterDays - 1;
+        subject.LibertyDesire = kind.AnnexBelowLiberty + 0.1f;
+        if (SubjectSystem.MayAnnex(campaign, overlord, subject, out var wantsOut))
+            return "a puppet that wants out was absorbed anyway";
+        if (!wantsOut.Contains("wants out", StringComparison.OrdinalIgnoreCase))
+            return $"the refusal does not say what is wrong: {wantsOut}";
+
+        subject.LibertyDesire = 0f;
+        var wasFrance = campaign.States.Count(state => state.NationMapIndex == overlord.MapIndex);
+        var wasLuxembourg = campaign.States.Count(state => state.NationMapIndex == subject.MapIndex);
+        if (wasLuxembourg == 0) return "LUX held no ground to be absorbed";
+        if (!SubjectSystem.Annex(campaign, overlord, subject, out var blocked))
+            return $"a puppet held long enough and content could not be absorbed: {blocked}";
+        if (subject.OverlordId != 0 || subject.SubjectType.Length != 0)
+            return "LUX was absorbed and still thinks it answers to somebody";
+        var nowFrance = campaign.States.Count(state => state.NationMapIndex == overlord.MapIndex);
+        if (nowFrance <= wasFrance)
+            return $"LUX was absorbed and FRA is no larger ({wasFrance} region(s) before and after)";
+
+        // A dominion is the kind that never ends this way, and that is data rather than code.
+        var dominion = SubjectCatalog.Of("dominion");
+        if (dominion is null || dominion.AnnexAfterDays >= 0)
+            return "common/subjects no longer has a kind that cannot be absorbed at all";
+
+        Console.WriteLine($"  obligations: a puppet declares no wars of its own, its overlord " +
+                          $"answered for it, and after {kind.AnnexAfterDays / 365.0:0.0} content year(s) " +
+                          $"it became {nowFrance - wasFrance} more region(s) of France.");
+        return "";
+    }
+
+    /// <summary>
+    /// Every dependency in a world nobody steered, and whether any of them is nonsense.
+    ///
+    /// Run against the campaign the bench has just played rather than a staged one, because
+    /// the failure this is looking for only happens in a world with a history: a country
+    /// annexed while somebody answered to it, a subject that outlived its overlord, a chain
+    /// that became a circle. The report is the other half - a mechanic that never fires in
+    /// an unsteered world is one the player will never meet either.
+    /// </summary>
+    private static string DependenciesInAWorldNobodySteered(Campaign campaign)
+    {
+        var counted = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var subject in campaign.Nations)
+        {
+            if (subject.OverlordId == 0) continue;
+            var overlord = campaign.NationById(subject.OverlordId);
+            if (overlord is null)
+                return $"{subject.Tag} answers to country {subject.OverlordId}, which is not on the list";
+            if (overlord.Id == subject.Id) return $"{subject.Tag} answers to itself";
+            if (!SubjectCatalog.Knows(subject.SubjectType))
+                return $"{subject.Tag} answers as a '{subject.SubjectType}', which is not a kind";
+            if (overlord.OverlordId == subject.Id)
+                return $"{subject.Tag} and {overlord.Tag} answer to each other";
+            if (subject.Population <= 0)
+                return $"{subject.Tag} answers to {overlord.Tag} and has nobody living in it";
+            counted[subject.SubjectType] = counted.GetValueOrDefault(subject.SubjectType) + 1;
+        }
+
+        var total = counted.Values.Sum();
+        Console.WriteLine(total == 0
+            ? "  dependencies: none were imposed in this run - every war that was won was won for ground."
+            : $"  dependencies: {total} country(ies) answer to another, as " +
+              string.Join(", ", counted.OrderByDescending(pair => pair.Value)
+                  .Select(pair => $"{pair.Value} {pair.Key}")) + ".");
         return "";
     }
 

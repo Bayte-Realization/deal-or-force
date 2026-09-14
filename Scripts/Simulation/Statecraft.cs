@@ -321,20 +321,18 @@ public static class Statecraft
             Candidates.Add(friendId);
         }
 
-        // Every dependency of the defender that is obliged to come, and the attacker's
-        // own, if the kind it is says it can be dragged into a war its overlord started.
-        // Checked here rather than in SubjectSystem because this is the list of everybody
-        // who answers a war, and a dependency answering one is not a special case.
+        // Every dependency of the defender that is obliged to come. Checked here rather
+        // than in SubjectSystem because this is the list of everybody who answers a war, and
+        // a dependency answering one is not a special case.
+        //
+        // The attacker's own subjects are NOT in this list, and the reason is worth writing
+        // down: everybody in it declares war on the attacker. A subject dragged along by its
+        // overlord declares on the overlord's enemy instead, which is the opposite direction
+        // and is done at the end of this method.
         foreach (var nation in campaign.Nations)
         {
-            if (nation.OverlordId == 0) continue;
-            var kind = SubjectCatalog.Of(nation.SubjectType);
-            if (kind is null) continue;
-            var callable = nation.OverlordId == defender.Id
-                ? kind.JoinsWars
-                : nation.OverlordId == attacker.Id && kind.DraggedIntoWars;
-            if (!callable) continue;
-            if (nation.Id == attacker.Id || nation.Id == defender.Id) continue;
+            if (nation.OverlordId != defender.Id || nation.Id == attacker.Id) continue;
+            if (SubjectCatalog.Of(nation.SubjectType) is not { JoinsWars: true }) continue;
             if (!Candidates.Contains(nation.Id)) Candidates.Add(nation.Id);
         }
 
@@ -361,7 +359,8 @@ public static class Statecraft
 
             if (WillAnswer(campaign, friend, defender, attacker, bond))
             {
-                if (CampaignDiplomacy.DeclareWar(campaign, friendId, attacker.Id, -1, "defence_of_an_ally") is null)
+                if (CampaignDiplomacy.DeclareWar(campaign, friendId, attacker.Id, -1, "defence_of_an_ally",
+                        onOwnInitiative: false) is null)
                     continue;
                 joined++;
                 OpinionSystem.Remember(campaign, bond, "stood_by_us");
@@ -382,6 +381,35 @@ public static class Statecraft
             }
             OpinionSystem.Remember(campaign, bond, "abandoned_us");
             friend.Stability = M.Clamp01(friend.Stability - campaign.Defines.BrokenPromiseStabilityCost);
+        }
+
+        // And the attacker's own, dragged along. Not a call and not a choice: the kind they
+        // answer under says they come, so they declare on the country their overlord just
+        // declared on. A subject a player is steering is left out, because the rule that a
+        // player is never brought into a war without being asked outranks the arrangement -
+        // it arrives as an offer instead, the same way answering an ally does.
+        // The other direction first, because it matters more: attacking somebody's
+        // dependency is attacking them. Not run through WillAnswer - an overlord defending
+        // what it holds is not keeping a promise it weighed up, and the kind of arrangement
+        // is what decides whether it comes at all.
+        if (defender.OverlordId != 0 && defender.OverlordId != attacker.Id &&
+            SubjectCatalog.Of(defender.SubjectType) is { OverlordDefends: true } &&
+            campaign.NationById(defender.OverlordId) is { } master &&
+            (campaign.Player is null || campaign.Player.Id != master.Id) &&
+            !CampaignDiplomacy.AtWar(campaign, master.Id, attacker.Id) &&
+            CampaignDiplomacy.DeclareWar(campaign, master.Id, attacker.Id, -1,
+                "defence_of_our_subject", onOwnInitiative: false) is not null)
+            joined++;
+
+        foreach (var nation in campaign.Nations.ToArray())
+        {
+            if (nation.OverlordId != attacker.Id || nation.Id == defender.Id) continue;
+            if (SubjectCatalog.Of(nation.SubjectType) is not { DraggedIntoWars: true }) continue;
+            if (campaign.Player is not null && campaign.Player.Id == nation.Id) continue;
+            if (CampaignDiplomacy.AtWar(campaign, nation.Id, defender.Id)) continue;
+            if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, defender.Id, -1,
+                    "dragged_by_our_overlord", onOwnInitiative: false) is not null)
+                joined++;
         }
         }
         finally { _answering = false; }
