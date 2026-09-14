@@ -2058,10 +2058,33 @@ void fragment() {
         {
             if (_spaceBackdrop == value) return;
             _spaceBackdrop = value;
-            if (_spaceMaterial is not null)
-                _spaceMaterial.AlbedoTexture = value ? _spaceTexture : null;
+            ApplySpaceBackdrop();
         }
     }
+
+    /// <summary>
+    /// Hang the sky, or take it down and paint the sphere instead.
+    ///
+    /// The two have to be set together. `albedo_color` is multiplied into `albedo_texture`,
+    /// so the dark tint that makes a bare sphere look like space makes a photograph of space
+    /// look like nothing: measured at 0.04 of 255 against 5.24 for the same picture untinted.
+    /// The colour belongs to the case where there is no picture.
+    /// </summary>
+    private void ApplySpaceBackdrop()
+    {
+        if (_spaceMaterial is null) return;
+        var showing = _spaceBackdrop && _spaceTexture is not null;
+        _spaceMaterial.AlbedoTexture = showing ? _spaceTexture : null;
+        _spaceMaterial.AlbedoColor = showing ? Colors.White : FlatSpaceColour();
+    }
+
+    /// <summary>
+    /// The colour behind the globe when no picture is hung there. Falls back to the globe's
+    /// own token, because an unknown one resolves to magenta and a magenta sky is worse than
+    /// a slightly different blue.
+    /// </summary>
+    private static Color FlatSpaceColour() => new(Simulation.InterfaceSkin.Colour(
+        Simulation.InterfaceSkin.Has("shell.space") ? "shell.space" : "globe.space"));
 
     private bool _spaceBackdrop = true;
     private StandardMaterial3D _spaceMaterial;
@@ -2078,7 +2101,9 @@ void fragment() {
         };
         var material = new StandardMaterial3D
         {
-            // Set below instead, from the field the player's setting toggles.
+            // Both of these are set by ApplySpaceBackdrop below, together, because the
+            // colour is multiplied into the texture and the two cannot be chosen apart.
+            AlbedoColor = Colors.White,
             AlbedoTexture = null,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             CullMode = BaseMaterial3D.CullModeEnum.Front,
@@ -2092,7 +2117,7 @@ void fragment() {
             : null;
         // Applied here as well as in the setter, so it does not matter whether the globe is
         // built before the settings are read or after.
-        material.AlbedoTexture = _spaceBackdrop ? _spaceTexture : null;
+        ApplySpaceBackdrop();
         var node = new MeshInstance3D { Name = "SpaceBackground", Mesh = space };
         world.AddChild(node);
         return node;
