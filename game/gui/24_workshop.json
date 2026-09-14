@@ -1,0 +1,12 @@
+{
+  "layout": {
+    "workshop.panel": { "anchors": [0,0,1,1], "offsets": [40,30,-40,-30] }
+  },
+  "metrics": {
+    "map.country_font_size": 64,
+    "map.country_tracking": 0.86,
+    "map.province_border_width": 2.0,
+    "map.province_border_opacity": 0.72,
+    "map.province_border_halo": 0.15
+  }
+}

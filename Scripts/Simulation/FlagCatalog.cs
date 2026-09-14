@@ -299,7 +299,7 @@ public static class FlagCatalog
     public static bool IsKnownSource(string source) => source switch
     {
         "ideology" or "government" or "culture" or "continent" or
-        "war" or "tag" or "focus" => true,
+        "war" or "tag" or "focus" or "formable" => true,
         _ => false
     };
 
@@ -318,6 +318,10 @@ public static class FlagCatalog
             "continent" => nation.Continent,
             "tag" => nation.Tag,
             "focus" => nation.GovernmentFocus.ToString(),
+            // A country that has proclaimed itself something. The most specific thing there
+            // is to know about a flag - Yugoslavia is not Serbia with a different cabinet -
+            // which is why it is declared first in common/flags.
+            "formable" => nation.FormedNationId,
             "war" => AtWar(campaign, nation) ? "at_war" : "at_peace",
             _ => ""
         };
@@ -528,6 +532,18 @@ public static class FlagCatalog
         foreach (var name in Candidates(campaign, nation))
             if (SpriteCatalog.Has(name)) return name;
         return "";
+    }
+
+    /// <summary>Exactly the normal resolver, applied to a non-mutating political projection.</summary>
+    public static string ResolvePreview(Campaign campaign, Nation nation, string government = "", string ideology = "") =>
+        nation is null ? "" : Resolve(campaign, nation.FlagPoliticsPreview(government, ideology));
+
+    public static string ResolveFormationPreview(Campaign campaign, Nation nation, string formableId)
+    {
+        if (nation is null) return "";
+        var preview = nation.FlagPoliticsPreview("", "");
+        preview.FormedNationId = formableId;
+        return Resolve(campaign, preview);
     }
 
     /// <summary>

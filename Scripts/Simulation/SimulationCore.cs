@@ -144,10 +144,22 @@ public sealed class CampaignCommandQueue
 
 public sealed partial class Nation
 {
+    // Read-only projection for flag selection; the live country and its collections are never changed.
+    internal Nation FlagPoliticsPreview(string government, string ideology)
+    {
+        var preview = (Nation)MemberwiseClone();
+        if (!string.IsNullOrWhiteSpace(government)) preview.Government = government;
+        if (!string.IsNullOrWhiteSpace(ideology)) preview.Ideology = ideology;
+        return preview;
+    }
+
     public int Id;
     public string Tag = "";
     public string Iso = "";
     public string Name = "";
+    // Additive save fields: older campaigns default to no proclamation.
+    public string FormedNationId = "";
+    public int FormedNationDay = -1;
 
     /// <summary>
     /// The country's name as a player reads it.
@@ -158,7 +170,8 @@ public sealed partial class Nation
     /// player's table - and because a missing row comes back unchanged, a country a mod
     /// invented reads as whatever the mod called it until the mod also translates it.
     /// </summary>
-    public string DisplayName => Loc.Get(Name);
+    public string DisplayName => CountryNames.Resolve(this, false);
+    public string MapName => CountryNames.Resolve(this, true);
 
     public string Continent = "";
     public string Region = "";
@@ -361,6 +374,8 @@ public sealed partial class Campaign
 
     public int Seed { get; }
     public GameDate Date;
+    public string ScenarioId = "2024";
+    public Dictionary<string, int[]> ScenarioTerritories = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Hours since the campaign began. The authoritative clock.
     ///
@@ -402,11 +417,12 @@ public sealed partial class Campaign
 
     public event Action Changed;
 
-    public Campaign(int seed)
+    public Campaign(int seed, Defines scenarioRules = null)
     {
         Seed = seed;
         Random = new SimRandom(seed);
-        GameDataLoader.ApplyDefines(Defines);
+        if (scenarioRules is null) GameDataLoader.ApplyDefines(Defines);
+        else Defines = scenarioRules;
         Date = new GameDate(Defines.StartYear, Defines.StartMonth, Defines.StartDay);
     }
 
@@ -653,7 +669,7 @@ public sealed partial class Campaign
         // The political map is data. The raster says where the provinces are; this says who
         // owns them, and a mod that moves one border only has to name that one province.
         ProvinceController = (ushort[])topology.ProvinceToNation.Clone();
-        var politicalOverrides = ProvinceOwnership.Apply(this, topology, ProvinceController);
+        var politicalOverrides = ScenarioId == "2024" ? ProvinceOwnership.Apply(this, topology, ProvinceController) : 0;
         if (politicalOverrides > 0) PoliticalOverridesApplied = politicalOverrides;
         ProvinceOccupation = new float[topology.ProvinceCount + 1];
 

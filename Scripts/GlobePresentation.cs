@@ -153,6 +153,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// changed hands since, which is all the shader needs to draw them correctly.
     /// </summary>
     private ushort[] _paintedOwner;
+
     private byte[] _ownerPixels;
     private Image _ownerImage;
     private ImageTexture _ownerTexture;
@@ -179,6 +180,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private Simulation.ProvinceTopology _provinceTopology;
     private Simulation.Campaign _campaign;
     private bool _mapApplied;
+    public bool IsMapPresentationReady => _mapApplied;
+    public bool LoadingInputBlocked { get; set; }
+    public string MapLoadingError { get; private set; } = "";
+    public string MapLoadingStage => _pendingMapResult is null
+        ? "Reading province and terrain maps"
+        : _mapApplyStage < 5 ? "Uploading map layers"
+        : _mapApplyStage == 5 ? "Preparing terrain" : "Placing armies and country names";
+    // Stage completion, not a time estimate. Never pretend to measure the worker's bytes.
+    public double MapLoadingProgress => _mapApplied ? 100 : _pendingMapResult is null ? 45 : 55 + _mapApplyStage * 6;
     private bool _dragging;
     private bool _boxSelecting;
     private bool _paintBoxing;
@@ -195,6 +205,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _targetDistance = 12.5f;
 
     public event Action<GlobePick> CountryPicked;
+    public bool CountrySelectionOnly { get; set; }
     public event Action<Simulation.Army> ArmyPicked;
     public event Action<Simulation.Fleet> FleetPicked;
     public event Action<Simulation.LandBattle> BattlePicked;
@@ -291,12 +302,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public void BindCampaign(Simulation.Campaign campaign)
     {
         _campaign = campaign;
-        var repairs = Simulation.TerritorialTopology.Apply(
+        var repairs = campaign.ScenarioId == "2024" ? Simulation.TerritorialTopology.Apply(
             campaign,
             SourceEarthData.Control,
             SourceEarthData.States,
             SourceEarthData.Width,
-            SourceEarthData.Height);
+            SourceEarthData.Height) : Array.Empty<Simulation.TerritorialTopology.RepairSummary>();
         foreach (var repair in repairs)
         {
             if (repair.ChangedCells > 0)
@@ -433,8 +444,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _Process(double delta)
     {
-        if (_freeCamera) UpdateFreeCamera(delta);
-        else UpdateOrbitCamera(delta);
+        if (!LoadingInputBlocked)
+        {
+            if (_freeCamera) UpdateFreeCamera(delta);
+            else UpdateOrbitCamera(delta);
+        }
 
         // Keep the authored political raster legible at strategic distance. The old
         // quarter-resolution layer supplied almost forty percent of the default globe,
@@ -451,6 +465,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // Tactical boundaries should emerge only at operational zoom. Keeping them
         // faint at country-selection scale avoids turning the map into a crosshatch.
         _globeMaterial?.SetShaderParameter("province_detail", provinceDetail);
+        _globeMaterial?.SetShaderParameter("province_border_pixels", Math.Clamp(Simulation.InterfaceSkin.Metric("map.province_border_width", 2.0f), 0.5f, 4f));
+        _globeMaterial?.SetShaderParameter("province_border_opacity", Math.Clamp(Simulation.InterfaceSkin.Metric("map.province_border_opacity", 0.72f), 0f, 1f));
+        _globeMaterial?.SetShaderParameter("province_border_halo", Math.Clamp(Simulation.InterfaceSkin.Metric("map.province_border_halo", 0.15f), 0f, 0.4f));
         var fogViewer = FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
         _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
@@ -496,9 +513,19 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             _mapFailureReported = true;
             var reason = _mapTask.Exception?.GetBaseException().Message ?? "unknown map-data error";
+            MapLoadingError = reason;
             GD.PushError($"[dof] authored province map is required: {reason}");
         }
-        if (!_mapApplied && _pendingMapResult is not null) ApplyPoliticalMapStage();
+        if (!_mapApplied && !_mapFailureReported && _pendingMapResult is not null)
+        {
+            try { ApplyPoliticalMapStage(); }
+            catch (Exception exception)
+            {
+                _mapFailureReported = true;
+                MapLoadingError = exception.Message;
+                GD.PushError($"[dof] map upload failed: {exception}");
+            }
+        }
     }
 
     /// <summary>
@@ -573,7 +600,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 BuildFrontPreview();
                 RefreshProvinceControllers();
                 _pendingMapResult = null;
-                _mapApplied = true;
 
                 // One collection, here and nowhere else.
                 //
@@ -594,6 +620,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 GD.Print($"[dof] tactical province topology ready: {_provinceTopology.ProvinceCount:N0} land provinces, " +
                          $"{_provinceTopology.RiverCrossingCount:N0} river crossings, " +
                          $"{Simulation.HydrologyCatalog.RiverFeatures.Count:N0} rivers and {Simulation.HydrologyCatalog.LakeFeatures.Count:N0} lakes");
+                _mapApplied = true;
                 break;
         }
     }
@@ -1240,6 +1267,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _GuiInput(InputEvent inputEvent)
     {
+        if (LoadingInputBlocked) { AcceptEvent(); return; }
         if (_freeCamera && HandleFreeCameraInput(inputEvent)) { AcceptEvent(); return; }
         if (BorderPaintMode && HandleBorderInput(inputEvent)) return;
         if (PaintMode && HandlePaintInput(inputEvent)) return;
@@ -1262,7 +1290,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     var rect = RectFromPoints(_boxStart, _boxCurrent);
                     if (rect.Size.Length() < 8f)
                     {
-                        if (TryPickBattle(button.Position, out var battle)) BattlePicked?.Invoke(battle);
+                        if (CountrySelectionOnly)
+                        {
+                            if (TryPick(button.Position, out var country)) CountryPicked?.Invoke(country);
+                        }
+                        else if (TryPickBattle(button.Position, out var battle)) BattlePicked?.Invoke(battle);
                         else if (TryPickFleet(button.Position, out var fleet)) FleetPicked?.Invoke(fleet);
                         else if (TryPickArmyStack(button.Position, out var stack))
                         {
@@ -1274,7 +1306,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     else
                     {
                         var selected = ArmiesInScreenRect(rect);
-                        if (selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                        if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
                     }
                     QueueRedraw();
                 }
@@ -1294,7 +1326,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 {
                     var wasClick = _dragging && _dragDistance < 5f;
                     _dragging = false;
-                    if (wasClick && TryPick(button.Position, out var commanded, updateSelection: false))
+                    if (!CountrySelectionOnly && wasClick && TryPick(button.Position, out var commanded, updateSelection: false))
                         ProvinceCommanded?.Invoke(commanded);
                 }
                 AcceptEvent();
@@ -1510,6 +1542,9 @@ uniform sampler2D province_control_colors : source_color, filter_nearest, repeat
 uniform sampler2D province_owner_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2D nation_palette : source_color, filter_nearest, repeat_disable;
 uniform float border_pixels = 1.35;
+uniform float province_border_pixels = 2.0;
+uniform float province_border_opacity = 0.72;
+uniform float province_border_halo = 0.15;
 uniform sampler2D front_membership : filter_nearest, repeat_disable;
 uniform sampler2D map_mode_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2DArray terrain_tiles : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -1939,8 +1974,12 @@ void fragment() {
     float other_province_id;
     float province_cover = boundary_coverage(province_ids, map_uv, near_province, other_province_id);
     float province_aa = id_aa;
-    float province_edge = 1.0 - smoothstep(0.0, border_pixels, abs(province_cover - 0.5) / province_aa);
+    float province_distance = abs(province_cover - 0.5) / province_aa;
+    float province_width = mix(border_pixels, province_border_pixels, province_detail);
+    float province_edge = 1.0 - smoothstep(province_width * 0.3, province_width, province_distance);
     province_edge *= step(0.5, abs(near_province - other_province_id));
+    float province_halo = (1.0 - smoothstep(province_width, province_width + 1.0, province_distance)) *
+        step(0.5, abs(near_province - other_province_id));
 
     // The country line, off the same coverage field as the province and region lines rather
     // than off a distance field.
@@ -1979,9 +2018,10 @@ void fragment() {
     front_edge *= 1.0 - step(0.5, terrain_mode);
     front_outer *= 1.0 - step(0.5, terrain_mode);
 
-    // Tactical borders should read as fine cartography, not dark fish-scales.
-    // Selection remains strong below; the idle network stays deliberately subtle.
-    base = mix(base, vec3(0.10, 0.13, 0.16), province_edge * province_detail * political.a * 0.26);
+    // Zoom-gated, screen-space strokes: readable through relief at tactical distance,
+    // absent on the world map. A restrained light shoulder also works on dark terrain.
+    base = mix(base, vec3(0.78, 0.80, 0.77), province_halo * province_detail * political.a * province_border_halo);
+    base = mix(base, vec3(0.055, 0.075, 0.09), province_edge * province_detail * political.a * province_border_opacity);
     // The country border, drawn rather than baked. It replaces the one-texel darkening the
     // political raster used to carry, which was the most visible pixel grid on the map.
     base = mix(base, vec3(0.05, 0.07, 0.10), country_edge * detail_mix * political.a * 0.78);
@@ -2134,7 +2174,8 @@ void fragment() {
         _flatY = Mathf.Lerp(_flatY, _targetFlatY, weight);
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
 
-        if (_flatMap)
+        var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
+        if (_flatMap && !typing)
         {
             var flatSpeed = _flatZoom * 0.62f * (float)delta;
             if (Input.IsKeyPressed(Key.W)) _targetFlatY += flatSpeed;
@@ -2143,7 +2184,7 @@ void fragment() {
             if (Input.IsKeyPressed(Key.D)) _targetFlatX += flatSpeed;
             ClampFlatCamera();
         }
-        else
+        else if (!_flatMap && !typing)
         {
             // The keys move the camera, not the globe.
             //
@@ -2985,6 +3026,7 @@ void fragment() {
         if (_campaign is null || _provinceTopology is null) return;
         foreach (var army in _campaign.Armies)
         {
+            if (_campaign.ScenarioId != "2024" && army.ProvinceId > 0) continue;
             var x = Mathf.Clamp((int)((army.Longitude + 180f) / 360f * SourceEarthData.Width), 0, SourceEarthData.Width - 1);
             var y = Mathf.Clamp((int)((90f - army.Latitude) / 180f * SourceEarthData.Height), 0, SourceEarthData.Height - 1);
             var cell = y * SourceEarthData.Width + x;
@@ -2992,6 +3034,10 @@ void fragment() {
             army.ProvinceId = _provinceTopology.CellToProvince[cell];
         }
         _campaign.AttachProvinceTopology(_provinceTopology);
+        if (_campaign.ScenarioId != "2024")
+            foreach (var army in _campaign.Armies)
+                if (army.ProvinceId > 0 && army.ProvinceId <= _provinceTopology.ProvinceCount)
+                    army.StateMapIndex = _provinceTopology.ProvinceToState[army.ProvinceId];
         GD.Print($"[dof] province graph ready: {_provinceTopology.ProvinceCount:N0} nodes, {_provinceTopology.EdgeCount:N0} edges");
         foreach (var war in _campaign.Wars)
             GD.Print($"[dof] front {war.Name}: {war.AttackerFront.Count:N0}/{war.DefenderFront.Count:N0} provinces");
@@ -3154,6 +3200,9 @@ void fragment() {
         }
     }
 
+    private Dictionary<int, TerritoryLabelAnchor> _lastLabelAnchors;
+    private readonly Dictionary<int, string> _lastLabelNames = new();
+
     /// <summary>
     /// Who owned what when the names were last placed, and the campaign revision that scan
     /// was made at.
@@ -3167,6 +3216,14 @@ void fragment() {
 
     private int _labelRevision = -1;
     private Task<Dictionary<int, TerritoryLabelAnchor>> _labelTask;
+
+    public void RefreshCountryNames()
+    {
+        if (_lastLabelAnchors is null) return;
+        foreach (var (id, name) in _lastLabelNames)
+            if (_nationByMapIndex.TryGetValue(id, out var nation) && nation.MapName != name)
+            { BuildCountryLabels(_lastLabelAnchors); return; }
+    }
 
     /// <summary>
     /// Put the names back where the borders are now.
@@ -3222,16 +3279,21 @@ void fragment() {
     private void BuildCountryLabels(Dictionary<int, TerritoryLabelAnchor> anchors)
     {
         if (!IsInstanceValid(_countryLabelRoot)) return;
+        _lastLabelAnchors = anchors;
+        _lastLabelNames.Clear();
         foreach (var child in _countryLabelRoot.GetChildren()) child.QueueFree();
         _countryLabels.Clear();
         _countryGlyphs.Clear();
+
+        var countryFont = PresentationFonts.For("map.countries");
 
         foreach (var (mapIndex, anchor) in anchors)
         {
             if (!_nationByMapIndex.TryGetValue(mapIndex, out var nation) || anchor.Cells < 80)
                 continue;
 
-            var text = nation.DisplayName.ToUpperInvariant();
+            var text = nation.MapName.ToUpperInvariant();
+            _lastLabelNames[mapIndex] = nation.MapName;
             if (text.Length == 0) continue;
             var group = new Node3D { Name = $"CountryLabel_{nation.Tag}" };
             _countryLabelRoot.AddChild(group);
@@ -3267,10 +3329,10 @@ void fragment() {
             var thicknessDegrees = anchor.ThicknessPixels * latitudeDegreesPerCell;
             var roomForHeight = GlobeRadius * Mathf.DegToRad(thicknessDegrees) * 0.42f;
 
-            const int fontSize = 64;
+            var fontSize = Math.Clamp((int)Simulation.InterfaceSkin.Metric("map.country_font_size", 64), 24, 128);
             // How far apart tracked capitals sit, as a share of their height. Atlas names are
             // set loose; this is what makes them read as cartography rather than as a caption.
-            const float tracking = 0.86f;
+            var tracking = Math.Clamp(Simulation.InterfaceSkin.Metric("map.country_tracking", 0.86f), 0.4f, 1.5f);
             var glyphCount = text.Length;
 
             // Size the letters first, then space them - not the other way round.
@@ -3373,6 +3435,7 @@ void fragment() {
                     Name = $"Glyph{index}",
                     Text = character.ToString(),
                     FontSize = fontSize,
+                    Font = countryFont,
                     PixelSize = pixelSize,
                     FixedSize = false,
                     Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,

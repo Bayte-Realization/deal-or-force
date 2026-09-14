@@ -1,0 +1,18 @@
+{
+  "campaign": {
+    "screens": {
+      "Nation": {
+        "detail_order":["#STATE","Capital","States held","Population","#ECONOMY","GDP","GDP per head","Treasury","Tax rate","#GOVERNMENT","Form of government","Ideology","Politics","#SOCIETY","Standard of living","Literacy","Stability"],
+        "hidden_details":[], "detail_labels":{}
+      },
+      "Economy": {
+        "detail_order":["#THE WEEK","Taxes","Tariffs","Expenses","Balance","Treasury","#OUTPUT","GDP","Productivity","Market access","Trade balance","Stability"],
+        "hidden_details":["Population","Literacy","Standard of living","Urbanisation","Radicalism","Aristocrats","Capitalists","Clergy","Bureaucrats","Academics","Officers","Soldiers","Farmers","Labourers","Machinists","Engineers","Shopkeepers"],
+        "detail_labels":{}
+      },
+      "Military": {"detail_order":[], "hidden_details":[], "detail_labels":{}},
+      "Region": {"detail_order":[], "hidden_details":[], "detail_labels":{}},
+      "Diplomacy": {"detail_order":[], "hidden_details":[], "detail_labels":{}}
+    }
+  }
+}

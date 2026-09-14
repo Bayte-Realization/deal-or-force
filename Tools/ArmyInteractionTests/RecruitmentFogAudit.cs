@@ -10,7 +10,7 @@ static class RecruitmentFogAudit
     static void NextTrainingDay(Campaign c)
     {
         // Test clock only; no production shortcut or artificial instant recruitment.
-        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedDays)).SetValue(c, c.ElapsedDays + 1);
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, c.ElapsedHours + 24L);
         RecruitmentSystem.Tick(c);
     }
     public static void Run(Campaign c, Army own, Army enemy, int start, int target, StrategicWar war)
@@ -80,8 +80,8 @@ static class RecruitmentFogAudit
         foreach(var p in map.Neighbors[target]) c.SetProvinceController(p,(ushort)rus.MapIndex);
         capture.Invoke(null,new object[]{c,war,target,rus.Id,new[]{own},new[]{enemy},"retreat-audit"});
         Check(enemy.ProvinceId==target && c.ProvinceController[target]==rus.MapIndex,"AUDIT reproduces trapped loser remaining on lost province (known defect, NOT fixed)");
-        var fallback=map.Neighbors[target].First(p=>map.Neighbors[p].Any(n=>n!=target));
-        var next=map.Neighbors[fallback].First(n=>n!=target);
+        var fallback=map.Neighbors[target].First(p=>!map.IsWater(p) && map.Neighbors[p].Any(n=>n!=target && !map.IsWater(n)));
+        var next=map.Neighbors[fallback].First(n=>n!=target && !map.IsWater(n));
         c.SetProvinceController(target,(ushort)ukr.MapIndex);
         c.SetProvinceController(fallback,(ushort)ukr.MapIndex);
         c.SetProvinceController(next,(ushort)ukr.MapIndex);

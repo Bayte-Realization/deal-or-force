@@ -24,16 +24,18 @@ public static class FontCatalog
     /// <summary>One declared face.</summary>
     public readonly struct Face
     {
-        public Face(string role, string file)
+        public Face(string role, string file, string[] families = null)
         {
             Role = role ?? "";
             File = file ?? "";
+            Families = families ?? Array.Empty<string>();
         }
 
         public string Role { get; }
 
         /// <summary>The resolved path, ready for the engine to load.</summary>
         public string File { get; }
+        public string[] Families { get; }
     }
 
     private static readonly Dictionary<string, Face> Faces = new(StringComparer.OrdinalIgnoreCase);
@@ -48,6 +50,7 @@ public static class FontCatalog
     /// <summary>The file for a role, or empty when nothing declares it and the engine's own is used.</summary>
     public static string FileOf(string role) =>
         !string.IsNullOrEmpty(role) && Faces.TryGetValue(role, out var face) ? face.File : "";
+    public static string[] FamiliesOf(string role) => Faces.TryGetValue(role, out var face) ? face.Families : Array.Empty<string>();
 
     /// <summary>Read the base game's own `fonts/` tree, replacing whatever was loaded.</summary>
     public static void Load()
@@ -109,6 +112,16 @@ public static class FontCatalog
             if (value.ValueKind == JsonValueKind.String)
             {
                 Faces[role] = new Face(role, GameDataLoader.ResolveAssetPath(value.GetString(), assetRoot));
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.Object &&
+                value.TryGetProperty("system_families", out var families) && families.ValueKind == JsonValueKind.Array)
+            {
+                var familyNames = families.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()).ToArray();
+                var fontFile = value.TryGetProperty("file", out var declaredFile) && declaredFile.ValueKind == JsonValueKind.String
+                    ? GameDataLoader.ResolveAssetPath(declaredFile.GetString(), assetRoot) : "";
+                Faces[role] = new Face(role, fontFile, familyNames);
                 continue;
             }
 

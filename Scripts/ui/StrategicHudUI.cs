@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
@@ -9,7 +10,10 @@ public partial class DealOrForceGame
 {
     private PanelContainer _outliner = null!;
     private VBoxContainer _outlinerRows = null!;
-    private HBoxContainer _alertRows = null!;
+    private VBoxContainer _alertRows = null!;
+    private VBoxContainer _outlinerGroupRows;
+    private ScrollContainer _outlinerScroll;
+    private readonly HashSet<string> _collapsedOutlinerGroups = new();
     private VBoxContainer _battleDetailControls = null!;
     private ProgressBar _attackerOrganisation = null!;
     private ProgressBar _defenderOrganisation = null!;
@@ -19,21 +23,11 @@ public partial class DealOrForceGame
 
     private void BuildStrategicHud()
     {
-        var alerts = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
-        alerts.Name = "StrategicAlerts";
-        Ui.Place(alerts, "hud.alerts");
-        var alertMargin = Margin(alerts, 8, 5);
-        _alertRows = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        _alertRows.AddThemeConstantOverride("separation", 5);
-        alertMargin.AddChild(_alertRows);
-
         _outliner = TexturedPanel(_hudLayer, PanelSurface.Command);
         _outliner.Name = "StrategicOutliner";
         Ui.Place(_outliner, "hud.outliner");
-        // The actual visible inner rail of panel_command_frame.png is substantially
-        // narrower than the Control rectangle. Keep every dynamic row inside that rail;
-        // the outer PanelContainer's ClipContents remains a final safety net only.
-        var outer = Margin(_outliner, 24, 14);
+        // One scrollable rail keeps alerts and dossiers inside the available viewport.
+        var outer = Margin(_outliner, 10, 8);
         outer.ClipContents = true;
         var column = new VBoxContainer
         {
@@ -43,7 +37,7 @@ public partial class DealOrForceGame
         };
         column.AddThemeConstantOverride("separation", 6);
         outer.AddChild(column);
-        var toggle = ActionButton("STRATEGIC OUTLINER  −", ToggleOutliner, 0, 32, true);
+        var toggle = ActionButton("Situation report  −", ToggleOutliner, 0, 30);
         toggle.Name = "OutlinerToggle";
         toggle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         toggle.ClipText = true;
@@ -58,7 +52,14 @@ public partial class DealOrForceGame
             ClipContents = true
         };
         scroll.Name = "OutlinerScroll";
+        _outlinerScroll = scroll;
         column.AddChild(scroll);
+        var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        body.AddThemeConstantOverride("separation", 10);
+        scroll.AddChild(body);
+        _alertRows = new VBoxContainer { Name = "StrategicAlerts" };
+        _alertRows.AddThemeConstantOverride("separation", 4);
+        body.AddChild(_alertRows);
         _outlinerRows = new VBoxContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
@@ -66,18 +67,16 @@ public partial class DealOrForceGame
             ClipContents = true
         };
         _outlinerRows.AddThemeConstantOverride("separation", 4);
-        scroll.AddChild(_outlinerRows);
+        body.AddChild(_outlinerRows);
     }
 
     private void ToggleOutliner()
     {
         _outlinerCollapsed = !_outlinerCollapsed;
-        _outlinerRows.Visible = !_outlinerCollapsed;
-        var expanded = InterfaceSkin.Layout("hud.outliner");
-        _outliner.OffsetLeft = _outlinerCollapsed ? -226f : expanded.OffsetLeft;
-        _outliner.OffsetBottom = _outlinerCollapsed ? 158f : expanded.OffsetBottom;
+        _outlinerScroll.Visible = !_outlinerCollapsed;
+        LayoutCampaignShell();
         var toggle = _outliner.FindChild("OutlinerToggle", true, false) as Button;
-        if (toggle is not null) toggle.Text = _outlinerCollapsed ? "STRATEGIC OUTLINER  +" : "STRATEGIC OUTLINER  −";
+        if (toggle is not null) toggle.Text = Tr("Situation report") + (_outlinerCollapsed ? "  +" : "  −");
     }
 
     private void RefreshStrategicHud()
@@ -86,6 +85,8 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var playerBattles = _campaign.Battles.Count(battle => !battle.Ended &&
             (battle.AttackerId == player.Id || battle.DefenderId == player.Id));
+        var availableDecisions = DecisionCatalog.All.Count(definition =>
+            DecisionCatalog.BlockReason(_campaign, player, definition).Length == 0);
         var fingerprint = HashCode.Combine(
             _campaign.ElapsedDays / 3,
             _campaign.MapRevision,
@@ -93,17 +94,18 @@ public partial class DealOrForceGame
             _campaign.Wars.Count(war => !war.Ended && war.Involves(player.Id)),
             playerBattles,
             _campaign.Construction.Count(project => project.NationId == player.Id),
-            _campaign.PendingEvents.Count);
+            _campaign.PendingEvents.Count,
+            availableDecisions);
         if (fingerprint == _strategicHudFingerprint) return;
         _strategicHudFingerprint = fingerprint;
+        if (_outliner.FindChild("OutlinerToggle", true, false) is Button toggle)
+            toggle.Text = Tr("Situation report") + (_outlinerCollapsed ? "  +" : "  −");
 
         ClearRuntimeChildren(_alertRows);
         ClearRuntimeChildren(_outlinerRows);
 
         var armies = _campaign.Armies.Where(army => army.NationId == player.Id).ToArray();
         var lowSupply = armies.Count(army => army.SupplyLevel < 0.45f || army.CutOff);
-        var availableDecisions = DecisionCatalog.All.Count(definition =>
-            DecisionCatalog.BlockReason(_campaign, player, definition).Length == 0);
         var construction = _campaign.Construction.Where(project => project.NationId == player.Id).ToArray();
 
         if (_campaign.PendingEvents.Count > 0)
@@ -120,12 +122,12 @@ public partial class DealOrForceGame
             AddAlert($"△ SUPPLY {lowSupply}", () => FocusArmy(armies.First(army => army.SupplyLevel < 0.45f || army.CutOff)),
                 "Formations are undersupplied or cut off.");
         if (player.ShortageIndex > 0.10f)
-            AddAlert($"▼ MARKET {player.MarketAccess:P0}", () => OpenScreen("Economy"),
+            AddAlert(Simulation.Loc.Format("Market access {0:P0}", player.MarketAccess), () => OpenEconomyTab("Market"),
                 "Essential goods are in shortage. Open Economy for production, demand, imports and prices.", true);
         if (construction.Length == 0)
-            AddAlert("◇ NO CONSTRUCTION", () => OpenScreen("Economy"), "Construction capacity is idle.");
+            AddAlert("No construction", () => OpenEconomyTab("Construction"), "Construction capacity is idle.");
         if (availableDecisions > 0)
-            AddAlert($"◆ DECISIONS {availableDecisions}", () => OpenScreen("Decisions"), "National decisions are available.");
+            AddAlert(Simulation.Loc.Format("Decisions: {0}", availableDecisions), () => OpenScreen("Decisions"), "National decisions are available.");
 
         AddOutlinerHeader("WARS");
         var wars = _campaign.Wars.Where(war => !war.Ended && war.Involves(player.Id)).ToArray();
@@ -171,26 +173,43 @@ public partial class DealOrForceGame
             }
         }
 
+        var watched = player.Market.Values.Where(quote => PlayerSettings.Bool("watch.good." + quote.Commodity, false)).ToArray();
+        if (watched.Length > 0)
+        {
+            AddOutlinerHeader("WATCHLIST");
+            foreach (var quote in watched)
+            {
+                var good = quote.Commodity;
+                AddOutlinerButton($"{Tr(CommodityCatalog.Get(good).Name)} · {quote.Satisfaction:P0}", () =>
+                {
+                    OpenScreen("Economy");
+                    _marketSearch.Text = Tr(CommodityCatalog.Get(good).Name);
+                    _shortagesOnly.ButtonPressed = false;
+                    SelectDossierTab("Market");
+                }, Simulation.Loc.Format("Supply {0:P0}", quote.Satisfaction));
+            }
+        }
         AddOutlinerHeader("MARKET");
         var worstGood = player.Market.Values.OrderBy(quote => quote.Satisfaction).FirstOrDefault();
         if (worstGood is null) AddOutlinerHint("No market data");
         else
         {
             var definition = CommodityCatalog.Get(worstGood.Commodity);
-            AddOutlinerButton($"{definition.Name} · {worstGood.Satisfaction:P0} · {Fmt.Money(worstGood.Price)}",
-                () => OpenScreen("Economy"),
+            AddOutlinerButton($"{Tr(definition.Name)} · {worstGood.Satisfaction:P0} · {Fmt.Money(worstGood.Price)}",
+                () => OpenEconomyTab("Market"),
                 $"Production {worstGood.Production:0.0}, demand {worstGood.Demand:0.0}, imports {worstGood.Imports:0.0}, exports {worstGood.Exports:0.0}");
         }
 
         AddOutlinerHeader("CONSTRUCTION");
         if (construction.Length == 0) AddOutlinerHint("Idle — open Economy to queue a project");
-        foreach (var project in construction.OrderBy(project => project.Id).Take(4))
+        foreach (var project in construction.OrderBy(project => project.Id))
         {
             var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == project.StateMapIndex);
-            AddOutlinerButton($"{project.Building} · {project.Progress:P0}", () =>
+            AddOutlinerButton($"{Tr(BuildingCatalog.Get(project.Building).Name)} · {project.Progress:P0}", () =>
             {
                 _selectedState = state;
                 OpenScreen("Economy");
+                SelectDossierTab("Construction");
             }, state?.Name ?? "Construction project");
         }
     }
@@ -201,17 +220,38 @@ public partial class DealOrForceGame
     private void AddAlert(string text, Action action, string tooltip, bool critical = false)
     {
         var button = ActionButton(text, action, 0, 30, critical);
+        button.Alignment = HorizontalAlignment.Left;
+        button.ClipText = true;
         button.TooltipText = Ui.Tip(tooltip);
         _alertRows.AddChild(button);
     }
 
     private void AddOutlinerHeader(string text)
     {
-        var label = Title(text, 11, Ui.Colour("text.accent_dim"));
-        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        label.ClipText = true;
-        label.CustomMinimumSize = new Vector2(0, 16);
-        _outlinerRows.AddChild(label);
+        var collapsed = _collapsedOutlinerGroups.Contains(text);
+        var hidden = CampaignUiCatalog.HiddenOutliner.Contains(text);
+        var group = new VBoxContainer { Visible = !collapsed && !hidden };
+        group.SetMeta("outliner_section", text);
+        group.AddThemeConstantOverride("separation", 3);
+        var button = ActionButton((collapsed ? "▸ " : "▾ ") + Tr(text), () =>
+        {
+            if (!_collapsedOutlinerGroups.Add(text)) _collapsedOutlinerGroups.Remove(text);
+            _strategicHudFingerprint = int.MinValue;
+            RefreshStrategicHud();
+        }, 0, 28);
+        button.Name = "Group" + text.Replace(" ", "");
+        button.SetMeta("outliner_section", text);
+        button.Visible = !hidden;
+        button.Alignment = HorizontalAlignment.Left;
+        button.ClipText = true;
+        button.AddThemeFontSizeOverride("font_size", 12);
+        _outlinerRows.AddChild(button);
+        _outlinerRows.AddChild(group);
+        var position = 0;
+        foreach (var section in CampaignUiCatalog.OutlinerOrder)
+            foreach (var node in _outlinerRows.GetChildren().Where(n => n.HasMeta("outliner_section") && n.GetMeta("outliner_section").AsString() == section))
+                _outlinerRows.MoveChild(node, position++);
+        _outlinerGroupRows = group;
     }
 
     private void AddOutlinerHint(string text)
@@ -222,7 +262,7 @@ public partial class DealOrForceGame
         label.ClipText = true;
         label.MaxLinesVisible = 2;
         label.CustomMinimumSize = new Vector2(0, 18);
-        _outlinerRows.AddChild(label);
+        _outlinerGroupRows.AddChild(label);
     }
 
     private void AddOutlinerButton(string text, Action action, string tooltip)
@@ -233,12 +273,16 @@ public partial class DealOrForceGame
         button.CustomMinimumSize = new Vector2(0, 29);
         button.ClipText = true;
         button.TooltipText = Ui.Tip(tooltip);
-        _outlinerRows.AddChild(button);
+        _outlinerGroupRows.AddChild(button);
     }
 
     private static void ClearRuntimeChildren(Node parent)
     {
-        foreach (var child in parent.GetChildren()) child.QueueFree();
+        foreach (var child in parent.GetChildren())
+        {
+            parent.RemoveChild(child);
+            child.QueueFree();
+        }
     }
 
     private void FocusWar(StrategicWar war)
@@ -297,6 +341,9 @@ public partial class DealOrForceGame
     {
         if (battle is null || !_hudLayer.Visible) return;
         if (!CampaignIntel.PlayerCanSeeBattle(_campaign, battle)) return;
+        PrepareDossierTabs("Battle");
+        ApplyDossierTab();
+        ClearDetail();
         _selectedBattleId = battle.Id;
         _openScreen = "";
         _sidePanel.Visible = true;

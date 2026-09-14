@@ -261,6 +261,7 @@ public partial class DealOrForceGame
                     : displayName,
                 autosave);
             _saveStatus.Text = Simulation.Loc.Format("Saved {0} on {1}.", metadata.NationName, metadata.GameDate);
+            if (!autosave) PlayStrategicCue("save_complete");
             if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
         }
         catch (Exception exception)
@@ -271,15 +272,28 @@ public partial class DealOrForceGame
         }
     }
 
-    private void LoadFromSlot(string slot)
+    private async void LoadFromSlot(string slot)
+    {
+        await RunLoadingOperation("Restoring a campaign", async () =>
+        {
+            await LoadingPhase("Reading and checking the save", 20);
+            await RestoreCampaignFromSlot(slot);
+            await WaitForMapPresentation();
+        }, canReturn: true);
+    }
+
+    private async System.Threading.Tasks.Task RestoreCampaignFromSlot(string slot)
     {
         var result = SaveSystem.Load(SaveRoot, slot, ModFingerprint);
         DiagnosticLogs.Write(result.Success ? "system" : "errors", $"LOAD_RESULT slot={slot} success={result.Success} detail={result.Warning}");
         if (!result.Success)
         {
             _saveStatus.Text = result.Warning;
-            return;
+            throw new System.InvalidOperationException(result.Warning);
         }
+        await LoadingPhase("Restoring countries, armies and orders", 70);
+        // After replacing the live world, a binding failure is not safe to dismiss.
+        _loadingCanReturn = false;
         if (_campaign is not null) _campaign.Changed -= Refresh;
         _campaign = result.Campaign;
         _campaign.Changed += Refresh;

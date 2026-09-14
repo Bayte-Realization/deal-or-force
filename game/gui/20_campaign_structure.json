@@ -1,0 +1,30 @@
+{
+  "campaign": {
+    "top_stats":["TREASURY","BALANCE","GDP","POPULATION","STABILITY","MANPOWER"],
+    "outliner_order":["WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
+    "hidden_outliner":[],
+    "navigation": [
+      {"screen":"Nation", "icon":"nation", "help":"Capital, people and institutions."},
+      {"screen":"Economy", "icon":"economy", "help":"Budget, markets and construction."},
+      {"screen":"Military", "icon":"military", "help":"Recruitment, readiness and supply."},
+      {"screen":"Diplomacy", "icon":"diplomacy", "help":"Relations with the selected country."},
+      {"screen":"Wars", "icon":"wars", "help":"Wars and peace negotiations."},
+      {"screen":"Decisions", "icon":"decisions", "help":"National decisions and formable nations."},
+      {"screen":"State Affairs", "icon":"state_affairs", "help":"Taxes, spending and government."},
+      {"screen":"Ledger", "icon":"ledger", "help":"Charts, history and rankings."}
+    ],
+    "screens": {
+      "Nation": {
+        "tabs":[{"id":"Overview","groups":["STATE","ECONOMY"]},{"id":"Government","groups":["GOVERNMENT"]},{"id":"Society","groups":["SOCIETY"]}],
+        "links":[{"label":"Govern this country","action":"government","context":"own","tab":"Government"},{"label":"Charts and history","action":"ledger","tab":"Overview"},{"label":"How they see us","action":"diplomacy","context":"foreign","tab":"Government"}]
+      },
+      "Economy": {"tabs":[{"id":"Budget"},{"id":"Market"},{"id":"Construction"}],"links":[{"label":"Set the budget","action":"government","tab":"Budget"},{"label":"Economic history","action":"ledger","tab":"Budget"}]},
+      "Region": {"tabs":[{"id":"Overview"},{"id":"Population"},{"id":"Province"}],"links":[]},
+      "Decisions": {"tabs":[{"id":"Decisions"},{"id":"Formables","label":"Formable nations"}],"links":[]},
+      "Military": {"links":[{"label":"Every war","action":"wars"}]},
+      "Diplomacy": {"links":[{"label":"Compare them","action":"ledger","context":"foreign"}]}
+    }
+  },
+  "colors":{"shell.background":"#101d28f7","shell.border":"#536775","shell.row":"#152532","shell.row_alternate":"#1b2d3b","shell.space":"#080f18"},
+  "metrics":{"shell.navigation_size":54,"shell.tab_height":34,"shell.row_padding":9,"shell.outliner_height":600,"shell.outliner_collapsed":48,"shell.space_texture":0}
+}

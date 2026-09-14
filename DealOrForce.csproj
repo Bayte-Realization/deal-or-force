@@ -34,6 +34,27 @@
     <Compile Remove="Tools\**\*.cs" />
     <Content Include="game\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!--
+      Every other picture the sprite catalogue will accept.
+
+      It builds its index by walking this folder on disk rather than by asking the engine,
+      so a picture that is not copied here does not exist as far as the game is concerned -
+      whatever the .pck contains. That is how thirteen ideology icons, added as SVG, were
+      visible in the editor and absent from the build: the catalogue never saw them, so
+      nothing could ask for them. The list matches SpriteCatalog.PictureExtensions.
+    -->
+    <Content Include="game\**\*.svg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.jpeg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.webp" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.bmp" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.tga" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!--
+      And the sounds, for the same reason: the cue files name them by path and a mod's own
+      recordings have to be real files beside the game.
+    -->
+    <Content Include="game\**\*.wav" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.ogg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.csv" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.map" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

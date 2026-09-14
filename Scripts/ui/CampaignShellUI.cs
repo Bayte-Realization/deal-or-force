@@ -1,0 +1,158 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using DealOrForce.Simulation;
+using Godot;
+
+namespace DealOrForce;
+
+public partial class DealOrForceGame
+{
+    private HBoxContainer _dossierTabs;
+    private ScrollContainer _dossierScroll;
+    private string _dossierScreen = "";
+    private string _dossierTab = "Overview";
+    private string _detailGroup = "";
+    private readonly Dictionary<string, Button> _dossierTabButtons = new();
+
+    // Shared, restrained surfaces. Unlike the old ornamental nine-slices their visible
+    // boundary and their layout boundary are the same rectangle, even on a small display.
+    private static StyleBoxFlat ShellPanelStyle()
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour("shell.background"), BorderColor = Ui.Colour("shell.border"),
+            BorderWidthLeft = 1, BorderWidthRight = 1, BorderWidthBottom = 1,
+            BorderWidthTop = 2, ShadowColor = new Color(0, 0, 0, 0.28f),
+            ShadowSize = 5, ShadowOffset = new Vector2(0, 3)
+        };
+        style.SetContentMarginAll(1);
+        return style;
+    }
+
+    private static StyleBoxFlat ShellRowStyle(bool alternate)
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour(alternate ? "shell.row_alternate" : "shell.row"),
+            ContentMarginLeft = InterfaceSkin.Metric("shell.row_padding", 9), ContentMarginRight = InterfaceSkin.Metric("shell.row_padding", 9),
+            ContentMarginTop = 3, ContentMarginBottom = 3
+        };
+        return style;
+    }
+
+    private void ToggleCampaignScreen(string screen)
+    {
+        var open = screen switch
+        {
+            "State Affairs" => _stateAffairsLayer?.Visible == true,
+            "Ledger" => _ledgerLayer?.Visible == true,
+            "Wars" => _warLedgerLayer?.Visible == true,
+            _ => _sidePanel?.Visible == true && _openScreen == screen
+        };
+        if (!open)
+        {
+            if (screen == "Nation") _selectedNation = _campaign.Player;
+            OpenScreen(screen);
+            return;
+        }
+        if (screen == "State Affairs") CloseStateAffairs();
+        else if (screen == "Ledger") _ledgerLayer.Visible = false;
+        else if (screen == "Wars") _warLedgerLayer.Visible = false;
+        else CloseSidePanel();
+        UpdateScreenButtons();
+    }
+
+    private void LayoutCampaignShell()
+    {
+        if (_hudLayer is null) return;
+        // Baseline rectangles remain moddable in game/gui. Only the short outliner is
+        // clamped to available height; it must not cover the map toolbar at 720p.
+        if (_outliner is not null)
+        {
+            Ui.Place(_outliner, "hud.outliner");
+            _outliner.AnchorBottom = 0;
+            _outliner.OffsetBottom = _outliner.OffsetTop + (_outlinerCollapsed ? InterfaceSkin.Metric("shell.outliner_collapsed", 48) :
+                Mathf.Clamp(Size.Y - _outliner.OffsetTop - 68, 180, InterfaceSkin.Metric("shell.outliner_height", 600)));
+        }
+    }
+
+    private void PrepareDossierTabs(string screen)
+    {
+        if (_dossierTabs is null || _dossierScreen == screen) return;
+        _dossierScreen = screen;
+        var tabs = CampaignUiCatalog.For(screen).Tabs;
+        _dossierTab = tabs.FirstOrDefault()?.Id ?? (screen == "Economy" ? "Budget" : "Overview");
+        _dossierScroll.ScrollVertical = 0;
+        foreach (var child in _dossierTabs.GetChildren())
+        {
+            _dossierTabs.RemoveChild(child);
+            child.QueueFree();
+        }
+        _dossierTabButtons.Clear();
+        _dossierTabs.Visible = tabs.Length > 0;
+        foreach (var tab in tabs)
+        {
+            var captured = tab.Id;
+            var button = ActionButton(tab.Label, () =>
+            {
+                if (screen == "Region")
+                {
+                    _dossierTab = captured;
+                    _dossierScroll.ScrollVertical = 0;
+                    if (captured == "Population") ShowRegionPopulation();
+                    else if (captured == "Province") ShowProvinceOverview();
+                    else ShowRegionOverview();
+                    ApplyDossierTab();
+                }
+                else SelectDossierTab(captured);
+            }, 0, InterfaceSkin.Metric("shell.tab_height", 34));
+            button.ClipText = true;
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            Tip(button, tab.Label);
+            _dossierTabButtons.Add(tab.Id, button);
+            _dossierTabs.AddChild(button);
+        }
+    }
+
+    private void SelectDossierTab(string tab)
+    {
+        _dossierTab = tab;
+        _dossierScroll.ScrollVertical = 0;
+        if (_dossierScreen == "Economy") ShowEconomyScreen();
+        if (_dossierScreen == "Decisions") ShowDecisionsScreen();
+        ApplyDossierTab();
+    }
+
+    private void OpenEconomyTab(string tab)
+    {
+        OpenScreen("Economy");
+        SelectDossierTab(tab);
+    }
+
+    private void ApplyDossierTab()
+    {
+        RefreshSideLinks(_dossierScreen);
+        foreach (var (tab, button) in _dossierTabButtons) StyleButton(button, tab == _dossierTab);
+        if (_sideDetail is null) return;
+        _sideDetail.Visible = _dossierScreen != "Economy" || _dossierTab == "Budget";
+        if (_economyControls is not null)
+            _economyControls.Visible = _dossierScreen == "Economy" && _dossierTab != "Budget";
+        if (_economyBuildRows is not null) _economyBuildRows.Visible = _dossierTab == "Construction";
+        if (_economyMarketRows is not null) _economyMarketRows.Visible = _dossierTab == "Market";
+        foreach (var child in _sideDetail.GetChildren())
+        {
+            if (child is not Control control) continue;
+            var group = child.HasMeta("dossier_group") ? child.GetMeta("dossier_group").AsString() : "";
+            var groups = CampaignUiCatalog.For(_dossierScreen).Tabs.FirstOrDefault(t => t.Id == _dossierTab)?.Groups;
+            control.Visible = _dossierScreen != "Nation" || groups is null || groups.Length == 0 || groups.Contains(group);
+            if (child.HasMeta("dossier_field") && CampaignUiCatalog.DetailHidden(_dossierScreen, child.GetMeta("dossier_field").AsString()))
+                control.Visible = false;
+        }
+        var order = CampaignUiCatalog.DetailOrder(_dossierScreen);
+        var position = 0;
+        foreach (var field in order)
+            foreach (var node in _sideDetail.GetChildren().Where(n => n.HasMeta("dossier_field") && n.GetMeta("dossier_field").AsString() == field))
+                _sideDetail.MoveChild(node, position++);
+    }
+}

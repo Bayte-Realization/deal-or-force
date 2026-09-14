@@ -57,31 +57,35 @@ public partial class DealOrForceGame : Control
     /// </summary>
     private bool _campaignInProgress;
 
-    public override void _Ready()
+    public override async void _Ready()
     {
-        StartDiagnostics();
-        // `user://` is the engine's idea of where a player's own files go, and the simulation
-        // layer does not import Godot - so it is told rather than asked. Read before the
-        // interface is built, because the interface shows what was chosen last time.
-        Simulation.PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
-        // Resolved at startup rather than when somebody first opens the archive: it is
-        // what creates the folder and moves an older installation's saves into it, and
-        // "where are my saves" is a question worth being able to answer from a log.
-        GD.Print($"[dof] saves: {SaveRoot}");
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        // The interface is built next and asks for its pictures by name, so the names have
-        // to mean something first. Mods layer their own over these when a campaign starts.
-        Simulation.SpriteCatalog.Load();
-        Simulation.SoundCatalog.Load();
-        Simulation.MusicCatalog.Load();
-        Simulation.FontCatalog.Load();
-        ApplyDeclaredFont();
-        BuildInterface();
-        StartCampaign();
+        await RunLoadingOperation("Preparing the world", async () =>
+        {
+            StartDiagnostics();
+            // The engine-neutral settings layer is told where the player's files live.
+            Simulation.PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
+            await LoadingPhase("Loading interface and content catalogs", 10);
+            // Resolve/migrate old saves only after the first loading frame is visible.
+            GD.Print($"[dof] saves: {SaveRoot}");
+            Simulation.SpriteCatalog.Load();
+            Simulation.SoundCatalog.Load();
+            Simulation.MusicCatalog.Load();
+            Simulation.FontCatalog.Load();
+            ApplyDeclaredFont();
+            await LoadingPhase("Preparing the interface", 20);
+            BuildInterface();
+            _globe.LoadingInputBlocked = true;
+            await LoadingPhase("Creating countries and regions", 30);
+            StartCampaign();
+            await WaitForMapPresentation();
+            _startupComplete = true;
+        });
     }
 
     public override void _Process(double delta)
     {
+        if (_isLoading || !_startupComplete) return;
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false };
         // The lens and the roll move while a key is held, so the line that reports them
@@ -157,11 +161,37 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_authorCanvas))
+        {
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            { ConfirmAuthorExit(CloseAuthorWindow); GetViewport().SetInputAsHandled(); }
+            return;
+        }
+        if (_isLoading || !_startupComplete)
+        {
+            // Tab/hotkeys must not move focus to the covered game. Only the error
+            // action may receive keyboard activation; mouse delivery stays with the cover.
+            if (inputEvent is InputEventKey loadingKey &&
+                !(_loadingScreen is { CanDismiss: true } && loadingKey.Keycode is Key.Enter or Key.Space))
+                GetViewport().SetInputAsHandled();
+            return;
+        }
         // Space is a sacred strategy-game time key: it never activates a focused
         // button, confirms a dialog or changes projection. During a campaign it
         // only toggles time, and outside a campaign it is deliberately consumed.
         if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key)
             return;
+
+        // Text entry owns letters and space; Escape first leaves the field.
+        if (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit)
+        {
+            if (key.Keycode == Key.Escape)
+            {
+                GetViewport().GuiGetFocusOwner().ReleaseFocus();
+                GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
 
         if (key.Unicode is 96 or 126 || key.Keycode == Key.Quoteleft || key.PhysicalKeycode == Key.Quoteleft)
         {
@@ -248,6 +278,9 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_authorCanvas)) return;
+        if (_isLoading || !_startupComplete) return;
+        if (inputEvent is InputEventKey && GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return;
         if (_developerConsoleLayer is { Visible: true }) return;
         HandleProjectionHotkey(inputEvent);
         if (GetViewport().IsInputHandled()) return;
@@ -419,11 +452,11 @@ public partial class DealOrForceGame : Control
         };
         rows.AddChild(logo);
         rows.AddChild(Title(
-            "The world as it stands in 2024 — its borders, its people and its economy.",
+            "Choose a world. Shape its future.",
             15,
             Ui.Colour("text.muted")));
 
-        rows.AddChild(Title("1 January 2024", 17, Ui.Colour("text.bright")));
+        rows.AddChild(Title("Scenarios & workshop", 17, Ui.Colour("text.bright")));
         _scenarioSummary = Title("Preparing campaign data…", 14, Ui.Colour("text.hint"));
         rows.AddChild(_scenarioSummary);
 
@@ -431,7 +464,7 @@ public partial class DealOrForceGame : Control
         _modStatus.TooltipText = Ui.Tip(Tr("Development mods: res://mods · installed mods: user://mods"));
         rows.AddChild(_modStatus);
 
-        rows.AddChild(ActionButton("Singleplayer", OpenCountryPicker, 330, 46, true));
+        rows.AddChild(ActionButton("Singleplayer", OpenScenarioLibrary, 330, 46, true));
         rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
 
         var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
@@ -466,21 +499,24 @@ public partial class DealOrForceGame : Control
         AddChild(_hudLayer);
 
         var top = TexturedPanel(_hudLayer);
+        top.Name = "CampaignTopBar";
         Ui.Place(top, "hud.top");
 
-        var margin = Margin(top, 18, 12);
+        var margin = Margin(top, 12, 6);
         var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 24);
+        row.AddThemeConstantOverride("separation", 12);
         margin.AddChild(row);
 
         // Whose war this is, said in the one way that needs no reading.
         _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
         row.AddChild(_identityFlag);
 
-        var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(196, 0) };
+        var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(154, 0) };
         identityBox.AddThemeConstantOverride("separation", 2);
         row.AddChild(identityBox);
-        _identity = Title("South Korea", 21, Ui.Colour("text.accent"));
+        _identity = Title("South Korea", 18, Ui.Colour("text.accent"));
+        _identity.ClipText = true;
+        _identity.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         // The bar is two lines tall and no more. A name too wide for the column has to
         // widen the column, not wrap into the line underneath it - which is what
         // "South Korea" did the moment it became "Южная Корея".
@@ -491,21 +527,23 @@ public partial class DealOrForceGame : Control
         identityBox.AddChild(_identityTag);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        stats.AddThemeConstantOverride("separation", 28);
+        stats.AddThemeConstantOverride("separation", 12);
         row.AddChild(stats);
-        _treasury = Stat(stats, "TREASURY", "Cash on hand. The line below is the change over the last week of campaign time.");
-        _balance = Stat(stats, "BALANCE", "What the treasury gains or loses each week, and everything that goes into it.",
-            () => _campaign?.Player?.Budget);
-        _gdp = Stat(stats, "GDP", "Annual gross domestic product, as it emerges from what your economy actually produces.");
-        _population = Stat(stats, "POPULATION", "Everyone living in your states, and how that has moved over the last week.");
-        _stability = Stat(stats, "STABILITY", "How settled the country is. Unrest costs money to police and output to bear.",
-            () => _campaign?.Player?.StabilityDrivers);
-        _manpower = Stat(stats, "MANPOWER", "People left to put in uniform. A war that outruns this is a war that ends.");
+        foreach (var field in CampaignUiCatalog.TopStats)
+            switch (field)
+            {
+                case "TREASURY": _treasury = Stat(stats, field, "Cash on hand. The line below is the change over the last week of campaign time."); break;
+                case "BALANCE": _balance = Stat(stats, field, "What the treasury gains or loses each week, and everything that goes into it.", () => _campaign?.Player?.Budget); break;
+                case "GDP": _gdp = Stat(stats, field, "Annual gross domestic product, as it emerges from what your economy actually produces."); break;
+                case "POPULATION": _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week."); break;
+                case "STABILITY": _stability = Stat(stats, field, "How settled the country is. Unrest costs money to police and output to bear.", () => _campaign?.Player?.StabilityDrivers); break;
+                case "MANPOWER": _manpower = Stat(stats, field, "People left to put in uniform. A war that outruns this is a war that ends."); break;
+            }
 
-        var clock = new VBoxContainer { CustomMinimumSize = new Vector2(276, 0) };
-        clock.AddThemeConstantOverride("separation", 6);
+        var clock = new VBoxContainer { CustomMinimumSize = new Vector2(224, 0) };
+        clock.AddThemeConstantOverride("separation", 2);
         row.AddChild(clock);
-        _date = Title("1 January 2024", 17, Ui.Colour("text.bright"));
+        _date = Title("1 January 2024", 15, Ui.Colour("text.bright"));
         _date.HorizontalAlignment = HorizontalAlignment.Right;
         clock.AddChild(_date);
 
@@ -513,77 +551,88 @@ public partial class DealOrForceGame : Control
         speeds.AddThemeConstantOverride("separation", 5);
         clock.AddChild(speeds);
 
-        var menu = ActionButton("≡", ShowPauseMenu, 44, 34);
+        var menu = ActionButton("≡", ShowPauseMenu, 32, 28);
         menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc) · F5 quick-saves, F9 loads, F10 flies the camera"));
         speeds.AddChild(menu);
-        _pause = ActionButton("II", TogglePause, 44, 34, true);
+        _pause = ActionButton("II", TogglePause, 32, 28, true);
         _pause.TooltipText = Ui.Tip(Tr("Pause and resume campaign time (Space). Space never activates a focused button."));
         speeds.AddChild(_pause);
         _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
         {
             var captured = speed;
-            var button = ActionButton(speed.ToString(), () => SetSpeed(captured), 38, 34);
+            var button = ActionButton(speed.ToString(), () => SetSpeed(captured), 27, 28);
             _speedButtons.Add(button);
             speeds.AddChild(button);
         }
         UpdateSpeedButtons();
 
         var navigation = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
+        navigation.Name = "CampaignNavigation";
         Ui.Place(navigation, "hud.navigation");
-        var navMargin = Margin(navigation, 10, 8);
-        var nav = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        nav.AddThemeConstantOverride("separation", 8);
-        navMargin.AddChild(nav);
+        var navMargin = Margin(navigation, 4, 6);
+        var navScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        navMargin.AddChild(navScroll);
+        var nav = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        nav.AddThemeConstantOverride("separation", 6);
+        navScroll.AddChild(nav);
 
         // Each screen says what it is for. A player who has never opened one of these games
         // should be able to learn the interface by resting on it rather than by clicking
         // everything to find out.
-        var screens = new (string Name, string Icon, string Help)[]
-        {
-            ("Nation", "nation", "Who you are: capital, people, output, treasury and how settled the country is."),
-            ("Economy", "economy", "The budget: what the week raises, what it costs, and what the region you have selected is made of."),
-            ("Military", "military", "The armed forces: how many, how ready, how well fed, and what spending buys."),
-            ("Diplomacy", "diplomacy", "How the selected country regards you, and what can be done about it."),
-            ("Wars", "wars", "Every war being fought, what it is costing, and the table where it can be ended."),
-            ("Decisions", "decisions", "One-off national actions, with their price and their consequence."),
-            ("State Affairs", "state_affairs", "Running the country: taxation, the armed forces budget, " +
-                "the cabinet, welfare and education, trade policy, and what is being built."),
-            ("Ledger", "ledger", "The record, for any country: charts, history and rankings. Nothing here " +
-                "changes anything - the controls moved to State Affairs.")
-        };
         _screenButtons.Clear();
-        foreach (var (screen, icon, help) in screens)
+        foreach (var (screen, label, icon, help) in CampaignUiCatalog.NavigationItems)
         {
             var captured = screen;
-            var button = ActionButton(screen, () => OpenScreen(captured), 118, 38,
+            var navSize = Mathf.Clamp(InterfaceSkin.Metric("shell.navigation_size", 54), 28, 96);
+            var button = ActionButton("", () => ToggleCampaignScreen(captured), navSize, navSize,
                 false, SpriteCatalog.TextureOf($"icon_{icon}",
                     $"res://game/gfx/interface/icons/icon_{icon}.png"));
-            Tip(button, help);
+            button.Name = "Nav" + screen.Replace(" ", "");
+            Tip(button, Tr(label) + "\n" + Tr(help));
+            button.AccessibilityName = Tr(label);
             _screenButtons[captured] = button;
             nav.AddChild(button);
         }
         UpdateScreenButtons();
 
         _sidePanel = TexturedPanel(_hudLayer);
+        _sidePanel.Name = "CampaignDossier";
         Ui.Place(_sidePanel, "hud.side_panel");
         _sidePanel.Visible = false;
 
-        var sideRows = ScrollablePanelRows(_sidePanel, 24, 20, 12);
+        var dossierRows = PanelRows(_sidePanel, 16, 12, 10);
         var header = new HBoxContainer();
         header.AddThemeConstantOverride("separation", 8);
-        sideRows.AddChild(header);
+        dossierRows.AddChild(header);
         _sideFlag = FlagBadge("", 26);
         _sideFlag.Visible = false;
         header.AddChild(_sideFlag);
-        _sideTitle = Title("Nation", 27, Ui.Colour("text.accent"));
+        _sideTitle = Title("Nation", 24, Ui.Colour("text.bright"));
         _sideTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _sideTitle.AutowrapMode = TextServer.AutowrapMode.Off;
+        _sideTitle.ClipText = true;
+        _sideTitle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         header.AddChild(_sideTitle);
         header.AddChild(ActionButton("×", CloseSidePanel, 38, 34));
 
+        _dossierTabs = new HBoxContainer();
+        _dossierTabs.AddThemeConstantOverride("separation", 4);
+        dossierRows.AddChild(_dossierTabs);
+        _dossierScroll = new ScrollContainer
+        {
+            Name = "DossierScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            FollowFocus = true
+        };
+        dossierRows.AddChild(_dossierScroll);
+        var sideRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        sideRows.AddThemeConstantOverride("separation", 10);
+        _dossierScroll.AddChild(sideRows);
+
         _sideBody = Title("", 16, Ui.Colour("text.body"));
         _sideBody.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _sideBody.SizeFlagsVertical = SizeFlags.ExpandFill;
+        _sideBody.SizeFlagsVertical = SizeFlags.Fill;
         sideRows.AddChild(_sideBody);
 
         // Figures belong in aligned rows, not in a paragraph. A player comparing two
@@ -635,6 +684,8 @@ public partial class DealOrForceGame : Control
         BuildWarLedger();
         BuildMapControls();
         BuildStrategicHud();
+        Resized += LayoutCampaignShell;
+        LayoutCampaignShell();
     }
 
     private void BeginSession()
@@ -673,6 +724,9 @@ public partial class DealOrForceGame : Control
 
     private void OpenScreen(string screen)
     {
+        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
+        if (_fleetPanel is not null) _fleetPanel.Visible = false;
+        PrepareDossierTabs(screen);
         if (screen == "Ledger")
         {
             OpenLedger();
@@ -706,8 +760,8 @@ public partial class DealOrForceGame : Control
 
         var player = _campaign.Player;
         var nation = _selectedNation ?? player;
-        _sideTitle.Text = screen;
-        ShowSideFlag(screen is "Nation" or "Diplomacy" or "Economy" or "Military" ? nation.Tag : "");
+        _sideTitle.Text = Tr(screen);
+        ShowSideFlag(screen is "Economy" or "Military" ? player.Tag : screen is "Nation" or "Diplomacy" ? nation.Tag : "");
         ClearDetail();
         RefreshSideLinks(screen);
 
@@ -807,6 +861,7 @@ public partial class DealOrForceGame : Control
                 ShowDecisionsScreen();
                 break;
         }
+        ApplyDossierTab();
     }
 
     private void CloseSidePanel()
@@ -821,6 +876,11 @@ public partial class DealOrForceGame : Control
 
     private void OnCountryPicked(GlobePick pick)
     {
+        if (_networkLayer is not null && _networkLayer.Visible)
+        {
+            SelectNetworkCountry(pick.Nation, false);
+            return;
+        }
         _selectedNation = pick.Nation;
         _selectedState = pick.State;
         _selectedProvinceId = pick.ProvinceId;
@@ -920,6 +980,7 @@ public partial class DealOrForceGame : Control
             return;
         }
         _campaign.IsPaused = !_campaign.IsPaused;
+        PlayStrategicCue(_campaign.IsPaused ? "game_pause" : "game_resume");
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
         StyleButton(_pause, _campaign.IsPaused);
         Refresh();
@@ -935,6 +996,7 @@ public partial class DealOrForceGame : Control
         _speed = Mathf.Clamp(speed, 1, 5);
         if (_campaign.IsPaused)
         {
+            PlayStrategicCue("game_resume");
             _campaign.IsPaused = false;
             _pause.Text = Tr("II");
             StyleButton(_pause, false);
@@ -1008,7 +1070,7 @@ public partial class DealOrForceGame : Control
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
         if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
-        else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation")
+        else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions")
             OpenScreen(_openScreen);
     }
 
@@ -1030,7 +1092,8 @@ public partial class DealOrForceGame : Control
         // show; an ordinary tooltip when there are not.
         var box = new ExplainedStat
         {
-            CustomMinimumSize = new Vector2(126, 0),
+            CustomMinimumSize = new Vector2(84, 0),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             Explain = explain,
             Plain = explain is null ? "" : Tr(tooltip)
         };
@@ -1038,7 +1101,10 @@ public partial class DealOrForceGame : Control
         box.AddThemeConstantOverride("separation", 1);
         box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
-        box.AddChild(Title(caption, 11, Ui.Colour("text.caption")));
+        var statCaption = Title(caption, 11, Ui.Colour("text.caption"));
+        statCaption.AutowrapMode = TextServer.AutowrapMode.Off;
+        statCaption.ClipText = true;
+        box.AddChild(statCaption);
 
         var readout = new StatReadout
         {
@@ -1051,6 +1117,9 @@ public partial class DealOrForceGame : Control
         // "поддержка войны 63 %".
         readout.Value.AutowrapMode = TextServer.AutowrapMode.Off;
         readout.Delta.AutowrapMode = TextServer.AutowrapMode.Off;
+        readout.Value.ClipText = true;
+        readout.Delta.ClipText = true;
+        readout.Delta.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         box.AddChild(readout.Value);
         box.AddChild(readout.Delta);
         return readout;
@@ -1068,6 +1137,8 @@ public partial class DealOrForceGame : Control
         stat.Value.TooltipText = Ui.Tip(exact);
         stat.Value.MouseFilter = MouseFilterEnum.Stop;
         stat.Delta.Text = delta;
+        stat.Delta.TooltipText = Ui.Tip(delta);
+        stat.Delta.MouseFilter = MouseFilterEnum.Stop;
         stat.Delta.AddThemeColorOverride("font_color", direction switch
         {
             > 0 => Ui.Colour("state.positive"),
@@ -1105,6 +1176,7 @@ public partial class DealOrForceGame : Control
     /// <summary>Empty the structured rows before a screen writes its own.</summary>
     private void ClearDetail()
     {
+        _detailGroup = "";
         if (_sideDetail is null) return;
         foreach (var child in _sideDetail.GetChildren())
         {
@@ -1132,24 +1204,36 @@ public partial class DealOrForceGame : Control
             row.MouseFilter = MouseFilterEnum.Stop;
         }
 
-        var label = Title(caption, 13, Ui.Colour("text.caption"));
+        row.CustomMinimumSize = new Vector2(0, 30);
+        row.AddThemeConstantOverride("separation", 14);
+        var label = Title(CampaignUiCatalog.DetailLabel(_dossierScreen, caption, caption), 14, Ui.Colour("text.body_soft"));
         label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        label.AutowrapMode = TextServer.AutowrapMode.Off;
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.SizeFlagsStretchRatio = 1.1f;
         row.AddChild(label);
 
         var figure = Title(value, 14, Ui.Colour(valueToken));
         figure.HorizontalAlignment = HorizontalAlignment.Right;
-        figure.AutowrapMode = TextServer.AutowrapMode.Off;
+        figure.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        figure.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         row.AddChild(figure);
 
-        _sideDetail.AddChild(row);
+        var card = new PanelContainer();
+        card.SetMeta("dossier_field", caption);
+        card.SetMeta("dossier_group", _detailGroup);
+        card.AddThemeStyleboxOverride("panel", ShellRowStyle(_sideDetail.GetChildCount() % 2 == 0));
+        card.AddChild(row);
+        _sideDetail.AddChild(card);
     }
 
     /// <summary>A small capitalised rule between groups of rows.</summary>
     private void DetailHeading(string text)
     {
-        var heading = Title(text, 11, Ui.Colour("text.caption"));
-        heading.CustomMinimumSize = new Vector2(0, 22);
+        _detailGroup = text;
+        var heading = Title(CampaignUiCatalog.DetailLabel(_dossierScreen, "#" + text, text), 12, Ui.Colour("text.accent_dim"));
+        heading.SetMeta("dossier_field", "#" + text);
+        heading.SetMeta("dossier_group", text);
+        heading.CustomMinimumSize = new Vector2(0, 30);
         heading.VerticalAlignment = VerticalAlignment.Bottom;
         _sideDetail.AddChild(heading);
     }
@@ -1195,6 +1279,7 @@ public partial class DealOrForceGame : Control
         var open =
             _stateAffairsLayer is { Visible: true } ? "State Affairs" :
             _ledgerLayer is { Visible: true } ? "Ledger" :
+            _warLedgerLayer is { Visible: true } ? "Wars" :
             _sidePanel is { Visible: true } ? _openScreen : "";
         foreach (var (screen, button) in _screenButtons)
         {
@@ -1230,7 +1315,8 @@ public partial class DealOrForceGame : Control
             // cannot paint over the map outside the ornamental frame.
             ClipContents = true
         };
-        panel.AddThemeStyleboxOverride("panel", PanelStyle(surface));
+        var inCampaign = _hudLayer is not null && (parent == _hudLayer || _hudLayer.IsAncestorOf(parent));
+        panel.AddThemeStyleboxOverride("panel", inCampaign ? ShellPanelStyle() : PanelStyle(surface));
         parent.AddChild(panel);
         return panel;
     }
@@ -1319,15 +1405,7 @@ public partial class DealOrForceGame : Control
     /// </summary>
     private void ApplyDeclaredFont()
     {
-        var file = Simulation.FontCatalog.FileOf("ui.default");
-        if (string.IsNullOrEmpty(file)) return;
-        if (!ResourceLoader.Exists(file))
-        {
-            GD.PushWarning($"[dof] fonts declare ui.default as {file}, which is not there");
-            return;
-        }
-        var face = GD.Load<Font>(file);
-        if (face is not null) AddThemeFontOverride("font", face);
+        AddThemeFontOverride("font", PresentationFonts.For("ui.default"));
     }
 
     /// <summary>
@@ -1429,7 +1507,13 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>Re-translate every caption still showing its own translation, in place.</summary>
-    private void RefreshLocalisedText() => RefreshLocalisedText(this);
+    private void RefreshLocalisedText()
+    {
+        RefreshLocalisedText(this);
+        _strategicHudFingerprint = int.MinValue;
+        RefreshStrategicHud();
+        if (_campaign is not null && _dossierScreen == "Economy") ShowEconomyScreen();
+    }
 
     private static void RefreshLocalisedText(Node node)
     {

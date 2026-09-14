@@ -13,7 +13,7 @@ static class Program
 
     static string Snapshot(Army army) => JsonSerializer.Serialize(army, new JsonSerializerOptions { IncludeFields = true });
 
-    static void Main()
+    static void Main(string[] args)
     {
         var c = Campaign.CreateBootstrap(20260906);
         var rus = c.NationByTag("RUS"); var ukr = c.NationByTag("UKR");
@@ -59,6 +59,7 @@ static class Program
         Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
             Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
+        if (args.Contains("--offensive-only")) { OffensivePlanTests.Run(c); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();
         var border = BorderFronts.Candidates(c, rus.Id, ukr.Id);
@@ -82,8 +83,16 @@ static class Program
             MilitaryOperations.Tick(c);
             Warfare.Tick(c);
         }
+        Check(own.ProvinceId == start && c.ProvinceController[target] == ukr.MapIndex,
+            "strong neighboring formations cover an empty province under current zone-of-control rules");
+        // Do not turn a pathfinding regression into a demand to bypass defensive cover.
+        // The same explicit order must resume once the covering force leaves.
+        c.Armies.Remove(foreign);
+        for (var day = 0; day < 60 && own.ProvinceId != target; day++)
+        { MilitaryOperations.Tick(c); Warfare.Tick(c); }
         Check(own.ProvinceId == target && c.ProvinceController[target] == rus.MapIndex,
-            "empty hostile province reachable despite strong divisions in neighboring provinces");
+            "explicit order reaches an unopposed hostile province after cover is removed");
+        c.Armies.Add(foreign);
         Check(!c.Battles.Any(b => b.ProvinceId == target), "unopposed entry creates no fictitious battle");
 
         // A direct route must survive a front refresh instead of being silently reassigned.
@@ -181,8 +190,10 @@ static class Program
         Check(own.DirectOrder && own.OrderProvinceId == target && own.Route.Count == 0 && own.PlannedRoute.Count > 0,
             "enemy taking a friendly marching step hands the original corridor to combat");
         foreign.ProvinceId = retreat;
+        c.Armies.Remove(foreign); // This case isolates route interruption, not defensive coverage.
         for (var i = 0; i < 60 && own.ProvinceId != target; i++) { MilitaryOperations.Tick(c); Warfare.Tick(c); }
         Check(own.ProvinceId == target, "interrupted friendly march can retake newly hostile destination");
+        c.Armies.Add(foreign);
 
         own.ProvinceId = start; own.ReadyDay = 0; c.Battles.Clear(); own.BattleId = -1; foreign.BattleId = -1;
         c.SetProvinceController(target, (ushort)ukr.MapIndex);
