@@ -299,7 +299,7 @@ public static class FlagCatalog
     public static bool IsKnownSource(string source) => source switch
     {
         "ideology" or "government" or "culture" or "continent" or
-        "war" or "tag" or "focus" or "formable" or "revolt" => true,
+        "war" or "tag" or "focus" or "formable" or "revolt" or "subject" => true,
         _ => false
     };
 
@@ -327,6 +327,10 @@ public static class FlagCatalog
             // for every country that was on the map when it started, which is what keeps
             // this out of the way of the three hundred flags that do not need it.
             "revolt" => nation.FoundedInRevolt,
+            // What it answers to somebody else as. This is where Vichy, Manchukuo and every
+            // other government installed from outside belongs: not a thing the country
+            // believes, and not how it is arranged, but who it is arranged BY.
+            "subject" => nation.OverlordId == 0 ? "" : nation.SubjectType,
             _ => ""
         };
         return Slug(value);

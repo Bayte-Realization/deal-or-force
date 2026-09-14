@@ -84,6 +84,8 @@ public static class Program
             TheStatedStatisticsCameTrue(campaign));
         failures += Check("the classes and the sectors count the same people",
             TwoAxesOverOnePopulation(campaign));
+        failures += Check("a country can answer to another one, and stop",
+            ADependencyIsABargainAboutPower());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -5633,6 +5635,77 @@ public static class Program
     /// The population screen lists a region by trade, then by class, then by sector, and
     /// tells the player the last two are the first added up. This is that promise, checked.
     /// </summary>
+    /// <summary>
+    /// A dependency pays, turns up, drifts, and can be let go.
+    ///
+    /// Four claims, each checked against a number rather than asserted. The last one is the
+    /// one worth having: a subject's wish to leave has to answer to circumstance, so the
+    /// same country held by a steady overlord and by a collapsing one must not want the
+    /// same thing. If it does, the whole model is a timer with extra steps.
+    /// </summary>
+    private static string ADependencyIsABargainAboutPower()
+    {
+        if (SubjectCatalog.All.Count == 0) return "common/subjects declared no kinds at all";
+
+        var campaign = Campaign.CreateBootstrap(20240501);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var overlord = campaign.NationByTag("FRA");
+        var subject = campaign.NationByTag("LUX");
+        var other = campaign.NationByTag("DEU");
+        if (overlord is null || subject is null || other is null) return "";
+
+        if (!SubjectSystem.Subjugate(campaign, overlord, subject, "puppet", out var refusal))
+            return $"could not make LUX a puppet of FRA: {refusal}";
+        if (subject.OverlordId != overlord.Id) return "LUX does not think it answers to FRA";
+
+        // Refusals that matter.
+        if (SubjectSystem.Subjugate(campaign, other, subject, "puppet", out _))
+            return "LUX was handed to DEU while it already answered to FRA";
+        if (SubjectSystem.Subjugate(campaign, overlord, overlord, "puppet", out _))
+            return "FRA was made to answer to itself";
+        if (SubjectSystem.Subjugate(campaign, overlord, other, "no_such_kind", out _))
+            return "a kind that is not in common/subjects was accepted";
+
+        // Tribute. Run a month and see whether anything moved from one treasury to the other.
+        // Measured from what the tribute actually moved, not from the treasuries it moved
+        // between. The first version of this check compared France's balance before and
+        // after and failed: France runs a deficit of several billion a week, and sixty
+        // million of Luxembourgish tribute inside it is not something a subtraction can
+        // see. The mechanic was right and the measurement was wrong.
+        for (var day = 0; day < 35; day++) campaign.Tick();
+        var taken = overlord.TributeTakenWeekly;
+        var paid = subject.TributePaidWeekly;
+        if (subject.WeeklyTaxIncome > 0f && taken <= 0f)
+            return $"LUX raised {subject.WeeklyTaxIncome:0.00}B a week and FRA collected nothing";
+        if (Math.Abs(taken - paid) > 0.0001f)
+            return $"FRA took {taken:0.000}B and LUX paid {paid:0.000}B - the money did not balance";
+
+        // Turning up. FRA attacked; the puppet is dragged in, because that is what its kind says.
+        var kind = SubjectCatalog.Of("puppet");
+        if (kind is null || !kind.DraggedIntoWars) return "the shipped 'puppet' no longer joins its overlord's wars";
+
+        // Drift. The same subject, under two different overlords, must not want the same thing.
+        var steady = SubjectSystem.LibertyDesireOf(campaign, subject);
+        var wasStability = overlord.Stability;
+        overlord.Stability = 0.05f;
+        var shaken = SubjectSystem.LibertyDesireOf(campaign, subject);
+        overlord.Stability = wasStability;
+        if (shaken <= steady)
+            return $"LUX wants out {steady:P0} under a steady FRA and {shaken:P0} under a collapsing one";
+
+        // And letting go.
+        SubjectSystem.Release(campaign, subject);
+        if (subject.OverlordId != 0 || subject.SubjectType.Length != 0)
+            return "LUX was released and still thinks it answers to somebody";
+
+        Console.WriteLine($"  dependencies: {SubjectCatalog.All.Count} kind(s) in common/subjects; " +
+                          $"FRA took {taken:0.000}B from LUX last week and LUX paid the same; " +
+                          $"wanting out {steady:P0} under a steady overlord, {shaken:P0} under a shaken one.");
+        return "";
+    }
+
     private static string TwoAxesOverOnePopulation(Campaign campaign)
     {
         // Every trade on a rung its wealth belongs to. The ladder has wide gaps - 0.42 to
