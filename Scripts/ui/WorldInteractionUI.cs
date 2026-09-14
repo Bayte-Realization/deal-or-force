@@ -9,6 +9,8 @@ public partial class DealOrForceGame
     private VBoxContainer _countryActions = null!;
     private Label _countryActionFeedback = null!;
     private Button _declareWarButton = null!;
+    private HBoxContainer _subjectActions = null!;
+    private Button _integrateButton = null!;
     private int _pendingWarTarget = -1;
 
     private void BuildCountryActionControls(VBoxContainer parent)
@@ -23,12 +25,96 @@ public partial class DealOrForceGame
         row.AddChild(ActionButton("Improve", ImproveSelectedRelations, 96, 32, true));
         row.AddChild(ActionButton("Denounce", DenounceSelected, 96, 32));
         row.AddChild(ActionButton("Capital", FocusSelectedCapital, 96, 32));
+        _subjectActions = new HBoxContainer { Visible = false };
+        _subjectActions.AddThemeConstantOverride("separation", 5);
+        _countryActions.AddChild(_subjectActions);
+        _subjectActions.AddChild(ActionButton("Release", ReleaseSelectedSubject, 96, 32));
+        _integrateButton = ActionButton("Integrate", IntegrateSelectedSubject, 110, 32);
+        _subjectActions.AddChild(_integrateButton);
+
         _declareWarButton = ActionButton("Declare war", ConfirmOrDeclareWar, 0, 38);
         _declareWarButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _countryActions.AddChild(_declareWarButton);
         _countryActionFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _countryActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _countryActions.AddChild(_countryActionFeedback);
+    }
+
+    /// <summary>
+    /// Who this country answers to, and who answers to it.
+    ///
+    /// Who answers to whom is public - it is the one thing about a dependency that everybody
+    /// can see. How badly it wants out is a judgement about somebody else's politics, so it
+    /// is shown for a country's own subjects and for anybody the player can actually see
+    /// into, and withheld otherwise rather than guessed at.
+    /// </summary>
+    private void ShowDependencies(Nation nation)
+    {
+        var overlord = SubjectSystem.OverlordOf(_campaign, nation);
+        var subjects = SubjectSystem.SubjectsOf(_campaign, nation);
+        if (overlord is null && subjects.Count == 0) return;
+
+        DetailHeading("ARRANGEMENTS");
+        if (overlord is not null)
+        {
+            var kind = SubjectCatalog.Of(nation.SubjectType);
+            DetailRow("Answers to", $"{overlord.DisplayName} · {kind?.Name ?? nation.SubjectType}",
+                kind?.Description ?? "");
+            if (kind is not null)
+            {
+                var held = _campaign.ElapsedDays - nation.SubjectSinceDay;
+                DetailRow("Arranged", Simulation.Loc.Format("{0} year(s) ago", $"{held / 365.0:0.0}"));
+                if (kind.Tribute > 0f)
+                    DetailRow("Tribute", $"{kind.Tribute:P0} " +
+                                         Simulation.Loc.Format("of its taxes, {0} last week",
+                                             Fmt.Money(nation.TributePaidWeekly)));
+            }
+            if (nation.OverlordId == _campaign.Player.Id || CanInspectNation(nation.Id))
+                DetailRow("Wants out", $"{nation.LibertyDesire:P0}",
+                    Tr("What it wants this week is worked out from how large it has grown, whether " +
+                       "its overlord can govern itself, and whether that overlord is at war. At a " +
+                       "hundred per cent it simply leaves."),
+                    nation.LibertyDesire > 0.6f ? "state.negative" : "text.bright");
+        }
+
+        foreach (var subject in subjects.OrderByDescending(other => other.Population).Take(8))
+        {
+            var kind = SubjectCatalog.Of(subject.SubjectType);
+            var wants = nation.Id == _campaign.Player.Id || CanInspectNation(subject.Id)
+                ? $" · {Simulation.Loc.Format("wants out {0}", $"{subject.LibertyDesire:P0}")}"
+                : "";
+            DetailRow(subject.DisplayName, $"{kind?.Name ?? subject.SubjectType}{wants}",
+                kind?.Description ?? "",
+                subject.LibertyDesire > 0.6f ? "state.negative" : "text.bright");
+        }
+        if (subjects.Count > 8)
+            DetailRow("And", Simulation.Loc.Format("{0} more", $"{subjects.Count - 8:N0}"));
+    }
+
+    /// <summary>Let one go, or take it in - the two ends an arrangement has.</summary>
+    private void ReleaseSelectedSubject()
+    {
+        if (_campaign?.Player is null || _selectedNation is null) return;
+        if (_selectedNation.OverlordId != _campaign.Player.Id) return;
+        var name = _selectedNation.DisplayName;
+        SubjectSystem.Release(_campaign, _selectedNation);
+        _countryActionFeedback.Text = Simulation.Loc.Format("{0} answers to nobody now.", name);
+        Refresh();
+    }
+
+    private void IntegrateSelectedSubject()
+    {
+        if (_campaign?.Player is null || _selectedNation is null) return;
+        var name = _selectedNation.DisplayName;
+        if (!SubjectSystem.Annex(_campaign, _campaign.Player, _selectedNation, out var refusal))
+        {
+            _countryActionFeedback.Text = refusal;
+            return;
+        }
+        // The country it was is off the map now, so nothing may go on pointing at it.
+        _selectedNation = _campaign.Player;
+        _countryActionFeedback.Text = Simulation.Loc.Format("{0} is part of your country now.", name);
+        Refresh();
     }
 
     private void ShowCountryInteraction(Nation nation, string location)
@@ -68,7 +154,17 @@ public partial class DealOrForceGame
                 DetailRow(entry.Source, $"{entry.Value:+0;-0;0}");
         }
         if (war is not null) DetailRow("War score", $"{(war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
+        ShowDependencies(nation);
         _countryActions.Visible = nation != _campaign.Player;
+        _subjectActions.Visible = nation.OverlordId == _campaign.Player.Id;
+        if (_subjectActions.Visible)
+        {
+            var may = SubjectSystem.MayAnnex(_campaign, _campaign.Player, nation, out var why);
+            _integrateButton.Disabled = !may;
+            _integrateButton.TooltipText = Ui.Tip(may
+                ? Tr("Take it into your country. Its regions become yours.")
+                : why);
+        }
         if (!_countryActions.Visible) return;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
         _declareWarButton.Disabled = !canDeclare;
