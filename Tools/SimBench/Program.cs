@@ -94,6 +94,8 @@ public static class Program
             AnAllianceIsAskedForAndAnswered());
         failures += Check("the war the scenario is about opens with both armies on its front",
             TheFrontIsMannedOnTheFirstMorning());
+        failures += Check("an army answers to the situation, not to the day it started",
+            AnArmyAnswersToTheSituation());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -5856,6 +5858,24 @@ public static class Program
         }
         Console.WriteLine($"  alliances: {allied:N0} alliance(s), {guaranteed:N0} guarantee(s) and " +
                           $"{pacts:N0} non-aggression pact(s) stand in this world.");
+
+        // Who armed and who went home, which is the thing the establishment was added for.
+        var armed = 0;
+        var shrank = 0;
+        var biggest = 0f;
+        Nation armer = null;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.FoundingDivisions <= 0f) continue;
+            var ratio = nation.EstablishedDivisions / nation.FoundingDivisions;
+            if (ratio > 1.05f) armed++;
+            if (ratio < 0.95f) shrank++;
+            if (ratio > biggest) { biggest = ratio; armer = nation; }
+        }
+        Console.WriteLine(armed + shrank == 0
+            ? "  establishments: nobody's army moved from what they started with."
+            : $"  establishments: {armed:N0} country(ies) armed and {shrank:N0} stood down; " +
+              $"the furthest is {armer?.Tag} at {biggest:P0} of what it began with.");
         return "";
     }
 
@@ -5918,6 +5938,71 @@ public static class Program
                           $"{defenderPosted}/{ours} {defender.Tag} division(s) stand on the front " +
                           $"({war.AttackerFront.Count} and {war.DefenderFront.Count} province(s) of it) " +
                           "before a day is stepped.");
+        return "";
+    }
+
+    /// <summary>
+    /// A country arms when it has reason to, and sends men home when it has not.
+    ///
+    /// The rebuild used to aim at the army a country began the campaign with, with a ceiling
+    /// of exactly one, so nobody in the world could arm: Russia at war, Poland next door to
+    /// it and Ireland behind two seas all kept the army they had on the first morning. The
+    /// establishment follows the military budget now, and the budget already answers to war,
+    /// to a rival, to a neighbour's war and to what the treasury bears.
+    ///
+    /// Checked against the figures rather than against a campaign, because the point is the
+    /// shape of the answer: the same country, the same people, the same treasury, and only
+    /// the situation different.
+    /// </summary>
+    private static string AnArmyAnswersToTheSituation()
+    {
+        var campaign = Campaign.CreateBootstrap(20240501);
+        var nation = campaign.NationByTag("POL");
+        if (nation is null) return "";
+        var defines = campaign.Defines;
+
+        nation.FoundingDivisions = 40f;
+        nation.EstablishedDivisions = 40f;
+        nation.ManpowerReserve = 40f * MilitaryBootstrap.DivisionSize * 2f;
+
+        nation.MilitarySpending = defines.AiPeacetimeMilitarySpending;
+        var quiet = Attrition.Establishment(campaign, nation);
+        nation.MilitarySpending = defines.AiTenseMilitarySpending;
+        var tense = Attrition.Establishment(campaign, nation);
+        nation.MilitarySpending = defines.AiWartimeMilitarySpending;
+        var fighting = Attrition.Establishment(campaign, nation);
+
+        if (!(fighting > tense && tense > quiet))
+            return $"the same country wants {quiet:0.0} division(s) at peace, {tense:0.0} under " +
+                   $"threat and {fighting:0.0} at war - that is not an order";
+        if (fighting > 40f * defines.ArmyDemandCeiling + 0.01f)
+            return $"a country at war wants {fighting:0.0} division(s), over its own ceiling of " +
+                   $"{40f * defines.ArmyDemandCeiling:0.0}";
+        if (quiet < 40f * defines.ArmyDemandFloor - 0.01f)
+            return $"a country at peace wants {quiet:0.0} division(s), under its own floor";
+
+        // Men, not just money. The same wartime budget with an empty reserve buys less.
+        nation.MilitarySpending = defines.AiWartimeMilitarySpending;
+        nation.ManpowerReserve = 0f;
+        var empty = Attrition.Establishment(campaign, nation);
+        if (empty >= fighting)
+            return $"a country with nobody left to call up still wants {empty:0.0} division(s) " +
+                   $"against {fighting:0.0} with a full reserve";
+
+        // Two neighbours, same budget, same size, different armies - or every border in the
+        // world is a mirror.
+        var other = campaign.NationByTag("CZE");
+        if (other is null) return "";
+        other.FoundingDivisions = 40f;
+        other.EstablishedDivisions = 40f;
+        other.ManpowerReserve = nation.ManpowerReserve = 40f * MilitaryBootstrap.DivisionSize * 2f;
+        other.MilitarySpending = nation.MilitarySpending = defines.AiTenseMilitarySpending;
+        if (MathF.Abs(Attrition.Establishment(campaign, nation) -
+                      Attrition.Establishment(campaign, other)) < 0.01f)
+            return "two countries with the same budget want armies of exactly the same size";
+
+        Console.WriteLine($"  establishment: forty divisions become {quiet:0.0} at peace, {tense:0.0} " +
+                          $"under threat and {fighting:0.0} at war; {empty:0.0} with an empty reserve.");
         return "";
     }
 

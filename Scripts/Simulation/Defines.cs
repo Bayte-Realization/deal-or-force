@@ -206,6 +206,41 @@ public sealed class Defines
 	/// <summary>How much of its establishment a country rebuilds towards.</summary>
 	public float ArmyRebuildCeiling { get; set; } = 1.0f;
 
+	// ---- What army a country is trying to keep, and what moves it ----
+	//
+	// The establishment follows the military budget, because that budget already answers to
+	// the situation: war, a rival next door, a neighbour's war, and what the treasury bears.
+
+	/// <summary>
+	/// How much of a budget rise becomes army. One would mean tripling the budget triples
+	/// the army, which no state has managed; a little over a half is the historical shape.
+	/// </summary>
+	public float ArmyDemandElasticity { get; set; } = 0.55f;
+
+	/// <summary>How far below and above its founding army a country will go.</summary>
+	public float ArmyDemandFloor { get; set; } = 0.65f;
+
+	public float ArmyDemandCeiling { get; set; } = 2.2f;
+
+	/// <summary>How fast the establishment moves towards what the budget implies, per cycle.</summary>
+	public float ArmyEstablishmentDrift { get; set; } = 0.12f;
+
+	/// <summary>What an empty manpower reserve does to the establishment, and how fast a full one lifts it.</summary>
+	public float ArmyManpowerFloor { get; set; } = 0.55f;
+
+	public float ArmyManpowerWeight { get; set; } = 0.35f;
+
+	/// <summary>How much two countries with the same budget may still differ, and how long a habit lasts.</summary>
+	public float ArmyHabitSpread { get; set; } = 0.18f;
+
+	public int ArmyHabitSeasonDays { get; set; } = 365;
+
+	/// <summary>How far over its establishment a country goes before sending a formation home.</summary>
+	public float ArmyDisbandMargin { get; set; } = 1.12f;
+
+	/// <summary>And how much of a stood-down formation's people go back into the reserve.</summary>
+	public float ArmyStandDownReturn { get; set; } = 0.75f;
+
 	// --- statecraft ---
 
 	/// <summary>Notoriety earned by declaring a war nobody accepts a reason for.</summary>
@@ -743,6 +778,7 @@ public sealed class Defines
 	/// country can look for a friend beyond its own borders at all.
 	/// </summary>
 	public int AiGreatPowers { get; set; } = 12;
+
 
 	// ---- Economy: how a country governs itself between crises ----
 
