@@ -20,6 +20,19 @@ public sealed class CampaignEventOption
     /// <summary>Modifier ids this option attaches to the country, with optional durations.</summary>
     public (string Id, int Days)[] Modifiers { get; init; } = Array.Empty<(string, int)>();
 
+    /// <summary>
+    /// A country to declare war on when this option is taken, or zero for the usual case.
+    ///
+    /// Effects are numbers written against the country the event is for, which covers almost
+    /// everything an event wants to do and cannot express "and now fight THEM". A secession
+    /// is the case that needs it: the choice the player is being given is precisely whether
+    /// to start that war, so the war has to be reachable from the option.
+    ///
+    /// An id rather than a tag because tags are reused as countries come and go, and an int
+    /// on this class is carried by the save without anything being taught about it.
+    /// </summary>
+    public int DeclareWarOn { get; init; }
+
     /// <summary>Falls back to a generated summary when content shipped no prose.</summary>
     public string ConsequenceText => string.IsNullOrWhiteSpace(Consequence) ? Effect.Describe() : Consequence;
 }
@@ -395,6 +408,15 @@ public static class EventSystem
         var nation = campaign.NationById(item.NationId);
         option.Effect.Apply(campaign, nation);
         foreach (var (id, days) in option.Modifiers) ModifierSystem.Grant(campaign, nation, id, days);
+        if (option.DeclareWarOn != 0 && nation is not null)
+        {
+            // Refused, and unable to do anything about it - a truce, no shared border, no way
+            // to reach them - is an acceptance whatever the cabinet decided. Nothing is said
+            // here because the war itself is the message.
+            var target = campaign.NationById(option.DeclareWarOn);
+            if (target is not null)
+                CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id, -1, "secession");
+        }
         campaign.PendingEvents.Remove(item);
         campaign.MarkStrategicChange();
     }

@@ -3990,9 +3990,27 @@ public static class Program
                           $"({campaign.Nations.Count - before:N0} still on the list), {accepted:N0} let go and " +
                           $"{born.Count - accepted:N0} fought over; {core:N0} region(s) left for their people " +
                           $"and {joined:N0} went along for their own reasons.");
+        // What kind of revolt each one was, which is the thing a newborn country knows about
+        // itself and the only basis it has for a flag. A world where every secession comes
+        // back "discontent" means the core-finding is not distinguishing anything.
+        var kinds = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var report in born)
+        {
+            var kind = string.IsNullOrEmpty(report.Revolt) ? "(none)" : report.Revolt;
+            kinds[kind] = kinds.GetValueOrDefault(kind) + 1;
+            if (report.Seceded.FoundedInRevolt != report.Revolt)
+                return $"{report.Seceded.Tag} was founded in a '{report.Revolt}' revolt and " +
+                       $"remembers '{report.Seceded.FoundedInRevolt}'";
+        }
+        if (kinds.ContainsKey("(none)"))
+            return $"{kinds["(none)"]} of {born.Count} new countries do not know what founded them";
+        Console.WriteLine("    revolts: " + string.Join(", ",
+            kinds.OrderByDescending(entry => entry.Value).Select(entry => $"{entry.Key} {entry.Value}")));
+
         foreach (var report in born.Take(6))
             Console.WriteLine($"    {report.Parent.Tag} -> {report.Seceded.Tag} ({report.Seceded.Name}): " +
-                              $"{report.Regions} region(s), {report.Population:N0} people, {report.Reason}");
+                              $"{report.Regions} region(s), {report.Population:N0} people, " +
+                              $"{report.Revolt}, {report.Reason}");
         return "";
     }
 

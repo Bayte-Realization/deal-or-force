@@ -239,6 +239,18 @@ public sealed partial class Nation
     public int LastSecessionDay = -9999;
 
     /// <summary>
+    /// What kind of revolt founded this country, for the countries that were founded by one:
+    /// `national`, `sectarian`, `discontent`, or empty for a state that was always here.
+    ///
+    /// Kept because it is the only thing a country born last Tuesday knows about itself that
+    /// bears on what it should look like. A people that walked out has its own banner to
+    /// reach for; a bloc of angry provinces that share nothing but a grievance does not, and
+    /// the flag resolver needs to be told which of the two it is looking at rather than
+    /// guessing from a culture that may be nobody's in particular.
+    /// </summary>
+    public string FoundedInRevolt = "";
+
+    /// <summary>
     /// Who this country is for, when the scenario never said - which is every country the
     /// campaign founds rather than loads.
     ///

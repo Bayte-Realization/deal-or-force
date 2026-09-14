@@ -212,5 +212,20 @@
   // believes, is a better answer than nothing and usually the right one.
   //
   // Named `flag_<source>_<value>`: flag_culture_chechen, flag_ideology_communism.
-  "fallbacks": ["culture", "ideology", "government"]
+  //
+  // `revolt` only ever answers for a country a campaign created, and it says what kind of
+  // revolt founded it - `national`, `sectarian` or `discontent`. It sits after `culture`
+  // because a people that walked out has its own banner and that banner is always the
+  // better answer. It is here for the other case: the bloc of provinces that left over
+  // conditions rather than nationality, which shares nothing a flag could be drawn from.
+  //
+  //     flag_revolt_national.png
+  //     flag_revolt_sectarian.png
+  //     flag_revolt_discontent.png
+  //
+  // The game ships none of those three, deliberately. A banner for "a revolt in general" is
+  // not something any state has ever flown, so drawing one here would be inventing history
+  // rather than using it. The hook is declared because a mod that wants that look should
+  // not have to change code to get it.
+  "fallbacks": ["culture", "revolt", "ideology", "government"]
 }
