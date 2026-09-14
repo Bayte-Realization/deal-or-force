@@ -2042,7 +2042,32 @@ void fragment() {
         world.AddChild(_globeNode);
     }
 
-    private static Node3D CreateSpace(Node3D world)
+    /// <summary>
+    /// Whether the globe hangs in the sky the skin supplies or against flat `shell.space`.
+    ///
+    /// Two things have to agree before anything is drawn, and they are asking different
+    /// questions. `shell.space_texture` is the skin saying whether it HAS a sky - a mod that
+    /// wants a plain void sets it to zero, and no player setting should be able to hang a
+    /// photograph behind its globe anyway. This is the player saying whether to draw the one
+    /// that exists.
+    /// </summary>
+    public bool SpaceBackdropEnabled
+    {
+        get => _spaceBackdrop;
+        set
+        {
+            if (_spaceBackdrop == value) return;
+            _spaceBackdrop = value;
+            if (_spaceMaterial is not null)
+                _spaceMaterial.AlbedoTexture = value ? _spaceTexture : null;
+        }
+    }
+
+    private bool _spaceBackdrop = true;
+    private StandardMaterial3D _spaceMaterial;
+    private Texture2D _spaceTexture;
+
+    private Node3D CreateSpace(Node3D world)
     {
         var space = new SphereMesh
         {
@@ -2053,13 +2078,21 @@ void fragment() {
         };
         var material = new StandardMaterial3D
         {
-            AlbedoTexture = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_space_background",
-            "res://game/gfx/globe/globe_space_background.png")),
+            // Set below instead, from the field the player's setting toggles.
+            AlbedoTexture = null,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
             CullMode = BaseMaterial3D.CullModeEnum.Front,
             TextureFilter = BaseMaterial3D.TextureFilterEnum.LinearWithMipmapsAnisotropic
         };
         space.Material = material;
+        _spaceMaterial = material;
+        _spaceTexture = Simulation.InterfaceSkin.Metric("shell.space_texture", 0) > 0
+            ? GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_space_background",
+                "res://game/gfx/globe/globe_space_background.png"))
+            : null;
+        // Applied here as well as in the setter, so it does not matter whether the globe is
+        // built before the settings are read or after.
+        material.AlbedoTexture = _spaceBackdrop ? _spaceTexture : null;
         var node = new MeshInstance3D { Name = "SpaceBackground", Mesh = space };
         world.AddChild(node);
         return node;

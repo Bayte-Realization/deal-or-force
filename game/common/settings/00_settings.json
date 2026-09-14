@@ -77,6 +77,13 @@
     "description": "Rebuild country, region and terrain boundaries so the map has no visible texel grid. Off is the raster exactly as authored - pixels and all - and the cheaper picture on a slower machine.",
     "default": true
   },
+  "space_backdrop": {
+    "category": "interface", "order": 245, "kind": "toggle",
+    "name": "Stars behind the globe",
+    "description": "The photographed sky the world hangs in. Off leaves the flat colour behind it, which is quieter to look at and one less texture to hold.",
+    "default": true
+  },
+
   "projection": {
     "category": "interface", "order": 250, "kind": "choice",
     "name": "Map view",

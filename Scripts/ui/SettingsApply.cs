@@ -76,6 +76,11 @@ public partial class DealOrForceGame
                 if (_globe is not null) _globe.CountryLabelsEnabled = SettingsCatalog.Flag("region_names");
                 break;
 
+            case "space_backdrop":
+                if (_globe is not null)
+                    _globe.SpaceBackdropEnabled = SettingsCatalog.Flag("space_backdrop");
+                break;
+
             case "map_smoothing":
                 if (_globe is not null && _globe.MapSmoothing != SettingsCatalog.Flag("map_smoothing"))
                     ToggleMapSmoothing();
