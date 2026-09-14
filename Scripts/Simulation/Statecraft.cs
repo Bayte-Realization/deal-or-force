@@ -321,6 +321,23 @@ public static class Statecraft
             Candidates.Add(friendId);
         }
 
+        // Every dependency of the defender that is obliged to come, and the attacker's
+        // own, if the kind it is says it can be dragged into a war its overlord started.
+        // Checked here rather than in SubjectSystem because this is the list of everybody
+        // who answers a war, and a dependency answering one is not a special case.
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.OverlordId == 0) continue;
+            var kind = SubjectCatalog.Of(nation.SubjectType);
+            if (kind is null) continue;
+            var callable = nation.OverlordId == defender.Id
+                ? kind.JoinsWars
+                : nation.OverlordId == attacker.Id && kind.DraggedIntoWars;
+            if (!callable) continue;
+            if (nation.Id == attacker.Id || nation.Id == defender.Id) continue;
+            if (!Candidates.Contains(nation.Id)) Candidates.Add(nation.Id);
+        }
+
         // And the coalition, if the attacker is what it was formed about.
         var coalition = CoalitionAgainst(campaign, attacker.Id);
         if (coalition is not null)
