@@ -43,7 +43,7 @@
   "ARG": { "government": "federation", "ideology": "libertarianism" },
   "POL": { "government": "parliamentary_republic", "ideology": "conservatism" },
   "UKR": { "government": "presidential_republic", "ideology": "nationalism" },
-  "BLR": { "government": "presidential_republic", "ideology": "nationalism" },
+  "BLR": { "government": "presidential_republic", "ideology": "conservatism" },
   "KAZ": { "government": "presidential_republic", "ideology": "nationalism" },
   "UZB": { "government": "presidential_republic", "ideology": "nationalism" },
   "VNM": { "government": "one_party_state", "ideology": "socialism" },
