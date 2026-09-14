@@ -500,3 +500,12 @@ For further information |
 | `flag_svn_communism.png` | [Flag of the Socialist Republic of Slovenia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovenia_(1945%E2%80%931991).svg) | Public domain | No machine-readable author provided. Zscout370 assumed (base |
 | `flag_culture_tuareg.png` | [MNLA flag.svg](https://commons.wikimedia.org/wiki/File:MNLA_flag.svg) | Public domain | Orionist |
 | `flag_formable_iberia_greater.png` | [Flag of the Hispanicity.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Hispanicity.svg) | CC BY-SA 3.0 | Rastrojo |
+| `flag_bdi_absolute_monarchy.png` | [Flag of Burundi (1962-1966).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Burundi_(1962%E2%80%931966).svg) | Public domain | Orange Tuesday (talk) |
+| `flag_hti_one_party_state.png` | [Flag of Haiti (1964-1986).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Haiti_(1964%E2%80%931986).svg) | Public domain | B1mbo
+
+Coat of arms :Lokal_Profil and Myriam Thyes |
+| `flag_lka_traditionalism.png` | [Flag of Ceylon (1951-1972).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ceylon_(1951%E2%80%931972).svg) | Public domain | Thommy |
+| `flag_mwi_nationalism.png` | [Flag of Malawi (2010-2012).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Malawi_(2010%E2%80%932012).svg) | Public domain | Fornax, Zscout370, Phlegmatic |
+| `flag_omn_absolute_monarchy.png` | [Flag of Muscat.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Muscat.svg) | Public domain | Wikimedia Commons |
+| `flag_sdn_traditionalism.png` | [Flag of Sudan (1956-1970).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sudan_(1956%E2%80%931970).svg) | Public domain | Mysid |
+| `flag_tza_traditionalism.png` | [Flag of Tanganyika (1961-1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tanganyika_(1961%E2%80%931964).svg) | CC BY-SA 3.0 | Mysid |
