@@ -52,10 +52,11 @@ public sealed class DlcPackage
     public string PhysicalRoot { get; init; } = "";
     public string VirtualRoot { get; init; } = "";
     public bool Owned { get; set; }
+    public bool Enabled { get; set; } = true;
     public List<string> Errors { get; } = new();
 
     /// <summary>Content only counts if it is owned; a locked pack is listed and not read.</summary>
-    public bool Active => Owned && Errors.Count == 0;
+    public bool Active => Owned && Enabled && Errors.Count == 0;
 }
 
 /// <summary>
@@ -143,7 +144,7 @@ public sealed class DlcLoader
 
     public string StatusLine => _packages.Count == 0
         ? ""
-        : $"{OwnedCount} of {_packages.Count} content pack(s) active";
+        : $"{Active.Count()} of {_packages.Count} content pack(s) active";
 
     /// <summary>
     /// What the packs together amount to, for multiplayer to compare.
@@ -169,22 +170,21 @@ public sealed class DlcLoader
             DiscoverRoot(root, "res://dlc", found);
         DiscoverRoot(ProjectSettings.GlobalizePath("user://dlc"), "user://dlc", found);
 
-        foreach (var package in found.Values)
-            package.Owned = DlcEntitlements.Has(package.Manifest.Entitlement);
-
-        // A pack written against another pack the player does not own is not half-loaded.
+        var selection = LauncherSelection.Read();
         foreach (var package in found.Values)
         {
-            var missing = package.Manifest.Requires
-                .Where(id => !found.TryGetValue(id, out var other) || !other.Owned)
-                .ToArray();
-            if (missing.Length == 0) continue;
-            package.Errors.Add($"Requires content not present: {string.Join(", ", missing)}");
+            package.Owned = DlcEntitlements.Has(package.Manifest.Entitlement);
+            package.Enabled = selection.IsEnabled(package.Manifest.Id, true);
+            if (!package.Enabled) package.Errors.Add("Disabled in launcher");
         }
-
-        _packages.AddRange(found.Values
+        var ordered = found.Values
             .OrderBy(package => package.Manifest.LoadOrder)
-            .ThenBy(package => package.Manifest.Id, StringComparer.OrdinalIgnoreCase));
+            .ThenBy(package => package.Manifest.Id, StringComparer.OrdinalIgnoreCase).ToList();
+        var activeIds = ContentDependencies.Resolve(ordered.Select(p => new ContentRequirement(
+            p.Manifest.Id, p.Owned && p.Enabled, p.Manifest.Requires ?? new())), out var dependencyErrors);
+        foreach (var error in dependencyErrors) found[error.Key].Errors.Add(error.Value);
+        _packages.AddRange(activeIds.Select(id => found[id]));
+        _packages.AddRange(ordered.Where(p => !_packages.Contains(p)));
     }
 
     private void DiscoverRoot(string physicalRoot, string virtualRoot, Dictionary<string, DlcPackage> found)

@@ -34,6 +34,9 @@ public partial class DealOrForceGame
     private void ShowCountryInteraction(Nation nation, string location)
     {
         if (nation is null || _campaign?.Player is null) return;
+        PrepareDossierTabs("Diplomacy");
+        ApplyDossierTab();
+        ClearDetail();
         _selectedNation = nation;
         _sideTitle.Text = nation.DisplayName;
         var relation = nation == _campaign.Player ? null : CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, nation.Id);
@@ -41,28 +44,30 @@ public partial class DealOrForceGame
         // number the player has no way to act on: "they dislike you" is not a fact you can
         // do anything with, and "they have not forgotten the war, and the trade agreement
         // is not making up for it" is.
-        var relationText = relation is null
-            ? "Your country"
-            : $"Relations: {relation.Opinion:+0;-0;0} · {relation.Stance}";
-        if (relation is not null && relation.OpinionDrivers.HasEntries)
-            foreach (var entry in relation.OpinionDrivers.Entries
-                         .OrderByDescending(item => System.Math.Abs(item.Value))
-                         .Take(5))
-                relationText += $"\n    {entry.Source}  {entry.Value:+0;-0;0}";
         var war = nation == _campaign.Player ? null : _campaign.Wars.Find(candidate =>
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
-        _sideBody.Text =
-            Simulation.Loc.Format("{0} ({1})\n{2}\n\nCapital: {3}\n",
-                nation.DisplayName, nation.Tag, location, nation.CapitalName) +
-            (CanInspectNation(nation.Id)
-                ? Simulation.Loc.Format("Population: {0:N0}\nGDP: ${1:0.00}B\nTreasury: ${2:0.00}B\n\n",
-                    nation.Population, nation.Gdp, nation.Treasury)
-                : Tr("Internal statistics: unknown (fog of war).\n\n")) +
-            relationText +
-            (war is null
-                ? ""
-                : Simulation.Loc.Format("\nAt war · score {0:+0.0;-0.0;0.0}",
-                    war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore));
+        _sideBody.Text = Tr(location);
+        DetailHeading("COUNTRY");
+        DetailRow("Capital", nation.CapitalName);
+        DetailRow("Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name));
+        if (CanInspectNation(nation.Id))
+        {
+            DetailRow("Population", Fmt.People(nation.Population));
+            DetailRow("GDP", Fmt.Money(nation.Gdp));
+            DetailRow("Treasury", Fmt.Money(nation.Treasury));
+        }
+        else DetailRow("Intelligence", Tr("Unknown (fog of war)"));
+        DetailHeading("RELATIONS");
+        if (relation is null) DetailRow("Status", Tr("Your country"));
+        else
+        {
+            DetailRow("Opinion", $"{relation.Opinion:+0;-0;0}", Tr("How this government regards you."),
+                relation.Opinion < 0 ? "state.negative" : "state.positive", () => relation.OpinionDrivers);
+            DetailRow("Stance", Tr(relation.Stance.ToString()));
+            foreach (var entry in relation.OpinionDrivers.Entries.OrderByDescending(item => System.Math.Abs(item.Value)).Take(5))
+                DetailRow(entry.Source, $"{entry.Value:+0;-0;0}");
+        }
+        if (war is not null) DetailRow("War score", $"{(war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
         _countryActions.Visible = nation != _campaign.Player;
         if (!_countryActions.Visible) return;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);

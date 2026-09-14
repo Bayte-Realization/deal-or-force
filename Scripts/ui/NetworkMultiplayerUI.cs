@@ -17,7 +17,15 @@ public partial class DealOrForceGame
     private PanelContainer _networkHud = null!;
     private Label _networkHudStatus = null!;
     private Label _networkStatus = null!;
-    private Label _networkRoster = null!;
+    private VBoxContainer _networkRoster = null!;
+    private VBoxContainer _networkCountries = null!;
+    private LineEdit _networkSearch = null!;
+    private Label _networkSelection = null!;
+    private Button _networkReady = null!;
+    private Button _networkHost = null!;
+    private Button _networkJoin = null!;
+    private readonly Dictionary<long, string> _networkNames = new();
+    private readonly HashSet<long> _networkReadyPeers = new();
     private LineEdit _networkAddress = null!;
     private LineEdit _networkPort = null!;
     private LineEdit _networkPlayerName = null!;
@@ -80,45 +88,85 @@ public partial class DealOrForceGame
 
         _networkLayer = FullLayer("NetworkMultiplayer");
         _networkLayer.Visible = false;
-        _networkLayer.MouseFilter = MouseFilterEnum.Stop;
+        _networkLayer.MouseFilter = MouseFilterEnum.Ignore;
         AddChild(_networkLayer);
-        var shade = new ColorRect { Color = new Color(0.01f, 0.016f, 0.026f, 0.90f), MouseFilter = MouseFilterEnum.Stop };
-        shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _networkLayer.AddChild(shade);
         var panel = TexturedPanel(_networkLayer);
-        Ui.Place(panel, "modal.multiplayer");
-        var rows = PanelRows(panel, 26, 22, 10);
-        rows.AddChild(Title("MULTIPLAYER · LAN / DIRECT IP", 26, Ui.Colour("text.accent")));
+        panel.AddThemeStyleboxOverride("panel", ShellPanelStyle());
+        Ui.Place(panel, "multiplayer.connection");
+        var outer = PanelRows(panel, 16, 16, 8);
+        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        outer.AddChild(scroll);
+        var rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        rows.AddThemeConstantOverride("separation", 8);
+        scroll.AddChild(rows);
+        rows.AddChild(Title("MULTIPLAYER", 24, Ui.Colour("text.accent")));
         var explanation = Title("Host an authoritative campaign or join by IPv4 address. Radmin/Hamachi work as a virtual LAN: enter the host's VPN IPv4 address.", 13, Ui.Colour("text.muted"));
         explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(explanation);
 
-        _networkPlayerName = NetworkField("Player name", "Player");
+        rows.AddChild(Title("1 · Connect", 16, Ui.Colour("text.accent")));
+        rows.AddChild(Title("Player name", 12, Ui.Colour("text.caption")));
+        _networkPlayerName = NetworkField(Tr("Player name"), "Player");
+        _networkPlayerName.MaxLength = 32;
         rows.AddChild(_networkPlayerName);
         _networkCountryTag = NetworkField("Country tag", "KOR");
-        _networkCountryTag.MaxLength = 3;
+        _networkCountryTag.Visible = false;
         rows.AddChild(_networkCountryTag);
+        rows.AddChild(Title("Host address · LAN / VPN / Internet", 12, Ui.Colour("text.caption")));
         _networkAddress = NetworkField("Host IPv4", "127.0.0.1");
         rows.AddChild(_networkAddress);
+        rows.AddChild(Title("UDP port · must match the host", 12, Ui.Colour("text.caption")));
         _networkPort = NetworkField("UDP port", DefaultNetworkPort.ToString());
         rows.AddChild(_networkPort);
 
         var connection = new HBoxContainer();
         connection.AddThemeConstantOverride("separation", 8);
         rows.AddChild(connection);
-        connection.AddChild(ActionButton("HOST", HostNetworkGame, 245, 42, true));
-        connection.AddChild(ActionButton("JOIN", JoinNetworkGame, 245, 42));
+        _networkHost = ActionButton("Create lobby", HostNetworkGame, 0, 38, true);
+        _networkJoin = ActionButton("Join lobby", JoinNetworkGame, 0, 38);
+        _networkHost.Name = "LobbyHost";
+        _networkJoin.Name = "LobbyJoin";
+        _networkHost.SizeFlagsHorizontal = _networkJoin.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        connection.AddChild(_networkHost);
+        connection.AddChild(_networkJoin);
 
         _networkStart = ActionButton("START CAMPAIGN", StartHostedNetworkCampaign, 0, 44, true);
         _networkStart.Disabled = true;
+        _networkReady = ActionButton("Ready", ToggleNetworkReady, 0, 38);
+        _networkReady.Name = "LobbyReady";
+        _networkStart.Name = "LobbyStart";
+        rows.AddChild(_networkReady);
         rows.AddChild(_networkStart);
         _networkStatus = Title("Not connected.", 13, Ui.Colour("text.body_soft"));
         _networkStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_networkStatus);
-        _networkRoster = Title("", 12, Ui.Colour("text.hint"));
-        _networkRoster.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(Title("3 · Players and countries", 16, Ui.Colour("text.accent")));
+        _networkRoster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         rows.AddChild(_networkRoster);
         rows.AddChild(ActionButton("DISCONNECT / BACK", CloseNetworkMultiplayer, 0, 36));
+        var help = Title("UDP must be allowed through Windows Firewall. Internet play also requires UDP port forwarding; virtual LAN normally does not.", 11, Ui.Colour("text.muted"));
+        help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(help);
+
+        var countryPanel = TexturedPanel(_networkLayer);
+        countryPanel.AddThemeStyleboxOverride("panel", ShellPanelStyle());
+        Ui.Place(countryPanel, "multiplayer.countries");
+        var countryRows = PanelRows(countryPanel, 16, 16, 8);
+        countryRows.AddChild(Title("2 · Choose your country", 18, Ui.Colour("text.accent")));
+        var mapHelp = Title("Click a country on the globe, or search below. Drag to rotate; scroll to zoom.", 12, Ui.Colour("text.muted"));
+        mapHelp.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        countryRows.AddChild(mapHelp);
+        _networkSelection = Title("", 16, Ui.Colour("text.accent"));
+        _networkSelection.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        countryRows.AddChild(_networkSelection);
+        _networkSearch = NetworkField(Tr("Country name or tag"), "");
+        _networkSearch.Name = "LobbyCountrySearch";
+        _networkSearch.TextChanged += _ => RenderNetworkCountries();
+        countryRows.AddChild(_networkSearch);
+        var countryScroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        countryRows.AddChild(countryScroll);
+        _networkCountries = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        countryScroll.AddChild(_networkCountries);
 
         Multiplayer.PeerConnected += OnNetworkPeerConnected;
         Multiplayer.PeerDisconnected += OnNetworkPeerDisconnected;
@@ -143,8 +191,9 @@ public partial class DealOrForceGame
         _hudLayer.Visible = false;
         _networkLayer.Visible = true;
         _networkCountryTag.Text = _campaign.Player?.Tag ?? "KOR";
-        _networkStatus.Text = Tr("Choose a unique country tag, then host or join.");
-        _networkRoster.Text = Tr("UDP must be allowed through Windows Firewall. Internet play also requires UDP port forwarding; virtual LAN normally does not.");
+        _globe.CountrySelectionOnly = true;
+        _networkStatus.Text = Tr("Choose a country on the map, then create or join a lobby.");
+        RenderNetworkLobby();
     }
 
     private int RequestedNetworkPort() => int.TryParse(_networkPort.Text.Trim(), out var port)
@@ -152,6 +201,7 @@ public partial class DealOrForceGame
 
     private void HostNetworkGame()
     {
+        if (!ValidateNetworkPort()) return;
         ShutdownNetworkPeer();
         var nation = RequestedNetworkNation();
         if (nation is null)
@@ -174,6 +224,8 @@ public partial class DealOrForceGame
         _networkGameStarted = false;
         _networkLocalNationId = nation.Id;
         _networkPeerNations[1] = nation.Id;
+        _networkNames[1] = NetworkPlayerName();
+        PlayStrategicCue("network_connected");
         _networkStart.Disabled = true;
         _networkStatus.Text = Simulation.Loc.Format("Hosting on UDP {0}. Share this machine's LAN/Radmin IPv4 address.", RequestedNetworkPort());
         RefreshNetworkRoster();
@@ -181,6 +233,7 @@ public partial class DealOrForceGame
 
     private void JoinNetworkGame()
     {
+        if (!ValidateNetworkPort()) return;
         ShutdownNetworkPeer();
         if (RequestedNetworkNation() is null)
         {
@@ -203,6 +256,7 @@ public partial class DealOrForceGame
         _networkConnected = false;
         _networkGameStarted = false;
         _networkStatus.Text = Simulation.Loc.Format("Connecting to {0}:{1}…", address, RequestedNetworkPort());
+        RenderNetworkLobby();
     }
 
     private Nation RequestedNetworkNation()
@@ -214,6 +268,7 @@ public partial class DealOrForceGame
     private void OnConnectedToNetworkServer()
     {
         _networkConnected = true;
+        PlayStrategicCue("network_connected");
         var nation = RequestedNetworkNation();
         RpcId(1, nameof(ServerRegisterNetworkPlayer), _networkPlayerName.Text.Trim(), nation?.Tag ?? "");
         _networkStatus.Text = Tr("Connected. Waiting for the host to start the campaign.");
@@ -221,12 +276,14 @@ public partial class DealOrForceGame
 
     private void OnNetworkConnectionFailed()
     {
+        PlayStrategicCue("action_denied");
         _networkStatus.Text = Tr("Connection failed. Check IPv4 address, UDP port and firewall.");
         ShutdownNetworkPeer();
     }
 
     private void OnNetworkServerDisconnected()
     {
+        PlayStrategicCue("network_disconnected");
         _networkStatus.Text = Tr("Host disconnected.");
         ShutdownNetworkPeer();
         _networkLayer.Visible = true;
@@ -242,6 +299,9 @@ public partial class DealOrForceGame
     {
         if (!_networkIsHost) return;
         _networkPeerNations.Remove(peerId);
+        _networkNames.Remove(peerId);
+        _networkReadyPeers.Clear();
+        _networkRosterRevision++;
         RefreshNetworkRoster();
     }
 
@@ -250,13 +310,29 @@ public partial class DealOrForceGame
     {
         if (!_networkIsHost) return;
         var peerId = Multiplayer.GetRemoteSenderId();
+        if (_networkGameStarted && _networkPeerNations.ContainsKey(peerId))
+        {
+            RpcId(peerId, nameof(ClientNetworkLobbyRefusal), "This campaign has already started.");
+            return;
+        }
         var requested = _campaign.NationByTag(requestedTag);
-        var used = _networkPeerNations.Values.ToHashSet();
-        var assigned = requested is not null && !used.Contains(requested.Id)
-            ? requested
-            : _campaign.Nations.Where(nation => !used.Contains(nation.Id)).OrderByDescending(nation => nation.Gdp).FirstOrDefault();
-        if (assigned is null) return;
+        if (requested is null || _networkPeerNations.Any(pair => pair.Key != peerId && pair.Value == requested.Id))
+        {
+            RpcId(peerId, nameof(ClientNetworkLobbyRefusal), "That country is occupied. Choose another country.");
+            RefreshNetworkRoster();
+            return;
+        }
+        var assigned = requested;
+        if (_networkPeerNations.TryGetValue(peerId, out var previous) && previous == assigned.Id)
+        {
+            RpcId(peerId, nameof(ClientAssignedNetworkNation), assigned.Tag);
+            RefreshNetworkRoster();
+            return;
+        }
         _networkPeerNations[peerId] = assigned.Id;
+        _networkNames[peerId] = string.IsNullOrWhiteSpace(playerName) ? $"Player {peerId}" : playerName.Trim()[..Math.Min(32, playerName.Trim().Length)];
+        _networkReadyPeers.Clear();
+        _networkRosterRevision++;
         RpcId(peerId, nameof(ClientAssignedNetworkNation), assigned.Tag);
         var joiner = string.IsNullOrWhiteSpace(playerName)
             ? Simulation.Loc.Format("Peer {0}", peerId)
@@ -278,32 +354,35 @@ public partial class DealOrForceGame
         var nation = _campaign.NationByTag(tag);
         _networkLocalNationId = nation?.Id ?? -1;
         _networkCountryTag.Text = tag;
+        PlayStrategicCue("country_selected");
         _networkStatus.Text = Simulation.Loc.Format("Registered as {0}. Waiting for host.", tag);
+        RenderNetworkLobby();
     }
 
     private void RefreshNetworkRoster()
     {
         if (!_networkIsHost) return;
-        var rows = _networkPeerNations.OrderBy(pair => pair.Key).Select(pair =>
-        {
-            var nation = _campaign.NationById(pair.Value);
-            return Simulation.Loc.Format("Peer {0}: {1} · {2}",
-                pair.Key, nation?.Tag ?? "?", nation?.Name ?? Tr("Unknown"));
-        });
-        _networkRoster.Text = Tr("PLAYERS") + "\n" + string.Join("\n", rows);
-        _networkStart.Disabled = _networkPeerNations.Count < 2;
+        RenderNetworkLobby();
+        var ids = _networkPeerNations.Keys.OrderBy(id => id).ToArray();
+        Rpc(nameof(ClientReceiveNetworkRoster), ids,
+            ids.Select(id => _networkPeerNations[id]).ToArray(),
+            ids.Select(id => _networkNames.GetValueOrDefault(id, $"Player {id}")).ToArray(),
+            ids.Select(id => _networkReadyPeers.Contains(id) ? 1 : 0).ToArray(), _networkRosterRevision);
     }
 
     private void StartHostedNetworkCampaign()
     {
-        if (!_networkIsHost || _networkPeerNations.Count < 2) return;
+        if (!_networkIsHost || _networkGameStarted || _networkPeerNations.Count < 2 ||
+            !_networkPeerNations.Keys.All(id => _networkReadyPeers.Contains(id))) return;
         _campaign.ConfigureSinglePlayer(_networkLocalNationId);
         foreach (var nationId in _networkPeerNations.Values.Where(id => id != _networkLocalNationId).Distinct())
             _campaign.AddHumanSeat(nationId);
         _networkGameStarted = true;
         AttachNetworkCommandTransport();
+        _globe.CountrySelectionOnly = false;
         _networkLayer.Visible = false;
         BeginSession();
+        PlayStrategicCue("campaign_start");
         UpdateNetworkHud();
         foreach (var peerId in _networkPeerNations.Keys.Where(id => id != 1).ToArray()) SendNetworkSnapshot(peerId);
     }
@@ -325,9 +404,12 @@ public partial class DealOrForceGame
             _networkStatus.Text = result.Warning;
             return;
         }
+        var firstStart = !_networkGameStarted;
         AdoptNetworkCampaign(result.Campaign);
+        _globe.CountrySelectionOnly = false;
         _networkGameStarted = true;
         _networkLayer.Visible = false;
+        if (firstStart) PlayStrategicCue("campaign_start");
         _menuLayer.Visible = false;
         _pickerLayer.Visible = false;
         _pauseMenuLayer.Visible = false;
@@ -585,8 +667,10 @@ public partial class DealOrForceGame
 
     private void CloseNetworkMultiplayer()
     {
+        if (_networkConnected) PlayStrategicCue("network_disconnected");
         ShutdownNetworkPeer();
         _networkLayer.Visible = false;
+        _globe.CountrySelectionOnly = false;
         ShowMainMenu();
     }
 
@@ -597,6 +681,8 @@ public partial class DealOrForceGame
         _networkPeer = null;
         Multiplayer.MultiplayerPeer = null;
         _networkPeerNations.Clear();
+        _networkNames.Clear();
+        _networkReadyPeers.Clear();
         _networkDeferred.Clear();
         _networkIsHost = false;
         _networkConnected = false;
@@ -604,5 +690,6 @@ public partial class DealOrForceGame
         _networkLocalNationId = -1;
         if (_networkHud is not null) _networkHud.Visible = false;
         if (_networkStart is not null) _networkStart.Disabled = true;
+        if (_networkCountries is not null) RenderNetworkLobby();
     }
 }

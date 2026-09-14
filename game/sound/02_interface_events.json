@@ -1,0 +1,95 @@
+{
+  "channels": {
+    "notification": {
+      "volume_db": -10,
+      "priority": 1
+    }
+  },
+  "cues": {
+    "country_selected": {
+      "file": "audio/interface/country_selected.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 180
+    },
+    "network_connected": {
+      "file": "audio/interface/network_connected.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "network_disconnected": {
+      "file": "audio/interface/network_disconnected.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "player_ready": {
+      "file": "audio/interface/player_ready.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "player_not_ready": {
+      "file": "audio/interface/player_not_ready.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "action_denied": {
+      "file": "audio/interface/action_denied.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "campaign_start": {
+      "file": "audio/interface/campaign_start.wav",
+      "channel": "notification",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "game_pause": {
+      "file": "audio/interface/game_pause.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "game_resume": {
+      "file": "audio/interface/game_resume.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "construction_queued": {
+      "file": "audio/interface/construction_queued.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "construction_complete": {
+      "file": "audio/interface/construction_complete.wav",
+      "channel": "notification",
+      "volume_db": 0,
+      "cooldown_ms": 3000,
+      "yields_to_anything_playing": true
+    },
+    "policy_changed": {
+      "file": "audio/interface/policy_changed.wav",
+      "channel": "notification",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    },
+    "nation_formed": {
+      "file": "audio/interface/nation_formed.wav",
+      "channel": "strategic",
+      "volume_db": -2,
+      "cooldown_ms": 500
+    },
+    "save_complete": {
+      "file": "audio/interface/save_complete.wav",
+      "channel": "interface",
+      "volume_db": 0,
+      "cooldown_ms": 500
+    }
+  }
+}

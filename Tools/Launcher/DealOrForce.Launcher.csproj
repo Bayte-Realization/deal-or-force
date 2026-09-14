@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Deal or Force Launcher</AssemblyName>
+    <ApplicationIcon>../../icon.ico</ApplicationIcon>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Scripts/Modding/ContentSelection.cs" Link="ContentSelection.cs" />
+    <Resource Include="../../game/gfx/interface/brand_logo_banner.png" Link="Brand.png" />
+    <Resource Include="../../icon.ico" Link="App.ico" />
+  </ItemGroup>
+</Project>

@@ -183,6 +183,8 @@ public static class Program
             GovernmentsChangeWithoutBeingTold());
         failures += Check("a second campaign in one session starts in the authored world",
             ASecondCampaignGetsTheMapToo());
+        failures += Check("every state a country can proclaim itself is one it could reach",
+            FormableStatesNameRealThings(campaign));
         if (mapped)
             failures += Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
         failures += Check("every explained number adds up to what the screen shows",
@@ -2695,6 +2697,87 @@ public static class Program
     ///   topology's own arrays, so a second campaign handed it unchanged would open with the
     ///   first campaign's conquests already made.
     /// </summary>
+    /// <summary>
+    /// The states a country can proclaim itself.
+    ///
+    /// Each is a few lines of data naming country tags, ideology ids, government ids and a
+    /// colour, and not one of those is checked by anything. A tag that does not exist does
+    /// not throw - it silently contributes no territory, which makes the state either
+    /// impossible or far too easy to proclaim, and nothing would ever say which.
+    /// </summary>
+    private static string FormableStatesNameRealThings(Campaign campaign)
+    {
+        FormableNations.ResetCatalog();
+        var all = FormableNations.All.ToList();
+        if (all.Count == 0) return "common/formable_nations declares nothing at all";
+
+        var tags = new HashSet<string>(campaign.Nations.Select(nation => nation.Tag),
+            StringComparer.OrdinalIgnoreCase);
+
+        var conditioned = 0;
+        var coloured = 0;
+        long largest = 0;
+        FormableNation biggest = null;
+        foreach (var formable in all)
+        {
+            foreach (var tag in formable.EligibleTags)
+                if (!tags.Contains(tag))
+                    return $"'{formable.Id}' may be proclaimed by {tag}, which is not a country";
+            foreach (var tag in formable.RequiredTags)
+                if (!tags.Contains(tag))
+                    return $"'{formable.Id}' wants the territory of {tag}, which is not a country";
+            foreach (var id in formable.RequiredIdeology)
+                if (!IdeologyCatalog.Knows(id))
+                    return $"'{formable.Id}' requires the ideology '{id}', which nothing declares";
+            foreach (var id in formable.RequiredGovernment)
+                if (!GovernmentCatalog.Knows(id))
+                    return $"'{formable.Id}' requires the government '{id}', which nothing declares";
+
+            // Whoever may proclaim it must be among those whose ground it wants, or it is a
+            // claim on somebody else rather than a union - which this mechanic does not do,
+            // because it grants no territory.
+            if (formable.RequiredTags.Length > 0 &&
+                !formable.EligibleTags.Any(tag => formable.RequiredTags.Contains(tag, StringComparer.OrdinalIgnoreCase)))
+                return $"nobody who may proclaim '{formable.Id}' is part of it, so it could only " +
+                       "ever be declared over other people's ground";
+
+            if (formable.Colour.Length > 0)
+            {
+                coloured++;
+                if (!formable.Colour.StartsWith("#", StringComparison.Ordinal) || formable.Colour.Length != 7)
+                    return $"'{formable.Id}' paints itself '{formable.Colour}', which is not a colour";
+            }
+            if (formable.RequiredIdeology.Length > 0 || formable.RequiredGovernment.Length > 0)
+                conditioned++;
+
+            long people = 0;
+            foreach (var tag in formable.RequiredTags)
+                people += campaign.NationByTag(tag)?.Population ?? 0;
+            if (people > largest) { largest = people; biggest = formable; }
+        }
+
+        // And one of them, evaluated for real, has to produce requirements a player could
+        // read - the whole path from data to panel, rather than the data alone.
+        var korea = FormableNations.Find("united_korea");
+        var founder = campaign.NationByTag("KOR");
+        if (korea is not null && founder is not null)
+        {
+            var status = FormableNations.Evaluate(campaign, founder, korea);
+            if (status.Requirements.Length == 0)
+                return "united_korea evaluated to no requirements at all";
+            if (status.CanForm)
+                return "Korea could proclaim a united Korea on day one without holding the North";
+            foreach (var requirement in status.Requirements)
+                if (string.IsNullOrWhiteSpace(requirement.Label))
+                    return "a requirement was shown to the player with no words in it";
+        }
+
+        Console.WriteLine($"  formable states: {all.Count:N0} declared, {conditioned:N0} of them " +
+                          $"asking for a particular politics and {coloured:N0} painting themselves; " +
+                          $"the largest is {biggest?.Name} at {largest:N0} people.");
+        return "";
+    }
+
     private static string ASecondCampaignGetsTheMapToo()
     {
         MapRasterCatalog.ResetCatalog();

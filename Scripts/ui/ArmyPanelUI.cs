@@ -189,6 +189,10 @@ public partial class DealOrForceGame
             11, Ui.Colour("text.muted"));
         _drawFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         plansPage.AddChild(_drawFeedback);
+        var steps = Title("1. Select divisions → Front: choose a border.\n2. Attack: right-drag the objective in the target country.\n3. Execute: advance. Prepare: stop. Alt + right-drag: redraw.",
+            12, Ui.Colour("text.caption"));
+        steps.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        plansPage.AddChild(steps);
 
         // ---- posture and reinforcement -------------------------------------------------
         doctrinePage.AddChild(Title("POSTURE", 11, Ui.Colour("text.caption")));

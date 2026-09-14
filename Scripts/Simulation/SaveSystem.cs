@@ -58,6 +58,54 @@ public static class SaveSystem
 
     private static readonly JsonSerializerOptions MetadataOptions = new(JsonOptions) { WriteIndented = true };
 
+    /// <summary>Independent, readable scenario; no contemporary bootstrap is used on import.</summary>
+    public static string ExportScenarioJson(Campaign campaign, string scenarioId)
+    {
+        if (campaign.ProvinceMap is null) throw new InvalidOperationException("Wait for the map to finish loading.");
+        var payload = CampaignSave.Capture(campaign, "");
+        payload.ScenarioId = scenarioId;
+        payload.ScenarioRules = campaign.Defines;
+        // Keep the clock origin: orders, cooldowns and event dates refer to elapsed days.
+        payload.IsPaused = true;
+        payload.History.Clear();
+        payload.ScenarioTerritories = campaign.Nations.ToDictionary(n => n.Tag, n =>
+            Enumerable.Range(1, campaign.ProvinceMap.ProvinceCount).Where(p => payload.ProvinceOwner[p] == n.MapIndex).ToArray());
+        return JsonSerializer.Serialize(payload, MetadataOptions);
+    }
+
+    public static Campaign ImportScenarioJson(string json, string scenarioId, int expectedProvinceCount = 0)
+    {
+        var payload = JsonSerializer.Deserialize<CampaignSave>(json, JsonOptions) ?? throw new InvalidDataException("Empty scenario.");
+        if (payload.FormatVersion != FormatVersion || payload.MapDataVersion != MapDataVersion || payload.ProvinceCount <= 0 ||
+            (expectedProvinceCount > 0 && payload.ProvinceCount != expectedProvinceCount) ||
+            payload.ProvinceOwner.Length != payload.ProvinceCount + 1 ||
+            payload.ProvinceState.Length != payload.ProvinceCount + 1 ||
+            payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
+            payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)
+            throw new InvalidDataException("Scenario requires a complete political layer for the current map.");
+        _ = new DateTime(payload.Date.Year, payload.Date.Month, payload.Date.Day);
+        if (payload.Nations.Count == 0 || !payload.Nations.Any(n => n.Id == payload.PlayerId) ||
+            payload.Nations.Select(n => n.Id).Distinct().Count() != payload.Nations.Count ||
+            payload.Nations.Select(n => n.MapIndex).Distinct().Count() != payload.Nations.Count ||
+            payload.Nations.Select(n => n.Tag).Distinct(StringComparer.OrdinalIgnoreCase).Count() != payload.Nations.Count ||
+            payload.Nations.Any(n => n.MapIndex <= 0 || n.MapIndex > ushort.MaxValue))
+            throw new InvalidDataException("Invalid country IDs, tags or player in scenario.");
+        var owners = payload.Nations.Select(n => n.MapIndex).Append(0).ToHashSet();
+        var states = payload.States.Select(s => s.MapIndex).Append(0).ToHashSet();
+        if (payload.States.Select(s => s.Id).Distinct().Count() != payload.States.Count ||
+            states.Count != payload.States.Count + 1 || payload.States.Any(s => s.MapIndex <= 0 || s.MapIndex > ushort.MaxValue || !owners.Contains(s.NationMapIndex)) ||
+            payload.Date.Hour is < 0 or > 23 ||
+            payload.Armies.Select(a => a.Id).Distinct().Count() != payload.Armies.Count ||
+            payload.Armies.Any(a => !payload.Nations.Any(n => n.Id == a.NationId) || a.ProvinceId < 0 || a.ProvinceId > payload.ProvinceCount) ||
+            payload.ScenarioTerritories.Values.Any(ps => ps is null || ps.Any(p => p <= 0 || p > payload.ProvinceCount)))
+            throw new InvalidDataException("Invalid state, army, territory or clock references.");
+        if (payload.ProvinceOwner.Any(p => !owners.Contains(p)) || payload.ProvinceController.Any(p => !owners.Contains(p)) ||
+            payload.ProvinceState.Any(p => !states.Contains(p))) throw new InvalidDataException("Political map references an unknown country or state.");
+        payload.ScenarioId = scenarioId;
+        payload.IsPaused = true;
+        return payload.Restore();
+    }
+
     public static SaveMetadata Save(string root, string slot, Campaign campaign, string modFingerprint,
         string displayName = "", bool autosave = false)
     {
@@ -245,6 +293,9 @@ public static class SaveSystem
         public string ModFingerprint = "";
         public int ProvinceCount;
         public int Seed;
+        public string ScenarioId = "2024";
+        public Defines ScenarioRules;
+        public Dictionary<string, int[]> ScenarioTerritories = new();
         public GameDate Date;
         public int ElapsedDays;
         public bool IsPaused;
@@ -316,6 +367,9 @@ public static class SaveSystem
             ProvinceCount = campaign.ProvinceMap?.ProvinceCount ??
                 Math.Max(0, (campaign.ProvinceController?.Length ?? 1) - 1),
             Seed = campaign.Seed,
+            ScenarioId = campaign.ScenarioId,
+            ScenarioRules = campaign.ScenarioId != "2024" ? campaign.Defines : null,
+            ScenarioTerritories = new Dictionary<string, int[]>(campaign.ScenarioTerritories),
             Date = campaign.Date,
             ElapsedDays = campaign.ElapsedDays,
             IsPaused = campaign.IsPaused,
@@ -352,7 +406,8 @@ public static class SaveSystem
 
         public Campaign Restore()
         {
-            var campaign = Campaign.CreateBootstrap(Seed);
+            var campaign = new Campaign(Seed, ScenarioRules) { ScenarioId = ScenarioId,
+                ScenarioTerritories = new Dictionary<string, int[]>(ScenarioTerritories, StringComparer.OrdinalIgnoreCase) };
             Replace(campaign.Nations, Nations);
             Replace(campaign.States, States);
             Replace(campaign.Armies, Armies);

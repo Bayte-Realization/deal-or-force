@@ -41,7 +41,7 @@ public partial class DealOrForceGame
         Ui.Place(panel, "picker.country");
         var rows = PanelRows(panel, 20, 16, 8);
 
-        rows.AddChild(Title("THE WORLD IN 2024", 13, Ui.Colour("text.caption")));
+        rows.AddChild(Title("COUNTRIES", 13, Ui.Colour("text.caption")));
         _pickerSearch = new LineEdit
         {
             CustomMinimumSize = new Vector2(0, 38),
@@ -91,13 +91,10 @@ public partial class DealOrForceGame
         actionMargin.AddChild(actionRow);
         actionRow.AddChild(ActionButton("Back", ShowMainMenu, 100, 38));
         actionRow.AddChild(ActionButton("Random nation", PickRandomNation, 150, 38));
-        var observe = ActionButton("Observe", () => { }, 100, 38);
-        observe.Disabled = true;
-        observe.TooltipText = Ui.Tip(Tr("Observer authority will be enabled with the multiplayer/session ownership slice."));
-        actionRow.AddChild(observe);
+        actionRow.AddChild(ActionButton("Scenarios / editor", OpenScenarioLibrary, 170, 38));
     }
 
-    private void OpenCountryPicker()
+    private async void OpenCountryPicker()
     {
         // A new game is a new world.
         //
@@ -106,7 +103,8 @@ public partial class DealOrForceGame
         // war - which is not what "Singleplayer" says on the button. The world is rebuilt
         // here rather than when the menu opens, so looking at the menu costs nothing and
         // only actually starting a game throws the old campaign away.
-        if (_campaignInProgress) StartCampaign();
+        if (_isLoading) return;
+        if (_campaignInProgress && !await RebuildCampaignWithLoading()) return;
 
         _pickerHotseatMode = false;
         _campaign.IsPaused = true;
@@ -116,7 +114,7 @@ public partial class DealOrForceGame
         _sidePanel.Visible = false;
         _pickerSearch.Text = Tr("");
         _pickerHeading.Text = Tr("SELECT A COUNTRY");
-        _pickerSubheading.Text = Tr("1 January 2024 · click the political map or search");
+        _pickerSubheading.Text = $"{_campaign.Date} · {Tr("Click the map or search")}";
         _pickerSeats.Visible = false;
         _pickerSeatToggle.Visible = false;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
@@ -211,9 +209,10 @@ public partial class DealOrForceGame
         BeginSession();
     }
 
-    private void OpenLocalMultiplayer()
+    private async void OpenLocalMultiplayer()
     {
-        if (_campaignInProgress) StartCampaign();
+        if (_isLoading) return;
+        if (_campaignInProgress && !await RebuildCampaignWithLoading()) return;
         _pickerHotseatMode = true;
         _campaign.IsPaused = true;
         _menuLayer.Visible = false;

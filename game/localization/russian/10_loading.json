@@ -1,0 +1,22 @@
+{
+  "Ready": "Готово",
+  "STRATEGIC DOSSIER": "СТРАТЕГИЧЕСКОЕ ДОСЬЕ",
+  "Every decision leaves its mark on the map.": "Каждое решение оставляет свой след на карте.",
+  "Preparing the world": "Подготовка мира",
+  "Opening the archive": "Открытие архива",
+  "Loading advances as each stage is completed.": "Индикатор отмечает завершённые этапы подготовки.",
+  "Loading interface and content catalogs": "Загрузка каталогов интерфейса и контента",
+  "Preparing the interface": "Подготовка интерфейса",
+  "Creating countries and regions": "Создание стран и регионов",
+  "Reading province and terrain maps": "Чтение карт провинций и местности",
+  "Uploading map layers": "Подготовка графических слоёв карты",
+  "Preparing terrain": "Подготовка местности",
+  "Placing armies and country names": "Размещение армий и названий стран",
+  "Preparing a new campaign": "Подготовка новой кампании",
+  "Restoring a campaign": "Восстановление кампании",
+  "Reading and checking the save": "Чтение и проверка сохранения",
+  "Restoring countries, armies and orders": "Восстановление стран, армий и приказов",
+  "Loading could not be completed": "Не удалось завершить загрузку",
+  "Details have been written to the error log.": "Подробности записаны в журнал ошибок.",
+  "Return to game": "Вернуться в игру"
+}

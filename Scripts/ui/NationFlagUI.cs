@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -42,12 +43,19 @@ public partial class DealOrForceGame
         var nation = FlagWorld?.NationByTag(tag);
         if (nation is not null)
         {
-            var situation = $"{key}|{nation.Ideology}|{nation.Government}|{FlagWorld.MapRevision}";
+            var situation = key + "|" + string.Join("|", FlagCatalog.All.Select(q =>
+                FlagCatalog.ValueOf(q.Source, FlagWorld, nation))) + $"|{FlagWorld.MapRevision}";
             if (!ResolvedFlags.TryGetValue(situation, out var resolved))
                 ResolvedFlags[situation] = resolved = FlagCatalog.Resolve(FlagWorld, nation);
             if (!string.IsNullOrEmpty(resolved)) sprite = resolved;
         }
 
+        return FlagSpriteTexture(sprite);
+    }
+
+    private static Texture2D FlagSpriteTexture(string sprite)
+    {
+        if (string.IsNullOrEmpty(sprite)) return null;
         if (FlagCache.TryGetValue(sprite, out var cached)) return cached;
         var path = SpriteCatalog.TextureOf(sprite, $"res://game/gfx/flags/{sprite}.png");
         var texture = !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path)

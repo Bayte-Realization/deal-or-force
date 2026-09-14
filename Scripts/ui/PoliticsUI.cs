@@ -25,6 +25,7 @@ public partial class DealOrForceGame
     private Label _politicsFeedback = null!;
     private readonly Dictionary<string, Button> _governmentButtonById = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Button> _ideologyButtonById = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (TextureRect Flag, Label Caption)> _politicsPreviews = new();
 
     private void BuildPoliticsControls(VBoxContainer rows)
     {
@@ -45,9 +46,9 @@ public partial class DealOrForceGame
         foreach (var government in GovernmentCatalog.All)
         {
             var id = government.Id;
-            var button = ActionButton(government.Name, () => ChangePolitics(id, ""), 172, 30);
+            var button = ActionButton(government.Name, () => ChangePolitics(id, ""), 212, 38);
             button.TooltipText = Ui.Tip(GovernmentTooltip(government));
-            _governmentButtons.AddChild(button);
+            AddPoliticsOption(_governmentButtons, button, "government:" + id);
             _governmentButtonById[id] = button;
         }
 
@@ -59,9 +60,14 @@ public partial class DealOrForceGame
         foreach (var ideology in IdeologyCatalog.All)
         {
             var id = ideology.Id;
-            var button = ActionButton(ideology.Name, () => ChangePolitics("", id), 172, 30);
+            var button = ActionButton(ideology.Name, () => ChangePolitics("", id), 212, 42);
+            var sprite = "icon_ideology_" + id;
+            var iconPath = SpriteCatalog.TextureOf(sprite, SpriteCatalog.TextureOf("icon_ideology_generic", ""));
+            if (!string.IsNullOrEmpty(iconPath) && ResourceLoader.Exists(iconPath)) button.Icon = GD.Load<Texture2D>(iconPath);
+            button.ExpandIcon = true;
+            button.AddThemeConstantOverride("icon_max_width", 30);
             button.TooltipText = Ui.Tip(IdeologyTooltip(ideology));
-            _ideologyButtons.AddChild(button);
+            AddPoliticsOption(_ideologyButtons, button, "ideology:" + id);
             _ideologyButtonById[id] = button;
         }
 
@@ -110,9 +116,15 @@ public partial class DealOrForceGame
         _politicsSummary.Text = summary;
 
         foreach (var (id, button) in _governmentButtonById)
+        {
             ApplyLedgerButtonState(button, string.Equals(id, nation.Government, StringComparison.OrdinalIgnoreCase));
+            RefreshPoliticsOption(nation, button, "government:" + id, id, "");
+        }
         foreach (var (id, button) in _ideologyButtonById)
+        {
             ApplyLedgerButtonState(button, string.Equals(id, nation.Ideology, StringComparison.OrdinalIgnoreCase));
+            RefreshPoliticsOption(nation, button, "ideology:" + id, "", id);
+        }
 
         if (settling > 0)
         {
@@ -127,5 +139,36 @@ public partial class DealOrForceGame
             "Changing the form of government would cost about {0:P0} stability and stir up the regions; " +
             "changing only the ideology costs less. Either way nothing else may change for {1} days.",
             cost, PoliticsCore.ChangeCooldownDays);
+    }
+
+    private void AddPoliticsOption(HFlowContainer flow, Button button, string key)
+    {
+        var card = new VBoxContainer { CustomMinimumSize = new Vector2(212, 0) };
+        card.AddThemeConstantOverride("separation", 4);
+        button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        button.Name = "PoliticsOption_" + key.Replace(':', '_');
+        card.AddChild(button);
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 8);
+        var flag = new TextureRect { CustomMinimumSize = new Vector2(38, 25),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered };
+        var caption = RowLabel("", 11, Ui.Colour("text.muted"));
+        row.AddChild(flag); row.AddChild(caption); card.AddChild(row); flow.AddChild(card);
+        _politicsPreviews[key] = (flag, caption);
+    }
+
+    private void RefreshPoliticsOption(Nation nation, Button button, string key, string government, string ideology)
+    {
+        var sprite = FlagCatalog.ResolvePreview(_campaign, nation, government, ideology);
+        var preview = _politicsPreviews[key];
+        preview.Flag.Texture = FlagSpriteTexture(sprite);
+        var unchanged = sprite == FlagCatalog.Resolve(_campaign, nation);
+        preview.Caption.Text = Tr(string.IsNullOrEmpty(sprite) ? "No flag available" : unchanged ? "Flag unchanged" : "Flag after adoption");
+        preview.Flag.TooltipText = preview.Caption.Text + (sprite.Length > 0 ? "\n" + sprite : "");
+        var current = (government.Length > 0 && government == nation.Government) || (ideology.Length > 0 && ideology == nation.Ideology);
+        var refusal = PoliticsCore.Refusal(_campaign, nation, government, ideology);
+        button.Disabled = current || refusal.Length > 0;
+        // Keep the substantive description, with availability on the card's flag row.
+        preview.Caption.TooltipText = current ? Tr("Current policy") : refusal.Length > 0 ? Tr(refusal) : Tr("Flag after adoption");
     }
 }

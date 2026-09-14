@@ -100,16 +100,14 @@ public sealed class ModLoader
             DiscoverRoot(root, "res://mods", candidates);
         DiscoverRoot(ProjectSettings.GlobalizePath("user://mods"), "user://mods", candidates);
 
-        var enabled = candidates.Values.Where(package => package.Manifest.Enabled).ToList();
-        foreach (var package in enabled.ToArray())
-        {
-            var missing = package.Manifest.Dependencies
-                .Where(dependency => !enabled.Any(candidate => candidate.Manifest.Id.Equals(dependency, StringComparison.OrdinalIgnoreCase)))
-                .ToArray();
-            if (missing.Length == 0) continue;
-            package.Errors.Add($"Missing dependencies: {string.Join(", ", missing)}");
-            enabled.Remove(package);
-        }
+        var selection = LauncherSelection.Read();
+        var orderedMods = candidates.Values
+            .OrderBy(p => selection.Order(p.Manifest.Id, p.Manifest.LoadOrder))
+            .ThenBy(p => p.Manifest.Id, StringComparer.OrdinalIgnoreCase);
+        var enabledIds = ContentDependencies.Resolve(orderedMods.Select(p => new ContentRequirement(
+            p.Manifest.Id, selection.IsEnabled(p.Manifest.Id, false, p.Manifest.Enabled),
+            p.Manifest.Dependencies ?? new())), out var dependencyErrors);
+        foreach (var error in dependencyErrors) Write($"Mod {error.Key} skipped: {error.Value}");
 
         // Base game, then content packs, then mods. Later wins, so a mod may overrule a
         // pack the player has paid for - which is the right way round: they own both.
@@ -133,7 +131,7 @@ public sealed class ModLoader
                 : $"Content pack {pack.Manifest.Name} present but not active" +
                   (pack.Errors.Count > 0 ? $" ({pack.Errors[0]})" : " (not owned)") + ".");
 
-        _packages.AddRange(TopologicalOrder(enabled));
+        _packages.AddRange(enabledIds.Select(id => candidates[id]));
         Write($"Discovery complete: {ContentPackCount} content pack(s), {EnabledCount} enabled mod(s).");
     }
 

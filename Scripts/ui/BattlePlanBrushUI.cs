@@ -225,7 +225,7 @@ public partial class DealOrForceGame
         var armies = SelectedPlayerArmies().ToArray();
         var line = OffensivePlanning.Source(_campaign, armies);
         if (line is not { Kind: FrontLineKind.Offensive } || line.Objectives.Count == 0)
-            return "Front: LMB whole border / RMB section. Attack: RMB destination / Alt+RMB redraw.";
+            return Tr("Front: LMB whole border / RMB section. Attack: RMB destination / Alt+RMB redraw.");
         var reached = armies.Count(a => line.Objectives.GetValueOrDefault(a.Id, -1) == a.ProvinceId);
         var executing = armies.Count(a => a.PlanActive);
         var phase = reached == armies.Length ? "Objective reached" : executing > 0 ? "Executing" : "Prepared / paused";

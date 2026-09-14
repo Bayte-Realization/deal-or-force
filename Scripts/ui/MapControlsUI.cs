@@ -19,7 +19,7 @@ public partial class DealOrForceGame
         // Eight pixels kept the controls inside the Control rectangle, but not inside
         // the rail the player actually reads as the panel boundary. Keep the whole
         // toolbar clear of that bevel, especially the projection button on the left.
-        var margin = Margin(panel, 24, 6);
+        var margin = Margin(panel, 8, 4);
         margin.ClipContents = true;
         var row = new HBoxContainer
         {

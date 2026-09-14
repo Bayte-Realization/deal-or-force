@@ -12,6 +12,10 @@ public partial class DealOrForceGame
     private readonly HashSet<int> _knownEndedBattles = new();
     private readonly Queue<string> _strategicAudioQueue = new();
     private readonly Dictionary<string, ulong> _lastCueAt = new();
+    private readonly Dictionary<string, float> _channelCueTrim = new();
+    private int _audioObservedNation = -1;
+    private string _audioPolitics = "", _audioFormation = "";
+    private readonly Dictionary<int, (int State, BuildingKind Building, int Count)> _audioConstruction = new();
     private AudioStreamPlayer _musicPlayer;
     private readonly System.Random _musicOrder = new();
 
@@ -40,7 +44,8 @@ public partial class DealOrForceGame
         {
             if (!GodotObject.IsInstanceValid(player)) continue;
             var channel = SoundCatalog.GetChannel(name);
-            player.VolumeDb = channel.VolumeDb + Decibels(master * effects);
+            player.VolumeDb = channel.VolumeDb + _channelCueTrim.GetValueOrDefault(name) + Decibels(master * effects);
+            if (master * effects <= 0.0005f) player.Stop();
         }
         if (GodotObject.IsInstanceValid(_musicPlayer))
             _musicPlayer.VolumeDb = SoundCatalog.GetChannel("music").VolumeDb + Decibels(master * music);
@@ -142,9 +147,12 @@ public partial class DealOrForceGame
         return false;
     }
 
-    private static void Speak(AudioStreamPlayer player, SoundCatalog.Cue cue, AudioStream stream)
+    private void Speak(AudioStreamPlayer player, SoundCatalog.Cue cue, AudioStream stream)
     {
-        player.VolumeDb = SoundCatalog.GetChannel(cue.Channel).VolumeDb + cue.VolumeDb;
+        var gain = Mathf.Clamp(SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_effects"), 0, 1);
+        if (gain <= 0.0005f) { player.Stop(); return; }
+        _channelCueTrim[cue.Channel] = cue.VolumeDb;
+        player.VolumeDb = SoundCatalog.GetChannel(cue.Channel).VolumeDb + cue.VolumeDb + Mathf.LinearToDb(gain);
         player.Stream = stream;
         player.Play();
     }
@@ -200,6 +208,8 @@ public partial class DealOrForceGame
         _strategicAudioQueue.Clear();
         _lastCueAt.Clear();
         _knownEndedBattles.Clear();
+        _audioObservedNation = -1;
+        _audioConstruction.Clear();
         foreach (var battle in _campaign.Battles.Where(battle => battle.Ended))
             _knownEndedBattles.Add(battle.Id);
     }
@@ -207,6 +217,7 @@ public partial class DealOrForceGame
     private void RefreshStrategicAudio()
     {
         if (_campaign?.Player is null || !_hudLayer.Visible) return;
+        RefreshDomesticAudio();
         var playerWon = false;
         var playerLost = false;
         foreach (var battle in _campaign.Battles.Where(battle => battle.Ended &&
@@ -219,5 +230,42 @@ public partial class DealOrForceGame
 
         if (playerLost) PlayStrategicCue("battle_lost");
         else if (playerWon) PlayStrategicCue("battle_won");
+    }
+
+    private void RefreshDomesticAudio()
+    {
+        var nation = _campaign.Player;
+        var initial = _audioObservedNation != nation.Id;
+        var politics = nation.Government + ":" + nation.Ideology;
+        if (!initial)
+        {
+            if (_audioFormation != nation.FormedNationId) PlayStrategicCue("nation_formed");
+            else if (_audioPolitics != politics) PlayStrategicCue("policy_changed");
+        }
+        else _audioConstruction.Clear();
+        _audioObservedNation = nation.Id;
+        _audioPolitics = politics;
+        _audioFormation = nation.FormedNationId;
+        var projects = _campaign.Construction.Where(p => p.NationId == nation.Id).ToArray();
+        var queued = false;
+        var finished = false;
+        foreach (var (id, previous) in _audioConstruction.ToArray())
+        {
+            if (projects.Any(p => p.Id == id)) continue;
+            var state = _campaign.States.FirstOrDefault(s => s.MapIndex == previous.State);
+            // A cancellation or lost state is not a finished building.
+            if (state?.NationMapIndex == nation.MapIndex && state.Buildings.GetValueOrDefault(previous.Building) > previous.Count)
+                finished = true;
+            _audioConstruction.Remove(id);
+        }
+        foreach (var p in projects)
+        {
+            if (_audioConstruction.ContainsKey(p.Id)) continue;
+            var state = _campaign.States.FirstOrDefault(s => s.MapIndex == p.StateMapIndex);
+            _audioConstruction[p.Id] = (p.StateMapIndex, p.Building, state?.Buildings.GetValueOrDefault(p.Building) ?? 0);
+            queued = true;
+        }
+        if (!initial && finished) PlayStrategicCue("construction_complete");
+        else if (!initial && queued) PlayStrategicCue("construction_queued");
     }
 }

@@ -37,6 +37,8 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        foreach (var character in campaign.ScenarioId ?? "2024") Mix(character);
+        Mix(-1);
 
         // The region list is no longer fixed: a border cuts a region in two and a border
         // going away puts it back. Two worlds that disagree about how many regions exist
@@ -46,6 +48,9 @@ public static class CampaignFingerprint
         foreach (var nation in Ordered(campaign.Nations, nation => nation.Id))
         {
             Mix(nation.Id);
+            foreach (var character in nation.FormedNationId ?? "") Mix(character);
+            Mix(-1);
+            Mix(nation.FormedNationDay);
             Mix(nation.Population);
             MixFloat(nation.Treasury);
             MixFloat(nation.Gdp);

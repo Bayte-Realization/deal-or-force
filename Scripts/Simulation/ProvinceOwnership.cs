@@ -42,6 +42,11 @@ public static class ProvinceOwnership
 
     public static int Count => Entries.Count;
 
+    /// <summary>Bookmark territory, including mod overrides; live conquests do not change it.</summary>
+    public static int[] ProvincesOf(string tag) => Entries.Values
+        .Where(e => string.Equals(e.Owner, tag, StringComparison.OrdinalIgnoreCase))
+        .Select(e => e.Province).OrderBy(p => p).ToArray();
+
     /// <summary>
     /// Forget the political map entirely.
     ///

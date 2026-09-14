@@ -290,6 +290,7 @@ public static class InterfaceSkin
     /// <summary>Reload the base-game skin. Mods layer on top afterwards via <see cref="Merge"/>.</summary>
     public static void ResetCatalog()
     {
+        CampaignUiCatalog.Reset();
         Colours.Clear();
         Metrics.Clear();
         foreach (var (key, value) in DefaultColours) Colours[key] = value;
@@ -345,6 +346,11 @@ public static class InterfaceSkin
         }
 
         var sectioned = false;
+        if (root.TryGetProperty("campaign", out var campaign))
+        {
+            sectioned = true;
+            CampaignUiCatalog.Merge(campaign, errors);
+        }
         foreach (var section in new[] { "colors", "colours" })
             if (root.TryGetProperty(section, out var element) && element.ValueKind == JsonValueKind.Object)
             {

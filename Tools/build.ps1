@@ -20,7 +20,8 @@ param(
     [string]$Godot = "C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe",
     [string]$Preset = "Windows Desktop",
     [switch]$Debug,
-    [switch]$NoZip
+    [switch]$NoZip,
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,7 +30,11 @@ $project = Split-Path -Parent $PSScriptRoot
 # the folder that goes into the archive whole - an archive whose entries sit at its root
 # empties 572 files into whatever directory it is opened next to, which is a poor first
 # impression and an easy way for somebody to end up running the game from their Downloads.
-$out = Join-Path $project "build\Deal or Force"
+$out = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $project "build\Deal or Force" }
+$allowedBuildRoot = [IO.Path]::GetFullPath((Join-Path $project "build")) + [IO.Path]::DirectorySeparatorChar
+if (-not ([IO.Path]::GetFullPath($out)).StartsWith($allowedBuildRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Export output must be a subdirectory of this project build folder.'
+}
 $exe = Join-Path $out "Deal or Force.exe"
 
 if (-not (Test-Path $Godot)) {
@@ -101,6 +106,12 @@ if (Test-Path $modsSource) {
 }
 
 # ---------------------------------------------------------------- the check that matters
+# Keep content visible beside both executables. The runtime and launcher prefer these
+# user-facing copies over the published managed-data copies with matching IDs.
+$dlcSource = Join-Path $project "dlc"
+if (Test-Path $dlcSource) { Copy-Item -LiteralPath $dlcSource -Destination $out -Recurse -Force }
+& (Join-Path $PSScriptRoot "build-launcher.ps1") -OutputDirectory $out
+
 Write-Host "== checking the data came with it ==" -ForegroundColor Cyan
 
 # Where the game will look: its own folder, then up to seven parents. Anything below the

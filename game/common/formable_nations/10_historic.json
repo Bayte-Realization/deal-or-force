@@ -1,0 +1,424 @@
+// States a country can proclaim itself, beyond the regional unions in 00_unions.json.
+//
+// Every one of these either existed, was formally proposed by the governments involved, or
+// follows from something that is on the table today. None of them grants an inch of ground:
+// what a proclamation does is put a name, a flag and a colour on a country that has ALREADY
+// taken or agreed the territory, and give it the administrative dividend of being one state
+// instead of several.
+//
+// ---------------------------------------------------------------------------------------
+// Writing one
+// ---------------------------------------------------------------------------------------
+//
+//   eligible_tags        who may proclaim it - usually the plausible core
+//   required_tags        whose authored territory must be held AND controlled
+//   required_provinces   individual provinces, for the cases a tag cannot express
+//   minimum_stability    how settled the founder has to be
+//   required_ideology    what it must believe, if the state only makes sense that way
+//   required_government  and how it must be arranged
+//   colour               what it paints on the political map
+//   gdp_cost_share       what proclaiming costs, as a share of the founder's output
+//   governance_gain      the administrative dividend, bounded by the stability model
+//   productivity_gain    and the economic one
+//
+// The flag needs no line here. FlagCatalog reads what a country has proclaimed as a
+// qualifier, so `gfx/flags/flag_formable_yugoslavia.png` is the whole of declaring one - and
+// `flag_formable_yugoslavia_communism.png` for the version with a star on it.
+{
+  // ------------------------------------------------------------------------- Europe --
+  "yugoslavia": {
+    "name": "Yugoslavia",
+    "description": "The South Slavs under one state again. Held together by administration rather than by sentiment, which is the hard part and always was.",
+    "eligible_tags": ["SRB", "HRV", "SVN", "BIH"],
+    "required_tags": ["SRB", "HRV", "SVN", "BIH", "MNE", "MKD"],
+    "minimum_stability": 0.72, "gdp_cost_share": 0.030,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "colour": "#2f6fae"
+  },
+
+  "czechoslovakia": {
+    "name": "Czechoslovakia",
+    "description": "The velvet divorce, undone by agreement. Two economies that never really stopped being one.",
+    "eligible_tags": ["CZE", "SVK"],
+    "required_tags": ["CZE", "SVK"],
+    "minimum_stability": 0.68, "gdp_cost_share": 0.015,
+    "governance_gain": 0.04, "productivity_gain": 0.020,
+    "colour": "#2a5c9c"
+  },
+
+  "greater_romania": {
+    "name": "Greater Romania",
+    "description": "Romania and Moldova as one state - two halves of the same language that a river and a century of empires happened to divide.",
+    "eligible_tags": ["ROU", "MDA"],
+    "required_tags": ["ROU", "MDA"],
+    "minimum_stability": 0.66, "gdp_cost_share": 0.018,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "colour": "#c4a029"
+  },
+
+  "austria_hungary": {
+    "name": "Austria-Hungary",
+    "description": "The Danube under one crown once more: the one arrangement that ever governed this many peoples at once, and the one that failed most instructively.",
+    "eligible_tags": ["AUT", "HUN"],
+    "required_tags": ["AUT", "HUN", "CZE", "SVK", "HRV", "SVN", "BIH"],
+    "minimum_stability": 0.75, "gdp_cost_share": 0.035,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "required_government": ["constitutional_monarchy", "absolute_monarchy"],
+    "colour": "#b3902c"
+  },
+
+  "visegrad_union": {
+    "name": "Visegrád Union",
+    "description": "The four of Central Europe as one state rather than one caucus - a bloc with a treasury instead of a communiqué.",
+    "eligible_tags": ["POL", "CZE", "SVK", "HUN"],
+    "required_tags": ["POL", "CZE", "SVK", "HUN"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.025,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "colour": "#8b3d5c"
+  },
+
+  "kalmar_union": {
+    "name": "Kalmar Union",
+    "description": "Denmark, Norway and Sweden under one crown, as they were for a hundred and twenty-six years and have not been since.",
+    "eligible_tags": ["DNK", "NOR", "SWE"],
+    "required_tags": ["DNK", "NOR", "SWE"],
+    "minimum_stability": 0.74, "gdp_cost_share": 0.020,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "required_government": ["constitutional_monarchy", "absolute_monarchy"],
+    "colour": "#b03040"
+  },
+
+  "european_federation": {
+    "name": "European Federation",
+    "description": "The end of the argument the Union has been having with itself since it started: one state, one treasury, one foreign policy.",
+    "eligible_tags": ["DEU", "FRA", "ITA", "ESP", "POL", "NLD"],
+    "required_tags": ["DEU", "FRA", "ITA", "ESP", "POL", "NLD", "BEL", "LUX", "AUT",
+                      "PRT", "CZE", "SVK", "HUN", "SVN", "HRV", "ROU", "BGR", "GRC",
+                      "DNK", "SWE", "FIN", "EST", "LVA", "LTU", "IRL", "MLT", "CYP"],
+    "minimum_stability": 0.78, "gdp_cost_share": 0.040,
+    "governance_gain": 0.06, "productivity_gain": 0.030,
+    "colour": "#1f4f9c"
+  },
+
+  "union_state": {
+    "name": "Union State",
+    "description": "The treaty of 1999, finally executed. Two states that have spent a quarter of a century agreeing to become one.",
+    "eligible_tags": ["RUS", "BLR"],
+    "required_tags": ["RUS", "BLR"],
+    "minimum_stability": 0.68, "gdp_cost_share": 0.020,
+    "governance_gain": 0.04, "productivity_gain": 0.015,
+    "colour": "#3b6b45"
+  },
+
+  "soviet_union": {
+    "name": "Soviet Union",
+    "description": "Every republic of the Union back inside it. Not nostalgia - an administrative fact, and the largest one anybody has attempted.",
+    "eligible_tags": ["RUS"],
+    "required_tags": ["RUS", "BLR", "UKR", "KAZ", "UZB", "TKM", "TJK", "KGZ",
+                      "ARM", "AZE", "GEO", "MDA", "LVA", "LTU", "EST"],
+    "minimum_stability": 0.76, "gdp_cost_share": 0.045,
+    "governance_gain": 0.06, "productivity_gain": 0.025,
+    "required_ideology": ["communism", "socialism"],
+    "colour": "#b01c1c"
+  },
+
+  "eurasian_union": {
+    "name": "Eurasian Union",
+    "description": "The customs union made into a country. The members are the members; what changes is that there is one government of them.",
+    "eligible_tags": ["RUS", "KAZ"],
+    "required_tags": ["RUS", "BLR", "KAZ", "ARM", "KGZ"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.028,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "colour": "#2e6f8e"
+  },
+
+  "transcaucasia": {
+    "name": "Transcaucasian Federation",
+    "description": "Georgia, Armenia and Azerbaijan in one state - which lasted a month in 1918 and has not been tried since, for reasons everybody involved could list.",
+    "eligible_tags": ["GEO", "ARM", "AZE"],
+    "required_tags": ["GEO", "ARM", "AZE"],
+    "minimum_stability": 0.74, "gdp_cost_share": 0.022,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "colour": "#a8552c"
+  },
+
+  "byzantium": {
+    "name": "Roman Empire",
+    "description": "Constantinople and the Aegean under one state, calling itself what the people who held it always called it.",
+    "eligible_tags": ["GRC", "TUR"],
+    "required_tags": ["GRC", "TUR", "CYP"],
+    "minimum_stability": 0.76, "gdp_cost_share": 0.035,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "required_government": ["absolute_monarchy", "constitutional_monarchy", "theocracy"],
+    "colour": "#6d2d8e"
+  },
+
+  "iberia_greater": {
+    "name": "Hispanidad",
+    "description": "Iberia and the islands as one state, the old Union with the Atlantic added.",
+    "eligible_tags": ["ESP", "PRT"],
+    "required_tags": ["ESP", "PRT", "AND"],
+    "minimum_stability": 0.72, "gdp_cost_share": 0.022,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "colour": "#b8912b"
+  },
+
+  "italia_unita": {
+    "name": "Greater Italy",
+    "description": "The peninsula and its enclaves as one administration - the last three sovereignties inside Italy folded into the state around them.",
+    "eligible_tags": ["ITA"],
+    "required_tags": ["ITA", "SMR", "VAT", "MLT"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.018,
+    "governance_gain": 0.04, "productivity_gain": 0.015,
+    "colour": "#2f8a4c"
+  },
+
+  "british_isles": {
+    "name": "Union of the Isles",
+    "description": "Britain and Ireland in one state by agreement rather than by conquest, which is the only way it has never been tried.",
+    "eligible_tags": ["GBR", "IRL"],
+    "required_tags": ["GBR", "IRL", "IMN", "JEY", "GGY"],
+    "minimum_stability": 0.76, "gdp_cost_share": 0.025,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "colour": "#2b4a86"
+  },
+
+  // --------------------------------------------------- the Middle East and Africa --
+  "united_arab_republic": {
+    "name": "United Arab Republic",
+    "description": "Egypt and Syria as one state, which they were from 1958 to 1961 and which neither has entirely stopped describing as unfinished.",
+    "eligible_tags": ["EGY", "SYR"],
+    "required_tags": ["EGY", "SYR"],
+    "minimum_stability": 0.66, "gdp_cost_share": 0.025,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "colour": "#c0392b"
+  },
+
+  "arab_federation": {
+    "name": "Arab Federation",
+    "description": "Iraq and Jordan under one throne - the Hashemite answer to the Republic, which lasted five months in 1958.",
+    "eligible_tags": ["IRQ", "JOR"],
+    "required_tags": ["IRQ", "JOR"],
+    "minimum_stability": 0.66, "gdp_cost_share": 0.022,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "required_government": ["constitutional_monarchy", "absolute_monarchy"],
+    "colour": "#99752c"
+  },
+
+  "levant_union": {
+    "name": "Greater Syria",
+    "description": "The Levant as one country, the way it was administered before the borders drawn in 1916 by two men with a map.",
+    "eligible_tags": ["SYR", "IRQ", "JOR", "LBN"],
+    "required_tags": ["SYR", "LBN", "JOR", "PSE"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.028,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "colour": "#7a9c3d"
+  },
+
+  "gulf_union": {
+    "name": "Gulf Union",
+    "description": "The Council made into a country - a proposal its own members have put formally and never quite carried.",
+    "eligible_tags": ["SAU", "ARE", "QAT", "KWT", "BHR", "OMN"],
+    "required_tags": ["SAU", "ARE", "QAT", "KWT", "BHR", "OMN"],
+    "minimum_stability": 0.74, "gdp_cost_share": 0.030,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "required_government": ["absolute_monarchy", "constitutional_monarchy"],
+    "colour": "#1f7a4c"
+  },
+
+  "caliphate": {
+    "name": "Caliphate",
+    "description": "The office nobody has held since 1924, claimed by a state that holds the cities it would have to be claimed from.",
+    "eligible_tags": ["SAU", "TUR", "EGY", "IRQ"],
+    "required_tags": ["SAU", "IRQ", "SYR", "JOR", "PSE", "LBN"],
+    "minimum_stability": 0.72, "gdp_cost_share": 0.040,
+    "governance_gain": 0.06, "productivity_gain": 0.018,
+    "required_ideology": ["theocratic_rule"],
+    "required_government": ["theocracy", "absolute_monarchy"],
+    "colour": "#146b3a"
+  },
+
+  "maghreb_union": {
+    "name": "Arab Maghreb Union",
+    "description": "The 1989 treaty executed rather than shelved: five states from the Atlantic to the Libyan desert as one.",
+    "eligible_tags": ["MAR", "DZA", "TUN", "LBY", "MRT"],
+    "required_tags": ["MAR", "DZA", "TUN", "LBY", "MRT"],
+    "minimum_stability": 0.72, "gdp_cost_share": 0.030,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "colour": "#c07a2c"
+  },
+
+  "east_african_federation": {
+    "name": "East African Federation",
+    "description": "The federation the Community has had on its own order paper since 2010, and a treaty text since 2023.",
+    "eligible_tags": ["KEN", "TZA", "UGA", "RWA"],
+    "required_tags": ["KEN", "TZA", "UGA", "RWA", "BDI", "SSD"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.028,
+    "governance_gain": 0.06, "productivity_gain": 0.025,
+    "colour": "#1f8a6b"
+  },
+
+  "nile_union": {
+    "name": "Unity of the Nile Valley",
+    "description": "Egypt and Sudan as one state, which was the formal Egyptian position until 1956 and the actual arrangement before it.",
+    "eligible_tags": ["EGY", "SDN"],
+    "required_tags": ["EGY", "SDN", "SSD"],
+    "minimum_stability": 0.68, "gdp_cost_share": 0.025,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "colour": "#a8873a"
+  },
+
+  "senegambia": {
+    "name": "Senegambia",
+    "description": "The confederation of 1982, which held for seven years - one country that entirely surrounds another, arranged as one.",
+    "eligible_tags": ["SEN", "GMB"],
+    "required_tags": ["SEN", "GMB"],
+    "minimum_stability": 0.64, "gdp_cost_share": 0.012,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "colour": "#3f8a3f"
+  },
+
+  "greater_somalia": {
+    "name": "Greater Somalia",
+    "description": "The five points of the star as one state, which is what the star on the flag has meant since the flag was drawn.",
+    "eligible_tags": ["SOM", "DJI"],
+    "required_tags": ["SOM", "DJI"],
+    "minimum_stability": 0.66, "gdp_cost_share": 0.020,
+    "governance_gain": 0.05, "productivity_gain": 0.018,
+    "colour": "#4a9fd6"
+  },
+
+  "west_african_union": {
+    "name": "West African Union",
+    "description": "ECOWAS as a state: one currency that already half exists, one market, and one government of it.",
+    "eligible_tags": ["NGA", "GHA", "CIV", "SEN"],
+    "required_tags": ["NGA", "GHA", "CIV", "SEN", "BEN", "TGO", "BFA", "NER", "MLI",
+                      "GIN", "SLE", "LBR", "GNB", "GMB", "CPV"],
+    "minimum_stability": 0.72, "gdp_cost_share": 0.032,
+    "governance_gain": 0.06, "productivity_gain": 0.025,
+    "colour": "#2f9c5c"
+  },
+
+  // ---------------------------------------------------------------------------- Asia --
+  "china_reunified": {
+    "name": "Reunified China",
+    "description": "One China, settled rather than asserted. Which of the two governments is doing the settling is the whole question.",
+    "eligible_tags": ["CHN", "TWN"],
+    "required_tags": ["CHN", "TWN"],
+    "minimum_stability": 0.74, "gdp_cost_share": 0.030,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "colour": "#c4182c"
+  },
+
+  "indochinese_federation": {
+    "name": "Indochinese Federation",
+    "description": "Vietnam, Laos and Cambodia as one state - proposed by the Party in 1930, and quietly by everyone who has governed the three since.",
+    "eligible_tags": ["VNM", "LAO", "KHM"],
+    "required_tags": ["VNM", "LAO", "KHM"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.025,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "colour": "#b8332c"
+  },
+
+  "maphilindo": {
+    "name": "Maphilindo",
+    "description": "Malaya, the Philippines and Indonesia as one Malay state - agreed in principle at Manila in 1963 and overtaken by events within weeks.",
+    "eligible_tags": ["MYS", "PHL", "IDN"],
+    "required_tags": ["MYS", "PHL", "IDN", "BRN", "SGP"],
+    "minimum_stability": 0.74, "gdp_cost_share": 0.032,
+    "governance_gain": 0.06, "productivity_gain": 0.025,
+    "colour": "#c9922c"
+  },
+
+  "greater_india": {
+    "name": "Akhand Bharat",
+    "description": "The subcontinent under one administration, as it was until 1947. Every government in it has a position on this and none of them is quiet.",
+    "eligible_tags": ["IND", "PAK", "BGD"],
+    "required_tags": ["IND", "PAK", "BGD", "NPL", "BTN", "LKA"],
+    "minimum_stability": 0.78, "gdp_cost_share": 0.040,
+    "governance_gain": 0.06, "productivity_gain": 0.025,
+    "colour": "#e07a1f"
+  },
+
+  "turkic_union": {
+    "name": "Turan",
+    "description": "The Organization of Turkic States as one country, from Anatolia to the Altai. Six governments that already meet as a bloc, arranged as a state.",
+    "eligible_tags": ["TUR", "KAZ", "AZE", "UZB"],
+    "required_tags": ["TUR", "AZE", "KAZ", "UZB", "TKM", "KGZ"],
+    "minimum_stability": 0.74, "gdp_cost_share": 0.035,
+    "governance_gain": 0.06, "productivity_gain": 0.022,
+    "colour": "#2e9ad6"
+  },
+
+  "persian_union": {
+    "name": "Greater Iran",
+    "description": "The Persianate world as one state: the plateau, the Hindu Kush and the Oxus, which were administered together more often than not.",
+    "eligible_tags": ["IRN"],
+    "required_tags": ["IRN", "AFG", "TJK"],
+    "minimum_stability": 0.72, "gdp_cost_share": 0.030,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "colour": "#2c7a4a"
+  },
+
+  // ------------------------------------------------------------------------ Americas --
+  "gran_colombia": {
+    "name": "Gran Colombia",
+    "description": "Bolívar's republic, put back together. It governed this ground for eleven years and has been an argument in four countries ever since.",
+    "eligible_tags": ["COL", "VEN", "ECU", "PAN"],
+    "required_tags": ["COL", "VEN", "ECU", "PAN"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.028,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "colour": "#d4a017"
+  },
+
+  "central_american_federation": {
+    "name": "Federal Republic of Central America",
+    "description": "The federation of 1823, which came apart in civil war and has been formally attempted three times since.",
+    "eligible_tags": ["GTM", "HND", "SLV", "NIC", "CRI"],
+    "required_tags": ["GTM", "HND", "SLV", "NIC", "CRI"],
+    "minimum_stability": 0.68, "gdp_cost_share": 0.022,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "colour": "#3aa0d6"
+  },
+
+  "rio_de_la_plata": {
+    "name": "United Provinces of the Plate",
+    "description": "The Plate basin as one republic, as it was declared in 1816 before the provinces discovered how little they agreed.",
+    "eligible_tags": ["ARG", "URY", "PRY", "BOL"],
+    "required_tags": ["ARG", "URY", "PRY", "BOL"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.028,
+    "governance_gain": 0.05, "productivity_gain": 0.020,
+    "colour": "#6fa8dc"
+  },
+
+  "north_american_union": {
+    "name": "North American Union",
+    "description": "The three economies of the trade agreement as one state. The market has been one for thirty years; this is the government catching up.",
+    "eligible_tags": ["USA", "CAN", "MEX"],
+    "required_tags": ["USA", "CAN", "MEX"],
+    "minimum_stability": 0.80, "gdp_cost_share": 0.040,
+    "governance_gain": 0.05, "productivity_gain": 0.025,
+    "colour": "#3f5f9c"
+  },
+
+  "west_indies_federation": {
+    "name": "Federation of the West Indies",
+    "description": "The federation of 1958, which lasted four years. Ten island governments that share a court, a university and a cricket team.",
+    "eligible_tags": ["JAM", "TTO", "BRB"],
+    "required_tags": ["JAM", "TTO", "BRB", "GRD", "LCA", "VCT", "ATG", "KNA", "DMA"],
+    "minimum_stability": 0.70, "gdp_cost_share": 0.018,
+    "governance_gain": 0.05, "productivity_gain": 0.022,
+    "colour": "#2aa6a6"
+  },
+
+  // ------------------------------------------------------------------------- Oceania --
+  "australasia": {
+    "name": "Australasia",
+    "description": "The seventh state that New Zealand was offered in 1901 and declined, taken up a century and a quarter late.",
+    "eligible_tags": ["AUS", "NZL"],
+    "required_tags": ["AUS", "NZL", "PNG"],
+    "minimum_stability": 0.76, "gdp_cost_share": 0.022,
+    "governance_gain": 0.04, "productivity_gain": 0.018,
+    "colour": "#1f6f9c"
+  }
+}
