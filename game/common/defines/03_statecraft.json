@@ -31,6 +31,15 @@
   // not. Set it to nought and diplomacy is between neighbours again.
   "AiGreatPowers": 12,
 
+  // A small country frightened of a large neighbour asks somebody larger still to
+  // stand behind it. How much stronger the neighbour has to be before it asks, what
+  // the request has to be worth to be granted, and what it is worth that the country
+  // being asked is wary of the same neighbour.
+  "AiCounterweightFear": 1.15,
+  "AiShelterWillingness": 0.20,
+  "AiShelterSharedRival": 0.50,
+  "AiShelterWarPenalty": 0.35,
+
   // An alliance is asked for and answered - see AllianceCore. What an offer has to be
   // worth, how long one put to a player stands, how long a refusal is remembered, and the
   // four things a country weighs when it is asked.

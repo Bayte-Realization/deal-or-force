@@ -378,6 +378,21 @@ public static partial class AiStatecraft
             return;
         }
 
+        // Frightened, and somebody large enough to be worth asking: ask for a guarantee.
+        //
+        // Not courtship. Courting a distant great power costs a week now and pays in five
+        // months for a pact and two years for an alliance, which is past the end of most
+        // campaigns - two versions of that were measured and both cost seventeen pacts and
+        // bought nothing. A guarantee is the instrument that fits: it commits nothing until
+        // somebody attacks, it is decided in one week rather than two years, and it makes
+        // the country asking measurably less worth invading, because the war judgement
+        // counts a guarantor exactly as it counts an ally.
+        if (worstRival is not null && worstOpinion <= defines.AiRivalryThreshold &&
+            CampaignIntel.EstimatedStrength(campaign, nation.Id, worstRival) >
+            Strength(campaign, nation) * defines.AiCounterweightFear &&
+            AskForShelter(campaign, nation, worstRival))
+            return;
+
         // Nothing has crossed a threshold yet, which is where every relationship starts:
         // neighbours dislike each other by default, so warmth has to be worked at. A
         // country spends the week courting whichever neighbour it is least unhappy with.
@@ -923,6 +938,95 @@ public static partial class AiStatecraft
     }
 
     /// <summary>Whether anybody next door is at war, which is reason enough to spend.</summary>
+    /// <summary>
+    /// Ask somebody large to stand behind us against the country we are afraid of.
+    ///
+    /// Who is worth asking is not who is heaviest. Nepal, frightened of India, could reach
+    /// China, the United States and Russia; the first version of this asked Russia, because
+    /// Russia is the largest thing within reach - and Russia is on good terms with India and
+    /// fighting a war of its own, so Russia said no, and the country that would have said
+    /// yes was never asked. Measured, in a probe, after three guesses that were not.
+    ///
+    /// So the choice and the answer are one question. Each candidate is scored by what it
+    /// would actually answer - what it thinks of us, whether it is steady, whether it is
+    /// already fighting, and above all whether it is wary of the same country - and the
+    /// request goes to the best of them, if that is good enough at all.
+    /// </summary>
+    internal static bool AskForShelter(Campaign campaign, Nation nation, Nation rival)
+    {
+        var defines = campaign.Defines;
+        var rivalStrength = CampaignIntel.EstimatedStrength(campaign, nation.Id, rival);
+
+        // Somebody already stands behind us against this: stop shopping.
+        //
+        // Without this a country asked again every week it was frightened, and since it only
+        // ever skipped the ONE country it had already asked, it collected protectors: 483
+        // guarantees stood in a world of 280 countries, and a world where everybody is
+        // guaranteed is a world where nothing can be attacked - wars fell from 29 to 24 and
+        // annexations from 61 to 38, which is not peace, it is a mechanic overreaching.
+        foreach (var relation in campaign.Relations.Values)
+        {
+            if (relation.A != nation.Id && relation.B != nation.Id) continue;
+            var patronId = relation.Other(nation.Id);
+            if (!relation.GuaranteedBy(patronId) && relation.Stance != DiplomaticStance.Allied) continue;
+            var patron = campaign.NationById(patronId);
+            if (patron is null) continue;
+            if (CampaignIntel.EstimatedStrength(campaign, nation.Id, patron) > rivalStrength) return false;
+        }
+
+        // Its own circle, built here rather than read out of the shared one: this used to
+        // read whatever the weekly pass had left in the static list, which is right exactly
+        // when that pass is the caller and silently wrong the moment anybody else asks.
+        BuildCircle(campaign, nation, rival);
+
+        Nation best = null;
+        var bestAnswer = float.MinValue;
+        foreach (var other in Circle)
+        {
+            if (other.Id == rival.Id || other.Id == nation.Id || other.OverlordId != 0) continue;
+
+            var ours = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
+            if (ours.GuaranteedBy(other.Id) || ours.Stance == DiplomaticStance.AtWar) continue;
+            // A country you merely mistrust is a country you can still ask; one you have
+            // named a rival is not.
+            if (ours.Stance == DiplomaticStance.Rival) continue;
+
+            var theirs = CampaignDiplomacy.Peek(campaign, other.Id, rival.Id);
+            if (theirs is { Stance: DiplomaticStance.Allied }) continue;
+            if (CampaignIntel.EstimatedStrength(campaign, nation.Id, other) <= rivalStrength) continue;
+
+            // What they would say. Their opinion of us counts for half of what it would in
+            // an alliance - a great power does not shelter a small country because it is
+            // fond of it - and what the shelter is against counts for most of it.
+            var answer = ours.Opinion / 200f + M.Clamp(other.Stability - 0.5f, -0.3f, 0.3f);
+            if (theirs is not null && theirs.Opinion <= defines.AiRivalryThreshold)
+                answer += defines.AiShelterSharedRival;
+            foreach (var war in campaign.Wars)
+                if (!war.Ended && war.Involves(other.Id))
+                {
+                    // Not a refusal: a guarantee commits nothing today, and a power already
+                    // fighting is if anything more interested in who else is drawn in. It
+                    // makes them harder to ask, not impossible.
+                    answer -= defines.AiShelterWarPenalty;
+                    break;
+                }
+
+            if (answer <= bestAnswer) continue;
+            bestAnswer = answer;
+            best = other;
+        }
+
+        if (best is null || bestAnswer < defines.AiShelterWillingness) return false;
+
+        new GuaranteeCommand { IssuerId = best.Id, TargetId = nation.Id, Guarantee = true }
+            .Apply(campaign);
+        CampaignDiplomacy.Get(campaign, nation.Id, best.Id).LastActionDay = campaign.ElapsedDays;
+        DiagnosticLogs.Write("simulation",
+            $"SHELTER {best.Tag} guarantees {nation.Tag} against {rival.Tag} " +
+            $"answer={bestAnswer:0.00} day={campaign.ElapsedDays}");
+        return true;
+    }
+
     private static bool Threatened(Campaign campaign, Nation nation)
     {
         foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex))
