@@ -498,3 +498,5 @@ For further information |
 | `flag_phl_at_war.png` | [War Flag of the Philippines.svg](https://commons.wikimedia.org/wiki/File:War_Flag_of_the_Philippines.svg) | Public domain | See File history below for details. |
 | `flag_ser_communism.png` | [Flag of the Socialist Republic of Serbia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Montenegro_(1946%E2%80%931993),_Flag_of_Serbia_(1947%E2%80%931992).svg) | Public domain | User:CrnaGora |
 | `flag_svn_communism.png` | [Flag of the Socialist Republic of Slovenia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovenia_(1945%E2%80%931991).svg) | Public domain | No machine-readable author provided. Zscout370 assumed (base |
+| `flag_culture_tuareg.png` | [MNLA flag.svg](https://commons.wikimedia.org/wiki/File:MNLA_flag.svg) | Public domain | Orionist |
+| `flag_formable_iberia_greater.png` | [Flag of the Hispanicity.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Hispanicity.svg) | CC BY-SA 3.0 | Rastrojo |
