@@ -6,12 +6,23 @@ namespace DealOrForce.Simulation;
 public sealed partial class Nation
 {
     /// <summary>
-    /// The army this country is built to keep - the number of formations it began with.
+    /// The army this country began with, learned the first time anybody asks and never
+    /// changed after. The baseline everything below is a multiple of.
+    /// </summary>
+    public float FoundingDivisions;
+
+    /// <summary>
+    /// The army this country is trying to keep NOW.
     ///
-    /// Set the first time anybody asks and never again, so it survives a save and does not
-    /// have to be threaded through the bootstrap. It is what a country rebuilds towards
-    /// after a war has cost it formations, which is the other half of letting formations be
-    /// lost at all: destruction without replacement is not attrition, it is a death spiral.
+    /// It used to be the founding figure and nothing else, with a ceiling of exactly one -
+    /// so a country could replace what it lost, up to the army it had on the first morning,
+    /// and not one division further. Nobody in the world could arm. A country that was
+    /// threatened, voted itself a wartime budget and raised its taxes kept precisely the
+    /// army it started with, which is the one thing no state under threat has ever done.
+    ///
+    /// Now it moves, slowly, towards what the country's own military budget implies - and
+    /// that budget already answers to war, to a rival next door, to a neighbour's war and
+    /// to what the treasury can bear. Counting the situation once, there, rather than twice.
     /// </summary>
     public float EstablishedDivisions;
 
@@ -108,12 +119,15 @@ public static class Attrition
     /// marked `known_defect=true`. What has actually happened to such a formation is that
     /// it surrendered, so it is removed and counted.
     /// </summary>
-    public static void Destroy(Campaign campaign, Army army, string reason)
+    public static void Destroy(Campaign campaign, Army army, string reason, bool lost = true)
     {
         if (campaign is null || army is null) return;
         campaign.Armies.Remove(army);
         var owner = campaign.NationById(army.NationId);
-        if (owner is not null) owner.FormationsLost++;
+        // A formation stood down is not a formation lost. The ledger, the attrition report
+        // and the war tally are all about what a war cost, and a peacetime demobilisation
+        // would read as casualties in every one of them.
+        if (owner is not null && lost) owner.FormationsLost++;
 
         // The battle it was standing in, and the line it was posted to, both hold its id
         // rather than the formation itself. A dangling id is harmless where it is read -
@@ -129,7 +143,59 @@ public static class Attrition
         // The same tally the rest of warfare reports through, so the bench and the in-game
         // console say this out loud rather than leaving a formation to quietly vanish from
         // a list.
-        Warfare.OutcomeTally[reason] = Warfare.OutcomeTally.GetValueOrDefault(reason) + 1;
+        if (lost) Warfare.OutcomeTally[reason] = Warfare.OutcomeTally.GetValueOrDefault(reason) + 1;
+    }
+
+    /// <summary>
+    /// The army this country is trying to keep, and what decides it.
+    ///
+    /// One term, and it is deliberate: the military budget. A country at war votes sixteen
+    /// per cent of its spending to the army, a threatened one nine, a quiet one four and a
+    /// half - see AiStatecraft.Economy - so the whole of the geopolitics is already in that
+    /// number, and reading it here counts the situation once rather than twice.
+    ///
+    /// Two things temper it. Men, because an establishment is people and a country whose
+    /// reserve is empty is not keeping a larger army whatever it votes. And the country's
+    /// own long habit: two neighbours with the same budget do not keep the same army, and a
+    /// world where they did would have every border in it mirror-imaged.
+    /// </summary>
+    internal static float Establishment(Campaign campaign, Nation nation)
+    {
+        var defines = campaign.Defines;
+        if (nation.FoundingDivisions <= 0f) return nation.EstablishedDivisions;
+
+        var voted = nation.MilitarySpending / MathF.Max(0.0001f, defines.BaselineMilitarySpending);
+        var demand = MathF.Pow(MathF.Max(0.05f, voted), defines.ArmyDemandElasticity);
+
+        // Men. Measured against the army it began with, so a country that has spent its
+        // reserve cannot vote itself divisions it has nobody to put in.
+        var reserve = nation.ManpowerReserve /
+                      MathF.Max(1f, nation.FoundingDivisions * MilitaryBootstrap.DivisionSize);
+        demand *= M.Clamp(defines.ArmyManpowerFloor + reserve * defines.ArmyManpowerWeight,
+            defines.ArmyManpowerFloor, 1.15f);
+
+        // And its own habit, which is a hash rather than a roll: this is asked for every
+        // country every cycle, and consuming the campaign's generator here would make every
+        // other roll in the world land differently because one army moved.
+        demand *= 1f + (Habit(campaign.Seed, nation.Id, campaign.ElapsedDays,
+            defines.ArmyHabitSeasonDays) - 0.5f) * defines.ArmyHabitSpread;
+
+        return nation.FoundingDivisions *
+               M.Clamp(demand, defines.ArmyDemandFloor, defines.ArmyDemandCeiling);
+    }
+
+    /// <summary>A country's own slow wobble, nought to one, from the seed and the season.</summary>
+    private static float Habit(int seed, int nationId, int day, int seasonDays)
+    {
+        unchecked
+        {
+            var hash = (uint)(seed * 73856093) ^ (uint)(nationId * 19349663) ^
+                       (uint)(day / Math.Max(1, seasonDays) * 83492791);
+            hash ^= hash >> 13;
+            hash *= 2654435761u;
+            hash ^= hash >> 16;
+            return (hash & 0xFFFFFF) / (float)0x1000000;
+        }
     }
 
     /// <summary>
@@ -160,14 +226,34 @@ public static class Attrition
             if (nation.Population <= 0) continue;
             var strength = Standing.GetValueOrDefault(nation.Id);
 
-            // The establishment is whatever the country started with, learned on first sight.
-            if (nation.EstablishedDivisions <= 0f)
+            // What it began with, learned on first sight and never changed after.
+            if (nation.FoundingDivisions <= 0f)
             {
+                nation.FoundingDivisions = strength;
                 nation.EstablishedDivisions = strength;
                 continue;
             }
 
             if ((campaign.ElapsedDays + nation.Id) % defines.ArmyRebuildIntervalDays != 0) continue;
+
+            // The establishment follows the country's own budget, and it follows it slowly:
+            // an army is not raised or sent home in a fortnight, and a target that jumped
+            // would have every country in the world lurching between two sizes.
+            nation.EstablishedDivisions = M.Lerp(nation.EstablishedDivisions,
+                Establishment(campaign, nation), defines.ArmyEstablishmentDrift);
+
+            // Over establishment and at peace: one formation goes home. Without this the
+            // world only ever ratchets upwards - every war leaves the winner permanently
+            // larger, and nothing ever comes back down.
+            if (strength > nation.EstablishedDivisions * defines.ArmyDisbandMargin)
+            {
+                var fighting = false;
+                foreach (var war in campaign.Wars)
+                    if (!war.Ended && war.Involves(nation.Id)) { fighting = true; break; }
+                if (!fighting) StandDown(campaign, nation);
+                continue;
+            }
+
             if (strength >= nation.EstablishedDivisions * defines.ArmyRebuildCeiling) continue;
             if (nation.Treasury < defines.ArmyRebuildCost) continue;
             if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) continue;
@@ -182,6 +268,32 @@ public static class Attrition
             }.Apply(campaign);
             Standing[nation.Id] = strength + 1f;
         }
+    }
+
+    /// <summary>
+    /// Send one formation home.
+    ///
+    /// The weakest one, and never one that is in a battle or posted to a front - a country
+    /// demobilising does not start by dissolving the division holding the line. Most of its
+    /// people go back into the reserve, which is what makes standing down and raising again
+    /// a decision about money and time rather than about population.
+    /// </summary>
+    private static void StandDown(Campaign campaign, Nation nation)
+    {
+        Army weakest = null;
+        foreach (var army in campaign.Armies)
+        {
+            if (army.NationId != nation.Id || army.InBattle) continue;
+            if (army.AssignedWarId >= 0 || army.PlanActive) continue;
+            if (weakest is null || army.Power < weakest.Power) weakest = army;
+        }
+        if (weakest is null) return;
+
+        nation.ManpowerReserve += weakest.Personnel * campaign.Defines.ArmyStandDownReturn;
+        Destroy(campaign, weakest, "stood down", lost: false);
+        DiagnosticLogs.Write("simulation",
+            $"STAND_DOWN nation={nation.Tag} army={weakest.Id} day={campaign.ElapsedDays}");
+        campaign.MarkStrategicChange();
     }
 
     /// <summary>Where a country raises troops: the most populous region it still holds.</summary>
