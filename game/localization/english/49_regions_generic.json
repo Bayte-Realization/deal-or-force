@@ -1,0 +1,14 @@
+// Words that are one row for the whole world. Loaded last; settles the collisions.
+{
+  "Central": "Central",
+  "Centre": "Centre",
+  "East": "East",
+  "Eastern": "Eastern",
+  "North": "North",
+  "Northern": "Northern",
+  "Plateaux": "Plateaux",
+  "South": "South",
+  "Southern": "Southern",
+  "West": "West",
+  "Western": "Western"
+}
