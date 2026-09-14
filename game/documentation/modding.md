@@ -538,3 +538,58 @@ rebuilt; everything else is live immediately.
 `selftest` runs every command once and reports the ones that threw. It is a check on the
 console rather than on your mod, and it perturbs the world it runs in, so give it a campaign
 you do not mind losing.
+
+## States that answer to other states
+
+`common/subjects/` is what a dependency can be. Until it existed a war could end two ways -
+the loser was annexed or the loser was let go - and the third way is most of history.
+
+Five kinds ship: protectorate, puppet, satellite, dominion, client. Nothing in the code
+names any of them. Add a row and the kind exists:
+
+    "occupation_zone": {
+      "name": "Occupation zone",
+      "description": "Somebody else's army decides, and says so.",
+      "tribute": 0.35,          share of the subject's weekly tax taken by the overlord
+      "manpower": 0.25,         share of its manpower growth taken with it
+      "joins_wars": true,       does it come when the overlord is attacked
+      "dragged_into_wars": true does it come when the overlord attacks
+      "may_declare_war": false,
+      "liberty_desire": 0.60,   what it wants, before circumstances are counted
+      "grace_days": 180         how long before it starts wanting anything
+    }
+
+### What liberty desire actually is
+
+`liberty_desire` in a row is a floor, not an answer. What a subject wants is worked out every
+week, and every term in it is something that moves:
+
+| it wants out more when | because |
+|---|---|
+| it has grown large against its overlord | a dependency the size of its overlord is not one for long |
+| its overlord cannot govern itself | a state that cannot hold itself together holds nobody |
+| its overlord is at war | which is the moment every subject in history has chosen |
+| it wants out less when | |
+| its overlord is overwhelming | which is its own argument |
+
+Those four weights live in the `weights` block at the top of the same file, along with
+`break_at` (what the figure has to reach before the subject simply leaves) and
+`drift_per_week` (how fast it can move). A subject that has decided takes a year or two to
+get there rather than announcing it next Tuesday, and the whole of that is two numbers you
+can change.
+
+### Flags
+
+`subject` is a flag qualifier, so the kind's id composes into a file name:
+
+    flag_fra_puppet.png              France while somebody else's puppet
+    flag_deu_occupation_zone.png     and the kind you just invented
+
+It sits above ideology in the order, because a government installed from outside outranks
+what it claims to believe.
+
+### From the console
+
+    subjects [TAG]     who answers to a country, and how badly each wants out
+    puppet TAG [kind]  make one answer to yours
+    release TAG        let one go

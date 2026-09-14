@@ -239,6 +239,40 @@ public sealed partial class Nation
     public int LastSecessionDay = -9999;
 
     /// <summary>
+    /// The country this one answers to, or zero. See <see cref="SubjectSystem"/>.
+    ///
+    /// An id and not a tag, because tags are reused as countries come and go and a
+    /// dependency has to survive that. One overlord at most: a country with two masters is
+    /// a country in a war, not a country in an arrangement.
+    /// </summary>
+    public int OverlordId;
+
+    /// <summary>Which kind, by its id in `common/subjects`. Empty when there is no overlord.</summary>
+    public string SubjectType = "";
+
+    /// <summary>The day the arrangement began, which is what the grace period counts from.</summary>
+    public int SubjectSinceDay = -9999;
+
+    /// <summary>
+    /// What this country paid its overlord last week, and what it took from its own
+    /// subjects. Both are recorded rather than recomputed because a treasury carries a
+    /// country's whole budget: a tribute of sixty million inside a deficit of four billion
+    /// is invisible in the balance and is the thing a player wants to see.
+    /// </summary>
+    public float TributePaidWeekly;
+
+    public float TributeTakenWeekly;
+
+    /// <summary>
+    /// How badly it wants out, nought to one, moving a little each week.
+    ///
+    /// Stored rather than computed on demand because it is a position rather than an
+    /// opinion: a subject that has been drifting towards independence for six years does
+    /// not forget that because its overlord had a good month.
+    /// </summary>
+    public float LibertyDesire;
+
+    /// <summary>
     /// What kind of revolt founded this country, for the countries that were founded by one:
     /// `national`, `sectarian`, `discontent`, or empty for a state that was always here.
     ///
@@ -554,6 +588,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
             using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);
+            using (SimProfiler.Measure("subjects")) SubjectSystem.Tick(this);
             using (SimProfiler.Measure("statecraft")) AiStatecraft.Tick(this);
             using (SimProfiler.Measure("events")) EventSystem.Tick(this);
             using (SimProfiler.Measure("history")) History.Capture(this);

@@ -145,6 +145,15 @@ public partial class DealOrForceGame
         Add("occupy", "WAR", "occupy [PROVINCE]",
             "Hand a province to your country's control. The selected one unless a number is given.",
             ConsoleOccupy);
+        Add("subjects", "DIPLOMACY", "subjects [DEU]",
+            "Who answers to a country, under what arrangement, and how badly each of them " +
+            "wants out.", ConsoleSubjects, "puppets");
+        Add("puppet", "DIPLOMACY", "puppet LUX [puppet|protectorate|satellite|dominion|client]",
+            "Make a country answer to yours. The kinds come from common/subjects, so a mod " +
+            "may add its own.", ConsoleSubjugate, "subjugate");
+        Add("release", "DIPLOMACY", "release LUX",
+            "Let one go.", ConsoleRelease);
+
         Add("annex", "WAR", "annex LUX",
             "Take a whole country. Blunt on purpose - it is for reaching a state of the world, " +
             "not for playing.", ConsoleAnnex);
@@ -1142,6 +1151,66 @@ public partial class DealOrForceGame
         return EscapeBb($"{nation.Tag}: warmest and coldest of {rows.Length:N0} opinion(s)\n" +
                         string.Join("\n", rows.Take(8).Select(Row)) + "\n  …\n" +
                         string.Join("\n", rows.TakeLast(8).Select(Row)));
+    }
+
+    private string ConsoleSubjects(string argument)
+    {
+        if (_campaign is null) return "No campaign.";
+        var nation = ConsoleNation(argument);
+        if (nation is null) return "No such country.";
+
+        var lines = new List<string>();
+        var mine = SubjectSystem.SubjectsOf(_campaign, nation);
+        foreach (var subject in mine)
+        {
+            var kind = SubjectCatalog.Of(subject.SubjectType);
+            var held = _campaign.ElapsedDays - subject.SubjectSinceDay;
+            var grace = kind is not null && held < kind.GraceDays
+                ? $", settling for another {kind.GraceDays - held:N0} day(s)"
+                : "";
+            lines.Add($"  {subject.Tag} {EscapeBb(subject.Name)} · {kind?.Name ?? subject.SubjectType} · " +
+                      $"wants out {subject.LibertyDesire:P0} of the way " +
+                      $"(pull {SubjectSystem.LibertyDesireOf(_campaign, subject):P0}){grace}");
+        }
+
+        var over = SubjectSystem.OverlordOf(_campaign, nation);
+        if (over is not null)
+            lines.Insert(0, $"  {nation.Tag} itself answers to {over.Tag} as a " +
+                            $"{SubjectCatalog.Of(nation.SubjectType)?.Name ?? nation.SubjectType}.");
+        if (lines.Count == 0)
+            return $"{nation.Tag} holds nobody and answers to nobody. " +
+                   $"Kinds available: {string.Join(", ", SubjectCatalog.All.Select(kind => kind.Id))}";
+        return string.Join("\n", lines);
+    }
+
+    private string ConsoleSubjugate(string argument)
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var words = ConsoleWords(argument);
+        if (words.Length == 0)
+            return "Usage: puppet LUX [kind]. Kinds: " +
+                   string.Join(", ", SubjectCatalog.All.Select(kind => kind.Id));
+        var target = ConsoleNation(words[0]);
+        if (target is null) return $"No country called '{EscapeBb(words[0])}'.";
+        var kindId = words.Length > 1 ? words[1] : "puppet";
+        if (!SubjectSystem.Subjugate(_campaign, _campaign.Player, target, kindId, out var refusal))
+            return $"Refused: {EscapeBb(refusal)}";
+        Refresh();
+        var kind = SubjectCatalog.Of(kindId);
+        return $"{target.Name} answers to {_campaign.Player.Tag} as a {kind?.Name ?? kindId}. " +
+               $"Tribute {kind?.Tribute:P0} of its taxes; flag {FlagCatalog.Resolve(_campaign, target)}.";
+    }
+
+    private string ConsoleRelease(string argument)
+    {
+        if (_campaign is null) return "No campaign.";
+        var target = ConsoleNation(argument);
+        if (target is null || target.OverlordId == 0)
+            return "Usage: release LUX - and it has to answer to somebody.";
+        var was = _campaign.NationById(target.OverlordId);
+        SubjectSystem.Release(_campaign, target);
+        Refresh();
+        return $"{target.Name} no longer answers to {was?.Tag ?? "anybody"}.";
     }
 
     private string ConsoleOpinion(string argument)

@@ -1,0 +1,113 @@
+// States that exist and do not decide.
+//
+// ---------------------------------------------------------------------------------------
+// What this file is
+// ---------------------------------------------------------------------------------------
+//
+// Until now a war could end two ways: the loser was eaten, or the loser was let go. There
+// was no third, and the third is most of history. A protectorate, a puppet, a dominion, a
+// satellite - a country that keeps its army, its economy and its flag, and answers to
+// somebody else about what it does with them.
+//
+// Each kind below is a row. Add a row and the game has a new kind; nothing in the code
+// names any of these, and `SubjectCatalog` reads whatever is here.
+//
+// ---------------------------------------------------------------------------------------
+// What a row means
+// ---------------------------------------------------------------------------------------
+//
+//     tribute            share of the subject's weekly tax that goes to the overlord
+//     manpower           share of the subject's manpower growth that goes with it
+//     joins_wars         does it turn up when the overlord is attacked
+//     dragged_into_wars  does it turn up when the overlord ATTACKS somebody
+//     may_declare_war    may it start a war of its own
+//     liberty_desire     how much it wants out, before circumstances are counted
+//     grace_days         how long after being made a subject before it starts wanting out
+//
+// `liberty_desire` is the base, not the answer. What a subject actually feels is worked out
+// every week from its size against its overlord's, how stable the overlord is, and whether
+// the overlord is losing a war - because a dependency is a bargain about power, and it is
+// renegotiated the moment the power changes.
+{
+  "weights": {
+    // How much a subject's own size counts. A dependency the size of its overlord is not a
+    // dependency for long, and history is short of exceptions.
+    "size_pull": 0.55,
+
+    // An overlord who cannot govern itself cannot govern anybody else.
+    "overlord_instability_pull": 0.40,
+
+    // A war the overlord is losing is the moment every subject has ever chosen.
+    "overlord_at_war_pull": 0.20,
+
+    // And the other direction: overwhelming strength is its own argument.
+    "overlord_strength_hold": 0.35,
+
+    // What liberty desire has to reach before the subject simply leaves.
+    "break_at": 1.0,
+
+    // How fast it moves. Per week, so a subject that has decided takes a year or two to
+    // get there rather than announcing it the following Tuesday.
+    "drift_per_week": 0.02
+  },
+
+  "protectorate": {
+    "name": "Protectorate",
+    "description": "It keeps its government and its flag. Its foreign policy is made somewhere else.",
+    "tribute": 0.10,
+    "manpower": 0.05,
+    "joins_wars": true,
+    "dragged_into_wars": false,
+    "may_declare_war": false,
+    "liberty_desire": 0.20,
+    "grace_days": 730
+  },
+
+  "puppet": {
+    "name": "Puppet",
+    "description": "A government installed and kept there. It fights the wars it is told to.",
+    "tribute": 0.25,
+    "manpower": 0.20,
+    "joins_wars": true,
+    "dragged_into_wars": true,
+    "may_declare_war": false,
+    "liberty_desire": 0.40,
+    "grace_days": 365
+  },
+
+  "satellite": {
+    "name": "Satellite",
+    "description": "Its own party, its own army, its own five-year plan, and none of its own choices.",
+    "tribute": 0.15,
+    "manpower": 0.15,
+    "joins_wars": true,
+    "dragged_into_wars": true,
+    "may_declare_war": false,
+    "liberty_desire": 0.30,
+    "grace_days": 1095
+  },
+
+  "dominion": {
+    "name": "Dominion",
+    "description": "Self-governing, and turns up when the senior partner is attacked. Usually.",
+    "tribute": 0.05,
+    "manpower": 0.10,
+    "joins_wars": true,
+    "dragged_into_wars": false,
+    "may_declare_war": true,
+    "liberty_desire": 0.10,
+    "grace_days": 1825
+  },
+
+  "client": {
+    "name": "Client state",
+    "description": "Nobody signed anything. The money and the weapons come from one direction.",
+    "tribute": 0.05,
+    "manpower": 0.00,
+    "joins_wars": false,
+    "dragged_into_wars": false,
+    "may_declare_war": true,
+    "liberty_desire": 0.15,
+    "grace_days": 365
+  }
+}

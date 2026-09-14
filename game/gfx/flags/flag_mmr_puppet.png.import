@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://plq5mej5lyw7"
-path="res://.godot/imported/flag_srb_fascism.png-e7c808cecab77cc14624b1f63ae9351a.ctex"
+uid="uid://br143ykoc7qc0"
+path="res://.godot/imported/flag_mmr_puppet.png-eb293848825a6856459c643fc6fc8d2b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://game/gfx/flags/flag_srb_fascism.png"
-dest_files=["res://.godot/imported/flag_srb_fascism.png-e7c808cecab77cc14624b1f63ae9351a.ctex"]
+source_file="res://game/gfx/flags/flag_mmr_puppet.png"
+dest_files=["res://.godot/imported/flag_mmr_puppet.png-eb293848825a6856459c643fc6fc8d2b.ctex"]
 
 [params]
 

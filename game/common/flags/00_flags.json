@@ -58,6 +58,21 @@
       "order": 5
     },
 
+    // Who the country is arranged BY, when that is somebody else - see common/subjects.
+    // Second, because a government installed from outside outranks what it claims to
+    // believe: Vichy France flew neither the Republic's flag nor a fascist one, it flew
+    // what an occupied France was allowed to fly.
+    //
+    //     flag_fra_puppet.png            France while somebody else's puppet
+    //     flag_chn_puppet.png            the Nanjing government
+    //
+    // The value is the kind's id, so a mod that adds `occupation_zone` to common/subjects
+    // gets `flag_deu_occupation_zone` for free.
+    "subject": {
+      "from": "subject",
+      "order": 7
+    },
+
     // What a government believes is the thing that has historically changed a flag, and it
     // is first for that reason: Russia in 1917, Germany in 1933, Iran in 1979, Spain twice.
     "ideology": {
