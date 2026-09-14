@@ -87,10 +87,15 @@
       "order": 20
     },
 
-    // A wartime flag or a battle ensign. Nothing in the base game uses this; it is declared
-    // because it costs one line and it is the clearest possible example of a qualifier that
-    // has nothing to do with politics, for anybody reading this to work out how to add
-    // their own.
+    // A wartime flag. One country in the world genuinely has one: the Philippines flies its
+    // flag with the red field uppermost, by law, and only while the country is at war. That
+    // is the whole of what this qualifier is for.
+    //
+    // It is NOT for battle ensigns. A naval ensign is what a navy flies from a ship, not what
+    // a country flies when it is fighting - twenty-three of them were shipped here once and
+    // had to come back out, and three more (Bolivia's and Peru's state flags, Japan's naval
+    // ensign) followed them. If a flag's own name says state, naval or regimental, it does
+    // not belong under this condition.
     "at_war": {
       "from": "war",
       "order": 30,

@@ -3347,6 +3347,37 @@ public static class Program
         if (variant != "flag_culture_kurdish_socialism")
             return $"a socialist Kurdish state resolved to '{variant}' rather than its own banner";
 
+        // And the one condition that is not politics at all. The Philippines is the whole
+        // reason the `at_war` qualifier exists: its flag is flown red-field-up, by law and
+        // only, while the country is at war. Three other countries were filed under it once
+        // - Bolivia's and Peru's state flags and Japan's naval ensign - and none of them was
+        // a war flag; this is what the condition is for, so this is what is checked.
+        var philippines = campaign.NationByTag("PHL");
+        if (philippines is not null)
+        {
+            if (FlagCatalog.Resolve(campaign, philippines) != "flag_phl")
+                return "the Philippines at peace does not fly its own flag";
+
+            var enemy = campaign.Nations.FirstOrDefault(
+                other => other.Id != philippines.Id && other.OverlordId == 0 &&
+                         CampaignDiplomacy.CanDeclareWar(campaign, other.Id, philippines.Id, out _));
+            if (enemy is null)
+                return "nobody in the world was able to declare war on the Philippines";
+
+            CampaignDiplomacy.DeclareWar(campaign, enemy.Id, philippines.Id);
+            var wartime = FlagCatalog.Resolve(campaign, philippines);
+            if (wartime != "flag_phl_at_war")
+                return $"the Philippines went to war and flew '{wartime}' rather than its war flag";
+
+            // And the flag comes back down again. `at_peace` is declared silent, so this is
+            // also the check that a silent value drops out of the name rather than becoming
+            // a file nobody has.
+            foreach (var war in campaign.Wars) war.Ended = true;
+            var afterwards = FlagCatalog.Resolve(campaign, philippines);
+            if (afterwards != "flag_phl")
+                return $"the war ended and the Philippines went on flying '{afterwards}'";
+        }
+
         // Every flag on disk has to be reachable by the name it is filed under: a picture
         // nothing can ask for is a picture that is not in the game.
         var unreachable = 0;
