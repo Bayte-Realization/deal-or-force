@@ -552,30 +552,7 @@ iThe source code of this  SVG is v |
 | `flag_syr_absolute_monarchy.png` | [Flag of Kingdom of Syria (1920-03-08 to 1920-07-24).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kingdom_of_Syria_%281920-03-08_to_1920-07-24%29.svg) | Public domain | Ch1902 |
 | `flag_twn_provisional_government.png` | [Flag of the Republic of Formosa (1895).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_Formosa_%281895%29.svg) | Public domain | Henry Szytko, vectorised by cypp0847 |
 | `flag_usa_traditionalism.png` | [Flag of the United States (1777-1795).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_States_%281777-1795%29.svg) | Public domain | Jacobolus (SVG file) |
-| `flag_bra_at_war.png` | [Naval Jack of Brazil.svg](https://commons.wikimedia.org/wiki/File:Naval_Jack_of_Brazil.svg) | CC BY-SA 3.0 | unknown |
-| `flag_chl_at_war.png` | [Naval Jack of Chile.svg](https://commons.wikimedia.org/wiki/File:Naval_Jack_of_Chile.svg) | Public domain | unknown |
-| `flag_chn_at_war.png` | [Flag of the People's Liberation Army.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_People%27s_Liberation_Army.svg) | Public domain | See file history |
-| `flag_deu_at_war.png` | [War Ensign of Germany (1903-1918).svg](https://commons.wikimedia.org/wiki/File:War_Ensign_of_Germany_%281903-1918%29.svg) | Public domain | The original uploader was R-41 at English Wikipedia. |
-| `flag_dnk_at_war.png` | [Naval Ensign of Denmark.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Denmark.svg) | Public domain | unknown |
-| `flag_egy_at_war.png` | [Naval Ensign of Egypt.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Egypt.svg) | Public domain | Denelson83 from original Flag of Egypt.svg |
-| `flag_esp_at_war.png` | [Naval Jack of Spain.svg](https://commons.wikimedia.org/wiki/File:Naval_Jack_of_Spain.svg) | Public domain | Denelson83 |
-| `flag_fin_at_war.png` | [Flag of Finland (state).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Finland_%28state%29.svg) | Public domain | Axel Gallén-Kallela |
-| `flag_gbr_at_war.png` | [Naval Ensign of the United Kingdom.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_the_United_Kingdom.svg) | Public domain | unknown |
-| `flag_grc_at_war.png` | [Naval Jack of Greece.svg](https://commons.wikimedia.org/wiki/File:Naval_Jack_of_Greece.svg) | CC BY-SA 3.0 | (of code) cs:User:-xfi- |
-| `flag_ind_at_war.png` | [Naval Ensign of India.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_India.svg) | Public domain | Indian Navy |
-| `flag_isl_at_war.png` | [Flag of Iceland (state).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iceland_%28state%29.svg) | Public domain | Kjallakr |
-| `flag_isr_at_war.png` | [Naval Ensign of Israel.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Israel.svg) | Public domain | Drawn by Makaristos, based on a previous version by Denelson |
-| `flag_ita_at_war.png` | [Naval Ensign of Italy.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Italy.svg) | Public domain | F l a n k e r |
-| `flag_nld_at_war.png` | [Naval Jack of the Netherlands.svg](https://commons.wikimedia.org/wiki/File:Naval_Jack_of_the_Netherlands.svg) | CC BY-SA 3.0 | Made by David Newton. Colours altered by Denelson83. |
-| `flag_pol_at_war.png` | [Naval Ensign of Poland.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Poland.svg) | Public domain | Denelson83, Mareklug, Wanted |
-| `flag_prk_at_war.png` | [Naval Ensign of North Korea.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_North_Korea.svg) | Public domain | Raster (FotW): Miles Li
 Raster 2: TRAJAN 117
 
 Vector: Mliu92 |
-| `flag_prt_at_war.png` | [Naval Jack of Portugal.svg](https://commons.wikimedia.org/wiki/File:Naval_Jack_of_Portugal.svg) | Public domain | Denelson83 |
-| `flag_rus_at_war.png` | [Naval Ensign of Russia.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Russia.svg) | Public domain | Zscout370, SeNeKa |
-| `flag_swe_at_war.png` | [Naval Ensign of Sweden.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Sweden.svg) | CC BY-SA 3.0 | User: David Newton |
-| `flag_tha_at_war.png` | [Naval Ensign of Thailand.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Thailand.svg) | Public domain | Multiple |
-| `flag_twn_at_war.png` | [Naval Jack of the Republic of China.svg](https://commons.wikimedia.org/wiki/File:Naval_Jack_of_the_Republic_of_China.svg) | Public domain | Lu Haodong |
-| `flag_ukr_at_war.png` | [Naval Ensign of Ukraine.svg](https://commons.wikimedia.org/wiki/File:Naval_Ensign_of_Ukraine.svg) | Public domain | UP9 |
 | `flag_yug_absolute_monarchy.png` | [Flag of the Kingdom of Yugoslavia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Yugoslavia.svg) | Public domain | Fibonacci |
