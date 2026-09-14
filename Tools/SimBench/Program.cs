@@ -92,7 +92,7 @@ public static class Program
             AnsweringToSomebodyMeansSomething());
         failures += Check("an alliance is asked for, answered and left",
             AnAllianceIsAskedForAndAnswered());
-        failures += Check("the war the scenario is about opens with somebody on its front",
+        failures += Check("the war the scenario is about opens with both armies on its front",
             TheFrontIsMannedOnTheFirstMorning());
 
         Console.WriteLine();
@@ -5869,77 +5869,55 @@ public static class Program
     /// is offered rather than signed for.
     /// </summary>
     /// <summary>
-    /// The war the scenario is about has two armies standing on it, not walking towards it.
+    /// The war the scenario is about opens with both armies standing on it.
     ///
-    /// Divisions are dealt around their own capital, which is right for a country at peace
-    /// and was silently wrong for the two countries at war: the front was drawn across
-    /// eastern Ukraine with every Russian division near Moscow and every Ukrainian one near
-    /// Kyiv, eight hundred kilometres away. The line held in the bench because neither side
-    /// could reach it, which is not the same thing as a stalemate.
+    /// The deployment planner has always known how to do this - most of an army goes to its
+    /// front when there is a front, and 94% of it for these two countries. It ran one line
+    /// before the fronts were built, so what it actually saw was `front=0` for both, fell
+    /// through to the peacetime branch, and spread each army along every border it has: for
+    /// Russia two hundred and thirty-seven provinces from Finland to the Pacific.
     ///
-    /// Measured in degrees rather than provinces because that is what the deployment file
-    /// is written in, and two degrees is about a hundred and fifty kilometres - close enough
-    /// to be on the front by the end of the first week rather than the end of the spring.
+    /// Measured where it matters - after the map is attached, which is the moment the
+    /// planner runs - and measured as "is this division standing on a front province",
+    /// which is the question, rather than as a distance from a line somebody wrote down.
     /// </summary>
     private static string TheFrontIsMannedOnTheFirstMorning()
     {
         var campaign = Campaign.CreateBootstrap(20240501);
-        var russia = campaign.NationByTag("RUS");
-        var ukraine = campaign.NationByTag("UKR");
-        if (russia is null || ukraine is null) return "";
+        if (!AttachMap(campaign)) return "";
 
-        // The contact line, in the places both sides agree it runs through.
-        var line = new[]
-        {
-            (38.15f, 49.41f), (38.00f, 48.60f), (37.75f, 48.14f), (37.50f, 47.94f),
-            (36.86f, 47.83f), (35.83f, 47.44f), (34.60f, 47.05f), (32.62f, 46.64f)
-        };
+        var war = campaign.Wars.Find(candidate => !candidate.Ended);
+        if (war is null) return "the scenario opens with no war at all";
+        var attacker = campaign.NationById(war.AttackerId);
+        var defender = campaign.NationById(war.DefenderId);
+        if (attacker is null || defender is null) return "";
 
-        int Near(Nation nation, float within)
+        int OnTheFront(Nation nation)
         {
-            var count = 0;
+            var front = war.FriendlyFront(nation.Id);
+            var standing = 0;
             foreach (var army in campaign.Armies)
-            {
-                if (army.NationId != nation.Id) continue;
-                foreach (var (longitude, latitude) in line)
-                {
-                    var dx = army.Longitude - longitude;
-                    var dy = army.Latitude - latitude;
-                    if (MathF.Sqrt(dx * dx + dy * dy) > within) continue;
-                    count++;
-                    break;
-                }
-            }
-            return count;
+                if (army.NationId == nation.Id && army.ProvinceId > 0 && front.Contains(army.ProvinceId))
+                    standing++;
+            return standing;
         }
 
-        var theirs = Near(russia, 2f);
-        var ours = Near(ukraine, 2f);
-        if (theirs < 8)
-            return $"{theirs} Russian division(s) are within two degrees of the front on day one";
-        if (ours < 8)
-            return $"{ours} Ukrainian division(s) are within two degrees of the front on day one";
+        var theirs = campaign.Armies.Count(army => army.NationId == attacker.Id);
+        var ours = campaign.Armies.Count(army => army.NationId == defender.Id);
+        if (war.AttackerFront.Count == 0 || war.DefenderFront.Count == 0)
+            return "the war has no front on the day the map arrives, so nobody can be posted to one";
 
-        // And the rest of the world is still at home, because a deployment file that quietly
-        // moved everybody would be a worse bug than the one it fixes.
-        var elsewhere = 0;
-        foreach (var nation in campaign.Nations)
-        {
-            if (nation.Id == russia.Id || nation.Id == ukraine.Id) continue;
-            if (DeploymentCatalog.Of(nation.Tag) is not null) continue;
-            foreach (var army in campaign.Armies)
-            {
-                if (army.NationId != nation.Id) continue;
-                var dx = army.Longitude - nation.CapitalLongitude;
-                var dy = army.Latitude - nation.CapitalLatitude;
-                if (MathF.Sqrt(dx * dx + dy * dy) > 1.5f) elsewhere++;
-            }
-        }
-        if (elsewhere > 0)
-            return $"{elsewhere:N0} division(s) of countries with no deployment row wandered from their capital";
+        var attackerPosted = OnTheFront(attacker);
+        var defenderPosted = OnTheFront(defender);
+        if (attackerPosted < theirs / 2)
+            return $"{attackerPosted} of {attacker.Tag}'s {theirs} division(s) stand on the front on day one";
+        if (defenderPosted < ours / 2)
+            return $"{defenderPosted} of {defender.Tag}'s {ours} division(s) stand on the front on day one";
 
-        Console.WriteLine($"  deployment: {theirs:N0} Russian and {ours:N0} Ukrainian division(s) stand within " +
-                          $"two degrees of the 2024 contact line; every other army is at home.");
+        Console.WriteLine($"  opening deployment: {attackerPosted}/{theirs} {attacker.Tag} and " +
+                          $"{defenderPosted}/{ours} {defender.Tag} division(s) stand on the front " +
+                          $"({war.AttackerFront.Count} and {war.DefenderFront.Count} province(s) of it) " +
+                          "before a day is stepped.");
         return "";
     }
 

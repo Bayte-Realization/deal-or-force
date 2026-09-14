@@ -779,9 +779,22 @@ public sealed partial class Campaign
         // point of restoring it.
         if (!InitialDeploymentCompleted)
         {
+            // The fronts first, and this order is the whole of it.
+            //
+            // The planner posts most of an army to its front when there is a war with a
+            // front to post it to, and 94% of it for the two countries this scenario is
+            // about. It asked one line before the fronts were built, so what it saw was
+            // `front=0` for both of them - measured, after two years of the opening weeks
+            // looking like a collapse - and both armies fell through to the peacetime
+            // branch, which spreads them along every border the country has. For Russia
+            // that is two hundred and thirty-seven provinces from Finland to the Pacific,
+            // and for Ukraine it is the Polish border as much as the Donbas.
+            //
+            // Rebuilding a front reads province control and nothing else, so it is safe
+            // this side of the deployment and was only ever on the wrong side of it.
+            Warfare.RebuildFronts(this);
             StrategicDeploymentPlanner.Deploy(this);
             InitialDeploymentCompleted = true;
-            Warfare.RebuildFronts(this);
             FrontPlanner.AssignAi(this);
         }
         Changed?.Invoke();
