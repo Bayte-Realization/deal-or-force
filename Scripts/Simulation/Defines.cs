@@ -779,6 +779,20 @@ public sealed class Defines
 	/// </summary>
 	public int AiGreatPowers { get; set; } = 12;
 
+	/// <summary>
+	/// How much stronger a rival has to be before a country goes looking for somebody
+	/// to stand behind it.
+	/// </summary>
+	public float AiCounterweightFear { get; set; } = 1.15f;
+
+	/// <summary>What a request for a guarantee has to be worth before it is granted.</summary>
+	public float AiShelterWillingness { get; set; } = 0.20f;
+
+	/// <summary>And what it is worth that the great power is wary of the same country.</summary>
+	public float AiShelterSharedRival { get; set; } = 0.50f;
+
+	/// <summary>And what it costs a request that the country being asked is already fighting.</summary>
+	public float AiShelterWarPenalty { get; set; } = 0.35f;
 
 	// ---- Economy: how a country governs itself between crises ----
 

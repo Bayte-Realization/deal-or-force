@@ -96,6 +96,8 @@ public static class Program
             TheFrontIsMannedOnTheFirstMorning());
         failures += Check("an army answers to the situation, not to the day it started",
             AnArmyAnswersToTheSituation());
+        failures += Check("a frightened country asks somebody larger to stand behind it",
+            BeingAfraidIsNotAPolicy());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -6003,6 +6005,116 @@ public static class Program
 
         Console.WriteLine($"  establishment: forty divisions become {quiet:0.0} at peace, {tense:0.0} " +
                           $"under threat and {fighting:0.0} at war; {empty:0.0} with an empty reserve.");
+        return "";
+    }
+
+    /// <summary>
+    /// Being afraid is not a foreign policy on its own.
+    ///
+    /// Widening the AI's circle gave every small country an opinion about the great powers,
+    /// and the first measurement said what that was worth by itself: rivalries went from 41
+    /// to 70 in two years and alliances did not move. A country that has learned to be
+    /// frightened and has not learned to do anything about it is a worse model than one that
+    /// never looked past its own border.
+    ///
+    /// What it does about it is ask somebody larger to stand behind it - and the country
+    /// asked decides, on what it thinks of the applicant, whether it is already fighting
+    /// somebody, and whether it is wary of the same neighbour. Checked here as a
+    /// before-and-after on the same world rather than as a number out of a campaign, because
+    /// the question is whether the ASKING happens at all.
+    /// </summary>
+    private static string BeingAfraidIsNotAPolicy()
+    {
+        var campaign = Campaign.CreateBootstrap(20240501);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        // Non-aligned, and afraid of somebody who is NOT the strongest country in the
+        // world - two earlier versions of this check failed on their own staging rather
+        // than on the mechanism. Lithuania is in NATO, so it always had a warmer
+        // relationship to work on than its fear; and nobody can shelter a country from
+        // China, because there is nobody heavier to ask.
+        var small = campaign.NationByTag("NPL");
+        var bully = campaign.NationByTag("IND");
+        var power = campaign.NationByTag("CHN");
+        if (small is null || bully is null || power is null) return "";
+        Estrange(campaign, small, bully);
+        Estrange(campaign, small, power);
+
+        var fear = CampaignDiplomacy.Get(campaign, small.Id, bully.Id);
+        fear.Stance = DiplomaticStance.Rival;
+        // Several different grievances rather than one repeated: every opinion modifier has
+        // a stack limit, so eight denunciations are worth two.
+        foreach (var grievance in new[]
+                 {
+                     "denounced", "denounced", "took_our_land", "took_our_land",
+                     "fought_a_war", "fought_a_war", "embargoed_us", "declared_war_on_us"
+                 })
+            OpinionSystem.Remember(campaign, fear, grievance);
+        OpinionSystem.Settle(campaign, fear);
+        if (fear.Opinion > campaign.Defines.AiRivalryThreshold)
+            return $"the check could not make NPL afraid of IND: opinion {fear.Opinion:0} against " +
+                   $"a rivalry threshold of {campaign.Defines.AiRivalryThreshold:0}";
+
+        var friend = CampaignDiplomacy.Get(campaign, small.Id, power.Id);
+        for (var repeat = 0; repeat < 4; repeat++)
+            OpinionSystem.Remember(campaign, friend, "improved_relations");
+        OpinionSystem.Settle(campaign, friend);
+        if (friend.Opinion <= 0f)
+            return $"the check could not put NPL and CHN on speaking terms: opinion {friend.Opinion:0}";
+
+        // And a protector with a reason. A great power does not shelter a country from a
+        // country it gets on with - measured: China refused Nepal because China's view of
+        // India was +33, which is the right answer and the thing this staging was missing.
+        var theirQuarrel = CampaignDiplomacy.Get(campaign, power.Id, bully.Id);
+        foreach (var grievance in new[]
+                 {
+                     "denounced", "denounced", "took_our_land", "took_our_land",
+                     "fought_a_war", "fought_a_war", "embargoed_us"
+                 })
+            OpinionSystem.Remember(campaign, theirQuarrel, grievance);
+        OpinionSystem.Settle(campaign, theirQuarrel);
+        if (theirQuarrel.Opinion > campaign.Defines.AiRivalryThreshold)
+            return $"the check could not give CHN a reason to mind IND: opinion {theirQuarrel.Opinion:0}";
+
+        // A bully worth being afraid of, and a protector heavier than the bully.
+        foreach (var army in campaign.Armies)
+            if (army.NationId == bully.Id) army.Divisions *= 3f;
+        var bullyStrength = CampaignIntel.EstimatedStrength(campaign, small.Id, bully);
+        var powerStrength = CampaignIntel.EstimatedStrength(campaign, small.Id, power);
+        if (bullyStrength <= AiStatecraft.StrengthOf(campaign, small) * campaign.Defines.AiCounterweightFear)
+            return $"IND is not frightening enough to ask about: {bullyStrength:0} against NPL's " +
+                   $"{AiStatecraft.StrengthOf(campaign, small):0}";
+        if (powerStrength <= bullyStrength)
+            return $"CHN is no heavier than IND ({powerStrength:0} against {bullyStrength:0}), " +
+                   "so there is nobody worth asking";
+
+        // The decision itself, rather than four months of a world in which a hundred other
+        // things also happen. Three earlier versions of this check ran the campaign and
+        // failed on their own staging every time; what is being checked is whether a
+        // frightened country asks and whether a power with a reason says yes.
+        if (friend.GuaranteedBy(power.Id)) return "CHN already guaranteed NPL before the check began";
+        campaign.Tick();
+        if (!AiStatecraft.AskForShelter(campaign, small, bully))
+            return $"NPL, worth {AiStatecraft.StrengthOf(campaign, small):0} beside a neighbour worth " +
+                   $"{bullyStrength:0}, did not ask a country worth {powerStrength:0} that has its own " +
+                   "quarrel with that neighbour";
+        if (!friend.GuaranteedBy(power.Id))
+            return "NPL asked, somebody said yes, and no guarantee came of it";
+
+        // And the point of it: a guarantor counts when somebody weighs up attacking.
+        var friends = 0;
+        foreach (var relation in campaign.Relations.Values)
+        {
+            if (relation.A != small.Id && relation.B != small.Id) continue;
+            var otherId = relation.Other(small.Id);
+            if (relation.Stance == DiplomaticStance.Allied || relation.GuaranteedBy(otherId)) friends++;
+        }
+        if (friends == 0) return "NPL is guaranteed and counts nobody on its side";
+
+        Console.WriteLine($"  shelter: NPL, afraid of a neighbour three times its weight, was " +
+                          $"guaranteed by CHN within {campaign.ElapsedDays:N0} day(s), and now counts " +
+                          $"{friends:N0} country(ies) standing with it.");
         return "";
     }
 
