@@ -91,7 +91,13 @@ public static class CampaignDiplomacy
         campaign.Wars.Any(war => !war.Ended &&
             ((war.AttackerId == a && war.DefenderId == b) || (war.AttackerId == b && war.DefenderId == a)));
 
-    public static bool CanDeclareWar(Campaign campaign, int attackerId, int defenderId, out string reason)
+    /// <param name="onOwnInitiative">
+    /// False when the country is not choosing: answering a call to arms, or dragged along by
+    /// the overlord it answers to. A dependency with no foreign policy of its own may still
+    /// be brought into somebody else's war - that is most of what having one is for.
+    /// </param>
+    public static bool CanDeclareWar(Campaign campaign, int attackerId, int defenderId, out string reason,
+        bool onOwnInitiative = true)
     {
         reason = "";
         var attacker = campaign.NationById(attackerId);
@@ -102,6 +108,24 @@ public static class CampaignDiplomacy
         if (relation.Stance == DiplomaticStance.Allied) { reason = "Break the alliance first."; return false; }
         if (relation.NonAggressionPact) { reason = "A non-aggression pact is active."; return false; }
         if (relation.TruceUntil > campaign.ElapsedDays) { reason = $"Truce: {relation.TruceUntil - campaign.ElapsedDays} days remain."; return false; }
+        if (attacker.OverlordId != 0)
+        {
+            // A country that answers to another one does not have a foreign policy of its
+            // own, which is the whole of what the arrangement means. The kind says how much
+            // of one it keeps.
+            var overlord = campaign.NationById(attacker.OverlordId);
+            if (attacker.OverlordId == defenderId)
+            {
+                reason = $"{attacker.Tag} answers to {defender.Tag}, and has to stop first.";
+                return false;
+            }
+            if (onOwnInitiative && SubjectCatalog.Of(attacker.SubjectType) is { MayDeclareWar: false } kind)
+            {
+                reason = $"A {kind.Name.ToLowerInvariant()} of {overlord?.Tag ?? "somebody"} " +
+                         "does not declare its own wars.";
+                return false;
+            }
+        }
         if (!SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
         {
             // Force can be projected across water by a country that has ships to project it
@@ -130,9 +154,9 @@ public static class CampaignDiplomacy
     /// reason for, and that is where notoriety comes from.
     /// </summary>
     public static StrategicWar DeclareWar(Campaign campaign, int attackerId, int defenderId,
-        int claimedStateMapIndex = -1, string justification = null)
+        int claimedStateMapIndex = -1, string justification = null, bool onOwnInitiative = true)
     {
-        if (!CanDeclareWar(campaign, attackerId, defenderId, out _)) return null;
+        if (!CanDeclareWar(campaign, attackerId, defenderId, out _, onOwnInitiative)) return null;
         var attacker = campaign.NationById(attackerId);
         var defender = campaign.NationById(defenderId);
         var relation = Get(campaign, attackerId, defenderId);

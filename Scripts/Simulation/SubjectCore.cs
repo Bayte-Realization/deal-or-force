@@ -22,6 +22,16 @@ public sealed class SubjectType
     public bool DraggedIntoWars;
     public bool MayDeclareWar;
 
+    /// <summary>
+    /// Whether the OVERLORD comes when the subject is attacked - the obligation running the
+    /// other way, and the one that decides whether a dependency is worth being.
+    ///
+    /// True for everything signed. False for a client state, where nobody signed anything:
+    /// the money and the weapons come from one direction and the patron is free to discover
+    /// that it was never a commitment, which is the whole history of client states.
+    /// </summary>
+    public bool OverlordDefends = true;
+
     /// <summary>What it wants before circumstances are counted. See <see cref="SubjectSystem"/>.</summary>
     public float LibertyDesire;
 
@@ -37,6 +47,20 @@ public sealed class SubjectType
     /// a puppet are the same demand.
     /// </summary>
     public float DemandCost = 55f;
+
+    /// <summary>
+    /// How long it has to have answered before its overlord may absorb it outright, or -1
+    /// for a kind that never ends that way.
+    ///
+    /// Most dependencies in history ended inside the country holding them, and a mechanic
+    /// with no way to do that leaves the player with a permanent tenant. A dominion is the
+    /// counter-example and is why this is per-kind: every dominion that ever existed either
+    /// walked away or is still there, and none of them were annexed.
+    /// </summary>
+    public int AnnexAfterDays = -1;
+
+    /// <summary>And how contented it has to be to go quietly.</summary>
+    public float AnnexBelowLiberty = 0.25f;
 }
 
 /// <summary>The numbers that decide how a dependency ages, all of them from the same file.</summary>
@@ -48,6 +72,7 @@ public sealed class SubjectWeights
     public float OverlordStrengthHold = 0.35f;
     public float BreakAt = 1.0f;
     public float DriftPerWeek = 0.02f;
+    public float AnnexSizeLimit = 0.25f;
 }
 
 /// <summary>
@@ -97,6 +122,7 @@ public static class SubjectCatalog
                 Read(entry.Value, "overlord_strength_hold", value => weights.OverlordStrengthHold = value);
                 Read(entry.Value, "break_at", value => weights.BreakAt = value);
                 Read(entry.Value, "drift_per_week", value => weights.DriftPerWeek = value);
+            Read(entry.Value, "annex_size_limit", value => weights.AnnexSizeLimit = M.Clamp01(value));
                 continue;
             }
 
@@ -115,7 +141,11 @@ public static class SubjectCatalog
             Flag(value2, "joins_wars", v => type.JoinsWars = v);
             Flag(value2, "dragged_into_wars", v => type.DraggedIntoWars = v);
             Flag(value2, "may_declare_war", v => type.MayDeclareWar = v);
+            Flag(value2, "overlord_defends", v => type.OverlordDefends = v);
             Read(value2, "demand_cost", v => type.DemandCost = Math.Max(0f, v));
+            Read(value2, "annex_below_liberty", v => type.AnnexBelowLiberty = M.Clamp01(v));
+            if (value2.TryGetProperty("annex_after_days", out var absorb) && absorb.TryGetInt32(out var after))
+                type.AnnexAfterDays = after;
 
             if (type.Tribute > 0.9f)
                 errors?.Add($"subjects/{entry.Name}: a tribute of {type.Tribute:P0} leaves the subject nothing.");
@@ -241,6 +271,71 @@ public static class SubjectSystem
     }
 
     /// <summary>
+    /// Whether an overlord may simply take a subject into itself, and why not.
+    ///
+    /// The end most dependencies had. It is deliberately not a reward for waiting: a
+    /// subject that has spent those years wanting out cannot be absorbed at all, so holding
+    /// one badly - losing wars, losing stability, letting it grow - costs the overlord the
+    /// option. That is the whole bargain restated at its end.
+    /// </summary>
+    public static bool MayAnnex(Campaign campaign, Nation overlord, Nation subject, out string refusal)
+    {
+        refusal = "";
+        if (campaign is null || overlord is null || subject is null) { refusal = "no such country"; return false; }
+        if (subject.OverlordId != overlord.Id)
+        {
+            refusal = $"{subject.Tag} does not answer to {overlord.Tag}";
+            return false;
+        }
+        var type = SubjectCatalog.Of(subject.SubjectType);
+        if (type is null) { refusal = $"no such kind as '{subject.SubjectType}'"; return false; }
+        if (type.AnnexAfterDays < 0)
+        {
+            refusal = $"a {type.Name.ToLowerInvariant()} is not a thing a country absorbs";
+            return false;
+        }
+        var held = campaign.ElapsedDays - subject.SubjectSinceDay;
+        if (held < type.AnnexAfterDays)
+        {
+            refusal = $"{subject.Tag} has answered for {held / 365.0:0.0} year(s) of the " +
+                      $"{type.AnnexAfterDays / 365.0:0.0} it takes";
+            return false;
+        }
+        if (subject.LibertyDesire > type.AnnexBelowLiberty)
+        {
+            refusal = $"{subject.Tag} wants out {subject.LibertyDesire:P0} of the way, and " +
+                      $"{type.AnnexBelowLiberty:P0} is as much as goes quietly";
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Take it in. Every province it owns changes hands the ordinary way, so the regions
+    /// the new border cuts are cut exactly as any other border change would cut them.
+    /// </summary>
+    public static bool Annex(Campaign campaign, Nation overlord, Nation subject, out string refusal)
+    {
+        if (!MayAnnex(campaign, overlord, subject, out refusal)) return false;
+        var topology = campaign.ProvinceMap;
+        if (topology is null) { refusal = "the map is not ready"; return false; }
+
+        var taken = new List<int>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (topology.ProvinceToNation[province] == subject.MapIndex) taken.Add(province);
+
+        var kind = SubjectCatalog.Of(subject.SubjectType)?.Name ?? subject.SubjectType;
+        Release(campaign, subject);
+        if (taken.Count > 0) StatePartition.Annex(campaign, taken, overlord);
+        campaign.MarkMapChanged();
+        campaign.MarkStrategicChange();
+        DiagnosticLogs.Write("simulation",
+            $"SUBJECT_ANNEX overlord={overlord.Tag} subject={subject.Tag} kind={kind} " +
+            $"provinces={taken.Count} day={campaign.ElapsedDays}");
+        return true;
+    }
+
+    /// <summary>
     /// What a subject wants this week, on a scale where one is "gone".
     ///
     /// Public because the interface has to be able to show it. A dependency the player
@@ -282,6 +377,7 @@ public static class SubjectSystem
         // Collected before anything is changed, because a subject that breaks free inside
         // the loop would otherwise be walked over while the list it is in is being edited.
         var leaving = new List<Nation>();
+        var absorbing = new List<Nation>();
 
         foreach (var nation in campaign.Nations)
         {
@@ -329,9 +425,21 @@ public static class SubjectSystem
                 ? Math.Min(want, subject.LibertyDesire + weights.DriftPerWeek)
                 : Math.Max(want, subject.LibertyDesire - weights.DriftPerWeek);
 
-            if (subject.LibertyDesire >= weights.BreakAt) leaving.Add(subject);
+            if (subject.LibertyDesire >= weights.BreakAt) { leaving.Add(subject); continue; }
+
+            // And the other ending. A country steering itself decides this for itself; the
+            // rest take the option when they have it and the subject is small enough that
+            // taking it is a formality rather than a decision.
+            if (campaign.Player is not null && campaign.Player.Id == overlord.Id) continue;
+            if (subject.Population > overlord.Population * weights.AnnexSizeLimit) continue;
+            if (MayAnnex(campaign, overlord, subject, out _)) absorbing.Add(subject);
         }
 
         foreach (var subject in leaving) Release(campaign, subject, broke: true);
+        foreach (var subject in absorbing)
+        {
+            var overlord = campaign.NationById(subject.OverlordId);
+            if (overlord is not null) Annex(campaign, overlord, subject, out _);
+        }
     }
 }

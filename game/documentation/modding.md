@@ -554,10 +554,21 @@ names any of them. Add a row and the kind exists:
       "manpower": 0.25,         share of its manpower growth taken with it
       "joins_wars": true,       does it come when the overlord is attacked
       "dragged_into_wars": true does it come when the overlord attacks
-      "may_declare_war": false,
+      "may_declare_war": false, may it start a war of its own
+      "overlord_defends": true, does the OVERLORD come when it is attacked
       "liberty_desire": 0.60,   what it wants, before circumstances are counted
-      "grace_days": 180         how long before it starts wanting anything
+      "grace_days": 180,        how long before it starts wanting anything
+      "demand_cost": 70,        what imposing it costs at a peace conference
+      "annex_after_days": 1825, how long before the overlord may absorb it, -1 never
+      "annex_below_liberty": 0.2  and how contented it has to be to go quietly
     }
+
+`may_declare_war` is about the subject's own wars only. A dependency that may not declare
+one can still be brought into somebody else's - that is most of what having one is for.
+`overlord_defends` is the obligation running the other way, and it is the line that decides
+whether an arrangement is worth being in: the base game leaves it true for everything except
+`client`, where nobody signed anything and the patron is free to discover it was never a
+commitment.
 
 ### What liberty desire actually is
 
@@ -606,8 +617,26 @@ annex, where the choice used to be a strip of border provinces or nothing. Set e
 It sits above ideology in the order, because a government installed from outside outranks
 what it claims to believe.
 
+### How an arrangement ends
+
+Two ways, and the second is the one most of them took.
+
+It can slip: liberty desire reaches `break_at` and the subject is simply gone. Or it can
+finish, with the subject inside the overlord - `annex_after_days` says how long that takes
+and `annex_below_liberty` how contented it has to be. Those two together are deliberately
+not a reward for waiting: a subject that spent those years wanting out cannot be absorbed at
+all, so holding one badly costs the overlord the option, which is the bargain restated at
+its end. A kind with `annex_after_days: -1` never ends this way, which is what a dominion
+is.
+
+The computer absorbs a subject as soon as it may and the subject is under `annex_size_limit`
+of its own size - a small country quietly becomes part of the country holding it, and one a
+third its size is a decision rather than a formality. A player decides for themselves:
+`integrate` on the console, and nothing happens to their subjects unasked.
+
 ### From the console
 
     subjects [TAG]     who answers to a country, and how badly each wants out
     puppet TAG [kind]  make one answer to yours
     release TAG        let one go
+    integrate TAG      take one into your country, if its kind and its contentment allow

@@ -153,6 +153,10 @@ public partial class DealOrForceGame
             "may add its own.", ConsoleSubjugate, "subjugate");
         Add("release", "DIPLOMACY", "release LUX",
             "Let one go.", ConsoleRelease);
+        Add("integrate", "DIPLOMACY", "integrate LUX",
+            "Take a country that answers to yours into it. Only after the years its kind asks " +
+            "for, and only while it is not trying to leave - `subjects` says how far off both are.",
+            ConsoleIntegrate, "absorb");
 
         Add("annex", "WAR", "annex LUX",
             "Take a whole country. Blunt on purpose - it is for reaching a state of the world, " +
@@ -1211,6 +1215,17 @@ public partial class DealOrForceGame
         SubjectSystem.Release(_campaign, target);
         Refresh();
         return $"{target.Name} no longer answers to {was?.Tag ?? "anybody"}.";
+    }
+
+    private string ConsoleIntegrate(string argument)
+    {
+        if (_campaign?.Player is null) return "No campaign.";
+        var target = ConsoleNation(argument);
+        if (target is null) return "Usage: integrate LUX";
+        if (!SubjectSystem.Annex(_campaign, _campaign.Player, target, out var refusal))
+            return $"Refused: {EscapeBb(refusal)}";
+        Refresh();
+        return $"{target.Name} is part of {_campaign.Player.Name} now.";
     }
 
     private string ConsoleOpinion(string argument)

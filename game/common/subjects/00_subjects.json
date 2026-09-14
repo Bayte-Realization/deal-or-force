@@ -21,9 +21,12 @@
 //     joins_wars         does it turn up when the overlord is attacked
 //     dragged_into_wars  does it turn up when the overlord ATTACKS somebody
 //     may_declare_war    may it start a war of its own
+//     overlord_defends   does the OVERLORD come when the subject is attacked
 //     liberty_desire     how much it wants out, before circumstances are counted
 //     grace_days         how long after being made a subject before it starts wanting out
 //     demand_cost        what imposing it costs at a peace conference, in war score
+//     annex_after_days   how long before the overlord may absorb it outright, -1 never
+//     annex_below_liberty  and how contented it has to be to go quietly
 //
 // `liberty_desire` is the base, not the answer. What a subject actually feels is worked out
 // every week from its size against its overlord's, how stable the overlord is, and whether
@@ -49,7 +52,12 @@
 
     // How fast it moves. Per week, so a subject that has decided takes a year or two to
     // get there rather than announcing it the following Tuesday.
-    "drift_per_week": 0.02
+    "drift_per_week": 0.02,
+
+    // How large a subject an overlord will absorb without asking, against its own size. A
+    // small province quietly becomes part of the country holding it; a dependency a third
+    // its size is a country, and swallowing one is a decision rather than a formality.
+    "annex_size_limit": 0.25
   },
 
   "protectorate": {
@@ -62,7 +70,9 @@
     "may_declare_war": false,
     "liberty_desire": 0.20,
     "grace_days": 730,
-    "demand_cost": 46
+    "demand_cost": 46,
+    "annex_after_days": 3650,
+    "annex_below_liberty": 0.30
   },
 
   "puppet": {
@@ -75,7 +85,9 @@
     "may_declare_war": false,
     "liberty_desire": 0.40,
     "grace_days": 365,
-    "demand_cost": 62
+    "demand_cost": 62,
+    "annex_after_days": 2555,
+    "annex_below_liberty": 0.35
   },
 
   "satellite": {
@@ -88,7 +100,9 @@
     "may_declare_war": false,
     "liberty_desire": 0.30,
     "grace_days": 1095,
-    "demand_cost": 58
+    "demand_cost": 58,
+    "annex_after_days": 5475,
+    "annex_below_liberty": 0.25
   },
 
   "dominion": {
@@ -101,7 +115,8 @@
     "may_declare_war": true,
     "liberty_desire": 0.10,
     "grace_days": 1825,
-    "demand_cost": 34
+    "demand_cost": 34,
+    "annex_after_days": -1
   },
 
   "client": {
@@ -112,8 +127,10 @@
     "joins_wars": false,
     "dragged_into_wars": false,
     "may_declare_war": true,
+    "overlord_defends": false,
     "liberty_desire": 0.15,
     "grace_days": 365,
-    "demand_cost": 22
+    "demand_cost": 22,
+    "annex_after_days": -1
   }
 }
