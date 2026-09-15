@@ -513,6 +513,16 @@ public sealed class Defines
 	public float GapExploitAdvantage { get; set; } = 1.60f;
 
 	/// <summary>
+	/// The slowest an advance a player ordered by hand may be driven by covering fire, as a
+	/// share of an advance into open country. The gap rule above refuses a formation
+	/// advancing on its own initiative; a direct order is instead made expensive, and this
+	/// is the floor under expensive. Zero leaves an ordered advance at whatever pace
+	/// covering fire alone allows, which against a held line the player cannot tell
+	/// apart from the refusal this replaces.
+	/// </summary>
+	public float OrderedAdvanceFloor { get; set; } = 0.25f;
+
+	/// <summary>
 	/// Share of its fresh worth a formation still contributes to covering the ground
 	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side
 	/// has a bad month; one makes casualties irrelevant to where the line sits.

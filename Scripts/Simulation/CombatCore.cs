@@ -344,8 +344,25 @@ public static partial class Warfare
                 var coveringPower = 0f;
                 var covering = 0f;
                 Cover(campaign, topology, target, enemyId, ref coveringPower, ref covering);
-                if (coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
+                // ...but the formation that refuses is one advancing on its own judgement.
+                // A player who marched a division here by hand has already decided, with the
+                // map in front of them, that this attack is worth making. The simulation gets
+                // to make that expensive and slow. It does not get to quietly decline: an
+                // order that produces no movement, no battle and no explanation is the single
+                // worst thing a strategy game can do, and this one did it every day forever.
+                //
+                // The measurement that produced the rule above was of the front planner
+                // exploiting gaps with nobody playing, so leaving it in force for exactly
+                // that case keeps what it bought.
+                var ordered = army.DirectOrder;
+                if (!ordered && coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
                 var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
+                // Covered ground still costs: an ordered advance into a fully covered gap runs
+                // at a fraction of the pace of one into open country, and the floor is what
+                // makes it a fraction rather than a standstill. Without it the resistance term
+                // alone turns a week into four months, which the player cannot tell apart from
+                // the refusal this replaces.
+                if (ordered) contested = M.Max(contested, campaign.Defines.OrderedAdvanceFloor);
                 // Progress belongs to the division, not a pooled province counter: a
                 // hundred divisions must not teleport one another across the border.
                 army.MoveProgress += campaign.Defines.UnopposedCapturePerDay * campaign.TickScale *

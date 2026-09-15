@@ -42,6 +42,11 @@
   "UnopposedCapturePerDay": 0.10,
   "ZoneOfControlResistance": 6.0,
   "GapExploitAdvantage": 1.60,
+
+  // What a formation the player ordered forward by hand may be slowed to by covering fire,
+  // as a share of an advance into open country. The rule above refuses a formation that
+  // advanced on its own judgement; an order is made costly instead of refused.
+  "OrderedAdvanceFloor": 0.25,
   "CoveringPresenceFloor": 0.45,
   "RestAfterCaptureDays": 2,
   "RestAfterSpentAttackDays": 7,

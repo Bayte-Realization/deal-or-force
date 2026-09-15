@@ -98,6 +98,8 @@ public static class Program
             AnArmyAnswersToTheSituation());
         failures += Check("a frightened country asks somebody larger to stand behind it",
             BeingAfraidIsNotAPolicy());
+        failures += Check("an order the player gave is carried out",
+            AnOrderIsCarriedOut());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -6201,6 +6203,125 @@ public static class Program
         Console.WriteLine($"  shelter: NPL, afraid of a neighbour three times its weight, was " +
                           $"guaranteed by CHN within {campaign.ElapsedDays:N0} day(s), and now counts " +
                           $"{friends:N0} country(ies) standing with it.");
+        return "";
+    }
+
+    /// <summary>
+    /// An order the player gave is carried out.
+    ///
+    /// A division marched by hand into an empty enemy province used to do nothing at all,
+    /// every day, forever, and say nothing about why. The gap rule refuses an advance into
+    /// ground covered by fire from the provinces around it unless the attacker is worth more
+    /// than the cover - which is the rule that keeps a front a front, and which was applied
+    /// to orders a person had given as well as to advances the planner chose on its own.
+    ///
+    /// The same world twice, with one flag different, because the question is about one
+    /// formation rather than about a campaign: both runs issue the identical march into the
+    /// identical covered province, and the control clears the flag that says a person asked
+    /// for it. What separates them is exactly the behaviour under test and nothing else.
+    /// </summary>
+    private static string AnOrderIsCarriedOut()
+    {
+        static (Campaign Campaign, Army Army, int Target, float Cover, bool Mapped) Stage()
+        {
+            var campaign = Campaign.CreateBootstrap(20240715);
+            if (!AttachMap(campaign)) return (null, null, 0, 0f, false);
+            campaign.IsPaused = false;
+            var topology = campaign.ProvinceMap;
+            var controllers = campaign.ProvinceController;
+            if (topology is null || controllers is null) return (null, null, 0, 0f, false);
+
+            // Let the deployment happen: at day zero the formations are on their seeded
+            // coordinates and there is no line to find a gap in yet.
+            for (var day = 0; day < 10; day++) campaign.Tick();
+
+            // Any war that is actually being fought. Taking the first unended one finds a
+            // quarrel between two small states with no divisions in it, of which the world
+            // holds a hundred and forty, and the whole check then passes without testing
+            // anything - which it did, once.
+            foreach (var war in campaign.Wars)
+            {
+                if (war.Ended) continue;
+                var enemy = campaign.NationById(war.DefenderId);
+                if (enemy is null) continue;
+
+                // Where the enemy divisions are, so an empty province can be told from a held
+                // one and the ground around it can be weighed.
+                var byProvince = new Dictionary<int, float>();
+                foreach (var other in campaign.Armies)
+                    if (other.NationId == enemy.Id && other.ProvinceId > 0 && other.Divisions >= 0.1f)
+                        byProvince[other.ProvinceId] = byProvince.GetValueOrDefault(other.ProvinceId) + other.Power;
+                if (byProvince.Count == 0) continue;
+
+                foreach (var army in campaign.Armies)
+                {
+                    if (army.NationId != war.AttackerId || army.ProvinceId <= 0 || army.InBattle) continue;
+                    if (army.Divisions < 0.1f) continue;
+                    foreach (var province in topology.Neighbors[army.ProvinceId])
+                    {
+                        if (controllers[province] != (ushort)enemy.MapIndex) continue;
+                        if (byProvince.ContainsKey(province)) continue;      // not empty
+                        // Covered: the ring around it holds more than this formation is worth,
+                        // which is the situation the rule refuses and the player cannot see.
+                        var cover = 0f;
+                        foreach (var neighbour in topology.Neighbors[province])
+                            cover += byProvince.GetValueOrDefault(neighbour);
+                        if (cover <= army.Power * campaign.Defines.GapExploitAdvantage) continue;
+                        return (campaign, army, province, cover, true);
+                    }
+                }
+            }
+            return (null, null, 0, 0f, true);
+        }
+
+        var (campaign, army, target, cover, mapped) = Stage();
+        if (!mapped) return "";
+        if (army is null)
+            return "no war in the world offered an empty province covered by a held line, so " +
+                   "this check proved nothing - which is how it passed once without testing anything";
+
+        // One day, because one day is all this question needs and everything that happens
+        // after it belongs to somebody else. The first probe of this ran for four months and
+        // measured the enemy plugging the gap on day two: the province stopped being empty,
+        // the advance correctly became a battle, and the resulting "4% of the way in" said
+        // nothing whatever about the rule under test. The rule is visible on day one or not
+        // at all.
+        static float FirstDay(Campaign campaign, Army army, int target, bool asAnOrder)
+        {
+            var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(army.NationId));
+            if (war is null) return -1f;
+            new MoveArmyCommand
+            {
+                IssuerId = army.NationId, ArmyId = army.Id, TargetProvinceId = target
+            }.Apply(campaign);
+            if (!army.DirectOrder) return -1f;
+            // The control keeps the order, the route, the objective and the war, and differs
+            // only in having nobody behind it - which is the whole of what the fix reads.
+            if (!asAnOrder) army.DirectOrder = false;
+            campaign.Tick();
+            return war.UnopposedProgress.GetValueOrDefault(target);
+        }
+
+        var ordered = FirstDay(campaign, army, target, true);
+        var (control, controlArmy, controlTarget, _, _) = Stage();
+        if (control is null || controlTarget != target)
+            return "the same world staged differently twice, so the two runs are not comparable";
+        var unordered = FirstDay(control, controlArmy, target, false);
+
+        if (ordered < 0f || unordered < 0f)
+            return "the march was refused at the moment it was ordered, before any advance began";
+        if (ordered <= 0f)
+            return $"a division ordered into an empty province covered by {cover:0.0} of enemy " +
+                   "strength did not move on the day it was ordered, and nothing said why - " +
+                   "which is the bug this check exists for";
+        if (unordered > 0f)
+            return $"a division that was not ordered advanced anyway ({unordered:P0} in a day), " +
+                   "so the gap rule no longer holds a front on its own";
+
+        Console.WriteLine($"  orders: a division marched by hand into an empty province covered by " +
+                          $"{cover:0.0} of enemy strength moved {ordered:P1} of the way in on the first " +
+                          $"day - about {1f / ordered:N0} day(s) to take it under that much fire. The same " +
+                          "division, advancing on its own judgement, was refused.");
         return "";
     }
 
