@@ -41,8 +41,10 @@ public partial class DealOrForceGame
         _mapModeLegend = new OptionButton { CustomMinimumSize = new Vector2(130, 34),
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, FitToLongestItem = false,
             TooltipText = Ui.Tip(Tr("All map layers, including diplomatic, population, economy and the moddable relief layer.")) };
+        // Through the table: an enum's name is a C# identifier, and putting one straight on a
+        // control is how a Russian interface ends up with a dropdown reading "Political".
         foreach (StrategicMapMode mode in System.Enum.GetValues<StrategicMapMode>())
-            _mapModeLegend.AddItem(mode.ToString(), (int)mode);
+            _mapModeLegend.AddItem(Tr(mode.ToString()), (int)mode);
         _mapModeLegend.ItemSelected += index => _globe.SetMapMode((StrategicMapMode)_mapModeLegend.GetItemId((int)index));
         row.AddChild(_mapModeLegend);
 

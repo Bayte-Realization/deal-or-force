@@ -48,25 +48,25 @@ public static class NavalInvasion
     public static bool CanEmbark(Campaign campaign, Fleet fleet, Army army, out string reason)
     {
         reason = "";
-        if (fleet is null || army is null) { reason = "Nothing to load."; return false; }
-        if (army.NationId != fleet.NationId) { reason = "That formation is not yours to load."; return false; }
-        if (army.EmbarkedFleetId >= 0) { reason = $"{army.Name} is already aboard."; return false; }
-        if (army.InBattle) { reason = $"{army.Name} is in action."; return false; }
-        if (fleet.HasOrder) { reason = "The fleet is under way. Bring it to port first."; return false; }
-        if (army.ProvinceId <= 0) { reason = $"{army.Name} is nowhere the fleet can reach."; return false; }
+        if (fleet is null || army is null) { reason = Loc.Get("Nothing to load."); return false; }
+        if (army.NationId != fleet.NationId) { reason = Loc.Get("That formation is not yours to load."); return false; }
+        if (army.EmbarkedFleetId >= 0) { reason = Loc.Format("{0} is already aboard.", army.Name); return false; }
+        if (army.InBattle) { reason = Loc.Format("{0} is in action.", army.Name); return false; }
+        if (fleet.HasOrder) { reason = Loc.Get("The fleet is under way. Bring it to port first."); return false; }
+        if (army.ProvinceId <= 0) { reason = Loc.Format("{0} is nowhere the fleet can reach.", army.Name); return false; }
 
         var topology = campaign.ProvinceMap;
-        if (topology is null) { reason = "No map."; return false; }
+        if (topology is null) { reason = Loc.Get("No map."); return false; }
         var centre = topology.CenterOf(army.ProvinceId);
         if (NavalOperations.Distance(fleet.Latitude, fleet.Longitude, centre.Latitude, centre.Longitude) >
             campaign.Defines.FleetEmbarkRangeDegrees)
         {
-            reason = $"{army.Name} is too far from the fleet to embark.";
+            reason = Loc.Format("{0} is too far from the fleet to embark.", army.Name);
             return false;
         }
         if (CarriedDivisions(campaign, fleet) + army.Divisions > Capacity(campaign, fleet) + 0.001f)
         {
-            reason = $"{fleet.Name} has no room for {army.Name}.";
+            reason = Loc.Format("{0} has no room for {1}.", Loc.Get(fleet.Name), army.Name);
             return false;
         }
         return true;

@@ -121,6 +121,19 @@ public partial class DealOrForceGame
         _pickerSearch.GrabFocus();
     }
 
+    /// <summary>
+    /// A capital's name in the player's language.
+    ///
+    /// Asked for under "capital.Kyiv" before "Kyiv", because a capital and a region can be
+    /// the same word and the table is flat: Kyiv is a city and an oblast, and the oblast's
+    /// file is read later, so the city inherited "Kyiv Oblast". Everywhere the two agree -
+    /// which is everywhere else - the plain name answers and nothing extra is needed.
+    /// </summary>
+    private static string CapitalName(Simulation.Nation nation) =>
+        nation is null || string.IsNullOrWhiteSpace(nation.CapitalName)
+            ? ""
+            : Simulation.Loc.GetOr("capital." + nation.CapitalName, Simulation.Loc.Get(nation.CapitalName));
+
     private void SetPickerNation(Nation nation, bool focus)
     {
         if (nation is null) return;
@@ -142,7 +155,7 @@ public partial class DealOrForceGame
         SetFlag(_pickerFlag, nation.Tag, 32);
         _pickerTier.Text = Simulation.Loc.Format("{0} · rank #{1} · {2}", nation.Tag, rank, tier);
         _pickerStats.Text =
-            Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", nation.CapitalName, Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
+            Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
         _pickerLocation.Text = Tr("Click the map to inspect a region and its tactical province.");
         _pickerBegin.Text = _pickerHotseatMode
             ? Simulation.Loc.Format("START HOTSEAT · {0} PLAYERS", _campaign.HumanSeats.Count)

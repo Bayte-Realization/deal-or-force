@@ -104,18 +104,16 @@ public static class MilitiaCore
     /// </summary>
     public static float Threat(Campaign campaign, ScenarioState state, Nation owner)
     {
-        Enemies.Clear();
-        CollectEnemies(campaign, owner, Enemies);
-        Tally.Clear();
-        ControlTally.Of(campaign, owner, Enemies, Tally);
-        return Threat(state, Tally);
+        // The world tally already knows who is hostile to whom, so the enemy list this used
+        // to build for one country is redundant here.
+        if (campaign is null || state is null || owner is null) return 0f;
+        return Threat(ControlTally.World(campaign, owner.MapIndex, state.MapIndex));
     }
 
     /// <summary>The same, against a tally already taken. Used inside the day.</summary>
-    private static float Threat(ScenarioState state, Dictionary<int, RegionControl> tally)
+    private static float Threat(RegionControl control)
     {
-        if (state is null) return 0f;
-        if (!tally.TryGetValue(state.MapIndex, out var control) || control.Provinces == 0) return 0f;
+        if (control.Provinces == 0) return 0f;
         var weights = Weights;
         // A border is not a fraction. A region with one province facing an enemy army knows
         // the enemy is there; counting the share of its provinces that do made a front-line
@@ -144,7 +142,6 @@ public static class MilitiaCore
     private static readonly HashSet<ushort> Enemies = new();
     private static readonly Dictionary<int, int> Standing = new();
     private static readonly Dictionary<long, int> Here = new();
-    private static readonly Dictionary<int, RegionControl> Tally = new();
 
     /// <summary>
     /// A day of it: who is rising, who has had enough, and who is going home.
@@ -189,14 +186,11 @@ public static class MilitiaCore
             if (raised >= weights.PerCountry) continue;
             var politics = PoliticsMultiplier(nation);
             if (politics <= 0f) continue;
-            Tally.Clear();
-            ControlTally.Of(campaign, nation, Enemies, Tally);
-
             foreach (var state in campaign.StatesOf(nation.MapIndex))
             {
                 // A village does not field a division, however frightened it is.
                 if (state.Population < weights.PopulationPerFormation) continue;
-                var threat = Threat(state, Tally);
+                var threat = Threat(ControlTally.World(campaign, nation.MapIndex, state.MapIndex));
                 if (threat <= 0.0001f) { nation.MilitiaReadiness.Remove(state.MapIndex); continue; }
                 var key = ((long)nation.Id << 32) | (uint)state.MapIndex;
                 if (Here.GetValueOrDefault(key) >= weights.PerRegion) continue;
@@ -334,8 +328,6 @@ public static class MilitiaCore
             {
                 Enemies.Clear();
                 if (fighting) CollectEnemies(campaign, nation, Enemies);
-                Tally.Clear();
-                ControlTally.Of(campaign, nation, Enemies, Tally);
                 lastNation = army.NationId;
             }
 
@@ -343,7 +335,8 @@ public static class MilitiaCore
             foreach (var candidate in campaign.States)
                 if (candidate.MapIndex == army.StateMapIndex) { state = candidate; break; }
 
-            var threatened = state is not null && Threat(state, Tally) > 0.0001f;
+            var threatened = state is not null && nation is not null &&
+                             Threat(ControlTally.World(campaign, nation.MapIndex, state.MapIndex)) > 0.0001f;
             if (threatened || army.InBattle) { nation.MilitiaQuietSince.Remove(army.Id); continue; }
 
             if (!nation.MilitiaQuietSince.TryGetValue(army.Id, out var since))

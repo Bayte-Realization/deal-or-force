@@ -120,12 +120,12 @@ public static class CampaignDiplomacy
         reason = "";
         var attacker = campaign.NationById(attackerId);
         var defender = campaign.NationById(defenderId);
-        if (attacker is null || defender is null || attacker == defender) { reason = "Invalid target."; return false; }
-        if (AtWar(campaign, attackerId, defenderId)) { reason = "Already at war."; return false; }
+        if (attacker is null || defender is null || attacker == defender) { reason = Loc.Get("Invalid target."); return false; }
+        if (AtWar(campaign, attackerId, defenderId)) { reason = Loc.Get("Already at war."); return false; }
         var relation = Get(campaign, attackerId, defenderId);
-        if (relation.Stance == DiplomaticStance.Allied) { reason = "Break the alliance first."; return false; }
-        if (relation.NonAggressionPact) { reason = "A non-aggression pact is active."; return false; }
-        if (relation.TruceUntil > campaign.ElapsedDays) { reason = $"Truce: {relation.TruceUntil - campaign.ElapsedDays} days remain."; return false; }
+        if (relation.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }
+        if (relation.NonAggressionPact) { reason = Loc.Get("A non-aggression pact is active."); return false; }
+        if (relation.TruceUntil > campaign.ElapsedDays) { reason = Loc.Format("Truce: {0} days remain.", relation.TruceUntil - campaign.ElapsedDays); return false; }
         if (attacker.OverlordId != 0)
         {
             // A country that answers to another one does not have a foreign policy of its
@@ -134,7 +134,7 @@ public static class CampaignDiplomacy
             var overlord = campaign.NationById(attacker.OverlordId);
             if (attacker.OverlordId == defenderId)
             {
-                reason = $"{attacker.Tag} answers to {defender.Tag}, and has to stop first.";
+                reason = Loc.Format("{0} answers to {1}, and has to stop first.", attacker.Tag, defender.Tag);
                 return false;
             }
             if (onOwnInitiative && SubjectCatalog.Of(attacker.SubjectType) is { MayDeclareWar: false } kind)
@@ -154,7 +154,7 @@ public static class CampaignDiplomacy
                 if (fleet.NationId == attackerId) carriers += fleet.Hulls;
             if (carriers <= 0)
             {
-                reason = "No shared land front, and no fleet to reach them with.";
+                reason = Loc.Get("No shared land front, and no fleet to reach them with.");
                 return false;
             }
         }

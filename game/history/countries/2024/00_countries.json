@@ -18,7 +18,7 @@
     "war_support": 0.82
   },
   "RUS": { "trade_policy": "StrategicAutarky", "military_spending": 0.18, "war_support": 0.74 },
-  "UKR": { "trade_policy": "OpenMarkets", "military_spending": 0.27, "war_support": 0.88 },
+  "UKR": { "population": 25000000, "trade_policy": "OpenMarkets", "military_spending": 0.27, "war_support": 0.88 },
   "CHN": { "trade_policy": "BalancedTrade", "military_spending": 0.10 },
   "USA": { "trade_policy": "OpenMarkets", "military_spending": 0.12 },
   "PMR": {

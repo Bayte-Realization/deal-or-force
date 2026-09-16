@@ -89,5 +89,31 @@
 
   // Readings on the trade instructions screen.
   "{0} {1} · {2} {3} · {4} {5} · {6} {7} · {8} {9}": "{0} {1} · {2} {3} · {4} {5} · {6} {7} · {8} {9}",
-  "{0}×": "{0}×"
+  "{0}×": "{0}×",
+
+  // Why the game says no: war, and putting troops on ships.
+  "Invalid target.": "Invalid target.",
+  "Already at war.": "Already at war.",
+  "Break the alliance first.": "Break the alliance first.",
+  "A non-aggression pact is active.": "A non-aggression pact is active.",
+  "Truce: {0} days remain.": "Truce: {0} days remain.",
+  "{0} answers to {1}, and has to stop first.": "{0} answers to {1}, and has to stop first.",
+  "No shared land front, and no fleet to reach them with.": "No shared land front, and no fleet to reach them with.",
+  "Nothing to load.": "Nothing to load.",
+  "That formation is not yours to load.": "That formation is not yours to load.",
+  "{0} is already aboard.": "{0} is already aboard.",
+  "{0} is in action.": "{0} is in action.",
+  "The fleet is under way. Bring it to port first.": "The fleet is under way. Bring it to port first.",
+  "{0} is nowhere the fleet can reach.": "{0} is nowhere the fleet can reach.",
+  "No map.": "No map.",
+  "{0} is too far from the fleet to embark.": "{0} is too far from the fleet to embark.",
+  "{0} has no room for {1}.": "{0} has no room for {1}.",
+
+  // Map layers.
+  "Political": "Political",
+  "Diplomatic": "Diplomatic",
+  "Terrain": "Terrain",
+  "Relief": "Relief",
+  "WAR": "WAR",
+  "TER": "TER"
 }

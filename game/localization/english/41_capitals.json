@@ -209,5 +209,8 @@
   "Yaounde": "Yaounde",
   "Yaren District": "Yaren District",
   "Yerevan": "Yerevan",
-  "Zagreb": "Zagreb"
+  "Zagreb": "Zagreb",
+
+  // Where a capital and a region share a name, the city asks under its own key first.
+  "capital.Kyiv": "Kyiv"
 }

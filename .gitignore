@@ -32,3 +32,8 @@ desktop.ini
 perf.log
 /Deal or Force Launcher.exe
 /Tools/TerrainCompiler/cache/
+
+# Concept art and logo masters. Working material rather than game content - nothing under
+# game/ or Scripts/ reads any of it, and the game's own logo lives in game/gfx/interface/brand.
+# Kept on disk, out of the repository.
+/art/

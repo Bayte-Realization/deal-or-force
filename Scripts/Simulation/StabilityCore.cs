@@ -128,18 +128,16 @@ public static class StabilityCore
     /// </summary>
     public static float RegionStability(Campaign campaign, Nation owner, ScenarioState state)
     {
-        Tally.Clear();
-        ControlTally.Of(campaign, owner, NoEnemies, Tally);
-        return RegionStability(owner, state, Tally);
+        return RegionStability(owner, state,
+            ControlTally.World(campaign, owner?.MapIndex ?? 0, state?.MapIndex ?? 0));
     }
 
     /// <summary>The same, against a tally already taken. Used inside the weekly pass.</summary>
     private static float RegionStability(Nation owner, ScenarioState state,
-        Dictionary<int, RegionControl> tally)
+        RegionControl control)
     {
         if (state is null || owner is null) return Weights.Base;
         var weights = Weights;
-        tally.TryGetValue(state.MapIndex, out var control);
         var value = weights.Base
                     + (state.StandardOfLiving - weights.LivingTolerance) * weights.Living
                     - state.Radicalism * weights.Radicalism
@@ -152,15 +150,12 @@ public static class StabilityCore
     /// <summary>How much of a region is under somebody else's flag right now.</summary>
     public static float OccupiedShare(Campaign campaign, ScenarioState state, Nation owner)
     {
-        Tally.Clear();
-        ControlTally.Of(campaign, owner, NoEnemies, Tally);
-        Tally.TryGetValue(state?.MapIndex ?? 0, out var control);
+        var control = ControlTally.World(campaign, owner?.MapIndex ?? 0, state?.MapIndex ?? 0);
         return control.OccupiedShare;
     }
 
     // Scratch, rebuilt on the way in and never read between calls.
     private static readonly Dictionary<int, RegionControl> Tally = new();
-    private static readonly HashSet<ushort> NoEnemies = new();
 
     /// <summary>
     /// What the country's stability is being pulled towards: its capital, weighted far
@@ -175,11 +170,11 @@ public static class StabilityCore
         var capitalStability = -1f;
         double weighted = 0;
         long people = 0;
-        Tally.Clear();
-        ControlTally.Of(campaign, nation, NoEnemies, Tally);
         foreach (var state in campaign.StatesOf(nation.MapIndex))
         {
-            var settled = RegionStability(nation, state, Tally);
+            // One walk of the map a day for the whole world, shared with everything that asks.
+            var settled = RegionStability(nation, state,
+                ControlTally.World(campaign, nation.MapIndex, state.MapIndex));
             state.Stability = settled;
             if (state.MapIndex == nation.CapitalStateMapIndex) capitalStability = settled;
             if (state.Population <= 0) continue;
