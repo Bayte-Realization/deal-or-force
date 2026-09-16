@@ -160,6 +160,7 @@ public partial class DealOrForceGame
         _updatingStateAffairs = false;
 
         RefreshStateBudget(nation);
+        RefreshTradeInstructions();
         foreach (var (policy, button) in _stateTradeButtons)
             ApplyLedgerButtonState(button, policy == nation.TradePolicy);
         foreach (var (focus, button) in _stateFocusButtons)
@@ -255,6 +256,8 @@ public partial class DealOrForceGame
         _statePolicyFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
         _statePolicyFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _stateTradeControls.AddChild(_statePolicyFeedback);
+
+        BuildTradeInstructions(rows);
 
         StateSection(rows, "THE CABINET",
             "What the government is for this year. One priority at a time, each with a weekly cost and a " +

@@ -279,6 +279,8 @@ public static class Program
                     APromiseIsAnsweredAndAConquestIsCounted());
                 failures += Check("trade has names on it, and an embargo has teeth",
                     TradeHasNamesOnIt(sandbox));
+                failures += Check("what a country says about its own trade is what its traders do",
+                    TradeAnswersToItsGovernment(sandbox));
                 failures += Check("the world makes what the world needs",
                     TheWorldMakesWhatItNeeds(sandbox));
                 failures += Check("a peace can be written, priced, refused and signed",
@@ -2019,6 +2021,115 @@ public static class Program
                           $"the tightest pair is {buyer.Tag}, which runs {strongest:P0} of its trade through {seller.Tag}.");
         Console.WriteLine($"    an embargo by {seller.Tag} cut {buyer.Tag}'s trade from {before:0.0} to {after:0.0} " +
                           $"and its market access from {beforeAccess:P0} to {afterAccess:P0}.");
+        return "";
+    }
+
+    /// <summary>
+    /// What a country says about its own trade is what its traders do.
+    ///
+    /// The market was one national switch - a trade policy, an embargo, and that was the
+    /// whole of a player's say in an economy the game otherwise models in detail. These are
+    /// the controls underneath it: per good, how badly this country wants it, how much of a
+    /// shortfall it will cover by buying, how much of a surplus it keeps at home, and what
+    /// it will pay; per country, a preference and a refusal that can name a single good.
+    ///
+    /// Measured on the largest trade route in the world, because a rule that cannot stop the
+    /// biggest deal on the map is not a rule. Three of the instructions are tried in turn on
+    /// the same route, each taken back before the next, and the world has to come back to
+    /// where it started afterwards - an instruction that could not be withdrawn would be a
+    /// worse trap than not having one.
+    /// </summary>
+    private static string TradeAnswersToItsGovernment(Campaign campaign)
+    {
+        if (campaign.TradeRoutes.Count == 0) return "nothing is being traded to instruct";
+
+        // The largest single route: one seller, one buyer, one good.
+        var biggest = 0f;
+        var sellerId = 0;
+        var buyerId = 0;
+        var commodity = default(Commodity);
+        foreach (var route in campaign.TradeRoutes)
+        {
+            if (route.Value <= biggest) continue;
+            biggest = route.Value;
+            sellerId = route.SellerId;
+            buyerId = route.BuyerId;
+            commodity = route.Commodity;
+        }
+        var seller = campaign.NationById(sellerId);
+        var buyer = campaign.NationById(buyerId);
+        if (seller is null || buyer is null) return "the largest route has no countries on it";
+        var good = CommodityCatalog.IdOf(commodity);
+        var routesBefore = campaign.TradeRoutes.Count;
+
+        float Volume()
+        {
+            var total = 0f;
+            foreach (var route in campaign.TradeRoutes)
+                if (route.SellerId == sellerId && route.BuyerId == buyerId && route.Commodity == commodity)
+                    total += route.Volume;
+            return total;
+        }
+
+        float Imports()
+        {
+            return buyer.Market.TryGetValue(commodity, out var quote) ? quote.Imports : 0f;
+        }
+
+        void Instruct(Nation nation, string partner, string setting, float value) =>
+            new SetTradeInstructionCommand
+            {
+                IssuerId = nation.Id, GoodId = good, PartnerTag = partner,
+                Setting = setting, Value = value
+            }.Apply(campaign);
+
+        var opening = Volume();
+        if (opening <= 0.0001f) return "the largest route in the world carries nothing";
+
+        // 1. Keep it all at home.
+        Instruct(seller, "", TradeDesk.ExportReserve, 1f);
+        MarketSystem.Prime(campaign);
+        var reserved = Volume();
+        Instruct(seller, "", TradeDesk.ExportReserve, 0f);
+        MarketSystem.Prime(campaign);
+        if (reserved > opening * 0.05f)
+            return $"{seller.Tag} reserved all its {good} and still sold {reserved:0.0} of {opening:0.0} to {buyer.Tag}";
+
+        // 2. Refuse that one country, for that one good.
+        Instruct(buyer, seller.Tag, TradeDesk.Forbid, 1f);
+        MarketSystem.Prime(campaign);
+        var forbidden = Volume();
+        var elsewhere = 0f;
+        foreach (var route in campaign.TradeRoutes)
+            if (route.SellerId == sellerId && route.BuyerId == buyerId && route.Commodity != commodity)
+                elsewhere += route.Volume;
+        Instruct(buyer, seller.Tag, TradeDesk.Forbid, 0f);
+        MarketSystem.Prime(campaign);
+        if (forbidden > 0.0001f)
+            return $"{buyer.Tag} forbade {good} from {seller.Tag} and bought {forbidden:0.0} of it anyway";
+
+        // 3. Go short on purpose.
+        Instruct(buyer, "", TradeDesk.ImportCeiling, 0f);
+        MarketSystem.Prime(campaign);
+        var capped = Imports();
+        Instruct(buyer, "", TradeDesk.ImportCeiling, 1f);
+        MarketSystem.Prime(campaign);
+        if (capped > 0.0001f)
+            return $"{buyer.Tag} capped its {good} imports at nothing and imported {capped:0.0}";
+
+        // And the world is where it was.
+        if (buyer.TradeSettings.Count > 0 || seller.TradeSettings.Count > 0)
+            return "an instruction set back to its default was still being stored, so a default " +
+                   "and a decision cannot be told apart";
+        var closing = Volume();
+        if (closing <= opening * 0.5f)
+            return $"the instructions were withdrawn and the route came back at {closing:0.0} of {opening:0.0}";
+
+        Console.WriteLine($"  trade orders: {TradeDesk.All.Count:N0} instruction(s) declared in common/trade. " +
+                          $"On the world's largest route - {seller.Tag} selling {good} to {buyer.Tag}, {opening:0.0} a week - " +
+                          $"a full export reserve cut it to {reserved:0.0}, a refusal naming that one good cut it to " +
+                          $"{forbidden:0.0} while {elsewhere:0.0} of their other trade carried on, and an import ceiling " +
+                          $"of nothing took {buyer.Tag}'s {good} imports to {capped:0.0}. Withdrawn, the route is {closing:0.0} again.");
         return "";
     }
 

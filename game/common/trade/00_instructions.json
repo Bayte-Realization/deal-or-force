@@ -1,0 +1,98 @@
+// What a country may decide about its own trade.
+//
+// Every control the trade screen offers is declared here, and the screen is drawn from this
+// file rather than from a list in the code: change a default, narrow a range, rename one, and
+// the interface follows. A mod may add its own - it will be stored, saved and shown like the
+// rest - but adding one does not teach the weekly pass to care about it. Five of these have
+// meaning in the routing, and they are the five the base game ships; anything beyond them is
+// a number waiting for a script or a patch to read it.
+//
+//   scope        "good" - set for one commodity
+//                "partner" - set about one other country, optionally for one commodity
+//   shape        how to read the number: "share" (0..1), "multiplier" (x), "flag" (on/off)
+//   default      what every country is taken to have chosen until it chooses otherwise
+//   minimum      the bounds a command is clamped to, so a bad number cannot be stored
+//   maximum
+//   step         the coarseness a control offers; zero means a free number
+//
+// The base price a price limit is a multiple of is the good's own, from common/goods - so a
+// ceiling of 1.4 on oil means "not above forty per cent over what oil is normally worth",
+// and it keeps meaning that after a mod reprices oil.
+{
+  "import_priority": {
+    "scope": "good",
+    "shape": "multiplier",
+    "default": 1.0,
+    "minimum": 0.0,
+    "maximum": 5.0,
+    "step": 0.25,
+    "name": "Import priority",
+    "description": "How far up the queue this country stands when the world is short of this good. Buyers are served in order of how badly they need it; this weighs that need. It decides who is served first, not how much arrives."
+  },
+
+  "import_ceiling": {
+    "scope": "good",
+    "shape": "share",
+    "default": 1.0,
+    "minimum": 0.0,
+    "maximum": 1.0,
+    "step": 0.05,
+    "name": "Import ceiling",
+    "description": "The most of a shortfall this country is willing to cover by buying it in. Below one it goes short on purpose rather than depend on anybody for the rest."
+  },
+
+  "export_reserve": {
+    "scope": "good",
+    "shape": "share",
+    "default": 0.0,
+    "minimum": 0.0,
+    "maximum": 1.0,
+    "step": 0.05,
+    "name": "Export reserve",
+    "description": "The share of a surplus kept at home before any of it is sold. At one nothing leaves the country, whatever anybody offers."
+  },
+
+  "price_ceiling": {
+    "scope": "good",
+    "shape": "multiplier",
+    "default": 0.0,
+    "minimum": 0.0,
+    "maximum": 5.0,
+    "step": 0.1,
+    "name": "Price ceiling",
+    "description": "Refuse to buy above this multiple of the good's base price. Nought is no limit, which is where every country starts."
+  },
+
+  "price_floor": {
+    "scope": "good",
+    "shape": "multiplier",
+    "default": 0.0,
+    "minimum": 0.0,
+    "maximum": 5.0,
+    "step": 0.1,
+    "name": "Price floor",
+    "description": "Refuse to sell below this multiple of the good's base price. Nought is no limit."
+  },
+
+  "preference": {
+    "scope": "partner",
+    "shape": "multiplier",
+    "default": 1.0,
+    "minimum": 0.0,
+    "maximum": 3.0,
+    "step": 0.25,
+    "name": "Preference",
+    "description": "How much this country favours dealing with that one, over and above what distance and diplomacy already say. Both sides' preferences multiply, so a partner who dislikes you back is harder to reach than one who does not."
+  },
+
+  "forbid": {
+    "scope": "partner",
+    "shape": "flag",
+    "default": 0.0,
+    "minimum": 0.0,
+    "maximum": 1.0,
+    "step": 1.0,
+    "name": "Forbidden",
+    "description": "No trade with that country - in everything, or in one good when the rule names one. Either side forbidding it is enough."
+  }
+}

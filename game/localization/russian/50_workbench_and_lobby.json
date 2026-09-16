@@ -79,5 +79,16 @@
   "Use a content folder and the .json extension.": "Используйте папку содержимого и расширение .json.",
   "Validate": "Проверить",
   "Value": "Значение",
-  "You": "Вы"
+  "You": "Вы",
+
+  // Экран торговых инструкций.
+  "TRADE INSTRUCTIONS": "ТОРГОВЫЕ ИНСТРУКЦИИ",
+  "What this country has told its traders to do, good by good and country by country. Every control here is declared in common/trade, so a mod can change the limits, the defaults and the names of all of them. A change takes effect at the next weekly clearing.": "Что страна велела своим торговцам — по каждому товару и по каждой стране. Каждый регулятор здесь объявлен в common/trade, так что мод может изменить пределы, значения по умолчанию и названия любого из них. Изменение вступает в силу на следующем недельном расчёте.",
+  "for the good above only": "только для товара выше",
+  "Apply the rules below to the good selected above rather than to everything. A rule naming a good is read first, and what the country said in general is the fallback.": "Применять правила ниже к выбранному выше товару, а не ко всему. Правило, называющее товар, читается первым, а сказанное о стране вообще — запасной вариант.",
+  "Forget everything this country has decided about its trade and let every good be traded on its merits again.": "Забыть всё, что страна решила о своей торговле, и снова торговать каждым товаром по существу.",
+
+  // Показания на экране торговых инструкций.
+  "{0} {1} · {2} {3} · {4} {5} · {6} {7} · {8} {9}": "{0} {1} · {2} {3} · {4} {5} · {6} {7} · {8} {9}",
+  "{0}×": "{0}×"
 }

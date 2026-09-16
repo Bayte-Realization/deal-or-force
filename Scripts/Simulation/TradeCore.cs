@@ -165,8 +165,12 @@ public static class TradeNetwork
         {
             var nation = nations[index];
             if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
+            // What is left after the country has kept back whatever it told itself to
+            // keep. At a reserve of one nothing leaves, whatever anybody offers, which is
+            // what "do not export food while my own people are short" has to mean.
             var capacity = (quote.Production - quote.Demand) *
-                           TradePolicyRules.ExportAccess(nation.TradePolicy);
+                           TradePolicyRules.ExportAccess(nation.TradePolicy) *
+                           (1f - M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ExportReserve)));
             if (capacity <= 0.0001f) continue;
             Insert(SellerIds, SellerCapacity, nation.Id, capacity, SellersPerGood);
         }
@@ -195,10 +199,19 @@ public static class TradeNetwork
             if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
             var shortfall = (quote.Demand - quote.Production) *
                             TradePolicyRules.ImportAccess(nation.TradePolicy) *
-                            Ceiling(campaign, nation);
+                            Ceiling(campaign, nation) *
+                            // A country that has capped its imports of this good goes short
+                            // on purpose rather than depend on anybody for the rest.
+                            M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ImportCeiling));
             if (shortfall <= 0.0001f) continue;
             _buyerIds[buyers] = nation.Id;
-            _buyerKeys[buyers] = -shortfall;
+            // Ordered by need, weighted by how badly the country says it wants this good.
+            // The weight decides the QUEUE and not the amount: a priority of three does not
+            // buy three times as much, it is served before somebody equally short who said
+            // nothing. What is actually taken is worked out again below from the shortfall
+            // itself, so an instruction cannot conjure goods that were never produced.
+            _buyerKeys[buyers] = -shortfall *
+                MathF.Max(0.0001f, TradeDesk.ForGood(nation, commodity, TradeDesk.ImportPriority));
             buyers++;
         }
         if (buyers > 1) Array.Sort(_buyerKeys, _buyerIds, 0, buyers);
@@ -207,7 +220,13 @@ public static class TradeNetwork
         {
             var buyer = campaign.NationById(_buyerIds[index]);
             if (buyer is null) continue;
-            var deficit = -_buyerKeys[index];
+            // The true shortfall, not the queue position above.
+            if (!buyer.Market.TryGetValue(commodity, out var buyerQuote)) continue;
+            var deficit = (buyerQuote.Demand - buyerQuote.Production) *
+                          TradePolicyRules.ImportAccess(buyer.TradePolicy) *
+                          Ceiling(campaign, buyer) *
+                          M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling));
+            if (deficit <= 0.0001f) continue;
 
             // Rank this week's exporters from where the buyer is standing.
             SellerScore.Clear();
@@ -217,7 +236,7 @@ public static class TradeNetwork
                 if (SellerCapacity[seat] <= 0.0001f || SellerIds[seat] == buyer.Id) continue;
                 var seller = campaign.NationById(SellerIds[seat]);
                 if (seller is null) continue;
-                var score = Affinity(campaign, buyer, seller);
+                var score = Affinity(campaign, buyer, seller, commodity);
                 if (score <= 0.0001f) continue;
                 Insert(SellerOrder, SellerScore, seat, score, int.MaxValue);
             }
@@ -229,6 +248,13 @@ public static class TradeNetwork
                 if (take <= 0.0001f) continue;
                 var seller = campaign.NationById(SellerIds[seat]);
                 if (seller is null) continue;
+                // A price either side has refused in advance. The seller's own price is what
+                // a route costs - see Deliver - so this is the same number the deal would be
+                // written at, against the limits the two countries set as multiples of what
+                // the good is worth at base.
+                if (!TradeDesk.PriceIsAcceptable(buyer, seller, commodity,
+                        seller.Market.TryGetValue(commodity, out var offer) ? offer.Price : 0f))
+                    continue;
 
                 SellerCapacity[seat] -= take;
                 deficit -= take;
@@ -283,8 +309,12 @@ public static class TradeNetwork
     /// How willing and able these two are to move goods between them, as a multiplier on
     /// nothing in particular - only the ranking matters. Zero means it cannot happen at all.
     /// </summary>
-    private static float Affinity(Campaign campaign, Nation buyer, Nation seller)
+    private static float Affinity(Campaign campaign, Nation buyer, Nation seller, Commodity commodity)
     {
+        // What the two countries have said about each other, which is an embargo one good
+        // wide when it names a good and the ordinary kind when it does not.
+        if (TradeDesk.Forbidden(buyer, seller, commodity)) return 0f;
+
         // A war stops trade, and so does either side forbidding it. These are the whole
         // point of the exercise: they are what an embargo and a blockade now mean.
         var relation = CampaignDiplomacy.Peek(campaign, buyer.Id, seller.Id);
@@ -316,7 +346,8 @@ public static class TradeNetwork
         }
 
         return score * TradePolicyRules.ImportAccess(buyer.TradePolicy) *
-               TradePolicyRules.ExportAccess(seller.TradePolicy);
+               TradePolicyRules.ExportAccess(seller.TradePolicy) *
+               TradeDesk.PreferenceBetween(buyer, seller, commodity);
     }
 
     /// <summary>
