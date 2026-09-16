@@ -1,0 +1,28 @@
+{
+
+  // The war screen.
+  "{0} of {1} war(s) shown": "{0} of {1} war(s) shown",
+  "{0} dead in the wars still being fought": "{0} dead in the wars still being fought",
+  "{0} yr": "{0} yr",
+  "{0} d": "{0} d",
+  "{0}   against   {1}": "{0}   against   {1}",
+  "War goal: {0}": "War goal: {0}",
+  "strategic supremacy": "strategic supremacy",
+  "nobody": "nobody",
+  "Operational profiles: {0} against {1}": "Operational profiles: {0} against {1}",
+  "War score {0} towards {1}": "War score {0} towards {1}",
+  "occupation {0}": "occupation {0}",
+  "battles {0}": "battles {0}",
+  "objective {0}": "objective {0}",
+  "home support {0}": "home support {0}",
+  "Front: {0} attacking province(s) against {1} defending": "Front: {0} attacking province(s) against {1} defending",
+  "Divisions committed: {0} against {1}": "Divisions committed: {0} against {1}",
+  "Dead: {0} against {1}": "Dead: {0} against {1}",
+  "War support at home: {0} against {1}": "War support at home: {0} against {1}",
+  "ENGAGEMENTS": "ENGAGEMENTS",
+  "{0} being fought": "{0} being fought",
+  "province {0}": "province {0}",
+  "day {0}": "day {0}",
+  "{0} dead": "{0} dead",
+  "Acceptance {0}%.": "Acceptance {0}%."
+}

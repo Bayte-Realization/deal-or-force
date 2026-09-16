@@ -111,6 +111,8 @@ public static class Program
         failures += Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
         failures += Check("a proclaimed state flies its own flag", AProclaimedStateFliesItsOwnFlag(campaign));
         failures += Check("every folder of data is read by something", EveryFolderOfDataIsRead());
+        failures += Check("the interface composes its prose through the table",
+            TheInterfaceComposesThroughTheTable());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -7038,6 +7040,99 @@ public static class Program
     /// happens, and no error is raised anywhere - and it is the one a list in a document
     /// cannot catch, because the document is where the wrong claim lives.
     /// </summary>
+    /// <summary>
+    /// How much English the interface still assembles behind the localisation table's back.
+    ///
+    /// A C# interpolated string is a format the compiler assembles at runtime. There is no
+    /// literal in the source for a table to index and nothing for the caption scan to find,
+    /// so "the English table indexes every string the game shows" passes while the game
+    /// shows English: the whole war screen was composed this way, every line of it, and
+    /// every check was green.
+    ///
+    /// Prose inside an interpolation is the failure. A format with no words in it -
+    /// "{0:N0} / {1:N0}", "{0}%" - is punctuation and reads the same in every language, so
+    /// it does not count.
+    ///
+    /// The ceiling only ever goes down. Adding one of these means lowering a number in this
+    /// file on purpose, which is the point.
+    /// </summary>
+    private static string TheInterfaceComposesThroughTheTable()
+    {
+        const int Ceiling = 210;
+
+        var scripts = FindScripts();
+        if (scripts is null) return "";
+
+        // The developer console is a tool for whoever is building the game, and it is
+        // deliberately English - it prints type names and command syntax.
+        var skip = new[] { "DeveloperConsoleCommands.cs", "DeveloperConsoleUI.cs" };
+
+        var offenders = new List<string>();
+        var total = 0;
+        foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
+        {
+            var name = Path.GetFileName(file);
+            if (skip.Contains(name)) continue;
+            // Only the presentation layer: the simulation's own strings go through Loc, and
+            // its diagnostics are meant to be English.
+            var relative = Path.GetRelativePath(scripts, file).Replace('\\', '/');
+            if (relative.StartsWith("Simulation/", StringComparison.OrdinalIgnoreCase)) continue;
+            if (relative.StartsWith("Modding/", StringComparison.OrdinalIgnoreCase)) continue;
+            if (relative.StartsWith("LegacySourceMap/", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var lines = File.ReadAllLines(file);
+            for (var index = 0; index < lines.Length; index++)
+            {
+                var line = lines[index];
+                var trimmed = line.TrimStart();
+                if (trimmed.StartsWith("//", StringComparison.Ordinal)) continue;
+                if (trimmed.Contains("GD.Print", StringComparison.Ordinal)) continue;
+                if (trimmed.Contains("DiagnosticLogs", StringComparison.Ordinal)) continue;
+                if (!line.Contains("$\"", StringComparison.Ordinal)) continue;
+                if (!HasProse(line)) continue;
+                total++;
+                if (offenders.Count < 6)
+                    offenders.Add($"{relative}:{index + 1}");
+            }
+        }
+
+        Console.WriteLine($"  localization: {total:N0} interpolated line(s) of prose the table " +
+                          $"cannot reach, against a ceiling of {Ceiling:N0}.");
+        if (total > Ceiling)
+            return $"{total:N0} interpolated line(s) of English the localisation table cannot " +
+                   $"reach, over the ceiling of {Ceiling:N0}: {string.Join(", ", offenders)}";
+        return "";
+    }
+
+    /// <summary>
+    /// Whether a line of source has actual words in a string rather than only a format.
+    ///
+    /// Two letters in a row outside a brace is the test, and it is deliberately crude: it
+    /// misses nothing that matters and admits the occasional format specifier, which is a
+    /// far better failure than the other way round.
+    /// </summary>
+    private static bool HasProse(string line)
+    {
+        var start = line.IndexOf("$\"", StringComparison.Ordinal);
+        while (start >= 0)
+        {
+            var depth = 0;
+            var letters = 0;
+            for (var index = start + 2; index < line.Length; index++)
+            {
+                var character = line[index];
+                if (character == '{') { depth++; continue; }
+                if (character == '}') { depth = Math.Max(0, depth - 1); continue; }
+                if (character == '"' && depth == 0) break;
+                if (depth > 0) continue;
+                if (char.IsLetter(character)) { if (++letters >= 3) return true; }
+                else letters = 0;
+            }
+            start = line.IndexOf("$\"", start + 2, StringComparison.Ordinal);
+        }
+        return false;
+    }
+
     private static string EveryFolderOfDataIsRead()
     {
         var scripts = FindScripts();

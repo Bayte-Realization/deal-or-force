@@ -253,8 +253,8 @@ public partial class DealOrForceGame
         var fighting = _campaign.Wars.Count(war => !war.Ended);
         _warLedgerSummary.Text = _warLedgerOrder.Count == 0
             ? _warLedgerMineOnly ? "You are at peace." : "The world is at peace."
-            : $"{_warLedgerOrder.Count:N0} of {fighting:N0} war(s) shown  ·  " +
-              $"{Fmt.People(worldwide)} dead in the wars still being fought  ·  " +
+            : Simulation.Loc.Format("{0} of {1} war(s) shown", _warLedgerOrder.Count.ToString("N0"), fighting.ToString("N0")) + "  ·  " +
+              Simulation.Loc.Format("{0} dead in the wars still being fought", Fmt.People(worldwide)) + "  ·  " +
               "click a war for its own page";
 
         while (_warLedgerRows.Count < _warLedgerOrder.Count) _warLedgerRows.Add(CreateWarLedgerRow());
@@ -396,7 +396,9 @@ public partial class DealOrForceGame
         row.Casualties.Text = Fmt.People(war.AttackerLosses + war.DefenderLosses);
         row.Front.Text = Simulation.Loc.Format("{0:N0} front", war.AttackerFront.Count + war.DefenderFront.Count);
         var days = Math.Max(0, _campaign.ElapsedDays - war.StartedDay);
-        row.Age.Text = days >= 730 ? $"{days / 365f:0.#} yr" : $"{days:N0} d";
+        row.Age.Text = days >= 730
+            ? Simulation.Loc.Format("{0} yr", (days / 365f).ToString("0.#"))
+            : Simulation.Loc.Format("{0} d", days.ToString("N0"));
     }
 
     private static Color NationColour(Nation nation) =>
@@ -463,24 +465,27 @@ public partial class DealOrForceGame
         string SideNames(bool attacking) => string.Join(", ", war.Side(attacking)
             .Select(id => _campaign.NationById(id)?.Name)
             .Where(name => !string.IsNullOrEmpty(name)));
-        Line($"{SideNames(true)}   against   {SideNames(false)}");
+        Line(Simulation.Loc.Format("{0}   against   {1}", SideNames(true), SideNames(false)));
 
         var objective = _campaign.States.FirstOrDefault(state => state.MapIndex == war.ClaimedStateMapIndex);
-        Line($"War goal: {objective?.Name ?? "strategic supremacy"}");
+        Line(Simulation.Loc.Format("War goal: {0}",
+            objective?.Name ?? Tr("strategic supremacy")));
         if (attacker is not null && defender is not null)
-            Line($"Operational profiles: {AiStrategyCatalog.Resolve(_campaign, war, attacker).Id} " +
-                 $"against {AiStrategyCatalog.Resolve(_campaign, war, defender).Id}");
+            Line(Simulation.Loc.Format("Operational profiles: {0} against {1}",
+                AiStrategyCatalog.Resolve(_campaign, war, attacker).Id,
+                AiStrategyCatalog.Resolve(_campaign, war, defender).Id));
 
         Heading("HOW IT IS GOING");
-        Line($"War score {war.WarScore:+0.0;-0.0;0.0} " +
-             $"towards {(war.WarScore >= 0f ? attacker?.Name : defender?.Name) ?? "nobody"}",
+        Line(Simulation.Loc.Format("War score {0} towards {1}",
+                 war.WarScore.ToString("+0.0;-0.0;0.0"),
+                 (war.WarScore >= 0f ? attacker?.Name : defender?.Name) ?? Tr("nobody")),
              NationColour(war.WarScore >= 0f ? attacker : defender));
-        Line($"    occupation {war.OccupationScore:+0.0;-0.0;0.0}  ·  " +
-             $"battles {war.BattleScore:+0.0;-0.0;0.0}  ·  " +
-             $"objective {war.ObjectiveScore:+0.0;-0.0;0.0}  ·  " +
-             $"home support {war.SupportScore:+0.0;-0.0;0.0}");
-        Line($"Front: {war.AttackerFront.Count:N0} attacking province(s) against " +
-             $"{war.DefenderFront.Count:N0} defending");
+        Line("    " + Simulation.Loc.Format("occupation {0}", war.OccupationScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
+             Simulation.Loc.Format("battles {0}", war.BattleScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
+             Simulation.Loc.Format("objective {0}", war.ObjectiveScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
+             Simulation.Loc.Format("home support {0}", war.SupportScore.ToString("+0.0;-0.0;0.0")));
+        Line(Simulation.Loc.Format("Front: {0} attacking province(s) against {1} defending",
+            war.AttackerFront.Count.ToString("N0"), war.DefenderFront.Count.ToString("N0")));
 
         var committed = new Dictionary<int, int>();
         foreach (var army in _campaign.Armies)
@@ -488,26 +493,32 @@ public partial class DealOrForceGame
                 committed[army.NationId] = committed.GetValueOrDefault(army.NationId) + 1;
         var attackingDivisions = war.Side(true).Sum(id => committed.GetValueOrDefault(id));
         var defendingDivisions = war.Side(false).Sum(id => committed.GetValueOrDefault(id));
-        Line($"Divisions committed: {attackingDivisions:N0} against {defendingDivisions:N0}");
+        Line(Simulation.Loc.Format("Divisions committed: {0} against {1}",
+            attackingDivisions.ToString("N0"), defendingDivisions.ToString("N0")));
 
         Heading("WHAT IT HAS COST");
-        Line($"Dead: {Fmt.People(war.AttackerLosses)} against {Fmt.People(war.DefenderLosses)}");
-        Line($"War support at home: {war.AttackerWarSupport:P0} against {war.DefenderWarSupport:P0}");
+        Line(Simulation.Loc.Format("Dead: {0} against {1}",
+            Fmt.People(war.AttackerLosses), Fmt.People(war.DefenderLosses)));
+        Line(Simulation.Loc.Format("War support at home: {0} against {1}",
+            war.AttackerWarSupport.ToString("P0"), war.DefenderWarSupport.ToString("P0")));
 
         var battles = _campaign.Battles
             .Where(battle => battle.WarId == war.Id && !battle.Ended)
             .OrderByDescending(battle => battle.AttackerLosses + battle.DefenderLosses)
             .Take(8)
             .ToList();
-        Heading($"ENGAGEMENTS  ·  {_campaign.Battles.Count(battle => battle.WarId == war.Id && !battle.Ended):N0} being fought");
+        Heading(Tr("ENGAGEMENTS") + "  ·  " + Simulation.Loc.Format("{0} being fought",
+            _campaign.Battles.Count(battle => battle.WarId == war.Id && !battle.Ended).ToString("N0")));
         if (battles.Count == 0) Line("Nothing is in contact.");
         foreach (var battle in battles)
         {
             var place = _campaign.ProvinceMap is null
-                ? $"province {battle.ProvinceId:N0}"
+                ? Simulation.Loc.Format("province {0}", battle.ProvinceId.ToString("N0"))
                 : StateNameOfProvince(battle.ProvinceId);
-            Line($"{place}  ·  day {_campaign.ElapsedDays - battle.StartedDay + 1:N0}  ·  " +
-                 $"{Fmt.People(battle.AttackerLosses + battle.DefenderLosses)} dead  ·  {battle.Outcome}");
+            Line(place + "  ·  " +
+                 Simulation.Loc.Format("day {0}", (_campaign.ElapsedDays - battle.StartedDay + 1).ToString("N0")) + "  ·  " +
+                 Simulation.Loc.Format("{0} dead", Fmt.People(battle.AttackerLosses + battle.DefenderLosses)) + "  ·  " +
+                 Simulation.Loc.Get(battle.Outcome));
         }
 
         if (war.LastNegotiation.Length > 0)
@@ -570,7 +581,8 @@ public partial class DealOrForceGame
             button.Disabled = blocked.Length > 0;
             button.TooltipText = Ui.Tip(blocked.Length > 0
                 ? blocked
-                : $"{PeaceNegotiation.Description(terms)}\nAcceptance {acceptance:0}%.");
+                : PeaceNegotiation.Description(terms) + "\n" +
+                  Simulation.Loc.Format("Acceptance {0}%.", acceptance.ToString("0")));
             quick.AddChild(button);
         }
     }
@@ -593,9 +605,9 @@ public partial class DealOrForceGame
     {
         var topology = _campaign.ProvinceMap;
         if (topology is null || provinceId <= 0 || provinceId > topology.ProvinceCount)
-            return $"province {provinceId:N0}";
+            return Simulation.Loc.Format("province {0}", provinceId.ToString("N0"));
         var stateIndex = topology.ProvinceToState[provinceId];
         var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == stateIndex);
-        return state?.Name ?? $"province {provinceId:N0}";
+        return state?.Name ?? Simulation.Loc.Format("province {0}", provinceId.ToString("N0"));
     }
 }
