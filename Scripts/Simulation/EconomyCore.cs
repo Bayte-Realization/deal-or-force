@@ -549,6 +549,53 @@ public static class EconomySystem
     public static float WeeklyMilitaryAt(Nation nation, float share, bool atWar = false) =>
         BudgetCore.AmountAtRate(nation, BudgetCore.Find("armed_forces"), nation.Gdp / 52f, atWar, share);
 
+
+    /// <summary>
+    /// Fill in the weekly figures and the explanations behind them, without moving money.
+    ///
+    /// The weekly tick does this as a side effect of running the week, and it does not run
+    /// on day zero and does not survive a save - a breakdown keeps its parts in a private
+    /// list and the serialiser writes public fields. Between them that is a budget screen
+    /// reading zero for the first week of every campaign and for up to six days after every
+    /// load, which is what "the economy sometimes zeroes out" turned out to be.
+    ///
+    /// Everything here is a pure read of the state: BudgetCore.Evaluate and Itemise compute,
+    /// StabilityCore.Target reports a target it does not apply. Nothing is added to a
+    /// treasury, so calling it twice in a day is not a week run twice.
+    ///
+    /// Only for countries somebody is looking at. Composing seventeen labels for two hundred
+    /// and sixty cabinets nobody reads is the cost the weekly tick already refuses to pay.
+    /// </summary>
+    public static void Explain(Campaign campaign)
+    {
+        if (campaign is null) return;
+        foreach (var nation in campaign.Nations)
+        {
+            if (!nation.IsHuman) continue;
+            var atWar = false;
+            foreach (var war in campaign.Wars)
+                if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+
+            var weeklyOutput = nation.Gdp / 52f;
+            var budget = BudgetCore.Evaluate(nation, weeklyOutput, atWar);
+            nation.WeeklyTaxIncome = budget.Taxation;
+            nation.WeeklyExpenses = budget.Expenses;
+            nation.WeeklyBalance = budget.Balance;
+            BudgetCore.Itemise(nation, weeklyOutput, atWar);
+            nation.Budget.Settle(nation.WeeklyBalance, Loc.Get("rounding"));
+
+            StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
+
+            var cabinet = GovernmentFocusCatalog.Of(nation.GovernmentFocus);
+            var government = PoliticsCore.GovernmentOf(nation);
+            var ideology = PoliticsCore.IdeologyOf(nation);
+            var focusWarSupport = cabinet.WarSupport + government.WarSupport + ideology.WarSupport;
+            nation.WarSupportDrivers.Begin("War support, weekly", "share");
+            nation.WarSupportDrivers.Add("Government focus on national security", focusWarSupport);
+            nation.WarSupportDrivers.Settle(0f, "held at its limit");
+        }
+    }
+
     public static void Tick(Campaign campaign)
     {
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;

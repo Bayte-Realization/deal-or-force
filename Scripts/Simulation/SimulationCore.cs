@@ -679,6 +679,12 @@ public sealed partial class Campaign
         nation.IsHuman = true;
         Player = nation;
         IsPaused = true;
+        // Sitting down in front of a country is the moment its books have to make sense.
+        // Every path arrives here - a new campaign, a hot seat handed over, a save just
+        // restored - and the weekly tick that writes these figures does not run on day zero
+        // and does not survive a save, which is the whole of why the economy screen was
+        // sometimes blank.
+        EconomySystem.Explain(this);
         Changed?.Invoke();
         return true;
     }

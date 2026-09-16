@@ -253,6 +253,11 @@ public static class ScenarioCatalog
         // nation's authored 2024 GDP. Everything the player sees afterwards is emergent.
         EconomySystem.CalibrateOutput(campaign);
 
+        // The world is finished, so its books can be written. The weekly tick that normally
+        // writes them explicitly skips day zero, which left a new campaign's budget screen
+        // reading nothing at all until its first Sunday.
+        EconomySystem.Explain(campaign);
+
         campaign.History.Capture(campaign, true);
         return campaign;
     }

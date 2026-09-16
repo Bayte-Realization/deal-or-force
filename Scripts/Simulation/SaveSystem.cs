@@ -450,6 +450,10 @@ public static class SaveSystem
             if (campaign.Nations.Any(nation => nation.OutputScale <= 0f))
                 EconomySystem.CalibrateOutput(campaign);
 
+            // A breakdown keeps its parts in a private list, so nothing above restored
+            // them and the budget screen would read zero until the next economic week.
+            // They are derivable from what has just been restored, so they are derived.
+            EconomySystem.Explain(campaign);
             return campaign;
         }
 

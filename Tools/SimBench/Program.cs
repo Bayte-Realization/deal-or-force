@@ -105,6 +105,8 @@ public static class Program
         failures += Check("a wharf is built on water", AWharfIsBuiltOnWater(campaign));
         failures += Check("an alliance fights one war, not thirty", AnAllianceFightsOneWar());
         failures += Check("what is built can be pulled down again", AWorldThatCanBeUnbuilt());
+        failures += Check("no economy falls off a cliff in a day", NoEconomyFallsOffACliff());
+        failures += Check("a country's books are never blank", TheBooksAreNeverBlank());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -6932,6 +6934,124 @@ public static class Program
     /// a demolition that forgets to take the GDP back is a money printer, and one that
     /// takes back more than it gave is a way to delete a country.
     /// </summary>
+    /// <summary>
+    /// An economy may be ruined; it may not vanish.
+    ///
+    /// A country can be conquered, blockaded, bankrupted and pulled apart, and all of those
+    /// are gradual. A figure that is a billion on Tuesday and nothing on Wednesday is not a
+    /// country in trouble, it is a number that was overwritten - and the report this exists
+    /// to answer ("the economy sometimes zeroes out, is it the events?") cannot be
+    /// investigated without knowing whether it happens and to whom.
+    ///
+    /// Secession and annexation are the two legitimate cliffs: a country that has just lost
+    /// half its regions is smaller by every measure on purpose, so a day the map changed
+    /// under a country is not counted against it.
+    /// </summary>
+    /// <summary>
+    /// A budget screen that reads zero, on the first morning and after every load.
+    ///
+    /// This is what "the economy sometimes zeroes out" was. The weekly figures and every
+    /// breakdown behind them are written by the economic week, the economic week does not
+    /// run on day zero, and a breakdown keeps its parts in a private list that no
+    /// serialiser writes. So a new campaign showed nothing for seven days and a loaded one
+    /// showed nothing until the next Sunday - "sometimes", with no pattern to see.
+    ///
+    /// Three moments: the first morning, mid-week, and straight out of a save.
+    /// </summary>
+    private static string TheBooksAreNeverBlank()
+    {
+        var campaign = Campaign.CreateBootstrap(20241121);
+        if (!AttachMap(campaign)) return "";
+        var player = campaign.Player;
+        if (player is null) return "the bootstrap seated nobody";
+
+        string Blank(string when, Nation nation)
+        {
+            if (!nation.Budget.HasEntries)
+                return $"{when}: {nation.Tag} has no budget to show at all";
+            if (MathF.Abs(nation.WeeklyTaxIncome) < 0.000001f &&
+                MathF.Abs(nation.WeeklyExpenses) < 0.000001f)
+                return $"{when}: {nation.Tag} takes nothing and spends nothing";
+            if (MathF.Abs(nation.Budget.Total - nation.WeeklyBalance) > 0.01f)
+                return $"{when}: {nation.Tag}'s budget explains {nation.Budget.Total:0.###} " +
+                       $"against a balance of {nation.WeeklyBalance:0.###}";
+            if (!nation.StabilityDrivers.HasEntries)
+                return $"{when}: {nation.Tag} cannot say why it is as stable as it is";
+            return "";
+        }
+
+        var day0 = Blank("on the first morning", player);
+        if (day0.Length > 0) return day0;
+
+        // Mid-week, where the weekly tick has not yet run again.
+        campaign.IsPaused = false;
+        for (var day = 0; day < 3; day++) campaign.Tick();
+        var midweek = Blank("three days in", campaign.Player);
+        if (midweek.Length > 0) return midweek;
+
+        // And out of a save, which is where the parts were being lost.
+        var bytes = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
+        var restored = SaveSystem.ImportNetworkSnapshot(bytes, "bench").Campaign;
+        if (restored is null) return "the campaign would not round-trip through a save";
+        var loaded = restored.Player;
+        if (loaded is null) return "the restored campaign seated nobody";
+        var afterLoad = Blank("straight out of a save", loaded);
+        if (afterLoad.Length > 0) return afterLoad;
+
+        Console.WriteLine($"  economy: {player.Tag} explains {player.Budget.Entries.Count} budget " +
+                          $"line(s) on day one and {loaded.Budget.Entries.Count} straight out of a save.");
+        return "";
+    }
+
+    private static string NoEconomyFallsOffACliff()
+    {
+        var campaign = Campaign.CreateBootstrap(20241102);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var gdp = new Dictionary<int, float>();
+        var regions = new Dictionary<int, int>();
+        foreach (var nation in campaign.Nations)
+        {
+            gdp[nation.Id] = nation.Gdp;
+            regions[nation.Id] = campaign.StatesOf(nation).Length;
+        }
+
+        var worst = "";
+        var worstDrop = 0f;
+        var cliffs = 0;
+        for (var day = 0; day < 730; day++)
+        {
+            campaign.Tick();
+            foreach (var nation in campaign.Nations)
+            {
+                var held = campaign.StatesOf(nation).Length;
+                var was = gdp.GetValueOrDefault(nation.Id, nation.Gdp);
+                var hadRegions = regions.GetValueOrDefault(nation.Id, held);
+                gdp[nation.Id] = nation.Gdp;
+                regions[nation.Id] = held;
+
+                // Ground changed hands, so of course the figures moved.
+                if (held != hadRegions) continue;
+                if (was < 1f) continue;
+
+                var drop = 1f - nation.Gdp / was;
+                if (drop < 0.60f) continue;
+                cliffs++;
+                if (drop <= worstDrop) continue;
+                worstDrop = drop;
+                worst = $"{nation.Tag} went from {was:0.##}B to {nation.Gdp:0.##}B on " +
+                        $"{campaign.Date} with the same {held} region(s)";
+            }
+        }
+
+        Console.WriteLine($"  economy: two years, {cliffs} single-day fall(s) of more than three fifths " +
+                          $"of a country's output with its borders unchanged.");
+        if (cliffs > 0)
+            return $"an economy vanished overnight: {worst}";
+        return "";
+    }
+
     private static string AWorldThatCanBeUnbuilt()
     {
         var campaign = Campaign.CreateBootstrap(20241014);
