@@ -258,13 +258,120 @@ public static class PeaceConference
     public static List<int> Claimable(Campaign campaign, StrategicWar war, int proposerId)
     {
         var topology = campaign.ProvinceMap;
-        var loser = campaign.NationById(proposerId == war.AttackerId ? war.DefenderId : war.AttackerId);
         var result = new List<int>();
-        if (topology is null || loser is null) return result;
+        if (topology is null) return result;
+
+        // Everybody on the other side. With allies in a war, claiming only from the enemy
+        // leader would leave an ally's ground unclaimable however much of it was taken.
+        var losers = new HashSet<ushort>();
+        foreach (var enemyId in war.EnemiesOf(proposerId))
+            if (campaign.NationById(enemyId) is { } enemy) losers.Add((ushort)enemy.MapIndex);
+        if (losers.Count == 0) return result;
+
         for (var province = 1; province <= topology.ProvinceCount; province++)
-            if (topology.ProvinceToNation[province] == (ushort)loser.MapIndex)
+            if (losers.Contains(topology.ProvinceToNation[province]))
                 result.Add(province);
         return result;
+    }
+
+
+    /// <summary>
+    /// Round a settlement to the regions it is mostly about.
+    ///
+    /// Given the provinces a treaty would transfer, this returns the provinces it should
+    /// transfer. A region the winner is taking most of is taken as far as the winner's own
+    /// soldiers stand in it; a region the winner is barely taking is given back. The war
+    /// goal is exempt from being given back - a war fought over one region does not end
+    /// with the winner deciding the region was not worth it.
+    ///
+    /// Why it matters more than it looks: a border that cuts a region in two creates a
+    /// second region, permanently. Province-by-province peaces do not only leave the map
+    /// looking chewed, they multiply what the map is made of, and every later war starts
+    /// from the smaller pieces the last one left.
+    /// </summary>
+    public static List<int> Tidy(Campaign campaign, StrategicWar war, IEnumerable<int> provinces,
+        int winnerMapIndex, bool roundUp = true)
+    {
+        var topology = campaign?.ProvinceMap;
+        var controllers = campaign?.ProvinceController;
+        var wanted = new HashSet<int>(provinces ?? Array.Empty<int>());
+        if (topology is null || controllers is null || wanted.Count == 0) return wanted.ToList();
+
+        var defines = campaign.Defines;
+        var up = roundUp ? M.Clamp01(defines.PeaceRoundUpShare) : 0f;
+        var down = M.Clamp01(defines.PeaceRoundDownShare);
+        if (up <= 0f && down <= 0f) return wanted.ToList();
+
+        // How big each region touched is, and how much of it is being taken. One walk.
+        var total = new Dictionary<int, int>();
+        var asked = new Dictionary<int, int>();
+        var regions = new HashSet<int>();
+        foreach (var province in wanted) regions.Add(topology.ProvinceToState[province]);
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            var region = topology.ProvinceToState[province];
+            if (!regions.Contains(region)) continue;
+            total[region] = total.GetValueOrDefault(region) + 1;
+            if (wanted.Contains(province)) asked[region] = asked.GetValueOrDefault(region) + 1;
+        }
+
+        // A region goes whole or it does not go.
+        //
+        // This is the only rule that actually removes border gore, and the arithmetic says
+        // why: taking any strict subset of a region cuts that region in two, and a region cut
+        // in two becomes two regions permanently. Dropping slivers alone got the cuts down by
+        // half and cost the winner most of what it had occupied; taking only what touches
+        // home left the cuts exactly where they were. Whole regions leave none at all.
+        //
+        // It is also the convention every game of this shape uses, and for the same reason:
+        // an army that has taken most of a province has taken the province, and a treaty
+        // that carves it along the line two armies stopped on is a treaty nobody would sign.
+        foreach (var region in regions)
+        {
+            if (region == 0) continue;
+            var size = total.GetValueOrDefault(region, 1);
+            var share = asked.GetValueOrDefault(region) / (float)(size <= 0 ? 1 : size);
+            var goal = war is not null && region == war.ClaimedStateMapIndex;
+
+            if (share >= up || (goal && share >= down))
+            {
+                // Whole. Including ground the winner does not stand on: the border follows
+                // the region, which is the entire point, and the alternative is the cut.
+                for (var province = 1; province <= topology.ProvinceCount; province++)
+                    if (topology.ProvinceToState[province] == (ushort)region) wanted.Add(province);
+                continue;
+            }
+            if (goal) continue;
+            if (share >= down) continue;     // the middle band, left exactly as it was drawn
+
+            foreach (var province in wanted.Where(province =>
+                         topology.ProvinceToState[province] == (ushort)region).ToList())
+                wanted.Remove(province);
+        }
+
+        // Never down to nothing, and never down to a fragment either: a country that won a
+        // war signs for something, and the something is a whole region. Keeping the scraps
+        // instead was the obvious floor and it quietly reintroduced exactly the cut this
+        // method exists to prevent.
+        if (wanted.Count == 0)
+        {
+            var bestRegion = -1;
+            var bestShare = -1f;
+            foreach (var region in regions)
+            {
+                if (region == 0) continue;
+                var size = total.GetValueOrDefault(region, 1);
+                var share = asked.GetValueOrDefault(region) / (float)(size <= 0 ? 1 : size);
+                if (share <= bestShare) continue;
+                bestShare = share;
+                bestRegion = region;
+            }
+            if (bestRegion > 0)
+                for (var province = 1; province <= topology.ProvinceCount; province++)
+                    if (topology.ProvinceToState[province] == (ushort)bestRegion) wanted.Add(province);
+        }
+
+        return wanted.ToList();
     }
 
     public static List<int> ProvincesOfState(ProvinceTopology topology, int stateMapIndex)

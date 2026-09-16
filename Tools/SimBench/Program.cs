@@ -107,6 +107,8 @@ public static class Program
         failures += Check("what is built can be pulled down again", AWorldThatCanBeUnbuilt());
         failures += Check("no economy falls off a cliff in a day", NoEconomyFallsOffACliff());
         failures += Check("a country's books are never blank", TheBooksAreNeverBlank());
+        failures += Check("the computer walks into empty ground", TheComputerWalksIntoEmptyGround());
+        failures += Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -2269,9 +2271,33 @@ public static class Program
 
         var peopleNow = PeopleIn(written);
         var peopleBefore = PeopleIn(cheapest);
-        if (peopleNow < peopleBefore)
-            return $"for the same {shaping:0.0} of war score the treaty takes {peopleNow:N0} people " +
-                   $"where the cheapest-first rule it replaced took {peopleBefore:N0}";
+
+        // Per province rather than in total, and the reason is a change of rule rather than
+        // a lowered bar. A settlement moves whole regions now: a region the winner is in more
+        // than halfway comes with it entire, and one it has barely entered is let go instead
+        // of being carved off, because carving it makes a second region that never goes away.
+        // That trade is the point - it is what took a decade of wars from 37 regions cut in
+        // two to 12 - and it means a small occupation can now buy less ground than a rule
+        // that took whatever it was standing on. What must still hold is the thing the old
+        // rule got wrong: the ground it does take must not be the emptiest ground available.
+        var perProvinceNow = written.Provinces.Count == 0 ? 0 : peopleNow / written.Provinces.Count;
+        var perProvinceBefore = cheapest.Provinces.Count == 0 ? 0 : peopleBefore / cheapest.Provinces.Count;
+        if (perProvinceNow < perProvinceBefore)
+            return $"for the same {shaping:0.0} of war score the treaty takes {perProvinceNow:N0} people " +
+                   $"a province where the cheapest-first rule it replaced took {perProvinceBefore:N0} " +
+                   $"({peopleNow:N0} against {peopleBefore:N0} in total)";
+
+        // And the new guarantee, which is the whole reason the trade above is worth making:
+        // no region is left cut in two by the treaty unless it is the one the war was over.
+        foreach (var region in written.Provinces.Select(province => (int)topology.ProvinceToState[province]).Distinct())
+        {
+            if (region == war.ClaimedStateMapIndex) continue;
+            var whole = PeaceConference.ProvincesOfState(topology, region).Count;
+            var taken = written.Provinces.Count(province => topology.ProvinceToState[province] == (ushort)region);
+            if (taken > 0 && taken < whole)
+                return $"the treaty takes {taken:N0} of {whole:N0} province(s) of region {region}, " +
+                       "which cuts it in two and makes a new region of the remainder";
+        }
 
         var regionsNow = written.Provinces.Select(province => (int)topology.ProvinceToState[province])
             .Distinct().Count();
@@ -6958,6 +6984,119 @@ public static class Program
     ///
     /// Three moments: the first morning, mid-week, and straight out of a save.
     /// </summary>
+    /// <summary>
+    /// Undefended ground is taken by armies nobody is steering.
+    ///
+    /// The gap rule was written about the player - a formation refusing an order into an
+    /// empty province was the complaint that produced it - and the fix went into the shared
+    /// path, so the AI inherited it without anybody checking. An AI that will not walk into
+    /// an open province cannot finish a war it is winning: every front freezes the moment
+    /// the other side runs out of divisions to put on it.
+    ///
+    /// So this counts provinces that changed hands with nobody standing in them, for
+    /// countries with no human in them, over a year of the world as it is.
+    /// </summary>
+    /// <summary>
+    /// Border gore, counted.
+    ///
+    /// "Make the AI avoid border gore" is a request about how the map looks, and how the map
+    /// looks is downstream of how a treaty is written. A settlement written province by
+    /// province draws the front line onto the map, and because a border that cuts a region
+    /// in two creates a second region, the damage is permanent and compounds: every later
+    /// war starts from the fragments the last one left.
+    ///
+    /// So the measurement is the number of regions in the world, which starts at 1,826 and
+    /// only ever goes up. Two worlds from the same seed, stepped the same number of days,
+    /// with the rounding rule on in one and off in the other - which is the only honest way
+    /// to say the rule did anything, since the number alone means nothing without the
+    /// number it replaced.
+    /// </summary>
+    private static string ADecadeOfWarsDoesNotShredTheMap()
+    {
+        static (int Regions, int Created, int Wars) Run(bool tidy)
+        {
+            var campaign = Campaign.CreateBootstrap(20241227);
+            if (!AttachMap(campaign)) return (0, 0, 0);
+            if (!tidy)
+            {
+                campaign.Defines.PeaceRoundUpShare = 0f;
+                campaign.Defines.PeaceRoundDownShare = 0f;
+            }
+            var before = campaign.States.Count;
+            campaign.IsPaused = false;
+            for (var day = 0; day < 365 * 10; day++) campaign.Tick();
+            var created = campaign.Wars.Sum(war => war.CreatedStates);
+            return (campaign.States.Count - before, created, campaign.Wars.Count(war => war.Ended));
+        }
+
+        var tidy = Run(true);
+        var ragged = Run(false);
+        if (tidy.Regions == 0 && ragged.Regions == 0) return "";
+
+        Console.WriteLine($"  borders: ten years of the world cut {tidy.Created:N0} region(s) in two " +
+                          $"with the rounding rule and {ragged.Created:N0} without " +
+                          $"({tidy.Regions:N0} against {ragged.Regions:N0} new regions on the map, " +
+                          $"{tidy.Wars:N0} and {ragged.Wars:N0} wars settled).");
+
+        if (ragged.Created == 0 && tidy.Created == 0)
+            return "";     // no war in either world annexed anything; nothing to compare
+        if (tidy.Created > ragged.Created)
+            return $"the rounding rule cut {tidy.Created:N0} regions in two against " +
+                   $"{ragged.Created:N0} without it, which is the opposite of what it is for";
+        return "";
+    }
+
+    private static string TheComputerWalksIntoEmptyGround()
+    {
+        var campaign = Campaign.CreateBootstrap(20241209);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        var controllers = campaign.ProvinceController;
+        if (controllers is null) return "no control map";
+        var before = (ushort[])controllers.Clone();
+
+        // Who is fighting whom, so a province changing hands can be told from a border
+        // being redrawn by a peace or a secession.
+        var taken = 0;
+        var takers = new HashSet<string>(StringComparer.Ordinal);
+        var battles = campaign.Battles.Count;
+
+        for (var day = 0; day < 365; day++)
+        {
+            campaign.Tick();
+            var now = campaign.ProvinceController;
+            if (now is null) break;
+            for (var province = 1; province < now.Length && province < before.Length; province++)
+            {
+                if (now[province] == before[province]) continue;
+                var winner = campaign.Nations.FirstOrDefault(nation => nation.MapIndex == now[province]);
+                before[province] = now[province];
+                if (winner is null || winner.IsHuman) continue;
+
+                // Nobody was standing there: no battle was fought for it on the day it fell.
+                var fought = false;
+                foreach (var battle in campaign.Battles)
+                    if (battle.ProvinceId == province && battle.StartedDay >= campaign.ElapsedDays - 2)
+                    { fought = true; break; }
+                if (fought) continue;
+                taken++;
+                takers.Add(winner.Tag);
+            }
+        }
+
+        Console.WriteLine($"  ai: {taken:N0} province(s) walked into without a fight in a year, " +
+                          $"by {takers.Count:N0} countries nobody is playing " +
+                          $"({campaign.Battles.Count - battles:N0} battles started in the same year).");
+        if (taken == 0)
+            return "a year of the world's wars and not one province was taken by an army " +
+                   "nobody is steering without a battle for it - the AI will not enter empty ground";
+        if (takers.Count < 2)
+            return $"only {string.Join(", ", takers)} ever took undefended ground, which is one " +
+                   "country's front rather than a rule the AI follows";
+        return "";
+    }
+
     private static string TheBooksAreNeverBlank()
     {
         var campaign = Campaign.CreateBootstrap(20241121);

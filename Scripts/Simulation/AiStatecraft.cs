@@ -849,6 +849,60 @@ public static partial class AiStatecraft
             if (bestCost <= 0f) break;
         }
 
+        // And rounded before it is offered. The loop above stops the moment the next
+        // province is unaffordable, which is exactly how a region ends up half taken - and
+        // a half-taken region is a new region on the map for ever. Rounding up is only kept
+        // if it is still affordable; rounding down always is, because it costs less.
+        var tidied = PeaceConference.Tidy(campaign, war, demand.Provinces, nation.MapIndex);
+        demand.Provinces.Clear();
+        foreach (var province in tidied) demand.Provinces.Add(province);
+
+        // Whole regions cost what whole regions cost, and a war score that cannot buy one
+        // buys none: regions are given up entire, cheapest-held first, until the treaty is
+        // affordable again. A settlement that takes no land is a real settlement - the
+        // indemnity, the truce and the rest are written below out of the same budget - and
+        // it is a far better answer than a border drawn where two armies ran out of steam.
+        if (ledger.Cost(demand) > budget)
+        {
+            var byRegion = demand.Provinces
+                .GroupBy(province => (int)topology.ProvinceToState[province])
+                .OrderBy(group => group.Sum(province => worthPerProvince
+                    .GetValueOrDefault((int)topology.ProvinceToState[province], 0.05f)))
+                .ToList();
+            foreach (var group in byRegion)
+            {
+                if (ledger.Cost(demand) <= budget) break;
+                if (war.ClaimedStateMapIndex >= 0 && group.Key == war.ClaimedStateMapIndex &&
+                    byRegion.Count > 1) continue;
+                foreach (var province in group.ToList()) demand.Provinces.Remove(province);
+            }
+            if (ledger.Cost(demand) > budget) demand.Provinces.Clear();
+        }
+
+        // And then the money the tidying handed back is spent on finishing a region.
+        //
+        // A settlement moves whole regions now, so a region the army is halfway into is the
+        // best thing a war score can buy: one more push over the line brings the rest of it
+        // with no cut in the map, where the same money spread over four provinces of four
+        // different oblasts buys four cuts and gets rounded away again. The greedy loop
+        // above cannot see that, because it prices provinces and the rule is about regions.
+        var occupiedShare = new Dictionary<int, float>();
+        foreach (var entry in provincesPerState)
+        {
+            var whole = PeaceConference.ProvincesOfState(topology, entry.Key).Count;
+            occupiedShare[entry.Key] = whole <= 0 ? 0f : entry.Value / (float)whole;
+        }
+        foreach (var entry in occupiedShare.OrderByDescending(entry => entry.Value))
+        {
+            if (entry.Value < campaign.Defines.PeaceRoundDownShare * 0.5f) break;
+            var whole = PeaceConference.ProvincesOfState(topology, entry.Key);
+            var missing = whole.Where(province => !demand.Provinces.Contains(province)).ToList();
+            if (missing.Count == 0) continue;
+            foreach (var province in missing) demand.Provinces.Add(province);
+            if (ledger.Cost(demand) <= budget) continue;
+            foreach (var province in missing) demand.Provinces.Remove(province);
+        }
+
         WriteTerms(campaign, nation, war, ledger, demand, budget);
     }
 

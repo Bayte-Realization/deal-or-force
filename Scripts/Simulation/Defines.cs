@@ -542,6 +542,29 @@ public sealed class Defines
 	public float DemolitionRefund { get; set; } = 0.25f;
 
 	/// <summary>
+	/// How much of a region a settlement has to be taking before it takes the rest of what
+	/// the winner is standing on.
+	///
+	/// A treaty written province by province draws the front line onto the map and leaves it
+	/// there. Rounding up to the region is what stops a war from carving a country into
+	/// fragments named after where two armies happened to stop - and because a region split
+	/// in two becomes two regions, the fragments are permanent and they multiply.
+	///
+	/// One takes nothing but whole regions; zero rounds every occupied scrap up to its whole
+	/// region, which hands over ground nobody fought for.
+	/// </summary>
+	public float PeaceRoundUpShare { get; set; } = 0.50f;
+
+	/// <summary>
+	/// And below this share of a region, a settlement lets it go rather than keep a sliver.
+	///
+	/// The other half of the same rule. A country that ends a war owning three provinces of
+	/// somebody else's region owns a salient it cannot defend, cannot administer and did not
+	/// want; what it wanted was the war over. Zero keeps every scrap.
+	/// </summary>
+	public float PeaceRoundDownShare { get; set; } = 0.50f;
+
+	/// <summary>
 	/// Share of its fresh worth a formation still contributes to covering the ground
 	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side
 	/// has a bad month; one makes casualties irrelevant to where the line sits.

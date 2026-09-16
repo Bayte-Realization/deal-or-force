@@ -159,6 +159,15 @@ public static class PeaceNegotiation
 
             if (winner is not null && kept.Count > 0)
             {
+                // Rounded to regions before it is applied. These terms take whatever the
+                // front happened to have secured, which is a line drawn by two armies and
+                // not a border anybody would draw on purpose - and every region it cuts in
+                // half becomes a new region that every later war starts from.
+                var tidied = PeaceConference.Tidy(campaign, war, kept, winner.MapIndex);
+                foreach (var province in kept)
+                    if (!tidied.Contains(province) && war.OriginalController.TryGetValue(province, out var was))
+                        campaign.SetProvinceController(province, was);
+                kept = tidied;
                 var created = StatePartition.Annex(campaign, kept, winner);
                 war.AnnexedProvinces = kept.Count;
                 war.CreatedStates = created.Count;
