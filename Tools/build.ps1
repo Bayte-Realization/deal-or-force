@@ -105,12 +105,45 @@ if (Test-Path $modsSource) {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---------------------------------------------------------------- the check that matters
-# Keep content visible beside both executables. The runtime and launcher prefer these
-# user-facing copies over the published managed-data copies with matching IDs.
+# ---------------------------------------------------------------- content, beside the game
+# Content packs sit beside the executable, where somebody looking for them will look.
 $dlcSource = Join-Path $project "dlc"
 if (Test-Path $dlcSource) { Copy-Item -LiteralPath $dlcSource -Destination $out -Recurse -Force }
 & (Join-Path $PSScriptRoot "build-launcher.ps1") -OutputDirectory $out
+
+# ---------------------------------------------------------------- one folder of each
+# What .NET leaves behind is a folder of assemblies with the game's entire world inside it,
+# because the csproj copies `game/**` into the publish output and Godot puts that output in
+# `data_<project>_<platform>`. That is the right place for DealOrForce.dll and the wrong one
+# for the map: a player opening the build sees `mods` beside the executable, `dlc` twice, and
+# no `game` at all until they go looking inside a folder named after a build target.
+#
+# So `game` comes up to the root. Nothing in the code has to change for it - the loader looks
+# for a root that CONTAINS a `game/` folder and walks up from the assembly to find one - and
+# it is what makes the duplicate `dlc` go away rather than merely be deleted: with `game` gone
+# from `data_...`, that folder no longer qualifies as an install root, so the copy of `dlc`
+# inside it is not somewhere the game would look any more.
+$dataDirectory = Get-ChildItem -Path $out -Directory -Filter "data_*" -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if ($dataDirectory) {
+    $dataGame = Join-Path $dataDirectory.FullName "game"
+    $rootGame = Join-Path $out "game"
+    if (Test-Path $dataGame) {
+        if (Test-Path $rootGame) { Remove-Item -LiteralPath $rootGame -Recurse -Force }
+        Move-Item -LiteralPath $dataGame -Destination $rootGame -Force
+        Write-Host "  game moved beside the executable" -ForegroundColor DarkGray
+    }
+    $dataDlc = Join-Path $dataDirectory.FullName "dlc"
+    if ((Test-Path $dataDlc) -and (Test-Path (Join-Path $out "dlc"))) {
+        Remove-Item -LiteralPath $dataDlc -Recurse -Force
+        Write-Host "  the second copy of dlc removed" -ForegroundColor DarkGray
+    }
+    $dataMods = Join-Path $dataDirectory.FullName "mods"
+    if ((Test-Path $dataMods) -and (Test-Path (Join-Path $out "mods"))) {
+        Remove-Item -LiteralPath $dataMods -Recurse -Force
+        Write-Host "  the second copy of mods removed" -ForegroundColor DarkGray
+    }
+}
 
 Write-Host "== checking the data came with it ==" -ForegroundColor Cyan
 
@@ -157,7 +190,8 @@ if ($missing.Count -gt 0) {
     $missing | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
     Write-Host ""
     Write-Host "This build would start and show an empty world. The data is copied by the" -ForegroundColor Yellow
-    Write-Host "<Content Include=`"game\**`" /> items in DealOrForce.csproj; check those first." -ForegroundColor Yellow
+    Write-Host "<Content Include=`"game\**`" /> items in DealOrForce.csproj and then moved up" -ForegroundColor Yellow
+    Write-Host "beside the executable by this script; check the Content items first." -ForegroundColor Yellow
     throw "Build incomplete."
 }
 
