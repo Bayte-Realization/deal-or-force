@@ -103,7 +103,7 @@ public static class TradeNetwork
     private static float[] _buyerKeys;
 
     private static readonly Dictionary<int, float> Reach = new();
-    private static readonly Dictionary<int, (int States, int Infrastructure, int Ports, int Rails)> Counts = new();
+    private static readonly Dictionary<int, (int States, int Infrastructure, float Ports, int Rails)> Counts = new();
 
     /// <summary>
     /// Route objects, reused.
@@ -383,7 +383,11 @@ public static class TradeNetwork
             Counts[state.NationMapIndex] = (
                 current.States + 1,
                 current.Infrastructure + state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure),
-                current.Ports + state.Buildings.GetValueOrDefault(BuildingKind.Port),
+                // A river port reaches less of the world than a sea port. Counting them
+                // alike was how a landlocked country could trade its way to the far side of
+                // the planet on barge terminals.
+                current.Ports + state.Buildings.GetValueOrDefault(BuildingKind.Port) *
+                    Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Port),
                 current.Rails + state.Buildings.GetValueOrDefault(BuildingKind.RailNetwork));
         }
         foreach (var nation in campaign.Nations)

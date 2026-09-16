@@ -523,6 +523,17 @@ public sealed class Defines
 	public float OrderedAdvanceFloor { get; set; } = 0.25f;
 
 	/// <summary>
+	/// What a port or a shipyard on a lake or a river is worth against one on the sea.
+	///
+	/// The compromise between "a shipyard in Mongolia is absurd" and "Paraguay has a navy".
+	/// A region with no water at all cannot build either; a region with inland water can,
+	/// at the same price, for this share of the gain. One makes a river port a seaport and
+	/// takes the decision out of the game; zero forbids inland yards outright, which is
+	/// wrong about Duisburg, Chongqing and the entire Great Lakes.
+	/// </summary>
+	public float InlandWaterworksYield { get; set; } = 0.45f;
+
+	/// <summary>
 	/// Share of its fresh worth a formation still contributes to covering the ground
 	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side
 	/// has a bad month; one makes casualties irrelevant to where the line sits.

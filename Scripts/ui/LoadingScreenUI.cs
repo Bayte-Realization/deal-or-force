@@ -126,5 +126,9 @@ public partial class DealOrForceGame
         await LoadingPhase("Creating countries and regions", 20);
         StartCampaign();
         await WaitForMapPresentation();
+        // The second campaign of a session gets the preferences the first one had. Without
+        // this the map came back as a globe however the player had left it, because the
+        // settings were pushed at a globe that was still being assembled.
+        ApplyAllSettings();
     });
 }

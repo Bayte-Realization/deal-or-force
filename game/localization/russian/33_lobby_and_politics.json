@@ -26,5 +26,8 @@
   "Flag unchanged": "Флаг не изменится",
   "Flag after adoption": "Флаг после принятия",
   "No flag available": "Флаг отсутствует",
-  "Current policy": "Действующий строй"
+  "Current policy": "Действующий строй",
+
+  // Курс, которым страна уже идёт.
+  "Current course": "Текущий курс"
 }

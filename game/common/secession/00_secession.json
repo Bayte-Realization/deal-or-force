@@ -121,6 +121,21 @@
   // "or fight about it" half of the mechanic something a player would rarely see.
   "acceptance": 0.10,
 
+  // What "cannot fight about it" actually means.
+  //
+  // Instability used to buy acceptance across the whole range, which had the model
+  // backwards - the state a region leaves is by construction an unstable one, so the
+  // exception swallowed the rule and nine secessions in ten were waved through. A state
+  // whose grip is slipping is the one most likely to shoot. What it lacks is the ability to
+  // win, and that only really goes at collapse: below `collapse_below` there is no
+  // instrument left to send, and that is worth `collapse` towards letting go.
+  "collapse_below": 0.30,
+  "collapse": 0.30,
+
+  // An army in being is an argument for using it. Full weight at this many divisions.
+  "army_resolve": 0.22,
+  "army_resolve_divisions": 24,
+
   // And how long before anybody else can leave the same country - counted from either side,
   // so a country three weeks old is not yet somewhere anybody secedes from either.
   //

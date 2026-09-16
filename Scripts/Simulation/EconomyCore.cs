@@ -309,6 +309,12 @@ public sealed class QueueConstructionCommand : ICampaignCommand
             if (project.NationId == nation.Id && ++running >= 12) return;
         }
 
+        // A wharf needs water. The AI never orders one and the player's button now says
+        // so before it is pressed, but a command is the boundary of the simulation and an
+        // order arriving over the network or out of a save has not been through either.
+        if (Waterfront.NeedsWater(Building) &&
+            Waterfront.OfRegion(campaign, state) == WaterAccess.None) return;
+
         var definition = BuildingCatalog.Get(Building);
         if (nation.Treasury < Math.Min(0.05f, definition.Cost)) return;
         campaign.Construction.Add(new ConstructionProject
@@ -1046,9 +1052,12 @@ public static class ConstructionSystem
             if (candidate.MapIndex == project.StateMapIndex) { state = candidate; break; }
         if (state is null) return;
         var definition = BuildingCatalog.Get(project.Building);
+        // An inland yard cost what a coastal one cost and is worth a fraction of it. That
+        // is the whole of the compromise: the building is allowed, the geography is priced.
+        var yield = Waterfront.Yield(campaign, state.MapIndex, project.Building);
         state.Buildings[project.Building] = state.Buildings.GetValueOrDefault(project.Building) + 1;
-        nation.Gdp += definition.GdpGain;
-        nation.ConstructionCapacity += definition.CapacityGain;
+        nation.Gdp += definition.GdpGain * yield;
+        nation.ConstructionCapacity += definition.CapacityGain * yield;
         if (project.Building == BuildingKind.University)
         {
             state.Literacy = M.Clamp01(state.Literacy + 0.025f);

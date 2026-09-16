@@ -163,9 +163,15 @@ public partial class DealOrForceGame
         var preview = _politicsPreviews[key];
         preview.Flag.Texture = FlagSpriteTexture(sprite);
         var unchanged = sprite == FlagCatalog.Resolve(_campaign, nation);
-        preview.Caption.Text = Tr(string.IsNullOrEmpty(sprite) ? "No flag available" : unchanged ? "Flag unchanged" : "Flag after adoption");
+        var isCurrent = (government.Length > 0 && government == nation.Government) ||
+                        (ideology.Length > 0 && ideology == nation.Ideology);
+        // The card says what this option IS to the country before it says anything about its
+        // flag. "Flag unchanged" is true of the country's own ideology and of half the others.
+        preview.Caption.Text = Tr(isCurrent ? "Current course"
+            : string.IsNullOrEmpty(sprite) ? "No flag available"
+            : unchanged ? "Flag unchanged" : "Flag after adoption");
         preview.Flag.TooltipText = preview.Caption.Text + (sprite.Length > 0 ? "\n" + sprite : "");
-        var current = (government.Length > 0 && government == nation.Government) || (ideology.Length > 0 && ideology == nation.Ideology);
+        var current = isCurrent;
         var refusal = PoliticsCore.Refusal(_campaign, nation, government, ideology);
         button.Disabled = current || refusal.Length > 0;
         // Keep the substantive description, with availability on the card's flag row.

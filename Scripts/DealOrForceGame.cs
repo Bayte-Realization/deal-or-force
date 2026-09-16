@@ -79,6 +79,11 @@ public partial class DealOrForceGame : Control
             await LoadingPhase("Creating countries and regions", 30);
             StartCampaign();
             await WaitForMapPresentation();
+            // Again, now that there is a map to apply them to. Several preferences reach
+            // into the globe and the globe refuses them while it is still being built -
+            // the projection is the visible one, because SetFlatMap gives up if the camera
+            // is not there yet and says nothing about having done so.
+            ApplyAllSettings();
             _startupComplete = true;
         });
     }
@@ -551,8 +556,11 @@ public partial class DealOrForceGame : Control
         speeds.AddThemeConstantOverride("separation", 5);
         clock.AddChild(speeds);
 
-        var menu = ActionButton("≡", ShowPauseMenu, 32, 28);
-        menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc) · F5 quick-saves, F9 loads, F10 flies the camera"));
+        // Labelled rather than drawn. This was a hamburger glyph, and the one tester who
+        // plays grand strategy for an audience reported that the game had no way out to the
+        // main menu - it had two, Escape and this, and neither of them said so.
+        var menu = ActionButton("Menu", ShowPauseMenu, 62, 28);
+        menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 32, 28, true);
         _pause.TooltipText = Ui.Tip(Tr("Pause and resume campaign time (Space). Space never activates a focused button."));
@@ -1596,6 +1604,7 @@ public partial class DealOrForceGame : Control
         Simulation.Loc.Language = languages[(index + 1) % languages.Count];
 
         RefreshLocalisedText();
+        _globe?.RefreshCountryNames();
 
         // Written after the sweep, not before: this caption is built from the language's
         // own name rather than from a source string, so the generic refresh cannot
@@ -1635,12 +1644,18 @@ public partial class DealOrForceGame : Control
         button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly));
         button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly));
         button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly));
-        button.AddThemeStyleboxOverride("disabled", ButtonStyle(false, 3, iconOnly));
+        // `primary` survives into the disabled look, and that is the whole of telling
+        // "this is what we are" apart from "you may not have this". The politics screen
+        // disables the form of government and the ideology a country already has - you
+        // cannot adopt what you already are - and with a flat grey disabled style that made
+        // the country's own ideology look exactly like one the game was refusing.
+        button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly));
         button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1, iconOnly));
         button.AddThemeColorOverride("font_color", primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text"));
         button.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
-        button.AddThemeColorOverride("font_disabled_color", Ui.Colour("button.text_disabled"));
+        button.AddThemeColorOverride("font_disabled_color",
+            primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text_disabled"));
     }
 
     private static StyleBoxFlat ButtonStyle(bool primary, int state, bool iconOnly = false)
@@ -1649,14 +1664,18 @@ public partial class DealOrForceGame : Control
         {
             1 => primary ? Ui.Colour("button.primary_fill_hover") : Ui.Colour("button.fill_hover"),
             2 => primary ? Ui.Colour("button.primary_fill_pressed") : Ui.Colour("button.fill_pressed"),
-            3 => Ui.Colour("button.fill_disabled"),
+            // Settled rather than unavailable: the accent stays, so a chosen option reads as
+            // chosen even though it cannot be pressed again.
+            3 => primary ? Ui.Colour("button.primary_fill") : Ui.Colour("button.fill_disabled"),
             _ => primary ? Ui.Colour("button.primary_fill") : Ui.Colour("button.fill")
         };
         var border = state switch
         {
             1 => Ui.Colour("button.border_hover"),
             2 => Ui.Colour("button.border_pressed"),
-            3 => Ui.Colour("button.border_disabled"),
+            // The border stays the quiet one even when the fill is the accent: a settled
+            // choice should not shout as loudly as one you can still make.
+            3 => primary ? Ui.Colour("button.primary_border") : Ui.Colour("button.border_disabled"),
             _ => primary ? Ui.Colour("button.primary_border") : Ui.Colour("button.border")
         };
         return new StyleBoxFlat

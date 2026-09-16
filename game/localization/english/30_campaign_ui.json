@@ -47,5 +47,15 @@
   "Electronics plant": "Electronics plant",
   "Shipyard": "Shipyard",
   "Rail network": "Rail network",
-  "Research laboratory": "Research laboratory"
+  "Research laboratory": "Research laboratory",
+
+  // Water, and what a wharf away from it is worth.
+  "{0}: this region has no coast, no lake and no navigable river.": "{0}: this region has no coast, no lake and no navigable river.",
+  "Needs a coast, a lake or a navigable river. On inland water it is worth less.": "Needs a coast, a lake or a navigable river. On inland water it is worth less.",
+  "{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.": "{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.",
+
+  // The way out, and the way back in.
+  "Menu": "Menu",
+  "Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.": "Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.",
+  "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.": "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping."
 }

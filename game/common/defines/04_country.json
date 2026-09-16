@@ -13,6 +13,7 @@
 {
 
   // Everything else
+  "InlandWaterworksYield": 0.45,
   "EconomyTickDays": 7,
   "PopulationTickDays": 30,
   "AutosaveIntervalDays": 30,

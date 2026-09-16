@@ -210,9 +210,14 @@ public partial class DealOrForceGame
         foreach (var kind in BuildingCatalog.All)
         {
             var definition = BuildingCatalog.Get(kind);
-            _stateBuildingPicker.AddItem(Simulation.Loc.Format("{0} · {1}", definition.Name, Fmt.Money(definition.Cost)));
+            _stateBuildingPicker.AddItem(Simulation.Loc.Format("{0} · {1}",
+                Simulation.Loc.Get(definition.Name), Fmt.Money(definition.Cost)));
             _stateBuildingPicker.SetItemMetadata(_stateBuildingPicker.ItemCount - 1, (int)kind);
-            _stateBuildingPicker.SetItemTooltip(_stateBuildingPicker.ItemCount - 1, definition.Description);
+            _stateBuildingPicker.SetItemTooltip(_stateBuildingPicker.ItemCount - 1,
+                Waterfront.NeedsWater(kind)
+                    ? Simulation.Loc.Get(definition.Description) + "\n\n" +
+                      Tr("Needs a coast, a lake or a navigable river. On inland water it is worth less.")
+                    : Simulation.Loc.Get(definition.Description));
         }
         order.AddChild(_stateBuildingPicker);
 
@@ -459,13 +464,27 @@ public partial class DealOrForceGame
             _stateFiscalFeedback.Text = Simulation.Loc.Format("The treasury holds {0} and cannot open a {1} site.", Fmt.Money(nation.Treasury), Fmt.Money(definition.Cost));
             return;
         }
+        var dry = Waterfront.Refusal(_campaign, stateMapIndex, kind);
+        if (dry.Length > 0)
+        {
+            _stateFiscalFeedback.Text = dry;
+            return;
+        }
 
         _campaign.Commands.Enqueue(new QueueConstructionCommand
         {
             IssuerId = nation.Id, StateMapIndex = stateMapIndex, Building = kind
         });
         _campaign.Commands.ApplyAll(_campaign);
-        _stateFiscalFeedback.Text = Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days.", definition.Name, _stateRegionPicker.GetItemText(_stateRegionPicker.Selected), Fmt.Money(definition.Cost), definition.Days);
+        _stateFiscalFeedback.Text = Waterfront.OfRegion(_campaign, stateMapIndex) == WaterAccess.Inland &&
+            Waterfront.NeedsWater(kind)
+            ? Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.",
+                Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
+                Fmt.Money(definition.Cost), definition.Days,
+                Fmt.Percent(Waterfront.Yield(_campaign, WaterAccess.Inland)))
+            : Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days.",
+                Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
+                Fmt.Money(definition.Cost), definition.Days);
         RefreshStateAffairs();
     }
     /// <summary>

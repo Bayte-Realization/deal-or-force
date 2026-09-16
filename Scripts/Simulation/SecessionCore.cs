@@ -68,6 +68,24 @@ public sealed class SecessionWeights
     public float WarSupport = 0.80f;
 
     public float Acceptance = 0.10f;
+
+    /// <summary>
+    /// How much of a state's grip has to be gone before it stops being able to fight at all,
+    /// and how much acceptance that buys when it is. Above the threshold instability changes
+    /// nothing: a shaky government is the one most likely to make an example of somebody.
+    /// </summary>
+    public float CollapseBelow = 0.30f;
+
+    public float Collapse = 0.30f;
+
+    /// <summary>
+    /// How much an army in being argues against letting go, and how large an army has to be
+    /// before it argues at full strength. A state with divisions to send sends them.
+    /// </summary>
+    public float ArmyResolve = 0.22f;
+
+    public float ArmyResolveDivisions = 24f;
+
     public int CooldownDays = 730;
 }
 
@@ -162,6 +180,10 @@ public static class SecessionCore
                 case "stability": Weights.Stability = value; break;
                 case "war_support": Weights.WarSupport = value; break;
                 case "acceptance": Weights.Acceptance = value; break;
+                case "collapse_below": Weights.CollapseBelow = value; break;
+                case "collapse": Weights.Collapse = value; break;
+                case "army_resolve": Weights.ArmyResolve = value; break;
+                case "army_resolve_divisions": Weights.ArmyResolveDivisions = value; break;
                 case "cooldown_days": Weights.CooldownDays = (int)MathF.Round(value); break;
                 default: errors?.Add($"common/secession: '{entry.Name}' is not something this game reads."); break;
             }
@@ -236,8 +258,19 @@ public static class SecessionCore
         var weights = Weights;
         var accept = weights.Acceptance;
 
-        // A state that cannot govern itself cannot hold anybody else.
-        accept += (1f - M.Clamp01(parent.Stability)) * 0.45f;
+        // Collapse, not instability.
+        //
+        // This used to read "a state that cannot govern itself cannot hold anybody else"
+        // and gave a shaky government most of a free pass, which had the mechanic backwards:
+        // the state that a region is leaving is by construction a state whose stability has
+        // already gone, so the term that was meant to describe an exception described nearly
+        // every case, and nine secessions in ten were waved through. A government losing its
+        // grip is the one that most needs to be seen not to lose a province.
+        //
+        // Below the threshold there is genuinely nothing left to send, and that is the case
+        // this is for - not a bad year, an absence of a state.
+        var collapse = M.Clamp01(parent.Stability) / M.Max(0.01f, weights.CollapseBelow);
+        if (collapse < 1f) accept += (1f - collapse) * weights.Collapse;
 
         // Busy elsewhere.
         foreach (var war in campaign.Wars)
@@ -259,11 +292,18 @@ public static class SecessionCore
         // War support is the appetite for another one.
         accept += (1f - M.Clamp01(parent.WarSupport)) * 0.25f;
 
+        // And an army in being is an argument for using it. A state with two dozen divisions
+        // and a province walking out does not hold a press conference about it.
+        var divisions = 0f;
+        foreach (var army in campaign.Armies)
+            if (army.NationId == parent.Id) divisions += army.Divisions;
+        accept -= M.Clamp01(divisions / M.Max(1f, weights.ArmyResolveDivisions)) * weights.ArmyResolve;
+
         accept = M.Clamp01(accept);
         var accepted = campaign.Random.NextFloat() < accept;
         reason = accepted
-            ? $"accepted ({accept:P0} likely: stability {parent.Stability:P0}, losing {share:P0})"
-            : $"contested ({accept:P0} likely: stability {parent.Stability:P0}, losing {share:P0})";
+            ? $"accepted ({accept:P0} likely: stability {parent.Stability:P0}, losing {share:P0}, {divisions:0.#} division(s))"
+            : $"contested ({accept:P0} likely: stability {parent.Stability:P0}, losing {share:P0}, {divisions:0.#} division(s))";
         return accepted ? SecessionOutcome.Accepted : SecessionOutcome.Contested;
     }
 }

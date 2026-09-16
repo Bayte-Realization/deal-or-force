@@ -102,6 +102,7 @@ public static class Program
             AnOrderIsCarriedOut());
         failures += Check("every word an event puts on the screen is in both tables",
             AnEventSpeaksTheLanguageTheGameIsIn());
+        failures += Check("a wharf is built on water", AWharfIsBuiltOnWater(campaign));
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -4141,6 +4142,37 @@ public static class Program
                        $"region(s) at once, past the cap of {SecessionCore.Weights.MaximumShare:P0}";
         }
 
+        // Whether anybody ever fights to keep a province.
+        //
+        // A refused secession declares a war, and if that declaration is itself refused -
+        // a truce, an alliance, no way to reach them - the code downgrades the refusal to
+        // an acceptance and says so. Which of those actually happens has never been
+        // measured, and "I have never seen a secession put down by force" is a report
+        // about the outcome, not about the branch that produced it.
+        var contested = born.Count(report => report.Outcome == SecessionOutcome.Contested);
+        var foughtOver = 0;
+        var stillFighting = 0;
+        foreach (var report in born)
+        {
+            if (report.Seceded is null || report.Parent is null) continue;
+            foreach (var war in campaign.Wars)
+            {
+                if (!war.Involves(report.Seceded.Id) || !war.Involves(report.Parent.Id)) continue;
+                foughtOver++;
+                if (!war.Ended) stillFighting++;
+                break;
+            }
+        }
+        Console.WriteLine($"  secession: {born.Count} founded, {contested} contested, " +
+                          $"{foughtOver} met a war of independence, {stillFighting} of those " +
+                          $"were still being fought at the end.");
+        if (contested == 0)
+            return $"{born.Count} countries were born and every single parent let them go, " +
+                   "so nothing is ever put down by force";
+        if (foughtOver == 0)
+            return $"{contested} secession(s) were refused and not one of them produced a war " +
+                   "between the parent and the country that left";
+
         // And the ground actually moved. A country in the nation list that owns nothing is
         // the failure mode this whole path is most likely to produce.
         foreach (var report in born)
@@ -6866,6 +6898,92 @@ public static class Program
     /// consequence the event catalogue holds, against both tables. It is the shape of check
     /// that any data-driven prose needs, and events are where the game keeps most of it.
     /// </summary>
+    /// <summary>
+    /// Ports and shipyards need water, and the map has to know where the water is.
+    ///
+    /// Nothing in the game recorded a coastline before this: the sea is not a province, it
+    /// is where the provinces stop, so "is this region coastal" had never been asked and
+    /// a shipyard could be ordered in Ulaanbaatar. The answer is now derived from the cell
+    /// raster, and a derived answer needs a check against geography nobody disputes.
+    ///
+    /// Three claims. Landlocked countries have no region on the sea. Maritime countries
+    /// have one. And the compromise works: a country with rivers and no coast can build,
+    /// for less - which is the whole reason this is a yield and not a refusal.
+    /// </summary>
+    private static string AWharfIsBuiltOnWater(Campaign campaign)
+    {
+        if (campaign.ProvinceMap is null) return "";
+
+        // Countries with no sea coast at all. Kazakhstan and Turkmenistan are left out on
+        // purpose: the Caspian is a lake region on this map, which makes them inland-watered
+        // rather than dry, and that is the right answer for Aktau and Turkmenbashi.
+        var dry = new[] { "MNG", "CHE", "AUT", "NPL", "BOL", "PRY", "BLR", "HUN", "CZE",
+                          "SVK", "ZWE", "MLI", "NER", "TCD", "LAO", "AFG", "BTN", "LUX", "MKD" };
+        var wet = new[] { "NOR", "JPN", "GBR", "AUS", "CHL", "PRT", "ISL", "NZL", "USA", "RUS" };
+
+        var wrong = new List<string>();
+        foreach (var tag in dry)
+        {
+            var nation = campaign.NationByTag(tag);
+            if (nation is null) continue;
+            foreach (var state in campaign.StatesOf(nation))
+                if (Waterfront.OfRegion(campaign, state) == WaterAccess.Sea)
+                {
+                    wrong.Add($"{tag} is landlocked but {state.Name} reads as coastal");
+                    break;
+                }
+        }
+        foreach (var tag in wet)
+        {
+            var nation = campaign.NationByTag(tag);
+            if (nation is null) continue;
+            var coastal = 0;
+            foreach (var state in campaign.StatesOf(nation))
+                if (Waterfront.OfRegion(campaign, state) == WaterAccess.Sea) coastal++;
+            if (coastal == 0) wrong.Add($"{tag} is a maritime country with no coastal region");
+        }
+        if (wrong.Count > 0) return string.Join("; ", wrong.Take(6));
+
+        // A dry region refuses the order outright.
+        var mongolia = campaign.NationByTag("MNG");
+        if (mongolia is not null)
+        {
+            var target = campaign.StatesOf(mongolia).FirstOrDefault(state =>
+                Waterfront.OfRegion(campaign, state) == WaterAccess.None);
+            if (target is not null)
+            {
+                var before = campaign.Construction.Count;
+                var treasury = mongolia.Treasury;
+                mongolia.Treasury = 500f;
+                new QueueConstructionCommand
+                {
+                    IssuerId = mongolia.Id, StateMapIndex = target.MapIndex, Building = BuildingKind.Shipyard
+                }.Apply(campaign);
+                var started = campaign.Construction.Count - before;
+                mongolia.Treasury = treasury;
+                if (started != 0)
+                {
+                    campaign.Construction.RemoveRange(before, started);
+                    return $"a shipyard was started in {target.Name}, which has no water";
+                }
+                if (Waterfront.Refusal(campaign, target.MapIndex, BuildingKind.Shipyard).Length == 0)
+                    return "the order was refused and the screen would have said nothing about why";
+            }
+        }
+
+        // And a river region takes it, at a discount rather than in full.
+        var inland = campaign.States.FirstOrDefault(state =>
+            Waterfront.OfRegion(campaign, state) == WaterAccess.Inland);
+        if (inland is null) return "no region on the map has inland water, so the compromise is unreachable";
+        var yield = Waterfront.Yield(campaign, inland.MapIndex, BuildingKind.Port);
+        if (yield <= 0f || yield >= 1f)
+            return $"an inland port in {inland.Name} is worth {yield:0.##} of a coastal one, " +
+                   "which is either forbidden or free";
+        if (Waterfront.Yield(campaign, inland.MapIndex, BuildingKind.University) != 1f)
+            return "a university was priced as though it needed a harbour";
+        return "";
+    }
+
     private static string AnEventSpeaksTheLanguageTheGameIsIn()
     {
         EventCatalog.ResetCatalog();

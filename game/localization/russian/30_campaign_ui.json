@@ -47,5 +47,15 @@
   "Electronics plant": "Завод электроники",
   "Shipyard": "Верфь",
   "Rail network": "Железнодорожная сеть",
-  "Research laboratory": "Исследовательская лаборатория"
+  "Research laboratory": "Исследовательская лаборатория",
+
+  // Вода и то, чего стоит причал вдали от неё.
+  "{0}: this region has no coast, no lake and no navigable river.": "{0}: у этого региона нет ни моря, ни озера, ни судоходной реки.",
+  "Needs a coast, a lake or a navigable river. On inland water it is worth less.": "Нужен выход к морю, озеру или судоходной реке. На внутренней воде стоит меньше.",
+  "{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.": "{0} — стройка начата в регионе {1} · {2} за {3} дн. Внутренняя вода: даст {4} от приморского.",
+
+  // Выход и возвращение.
+  "Menu": "Меню",
+  "Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.": "Меню паузы (Esc): сохранение, загрузка, настройки и выход в главное меню. F5 — быстрое сохранение, F9 — загрузка, F10 — свободная камера.",
+  "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.": "Выйти из кампании на титульный экран. При выходе ничего не сохраняется — сделайте быстрое сохранение, если кампанию стоит оставить."
 }
