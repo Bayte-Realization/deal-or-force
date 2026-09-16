@@ -167,7 +167,7 @@ public partial class DealOrForceGame
                 var state = fleet.InAction ? "IN ACTION"
                     : fleet.IsMoving ? "→"
                     : MissionName(fleet.Mission).ToUpperInvariant();
-                AddOutlinerButton($"{fleet.Name}  {state}  {fleet.Hulls:N0}", () => FocusFleet(fleet),
+                AddOutlinerButton($"{Loc.Get(fleet.Name)}  {state}  {fleet.Hulls:N0}", () => FocusFleet(fleet),
                     $"{fleet.Hulls:N0} hulls · strength {fleet.Strength:P0} · cohesion {fleet.Organisation:P0} · " +
                     $"stores {fleet.Supply:P0}" + System.Environment.NewLine + MissionHelp(fleet.Mission));
             }

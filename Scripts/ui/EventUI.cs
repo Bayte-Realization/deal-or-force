@@ -86,11 +86,15 @@ public partial class DealOrForceGame
             _campaign.IsPaused = true;
             _pause.Text = "▶";
         }
-        _eventTitle.Text = pending.Title;
-        _eventDescription.Text = pending.Description;
-        _eventOptionA.Text = pending.Options[0].Title;
+        // Through the table, every one of them. These strings come out of game/events as
+        // values rather than as literals in the source, so nothing looked them up and the
+        // window stayed English in a Russian game - while the tooltips beneath the buttons
+        // were translated, because Ui.Tip does its own lookup.
+        _eventTitle.Text = Loc.Get(pending.Title);
+        _eventDescription.Text = Loc.Get(pending.Description);
+        _eventOptionA.Text = Loc.Get(pending.Options[0].Title);
         _eventOptionA.TooltipText = Ui.Tip(pending.Options[0].Consequence);
-        _eventOptionB.Text = pending.Options[1].Title;
+        _eventOptionB.Text = Loc.Get(pending.Options[1].Title);
         _eventOptionB.TooltipText = Ui.Tip(pending.Options[1].Consequence);
         _eventLayer.Visible = true;
         _eventLayer.MoveToFront();

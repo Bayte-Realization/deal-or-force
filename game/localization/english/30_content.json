@@ -564,5 +564,27 @@
   "Zaghawa": "Zaghawa",
   "Zhuang": "Zhuang",
   "Zoroastrian": "Zoroastrian",
-  "Zulu": "Zulu"
+  "Zulu": "Zulu",
+
+  // What each option of an event costs - the line under the button.
+  "Costs treasury; raises GDP, productivity and construction capacity.": "Costs treasury; raises GDP, productivity and construction capacity.",
+  "Preserves cash; modest stability loss.": "Preserves cash; modest stability loss.",
+  "Costs treasury; improves living standards and reduces radicalism.": "Costs treasury; improves living standards and reduces radicalism.",
+  "Cheaper and pro-growth, but less socially stabilising.": "Cheaper and pro-growth, but less socially stabilising.",
+  "Costs treasury; restores stability and living standards.": "Costs treasury; restores stability and living standards.",
+  "Preserves cash and output, but raises radicalism.": "Preserves cash and output, but raises radicalism.",
+  "Costs nothing but candour; steadies support without hiding the cost.": "Costs nothing but candour; steadies support without hiding the cost.",
+  "Expensive, but buys real patience.": "Expensive, but buys real patience.",
+  "Cheap and quick; corrosive if the war drags on.": "Cheap and quick; corrosive if the war drags on.",
+  "Restores the budget; unpopular and mildly deflationary.": "Restores the budget; unpopular and mildly deflationary.",
+  "Frees money immediately at the cost of readiness.": "Frees money immediately at the cost of readiness.",
+  "Balances the books; the social cost lands on the regions.": "Balances the books; the social cost lands on the regions.",
+  "A modest cost; the mood is worth it.": "A modest cost; the mood is worth it.",
+  "Costs nothing at all.": "Costs nothing at all.",
+  "A small cost; a real lift in the national mood.": "A small cost; a real lift in the national mood.",
+  "Free, and almost as good.": "Free, and almost as good.",
+  "Costs treasury; lasting productivity and prestige.": "Costs treasury; lasting productivity and prestige.",
+  "No cost; a brief lift.": "No cost; a brief lift.",
+  "Costs treasury; literacy and productivity rise.": "Costs treasury; literacy and productivity rise.",
+  "Free; a small national lift.": "Free; a small national lift."
 }

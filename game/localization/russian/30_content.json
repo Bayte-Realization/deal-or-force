@@ -564,5 +564,27 @@
   "Zaghawa": "Загава",
   "Zhuang": "Чжуаны",
   "Zoroastrian": "Зороастрийцы",
-  "Zulu": "Зулусы"
+  "Zulu": "Зулусы",
+
+  // Что стоит каждый вариант события - строка под кнопкой.
+  "Costs treasury; raises GDP, productivity and construction capacity.": "Стоит казне; поднимает ВВП, производительность и мощности строительства.",
+  "Preserves cash; modest stability loss.": "Бережёт деньги; небольшая потеря стабильности.",
+  "Costs treasury; improves living standards and reduces radicalism.": "Стоит казне; поднимает уровень жизни и снижает радикализм.",
+  "Cheaper and pro-growth, but less socially stabilising.": "Дешевле и на пользу росту, но меньше успокаивает общество.",
+  "Costs treasury; restores stability and living standards.": "Стоит казне; возвращает стабильность и уровень жизни.",
+  "Preserves cash and output, but raises radicalism.": "Бережёт деньги и выпуск, но поднимает радикализм.",
+  "Costs nothing but candour; steadies support without hiding the cost.": "Не стоит ничего, кроме честности; поддерживает без замалчивания цены.",
+  "Expensive, but buys real patience.": "Дорого, но покупает настоящее терпение.",
+  "Cheap and quick; corrosive if the war drags on.": "Дёшево и быстро; разъедает, если война затянется.",
+  "Restores the budget; unpopular and mildly deflationary.": "Чинит бюджет; непопулярно и слегка дефляционно.",
+  "Frees money immediately at the cost of readiness.": "Немедленно освобождает деньги ценой боеготовности.",
+  "Balances the books; the social cost lands on the regions.": "Сводит баланс; социальная цена ложится на регионы.",
+  "A modest cost; the mood is worth it.": "Скромные траты; настроение того стоит.",
+  "Costs nothing at all.": "Не стоит ровным счётом ничего.",
+  "A small cost; a real lift in the national mood.": "Небольшие траты; настроение в стране заметно поднимается.",
+  "Free, and almost as good.": "Бесплатно и почти так же хорошо.",
+  "Costs treasury; lasting productivity and prestige.": "Стоит казне; надолго даёт производительность и престиж.",
+  "No cost; a brief lift.": "Ничего не стоит; недолгий подъём.",
+  "Costs treasury; literacy and productivity rise.": "Стоит казне; растут грамотность и производительность.",
+  "Free; a small national lift.": "Бесплатно; небольшой подъём в стране."
 }

@@ -91,10 +91,35 @@ public static class OffensivePlanning
         var target = goal;
         if (!army.PlanActive || war is null)
         {
-            target = line.SourceProvinces.Where(p => control[p] == own.MapIndex)
-                .OrderBy(p => Distance(map, p, goal)).ThenBy(p => Distance(map, army.ProvinceId, p)).ThenBy(p => p)
-                .FirstOrDefault();
-            if (target <= 0) return;
+            // Waiting to go, which is a line to stand on rather than a point to stand at.
+            //
+            // Ordering the departure provinces by their distance to the goal and taking the
+            // first is the same answer for every division that shares that goal, so all of
+            // them marched to one tile - and where the goals are close together, every
+            // division on the plan marched to the same one. The division's own position was
+            // in the ordering, but only as a tie-break between departures equally far from
+            // the goal, which is a case that essentially never arises.
+            var departures = line.SourceProvinces.Where(p => control[p] == own.MapIndex)
+                .OrderBy(p => Distance(map, p, goal)).ThenBy(p => p).ToList();
+            if (departures.Count == 0) return;
+
+            // Where this division stands among the ones sharing its goal. By id, so it is
+            // the same answer every day and two divisions never swap jumping-off points
+            // between one tick and the next.
+            var sharing = 0;
+            var rank = 0;
+            foreach (var pair in line.Objectives)
+            {
+                if (pair.Value != goal) continue;
+                sharing++;
+                if (pair.Key < army.Id) rank++;
+            }
+
+            // One province each while there are enough to go round, and from the near end
+            // again when there are not: an attack forms up along the closest stretch of its
+            // own front, not spread over the whole border and not stacked on one tile.
+            var spread = Math.Max(1, Math.Min(departures.Count, Math.Max(1, sharing)));
+            target = departures[rank % spread];
         }
         var route = army.PlanActive && war is not null
             ? map.FindOperationalRoute(army.ProvinceId, target, (ushort)own.MapIndex, (ushort)enemy.MapIndex, control)

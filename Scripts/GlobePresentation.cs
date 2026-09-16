@@ -1868,8 +1868,21 @@ void fragment() {
     // So a second overlay carries the owner, and it is applied first: it repaints the ground
     // itself, and any occupation stripes below are then drawn over the new owner rather than
     // the old one.
+    //
+    // Painted at the shade this pixel already had RELATIVE to its own country's colour,
+    // rather than multiplied by that country's brightness. The difference is the whole of
+    // why land won at a peace conference used to read as duller than land held since the
+    // first morning: the new owner's colour was arriving scaled by how bright the loser's
+    // colour happened to be - 0.58 for a dark one, 0.94 for a pale one - while the same
+    // country's own provinces were painted at full strength. As a ratio it is one at full
+    // detail, where the pixel simply is its country's colour, and it is the raster's own
+    // border shading when zoomed out, which is what the multiplier was reaching for.
     vec4 owner_paint = owner_color(province);
-    political.rgb = mix(political.rgb, owner_paint.rgb * political_light, owner_paint.a);
+    vec3 flat_here = nation_paint(near_nation).rgb;
+    float painted_flat = max(max(flat_here.r, flat_here.g), flat_here.b);
+    float painted_here = max(max(political.r, political.g), political.b);
+    float owner_shade = painted_flat > 0.001 ? clamp(painted_here / painted_flat, 0.30, 1.0) : 1.0;
+    political.rgb = mix(political.rgb, owner_paint.rgb * owner_shade, owner_paint.a);
     political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
     // Who owns ground and who is standing on it are two different questions, and a map that
     // answers only the second is why a peace conference is unreadable: every province the

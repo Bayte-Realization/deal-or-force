@@ -100,6 +100,8 @@ public static class Program
             BeingAfraidIsNotAPolicy());
         failures += Check("an order the player gave is carried out",
             AnOrderIsCarriedOut());
+        failures += Check("every word an event puts on the screen is in both tables",
+            AnEventSpeaksTheLanguageTheGameIsIn());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -248,6 +250,8 @@ public static class Program
                 // Draws a line and gives away posts, so it belongs on the copy as well.
                 failures += Check("a drawn line is held where it is pressed",
                     ADrawnLineIsHeldWhereItIsPressed(sandbox));
+                failures += Check("an attack waiting to go stands along its front, not in one province",
+                    AnAttackFormsUpAlongItsFront());
                 failures += Check("a battle plan survives a save",
                     ABattlePlanSurvivesASave(sandbox));
                 failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
@@ -6725,6 +6729,175 @@ public static class Program
     /// activity. So: the most pressed post must be held, and asking twice must give the
     /// same answer.
     /// </summary>
+    /// <summary>
+    /// An attack waiting to go stands along its own front, not in one province.
+    ///
+    /// A drawn offensive shares its goals out between the divisions on it, which was right,
+    /// and then sent every division sharing a goal to the departure province nearest THAT
+    /// GOAL - the same answer for all of them. Seventy-three divisions with four goals a few
+    /// provinces apart therefore walked into one tile, which is a traffic jam rather than a
+    /// jumping-off line and reads, correctly, as a commander who has lost the plot.
+    ///
+    /// Built by hand rather than by drawing on the map: the question is what Route does with
+    /// a line, and a line assembled here can have exactly the shape that provokes it - one
+    /// goal, many divisions, a departure front wide enough to spread over.
+    /// </summary>
+    /// <summary>
+    /// Every word an event puts on the screen is in both tables.
+    ///
+    /// The localisation check next door counts what the SOURCE asks for by name - every Tr,
+    /// every Title, every DetailRow - and read 3,872 of 3,872 while the event window was in
+    /// English, because an event's title is not written in the source. It arrives out of
+    /// game/events as a value, and a string that arrives as a value cannot be found by
+    /// reading the source.
+    ///
+    /// So this reads the content instead of the code: every title, description, option and
+    /// consequence the event catalogue holds, against both tables. It is the shape of check
+    /// that any data-driven prose needs, and events are where the game keeps most of it.
+    /// </summary>
+    private static string AnEventSpeaksTheLanguageTheGameIsIn()
+    {
+        EventCatalog.ResetCatalog();
+        if (EventCatalog.All.Count == 0) return "the game has no events at all";
+
+        var shown = new List<(string Where, string Text)>();
+        foreach (var definition in EventCatalog.All)
+        {
+            shown.Add(($"{definition.Id}.title", definition.Title));
+            shown.Add(($"{definition.Id}.description", definition.Description));
+            foreach (var option in definition.Options)
+            {
+                shown.Add(($"{definition.Id}.option", option.Title));
+                if (!string.IsNullOrWhiteSpace(option.Consequence))
+                    shown.Add(($"{definition.Id}.consequence", option.Consequence));
+            }
+        }
+
+        // Membership rather than lookup, and no switching of the language the run is in:
+        // a check that leaves the game in another language is a check that breaks the next
+        // one.
+        var gaps = new List<string>();
+        foreach (var language in new[] { "english", "russian" })
+        {
+            var known = new HashSet<string>(Loc.Keys(language), StringComparer.Ordinal);
+            foreach (var (where, content) in shown)
+            {
+                if (string.IsNullOrWhiteSpace(content) || known.Contains(content)) continue;
+                gaps.Add($"{language}: {where} - " + content[..Math.Min(48, content.Length)]);
+            }
+        }
+
+        if (gaps.Count > 0)
+            return $"{gaps.Count:N0} event string(s) never reach a table, starting with " +
+                   string.Join("; ", gaps.Take(3));
+
+        Console.WriteLine($"  events: {EventCatalog.All.Count:N0} event(s) put {shown.Count:N0} string(s) on the " +
+                          "screen, and every one of them is in both tables.");
+        return "";
+    }
+
+    private static string AnAttackFormsUpAlongItsFront()
+    {
+        // Its own campaign rather than the shared copy. The first version of this borrowed
+        // the sandbox, detached a dozen formations from their lines to do it, and put them
+        // back detached - which the next check felt immediately, and which is the sort of
+        // damage a check must never do to the run it is part of.
+        var campaign = Campaign.CreateBootstrap(20240820);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+        for (var day = 0; day < 10; day++) campaign.Tick();
+
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (topology is null || controllers is null) return "there is no map to attack across";
+
+        var war = campaign.Wars.FirstOrDefault(candidate => !candidate.Ended);
+        if (war is null) return "nobody is at war";
+        var attacker = campaign.NationById(war.AttackerId);
+        var defender = campaign.NationById(war.DefenderId);
+        if (attacker is null || defender is null) return "the war has no sides";
+
+        // A stretch of the attacker's own front to form up on, and one province of the
+        // enemy's beyond it to aim at.
+        var departures = war.FriendlyFront(attacker.Id)
+            .Where(province => province > 0 && controllers[province] == attacker.MapIndex)
+            .OrderBy(province => province).Take(8).ToList();
+        if (departures.Count < 3) return $"{attacker.Tag} holds {departures.Count} front province(s), too few to form up on";
+
+        var goal = 0;
+        foreach (var province in departures)
+        {
+            foreach (var neighbour in topology.Neighbors[province])
+                if (controllers[neighbour] == defender.MapIndex && !topology.IsWater(neighbour)) { goal = neighbour; break; }
+            if (goal > 0) break;
+        }
+        if (goal <= 0) return "no province of the enemy's touches that front";
+
+        var divisions = campaign.Armies
+            .Where(army => army.NationId == attacker.Id && army.ProvinceId > 0 && !army.InBattle)
+            .Take(12).ToList();
+        if (divisions.Count < 4) return $"{attacker.Tag} has {divisions.Count} formation(s) free, too few to spread";
+
+        var line = new DrawnFrontLine
+        {
+            Id = campaign.NextFrontLineId++, NationId = attacker.Id,
+            Kind = FrontLineKind.Offensive, BorderNationId = defender.Id
+        };
+        line.SourceProvinces.UnionWith(departures);
+        line.Provinces.Add(goal);
+        line.ObjectiveSequence.Add(goal);
+        foreach (var army in divisions)
+        {
+            line.ArmyIds.Add(army.Id);
+            line.Objectives[army.Id] = goal;          // every one of them aimed at the same place
+        }
+        campaign.FrontLines.Add(line);
+
+        try
+        {
+            var standing = new Dictionary<int, int>();
+            foreach (var army in divisions)
+            {
+                army.PlanActive = false;              // prepared, not executing: the case that broke
+                OffensivePlanning.Route(campaign, army, line);
+                if (army.OrderProvinceId > 0)
+                    standing[army.OrderProvinceId] = standing.GetValueOrDefault(army.OrderProvinceId) + 1;
+            }
+            if (standing.Count == 0) return "no division was given anywhere to form up";
+
+            var worst = standing.Values.Max();
+            var wanted = Math.Min(departures.Count, divisions.Count);
+            if (standing.Count == 1 && wanted > 1)
+                return $"{divisions.Count:N0} division(s) preparing one attack were all sent to the same " +
+                       "province, with " + $"{departures.Count:N0} province(s) of their own front to form up on";
+            // One each while there are enough to go round; the near end doubles up when not.
+            var ceiling = (int)Math.Ceiling(divisions.Count / (float)wanted);
+            if (worst > ceiling)
+                return $"the busiest jumping-off province holds {worst:N0} division(s) where " +
+                       $"{ceiling:N0} would be an even share of {wanted:N0} province(s)";
+
+            // And asking again must give the same answer: a division that changes its mind
+            // about where to wait spends the war walking between two provinces.
+            foreach (var army in divisions)
+            {
+                var was = army.OrderProvinceId;
+                OffensivePlanning.Route(campaign, army, line);
+                if (army.OrderProvinceId != was)
+                    return $"a division moved its jumping-off province from {was} to {army.OrderProvinceId} " +
+                           "when nothing had changed";
+            }
+
+            Console.WriteLine($"  forming up: {divisions.Count:N0} division(s) aimed at one objective spread over " +
+                              $"{standing.Count:N0} of {departures.Count:N0} province(s) of their own front, " +
+                              $"{worst:N0} in the busiest, and asking twice gave the same answer.");
+            return "";
+        }
+        finally
+        {
+            campaign.FrontLines.Remove(line);
+        }
+    }
+
     private static string ADrawnLineIsHeldWhereItIsPressed(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;

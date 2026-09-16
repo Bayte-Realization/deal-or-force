@@ -84,7 +84,7 @@ public partial class DealOrForceGame
         var owner = _campaign.NationById(fleet.NationId);
         var mine = owner is not null && _campaign.Player is not null && owner.Id == _campaign.Player.Id;
 
-        _fleetTitle.Text = fleet.Name;
+        _fleetTitle.Text = Loc.Get(fleet.Name);
         _fleetSubtitle.Text = Simulation.Loc.Format("{0} · {1:N0} hulls · {2}",
                                   owner?.Tag ?? "?", fleet.Hulls, MissionName(fleet.Mission)) +
                               (fleet.IsMoving ? Tr(" · under way") : "") +
