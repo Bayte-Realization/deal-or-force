@@ -18,5 +18,11 @@
   "Restoring countries, armies and orders": "Restoring countries, armies and orders",
   "Loading could not be completed": "Loading could not be completed",
   "Details have been written to the error log.": "Details have been written to the error log.",
-  "Return to game": "Return to game"
+  "Return to game": "Return to game",
+
+  // What is loaded, on the main menu.
+  "no external mods · open user://mods or res://mods": "no external mods · open user://mods or res://mods",
+  "{0} mod(s) loaded": "{0} mod(s) loaded",
+  "{0} warning(s)": "{0} warning(s)",
+  "{0} of {1} content pack(s) active": "{0} of {1} content pack(s) active"
 }

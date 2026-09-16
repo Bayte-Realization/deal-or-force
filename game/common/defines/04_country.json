@@ -17,6 +17,8 @@
   "DemolitionRefund": 0.25,
   "PeaceRoundUpShare": 0.50,
   "PeaceRoundDownShare": 0.50,
+  "EventIntervalDays": 75,
+  "EventMemoryDays": 1460,
   "EconomyTickDays": 7,
   "PopulationTickDays": 30,
   "AutosaveIntervalDays": 30,

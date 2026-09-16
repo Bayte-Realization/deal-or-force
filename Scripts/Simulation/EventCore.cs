@@ -386,7 +386,11 @@ public static class EventSystem
 {
     public static void Tick(Campaign campaign)
     {
-        if (campaign.ElapsedDays > 0 && campaign.ElapsedDays % 75 == 0)
+        // Nobody is asked anything in observer mode. It is the whole of what the mode is
+        // for: a timelapse is a campaign at speed five with nobody at the wheel, and one
+        // modal window waiting for an answer ends it.
+        if (!campaign.ObserverMode &&
+            campaign.ElapsedDays > 0 && campaign.ElapsedDays % campaign.Defines.EventIntervalDays == 0)
         {
             foreach (var nationId in campaign.HumanSeats)
             {
@@ -395,6 +399,12 @@ public static class EventSystem
                 if (created is not null) campaign.PendingEvents.Add(created);
             }
         }
+
+        // And anything already on the table is decided rather than left waiting, so turning
+        // the mode on in the middle of a campaign does not leave a window behind it.
+        if (campaign.ObserverMode)
+            foreach (var item in campaign.PendingEvents.ToArray())
+                Resolve(campaign, item, 0);
 
         foreach (var item in campaign.PendingEvents.Where(item => item.ExpiresDay <= campaign.ElapsedDays).ToArray())
             Resolve(campaign, item, 1);
@@ -449,18 +459,33 @@ public static class EventSystem
             .ToArray();
         if (eligible.Length == 0) return null;
 
-        var total = eligible.Sum(definition => definition.Weight);
+        // What this country has just seen counts against being dealt it again. Not a ban -
+        // a country really can have two bad harvests - but a weight that recovers over the
+        // memory's length, so a small pool still feels like a varied one and a large pool
+        // is nearly a shuffle. A pool of one still deals that one, because the fallback
+        // below takes whatever is left when every weight has been discounted to nothing.
+        var memory = M.Max(1, campaign.Defines.EventMemoryDays);
+        float WeightOf(CampaignEventDefinition definition)
+        {
+            if (!nation.EventMemory.TryGetValue(definition.Id, out var lastSeen)) return definition.Weight;
+            var since = campaign.ElapsedDays - lastSeen;
+            if (since >= memory) return definition.Weight;
+            return definition.Weight * M.Clamp01(since / (float)memory) * 0.9f + definition.Weight * 0.02f;
+        }
+
+        var total = eligible.Sum(WeightOf);
         var stream = new SimRandom(campaign.Seed + nationId * 7919 + campaign.ElapsedDays);
         var roll = stream.NextFloat() * total;
 
         var chosen = eligible[^1];
         foreach (var definition in eligible)
         {
-            roll -= definition.Weight;
+            roll -= WeightOf(definition);
             if (roll > 0f) continue;
             chosen = definition;
             break;
         }
+        nation.EventMemory[chosen.Id] = campaign.ElapsedDays;
 
         return new PendingCampaignEvent
         {

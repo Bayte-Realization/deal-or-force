@@ -298,6 +298,9 @@ public static class SaveSystem
         public Dictionary<string, int[]> ScenarioTerritories = new();
         public GameDate Date;
         public int ElapsedDays;
+
+        /// <summary>Whether the campaign was being watched rather than played.</summary>
+        public bool ObserverMode;
         public bool IsPaused;
         public uint RandomState;
         public int PlayerId;
@@ -372,6 +375,7 @@ public static class SaveSystem
             ScenarioTerritories = new Dictionary<string, int[]>(campaign.ScenarioTerritories),
             Date = campaign.Date,
             ElapsedDays = campaign.ElapsedDays,
+            ObserverMode = campaign.ObserverMode,
             IsPaused = campaign.IsPaused,
             RandomState = campaign.Random.State,
             PlayerId = campaign.Player?.Id ?? 0,
@@ -428,6 +432,7 @@ public static class SaveSystem
             campaign.Relations.Clear();
             foreach (var entry in Relations) campaign.Relations[entry.Key] = entry.Value;
             campaign.History.Restore(History);
+            campaign.ObserverMode = ObserverMode;
             campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
                 HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
                 ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState);

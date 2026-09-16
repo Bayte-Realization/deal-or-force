@@ -32,6 +32,9 @@ public partial class DealOrForceGame
         rows.AddChild(ActionButton("Quick save  [F5]", QuickSave, 330, 42));
         rows.AddChild(ActionButton("Save / load campaign", ShowSaveLoadInterface, 330, 42));
         rows.AddChild(ActionButton("Settings", ShowSettings, 330, 42));
+        var watch = ActionButton("Watch the world  [F7]", () => { HidePauseMenu(); ToggleObserverMode(); }, 330, 42);
+        watch.TooltipText = Ui.Tip(Tr("Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one."));
+        rows.AddChild(watch);
         var leave = ActionButton("Return to main menu", ReturnToMainMenu, 330, 42);
         leave.TooltipText = Ui.Tip(Tr("Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping."));
         rows.AddChild(leave);

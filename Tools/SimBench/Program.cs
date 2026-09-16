@@ -109,6 +109,7 @@ public static class Program
         failures += Check("a country's books are never blank", TheBooksAreNeverBlank());
         failures += Check("the computer walks into empty ground", TheComputerWalksIntoEmptyGround());
         failures += Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
+        failures += Check("a proclaimed state flies its own flag", AProclaimedStateFliesItsOwnFlag(campaign));
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -7011,6 +7012,79 @@ public static class Program
     /// to say the rule did anything, since the number alone means nothing without the
     /// number it replaced.
     /// </summary>
+    /// <summary>
+    /// Forty-four formable nations, forty-four drawn flags, and none of them on screen.
+    ///
+    /// The flags were shipped and credited and named exactly the way common/flags documents
+    /// - `flag_formable_soviet_union.png` - and the resolver never asked for that name: the
+    /// family list it comes from did not include `formable`, and even with it there the
+    /// family sat below the country's own flag, so Russia proclaiming the Soviet Union kept
+    /// flying the tricolour.
+    ///
+    /// Two claims. The flag a formable would fly is the formable's own where one exists, for
+    /// every country entitled to proclaim it - a flag that depends on who proclaimed it is a
+    /// flag nobody drew. And the ordinary rules still hold underneath: a country that has
+    /// proclaimed nothing is unaffected.
+    /// </summary>
+    private static string AProclaimedStateFliesItsOwnFlag(Campaign campaign)
+    {
+        // The sprite table is loaded by the flags check further down, which runs long after
+        // this one. Asking an empty table whether a flag exists is how this first reported
+        // that none of the forty-four had been drawn.
+        if (SpriteCatalog.Count == 0) SpriteCatalog.Load();
+
+        var formables = FormableNations.All.ToList();
+        if (formables.Count == 0) return "no formable nations are declared";
+
+        var drawn = 0;
+        var undrawn = new List<string>();
+        var wrong = new List<string>();
+
+        foreach (var definition in formables)
+        {
+            var own = "flag_formable_" + FlagCatalog.Slug(definition.Id);
+            if (!SpriteCatalog.Has(own)) { undrawn.Add(definition.Id); continue; }
+            drawn++;
+
+            // Every country that could proclaim it has to arrive at the same flag. If the
+            // answer depends on the founder, the founder's flag is still winning.
+            foreach (var tag in definition.EligibleTags)
+            {
+                var nation = campaign.NationByTag(tag);
+                if (nation is null) continue;
+                var preview = FlagCatalog.ResolveFormationPreview(campaign, nation, definition.Id);
+                // The stem, or anything built on it: `flag_formable_china_reunified_liberalism`
+                // is the proclaimed state's flag for a proclaimed state that is also liberal,
+                // which is a better answer than the plain one rather than a wrong one.
+                if (preview.StartsWith(own, StringComparison.OrdinalIgnoreCase)) continue;
+                wrong.Add($"{tag} proclaiming {definition.Id} would fly " +
+                          $"'{(preview.Length == 0 ? "nothing" : preview)}' rather than '{own}'");
+                break;
+            }
+        }
+
+        if (wrong.Count > 0) return string.Join("; ", wrong.Take(4));
+
+        // And nothing has been broken underneath: a country that has proclaimed nothing
+        // still flies what it flew.
+        foreach (var tag in new[] { "RUS", "FRA", "USA", "SRB", "KOR" })
+        {
+            var nation = campaign.NationByTag(tag);
+            if (nation is null) continue;
+            var resolved = FlagCatalog.Resolve(campaign, nation);
+            if (resolved.StartsWith("flag_formable_", StringComparison.OrdinalIgnoreCase))
+                return $"{tag} has proclaimed nothing and is flying '{resolved}'";
+        }
+
+        Console.WriteLine($"  flags: {drawn:N0} of {formables.Count:N0} formable nation(s) have a flag " +
+                          $"of their own and every eligible founder resolves to it" +
+                          (undrawn.Count == 0
+                              ? "."
+                              : $"; {undrawn.Count:N0} still to be drawn: {string.Join(", ", undrawn.Take(8))}" +
+                                (undrawn.Count > 8 ? ", …" : "") + "."));
+        return "";
+    }
+
     private static string ADecadeOfWarsDoesNotShredTheMap()
     {
         static (int Regions, int Created, int Wars) Run(bool tidy)

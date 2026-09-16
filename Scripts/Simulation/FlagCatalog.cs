@@ -71,6 +71,18 @@ public static class FlagCatalog
     private static readonly List<string> Fallbacks = new();
 
     /// <summary>
+    /// Families that outrank the country's own flag rather than standing in for it.
+    ///
+    /// A fallback answers "this country has no flag of its own"; an identity answers "this
+    /// country is no longer the country whose flag that is". Proclaiming a formable state is
+    /// the second: the Soviet Union flying the Russian tricolour because Russia has one is
+    /// the whole of what was wrong, and it is wrong in exactly the way the qualifier order
+    /// already says it is - `formable` is declared first in common/flags because it is the
+    /// most specific thing there is to know about a flag.
+    /// </summary>
+    private static readonly List<string> Identities = new();
+
+    /// <summary>
     /// What each value will answer to besides itself, in order of preference.
     ///
     /// This is what makes the whole thing affordable. Three hundred countries, twelve
@@ -128,12 +140,16 @@ public static class FlagCatalog
 
     public static IReadOnlyList<string> FallbackSources => Fallbacks;
 
+    /// <summary>Families that stand above a country's own flag. See <see cref="Identities"/>.</summary>
+    public static IReadOnlyList<string> IdentitySources => Identities;
+
     static FlagCatalog() => ResetCatalog();
 
     public static void ResetCatalog(List<string> errors = null)
     {
         Qualifiers.Clear();
         Fallbacks.Clear();
+        Identities.Clear();
         Aliases.Clear();
         Native.Clear();
         Otherwise.Clear();
@@ -258,20 +274,25 @@ public static class FlagCatalog
                 if (conditions.Count > 0) Native[Slug(entry.Name)] = conditions.ToArray();
             }
 
-        if (!root.TryGetProperty("fallbacks", out var fallbacks) ||
-            fallbacks.ValueKind != JsonValueKind.Array) return;
+        ReadFamilies(root, "identities", Identities, errors);
+        ReadFamilies(root, "fallbacks", Fallbacks, errors);
+    }
 
-        Fallbacks.Clear();
-        foreach (var value in fallbacks.EnumerateArray())
+    /// <summary>One declared list of families, replacing whatever was there.</summary>
+    private static void ReadFamilies(JsonElement root, string key, List<string> into, List<string> errors)
+    {
+        if (!root.TryGetProperty(key, out var declared) || declared.ValueKind != JsonValueKind.Array) return;
+        into.Clear();
+        foreach (var value in declared.EnumerateArray())
         {
             if (value.ValueKind != JsonValueKind.String) continue;
             var id = value.GetString() ?? "";
             if (!IsKnownSource(id))
             {
-                errors?.Add($"common/flags: fallback '{id}' is not something the game can answer.");
+                errors?.Add($"common/flags: {key} entry '{id}' is not something the game can answer.");
                 continue;
             }
-            Fallbacks.Add(id);
+            into.Add(id);
         }
     }
 
@@ -379,10 +400,37 @@ public static class FlagCatalog
         // the Imperial black-yellow-white the moment a traditionalist flag existed to borrow.
         // A country's own flag beats a borrowed one. Always.
         var combined = Math.Min(live.Count, MaxCombined);
+
+        // Which of the live qualifiers say the country has become something else. A name
+        // that mentions one of them describes what it is now; a name that does not describes
+        // what it used to be, and the second must not beat the first - which is exactly how
+        // Greece proclaiming Byzantium went on flying flag_grc_parliamentary_republic.
+        var identityMask = 0;
+        for (var index = 0; index < combined; index++)
+            if (Identities.Contains(live[index].Qualifier.Source, StringComparer.OrdinalIgnoreCase))
+                identityMask |= 1 << index;
+
+        // This country, as the thing it has proclaimed itself: the most specific answer there
+        // is, so it goes above everything - above a generic flag for that proclaimed state,
+        // and above every flag of the country that proclaimed it.
+        if (identityMask != 0)
+            for (var size = combined; size >= 1; size--)
+                for (var mask = 0; mask < 1 << combined; mask++)
+                {
+                    if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
+                    if ((mask & identityMask) == 0) continue;
+                    Spread(names, "flag_" + tag, live, combined, mask, 0, 0);
+                }
+
+        // Then the proclaimed state's own flag, whoever proclaimed it.
+        foreach (var source in Identities) Family(names, source, campaign, nation, live, combined);
+
+        // And only then what the country was: every remaining combination of its qualifiers.
         for (var size = combined; size >= 1; size--)
             for (var mask = 0; mask < 1 << combined; mask++)
             {
                 if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
+                if ((mask & identityMask) != 0) continue;      // already named above
                 Spread(names, "flag_" + tag, live, combined, mask, 0, 0);
             }
         for (var index = MaxCombined; index < live.Count; index++)
@@ -418,28 +466,7 @@ public static class FlagCatalog
         // Kurdish monarchy, and a mechanic that produces new countries constantly is
         // exactly where that variety is worth having. `flag_culture_kurdish_communism`
         // beats `flag_culture_kurdish`, which beats nothing.
-        foreach (var source in Fallbacks)
-        {
-            var family = ValueOf(source, campaign, nation);
-            if (family.Length == 0) continue;
-            var stem = $"flag_{Slug(source)}_{family}";
-
-            // Not the qualifier this family already is: `flag_ideology_communism` should
-            // not spawn a search for `flag_ideology_communism_communism`.
-            var skip = 0;
-            for (var index = 0; index < combined; index++)
-                if (string.Equals(live[index].Qualifier.Source, source, StringComparison.OrdinalIgnoreCase))
-                    skip |= 1 << index;
-
-            for (var size = combined; size >= 1; size--)
-                for (var mask = 0; mask < 1 << combined; mask++)
-                {
-                    if ((mask & skip) != 0) continue;
-                    if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
-                    Spread(names, stem, live, combined, mask, 0, int.MaxValue);
-                }
-            names.Add(stem);
-        }
+        foreach (var source in Fallbacks) Family(names, source, campaign, nation, live, combined);
 
         // Last of all, for a country whose own flag no longer fits and which nothing else
         // answered for: better the wrong flag than a grey rectangle, and a player can see
@@ -497,6 +524,43 @@ public static class FlagCatalog
     /// and both before anything two steps out. Ordering by distance rather than by
     /// enumeration order is what stops an alias beating the real thing.
     /// </summary>
+
+    /// <summary>
+    /// The names one family answers to: `flag_&lt;source&gt;_&lt;value&gt;`, and that stem
+    /// carrying the country's live qualifiers as well.
+    ///
+    /// A family takes the qualifiers for the same reason a country does: a Kurdish state
+    /// that has gone communist is not flying what a Kurdish monarchy flies, and a mechanic
+    /// that produces new countries constantly is exactly where that variety is worth having.
+    /// `flag_culture_kurdish_communism` beats `flag_culture_kurdish`, which beats nothing.
+    ///
+    /// Used for both rungs - the identities above a country's own flag and the fallbacks
+    /// below it - so the two cannot drift apart.
+    /// </summary>
+    private static void Family(List<string> names, string source, Campaign campaign, Nation nation,
+        List<(FlagQualifier Qualifier, List<string> Chain)> live, int combined)
+    {
+        var family = ValueOf(source, campaign, nation);
+        if (family.Length == 0) return;
+        var stem = $"flag_{Slug(source)}_{family}";
+
+        // Not the qualifier this family already is: `flag_ideology_communism` should not
+        // spawn a search for `flag_ideology_communism_communism`.
+        var skip = 0;
+        for (var index = 0; index < combined; index++)
+            if (string.Equals(live[index].Qualifier.Source, source, StringComparison.OrdinalIgnoreCase))
+                skip |= 1 << index;
+
+        for (var size = combined; size >= 1; size--)
+            for (var mask = 0; mask < 1 << combined; mask++)
+            {
+                if ((mask & skip) != 0) continue;
+                if (System.Numerics.BitOperations.PopCount((uint)mask) != size) continue;
+                Spread(names, stem, live, combined, mask, 0, int.MaxValue);
+            }
+        names.Add(stem);
+    }
+
     private static void Spread(List<string> into, string stem,
         List<(FlagQualifier Qualifier, List<string> Chain)> live, int combined, int mask,
         int nearest, int furthest)

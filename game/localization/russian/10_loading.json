@@ -18,5 +18,11 @@
   "Restoring countries, armies and orders": "Восстановление стран, армий и приказов",
   "Loading could not be completed": "Не удалось завершить загрузку",
   "Details have been written to the error log.": "Подробности записаны в журнал ошибок.",
-  "Return to game": "Вернуться в игру"
+  "Return to game": "Вернуться в игру",
+
+  // Что загружено — надпись в главном меню.
+  "no external mods · open user://mods or res://mods": "внешних модов нет · откройте user://mods или res://mods",
+  "{0} mod(s) loaded": "загружено модов: {0}",
+  "{0} warning(s)": "предупреждений: {0}",
+  "{0} of {1} content pack(s) active": "активно наборов контента: {0} из {1}"
 }

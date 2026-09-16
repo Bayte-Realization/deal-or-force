@@ -221,6 +221,10 @@ public partial class DealOrForceGame : Control
         // which the Godot editor already uses to stop the running project.
         if (key.Keycode == Key.F10) { ToggleFreeCamera(); GetViewport().SetInputAsHandled(); return; }
 
+        // Watching rather than playing. F7 rather than F8 for the same reason F10 is not F8:
+        // the editor takes that one to stop the running project.
+        if (key.Keycode == Key.F7) { ToggleObserverMode(); GetViewport().SetInputAsHandled(); return; }
+
         // Everything the flying camera does that is a switch rather than a movement. They
         // are read here rather than polled with the rest because holding G down should not
         // put the camera on and off a turntable sixty times a second - and they are guarded
@@ -426,6 +430,7 @@ public partial class DealOrForceGame : Control
         BuildStrategicAudio();
         BuildDeveloperConsole();
         BuildFreeCameraOverlay();
+        BuildObserverHint();
         BuildSettingsInterface();
 
         // Last, because it reaches into everything the lines above have just built. From
@@ -461,7 +466,11 @@ public partial class DealOrForceGame : Control
             15,
             Ui.Colour("text.muted")));
 
-        rows.AddChild(Title("Scenarios & workshop", 17, Ui.Colour("text.bright")));
+        // The heading that used to sit here said "Scenarios & workshop" over two status
+        // lines about the world that is loaded and the mods that are not. It named a
+        // section that is not on this screen - the workshop is a window reached from a
+        // campaign - and a player reading the menu top to bottom was told they were
+        // looking at something they were not. The two lines say what they are.
         _scenarioSummary = Title("Preparing campaign data…", 14, Ui.Colour("text.hint"));
         rows.AddChild(_scenarioSummary);
 

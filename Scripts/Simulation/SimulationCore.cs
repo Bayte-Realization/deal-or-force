@@ -369,6 +369,16 @@ public sealed partial class Nation
     /// <summary>Named conditions currently attached to this country - see ModifierCore.</summary>
     public readonly List<ActiveModifier> Modifiers = new();
 
+    /// <summary>
+    /// When each event last came up here, by its id.
+    ///
+    /// Nine events and a memoryless weighted draw deals the same card again and again: a
+    /// decade of a campaign is about fifty events out of a pool of nine, and a player who
+    /// has seen the industrial bottleneck five times stops reading them. A public readonly
+    /// collection, so the save writes it with everything else on the country.
+    /// </summary>
+    public readonly Dictionary<string, int> EventMemory = new();
+
     public readonly Dictionary<Commodity, MarketQuote> Market = new();
     public float MarketAccess = 1f;
     public float ShortageIndex;
@@ -411,6 +421,16 @@ public sealed partial class Campaign
     public readonly List<LandBattle> Battles = new();
     public readonly List<ConstructionProject> Construction = new();
     public readonly List<PendingCampaignEvent> PendingEvents = new();
+
+    /// <summary>
+    /// Watching rather than playing: no events are raised, nothing stops the clock, and
+    /// the interface gets out of the way.
+    ///
+    /// A recorded timelapse of a world running for fifty years is the thing this game is
+    /// most worth looking at, and the one thing that prevented it was that the game asks
+    /// the player questions. This is the seat that is not asked.
+    /// </summary>
+    public bool ObserverMode;
     public readonly Dictionary<long, DiplomaticRelation> Relations = new();
     public readonly List<int> HumanSeats = new();
     public readonly CampaignCommandQueue Commands = new();

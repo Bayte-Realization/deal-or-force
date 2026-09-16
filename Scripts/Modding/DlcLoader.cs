@@ -144,7 +144,7 @@ public sealed class DlcLoader
 
     public string StatusLine => _packages.Count == 0
         ? ""
-        : $"{Active.Count()} of {_packages.Count} content pack(s) active";
+        : Simulation.Loc.Format("{0} of {1} content pack(s) active", Active.Count(), _packages.Count);
 
     /// <summary>
     /// What the packs together amount to, for multiplayer to compare.

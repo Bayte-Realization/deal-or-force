@@ -564,6 +564,16 @@ public sealed class Defines
 	/// </summary>
 	public float PeaceRoundDownShare { get; set; } = 0.50f;
 
+	/// <summary>How often a country somebody is playing is handed an event, in days.</summary>
+	public int EventIntervalDays { get; set; } = 75;
+
+	/// <summary>
+	/// How long a country remembers an event it has already had, for the purpose of not
+	/// being handed it again. Zero deals with no memory at all, which with a small pool is
+	/// how a player learns the deck.
+	/// </summary>
+	public int EventMemoryDays { get; set; } = 1460;
+
 	/// <summary>
 	/// Share of its fresh worth a formation still contributes to covering the ground
 	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side

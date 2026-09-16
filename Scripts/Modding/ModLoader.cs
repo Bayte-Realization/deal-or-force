@@ -75,11 +75,14 @@ public sealed class ModLoader
     {
         get
         {
+            // On the main menu, under the campaign summary, and in English until now while
+            // the rest of that menu was translated.
             var packs = Dlc.Packages.Count == 0 ? "" : $"{Dlc.StatusLine} · ";
             var mods = EnabledCount == 0
-                ? "no external mods · open user://mods or res://mods"
-                : $"{EnabledCount} mod(s) loaded";
-            return packs + mods + (ErrorCount > 0 ? $" · {ErrorCount} warning(s)" : "");
+                ? Simulation.Loc.Get("no external mods · open user://mods or res://mods")
+                : Simulation.Loc.Format("{0} mod(s) loaded", EnabledCount);
+            return packs + mods +
+                (ErrorCount > 0 ? " · " + Simulation.Loc.Format("{0} warning(s)", ErrorCount) : "");
         }
     }
 

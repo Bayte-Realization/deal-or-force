@@ -64,5 +64,10 @@
   "Nothing of this kind is standing in the selected region.": "Nothing of this kind is standing in the selected region.",
   "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.": "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.",
   "Call this site off. What has already been spent stays spent; the rest is never taken.": "Call this site off. What has already been spent stays spent; the rest is never taken.",
-  "{0} of 12 sites running": "{0} of 12 sites running"
+  "{0} of 12 sites running": "{0} of 12 sites running",
+
+  // Watching the world instead of running it.
+  "Watch the world  [F7]": "Watch the world  [F7]",
+  "Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one.": "Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one.",
+  "Observing · F7 returns the controls · nothing will stop the clock": "Observing · F7 returns the controls · nothing will stop the clock"
 }

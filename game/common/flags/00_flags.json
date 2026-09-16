@@ -247,5 +247,22 @@
   // not something any state has ever flown, so drawing one here would be inventing history
   // rather than using it. The hook is declared because a mod that wants that look should
   // not have to change code to get it.
-  "fallbacks": ["culture", "revolt", "ideology", "government"]
+  "fallbacks": ["culture", "revolt", "ideology", "government"],
+
+  // ---------------------------------------------------------------------------------------
+  // Identities
+  // ---------------------------------------------------------------------------------------
+  //
+  // The same mechanism one rung higher. A fallback answers "this country has no flag of its
+  // own"; an identity answers "this country is no longer the country whose flag that is",
+  // so it is tried BEFORE `flag_<tag>` rather than after it.
+  //
+  //     flag_formable_soviet_union.png       whoever proclaims it
+  //     flag_formable_yugoslavia.png         Serbia, Croatia or anybody else who does
+  //
+  // Only `formable` ships here, and it is the reason the forty-four formable flags in
+  // gfx/flags are visible at all: proclaiming the Soviet Union used to leave Russia flying
+  // the tricolour, because a country's own flag beat everything underneath it. Declaring a
+  // family here is the one way to say that a country has stopped being itself.
+  "identities": ["formable"]
 }

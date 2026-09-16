@@ -64,5 +64,10 @@
   "Nothing of this kind is standing in the selected region.": "В выбранном регионе таких построек нет.",
   "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.": "Снести одну в регионе {0}. Её вклад уйдёт вместе с ней, а {1} вернётся ломом.",
   "Call this site off. What has already been spent stays spent; the rest is never taken.": "Свернуть стройку. Потраченное не вернуть, но остальное уже не спишут.",
-  "{0} of 12 sites running": "строек идёт: {0} из 12"
+  "{0} of 12 sites running": "строек идёт: {0} из 12",
+
+  // Наблюдение за миром вместо управления им.
+  "Watch the world  [F7]": "Наблюдать за миром  [F7]",
+  "Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one.": "Режим наблюдателя: ивентов нет, время не останавливается, панели уходят с экрана. Чтобы смотреть, как живёт мир, и чтобы записывать это.",
+  "Observing · F7 returns the controls · nothing will stop the clock": "Наблюдение · F7 вернёт управление · время не остановится"
 }
