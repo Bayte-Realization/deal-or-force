@@ -409,6 +409,19 @@ public partial class DealOrForceGame
     /// conference is reached from - for this war, rather than for whichever war the player
     /// happened to enter first.
     /// </summary>
+    private void CallAllyToWar(StrategicWar war, int allyId)
+    {
+        if (_campaign?.Player is null || war is null) return;
+        _campaign.Commands.Enqueue(new CallAllyToWarCommand
+        {
+            IssuerId = _campaign.Player.Id, WarId = war.Id, AllyId = allyId
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        // The answer lands on the war, and the panel is rebuilt so the side list shows it.
+        _warDetailBuiltFor = -1;
+        RefreshWarLedger();
+    }
+
     private void RefreshWarLedgerDetail()
     {
         var war = _campaign.Wars.Find(candidate => candidate.Id == _warLedgerOpenWarId);
@@ -444,7 +457,13 @@ public partial class DealOrForceGame
         }
 
         Heading("BELLIGERENTS");
-        Line($"{attacker?.Name ?? "?"}   against   {defender?.Name ?? "?"}");
+        // Both sides in full. A war used to be a pair of countries and an alliance answering
+        // one produced a war per member; now it is one war with two sides, and the ledger is
+        // where that has to be visible or it may as well not be true.
+        string SideNames(bool attacking) => string.Join(", ", war.Side(attacking)
+            .Select(id => _campaign.NationById(id)?.Name)
+            .Where(name => !string.IsNullOrEmpty(name)));
+        Line($"{SideNames(true)}   against   {SideNames(false)}");
 
         var objective = _campaign.States.FirstOrDefault(state => state.MapIndex == war.ClaimedStateMapIndex);
         Line($"War goal: {objective?.Name ?? "strategic supremacy"}");
@@ -467,8 +486,9 @@ public partial class DealOrForceGame
         foreach (var army in _campaign.Armies)
             if (army.AssignedWarId == war.Id)
                 committed[army.NationId] = committed.GetValueOrDefault(army.NationId) + 1;
-        Line($"Divisions committed: {committed.GetValueOrDefault(war.AttackerId):N0} against " +
-             $"{committed.GetValueOrDefault(war.DefenderId):N0}");
+        var attackingDivisions = war.Side(true).Sum(id => committed.GetValueOrDefault(id));
+        var defendingDivisions = war.Side(false).Sum(id => committed.GetValueOrDefault(id));
+        Line($"Divisions committed: {attackingDivisions:N0} against {defendingDivisions:N0}");
 
         Heading("WHAT IT HAS COST");
         Line($"Dead: {Fmt.People(war.AttackerLosses)} against {Fmt.People(war.DefenderLosses)}");
@@ -500,6 +520,33 @@ public partial class DealOrForceGame
         _warDetailBuiltFor = war.Id;
         foreach (var child in _warDetailActions.GetChildren()) child.QueueFree();
         if (!mine || war.Ended) return;
+
+        // Asking for help. The automatic call happens the moment war is declared and is
+        // over in the same breath; this is the case a player actually wants, which is a war
+        // that has gone badly and an ally who was never obliged to be in it.
+        var callable = Simulation.Statecraft.CallableAllies(_campaign, war, player.Id);
+        if (callable.Count > 0)
+        {
+            _warDetailActions.AddChild(RowLabel("CALLING FOR HELP", 12, Ui.Colour("text.caption")));
+            var calls = new HBoxContainer();
+            calls.AddThemeConstantOverride("separation", 6);
+            _warDetailActions.AddChild(calls);
+            foreach (var allyId in callable.Take(6))
+            {
+                var friend = _campaign.NationById(allyId);
+                if (friend is null) continue;
+                var captured = allyId;
+                var blocked = Simulation.Statecraft.CallRefusal(_campaign, war, player.Id, allyId);
+                var button = ActionButton(friend.Name, () => CallAllyToWar(war, captured), 150, 30);
+                button.Disabled = blocked.Length > 0;
+                button.TooltipText = Ui.Tip(blocked.Length > 0
+                    ? blocked
+                    : Simulation.Loc.Format(
+                        "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.",
+                        friend.Name));
+                calls.AddChild(button);
+            }
+        }
 
         _warDetailActions.AddChild(RowLabel("ENDING IT", 12, Ui.Colour("text.caption")));
         var conference = ActionButton("Open the peace conference", () => OpenPeaceConference(war), 320, 34, true);

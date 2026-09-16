@@ -167,9 +167,9 @@ public static class PeaceNegotiation
 
         war.Ended = true;
         war.EndedDay = campaign.ElapsedDays;
-        var sideScore = proposerId == war.AttackerId ? war.WarScore : -war.WarScore;
+        var sideScore = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
         war.WinnerId = terms == PeaceTerms.Capitulate
-            ? (proposerId == war.AttackerId ? war.DefenderId : war.AttackerId)
+            ? war.EnemyLeaderOf(proposerId)
             : sideScore > 0f ? proposerId : -1;
         war.PeaceSummary = terms switch
         {
@@ -185,11 +185,20 @@ public static class PeaceNegotiation
         war.AttackerFront.Clear();
         war.DefenderFront.Clear();
         war.UnopposedProgress.Clear();
-        var relation = CampaignDiplomacy.Get(campaign, war.AttackerId, war.DefenderId);
-        relation.Stance = DiplomaticStance.Truce;
-        relation.TruceUntil = campaign.ElapsedDays + (terms == PeaceTerms.Ceasefire ? 365 : 365 * 5);
-        relation.LastActionDay = campaign.ElapsedDays;
-        relation.Opinion = Math.Min(relation.Opinion, -35f);
+        // Everybody who was fighting everybody. A coalition war ends for all of it at
+        // once - that is what makes it one war rather than a folder of them - so every pair
+        // across the two sides gets the truce, not just the two that started it.
+        var truceUntil = campaign.ElapsedDays + (terms == PeaceTerms.Ceasefire ? 365 : 365 * 5);
+        foreach (var attackingId in war.Side(true))
+            foreach (var defendingId in war.Side(false))
+            {
+                if (attackingId == defendingId) continue;
+                var relation = CampaignDiplomacy.Get(campaign, attackingId, defendingId);
+                relation.Stance = DiplomaticStance.Truce;
+                relation.TruceUntil = truceUntil;
+                relation.LastActionDay = campaign.ElapsedDays;
+                relation.Opinion = Math.Min(relation.Opinion, -35f);
+            }
         foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id))
         {
             army.AssignedWarId = -1;

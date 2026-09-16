@@ -37,5 +37,18 @@
   "You guarantee {0}.": "Вы гарантируете {0}.",
   "You no longer guarantee {0}.": "Вы больше не гарантируете {0}.",
 
-  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "Чего она хочет на этой неделе, считается заново: насколько она выросла, способен ли сюзерен управлять собой и ведёт ли он войну. На ста процентах она просто уходит."
+  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "Чего она хочет на этой неделе, считается заново: насколько она выросла, способен ли сюзерен управлять собой и ведёт ли он войну. На ста процентах она просто уходит.",
+
+  // Просьба к союзнику прийти и его ответ.
+  "CALLING FOR HELP": "ЗОВ О ПОМОЩИ",
+  "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.": "Попросить {0} вступить в эту войну. Они не обязаны — наступательный зов это одолжение, и отказ стоит расположения, а не союза.",
+  "You are not in that war.": "Вы не участвуете в этой войне.",
+  "That war is over.": "Эта война уже окончена.",
+  "{0} cannot join against {1}: {2}": "{0} не может выступить против {1}: {2}",
+  "{0} could not join.": "{0} не смогли вступить.",
+  "{0} is already in this war.": "{0} уже в этой войне.",
+  "{0} is coming.": "{0} идут на помощь.",
+  "{0} is played by somebody. Ask them.": "За {0} играет человек. Спросите его.",
+  "{0} stayed home.": "{0} остались дома.",
+  "Would not come when we asked": "Не пришли, когда мы попросили"
 }

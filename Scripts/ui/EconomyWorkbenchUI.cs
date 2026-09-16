@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
@@ -102,11 +103,38 @@ public partial class DealOrForceGame
             cost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             line.AddChild(cost);
             var captured = kind;
+
+            // How many are standing here, so the row says what the region has rather than
+            // only what it could have. The minus is the whole of the tester's request and
+            // it needs this number to be worth showing at all.
+            var standing = hasRegion ? _selectedState.Buildings.GetValueOrDefault(kind) : 0;
+            if (standing > 0)
+            {
+                var have = Title(Simulation.Loc.Format("{0} standing", standing), 12, Ui.Colour("text.accent"));
+                line.AddChild(have);
+            }
+
+            var remove = ActionButton("−", () => DemolishBuilding(captured), 36, 32);
+            remove.Name = "Demolish" + kind;
+            remove.Disabled = standing <= 0;
+            Tip(remove, standing <= 0
+                ? Tr("Nothing of this kind is standing in the selected region.")
+                : Simulation.Loc.Format(
+                    "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.",
+                    _selectedState.Name,
+                    Fmt.Money(definition.Cost * _campaign.Defines.DemolitionRefund)));
+            line.AddChild(remove);
+
+            var dry = hasRegion
+                ? Waterfront.Refusal(_campaign, _selectedState.MapIndex, kind)
+                : "";
             var add = ActionButton("+", () => QueueBuilding(captured), 36, 32);
             add.Name = "Build" + kind;
             // Mirror admission, not the full project price: the economy pays it over time.
-            add.Disabled = !hasRegion || count >= 12 || player.Treasury < Math.Min(0.05f, definition.Cost);
+            add.Disabled = !hasRegion || dry.Length > 0 || count >= 12 ||
+                           player.Treasury < Math.Min(0.05f, definition.Cost);
             Tip(add, !hasRegion ? Tr("Select an owned region.")
+                : dry.Length > 0 ? dry
                 : count >= 12 ? Tr("Construction queue is full (12).")
                 : add.Disabled ? Tr("Insufficient treasury to start construction.")
                 : Tr(definition.Description) + "\n" + Simulation.Loc.Format("Queue in {0}", _selectedState.Name));

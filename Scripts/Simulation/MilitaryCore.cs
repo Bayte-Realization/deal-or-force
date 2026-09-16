@@ -264,8 +264,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
             ? null
             : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == targetController);
         var war = enemy is null ? null : campaign.Wars.FirstOrDefault(candidate => !candidate.Ended &&
-            ((candidate.AttackerId == nation.Id && candidate.DefenderId == enemy.Id) ||
-             (candidate.DefenderId == nation.Id && candidate.AttackerId == enemy.Id)));
+            candidate.Opposes(nation.Id, enemy.Id));
         if (targetController != nation.MapIndex && war is null)
         {
             SetResult(army, campaign, ArmyMoveResult.TargetNotControlled);
@@ -277,7 +276,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         {
             war = campaign.Wars.Find(candidate => candidate.Id == army.AssignedWarId && !candidate.Ended);
             if (war is not null)
-                enemy = campaign.NationById(war.AttackerId == nation.Id ? war.DefenderId : war.AttackerId);
+                enemy = campaign.NationById(war.EnemyLeaderOf(nation.Id));
         }
 
         int[] route;
@@ -737,7 +736,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                 : drawn is not null
                     ? BattlePlanning.PostFor(drawn, army, orderedFront)
                     : PostOnTheLine(campaign, army, Order, orderedFront);
-        var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
+        var enemyId = war.EnemyLeaderOf(army.NationId);
         var enemy = campaign.NationById(enemyId);
         var targetIsHostile = target > 0 && enemy is not null && controllers[target] == enemy.MapIndex;
         var plannedRoute = target < 0

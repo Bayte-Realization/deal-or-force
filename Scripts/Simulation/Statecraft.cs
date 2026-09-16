@@ -359,8 +359,11 @@ public static class Statecraft
 
             if (WillAnswer(campaign, friend, defender, attacker, bond))
             {
-                if (CampaignDiplomacy.DeclareWar(campaign, friendId, attacker.Id, -1, "defence_of_an_ally",
-                        onOwnInitiative: false) is null)
+                // Into the war that is already happening, on the side of the country that
+                // asked. A separate declaration would be a separate war with its own score
+                // and its own peace, which is exactly what a coalition is not.
+                if (!CampaignDiplomacy.JoinWar(campaign, war, friendId, defending: true,
+                        "declared_war_on_us"))
                     continue;
                 joined++;
                 OpinionSystem.Remember(campaign, bond, "stood_by_us");
@@ -397,8 +400,7 @@ public static class Statecraft
             campaign.NationById(defender.OverlordId) is { } master &&
             (campaign.Player is null || campaign.Player.Id != master.Id) &&
             !CampaignDiplomacy.AtWar(campaign, master.Id, attacker.Id) &&
-            CampaignDiplomacy.DeclareWar(campaign, master.Id, attacker.Id, -1,
-                "defence_of_our_subject", onOwnInitiative: false) is not null)
+            CampaignDiplomacy.JoinWar(campaign, war, master.Id, defending: true, "declared_war_on_us"))
             joined++;
 
         foreach (var nation in campaign.Nations.ToArray())
@@ -407,8 +409,11 @@ public static class Statecraft
             if (SubjectCatalog.Of(nation.SubjectType) is not { DraggedIntoWars: true }) continue;
             if (campaign.Player is not null && campaign.Player.Id == nation.Id) continue;
             if (CampaignDiplomacy.AtWar(campaign, nation.Id, defender.Id)) continue;
-            if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, defender.Id, -1,
-                    "dragged_by_our_overlord", onOwnInitiative: false) is not null)
+            // Beside its overlord, in its overlord's war. The direction is the other one -
+            // it declares on the country the overlord declared on - so it is the attacking
+            // side of the same war rather than a war of its own.
+            if (CampaignDiplomacy.JoinWar(campaign, war, nation.Id, defending: false,
+                    "dragged_by_our_overlord"))
                 joined++;
         }
         }
@@ -424,8 +429,116 @@ public static class Statecraft
     /// deciding, and it decides the way a government would: it keeps a promise it can afford
     /// to keep, to a friend it still has, against an enemy it can survive.
     /// </summary>
+
+    /// <summary>
+    /// Everybody this country could ask to join a war it is already fighting.
+    ///
+    /// Allies and guarantors, and nobody who is in the war already. Whether any of them
+    /// would actually come is <see cref="CallRefusal"/> and then their own judgement - this
+    /// is only the list the screen offers.
+    /// </summary>
+    public static List<int> CallableAllies(Campaign campaign, StrategicWar war, int callerId)
+    {
+        var result = new List<int>();
+        if (campaign is null || war is null || war.Ended || !war.Involves(callerId)) return result;
+        foreach (var relation in campaign.Relations.Values)
+        {
+            if (relation.A != callerId && relation.B != callerId) continue;
+            var friendId = relation.Other(callerId);
+            if (war.Involves(friendId)) continue;
+            if (relation.Stance != DiplomaticStance.Allied && !relation.GuaranteedBy(friendId)) continue;
+            if (campaign.NationById(friendId) is null) continue;
+            result.Add(friendId);
+        }
+
+        // And the dependencies that come when they are told to, which is most of what
+        // having one is for.
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.OverlordId != callerId || war.Involves(nation.Id)) continue;
+            if (SubjectCatalog.Of(nation.SubjectType) is not { DraggedIntoWars: true }) continue;
+            if (!result.Contains(nation.Id)) result.Add(nation.Id);
+        }
+        result.Sort();
+        return result;
+    }
+
+    /// <summary>Why this country cannot be asked at all, or an empty string when it can.</summary>
+    public static string CallRefusal(Campaign campaign, StrategicWar war, int callerId, int allyId)
+    {
+        if (campaign is null || war is null || war.Ended) return Loc.Get("That war is over.");
+        if (!war.Involves(callerId)) return Loc.Get("You are not in that war.");
+        var ally = campaign.NationById(allyId);
+        if (ally is null) return Loc.Get("Invalid target.");
+        if (war.Involves(allyId)) return Loc.Format("{0} is already in this war.", ally.Name);
+
+        // Somebody they are not allowed to fight. The ordinary refusals - a truce, a pact,
+        // an ocean and no ships - are exactly the ones that apply here.
+        foreach (var enemyId in war.EnemiesOf(callerId))
+        {
+            if (!CampaignDiplomacy.CanDeclareWar(campaign, allyId, enemyId, out var why, onOwnInitiative: false))
+            {
+                var enemy = campaign.NationById(enemyId);
+                return Loc.Format("{0} cannot join against {1}: {2}", ally.Name, enemy?.Name ?? "?", why);
+            }
+        }
+        return "";
+    }
+
+    /// <summary>
+    /// Put the question, and take the answer.
+    ///
+    /// A dependency that comes when it is told to is not asked. Everybody else weighs it the
+    /// same way they weigh a defensive call, with the promise itself worth rather less -
+    /// somebody else's offensive war is not what an alliance is for, and an ally that comes
+    /// anyway is doing you a favour.
+    /// </summary>
+    public static bool AskAllyToJoin(Campaign campaign, StrategicWar war, int callerId, int allyId,
+        out string answer)
+    {
+        answer = CallRefusal(campaign, war, callerId, allyId);
+        if (answer.Length > 0) return false;
+
+        var caller = campaign.NationById(callerId);
+        var ally = campaign.NationById(allyId);
+        var bond = CampaignDiplomacy.Get(campaign, callerId, allyId);
+        var defending = war.IsDefending(callerId);
+        var enemy = campaign.NationById(war.EnemyLeaderOf(callerId));
+
+        // Told rather than asked.
+        var obliged = ally.OverlordId == callerId &&
+                      SubjectCatalog.Of(ally.SubjectType) is { DraggedIntoWars: true } &&
+                      !ally.IsHuman;
+
+        var willing = obliged || (!ally.IsHuman && enemy is not null &&
+                                  WillAnswer(campaign, ally, caller, enemy, bond, favour: !defending));
+        if (willing)
+        {
+            if (!CampaignDiplomacy.JoinWar(campaign, war, allyId, defending, "declared_war_on_us"))
+            {
+                answer = Loc.Format("{0} could not join.", ally.Name);
+                return false;
+            }
+            OpinionSystem.Remember(campaign, bond, "stood_by_us");
+            answer = Loc.Format("{0} is coming.", ally.Name);
+            campaign.MarkStrategicChange();
+            return true;
+        }
+
+        // Refused. An offensive call is a favour, not a promise, so it costs goodwill and
+        // leaves the alliance standing; a defensive one is the promise, and that path is
+        // CallToArms above, which still ends the alliance over it.
+        OpinionSystem.Remember(campaign, bond, "refused_a_call");
+        bond.LastActionDay = campaign.ElapsedDays;
+        answer = ally.IsHuman
+            ? Loc.Format("{0} is played by somebody. Ask them.", ally.Name)
+            : Loc.Format("{0} stayed home.", ally.Name);
+        campaign.MarkStrategicChange();
+        return false;
+    }
+
     private static bool WillAnswer(Campaign campaign, Nation friend, Nation defender, Nation attacker,
-        DiplomaticRelation bond)
+        DiplomaticRelation bond, bool favour = false)
     {
         if (friend.IsHuman) return false;
         if (CampaignDiplomacy.AtWar(campaign, friend.Id, attacker.Id)) return false;
@@ -436,8 +549,8 @@ public static class Statecraft
             if (!war.Ended && war.Involves(friend.Id)) return false;
 
         var willingness = bond.Opinion / 100f;
-        if (bond.Stance == DiplomaticStance.Allied) willingness += 0.55f;
-        if (bond.GuaranteedBy(friend.Id)) willingness += 0.45f;
+        if (bond.Stance == DiplomaticStance.Allied) willingness += favour ? 0.25f : 0.55f;
+        if (bond.GuaranteedBy(friend.Id)) willingness += favour ? 0.15f : 0.45f;
         willingness += M.Clamp(friend.WarSupport - 0.5f, -0.4f, 0.4f);
         willingness += M.Clamp(friend.Stability - 0.5f, -0.3f, 0.3f);
 

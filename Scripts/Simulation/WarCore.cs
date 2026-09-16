@@ -71,9 +71,65 @@ public sealed class StrategicWar
     public readonly Dictionary<int, ushort> OriginalController = new();
     public readonly Dictionary<int, float> UnopposedProgress = new();
 
-    public bool Involves(int nationId) => nationId == AttackerId || nationId == DefenderId;
+    /// <summary>
+    /// Everybody else fighting on each side, the two leaders excepted.
+    ///
+    /// A war used to be a pair of countries and an alliance answering one produced a fresh
+    /// war per member: a NATO war was thirty wars, thirty war scores and thirty separate
+    /// peace deals, which is what a player sees and what they reported. The leaders stay
+    /// where they were - the country that declared and the country it declared on - so
+    /// everything that already asked who started it still gets the right answer, and
+    /// everybody who comes afterwards stands beside one of them.
+    ///
+    /// Public readonly collections, like the fronts above, because the save serialises the
+    /// nation list whole with fields included and populates rather than replaces.
+    /// </summary>
+    public readonly HashSet<int> AttackerAllies = new();
+
+    public readonly HashSet<int> DefenderAllies = new();
+
+    public bool Involves(int nationId) => IsAttacking(nationId) || IsDefending(nationId);
+
+    public bool IsAttacking(int nationId) =>
+        nationId == AttackerId || (AttackerAllies.Count > 0 && AttackerAllies.Contains(nationId));
+
+    public bool IsDefending(int nationId) =>
+        nationId == DefenderId || (DefenderAllies.Count > 0 && DefenderAllies.Contains(nationId));
+
+    /// <summary>Whether these two are on opposite sides of this war.</summary>
+    public bool Opposes(int first, int second) =>
+        (IsAttacking(first) && IsDefending(second)) || (IsDefending(first) && IsAttacking(second));
+
+    /// <summary>
+    /// The country on the other side that this war is about.
+    ///
+    /// Most of the simulation wants one enemy rather than a list - somewhere to march, a
+    /// coast to blockade, a name for the war - and the leader is the right answer for all
+    /// of them. Anything that has to be right about every belligerent asks for the side.
+    /// </summary>
+    public int EnemyLeaderOf(int nationId) =>
+        IsAttacking(nationId) ? DefenderId : IsDefending(nationId) ? AttackerId : -1;
+
+    /// <summary>Everybody on one side of it, leader first.</summary>
+    public IEnumerable<int> Side(bool attacking)
+    {
+        yield return attacking ? AttackerId : DefenderId;
+        foreach (var member in attacking ? AttackerAllies : DefenderAllies) yield return member;
+    }
+
+    /// <summary>Everybody this country is fighting, leader first. Empty if it is not in the war.</summary>
+    public IEnumerable<int> EnemiesOf(int nationId)
+    {
+        if (IsAttacking(nationId)) return Side(false);
+        if (IsDefending(nationId)) return Side(true);
+        return Array.Empty<int>();
+    }
+
+    /// <summary>How many countries are in it. Two is the ordinary war.</summary>
+    public int BelligerentCount => 2 + AttackerAllies.Count + DefenderAllies.Count;
+
     public IReadOnlySet<int> FriendlyFront(int nationId) =>
-        nationId == AttackerId ? AttackerFront : nationId == DefenderId ? DefenderFront : EmptyFront;
+        IsAttacking(nationId) ? AttackerFront : IsDefending(nationId) ? DefenderFront : EmptyFront;
 
     private static readonly HashSet<int> EmptyFront = new();
 }
@@ -143,12 +199,22 @@ public static partial class Warfare
             war.FrontDirty = false;
             war.LastFrontDay = campaign.ElapsedDays;
             if (war.Ended) continue;
-            var attacker = campaign.NationById(war.AttackerId);
-            var defender = campaign.NationById(war.DefenderId);
-            if (attacker is null || defender is null) continue;
-            byPair[PairKey(attacker.MapIndex, defender.MapIndex)] = (war, (ushort)attacker.MapIndex);
-            if (attacker.MapIndex < belligerents.Length) belligerents[attacker.MapIndex] = true;
-            if (defender.MapIndex < belligerents.Length) belligerents[defender.MapIndex] = true;
+            // Every pair across the two sides, not just the two leaders. A coalition war
+            // has a front wherever any of its members touches any of the other side's, and
+            // filing only the leaders' pair left everybody else's border unmanned.
+            foreach (var attackingId in war.Side(true))
+            {
+                var attacker = campaign.NationById(attackingId);
+                if (attacker is null) continue;
+                if (attacker.MapIndex < belligerents.Length) belligerents[attacker.MapIndex] = true;
+                foreach (var defendingId in war.Side(false))
+                {
+                    var defender = campaign.NationById(defendingId);
+                    if (defender is null) continue;
+                    if (defender.MapIndex < belligerents.Length) belligerents[defender.MapIndex] = true;
+                    byPair[PairKey(attacker.MapIndex, defender.MapIndex)] = (war, (ushort)attacker.MapIndex);
+                }
+            }
         }
         if (byPair.Count == 0) return;
 
@@ -286,16 +352,16 @@ public static partial class FrontPlanner
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
-            AssignSide(campaign, war, war.AttackerId, true);
-            AssignSide(campaign, war, war.DefenderId, false);
+            foreach (var nationId in war.Side(true)) AssignSide(campaign, war, nationId, true);
+            foreach (var nationId in war.Side(false)) AssignSide(campaign, war, nationId, false);
         }
     }
 
     public static void ReassignAi(Campaign campaign, StrategicWar war)
     {
         if (war.Ended) return;
-        AssignSide(campaign, war, war.AttackerId, true);
-        AssignSide(campaign, war, war.DefenderId, false);
+        foreach (var nationId in war.Side(true)) AssignSide(campaign, war, nationId, true);
+        foreach (var nationId in war.Side(false)) AssignSide(campaign, war, nationId, false);
     }
 
     public static void UpdateAiExecution(Campaign campaign, StrategicWar war)

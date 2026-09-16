@@ -534,6 +534,14 @@ public sealed class Defines
 	public float InlandWaterworksYield { get; set; } = 0.45f;
 
 	/// <summary>
+	/// What comes back out of a building that is pulled down, as a share of what it cost.
+	///
+	/// Scrap and land, not a refund. High enough that correcting a mistake is worth doing
+	/// and low enough that nobody builds and demolishes for a living.
+	/// </summary>
+	public float DemolitionRefund { get; set; } = 0.25f;
+
+	/// <summary>
 	/// Share of its fresh worth a formation still contributes to covering the ground
 	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side
 	/// has a bad month; one makes casualties irrelevant to where the line sits.

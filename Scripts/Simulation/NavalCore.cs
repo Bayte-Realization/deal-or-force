@@ -359,8 +359,7 @@ public static class NavalOperations
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
-            if ((war.AttackerId == left && war.DefenderId == right) ||
-                (war.AttackerId == right && war.DefenderId == left)) return true;
+            if (war.Opposes(left, right)) return true;
         }
         return false;
     }

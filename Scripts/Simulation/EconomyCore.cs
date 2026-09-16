@@ -330,6 +330,85 @@ public sealed class QueueConstructionCommand : ICampaignCommand
     }
 }
 
+
+/// <summary>
+/// Pull a building down.
+///
+/// The exact inverse of a project completing, which is the only way it can be right: the
+/// same gain is taken back, scaled by the same geography - an inland port that only ever
+/// delivered a fraction only ever takes that fraction away again - and a quarter of the
+/// original price comes back as scrap.
+///
+/// Nothing stops a country demolishing its last farm. That is a decision with consequences
+/// rather than an illegal move, and a game that refuses it is a game arguing with the
+/// player about their own country.
+/// </summary>
+public sealed class DemolishBuildingCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int StateMapIndex { get; init; }
+    public BuildingKind Building { get; init; }
+
+    public void Apply(Campaign campaign)
+    {
+        var nation = campaign.NationById(IssuerId);
+        if (nation is null) return;
+
+        ScenarioState state = null;
+        foreach (var candidate in campaign.States)
+            if (candidate.MapIndex == StateMapIndex) { state = candidate; break; }
+        if (state is null || state.NationMapIndex != nation.MapIndex) return;
+
+        var standing = state.Buildings.GetValueOrDefault(Building);
+        if (standing <= 0) return;
+
+        var definition = BuildingCatalog.Get(Building);
+        var yield = Waterfront.Yield(campaign, state.MapIndex, Building);
+        if (standing == 1) state.Buildings.Remove(Building);
+        else state.Buildings[Building] = standing - 1;
+
+        nation.Gdp = MathF.Max(0.01f, nation.Gdp - definition.GdpGain * yield);
+        nation.ConstructionCapacity = MathF.Max(0f, nation.ConstructionCapacity - definition.CapacityGain * yield);
+        nation.Treasury += definition.Cost * campaign.Defines.DemolitionRefund;
+
+        if (Building == BuildingKind.University)
+        {
+            state.Literacy = M.Clamp01(state.Literacy - 0.025f);
+            nation.Literacy = M.Clamp01(nation.Literacy - 0.003f);
+            nation.Productivity = MathF.Max(0.1f, nation.Productivity - 0.006f);
+        }
+        if (Building == BuildingKind.Hospital)
+            state.StandardOfLiving = M.Clamp01(state.StandardOfLiving - 0.018f);
+
+        campaign.MarkStrategicChange();
+    }
+}
+
+/// <summary>
+/// Call a site off before it is finished.
+///
+/// What has been spent is spent - the money went into the ground - and what has not is
+/// still in the treasury, so cancelling costs exactly the progress made. The twelve-project
+/// limit is what makes this worth having: a queue nobody can clear is a queue that has to
+/// be got right first time.
+/// </summary>
+public sealed class CancelConstructionCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int ProjectId { get; init; }
+
+    public void Apply(Campaign campaign)
+    {
+        var nation = campaign.NationById(IssuerId);
+        if (nation is null) return;
+        var project = campaign.Construction.Find(candidate =>
+            candidate.Id == ProjectId && candidate.NationId == nation.Id);
+        if (project is null) return;
+        campaign.Construction.Remove(project);
+        campaign.MarkStrategicChange();
+    }
+}
+
 public static class EconomySystem
 {
     public static void Seed(Campaign campaign)

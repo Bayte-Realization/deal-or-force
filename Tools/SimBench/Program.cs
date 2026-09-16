@@ -103,6 +103,8 @@ public static class Program
         failures += Check("every word an event puts on the screen is in both tables",
             AnEventSpeaksTheLanguageTheGameIsIn());
         failures += Check("a wharf is built on water", AWharfIsBuiltOnWater(campaign));
+        failures += Check("an alliance fights one war, not thirty", AnAllianceFightsOneWar());
+        failures += Check("what is built can be pulled down again", AWorldThatCanBeUnbuilt());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -1910,15 +1912,16 @@ public static class Program
         var war = CampaignDiplomacy.DeclareWar(campaign, attacker.Id, victim.Id);
         if (war is null) return $"{attacker.Tag} could not declare on its own neighbour {victim.Tag}";
 
-        var friendJoined = false;
-        foreach (var candidate in campaign.Wars)
-            if (!candidate.Ended && candidate.AttackerId == friend.Id && candidate.DefenderId == attacker.Id)
-                friendJoined = true;
-        if (!friendJoined)
+        // Into the same war, beside the country it promised to stand by. It used to be a
+        // second war of the friend's own, which is what made a NATO war thirty wars.
+        if (!war.IsDefending(friend.Id))
             return $"{friend.Tag} was allied to {victim.Tag} at {bond.Opinion:0} opinion, watched " +
                    $"{attacker.Tag} attack it, and did nothing";
-        if (campaign.Wars.Count <= warsBefore + 1)
-            return "the call to arms produced no second war";
+        if (campaign.Wars.Count != warsBefore + 1)
+            return $"one declaration opened {campaign.Wars.Count - warsBefore} wars; a call to arms " +
+                   "brings an ally into the war that is happening, not into one of its own";
+        if (CampaignDiplomacy.Get(campaign, friend.Id, attacker.Id).Stance != DiplomaticStance.AtWar)
+            return $"{friend.Tag} joined the war against {attacker.Tag} without being at war with them";
 
         // The declaration itself is counted, and so is what it takes afterwards.
         if (attacker.Notoriety <= notorietyBefore && string.IsNullOrEmpty(attacker.LastWarJustification))
@@ -1955,7 +1958,8 @@ public static class Program
                    "and nobody organised against it";
 
         Console.WriteLine($"  statecraft: {attacker.Tag} attacked {victim.Tag}; {friend.Tag} honoured its " +
-                          $"alliance and declared. {attacker.Tag} carries {attacker.Notoriety:0} notoriety " +
+                          $"alliance and joined the same war ({war.BelligerentCount} belligerents). " +
+                          $"{attacker.Tag} carries {attacker.Notoriety:0} notoriety " +
                           $"and {coalition.MemberIds.Count:N0} countries have formed against it.");
         return "";
     }
@@ -4786,7 +4790,7 @@ public static class Program
             if (!english.ContainsKey(caption)) absent.Add(caption);
         if (absent.Count > 0)
             return $"{absent.Count} caption(s) the interface shows are missing from the English " +
-                   $"table, starting with: {string.Join(" | ", absent.Take(4))}";
+                   $"table, starting with: {string.Join(" | ", absent)}";
 
         var report = new List<string>();
         foreach (var language in Directory.GetDirectories(
@@ -6910,6 +6914,233 @@ public static class Program
     /// have one. And the compromise works: a country with rivers and no coast can build,
     /// for less - which is the whole reason this is a yield and not a refusal.
     /// </summary>
+    /// <summary>
+    /// An alliance answering a declaration produces one war with sides, not a war per member.
+    ///
+    /// This is the thing a tester reported and it is worth a check rather than a look,
+    /// because the failure is silent: everything works, every ally fights, and the ledger
+    /// fills with thirty entries that each have their own war score and each have to be
+    /// settled separately. What makes it one war is that the allies are inside it.
+    /// </summary>
+    /// <summary>
+    /// Demolition is the exact inverse of completion, and cancelling is the inverse of
+    /// ordering.
+    ///
+    /// The economy could only ever add: a region industrialised by mistake stayed
+    /// industrialised, and twelve slots filled with the wrong thing stayed filled. Both
+    /// orders are new, so what they are worth is worth measuring rather than assuming -
+    /// a demolition that forgets to take the GDP back is a money printer, and one that
+    /// takes back more than it gave is a way to delete a country.
+    /// </summary>
+    private static string AWorldThatCanBeUnbuilt()
+    {
+        var campaign = Campaign.CreateBootstrap(20241014);
+        if (!AttachMap(campaign)) return "";
+        var nation = campaign.Nations.FirstOrDefault(country => country.Population > 20_000_000);
+        if (nation is null) return "no country large enough to build anything";
+        var state = campaign.StatesOf(nation).FirstOrDefault();
+        if (state is null) return $"{nation.Tag} owns no region";
+
+        var definition = BuildingCatalog.Get(BuildingKind.CivilianIndustry);
+        var yield = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.CivilianIndustry);
+        var standing = state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry);
+        var gdp = nation.Gdp;
+        var capacity = nation.ConstructionCapacity;
+        var treasury = nation.Treasury;
+
+        // Up. Ordered and finished on the spot rather than waited out: what is being tested
+        // is the arithmetic of the two orders, not the calendar between them.
+        nation.Treasury = 500f;
+        new QueueConstructionCommand
+        {
+            IssuerId = nation.Id, StateMapIndex = state.MapIndex, Building = BuildingKind.CivilianIndustry
+        }.Apply(campaign);
+        var project = campaign.Construction.FindLast(candidate => candidate.NationId == nation.Id);
+        if (project is null) return $"{nation.Tag} could not open a site at all";
+
+        // And back out of it, which is the cheaper half of the tester's request and the one
+        // that matters most: twelve sites run at once and nothing could clear one.
+        var queued = campaign.Construction.Count;
+        new CancelConstructionCommand { IssuerId = nation.Id, ProjectId = project.Id }.Apply(campaign);
+        if (campaign.Construction.Count != queued - 1)
+            return "a site was called off and is still in the queue";
+
+        // Somebody else's site is not theirs to call off.
+        var other = campaign.Nations.FirstOrDefault(country => country.Id != nation.Id &&
+                                                              country.Population > 20_000_000);
+        if (other is not null)
+        {
+            new QueueConstructionCommand
+            {
+                IssuerId = nation.Id, StateMapIndex = state.MapIndex, Building = BuildingKind.CivilianIndustry
+            }.Apply(campaign);
+            var mine = campaign.Construction.FindLast(candidate => candidate.NationId == nation.Id);
+            if (mine is not null)
+            {
+                new CancelConstructionCommand { IssuerId = other.Id, ProjectId = mine.Id }.Apply(campaign);
+                if (!campaign.Construction.Contains(mine))
+                    return $"{other.Tag} called off a site belonging to {nation.Tag}";
+                new CancelConstructionCommand { IssuerId = nation.Id, ProjectId = mine.Id }.Apply(campaign);
+            }
+        }
+
+        // Now the round trip. One building placed by hand, then pulled down, and everything
+        // back where it started bar the scrap value.
+        state.Buildings[BuildingKind.CivilianIndustry] = standing + 1;
+        nation.Gdp = gdp + definition.GdpGain * yield;
+        nation.ConstructionCapacity = capacity + definition.CapacityGain * yield;
+        nation.Treasury = treasury;
+
+        new DemolishBuildingCommand
+        {
+            IssuerId = nation.Id, StateMapIndex = state.MapIndex, Building = BuildingKind.CivilianIndustry
+        }.Apply(campaign);
+
+        if (state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry) != standing)
+            return $"a building was demolished and {state.Name} still counts " +
+                   $"{state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry)} of them " +
+                   $"against {standing} before it was built";
+        if (MathF.Abs(nation.Gdp - gdp) > 0.01f)
+            return $"{nation.Tag}'s GDP is {nation.Gdp:0.###} after building and demolishing " +
+                   $"the same thing, against {gdp:0.###} before";
+        if (MathF.Abs(nation.ConstructionCapacity - capacity) > 0.001f)
+            return $"{nation.Tag}'s construction capacity is {nation.ConstructionCapacity:0.###} " +
+                   $"against {capacity:0.###} before";
+
+        var scrap = definition.Cost * campaign.Defines.DemolitionRefund;
+        if (MathF.Abs(nation.Treasury - (treasury + scrap)) > 0.01f)
+            return $"demolition returned {nation.Treasury - treasury:0.###} rather than the " +
+                   $"{scrap:0.###} the defines promise";
+
+        // And nothing comes of demolishing what is not there.
+        var empty = campaign.Nations.FirstOrDefault(country => country.Id != nation.Id);
+        var before = nation.Treasury;
+        new DemolishBuildingCommand
+        {
+            IssuerId = nation.Id, StateMapIndex = state.MapIndex, Building = BuildingKind.Shipyard
+        }.Apply(campaign);
+        if (state.Buildings.GetValueOrDefault(BuildingKind.Shipyard) == 0 &&
+            MathF.Abs(nation.Treasury - before) > 0.0001f)
+            return "demolishing a building that was never there paid out";
+        if (empty is not null)
+        {
+            var theirs = campaign.StatesOf(empty).FirstOrDefault();
+            if (theirs is not null)
+            {
+                var had = theirs.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry);
+                new DemolishBuildingCommand
+                {
+                    IssuerId = nation.Id, StateMapIndex = theirs.MapIndex,
+                    Building = BuildingKind.CivilianIndustry
+                }.Apply(campaign);
+                if (theirs.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry) != had)
+                    return $"{nation.Tag} demolished a building in {empty.Tag}'s own region";
+            }
+        }
+
+        Console.WriteLine($"  building: {nation.Tag} raised and razed a {definition.Name.ToLowerInvariant()} " +
+                          $"in {state.Name}; GDP, capacity and the queue all came back, " +
+                          $"{scrap:0.##}B in scrap.");
+        return "";
+    }
+
+    private static string AnAllianceFightsOneWar()
+    {
+        var campaign = Campaign.CreateBootstrap(20240926);
+        if (!AttachMap(campaign)) return "";
+        campaign.IsPaused = false;
+
+        // Somebody with friends, and somebody able to attack them. Built rather than found:
+        // the 2024 world's alliances are what they are, and a check that depends on finding
+        // a convenient one is a check that stops testing when the data changes.
+        Nation victim = null;
+        Nation aggressor = null;
+        foreach (var candidate in campaign.Nations)
+        {
+            if (candidate.Population < 5_000_000 || candidate.OverlordId != 0) continue;
+            foreach (var other in campaign.Nations)
+            {
+                if (other.Id == candidate.Id || other.Population < 5_000_000) continue;
+                if (other.OverlordId != 0) continue;
+                if (!CampaignDiplomacy.CanDeclareWar(campaign, other.Id, candidate.Id, out _)) continue;
+                victim = candidate;
+                aggressor = other;
+                break;
+            }
+            if (victim is not null) break;
+        }
+        if (victim is null) return "no two countries in the world could go to war with each other";
+
+        // Three friends who are not the aggressor and could fight it.
+        var friends = new List<Nation>();
+        foreach (var candidate in campaign.Nations)
+        {
+            if (friends.Count == 3) break;
+            if (candidate.Id == victim.Id || candidate.Id == aggressor.Id) continue;
+            if (candidate.Population < 2_000_000 || candidate.OverlordId != 0) continue;
+            if (!CampaignDiplomacy.CanDeclareWar(campaign, candidate.Id, aggressor.Id, out _)) continue;
+            var bond = CampaignDiplomacy.Get(campaign, candidate.Id, victim.Id);
+            bond.Stance = DiplomaticStance.Allied;
+            bond.Opinion = 100f;
+            candidate.WarSupport = 1f;
+            candidate.Stability = 0.9f;
+            friends.Add(candidate);
+        }
+        if (friends.Count == 0) return "nobody in the world could be made an ally of the country attacked";
+
+        var warsBefore = campaign.Wars.Count;
+        var war = CampaignDiplomacy.DeclareWar(campaign, aggressor.Id, victim.Id);
+        if (war is null) return $"{aggressor.Tag} could not declare war on {victim.Tag} after all";
+
+        var opened = campaign.Wars.Count - warsBefore;
+        if (opened != 1)
+            return $"one declaration opened {opened} wars - the alliance is still splitting into " +
+                   "a war per member";
+
+        var answered = friends.Count(friend => war.IsDefending(friend.Id));
+        Console.WriteLine($"  coalition: {aggressor.Tag} attacked {victim.Tag}; {answered} of " +
+                          $"{friends.Count} ally(ies) answered into the same war, " +
+                          $"{war.BelligerentCount} belligerent(s) in it.");
+        if (answered == 0)
+            return $"not one of {friends.Count} allies with full opinion, full war support and " +
+                   "nothing else to do came to the war";
+
+        foreach (var friend in friends)
+        {
+            if (!war.IsDefending(friend.Id)) continue;
+            if (CampaignDiplomacy.Get(campaign, friend.Id, aggressor.Id).Stance != DiplomaticStance.AtWar)
+                return $"{friend.Tag} is in the war against {aggressor.Tag} and not at war with them";
+            if (war.IsAttacking(friend.Id))
+                return $"{friend.Tag} is on both sides of the same war";
+        }
+
+        // The fighting knows about them, and so does the peace.
+        Warfare.RebuildFronts(campaign);
+        for (var day = 0; day < 40; day++) campaign.Tick();
+        if (war.Ended) return "";      // settled early; nothing left to prove here
+
+        var committed = campaign.Armies.Count(army => army.AssignedWarId == war.Id &&
+            war.IsDefending(army.NationId) && army.NationId != victim.Id);
+        Console.WriteLine($"  coalition: {committed} ally formation(s) were given orders in it " +
+                          $"after forty days.");
+
+        // A white peace will not be looked at until a war is four months old, and forty
+        // days of real ticking is what this check can afford. The war is aged rather than
+        // fought, which is the one thing being proved here that the calendar is not.
+        war.StartedDay -= 200;
+        PeaceNegotiation.Resolve(campaign, war, aggressor.Id, PeaceTerms.WhitePeace);
+        if (!war.Ended) return $"a white peace did not end the war: {war.LastNegotiation}";
+        foreach (var friend in friends)
+        {
+            if (!war.IsDefending(friend.Id)) continue;
+            var relation = CampaignDiplomacy.Get(campaign, friend.Id, aggressor.Id);
+            if (relation.Stance == DiplomaticStance.AtWar)
+                return $"the war ended and {friend.Tag} is still at war with {aggressor.Tag} - " +
+                       "one war has to end for everybody in it";
+        }
+        return "";
+    }
+
     private static string AWharfIsBuiltOnWater(Campaign campaign)
     {
         if (campaign.ProvinceMap is null) return "";

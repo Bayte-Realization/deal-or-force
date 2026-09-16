@@ -128,6 +128,8 @@ public static partial class Warfare
     // thousand provinces - with fifty wars going stale on the same day that was two million
     // province reads for a table that is the same table every time.
     private static readonly Dictionary<ushort, int> HomeProvinces = new();
+    private static readonly HashSet<ushort> AttackerMaps = new();
+    private static readonly HashSet<ushort> DefenderMaps = new();
     private static readonly Dictionary<long, int> OccupiedPairs = new();
 
     private static void MeasureOccupation(Campaign campaign)
@@ -246,20 +248,31 @@ public static partial class Warfare
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
 
+        // Whose ground counts as the enemy's, per side. In a war with allies in it this is
+        // a set rather than one country, and it is the same set for every formation on a
+        // side, so it is built once per war rather than once per formation.
+        AttackerMaps.Clear();
+        DefenderMaps.Clear();
+        foreach (var nationId in war.Side(true))
+            if (campaign.NationById(nationId) is { } member) AttackerMaps.Add((ushort)member.MapIndex);
+        foreach (var nationId in war.Side(false))
+            if (campaign.NationById(nationId) is { } member) DefenderMaps.Add((ushort)member.MapIndex);
+
         foreach (var army in In(ByWar, war.Id))
         {
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
-                (army.NationId != war.AttackerId && army.NationId != war.DefenderId))
+                !war.Involves(army.NationId))
                 continue;
 
-            var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
+            var enemyMaps = war.IsAttacking(army.NationId) ? DefenderMaps : AttackerMaps;
+            var enemyId = war.EnemyLeaderOf(army.NationId);
             var enemy = campaign.NationById(enemyId);
             if (enemy is null || army.ProvinceId <= 0) continue;
             if (PrepareOperationalRoute(campaign, war, army, controllers)) continue;
             Candidates.Clear();
             foreach (var province in topology.Neighbors[army.ProvinceId])
-                if (controllers[province] == (ushort)enemy.MapIndex) Candidates.Add(province);
+                if (enemyMaps.Contains(controllers[province])) Candidates.Add(province);
             if (Candidates.Count == 0) continue;
             if (army.PlannedRoute.Count > 0 && Candidates.Contains(army.PlannedRoute[0]))
             {
@@ -413,7 +426,7 @@ public static partial class Warfare
     {
         var topology = campaign.ProvinceMap;
         var nation = campaign.NationById(army.NationId);
-        var enemyId = army.NationId == war.AttackerId ? war.DefenderId : war.AttackerId;
+        var enemyId = war.EnemyLeaderOf(army.NationId);
         var enemy = campaign.NationById(enemyId);
         if (topology is null || nation is null || enemy is null) return false;
 
@@ -479,7 +492,7 @@ public static partial class Warfare
 
         EnsureIndexed(campaign);
         var invaderId = landed[0].NationId;
-        var defenderId = invaderId == war.AttackerId ? war.DefenderId : war.AttackerId;
+        var defenderId = war.EnemyLeaderOf(invaderId);
 
         DefendingSide.Clear();
         foreach (var army in In(ByProvince, provinceId))
@@ -910,12 +923,31 @@ public static partial class Warfare
         var attacker = campaign.NationById(war.AttackerId);
         var defender = campaign.NationById(war.DefenderId);
         if (topology is null || controllers is null || attacker is null || defender is null) return;
-        var attackerMap = (ushort)attacker.MapIndex;
-        var defenderMap = (ushort)defender.MapIndex;
-        var attackerHome = HomeProvinces.GetValueOrDefault(attackerMap);
-        var defenderHome = HomeProvinces.GetValueOrDefault(defenderMap);
-        var attackerOccupied = Occupied(attackerMap, defenderMap);
-        var defenderOccupied = Occupied(defenderMap, attackerMap);
+        // Ground taken by anybody on a side counts for that side. Scoring the two leaders
+        // alone meant an ally could occupy half a country and the war score would not move,
+        // which is a coalition war that does not know it is one.
+        var attackerHome = 0;
+        var defenderHome = 0;
+        var attackerOccupied = 0;
+        var defenderOccupied = 0;
+        foreach (var attackingId in war.Side(true))
+        {
+            if (campaign.NationById(attackingId) is not { } member) continue;
+            var map = (ushort)member.MapIndex;
+            attackerHome += HomeProvinces.GetValueOrDefault(map);
+            foreach (var defendingId in war.Side(false))
+                if (campaign.NationById(defendingId) is { } foe)
+                    attackerOccupied += Occupied(map, (ushort)foe.MapIndex);
+        }
+        foreach (var defendingId in war.Side(false))
+        {
+            if (campaign.NationById(defendingId) is not { } member) continue;
+            var map = (ushort)member.MapIndex;
+            defenderHome += HomeProvinces.GetValueOrDefault(map);
+            foreach (var attackingId in war.Side(true))
+                if (campaign.NationById(attackingId) is { } foe)
+                    defenderOccupied += Occupied(map, (ushort)foe.MapIndex);
+        }
         war.OccupationScore = (defenderHome == 0 ? 0f : defenderOccupied * 65f / defenderHome) -
                               (attackerHome == 0 ? 0f : attackerOccupied * 65f / attackerHome);
         var totalLosses = war.AttackerLosses + war.DefenderLosses;
@@ -931,13 +963,19 @@ public static partial class Warfare
         war.ObjectiveScore = 0f;
         if (war.ClaimedStateMapIndex >= 0)
         {
+            // Whoever on the attacking side is standing on the goal. An ally holding it
+            // holds it for the coalition.
+            AttackerMaps.Clear();
+            foreach (var attackingId in war.Side(true))
+                if (campaign.NationById(attackingId) is { } member)
+                    AttackerMaps.Add((ushort)member.MapIndex);
             var goalTotal = 0;
             var goalControlled = 0;
             for (var province = 1; province <= topology.ProvinceCount; province++)
             {
                 if (topology.ProvinceToState[province] != war.ClaimedStateMapIndex) continue;
                 goalTotal++;
-                if (controllers[province] == attackerMap) goalControlled++;
+                if (AttackerMaps.Contains(controllers[province])) goalControlled++;
             }
             if (goalTotal > 0)
                 war.ObjectiveScore = M.Clamp(-10f + goalControlled * 35f / goalTotal, -10f, 25f);

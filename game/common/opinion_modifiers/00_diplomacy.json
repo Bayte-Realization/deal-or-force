@@ -119,6 +119,17 @@
     "max_stacks": 2
   },
 
+  // Saying no to a war that was never their obligation. A tenth of abandoning somebody and
+  // forgotten in three years, because an offensive call is a favour asked and not a promise
+  // kept - the alliance survives it, and the next request is heard a little more coldly.
+  "refused_a_call": {
+    "name": "Would not come when we asked",
+    "opinion": -6,
+    "days": 1100,
+    "decays": true,
+    "max_stacks": 3
+  },
+
   "abandoned_us": {
     "name": "Abandoned us when it counted",
     "opinion": -55,

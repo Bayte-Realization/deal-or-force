@@ -46,7 +46,7 @@ public static class AiAdmiralty
                 continue;
             }
 
-            var enemyId = war.AttackerId == nation.Id ? war.DefenderId : war.AttackerId;
+            var enemyId = war.EnemyLeaderOf(nation.Id);
             var enemy = campaign.NationById(enemyId);
             if (enemy is null) { SendHome(campaign, fleet); continue; }
 
@@ -86,7 +86,7 @@ public static class AiAdmiralty
         foreach (var war in campaign.Wars)
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
-            var enemyId = war.AttackerId == nation.Id ? war.DefenderId : war.AttackerId;
+            var enemyId = war.EnemyLeaderOf(nation.Id);
             var enemy = campaign.NationById(enemyId);
             if (enemy is null) continue;
             if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, enemy.MapIndex)) return war;

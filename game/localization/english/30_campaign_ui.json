@@ -57,5 +57,12 @@
   // The way out, and the way back in.
   "Menu": "Menu",
   "Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.": "Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.",
-  "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.": "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping."
+  "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.": "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.",
+
+  // Taking a building down, and calling a site off.
+  "{0} standing": "{0} standing",
+  "Nothing of this kind is standing in the selected region.": "Nothing of this kind is standing in the selected region.",
+  "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.": "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.",
+  "Call this site off. What has already been spent stays spent; the rest is never taken.": "Call this site off. What has already been spent stays spent; the rest is never taken.",
+  "{0} of 12 sites running": "{0} of 12 sites running"
 }

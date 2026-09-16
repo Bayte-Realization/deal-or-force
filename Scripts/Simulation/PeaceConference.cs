@@ -220,11 +220,21 @@ public static class PeaceConference
         war.DefenderFront.Clear();
         war.UnopposedProgress.Clear();
 
-        var relation = CampaignDiplomacy.Get(campaign, war.AttackerId, war.DefenderId);
-        relation.Stance = DiplomaticStance.Truce;
-        relation.TruceUntil = campaign.ElapsedDays + (demand.LongTruce ? 365 * 10 : 365 * 5);
-        relation.LastActionDay = campaign.ElapsedDays;
-        relation.Opinion = MathF.Min(relation.Opinion, demand.Provinces.Count > 0 ? -60f : -35f);
+        // Every pair across the two sides. One war, one settlement, one truce for all of
+        // the people who were in it - a coalition that has to sign thirty separate treaties
+        // is thirty wars wearing a coat.
+        var truceUntil = campaign.ElapsedDays + (demand.LongTruce ? 365 * 10 : 365 * 5);
+        var bitterness = demand.Provinces.Count > 0 ? -60f : -35f;
+        foreach (var attackingId in war.Side(true))
+            foreach (var defendingId in war.Side(false))
+            {
+                if (attackingId == defendingId) continue;
+                var relation = CampaignDiplomacy.Get(campaign, attackingId, defendingId);
+                relation.Stance = DiplomaticStance.Truce;
+                relation.TruceUntil = truceUntil;
+                relation.LastActionDay = campaign.ElapsedDays;
+                relation.Opinion = MathF.Min(relation.Opinion, bitterness);
+            }
 
         foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id))
         {

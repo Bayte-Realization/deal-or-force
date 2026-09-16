@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
@@ -13,6 +14,36 @@ public partial class DealOrForceGame
     private ScenarioState _selectedState;
 
     private void BuildEconomyControls(VBoxContainer parent) => BuildEconomyWorkbench(parent);
+
+    /// <summary>Pull one down in the selected region, and show the region again.</summary>
+    private void DemolishBuilding(BuildingKind kind)
+    {
+        var player = _campaign.Player;
+        if (_selectedState is null || _selectedState.NationMapIndex != player.MapIndex) return;
+        if (_selectedState.Buildings.GetValueOrDefault(kind) <= 0) return;
+        _campaign.Commands.Enqueue(new DemolishBuildingCommand
+        {
+            IssuerId = player.Id,
+            StateMapIndex = _selectedState.MapIndex,
+            Building = kind
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        ShowEconomyScreen();
+    }
+
+    /// <summary>Call a site off. What was spent stays spent; the rest is never taken.</summary>
+    private void CancelConstruction(int projectId)
+    {
+        var player = _campaign.Player;
+        if (player is null) return;
+        _campaign.Commands.Enqueue(new CancelConstructionCommand
+        {
+            IssuerId = player.Id, ProjectId = projectId
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        ShowEconomyScreen();
+        RefreshStateAffairs();
+    }
 
     private void QueueBuilding(BuildingKind kind)
     {

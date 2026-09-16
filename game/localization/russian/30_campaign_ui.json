@@ -57,5 +57,12 @@
   // Выход и возвращение.
   "Menu": "Меню",
   "Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.": "Меню паузы (Esc): сохранение, загрузка, настройки и выход в главное меню. F5 — быстрое сохранение, F9 — загрузка, F10 — свободная камера.",
-  "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.": "Выйти из кампании на титульный экран. При выходе ничего не сохраняется — сделайте быстрое сохранение, если кампанию стоит оставить."
+  "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.": "Выйти из кампании на титульный экран. При выходе ничего не сохраняется — сделайте быстрое сохранение, если кампанию стоит оставить.",
+
+  // Снос зданий и отмена строек.
+  "{0} standing": "построено: {0}",
+  "Nothing of this kind is standing in the selected region.": "В выбранном регионе таких построек нет.",
+  "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.": "Снести одну в регионе {0}. Её вклад уйдёт вместе с ней, а {1} вернётся ломом.",
+  "Call this site off. What has already been spent stays spent; the rest is never taken.": "Свернуть стройку. Потраченное не вернуть, но остальное уже не спишут.",
+  "{0} of 12 sites running": "строек идёт: {0} из 12"
 }

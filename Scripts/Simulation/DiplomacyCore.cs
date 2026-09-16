@@ -106,8 +106,15 @@ public static class CampaignDiplomacy
     }
 
     public static bool AtWar(Campaign campaign, int a, int b) =>
-        campaign.Wars.Any(war => !war.Ended &&
-            ((war.AttackerId == a && war.DefenderId == b) || (war.AttackerId == b && war.DefenderId == a)));
+        campaign.Wars.Any(war => !war.Ended && war.Opposes(a, b));
+
+    /// <summary>The war these two are fighting each other in, or null.</summary>
+    public static StrategicWar WarBetween(Campaign campaign, int a, int b)
+    {
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.Opposes(a, b)) return war;
+        return null;
+    }
 
     /// <param name="onOwnInitiative">
     /// False when the country is not choosing: answering a call to arms, or dragged along by
@@ -171,6 +178,43 @@ public static class CampaignDiplomacy
     /// border, a friend already being attacked. An empty answer is a war nobody accepts a
     /// reason for, and that is where notoriety comes from.
     /// </summary>
+    /// <summary>
+    /// Bring a country into a war that is already being fought.
+    ///
+    /// This is what answering a call to arms does now. It used to be a fresh declaration -
+    /// every member of an alliance opening its own private war against the same aggressor,
+    /// thirty wars for one attack on one NATO member - and the whole reason it was written
+    /// that way is in the comment it replaces: so that nothing downstream had to learn
+    /// about wars with more than two sides. Downstream has learned.
+    ///
+    /// Everybody it is now fighting learns about it, because a stance is a fact between two
+    /// countries and the war is only where the fighting is organised.
+    /// </summary>
+    public static bool JoinWar(Campaign campaign, StrategicWar war, int nationId, bool defending,
+        string opinionNote = null)
+    {
+        if (campaign is null || war is null || war.Ended) return false;
+        var joiner = campaign.NationById(nationId);
+        if (joiner is null || war.Involves(nationId)) return false;
+
+        (defending ? war.DefenderAllies : war.AttackerAllies).Add(nationId);
+
+        foreach (var enemyId in war.EnemiesOf(nationId))
+        {
+            if (enemyId == nationId) continue;
+            var relation = Get(campaign, nationId, enemyId);
+            relation.Stance = DiplomaticStance.AtWar;
+            relation.LastActionDay = campaign.ElapsedDays;
+            if (opinionNote is not null) OpinionSystem.Remember(campaign, relation, opinionNote);
+            OpinionSystem.Remember(campaign, relation, "fought_a_war");
+        }
+
+        Warfare.RebuildFronts(campaign);
+        FrontPlanner.ReassignAi(campaign, war);
+        campaign.MarkStrategicChange();
+        return true;
+    }
+
     public static StrategicWar DeclareWar(Campaign campaign, int attackerId, int defenderId,
         int claimedStateMapIndex = -1, string justification = null, bool onOwnInitiative = true)
     {
@@ -403,4 +447,26 @@ public sealed class DeclareWarCampaignCommand : ICampaignCommand
     public int TargetId { get; init; }
     public int ClaimedStateMapIndex { get; init; } = -1;
     public void Apply(Campaign campaign) => CampaignDiplomacy.DeclareWar(campaign, IssuerId, TargetId, ClaimedStateMapIndex);
+}
+
+/// <summary>
+/// Ask an ally to come into a war already being fought.
+///
+/// The automatic call happens when war is declared and is over in the same breath. This is
+/// the other case, and the one a player actually wants: a war that has gone badly, an ally
+/// who was under no obligation, and a government deciding to go and ask.
+/// </summary>
+public sealed class CallAllyToWarCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int WarId { get; init; }
+    public int AllyId { get; init; }
+
+    public void Apply(Campaign campaign)
+    {
+        var war = campaign.Wars.Find(candidate => candidate.Id == WarId);
+        if (war is null || war.Ended || !war.Involves(IssuerId)) return;
+        Statecraft.AskAllyToJoin(campaign, war, IssuerId, AllyId, out var answer);
+        war.LastNegotiation = answer;
+    }
 }

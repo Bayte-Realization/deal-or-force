@@ -35,6 +35,7 @@ public partial class DealOrForceGame
     private OptionButton _stateBuildingPicker = null!;
     private OptionButton _stateRegionPicker = null!;
     private Label _stateConstructionQueue = null!;
+    private VBoxContainer _stateConstructionRows = null!;
     private int _stateRegionListNationId = -1;
     private Label _stateGovernanceFeedback = null!;
     private readonly Dictionary<TradePolicy, Button> _stateTradeButtons = new();
@@ -227,8 +228,16 @@ public partial class DealOrForceGame
         order.AddChild(ActionButton("Queue", OnStateQueueConstruction, 88, 30));
 
         _stateConstructionQueue = Title("", 11, Ui.Colour("text.body_soft"));
-        _stateConstructionQueue.CustomMinimumSize = new Vector2(0, 36);
+        _stateConstructionQueue.CustomMinimumSize = new Vector2(0, 18);
         construction.AddChild(_stateConstructionQueue);
+
+        // One row per site, each with a way out of it. The queue used to be a single line
+        // of text listing four of twelve projects, which told a player what was running and
+        // gave them nothing to do about it - and with twelve slots and no way to clear one,
+        // a wrong order was permanent.
+        _stateConstructionRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _stateConstructionRows.AddThemeConstantOverride("separation", 2);
+        construction.AddChild(_stateConstructionRows);
     }
     private void BuildStateControls(VBoxContainer rows)
     {
@@ -533,21 +542,29 @@ public partial class DealOrForceGame
         }
 
         var projects = _campaign.Construction.Where(project => project.NationId == nation.Id).ToList();
+        ClearRuntimeChildren(_stateConstructionRows);
         if (projects.Count == 0)
         {
             _stateConstructionQueue.Text = Tr("Nothing under construction. Twelve sites may run at once.");
             return;
         }
-        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of 12 sites running · ", projects.Count) +
-            string.Join("  ·  ", projects
-                .OrderByDescending(project => project.Progress)
-                .Take(4)
-                .Select(project =>
-                {
-                    var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);
-                    return Simulation.Loc.Format("{0} in {1} {2:P0}",
-                        BuildingCatalog.Get(project.Building).Name, place?.Name ?? "?", project.Progress);
-                }));
+        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of 12 sites running", projects.Count);
+        foreach (var project in projects.OrderByDescending(project => project.Progress))
+        {
+            var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 6);
+            _stateConstructionRows.AddChild(row);
+            var text = Title(Simulation.Loc.Format("{0} in {1} {2:P0}",
+                Simulation.Loc.Get(BuildingCatalog.Get(project.Building).Name),
+                place?.Name ?? "?", project.Progress), 12, Ui.Colour("text.body_soft"));
+            text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            row.AddChild(text);
+            var captured = project.Id;
+            var drop = ActionButton("×", () => CancelConstruction(captured), 30, 24);
+            drop.TooltipText = Ui.Tip(Tr("Call this site off. What has already been spent stays spent; the rest is never taken."));
+            row.AddChild(drop);
+        }
     }
     private void SetStateTradePolicy(TradePolicy policy)
     {

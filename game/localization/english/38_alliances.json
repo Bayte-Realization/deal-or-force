@@ -37,5 +37,18 @@
   "You guarantee {0}.": "You guarantee {0}.",
   "You no longer guarantee {0}.": "You no longer guarantee {0}.",
 
-  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves."
+  "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.",
+
+  // Asking an ally to come, and what they say back.
+  "CALLING FOR HELP": "CALLING FOR HELP",
+  "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.": "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.",
+  "You are not in that war.": "You are not in that war.",
+  "That war is over.": "That war is over.",
+  "{0} cannot join against {1}: {2}": "{0} cannot join against {1}: {2}",
+  "{0} could not join.": "{0} could not join.",
+  "{0} is already in this war.": "{0} is already in this war.",
+  "{0} is coming.": "{0} is coming.",
+  "{0} is played by somebody. Ask them.": "{0} is played by somebody. Ask them.",
+  "{0} stayed home.": "{0} stayed home.",
+  "Would not come when we asked": "Would not come when we asked"
 }

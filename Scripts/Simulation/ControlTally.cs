@@ -86,13 +86,16 @@ public static class ControlTally
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
+            // By side, not by membership. An ally standing beside you in the same war is
+            // not somebody whose border counts as a threatened one.
             foreach (var side in campaign.Nations)
             {
                 if (!war.Involves(side.Id)) continue;
                 if (!HostileTo.TryGetValue((ushort)side.MapIndex, out var set))
                     HostileTo[(ushort)side.MapIndex] = set = new HashSet<ushort>();
                 foreach (var other in campaign.Nations)
-                    if (other.Id != side.Id && war.Involves(other.Id)) set.Add((ushort)other.MapIndex);
+                    if (other.Id != side.Id && war.Opposes(side.Id, other.Id))
+                        set.Add((ushort)other.MapIndex);
             }
         }
 
