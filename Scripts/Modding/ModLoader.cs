@@ -160,6 +160,7 @@ public sealed class ModLoader
         GovernmentFocusCatalog.ResetCatalog();
         TradePolicyCatalog.ResetCatalog();
         TradeDesk.ResetCatalog();
+        PeaceTermCatalog.ResetCatalog();
         foreach (var (_, reset, _) in Tunables) reset();
         GovernmentCatalog.ResetCatalog();
         IdeologyCatalog.ResetCatalog();

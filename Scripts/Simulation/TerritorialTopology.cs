@@ -419,7 +419,7 @@ public static class TerritorialTopology
                         string.Equals(candidate.Iso, rule.DonorIso, StringComparison.OrdinalIgnoreCase));
                 if (donor is not null && donor != state)
                     EconomySystem.AdjustStatePopulation(donor, -rule.Population);
-                EconomySystem.SeedState(state, nation, rule.Population);
+                EconomySystem.SeedState(campaign, state, nation, rule.Population);
             }
             // Which region the ground has to be coming out of, if the rule insists on one.
             //
@@ -549,7 +549,7 @@ public static class TerritorialTopology
                 campaign.States.Add(state);
                 if (donor is not null && piece.Population > 0)
                     EconomySystem.AdjustStatePopulation(donor, -piece.Population);
-                EconomySystem.SeedState(state, nation, piece.Population);
+                EconomySystem.SeedState(campaign, state, nation, piece.Population);
             }
             else if (piece.MapIndex == donorIndex && !string.IsNullOrWhiteSpace(piece.Name))
             {

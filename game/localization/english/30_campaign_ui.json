@@ -69,5 +69,27 @@
   // Watching the world instead of running it.
   "Watch the world  [F7]": "Watch the world  [F7]",
   "Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one.": "Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one.",
-  "Observing · F7 returns the controls · nothing will stop the clock": "Observing · F7 returns the controls · nothing will stop the clock"
+  "Observing · F7 returns the controls · nothing will stop the clock": "Observing · F7 returns the controls · nothing will stop the clock",
+
+  // How many sites a country may run at once - a define now.
+  "Every one of the {0} construction sites is taken.": "Every one of the {0} construction sites is taken.",
+  "All {0} sites are already under way. Something has to finish - or be called off - before anything else starts.": "All {0} sites are already under way. Something has to finish - or be called off - before anything else starts.",
+  "Nothing under construction. {0} sites may run at once.": "Nothing under construction. {0} sites may run at once.",
+  "{0} of {1} sites running": "{0} of {1} sites running",
+
+  // Why a settlement cannot be put on the table yet.
+  "No active war": "No active war",
+  "This war has no territorial objective": "This war has no territorial objective",
+  "The war has not lasted {0} days": "The war has not lasted {0} days",
+  "Opponent acceptance {0}% (requires {1}%)": "Opponent acceptance {0}% (requires {1}%)",
+
+  // The standing terms of peace, out of common/peace_terms.
+  "A one-year armistice; all forces return to the pre-war control map.": "A one-year armistice; all forces return to the pre-war control map.",
+  "Pre-war borders and a five-year truce, with no victor or indemnity.": "Pre-war borders and a five-year truce, with no victor or indemnity.",
+  "Pre-war borders plus an immediate economy-scaled indemnity.": "Pre-war borders plus an immediate economy-scaled indemnity.",
+  "Pre-war borders, an indemnity and a compelled bilateral trade agreement.": "Pre-war borders, an indemnity and a compelled bilateral trade agreement.",
+  "Pre-war borders while the defeated armed forces surrender equipment and cohesion.": "Pre-war borders while the defeated armed forces surrender equipment and cohesion.",
+  "Keep secured provinces inside the declared strategic objective.": "Keep secured provinces inside the declared strategic objective.",
+  "Keep every secured occupation, evacuating exposed advances.": "Keep every secured occupation, evacuating exposed advances.",
+  "Unconditional surrender under the current occupation map.": "Unconditional surrender under the current occupation map."
 }

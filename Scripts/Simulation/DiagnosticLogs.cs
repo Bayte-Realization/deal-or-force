@@ -32,21 +32,36 @@ public static class DiagnosticLogs
     public static bool Enabled => _running;
     public static long WrittenLines { get; private set; }
 
+    /// <summary>
+    /// Read what `common/diagnostics` says, without starting anything.
+    ///
+    /// This used to live inside <see cref="Start"/>, which meant the one way to find out
+    /// whether logging is switched on was to switch it on. Separated so the configuration
+    /// can be read by anything that wants to know - and so the category shows up in the
+    /// loader's record of what is moddable, which is checked.
+    /// </summary>
+    public static bool ResetCatalog()
+    {
+        var enabledHere = true;
+        foreach (var doc in GameDataLoader.DataDocuments("common", "diagnostics"))
+            using (doc)
+            {
+                var root = doc.RootElement;
+                if (root.TryGetProperty("enabled", out var enabled) && !enabled.GetBoolean()) enabledHere = false;
+                if (root.TryGetProperty("max_file_mb", out var mb)) _fileLimit = Math.Clamp(mb.GetInt32(), 1, 32) * 1024L * 1024L;
+                if (root.TryGetProperty("queue_limit", out var q)) _queueLimit = Math.Clamp(q.GetInt32(), 128, 16384);
+                if (root.TryGetProperty("slow_scope_ms", out var slow)) SlowScopeMilliseconds = Math.Clamp(slow.GetDouble(), 5, 5000);
+            }
+        return enabledHere;
+    }
+
     public static bool Start(string directory)
     {
         if (_running) return true;
         if (_worker?.IsAlive == true) { LastFailure = "Previous logging session is still flushing."; return false; }
         try
         {
-            foreach (var doc in GameDataLoader.DataDocuments("common", "diagnostics"))
-                using (doc)
-                {
-                    var root = doc.RootElement;
-                    if (root.TryGetProperty("enabled", out var enabled) && !enabled.GetBoolean()) return false;
-                    if (root.TryGetProperty("max_file_mb", out var mb)) _fileLimit = Math.Clamp(mb.GetInt32(), 1, 32) * 1024L * 1024L;
-                    if (root.TryGetProperty("queue_limit", out var q)) _queueLimit = Math.Clamp(q.GetInt32(), 128, 16384);
-                    if (root.TryGetProperty("slow_scope_ms", out var slow)) SlowScopeMilliseconds = Math.Clamp(slow.GetDouble(), 5, 5000);
-                }
+            if (!ResetCatalog()) return false;
             DirectoryPath = Path.GetFullPath(directory);
             Directory.CreateDirectory(DirectoryPath);
             try { _sessionLock = new FileStream(Path.Combine(DirectoryPath,"writer.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }

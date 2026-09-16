@@ -110,6 +110,7 @@ public static class Program
         failures += Check("the computer walks into empty ground", TheComputerWalksIntoEmptyGround());
         failures += Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
         failures += Check("a proclaimed state flies its own flag", AProclaimedStateFliesItsOwnFlag(campaign));
+        failures += Check("every folder of data is read by something", EveryFolderOfDataIsRead());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -7026,6 +7027,84 @@ public static class Program
     /// flag nobody drew. And the ordinary rules still hold underneath: a country that has
     /// proclaimed nothing is unaffected.
     /// </summary>
+    /// <summary>
+    /// Every folder of data is read by something, and everything read is shipped.
+    ///
+    /// What is moddable was a list in a guide, which is a claim somebody has to remember to
+    /// keep true. The loader knows: every catalogue asks it for a category by name, so it
+    /// writes down what it was asked for and this holds that against the disk.
+    ///
+    /// A folder nothing reads is the worse of the two failures - a modder edits it, nothing
+    /// happens, and no error is raised anywhere - and it is the one a list in a document
+    /// cannot catch, because the document is where the wrong claim lives.
+    /// </summary>
+    private static string EveryFolderOfDataIsRead()
+    {
+        var scripts = FindScripts();
+        if (scripts is null) return "";
+        var game = Path.Combine(Path.GetDirectoryName(scripts)!, "game");
+        if (!Directory.Exists(game)) return "";
+
+        // Loading a campaign asks for nearly everything, and these two are asked for by the
+        // shell rather than the simulation - the options screen and the diagnostic channels -
+        // so the bench asks for them here rather than pretending nothing reads them.
+        SettingsCatalog.ResetCatalog();
+        DiagnosticLogs.ResetCatalog();
+        InterfaceSkin.ResetCatalog();
+
+        var asked = new HashSet<string>(GameDataLoader.Asked, StringComparer.OrdinalIgnoreCase);
+        if (asked.Count == 0) return "nothing has asked the loader for any data at all";
+
+        // Categories that are read by name rather than as a folder of tables - rasters,
+        // pictures, prose - and are moddable by other means. Each is named here rather than
+        // guessed at, so adding one is a decision somebody wrote down.
+        var byOtherMeans = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "gfx", "fonts", "sound", "music", "localization", "interface", "map_data",
+            "history", "events", "scenarios",
+            // Prose for whoever opens the folder, shipped on purpose and read by nobody.
+            "documentation"
+        };
+
+        var unread = new List<string>();
+        foreach (var directory in Directory.GetDirectories(Path.Combine(game, "common")))
+        {
+            var name = "common/" + Path.GetFileName(directory);
+            if (asked.Contains(name)) continue;
+            unread.Add(name);
+        }
+        foreach (var directory in Directory.GetDirectories(game))
+        {
+            var name = Path.GetFileName(directory);
+            if (string.Equals(name, "common", StringComparison.OrdinalIgnoreCase)) continue;
+            if (byOtherMeans.Contains(name) || asked.Contains(name)) continue;
+            unread.Add(name);
+        }
+
+        if (unread.Count > 0)
+            return $"{unread.Count} folder(s) of data that nothing reads, so a mod editing " +
+                   $"them changes nothing and is told nothing: {string.Join(", ", unread)}";
+
+        // And the other way: a category something asks for and the base game does not ship,
+        // which leaves a modder with a feature and no worked example of it.
+        var undocumented = new List<string>();
+        foreach (var name in asked)
+        {
+            if (!name.StartsWith("common/", StringComparison.OrdinalIgnoreCase)) continue;
+            if (Directory.Exists(Path.Combine(game, name.Replace('/', Path.DirectorySeparatorChar))))
+                continue;
+            undocumented.Add(name);
+        }
+        if (undocumented.Count > 0)
+            return $"{undocumented.Count} category(ies) the game reads and does not ship, so a " +
+                   $"mod has nothing to copy: {string.Join(", ", undocumented)}";
+
+        var common = Directory.GetDirectories(Path.Combine(game, "common")).Length;
+        Console.WriteLine($"  data: {common:N0} category folder(s) under common/, every one of them " +
+                          $"read by name, and {asked.Count:N0} categor(ies) asked for in total.");
+        return "";
+    }
+
     private static string AProclaimedStateFliesItsOwnFlag(Campaign campaign)
     {
         // The sprite table is loaded by the flags check further down, which runs long after

@@ -574,6 +574,38 @@ public sealed class Defines
 	/// </summary>
 	public int EventMemoryDays { get; set; } = 1460;
 
+	/// <summary>How long an event waits for an answer before it decides itself.</summary>
+	public int EventExpiryDays { get; set; } = 182;
+
+	/// <summary>
+	/// How many building sites one country may have running at once.
+	///
+	/// The limit that makes demolition and cancellation matter, and it was the number twelve
+	/// written into three different files.
+	/// </summary>
+	public int MaxConstructionProjects { get; set; } = 12;
+
+	/// <summary>People per agricultural complex when a region is first populated.</summary>
+	public float SeedPeoplePerFarm { get; set; } = 4_000_000f;
+
+	/// <summary>Urban people per civilian industry when a region is first populated.</summary>
+	public float SeedUrbanPeoplePerIndustry { get; set; } = 5_000_000f;
+
+	/// <summary>Infrastructure per unit of urbanisation when a region is first populated.</summary>
+	public float SeedInfrastructurePerUrbanisation { get; set; } = 4f;
+
+	/// <summary>
+	/// How much a beaten enemy's exhaustion is worth when weighing a settlement, in points of
+	/// acceptance. The single largest reason a losing country signs anything.
+	/// </summary>
+	public float PeaceExhaustionWeight { get; set; } = 42f;
+
+	/// <summary>Days of war worth one point of acceptance, for the length of it alone.</summary>
+	public float PeaceTimePressureDays { get; set; } = 25f;
+
+	/// <summary>And the most that the length of a war alone can ever be worth.</summary>
+	public float PeaceTimePressureCap { get; set; } = 18f;
+
 	/// <summary>
 	/// Share of its fresh worth a formation still contributes to covering the ground
 	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side

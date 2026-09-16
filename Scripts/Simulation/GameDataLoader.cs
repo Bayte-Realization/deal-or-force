@@ -74,6 +74,21 @@ public static class GameDataLoader
         }
     }
 
+
+    /// <summary>
+    /// Every category some catalogue has asked for, as it asked for it.
+    ///
+    /// The list of what is moddable used to live in a document, where it was a claim
+    /// somebody had to remember to update. This is the same list as a fact: a folder nothing
+    /// asks for is a folder a modder can edit all day with no effect and no error, and a
+    /// category asked for with nothing shipped in it is a feature with no example to copy.
+    /// The bench holds this against what is on disk.
+    ///
+    /// Not cleared between loads on purpose - it is a record of what this build reads, not of
+    /// what the last reload happened to touch.
+    /// </summary>
+    public static readonly HashSet<string> Asked = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The shipped data documents itself with comments, so every reader allows them.</summary>
     public static readonly JsonDocumentOptions ForgivingJson = new()
     {
@@ -127,6 +142,7 @@ public static class GameDataLoader
 
     public static string DataFolder(params string[] relativeFolder)
     {
+        if (relativeFolder.Length > 0) Asked.Add(string.Join("/", relativeFolder));
         var suffix = Path.Combine(relativeFolder);
         return CandidateRoots().Select(root => Path.Combine(root, "game", suffix))
             .FirstOrDefault(Directory.Exists);

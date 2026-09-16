@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
@@ -16,74 +17,164 @@ public enum PeaceTerms
     Capitulate
 }
 
-public static class PeaceNegotiation
+
+/// <summary>
+/// What one standing settlement is worth and what it takes to get it.
+///
+/// Everything here is a number or a sentence; what the term actually does when it is signed
+/// is <see cref="PeaceNegotiation.Resolve"/>, and that stays in code because restoring a
+/// control map is an operation rather than a figure.
+/// </summary>
+public readonly record struct PeaceTermDefinition(
+    string Description,
+    float Cost,
+    float AcceptanceBase,
+    float ScoreWeight,
+    int MinimumDays,
+    float MinimumAcceptance);
+
+/// <summary>
+/// The standing terms, out of `common/peace_terms`.
+///
+/// The eight are fixed - each one is an operation the simulation knows how to carry out, and
+/// a ninth invented in a file would have nothing to do - but every number and every sentence
+/// about them is data. A balance mod that thinks a white peace should be free, or that
+/// nobody should be able to propose anything in the first year of a war, writes a file.
+/// </summary>
+public static class PeaceTermCatalog
 {
-    public static float DemandCost(PeaceTerms terms) => terms switch
+    private static readonly Dictionary<PeaceTerms, PeaceTermDefinition> Definitions = new();
+
+    private static readonly Dictionary<PeaceTerms, PeaceTermDefinition> Defaults = new()
     {
-        PeaceTerms.Ceasefire => 0f,
-        PeaceTerms.WhitePeace => 5f,
-        PeaceTerms.WarReparations => 24f,
-        PeaceTerms.TradeConcessions => 30f,
-        PeaceTerms.DemilitarizedSettlement => 46f,
-        PeaceTerms.EnforceWarGoal => 55f,
-        PeaceTerms.EnforceDemands => 78f,
-        _ => 100f
+        [PeaceTerms.Ceasefire] = new(
+            "A one-year armistice; all forces return to the pre-war control map.",
+            0f, 62f, -0.45f, 30, 50f),
+        [PeaceTerms.WhitePeace] = new(
+            "Pre-war borders and a five-year truce, with no victor or indemnity.",
+            5f, 50f, -0.65f, 120, 50f),
+        [PeaceTerms.WarReparations] = new(
+            "Pre-war borders plus an immediate economy-scaled indemnity.",
+            24f, 14f, 0.90f, 60, 50f),
+        [PeaceTerms.TradeConcessions] = new(
+            "Pre-war borders, an indemnity and a compelled bilateral trade agreement.",
+            30f, 8f, 0.98f, 90, 50f),
+        [PeaceTerms.DemilitarizedSettlement] = new(
+            "Pre-war borders while the defeated armed forces surrender equipment and cohesion.",
+            46f, 0f, 1.04f, 0, 50f),
+        [PeaceTerms.EnforceWarGoal] = new(
+            "Keep secured provinces inside the declared strategic objective.",
+            55f, 6f, 1.08f, 0, 50f),
+        [PeaceTerms.EnforceDemands] = new(
+            "Keep every secured occupation, evacuating exposed advances.",
+            78f, -4f, 1.22f, 0, 50f),
+        [PeaceTerms.Capitulate] = new(
+            "Unconditional surrender under the current occupation map.",
+            100f, 100f, 0f, 0, 0f)
     };
 
-    public static string Description(PeaceTerms terms) => terms switch
+    static PeaceTermCatalog() => ResetCatalog();
+
+    public static IEnumerable<PeaceTerms> All => Defaults.Keys;
+
+    public static PeaceTermDefinition Of(PeaceTerms terms) =>
+        Definitions.TryGetValue(terms, out var found) ? found : Defaults[terms];
+
+    public static void ResetCatalog(List<string> errors = null)
     {
-        PeaceTerms.Ceasefire => "A one-year armistice; all forces return to the pre-war control map.",
-        PeaceTerms.WhitePeace => "Pre-war borders and a five-year truce, with no victor or indemnity.",
-        PeaceTerms.WarReparations => "Pre-war borders plus an immediate economy-scaled indemnity.",
-        PeaceTerms.TradeConcessions => "Pre-war borders, an indemnity and a compelled bilateral trade agreement.",
-        PeaceTerms.DemilitarizedSettlement => "Pre-war borders while the defeated armed forces surrender equipment and cohesion.",
-        PeaceTerms.EnforceWarGoal => "Keep secured provinces inside the declared strategic objective.",
-        PeaceTerms.EnforceDemands => "Keep every secured occupation, evacuating exposed advances.",
-        _ => "Unconditional surrender under the current occupation map."
-    };
+        Definitions.Clear();
+        foreach (var entry in Defaults) Definitions[entry.Key] = entry.Value;
+        foreach (var document in GameDataLoader.DataDocuments("common", "peace_terms"))
+            using (document)
+                Merge(document.RootElement, errors);
+    }
+
+    public static void Merge(JsonElement root, List<string> errors = null)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.TryGetProperty("terms", out var terms) && terms.ValueKind == JsonValueKind.Object)
+            root = terms;
+
+        foreach (var entry in root.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (!Enum.TryParse<PeaceTerms>(entry.Name, true, out var kind))
+            {
+                errors?.Add($"common/peace_terms: '{entry.Name}' is not one of the standing terms. " +
+                            $"They are: {string.Join(", ", Defaults.Keys)}.");
+                continue;
+            }
+
+            var current = Of(kind);
+            Definitions[kind] = current with
+            {
+                Description = Text(entry.Value, "description") ?? current.Description,
+                Cost = Number(entry.Value, "cost") ?? current.Cost,
+                AcceptanceBase = Number(entry.Value, "acceptance_base") ?? current.AcceptanceBase,
+                ScoreWeight = Number(entry.Value, "war_score_weight") ?? current.ScoreWeight,
+                MinimumDays = Whole(entry.Value, "minimum_days") ?? current.MinimumDays,
+                MinimumAcceptance = Number(entry.Value, "minimum_acceptance") ?? current.MinimumAcceptance
+            };
+        }
+    }
+
+    private static string Text(JsonElement value, string key) =>
+        value.TryGetProperty(key, out var element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString() : null;
+
+    private static float? Number(JsonElement value, string key) =>
+        value.TryGetProperty(key, out var element) && element.TryGetSingle(out var number) ? number : null;
+
+    private static int? Whole(JsonElement value, string key) =>
+        value.TryGetProperty(key, out var element) && element.TryGetInt32(out var number) ? number : null;
+}
+
+public static class PeaceNegotiation
+{
+    public static float DemandCost(PeaceTerms terms) => PeaceTermCatalog.Of(terms).Cost;
+
+    public static string Description(PeaceTerms terms) => Loc.Get(PeaceTermCatalog.Of(terms).Description);
 
     public static float Acceptance(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)
     {
         if (war is null || war.Ended || !war.Involves(proposerId)) return 0f;
         if (terms == PeaceTerms.Capitulate) return 100f;
-        var proposerScore = proposerId == war.AttackerId ? war.WarScore : -war.WarScore;
-        var responderSupport = proposerId == war.AttackerId ? war.DefenderWarSupport : war.AttackerWarSupport;
+
+        // Which side is proposing, not which country started it: in a coalition war an ally
+        // proposing terms is proposing them for its whole side.
+        var attacking = war.IsAttacking(proposerId);
+        var proposerScore = attacking ? war.WarScore : -war.WarScore;
+        var responderSupport = attacking ? war.DefenderWarSupport : war.AttackerWarSupport;
         var duration = campaign.ElapsedDays - war.StartedDay;
-        var exhaustion = (1f - responderSupport) * 42f;
-        var timePressure = Math.Min(18f, duration / 25f);
-        var value = terms switch
-        {
-            PeaceTerms.Ceasefire => 62f - proposerScore * 0.45f + exhaustion + timePressure,
-            PeaceTerms.WhitePeace => 50f - proposerScore * 0.65f + exhaustion + timePressure,
-            PeaceTerms.WarReparations => 14f + proposerScore * 0.90f + exhaustion + timePressure,
-            PeaceTerms.TradeConcessions => 8f + proposerScore * 0.98f + exhaustion + timePressure,
-            PeaceTerms.DemilitarizedSettlement => proposerScore * 1.04f + exhaustion + timePressure,
-            PeaceTerms.EnforceWarGoal => 6f + proposerScore * 1.08f + exhaustion + timePressure,
-            _ => -4f + proposerScore * 1.22f + exhaustion + timePressure
-        };
-        return M.Clamp(value, 0f, 100f);
+        var defines = campaign.Defines;
+        var exhaustion = (1f - responderSupport) * defines.PeaceExhaustionWeight;
+        var timePressure = MathF.Min(defines.PeaceTimePressureCap,
+            duration / MathF.Max(1f, defines.PeaceTimePressureDays));
+
+        var definition = PeaceTermCatalog.Of(terms);
+        return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight +
+                       exhaustion + timePressure, 0f, 100f);
     }
 
     public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
     {
-        if (war is null || war.Ended || !war.Involves(nationId)) return "No active war";
+        if (war is null || war.Ended || !war.Involves(nationId)) return Loc.Get("No active war");
+
+        // The same two gates for every term, with the numbers coming off the term rather
+        // than out of a switch that stated each pair twice.
+        var definition = PeaceTermCatalog.Of(terms);
+        if (terms == PeaceTerms.EnforceWarGoal && war.ClaimedStateMapIndex < 0)
+            return Loc.Get("This war has no territorial objective");
+
+        var fought = campaign.ElapsedDays - war.StartedDay;
+        if (definition.MinimumDays > 0 && fought < definition.MinimumDays)
+            return Loc.Format("The war has not lasted {0} days", definition.MinimumDays);
+
         var acceptance = Acceptance(campaign, war, nationId, terms);
-        return terms switch
-        {
-            PeaceTerms.Ceasefire when campaign.ElapsedDays - war.StartedDay < 30 => "War has not lasted 30 days",
-            PeaceTerms.Ceasefire when acceptance < 50f => $"Opponent acceptance {acceptance:0}% (requires 50%)",
-            PeaceTerms.WhitePeace when campaign.ElapsedDays - war.StartedDay < 120 => "War has not lasted 120 days",
-            PeaceTerms.WhitePeace when acceptance < 50f => $"Opponent acceptance {acceptance:0}% (requires 50%)",
-            PeaceTerms.WarReparations when campaign.ElapsedDays - war.StartedDay < 60 => "War has not lasted 60 days",
-            PeaceTerms.WarReparations when acceptance < 50f => $"Opponent acceptance {acceptance:0}% (requires 50%)",
-            PeaceTerms.TradeConcessions when campaign.ElapsedDays - war.StartedDay < 90 => "War has not lasted 90 days",
-            PeaceTerms.TradeConcessions when acceptance < 50f => $"Opponent acceptance {acceptance:0}% (requires 50%)",
-            PeaceTerms.DemilitarizedSettlement when acceptance < 50f => $"Opponent acceptance {acceptance:0}% (requires 50%)",
-            PeaceTerms.EnforceWarGoal when war.ClaimedStateMapIndex < 0 => "This war has no territorial objective",
-            PeaceTerms.EnforceWarGoal when acceptance < 50f => $"Opponent acceptance {acceptance:0}% (requires 50%)",
-            PeaceTerms.EnforceDemands when acceptance < 50f => $"Opponent acceptance {acceptance:0}% (requires 50%)",
-            _ => ""
-        };
+        if (definition.MinimumAcceptance > 0f && acceptance < definition.MinimumAcceptance)
+            return Loc.Format("Opponent acceptance {0}% (requires {1}%)",
+                acceptance.ToString("0"), definition.MinimumAcceptance.ToString("0"));
+        return "";
     }
 
     public static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)

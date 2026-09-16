@@ -111,8 +111,17 @@ public sealed class ConstructionProject
         Cost <= 0f ? 1f : Paid / Cost));
 }
 
+/// <summary>
+/// What a building is, as data.
+///
+/// <paramref name="NeedsWater"/> is the one that is not a number: a port or a yard is
+/// useless away from water, and which buildings those are used to be a line of C# naming
+/// two of them. A mod that adds a fishing harbour can now say so, and a mod that decides
+/// its rail terminal is a river terminal can say that.
+/// </summary>
 public readonly record struct BuildingDefinition(
-    string Name, float Cost, int Days, float GdpGain, float CapacityGain, string Description);
+    string Name, float Cost, int Days, float GdpGain, float CapacityGain, string Description,
+    bool NeedsWater = false);
 
 public static class BuildingCatalog
 {
@@ -144,9 +153,11 @@ public static class BuildingCatalog
             "Ore and bauxite into industrial materials and aluminium. Drinks electricity."),
         [BuildingKind.ElectronicsPlant] = new("Electronics plant", 3.15f, 300, 1.75f, 0.08f,
             "Chips and control systems from rare earths, chemicals and aluminium."),
-        [BuildingKind.Shipyard] = new("Shipyard", 2.75f, 290, 0.90f, 0.10f,
+        [BuildingKind.Shipyard] = new("Shipyard", 2.75f, 290, 0.90f, 0.10f, NeedsWater: true,
+            Description:
             "Hull capacity for the navy and the merchant marine that carries its trade."),
-        [BuildingKind.Port] = new("Port", 1.70f, 200, 0.55f, 0.18f,
+        [BuildingKind.Port] = new("Port", 1.70f, 200, 0.55f, 0.18f, NeedsWater: true,
+            Description:
             "How much of the world this country can trade with across water."),
         [BuildingKind.RailNetwork] = new("Rail network", 1.95f, 215, 0.60f, 0.30f,
             "Overland throughput: supply to the front, and goods to the neighbours."),
@@ -218,7 +229,8 @@ public static class BuildingCatalog
                 Integer(value, "days", out var days);
                 Number(value, "gdp_gain", out var gdp);
                 Number(value, "capacity_gain", out var capacity);
-                Declare(entry.Name, name, cost, days, gdp, capacity, description);
+                Flag(value, "needs_water", out var needsWater);
+                Declare(entry.Name, name, cost, days, gdp, capacity, description, needsWater);
             }
     }
 
@@ -232,21 +244,21 @@ public static class BuildingCatalog
     /// Give it output in `common/production`.
     /// </summary>
     public static bool Declare(string id, string name, float? cost, int? days,
-        float? gdpGain, float? capacityGain, string description)
+        float? gdpGain, float? capacityGain, string description, bool? needsWater = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return false;
         if (TryParse(id, out var existing))
-            return Override(existing, name, cost, days, gdpGain, capacityGain, description);
+            return Override(existing, name, cost, days, gdpGain, capacityGain, description, needsWater);
         if (string.IsNullOrWhiteSpace(name) || cost is not > 0f || days is not > 0) return false;
         var kind = (BuildingKind)_nextId;
         Register(kind, id);
         Definitions[kind] = new BuildingDefinition(name, cost.Value, days.Value,
-            gdpGain ?? 0f, capacityGain ?? 0f, description ?? "");
+            gdpGain ?? 0f, capacityGain ?? 0f, description ?? "", needsWater ?? false);
         return true;
     }
 
     public static bool Override(BuildingKind kind, string name, float? cost, int? days,
-        float? gdpGain, float? capacityGain, string description)
+        float? gdpGain, float? capacityGain, string description, bool? needsWater = null)
     {
         if (!Definitions.TryGetValue(kind, out var current) || cost is <= 0f || days is <= 0 ||
             gdpGain is < 0f || capacityGain is < 0f) return false;
@@ -257,9 +269,19 @@ public static class BuildingCatalog
             Days = days ?? current.Days,
             GdpGain = gdpGain ?? current.GdpGain,
             CapacityGain = capacityGain ?? current.CapacityGain,
-            Description = string.IsNullOrWhiteSpace(description) ? current.Description : description
+            Description = string.IsNullOrWhiteSpace(description) ? current.Description : description,
+            NeedsWater = needsWater ?? current.NeedsWater
         };
         return true;
+    }
+
+    /// <summary>A yes-or-no property, absent meaning "leave it as it was".</summary>
+    private static bool Flag(JsonElement value, string key, out bool? result)
+    {
+        result = value.TryGetProperty(key, out var element) &&
+                 element.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? element.GetBoolean() : null;
+        return result is not null;
     }
 
     private static bool Text(JsonElement value, string key, out string result)
@@ -306,7 +328,7 @@ public sealed class QueueConstructionCommand : ICampaignCommand
         foreach (var project in campaign.Construction)
         {
             if (project.Id > highest) highest = project.Id;
-            if (project.NationId == nation.Id && ++running >= 12) return;
+            if (project.NationId == nation.Id && ++running >= campaign.Defines.MaxConstructionProjects) return;
         }
 
         // A wharf needs water. The AI never orders one and the player's button now says
@@ -481,7 +503,7 @@ public static class EconomySystem
             var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts);
             var farming = StatedAgricultureScale(nation, states, counts);
             for (var index = 0; index < states.Length; index++)
-                SeedState(states[index], nation, counts[index], composition[index], farming);
+                SeedState(campaign, states[index], nation, counts[index], composition[index], farming);
         }
     }
 
@@ -861,8 +883,8 @@ public static class EconomySystem
         state.PopulationGroups.RemoveAll(group => group.Size <= 0 && group != host);
     }
 
-    internal static void SeedState(ScenarioState state, Nation nation, long population) =>
-        SeedState(state, nation, population, null, (1f, 1f));
+    internal static void SeedState(Campaign campaign, ScenarioState state, Nation nation, long population) =>
+        SeedState(campaign, state, nation, population, null, (1f, 1f));
 
     /// <summary>
     /// Fill one region with the people who live in it.
@@ -877,9 +899,10 @@ public static class EconomySystem
     /// Groups below a thousandth of the region are folded away. They are noise on any chart
     /// and they are a tenth of the simulation's population objects.
     /// </summary>
-    internal static void SeedState(ScenarioState state, Nation nation, long population,
+    internal static void SeedState(Campaign campaign, ScenarioState state, Nation nation, long population,
         IReadOnlyList<(string Culture, float Share)> composition, (float Fields, float Town) farming)
     {
+        var defines = campaign?.Defines ?? new Defines();
         state.Population = population;
         state.Literacy = M.Clamp01(nation.Literacy + (StableFraction(state.MapIndex + 17) - 0.5f) * 0.12f);
         state.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + (StableFraction(state.MapIndex + 31) - 0.5f) * 0.10f);
@@ -887,9 +910,12 @@ public static class EconomySystem
         state.Urbanization = StateUrbanisation(nation, state.MapIndex);
         state.PopulationGroups.Clear();
         BuildGroups(state, nation, population, composition, farming);
-        state.Buildings[BuildingKind.Agriculture] = Math.Max(1, (int)(population / 4_000_000));
-        state.Buildings[BuildingKind.CivilianIndustry] = Math.Max(0, (int)(population * state.Urbanization / 5_000_000));
-        state.Buildings[BuildingKind.Infrastructure] = Math.Max(1, (int)(state.Urbanization * 4));
+        state.Buildings[BuildingKind.Agriculture] =
+            Math.Max(1, (int)(population / MathF.Max(1f, defines.SeedPeoplePerFarm)));
+        state.Buildings[BuildingKind.CivilianIndustry] = Math.Max(0, (int)(population * state.Urbanization /
+            MathF.Max(1f, defines.SeedUrbanPeoplePerIndustry)));
+        state.Buildings[BuildingKind.Infrastructure] =
+            Math.Max(1, (int)(state.Urbanization * defines.SeedInfrastructurePerUrbanisation));
         SeedResources(state, nation);
     }
 

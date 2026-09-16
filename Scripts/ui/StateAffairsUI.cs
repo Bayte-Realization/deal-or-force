@@ -463,9 +463,12 @@ public partial class DealOrForceGame
         var definition = BuildingCatalog.Get(kind);
 
         var running = _campaign.Construction.Count(project => project.NationId == nation.Id);
-        if (running >= 12)
+        var slots = _campaign.Defines.MaxConstructionProjects;
+        if (running >= slots)
         {
-            _stateFiscalFeedback.Text = Tr("Twelve projects are already under way. Something has to finish before anything else starts.");
+            _stateFiscalFeedback.Text = Simulation.Loc.Format(
+                "All {0} sites are already under way. Something has to finish - or be called off - before anything else starts.",
+                slots);
             return;
         }
         if (nation.Treasury < MathF.Min(0.05f, definition.Cost))
@@ -545,10 +548,13 @@ public partial class DealOrForceGame
         ClearRuntimeChildren(_stateConstructionRows);
         if (projects.Count == 0)
         {
-            _stateConstructionQueue.Text = Tr("Nothing under construction. Twelve sites may run at once.");
+            _stateConstructionQueue.Text = Simulation.Loc.Format(
+                "Nothing under construction. {0} sites may run at once.",
+                _campaign.Defines.MaxConstructionProjects);
             return;
         }
-        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of 12 sites running", projects.Count);
+        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites running",
+            projects.Count, _campaign.Defines.MaxConstructionProjects);
         foreach (var project in projects.OrderByDescending(project => project.Progress))
         {
             var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);

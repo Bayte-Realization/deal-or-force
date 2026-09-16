@@ -494,7 +494,7 @@ public static class EventSystem
             Title = chosen.Title,
             Description = chosen.Description,
             CreatedDay = campaign.ElapsedDays,
-            ExpiresDay = campaign.ElapsedDays + 182,
+            ExpiresDay = campaign.ElapsedDays + campaign.Defines.EventExpiryDays,
             Options = chosen.Options
         };
     }

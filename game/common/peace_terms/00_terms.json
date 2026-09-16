@@ -1,0 +1,102 @@
+// Deal or Force - the standing terms of peace.
+//
+// Eight settlements a government can put to an enemy without drawing anything on the map.
+// What each one DOES is in the simulation - restoring a control map, moving an indemnity,
+// breaking an army's equipment are operations rather than figures - and everything about
+// whether, when and for how much it is offered is here.
+//
+//   description          the sentence on the button, through the localisation table
+//   cost                 war score the proposer spends on it
+//   acceptance_base      how willing the other side is before anything else is weighed
+//   war_score_weight     how much the proposer's war score moves that willingness.
+//                        Negative for the terms a winner offers out of generosity: the
+//                        better a ceasefire's proposer is doing, the less the other side
+//                        needs one.
+//   minimum_days         how long the war must have lasted before it may be proposed
+//   minimum_acceptance   the percentage below which the other side will not sit down
+//
+// The eight are fixed, because each is an operation the game knows how to carry out and a
+// ninth invented here would have nothing to do. A settlement a mod wants to invent is drawn
+// in the peace conference, which takes anything.
+//
+// This whole folder is read in file-name order and later files win, so a balance mod drops
+// 50_my_peace.json in beside this one and changes three numbers.
+{
+  "terms": {
+    "Ceasefire": {
+      "description": "A one-year armistice; all forces return to the pre-war control map.",
+      "cost": 0,
+      "acceptance_base": 62,
+      "war_score_weight": -0.45,
+      "minimum_days": 30,
+      "minimum_acceptance": 50
+    },
+
+    "WhitePeace": {
+      "description": "Pre-war borders and a five-year truce, with no victor or indemnity.",
+      "cost": 5,
+      "acceptance_base": 50,
+      "war_score_weight": -0.65,
+      "minimum_days": 120,
+      "minimum_acceptance": 50
+    },
+
+    "WarReparations": {
+      "description": "Pre-war borders plus an immediate economy-scaled indemnity.",
+      "cost": 24,
+      "acceptance_base": 14,
+      "war_score_weight": 0.90,
+      "minimum_days": 60,
+      "minimum_acceptance": 50
+    },
+
+    "TradeConcessions": {
+      "description": "Pre-war borders, an indemnity and a compelled bilateral trade agreement.",
+      "cost": 30,
+      "acceptance_base": 8,
+      "war_score_weight": 0.98,
+      "minimum_days": 90,
+      "minimum_acceptance": 50
+    },
+
+    "DemilitarizedSettlement": {
+      "description": "Pre-war borders while the defeated armed forces surrender equipment and cohesion.",
+      "cost": 46,
+      "acceptance_base": 0,
+      "war_score_weight": 1.04,
+      "minimum_days": 0,
+      "minimum_acceptance": 50
+    },
+
+    // Needs a war goal to enforce, and the simulation refuses it without one whatever this
+    // file says - a term about a declared objective cannot be offered in a war that has none.
+    "EnforceWarGoal": {
+      "description": "Keep secured provinces inside the declared strategic objective.",
+      "cost": 55,
+      "acceptance_base": 6,
+      "war_score_weight": 1.08,
+      "minimum_days": 0,
+      "minimum_acceptance": 50
+    },
+
+    "EnforceDemands": {
+      "description": "Keep every secured occupation, evacuating exposed advances.",
+      "cost": 78,
+      "acceptance_base": -4,
+      "war_score_weight": 1.22,
+      "minimum_days": 0,
+      "minimum_acceptance": 50
+    },
+
+    // Never proposed to somebody else: this is what a government signs about itself, so it
+    // is always accepted and costs the proposer everything it has.
+    "Capitulate": {
+      "description": "Unconditional surrender under the current occupation map.",
+      "cost": 100,
+      "acceptance_base": 100,
+      "war_score_weight": 0,
+      "minimum_days": 0,
+      "minimum_acceptance": 0
+    }
+  }
+}

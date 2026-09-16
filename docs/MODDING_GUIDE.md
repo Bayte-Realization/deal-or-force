@@ -500,7 +500,15 @@ game/ или my_mod/
 
 Вместо закрытого собственного синтаксиса используется обычный JSON с комментариями, стабильными строковыми ID, валидацией и безопасными C#-fallback’ами. При новой кампании каталоги сначала сбрасываются к базе и лишь затем получают модовые слои — отключённый мод не «протекает» в следующий запуск.
 
-Реально подключены и влияют на симуляцию: `common/buildings`, `common/decisions`, `common/defines`, `common/goods`, `common/production`, `common/units`, `common/ai_strategy`, `common/modifiers`, `events`, `localization`, `interface`, `history/countries`, `history/states`, `history/units`, `history/provinces`, `map_data/default.map`, `map_data/provinces.png`, `map_data/definition.csv`, `map_data/rivers.png`, `map_data/lakes.png` и `map_data/region_overrides.json`. Следующим стабильным контрактом станет `common/diplomacy`.
+Список того, что «реально подключено», раньше жил здесь — и устаревал молча, потому что утверждение в документе никто не проверяет. Теперь его проверяет сборка: загрузчик записывает каждую категорию, которую у него спросили, а SimBench сверяет этот список с тем, что лежит на диске. Папка данных, которую никто не читает, роняет проверку — иначе моддер правил бы её весь день без единой ошибки и без единого эффекта.
+
+На сегодня под `common/` читается всё, а это 34 категорий:
+
+`common/ai_strategy`, `common/budget`, `common/buildings`, `common/countries`, `common/cultures`, `common/decisions`, `common/defines`, `common/diagnostics`, `common/flags`, `common/formable_nations`, `common/goods`, `common/governance`, `common/government_focus`, `common/governments`, `common/ideologies`, `common/militia`, `common/modifiers`, `common/opinion_modifiers`, `common/peace_terms`, `common/production`, `common/professions`, `common/religions`, `common/scripted_effects`, `common/scripted_modifiers`, `common/scripted_triggers`, `common/secession`, `common/settings`, `common/stability`, `common/states`, `common/subjects`, `common/terrain`, `common/trade`, `common/trade_policies`, `common/units`.
+
+Плюс `events`, `localization`, `interface`, `gui`, `gfx`, `fonts`, `sound`, `music`, `scenarios`, `history/countries`, `history/states`, `history/pops`, `history/units`, `history/provinces` и `map_data/*`.
+
+Из недавно вынесенного в данные: `common/peace_terms` (восемь стандартных условий мира — цена в очках войны, готовность противника, минимальная длительность войны), `common/trade` (правила закупок и продаж), `common/flags` → `identities` (флаг провозглашённого государства перебивает флаг страны, которая его провозгласила), `needs_water` у здания в `common/buildings` (порт и верфь бесполезны без воды) и новые `defines`: `MaxConstructionProjects`, `EventIntervalDays`, `EventMemoryDays`, `EventExpiryDays`, `InlandWaterworksYield`, `DemolitionRefund`, `PeaceRoundUpShare`, `PeaceRoundDownShare`.
 
 ### Правила совместимости
 

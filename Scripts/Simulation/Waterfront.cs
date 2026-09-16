@@ -47,9 +47,12 @@ public static class Waterfront
     private static int _regionStamp = -1;
     private static readonly Dictionary<int, WaterAccess> ByRegion = new();
 
-    /// <summary>Which buildings are useless away from water. Data would be nicer; two is not a list.</summary>
-    public static bool NeedsWater(BuildingKind building) =>
-        building == BuildingKind.Port || building == BuildingKind.Shipyard;
+    /// <summary>
+    /// Whether this building is useless away from water. Declared by the building, in
+    /// `common/buildings`, so a mod's fishing harbour needs a coast and a mod's river
+    /// terminal is a river terminal without either of them touching this file.
+    /// </summary>
+    public static bool NeedsWater(BuildingKind building) => BuildingCatalog.Get(building).NeedsWater;
 
     /// <summary>What a province can reach by water.</summary>
     public static WaterAccess OfProvince(ProvinceTopology map, int province)

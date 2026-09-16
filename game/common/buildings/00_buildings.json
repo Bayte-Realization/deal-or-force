@@ -109,6 +109,10 @@
   },
   "Shipyard": {
     "name": "Shipyard",
+    // Useless away from water. A region with no coast, no lake and no navigable river
+    // cannot build one at all; a region on inland water builds it at the same price for
+    // `InlandWaterworksYield` of the gain.
+    "needs_water": true,
     "cost": 2.75,
     "days": 290,
     "gdp_gain": 0.90,
@@ -117,6 +121,7 @@
   },
   "Port": {
     "name": "Port",
+    "needs_water": true,
     "cost": 1.70,
     "days": 200,
     "gdp_gain": 0.55,

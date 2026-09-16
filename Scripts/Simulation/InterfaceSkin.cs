@@ -303,6 +303,7 @@ public static class InterfaceSkin
         // so a mod may put either in either and nothing breaks.
         foreach (var folder in new[] { "interface", "gui" })
         {
+            GameDataLoader.Asked.Add(folder);
             var root = FindSkinRoot(folder);
             if (root is not null) LoadDirectory(root, null);
         }

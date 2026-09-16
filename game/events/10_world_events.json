@@ -1,0 +1,1022 @@
+// Deal or Force - things that happen to a country.
+//
+// A second pack beside 00_core_events.json, and nothing here needs code: the same
+// effect keys, the same trigger grammar and the same magnitudes as the nine that
+// shipped first. Every folder under events/ is read in file-name order, so a mod
+// drops 50_my_events.json in beside these and is in the game.
+//
+//   trigger     min_<key> / max_<key> over anything in the scripted vocabulary,
+//               plus at_war and tags. Every clause has to hold.
+//   weight      relative chance once the trigger passes. A country remembers when
+//               it last had each event and the draw discounts what it has just seen.
+//   effects     applied when the option is taken; _percent and _mult are relative.
+//   modifiers   temporary effects out of common/modifiers, with a length in days.
+//
+// An event with no trigger can happen to anybody. An event with one should be
+// something that could only happen to a country in that situation - a budget crisis
+// arriving in a solvent treasury reads as the game not knowing what is going on.
+{
+  "resource_find": {
+    "title": "A find in the interior",
+    "description": "Survey teams confirm a deposit large enough to be worth an argument about. Every ministry has a view on who should dig it.",
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Develop it with state money",
+        "consequence": "Expensive now; the output is the country's own.",
+        "effects": {
+          "treasury_percent": -0.07,
+          "gdp_percent": 0.005,
+          "construction_capacity": 0.22
+        },
+        "modifiers": [
+          {
+            "id": "investment_boom",
+            "days": 270
+          }
+        ]
+      },
+      {
+        "title": "Auction the concessions",
+        "consequence": "Cash today, and somebody else's profit tomorrow.",
+        "effects": {
+          "treasury_percent": 0.09,
+          "gdp_percent": 0.0018,
+          "state.radicalism": 0.008
+        }
+      },
+      {
+        "title": "Leave it in the ground",
+        "consequence": "Nothing changes, which is a decision too.",
+        "effects": {
+          "stability": 0.004
+        }
+      }
+    ]
+  },
+  "energy_shortfall": {
+    "title": "The grid will not hold the winter",
+    "description": "Generation capacity is short of projected demand and the shortfall lands in the coldest weeks. The alternatives are all unpopular with somebody.",
+    "trigger": {
+      "max_market_access": 0.92
+    },
+    "weight": 1.3,
+    "options": [
+      {
+        "title": "Buy power abroad at whatever it costs",
+        "consequence": "The lights stay on and the bill is enormous.",
+        "effects": {
+          "treasury_percent": -0.08,
+          "market_access": 0.03,
+          "state.standard_of_living": 0.004
+        }
+      },
+      {
+        "title": "Ration industrial supply",
+        "consequence": "Households are warm; factories are not.",
+        "effects": {
+          "productivity": -0.014,
+          "state.standard_of_living": 0.002
+        }
+      },
+      {
+        "title": "Ration households",
+        "consequence": "Industry keeps running. People remember this.",
+        "effects": {
+          "state.standard_of_living": -0.012,
+          "state.radicalism": 0.018,
+          "stability": -0.01
+        }
+      }
+    ]
+  },
+  "currency_pressure": {
+    "title": "Pressure on the currency",
+    "description": "Reserves are being spent defending a rate the market does not believe in. The central bank wants an instruction, not advice.",
+    "trigger": {
+      "max_treasury": 40.0
+    },
+    "weight": 1.4,
+    "options": [
+      {
+        "title": "Defend the rate",
+        "consequence": "Costly, and it holds - for now.",
+        "effects": {
+          "treasury_percent": -0.11,
+          "stability": 0.012
+        }
+      },
+      {
+        "title": "Let it float",
+        "consequence": "Imports cost more; exports find buyers.",
+        "effects": {
+          "market_access": -0.04,
+          "gdp_percent": 0.004,
+          "state.standard_of_living": -0.008,
+          "state.radicalism": 0.01
+        }
+      },
+      {
+        "title": "Impose controls",
+        "consequence": "The rate holds by decree. So does everything else.",
+        "effects": {
+          "market_access": -0.07,
+          "stability": -0.006,
+          "treasury_percent": 0.02
+        }
+      }
+    ]
+  },
+  "foreign_investment": {
+    "title": "Money wants to come here",
+    "description": "Several large foreign firms are asking what it would take to build here rather than somewhere cheaper. What it would take is a decision.",
+    "trigger": {
+      "min_stability": 0.62
+    },
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Offer them everything",
+        "consequence": "They come, and they pay very little tax.",
+        "effects": {
+          "gdp_percent": 0.006,
+          "productivity": 0.01,
+          "tax_rate": -0.015
+        },
+        "modifiers": [
+          {
+            "id": "investment_boom",
+            "days": 365
+          }
+        ]
+      },
+      {
+        "title": "Offer them terms, not gifts",
+        "consequence": "Some come. The ones that do are here to stay.",
+        "effects": {
+          "gdp_percent": 0.003,
+          "productivity": 0.005,
+          "stability": 0.006
+        }
+      },
+      {
+        "title": "Protect what we already have",
+        "consequence": "Domestic industry keeps the market and the habits that go with it.",
+        "effects": {
+          "market_access": -0.03,
+          "state.radicalism": -0.01,
+          "stability": 0.008
+        }
+      }
+    ]
+  },
+  "harvest_failure": {
+    "title": "A bad year in the fields",
+    "description": "Weather and blight together. The agriculture ministry is talking about the food bill, and the interior ministry about the cities.",
+    "weight": 1.3,
+    "options": [
+      {
+        "title": "Import at any price",
+        "consequence": "Nobody goes hungry and the treasury notices.",
+        "effects": {
+          "treasury_percent": -0.09,
+          "state.standard_of_living": -0.003
+        }
+      },
+      {
+        "title": "Release the reserves and hope",
+        "consequence": "Free, and it may not be enough.",
+        "effects": {
+          "state.standard_of_living": -0.014,
+          "state.radicalism": 0.016
+        }
+      },
+      {
+        "title": "Fix prices and requisition",
+        "consequence": "The cities are fed. The countryside remembers.",
+        "effects": {
+          "state.standard_of_living": -0.006,
+          "state.radicalism": 0.024,
+          "stability": -0.014
+        }
+      }
+    ]
+  },
+  "brain_drain": {
+    "title": "The graduates are leaving",
+    "description": "A third of this year's engineering graduates have taken jobs abroad. The universities are proud of them and the cabinet is not.",
+    "trigger": {
+      "max_standard_of_living": 0.62
+    },
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Pay them to stay",
+        "consequence": "Expensive, and it works on the ones who wanted to stay anyway.",
+        "effects": {
+          "treasury_percent": -0.05,
+          "productivity": 0.009,
+          "literacy": 0.004
+        }
+      },
+      {
+        "title": "Build somewhere worth staying for",
+        "consequence": "Slow, and it is the only thing that has ever worked.",
+        "effects": {
+          "education_spending": 0.012,
+          "state.standard_of_living": 0.006
+        }
+      },
+      {
+        "title": "Let them go",
+        "consequence": "They send money home. They do not come back.",
+        "effects": {
+          "treasury_percent": 0.02,
+          "productivity": -0.008,
+          "literacy": -0.003
+        }
+      }
+    ]
+  },
+  "shipping_disruption": {
+    "title": "The sea lanes are closed",
+    "description": "A chokepoint somewhere else in the world has become impassable, and every route this country's trade uses is suddenly longer.",
+    "trigger": {
+      "max_market_access": 0.95
+    },
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Pay for the long way round",
+        "consequence": "Trade continues at a price.",
+        "effects": {
+          "treasury_percent": -0.05,
+          "market_access": 0.02
+        }
+      },
+      {
+        "title": "Move what we can overland",
+        "consequence": "Slower, cheaper, and it will not carry everything.",
+        "effects": {
+          "market_access": -0.05,
+          "construction_capacity": 0.08
+        }
+      },
+      {
+        "title": "Live on what we make ourselves",
+        "consequence": "The shortages are real and the lesson is learned.",
+        "effects": {
+          "market_access": -0.09,
+          "productivity": 0.006,
+          "state.radicalism": 0.012
+        }
+      }
+    ]
+  },
+  "infrastructure_failure": {
+    "title": "A bridge comes down",
+    "description": "It had been on the inspection list for eleven years. The inquiry will find that, and so will the newspapers.",
+    "weight": 1.0,
+    "options": [
+      {
+        "title": "Fund a national programme",
+        "consequence": "The expensive answer, and the one that stops it happening again.",
+        "effects": {
+          "treasury_percent": -0.06,
+          "construction_capacity": 0.25,
+          "stability": 0.01
+        },
+        "modifiers": [
+          {
+            "id": "industrial_renewal",
+            "days": 365
+          }
+        ]
+      },
+      {
+        "title": "Repair this one",
+        "consequence": "Cheap, and the list is still eleven years long.",
+        "effects": {
+          "treasury_percent": -0.01,
+          "state.radicalism": 0.008
+        }
+      }
+    ]
+  },
+  "technological_leap": {
+    "title": "Something works",
+    "description": "A programme everybody had written off has produced a result nobody expected this decade. The question is what to do with it.",
+    "trigger": {
+      "min_literacy": 0.68
+    },
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Put it into industry at once",
+        "consequence": "Costly, and the advantage is real.",
+        "effects": {
+          "treasury_percent": -0.04,
+          "productivity": 0.018,
+          "gdp_percent": 0.004
+        },
+        "modifiers": [
+          {
+            "id": "industrial_renewal",
+            "days": 540
+          }
+        ]
+      },
+      {
+        "title": "Keep it to ourselves",
+        "consequence": "A military advantage, and a narrower one.",
+        "effects": {
+          "military_spending": 0.01,
+          "war_support": 0.03,
+          "productivity": 0.005
+        }
+      },
+      {
+        "title": "Publish it",
+        "consequence": "The world gains. So does the country's name in it.",
+        "effects": {
+          "literacy": 0.006,
+          "stability": 0.01
+        },
+        "modifiers": [
+          {
+            "id": "cultural_moment",
+            "days": 270
+          }
+        ]
+      }
+    ]
+  },
+  "volunteers_at_the_gates": {
+    "title": "Queues outside the recruiting offices",
+    "description": "More men have presented themselves this month than the depots can process. Somebody has to decide what to do with them.",
+    "trigger": {
+      "at_war": true,
+      "min_war_support": 0.68
+    },
+    "weight": 1.5,
+    "options": [
+      {
+        "title": "Take every one of them",
+        "consequence": "Manpower now; the factories notice by spring.",
+        "effects": {
+          "manpower_percent": 0.14,
+          "productivity": -0.008,
+          "war_support": 0.03
+        }
+      },
+      {
+        "title": "Take them and train them properly",
+        "consequence": "Slower, and they come back alive more often.",
+        "effects": {
+          "manpower_percent": 0.07,
+          "treasury_percent": -0.03,
+          "war_support": 0.05
+        }
+      },
+      {
+        "title": "Send the skilled ones back to work",
+        "consequence": "The war is fought by the army and supplied by everybody else.",
+        "effects": {
+          "manpower_percent": 0.04,
+          "productivity": 0.01,
+          "war_support": -0.02
+        }
+      }
+    ]
+  },
+  "mutiny_in_a_sector": {
+    "title": "A regiment refuses",
+    "description": "A unit that has held the same ground for eight months has declined to attack again. The staff want an example made; the corps commander is asking for relief instead.",
+    "trigger": {
+      "at_war": true,
+      "max_war_support": 0.42
+    },
+    "weight": 1.6,
+    "options": [
+      {
+        "title": "Relieve them",
+        "consequence": "The line holds and the staff are furious.",
+        "effects": {
+          "war_support": 0.04,
+          "stability": 0.008,
+          "military_spending": 0.004
+        }
+      },
+      {
+        "title": "Make an example",
+        "consequence": "Order is restored and the word spreads anyway.",
+        "effects": {
+          "war_support": -0.06,
+          "state.radicalism": 0.022,
+          "stability": -0.016
+        }
+      },
+      {
+        "title": "Go and speak to them",
+        "consequence": "Costs a week of a head of government's time. Worth it.",
+        "effects": {
+          "war_support": 0.07,
+          "stability": 0.012,
+          "state.radicalism": -0.008
+        }
+      }
+    ]
+  },
+  "atrocity_reported": {
+    "title": "What happened in the occupied districts",
+    "description": "Foreign correspondents have published photographs. The general staff dispute the account; nobody abroad is disputing the photographs.",
+    "trigger": {
+      "at_war": true
+    },
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Open an investigation and publish it",
+        "consequence": "Hard at home, and it is the only thing that answers abroad.",
+        "effects": {
+          "war_support": -0.05,
+          "market_access": 0.04,
+          "stability": 0.006
+        }
+      },
+      {
+        "title": "Deny everything",
+        "consequence": "Nobody at home is troubled. Nobody abroad is convinced.",
+        "effects": {
+          "war_support": 0.02,
+          "market_access": -0.05,
+          "state.radicalism": 0.006
+        }
+      }
+    ]
+  },
+  "prisoner_exchange": {
+    "title": "An offer through a third country",
+    "description": "A neutral government has offered to arrange an exchange. Both general staffs think they are being asked to give up more than they get.",
+    "trigger": {
+      "at_war": true
+    },
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Agree to it",
+        "consequence": "Families get their sons back and the front notices.",
+        "effects": {
+          "manpower_percent": 0.05,
+          "war_support": 0.05,
+          "stability": 0.008
+        }
+      },
+      {
+        "title": "Refuse",
+        "consequence": "The staff are satisfied. The letters keep arriving.",
+        "effects": {
+          "war_support": -0.03,
+          "state.radicalism": 0.008
+        }
+      }
+    ]
+  },
+  "war_profiteering": {
+    "title": "Somebody is doing very well out of this",
+    "description": "Procurement contracts have gone to the same four firms for two years, at prices the auditors cannot explain.",
+    "trigger": {
+      "at_war": true
+    },
+    "weight": 1.3,
+    "options": [
+      {
+        "title": "Prosecute",
+        "consequence": "Popular, and next quarter's deliveries slip.",
+        "effects": {
+          "treasury_percent": 0.04,
+          "stability": 0.014,
+          "state.radicalism": -0.016,
+          "productivity": -0.006
+        }
+      },
+      {
+        "title": "Renegotiate quietly",
+        "consequence": "The money comes back and nobody is embarrassed.",
+        "effects": {
+          "treasury_percent": 0.05,
+          "state.radicalism": 0.006
+        }
+      },
+      {
+        "title": "Leave it until the war is over",
+        "consequence": "The shells arrive on time. So do the invoices.",
+        "effects": {
+          "state.radicalism": 0.018,
+          "stability": -0.01,
+          "war_support": -0.02
+        }
+      }
+    ]
+  },
+  "coalition_collapse": {
+    "title": "The government has lost its majority",
+    "description": "A junior partner has walked out over something that was not really the reason. The arithmetic no longer works.",
+    "trigger": {
+      "max_stability": 0.58
+    },
+    "weight": 1.5,
+    "options": [
+      {
+        "title": "Buy them back",
+        "consequence": "Portfolios and money. It holds for a year or two.",
+        "effects": {
+          "treasury_percent": -0.04,
+          "stability": 0.02,
+          "state.radicalism": 0.006
+        }
+      },
+      {
+        "title": "Govern as a minority",
+        "consequence": "Every vote is a negotiation from now on.",
+        "effects": {
+          "stability": -0.012,
+          "tax_rate": -0.01
+        }
+      },
+      {
+        "title": "Go to the country",
+        "consequence": "A campaign costs money and settles the question.",
+        "effects": {
+          "treasury_percent": -0.03,
+          "stability": 0.026,
+          "state.radicalism": -0.01
+        }
+      }
+    ]
+  },
+  "corruption_scandal": {
+    "title": "The ministry and the contracts",
+    "description": "A journalist has the documents and is publishing one a week. The minister has offered to resign twice and been refused twice.",
+    "weight": 1.4,
+    "options": [
+      {
+        "title": "Let the minister go and prosecute",
+        "consequence": "Painful for a month; trusted for a decade.",
+        "effects": {
+          "stability": 0.018,
+          "state.radicalism": -0.018,
+          "treasury_percent": 0.02
+        }
+      },
+      {
+        "title": "Close ranks",
+        "consequence": "The government survives with a stain on it.",
+        "effects": {
+          "stability": -0.014,
+          "state.radicalism": 0.02
+        }
+      },
+      {
+        "title": "Go after the journalist",
+        "consequence": "The documents stop. The story does not.",
+        "effects": {
+          "stability": -0.024,
+          "state.radicalism": 0.03,
+          "market_access": -0.03
+        }
+      }
+    ]
+  },
+  "mass_demonstrations": {
+    "title": "The squares are full",
+    "description": "It began over one thing and is now about everything. The police commissioner is asking what he is authorised to do.",
+    "trigger": {
+      "max_stability": 0.5
+    },
+    "weight": 1.7,
+    "options": [
+      {
+        "title": "Meet the organisers",
+        "consequence": "Slow, undignified, and it usually works.",
+        "effects": {
+          "stability": 0.022,
+          "state.radicalism": -0.024,
+          "tax_rate": -0.01
+        }
+      },
+      {
+        "title": "Concede on the original grievance",
+        "consequence": "Costs money and takes the heat out of it.",
+        "effects": {
+          "treasury_percent": -0.05,
+          "state.standard_of_living": 0.008,
+          "state.radicalism": -0.02,
+          "stability": 0.012
+        }
+      },
+      {
+        "title": "Clear the squares",
+        "consequence": "Quiet by Friday. Not settled.",
+        "effects": {
+          "stability": -0.03,
+          "state.radicalism": 0.04,
+          "market_access": -0.04
+        }
+      }
+    ]
+  },
+  "constitutional_crisis": {
+    "title": "Two branches, one question",
+    "description": "The court has ruled against the government and the government has asked who enforces the ruling. Nobody in the building has a good answer.",
+    "trigger": {
+      "max_stability": 0.48
+    },
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Comply",
+        "consequence": "A defeat that is worth more than the policy was.",
+        "effects": {
+          "stability": 0.024,
+          "state.radicalism": -0.014,
+          "productivity": -0.004
+        }
+      },
+      {
+        "title": "Legislate around it",
+        "consequence": "Lawful, barely, and everybody can see the seam.",
+        "effects": {
+          "stability": -0.008,
+          "state.radicalism": 0.012
+        }
+      },
+      {
+        "title": "Ignore it",
+        "consequence": "Nothing happens today. Something happens eventually.",
+        "effects": {
+          "stability": -0.028,
+          "state.radicalism": 0.03,
+          "market_access": -0.03
+        }
+      }
+    ]
+  },
+  "epidemic": {
+    "title": "An outbreak in the cities",
+    "description": "The health ministry wants the ports closed and the schools shut. The finance ministry has read what that costs.",
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Close everything at once",
+        "consequence": "Fewer graves, and a very expensive quarter.",
+        "effects": {
+          "treasury_percent": -0.08,
+          "productivity": -0.016,
+          "state.standard_of_living": -0.004,
+          "stability": 0.008
+        }
+      },
+      {
+        "title": "Protect the vulnerable and keep working",
+        "consequence": "A middle path, with the usual cost of middle paths.",
+        "effects": {
+          "treasury_percent": -0.03,
+          "productivity": -0.006,
+          "population_percent": -0.0012
+        }
+      },
+      {
+        "title": "Carry on",
+        "consequence": "The economy does not stop. Other things do.",
+        "effects": {
+          "population_percent": -0.0035,
+          "state.standard_of_living": -0.01,
+          "state.radicalism": 0.02
+        },
+        "modifiers": [
+          {
+            "id": "national_mourning",
+            "days": 180
+          }
+        ]
+      }
+    ]
+  },
+  "natural_disaster": {
+    "title": "The river took the valley",
+    "description": "Two days of it, and a region that fed a city is under water. The army is already there; the money is not.",
+    "weight": 1.3,
+    "options": [
+      {
+        "title": "Rebuild better than it was",
+        "consequence": "The expensive answer, and the valley floods less next time.",
+        "effects": {
+          "treasury_percent": -0.09,
+          "construction_capacity": 0.2,
+          "state.standard_of_living": 0.006,
+          "stability": 0.012
+        },
+        "modifiers": [
+          {
+            "id": "industrial_renewal",
+            "days": 365
+          }
+        ]
+      },
+      {
+        "title": "Relief now, rebuilding later",
+        "consequence": "Nobody is abandoned and nothing is fixed.",
+        "effects": {
+          "treasury_percent": -0.04,
+          "state.standard_of_living": -0.004
+        }
+      },
+      {
+        "title": "Let the region manage",
+        "consequence": "The books balance. The region remembers who was not there.",
+        "effects": {
+          "state.radicalism": 0.03,
+          "stability": -0.018,
+          "state.standard_of_living": -0.012
+        },
+        "modifiers": [
+          {
+            "id": "national_mourning",
+            "days": 90
+          }
+        ]
+      }
+    ]
+  },
+  "refugees_arrive": {
+    "title": "They are walking across the border",
+    "description": "A war somewhere else has put a quarter of a million people on this country's roads. They are here; the question is what they are.",
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Take them in properly",
+        "consequence": "Costly, and in ten years they are taxpayers.",
+        "effects": {
+          "treasury_percent": -0.06,
+          "population_percent": 0.004,
+          "state.radicalism": 0.01,
+          "productivity": 0.004
+        }
+      },
+      {
+        "title": "Camps at the border",
+        "consequence": "Cheaper, and it solves nothing for anybody.",
+        "effects": {
+          "treasury_percent": -0.02,
+          "state.radicalism": 0.016,
+          "market_access": -0.02
+        }
+      },
+      {
+        "title": "Close the border",
+        "consequence": "Popular with some of the country and with nobody outside it.",
+        "effects": {
+          "stability": 0.006,
+          "state.radicalism": 0.012,
+          "market_access": -0.05
+        }
+      }
+    ]
+  },
+  "a_generation_grown": {
+    "title": "The first cohort",
+    "description": "The children who started school under the last reform have finished it. The results are in and somebody should say something about them.",
+    "trigger": {
+      "min_literacy": 0.6
+    },
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Fund the next stage",
+        "consequence": "More of the same, which is the point.",
+        "effects": {
+          "education_spending": 0.012,
+          "literacy": 0.006,
+          "productivity": 0.006
+        }
+      },
+      {
+        "title": "Declare it finished and spend elsewhere",
+        "consequence": "The money goes somewhere it is also needed.",
+        "effects": {
+          "education_spending": -0.01,
+          "treasury_percent": 0.03,
+          "literacy": -0.002
+        }
+      }
+    ]
+  },
+  "a_famous_death": {
+    "title": "The whole country is standing still",
+    "description": "Someone who had been part of the furniture of national life for forty years has died. The streets outside are quiet in a way nobody organised.",
+    "weight": 1.0,
+    "options": [
+      {
+        "title": "A state funeral",
+        "consequence": "Costs something and is worth more than it costs.",
+        "effects": {
+          "treasury_percent": -0.015,
+          "stability": 0.014,
+          "state.radicalism": -0.012
+        },
+        "modifiers": [
+          {
+            "id": "national_mourning",
+            "days": 90
+          }
+        ]
+      },
+      {
+        "title": "Let the family decide",
+        "consequence": "Quieter, and nobody minds.",
+        "effects": {
+          "stability": 0.006
+        },
+        "modifiers": [
+          {
+            "id": "national_mourning",
+            "days": 45
+          }
+        ]
+      }
+    ]
+  },
+  "border_incident": {
+    "title": "Shots on the border",
+    "description": "Two patrols met where neither should have been. There are dead on both sides and two capitals are waiting to see who speaks first.",
+    "trigger": {
+      "at_war": false
+    },
+    "weight": 1.3,
+    "options": [
+      {
+        "title": "Apologise first",
+        "consequence": "Unpopular at home and it ends there.",
+        "effects": {
+          "war_support": -0.04,
+          "stability": -0.006,
+          "market_access": 0.03
+        }
+      },
+      {
+        "title": "Demand an apology",
+        "consequence": "Popular, and the border stays tense.",
+        "effects": {
+          "war_support": 0.05,
+          "state.radicalism": 0.008
+        }
+      },
+      {
+        "title": "Reinforce the sector and say nothing",
+        "consequence": "Expensive, quiet, and understood by everybody who matters.",
+        "effects": {
+          "military_spending": 0.012,
+          "treasury_percent": -0.02,
+          "war_support": 0.02
+        }
+      }
+    ]
+  },
+  "espionage_exposed": {
+    "title": "A network rolled up",
+    "description": "Counter-intelligence has arrested eleven people and can prove what nine of them did. The foreign ministry has been given an hour's notice.",
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Publish everything",
+        "consequence": "A diplomatic incident, and a warning that lands.",
+        "effects": {
+          "market_access": -0.04,
+          "stability": 0.012,
+          "war_support": 0.03
+        }
+      },
+      {
+        "title": "Trade them quietly",
+        "consequence": "Nothing in the papers and our own people come home.",
+        "effects": {
+          "stability": 0.006,
+          "market_access": 0.02
+        }
+      },
+      {
+        "title": "Use them",
+        "consequence": "They keep reporting, and now we write it.",
+        "effects": {
+          "stability": 0.004,
+          "productivity": 0.004,
+          "state.radicalism": 0.004
+        }
+      }
+    ]
+  },
+  "international_summit": {
+    "title": "An invitation to the table",
+    "description": "A conference is being convened about something this country has an opinion on. Attending means being bound by what is agreed.",
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Go, and sign",
+        "consequence": "Access, obligations, and a seat next time.",
+        "effects": {
+          "market_access": 0.06,
+          "tax_rate": -0.005,
+          "stability": 0.006
+        }
+      },
+      {
+        "title": "Go, and sign nothing",
+        "consequence": "Heard, and not held to anything.",
+        "effects": {
+          "market_access": 0.02
+        }
+      },
+      {
+        "title": "Stay away",
+        "consequence": "A free hand, and it is agreed without us.",
+        "effects": {
+          "market_access": -0.04,
+          "war_support": 0.02,
+          "stability": 0.004
+        }
+      }
+    ]
+  },
+  "sanctions_threatened": {
+    "title": "A list of measures",
+    "description": "Several governments have circulated a draft of what they are prepared to do, and have made sure a copy reached this capital before it was published.",
+    "trigger": {
+      "max_market_access": 0.97
+    },
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Negotiate",
+        "consequence": "Concessions now instead of losses later.",
+        "effects": {
+          "market_access": 0.05,
+          "war_support": -0.03,
+          "stability": -0.004
+        }
+      },
+      {
+        "title": "Pre-empt them",
+        "consequence": "Our own restrictions, on our own terms.",
+        "effects": {
+          "market_access": -0.05,
+          "productivity": 0.006,
+          "war_support": 0.04,
+          "state.radicalism": -0.006
+        }
+      },
+      {
+        "title": "Do nothing and see",
+        "consequence": "Perhaps it was a draft. Perhaps it was not.",
+        "effects": {
+          "market_access": -0.03,
+          "stability": 0.002
+        }
+      }
+    ]
+  },
+  "an_old_claim": {
+    "title": "A map in a newspaper",
+    "description": "A neighbouring paper has printed a map with this country's border drawn where it was a century ago. The neighbouring government says it is not their map.",
+    "trigger": {
+      "at_war": false
+    },
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Ask for a formal disavowal",
+        "consequence": "They give one, grudgingly, and both sides note it.",
+        "effects": {
+          "stability": 0.008,
+          "war_support": 0.02
+        }
+      },
+      {
+        "title": "Print our own map",
+        "consequence": "Two maps now, and an argument that outlives both governments.",
+        "effects": {
+          "war_support": 0.05,
+          "state.radicalism": 0.012,
+          "market_access": -0.02
+        }
+      },
+      {
+        "title": "Say nothing at all",
+        "consequence": "A newspaper is a newspaper.",
+        "effects": {
+          "stability": 0.004
+        }
+      }
+    ]
+  }
+}

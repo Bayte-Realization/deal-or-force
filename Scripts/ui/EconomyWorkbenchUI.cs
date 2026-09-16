@@ -131,11 +131,12 @@ public partial class DealOrForceGame
             var add = ActionButton("+", () => QueueBuilding(captured), 36, 32);
             add.Name = "Build" + kind;
             // Mirror admission, not the full project price: the economy pays it over time.
-            add.Disabled = !hasRegion || dry.Length > 0 || count >= 12 ||
+            var slots = _campaign.Defines.MaxConstructionProjects;
+            add.Disabled = !hasRegion || dry.Length > 0 || count >= slots ||
                            player.Treasury < Math.Min(0.05f, definition.Cost);
             Tip(add, !hasRegion ? Tr("Select an owned region.")
                 : dry.Length > 0 ? dry
-                : count >= 12 ? Tr("Construction queue is full (12).")
+                : count >= slots ? Simulation.Loc.Format("Every one of the {0} construction sites is taken.", slots)
                 : add.Disabled ? Tr("Insufficient treasury to start construction.")
                 : Tr(definition.Description) + "\n" + Simulation.Loc.Format("Queue in {0}", _selectedState.Name));
             line.AddChild(add);
