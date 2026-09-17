@@ -1363,6 +1363,38 @@ public partial class DealOrForceGame : Control
     /// line - and the marks that ARE here are the same ones the top bar and the alert rail
     /// use for the same ideas, which is the point of having a set at all.
     /// </summary>
+
+    /// <summary>
+    /// A symbol, at the size and weight every other symbol in the interface is drawn at.
+    ///
+    /// Returns null when nothing is declared for that name, so a caller can put it straight
+    /// into a row and get nothing rather than a missing-texture box: a screen is never
+    /// obliged to have art before it can list something.
+    /// </summary>
+    private TextureRect Symbol(string name, int size = 16, string colourToken = "text.faint")
+    {
+        if (string.IsNullOrEmpty(name) || !SpriteCatalog.Has("icon_" + name)) return null;
+        return new TextureRect
+        {
+            Texture = Art("icon_" + name, $"res://game/gfx/interface/icons/icon_{name}.png"),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            CustomMinimumSize = new Vector2(size, size),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            MouseFilter = MouseFilterEnum.Ignore,
+            Modulate = Ui.Colour(colourToken)
+        };
+    }
+
+    /// <summary>The mark for one good. Twenty of them, named after the good itself.</summary>
+    private static string GoodIcon(Simulation.Commodity commodity) =>
+        "good_" + commodity.ToString().ToLowerInvariant();
+
+    /// <summary>And for one building. Seventeen, named the same way.</summary>
+    private static string BuildingIcon(Simulation.BuildingKind building) =>
+        "building_" + building.ToString().ToLowerInvariant();
+
     private static string RowIcon(string caption) => caption switch
     {
         // ---- the country -------------------------------------------------------------

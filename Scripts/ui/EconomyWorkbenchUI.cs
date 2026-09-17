@@ -96,7 +96,14 @@ public partial class DealOrForceGame
             var definition = BuildingCatalog.Get(kind);
             if (!Tr(definition.Name).Contains(_buildingSearch.Text.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
             var rows = WorkbenchCard(_buildingCatalogRows);
-            rows.AddChild(Title(definition.Name, 15, Ui.Colour("text.bright")));
+            var title = new HBoxContainer();
+            title.AddThemeConstantOverride("separation", 7);
+            rows.AddChild(title);
+            if (Symbol(BuildingIcon(kind), 22, "text.accent_dim") is { } mark)
+                title.AddChild(mark);
+            var name = Title(definition.Name, 15, Ui.Colour("text.bright"));
+            name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            title.AddChild(name);
             var line = new HBoxContainer();
             rows.AddChild(line);
             var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(definition.Cost), definition.Days), 12, Ui.Colour("text.caption"));
@@ -169,7 +176,12 @@ public partial class DealOrForceGame
             var definition = CommodityCatalog.Get(quote.Commodity);
             var rows = WorkbenchCard(_marketTableRows);
             var heading = new HBoxContainer();
+            heading.AddThemeConstantOverride("separation", 7);
             rows.AddChild(heading);
+            // Twenty goods in one scrolling list, told apart by reading twenty names. A mark
+            // per good is what makes the market scannable rather than searchable.
+            if (Symbol(GoodIcon(quote.Commodity), 22, "text.accent_dim") is { } mark)
+                heading.AddChild(mark);
             var label = Title(definition.Name, 15, Ui.Colour("text.bright"));
             label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             heading.AddChild(label);
