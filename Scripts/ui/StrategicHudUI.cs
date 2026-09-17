@@ -103,6 +103,8 @@ public partial class DealOrForceGame
 
         ClearRuntimeChildren(_alertRows);
         ClearRuntimeChildren(_outlinerRows);
+        _pendingOutlinerHeader = null;
+        _outlinerHasRows = false;
 
         var armies = _campaign.Armies.Where(army => army.NationId == player.Id).ToArray();
         var lowSupply = armies.Count(army => army.SupplyLevel < 0.45f || army.CutOff);
@@ -160,7 +162,6 @@ public partial class DealOrForceGame
 
         AddOutlinerHeader("WARS");
         var wars = _campaign.Wars.Where(war => !war.Ended && war.Involves(player.Id)).ToArray();
-        if (wars.Length == 0) AddOutlinerHint("At peace");
         foreach (var war in wars)
         {
             var enemy = _campaign.NationById(war.AttackerId == player.Id ? war.DefenderId : war.AttackerId);
@@ -173,7 +174,6 @@ public partial class DealOrForceGame
         var battles = _campaign.Battles.Where(battle => !battle.Ended &&
                 (battle.AttackerId == player.Id || battle.DefenderId == player.Id))
             .OrderByDescending(battle => battle.StartedDay).Take(6).ToArray();
-        if (battles.Length == 0) AddOutlinerHint("No active engagements");
         foreach (var battle in battles)
         {
             var enemyId = battle.AttackerId == player.Id ? battle.DefenderId : battle.AttackerId;
@@ -220,8 +220,7 @@ public partial class DealOrForceGame
         }
         AddOutlinerHeader("MARKET");
         var worstGood = player.Market.Values.OrderBy(quote => quote.Satisfaction).FirstOrDefault();
-        if (worstGood is null) AddOutlinerHint("No market data");
-        else
+        if (worstGood is not null)
         {
             var definition = CommodityCatalog.Get(worstGood.Commodity);
             AddOutlinerButton($"{Tr(definition.Name)} · {worstGood.Satisfaction:P0} · {Fmt.Money(worstGood.Price)}",
@@ -230,7 +229,6 @@ public partial class DealOrForceGame
         }
 
         AddOutlinerHeader("CONSTRUCTION");
-        if (construction.Length == 0) AddOutlinerHint("Idle — open Economy to queue a project");
         foreach (var project in construction.OrderBy(project => project.Id))
         {
             var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == project.StateMapIndex);
@@ -240,6 +238,19 @@ public partial class DealOrForceGame
                 OpenScreen("Economy");
                 SelectDossierTab("Construction");
             }, state?.Name ?? "Construction project");
+        }
+
+        // One line where there used to be four. A country at peace, with no battles, no
+        // market trouble and nothing on the stocks used to be told so four separate times
+        // under four separate headings; it is told once, quietly, and the rail stays empty
+        // for the news that matters.
+        if (!_outlinerHasRows && !_alertsDrawn)
+        {
+            _pendingOutlinerHeader = null;
+            var quiet = Title(Tr("Nothing needs attention."), 12, Ui.Colour("text.faint"));
+            quiet.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            quiet.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            _outlinerRows.AddChild(quiet);
         }
     }
 
@@ -287,6 +298,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void FlushAlerts()
     {
+        _alertsDrawn = _pendingAlerts.Count > 0;
         _pendingAlerts.Sort((left, right) => left.Level.CompareTo(right.Level));
         foreach (var alert in _pendingAlerts)
         {
@@ -313,8 +325,37 @@ public partial class DealOrForceGame
         _pendingAlerts.Clear();
     }
 
-    private void AddOutlinerHeader(string text)
+    /// <summary>
+    /// The heading this group would have, if anything turns up to go under it.
+    ///
+    /// Buffered rather than drawn, because a heading with nothing beneath it is two lines of
+    /// the narrowest column on the screen spent saying that there is no news - and the alert
+    /// rail directly above exists to say when there is. NAVY and WATCHLIST already worked
+    /// this way by writing the condition out by hand at each call site; this is the same
+    /// rule, once, for all of them.
+    /// </summary>
+    private string _pendingOutlinerHeader;
+
+    /// <summary>Whether anything at all has been listed, so the empty case can say so once.</summary>
+    private bool _outlinerHasRows;
+
+    /// <summary>
+    /// And whether the alert rail above it drew anything. Recorded rather than counted,
+    /// because the alerts are flushed before the groups below are built and the list they
+    /// came from is empty by then.
+    /// </summary>
+    private bool _alertsDrawn;
+
+    private void AddOutlinerHeader(string text) => _pendingOutlinerHeader = text;
+
+    /// <summary>Draw the buffered heading, now that there is something to put under it.</summary>
+    private void OpenOutlinerGroup()
     {
+        var text = _pendingOutlinerHeader;
+        _pendingOutlinerHeader = null;
+        _outlinerHasRows = true;
+        if (text is null) return;
+
         var collapsed = _collapsedOutlinerGroups.Contains(text);
         var hidden = CampaignUiCatalog.HiddenOutliner.Contains(text);
         var group = new VBoxContainer { Visible = !collapsed && !hidden };
@@ -343,6 +384,7 @@ public partial class DealOrForceGame
 
     private void AddOutlinerHint(string text)
     {
+        OpenOutlinerGroup();
         var label = Title(text, 12, Ui.Colour("text.hint"));
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -354,6 +396,7 @@ public partial class DealOrForceGame
 
     private void AddOutlinerButton(string text, Action action, string tooltip)
     {
+        OpenOutlinerGroup();
         var button = ActionButton(text, action, 0, 29);
         button.Alignment = HorizontalAlignment.Left;
         button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;

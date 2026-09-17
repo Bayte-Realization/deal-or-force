@@ -105,5 +105,8 @@
 
   // Two situation-report lines that had never been in the table.
   "Another government has put a settlement to you and is waiting on an answer.": "Another government has put a settlement to you and is waiting on an answer.",
-  "Essential goods are in shortage. Open Economy for production, demand, imports and prices.": "Essential goods are in shortage. Open Economy for production, demand, imports and prices."
+  "Essential goods are in shortage. Open Economy for production, demand, imports and prices.": "Essential goods are in shortage. Open Economy for production, demand, imports and prices.",
+
+  // When the situation report has no news at all.
+  "Nothing needs attention.": "Nothing needs attention."
 }

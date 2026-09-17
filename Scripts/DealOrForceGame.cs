@@ -1169,7 +1169,11 @@ public partial class DealOrForceGame : Control
                 Texture = Art("icon_" + symbol, $"res://game/gfx/interface/icons/icon_{symbol}.png"),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                CustomMinimumSize = new Vector2(0, 15),
+                // Both dimensions. A minimum height with a width of zero is a rect with no
+                // width, which is a texture nobody ever sees - and the alert rail's icons
+                // rendered fine the whole time, which is what said it was the size and not
+                // the sprite.
+                CustomMinimumSize = new Vector2(16, 16),
                 MouseFilter = MouseFilterEnum.Ignore,
                 Modulate = Ui.Colour("text.accent_dim")
             };
