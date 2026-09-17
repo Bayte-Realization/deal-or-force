@@ -1268,6 +1268,28 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>One caption/value row, the caption left and the value right against it.</summary>
+
+    /// <summary>
+    /// The proportion a formatted figure represents, or -1 when it is not one.
+    ///
+    /// Only a percentage counts, and only one between nought and a hundred: a war score of
+    /// -40 % and an inflation of 300 % are both real figures and neither is a proportion of
+    /// anything, so drawing them as a full or empty bar would be inventing information. The
+    /// separator is read either way round, because the game formats numbers in the player's
+    /// culture and Russian writes 74,5 where English writes 74.5.
+    /// </summary>
+    private static float ShareOf(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return -1f;
+        var text = value.Trim();
+        if (!text.EndsWith("%", System.StringComparison.Ordinal)) return -1f;
+        text = text[..^1].Trim().Replace(',', '.').Replace("\u00a0", "").Replace(" ", "");
+        if (!float.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var percent)) return -1f;
+        if (percent < 0f || percent > 100f) return -1f;
+        return percent / 100f;
+    }
+
     private void DetailRow(string caption, string value, string tooltip = null, string valueToken = "text.bright",
         System.Func<Simulation.Breakdown> explain = null)
     {
@@ -1278,8 +1300,14 @@ public partial class DealOrForceGame : Control
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             Explain = explain,
-            Plain = tooltip ?? ""
+            Plain = tooltip ?? "",
+            // A figure printed as a percentage is a share, and a share can be drawn. Read
+            // off the text rather than passed in by eighty-nine call sites, because the
+            // formatter is the same one everywhere and this is what its output means.
+            Share = ShareOf(value),
+            Fill = Ui.Colour(valueToken)
         };
+        row.QueueRedraw();
         if (!string.IsNullOrEmpty(tooltip) || explain is not null)
         {
             row.TooltipText = Ui.Tip(tooltip ?? caption);

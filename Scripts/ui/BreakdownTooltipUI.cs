@@ -38,7 +38,34 @@ public partial class ExplainedRow : HBoxContainer
     public Func<Breakdown> Explain;
     public string Plain = "";
 
+    /// <summary>
+    /// How full this row is, nought to one, or negative for a row that is not a proportion
+    /// of anything.
+    ///
+    /// A row that knows this draws itself as a meter: the share fills its own background
+    /// from the left, behind the text, at a few per cent opacity. It costs no height at all,
+    /// which is the whole point - a column of figures becomes something whose shape can be
+    /// read before any of the words are, and nothing had to grow to make room for it.
+    /// </summary>
+    public float Share = -1f;
+
+    /// <summary>The colour to fill with - the row's own value colour, so the two agree.</summary>
+    public Color Fill = new(1, 1, 1);
+
     public override Control _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
+
+    public override void _Draw()
+    {
+        if (Share < 0f) return;
+        var width = Size.X * Mathf.Clamp(Share, 0f, 1f);
+        if (width <= 1f) return;
+
+        // Quiet enough to sit behind a whole screen of rows without any of them shouting,
+        // and a hairline at the head of the bar so the exact value is readable rather than
+        // guessed from a gradient's edge.
+        DrawRect(new Rect2(0, 2, width, Size.Y - 4), new Color(Fill, 0.10f));
+        DrawRect(new Rect2(width - 1f, 2, 1f, Size.Y - 4), new Color(Fill, 0.38f));
+    }
 }
 
 public static class BreakdownPanel
