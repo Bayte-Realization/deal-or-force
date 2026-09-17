@@ -270,6 +270,30 @@ public partial class DealOrForceGame
         ShowSelectedArmies();
     }
 
+    /// <summary>
+    /// Open the diplomacy screen with whoever owns a province, if that is somebody else.
+    ///
+    /// Right-clicking a country to see where you stand with it is the thing a player reaches
+    /// for and the game had no answer to. Own ground does nothing: a right click that opens
+    /// a window about yourself where you expected an order is a surprise, and a surprise on
+    /// the button that moves armies is the wrong place to put one.
+    /// </summary>
+    private void OpenDiplomacyWithOwnerOf(int provinceId)
+    {
+        var topology = _campaign?.ProvinceMap;
+        var player = _campaign?.Player;
+        if (topology is null || player is null) return;
+        if (provinceId <= 0 || provinceId > topology.ProvinceCount) return;
+
+        var owner = topology.ProvinceToNation[provinceId];
+        if (owner == 0 || owner == (ushort)player.MapIndex) return;
+
+        var nation = _campaign.Nations.Find(candidate => candidate.MapIndex == owner);
+        if (nation is null) return;
+        _selectedNation = nation;
+        OpenScreen("Diplomacy");
+    }
+
     private void OnProvinceCommanded(GlobePick pick)
     {
         if (!_hudLayer.Visible) return;
@@ -280,8 +304,18 @@ public partial class DealOrForceGame
             SendSelectedFleet(pick.Latitude, pick.Longitude, pick.ProvinceId)) return;
 
         if (pick.ProvinceId <= 0) return;
+
+        // Nothing selected to command, so the right button is free to mean the other
+        // obvious thing: open the file on whoever owns the ground under the cursor.
+        //
+        // It cannot mean both. An army or a fleet selected keeps the order - that is the
+        // convention every game of this shape uses and the one a player's hands already
+        // know - and this only takes the case where the click did nothing at all.
         if (_selectedArmy is null)
+        {
+            OpenDiplomacyWithOwnerOf(pick.ProvinceId);
             return;
+        }
         if (_selectedArmy.NationId != _campaign.Player.Id)
         {
             SetArmyFeedback("That formation is foreign. Select one of your own divisions before issuing an order.");

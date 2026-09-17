@@ -12,16 +12,39 @@ public partial class DealOrForceGame
     private Label _regionActionFeedback = null!;
     private int _selectedProvinceId = -1;
 
+    /// <summary>
+    /// Everything that is only worth showing for a region the player owns: the heading, the
+    /// two rows of orders and the line that answers them. Held as one node so that a foreign
+    /// region hides all of it at once rather than greying six buttons out.
+    /// </summary>
+    private VBoxContainer _ownedRegionActions = null!;
+
+    /// <summary>And what a foreign region offers instead, which is its owner.</summary>
+    private Button _foreignRegionDiplomacy = null!;
+
     private void BuildRegionInteractionControls(VBoxContainer parent)
     {
         _regionControls = new VBoxContainer { Visible = false };
         _regionControls.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_regionControls);
-        _regionControls.AddChild(Title("REGION & PROVINCE", 12, Ui.Colour("text.caption")));
+
+        // The one thing worth doing about somebody else's region: it has an owner, and the
+        // owner can be talked to. Shown only when the region is not the player's, in the
+        // space the six disabled buttons used to occupy.
+        _foreignRegionDiplomacy = ActionButton("", OpenSelectedRegionDiplomacy, 0, 32, true,
+            SpriteCatalog.TextureOf("icon_diplomacy", "res://game/gfx/interface/icons/icon_diplomacy.png"));
+        _foreignRegionDiplomacy.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _foreignRegionDiplomacy.Visible = false;
+        _regionControls.AddChild(_foreignRegionDiplomacy);
+
+        _ownedRegionActions = new VBoxContainer();
+        _ownedRegionActions.AddThemeConstantOverride("separation", 6);
+        _regionControls.AddChild(_ownedRegionActions);
+        _ownedRegionActions.AddChild(Title("REGION & PROVINCE", 12, Ui.Colour("text.caption")));
 
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 5);
-        _regionControls.AddChild(actions);
+        _ownedRegionActions.AddChild(actions);
         var develop = ActionButton("Develop", () => QueueRegionalBuilding(BuildingKind.Infrastructure), 92, 31, true);
         develop.TooltipText = Ui.Tip(Tr("Queue infrastructure in this region. Construction uses the national treasury, materials and construction capacity."));
         actions.AddChild(develop);
@@ -34,14 +57,14 @@ public partial class DealOrForceGame
 
         var strategic = new HBoxContainer();
         strategic.AddThemeConstantOverride("separation", 5);
-        _regionControls.AddChild(strategic);
+        _ownedRegionActions.AddChild(strategic);
         strategic.AddChild(ActionButton("Extract", () => QueueRegionalBuilding(BuildingKind.ExtractionIndustry), 92, 31));
         strategic.AddChild(ActionButton("Power", () => QueueRegionalBuilding(BuildingKind.PowerPlant), 92, 31));
         strategic.AddChild(ActionButton("Arms", () => QueueRegionalBuilding(BuildingKind.ArmsIndustry), 105, 31));
 
         _regionActionFeedback = Title("", 12, Ui.Colour("text.accent_dim"));
         _regionActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _regionControls.AddChild(_regionActionFeedback);
+        _ownedRegionActions.AddChild(_regionActionFeedback);
     }
 
     private void HideRegionInteractionControls()
@@ -369,15 +392,39 @@ public partial class DealOrForceGame
         OpenRecruitment(_selectedState.MapIndex);
     }
 
-    private void SetRegionalActionsEnabled(bool enabled)
+    /// <summary>
+    /// Show the orders for a region the player owns, or the way to its owner for one they
+    /// do not. Never both, and never six buttons that cannot be pressed.
+    /// </summary>
+    private void SetRegionalActionsEnabled(bool owned)
     {
-        if (_regionControls is null) return;
-        foreach (var rowIndex in new[] { 2, 3 })
+        if (_ownedRegionActions is null || _foreignRegionDiplomacy is null) return;
+        _ownedRegionActions.Visible = owned;
+
+        var owner = SelectedRegionOwner();
+        var offer = !owned && owner is not null && owner.Id != _campaign.Player?.Id;
+        _foreignRegionDiplomacy.Visible = offer;
+        if (offer)
         {
-            if (_regionControls.GetChildCount() <= rowIndex || _regionControls.GetChild(rowIndex) is not HBoxContainer actions) continue;
-            foreach (var child in actions.GetChildren())
-                if (child is Button button) button.Disabled = !enabled;
+            _foreignRegionDiplomacy.Text = Simulation.Loc.Format("Talk to {0}", owner.Name);
+            _foreignRegionDiplomacy.TooltipText = Ui.Tip(Simulation.Loc.Format(
+                "Open the diplomacy screen with {0}, who this region belongs to.", owner.Name));
         }
+    }
+
+    /// <summary>Whoever the selected region answers to, or null.</summary>
+    private Simulation.Nation SelectedRegionOwner() =>
+        _selectedState is null || _campaign is null
+            ? null
+            : _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
+
+    /// <summary>Open the file on whoever owns the region being looked at.</summary>
+    private void OpenSelectedRegionDiplomacy()
+    {
+        var owner = SelectedRegionOwner();
+        if (owner is null) return;
+        _selectedNation = owner;
+        OpenScreen("Diplomacy");
     }
 
     private static string ClassName(SocialClass socialClass) => socialClass switch

@@ -108,5 +108,9 @@
   "Essential goods are in shortage. Open Economy for production, demand, imports and prices.": "Не хватает жизненно важных товаров. Откройте экономику: производство, спрос, импорт и цены.",
 
   // Когда в сводке вообще нет новостей.
-  "Nothing needs attention.": "Ничего не требует внимания."
+  "Nothing needs attention.": "Ничего не требует внимания.",
+
+  // Что предлагает чужой регион вместо приказов, которые нельзя отдать.
+  "Talk to {0}": "Поговорить с: {0}",
+  "Open the diplomacy screen with {0}, who this region belongs to.": "Открыть дипломатию с державой {0}, которой принадлежит этот регион."
 }

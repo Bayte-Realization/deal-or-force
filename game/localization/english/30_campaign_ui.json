@@ -108,5 +108,9 @@
   "Essential goods are in shortage. Open Economy for production, demand, imports and prices.": "Essential goods are in shortage. Open Economy for production, demand, imports and prices.",
 
   // When the situation report has no news at all.
-  "Nothing needs attention.": "Nothing needs attention."
+  "Nothing needs attention.": "Nothing needs attention.",
+
+  // What a foreign region offers instead of orders you cannot give.
+  "Talk to {0}": "Talk to {0}",
+  "Open the diplomacy screen with {0}, who this region belongs to.": "Open the diplomacy screen with {0}, who this region belongs to."
 }
