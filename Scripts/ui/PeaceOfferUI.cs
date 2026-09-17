@@ -36,7 +36,7 @@ public partial class DealOrForceGame
 
         // No veil over the map. The border being asked for is drawn out there while this is
         // open, and dimming it would hide the only part of the offer that is not a sentence.
-        var panel = TexturedPanel(_peaceOfferLayer);
+        var panel = TexturedPanel(_peaceOfferLayer, PanelSurface.Modal);
         Ui.Place(panel, "modal.peace_offer");
         var rows = PanelRows(panel, 30, 26, 12);
 

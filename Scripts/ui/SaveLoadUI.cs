@@ -111,7 +111,7 @@ public partial class DealOrForceGame
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _saveLoadLayer.AddChild(veil);
 
-        var panel = TexturedPanel(_saveLoadLayer);
+        var panel = TexturedPanel(_saveLoadLayer, PanelSurface.Modal);
         Ui.Place(panel, "modal.save_load");
         var rows = ScrollablePanelRows(panel, 28, 24, 10);
         rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, Ui.Colour("text.accent")));

@@ -21,7 +21,7 @@ public partial class DealOrForceGame
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _pauseMenuLayer.AddChild(veil);
 
-        var panel = TexturedPanel(_pauseMenuLayer);
+        var panel = TexturedPanel(_pauseMenuLayer, PanelSurface.Modal);
         Ui.Place(panel, "modal.pause");
 
         var rows = PanelRows(panel, 30, 26, 12);

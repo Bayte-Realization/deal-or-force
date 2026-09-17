@@ -39,7 +39,7 @@ public partial class DealOrForceGame
         _eventVeil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _eventLayer.AddChild(_eventVeil);
 
-        _eventPanel = TexturedPanel(_eventLayer);
+        _eventPanel = TexturedPanel(_eventLayer, PanelSurface.Modal);
         Ui.Place(_eventPanel, "modal.event");
         _eventPanel.MouseFilter = MouseFilterEnum.Stop;
         var rows = PanelRows(_eventPanel, 34, 30, 14);

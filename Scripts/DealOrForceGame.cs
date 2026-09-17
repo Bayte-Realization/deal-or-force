@@ -1384,7 +1384,78 @@ public partial class DealOrForceGame : Control
         // Horizontal HUD bars use the same artwork as command panels, but need a
         // much smaller nine-slice border. The full 48 px frame cannot fit into a
         // 44-84 px strip and collapses its centre/background.
-        CommandStrip
+        CommandStrip,
+
+        /// <summary>
+        /// The game has stopped to say something. An event, a settlement put to you, a
+        /// question with no map behind it - the only windows that are allowed to look like
+        /// an interruption, because they are one.
+        /// </summary>
+        Modal
+    }
+
+
+    /// <summary>
+    /// What a window looks like inside a campaign, by what kind of window it is.
+    ///
+    /// Every panel used to get the same flat box here, because this asked for a surface and
+    /// then ignored it. A strip of speed controls, a rail of alerts, a dossier and a modal
+    /// that has stopped the game are four different objects, and the first thing a frame has
+    /// to say is which one a player is looking at.
+    ///
+    /// Built ON the shell style rather than instead of it: the colours are still the shell's
+    /// tokens, so a reskin of `shell.*` still drives all four, and what is added here is only
+    /// the difference between them.
+    /// </summary>
+    private static StyleBoxFlat CampaignPanelStyle(PanelSurface surface)
+    {
+        var style = ShellPanelStyle();
+        var brass = Ui.Colour("button.primary_border");
+
+        switch (surface)
+        {
+            case PanelSurface.Modal:
+                // The one window on screen that is an interruption, and the only one with
+                // rounded corners - so it reads as a card laid over the game rather than a
+                // part of it.
+                style.BorderColor = brass;
+                style.BorderWidthTop = 2;
+                style.BorderWidthLeft = 2;
+                style.BorderWidthRight = 2;
+                style.BorderWidthBottom = 2;
+                style.SetCornerRadiusAll(6);
+                style.ShadowColor = new Color(0, 0, 0, 0.55f);
+                style.ShadowSize = 14;
+                style.ShadowOffset = new Vector2(0, 6);
+                break;
+
+            case PanelSurface.CommandStrip:
+                // Part of the frame of the screen, not a thing sitting on it.
+                style.BorderWidthTop = 1;
+                style.ShadowSize = 0;
+                style.ShadowOffset = Vector2.Zero;
+                break;
+
+            case PanelSurface.Command:
+                // An instrument: tight, cool, and quiet enough to sit beside the map for an
+                // entire campaign without asking for attention.
+                style.BorderWidthTop = 1;
+                style.ShadowColor = new Color(0, 0, 0, 0.18f);
+                style.ShadowSize = 3;
+                style.ShadowOffset = new Vector2(0, 2);
+                break;
+
+            default:
+                // A document. The brass rule along the top is the one ornament a dossier
+                // gets, and it is what makes a reading window look like a page.
+                style.BorderColor = brass;
+                style.BorderWidthTop = 3;
+                style.ShadowColor = new Color(0, 0, 0, 0.34f);
+                style.ShadowSize = 8;
+                style.ShadowOffset = new Vector2(0, 4);
+                break;
+        }
+        return style;
     }
 
     private PanelContainer TexturedPanel(Node parent, PanelSurface surface = PanelSurface.Dossier)
@@ -1398,7 +1469,8 @@ public partial class DealOrForceGame : Control
             ClipContents = true
         };
         var inCampaign = _hudLayer is not null && (parent == _hudLayer || _hudLayer.IsAncestorOf(parent));
-        panel.AddThemeStyleboxOverride("panel", inCampaign ? ShellPanelStyle() : PanelStyle(surface));
+        panel.AddThemeStyleboxOverride("panel",
+            inCampaign ? CampaignPanelStyle(surface) : PanelStyle(surface));
         parent.AddChild(panel);
         return panel;
     }
@@ -1780,15 +1852,21 @@ public partial class DealOrForceGame : Control
 
     private StyleBox PanelStyle(PanelSurface surface)
     {
-        var command = surface != PanelSurface.Dossier;
+        // A modal is a document, not an instrument: it takes the dossier artwork. Testing
+        // "not Dossier" put it on the command frame, which is the tall rail meant to sit
+        // beside a map for an hour - the wrong shape entirely for a window that appears,
+        // asks one question and goes.
+        var command = surface is PanelSurface.Command or PanelSurface.CommandStrip;
+        var modal = surface == PanelSurface.Modal;
         var strip = surface == PanelSurface.CommandStrip;
         var textureMargin = strip ? 20f : command ? 48f : 28f;
         // The tall command artwork draws its visible inner rail about 30 px from
         // the outer edge. Keep controls on the inside of that rail. Callers add a
         // further 8-16 px semantic margin, so 22 px lands text and buttons safely
         // inside the frame without sacrificing the useful width of narrow panels.
-        var contentHorizontal = strip ? 6f : command ? 28f : 6f;
-        var contentVertical = strip ? 4f : command ? 22f : 4f;
+        // A modal breathes: it is the one window with nothing competing for its space.
+        var contentHorizontal = strip ? 6f : command ? 28f : modal ? 14f : 6f;
+        var contentVertical = strip ? 4f : command ? 22f : modal ? 12f : 4f;
         return new StyleBoxTexture
         {
             Texture = strip
@@ -1809,9 +1887,14 @@ public partial class DealOrForceGame : Control
             ContentMarginTop = contentVertical,
             ContentMarginRight = contentHorizontal,
             ContentMarginBottom = contentVertical,
-            ModulateColor = command
-                ? new Color(0.88f, 0.92f, 0.98f, 0.985f)
-                : new Color(0.9f, 0.94f, 1f, 0.98f)
+            // Lit rather than tinted cool: the interruption should feel like a lamp has
+            // been turned on over it, which is most of what makes it read as urgent
+            // without a single new piece of artwork.
+            ModulateColor = modal
+                ? new Color(1.04f, 1.0f, 0.94f, 1f)
+                : command
+                    ? new Color(0.88f, 0.92f, 0.98f, 0.985f)
+                    : new Color(0.9f, 0.94f, 1f, 0.98f)
         };
     }
 }
