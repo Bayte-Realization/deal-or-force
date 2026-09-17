@@ -91,5 +91,19 @@
   "Pre-war borders while the defeated armed forces surrender equipment and cohesion.": "Довоенные границы, а побеждённая армия сдаёт технику и теряет сплочённость.",
   "Keep secured provinces inside the declared strategic objective.": "Оставить за собой закреплённые провинции в пределах заявленной цели войны.",
   "Keep every secured occupation, evacuating exposed advances.": "Оставить всю закреплённую оккупацию, оставив незащищённые вклинения.",
-  "Unconditional surrender under the current occupation map.": "Безоговорочная капитуляция по текущей карте оккупации."
+  "Unconditional surrender under the current occupation map.": "Безоговорочная капитуляция по текущей карте оккупации.",
+
+  // Сводка, отсортированная по важности.
+  "Event": "Ивент",
+  "Peace offer: {0}": "Мирных предложений: {0}",
+  "Shortages: {0}": "Дефицит: {0}",
+  "Out of supply: {0}": "Без снабжения: {0}",
+  "Battles: {0}": "Боёв: {0}",
+  "Inflation: {0}": "Инфляция: {0}",
+  "Nothing being built": "Ничего не строится",
+  "Prices are rising well past the comfortable rate. The policy rate in the budget is the lever.": "Цены растут заметно выше комфортного уровня. Рычаг — ключевая ставка в бюджете.",
+
+  // Две строки сводки, которых не было в таблице.
+  "Another government has put a settlement to you and is waiting on an answer.": "Другое правительство предложило вам мир и ждёт ответа.",
+  "Essential goods are in shortage. Open Economy for production, demand, imports and prices.": "Не хватает жизненно важных товаров. Откройте экономику: производство, спрос, импорт и цены."
 }

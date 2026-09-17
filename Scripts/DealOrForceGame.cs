@@ -1120,6 +1120,27 @@ public partial class DealOrForceGame : Control
         internal Label Delta = null!;
     }
 
+
+    /// <summary>
+    /// Which symbol stands for a figure on the top bar.
+    ///
+    /// Kept beside the bar rather than in the data because the seven names here are the
+    /// seven the code itself switches on a few lines further down - a mod that wants an
+    /// eighth figure is adding a case there too, and a name with no symbol simply keeps its
+    /// caption rather than showing nothing.
+    /// </summary>
+    private static string StatIcon(string caption) => caption switch
+    {
+        "TREASURY" => "treasury",
+        "BALANCE" => "balance",
+        "GDP" => "gdp",
+        "INFLATION" => "inflation",
+        "POPULATION" => "population",
+        "STABILITY" => "stability",
+        "MANPOWER" => "manpower",
+        _ => ""
+    };
+
     private StatReadout Stat(Container parent, string caption, string tooltip,
         System.Func<Simulation.Breakdown> explain = null)
     {
@@ -1132,14 +1153,36 @@ public partial class DealOrForceGame : Control
             Explain = explain,
             Plain = explain is null ? "" : Tr(tooltip)
         };
-        Tip(box, tooltip);
+        // The caption is in the tooltip now rather than gone: a symbol a player has not
+        // learned yet has to be able to say what it is.
+        Tip(box, Tr(caption) + " \u00b7 " + Tr(tooltip));
         box.AddThemeConstantOverride("separation", 1);
         box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
-        var statCaption = Title(caption, 11, Ui.Colour("text.caption"));
-        statCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-        statCaption.ClipText = true;
-        box.AddChild(statCaption);
+        // The symbol where the word was. A stat with no icon declared keeps its caption, so
+        // a mod that adds an eighth figure to `top_stats` is not obliged to draw for it.
+        var symbol = StatIcon(caption);
+        if (symbol.Length > 0 && SpriteCatalog.Has("icon_" + symbol))
+        {
+            var glyph = new TextureRect
+            {
+                Texture = Art("icon_" + symbol, $"res://game/gfx/interface/icons/icon_{symbol}.png"),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                CustomMinimumSize = new Vector2(0, 15),
+                MouseFilter = MouseFilterEnum.Ignore,
+                Modulate = Ui.Colour("text.accent_dim")
+            };
+            glyph.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
+            box.AddChild(glyph);
+        }
+        else
+        {
+            var statCaption = Title(caption, 11, Ui.Colour("text.caption"));
+            statCaption.AutowrapMode = TextServer.AutowrapMode.Off;
+            statCaption.ClipText = true;
+            box.AddChild(statCaption);
+        }
 
         var readout = new StatReadout
         {

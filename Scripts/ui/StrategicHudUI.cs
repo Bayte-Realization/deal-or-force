@@ -108,26 +108,55 @@ public partial class DealOrForceGame
         var lowSupply = armies.Count(army => army.SupplyLevel < 0.45f || army.CutOff);
         var construction = _campaign.Construction.Where(project => project.NationId == player.Id).ToArray();
 
+        // Every alert is a level, an icon, a count and a sentence kept for the tooltip. They
+        // are sorted before any of them is drawn, so the worst news is always at the top and
+        // a new emergency pushes the rest down where the movement is seen before it is read.
         if (_campaign.PendingEvents.Count > 0)
-            AddAlert("! EVENT", () => RefreshEventInterface(), "A campaign event is waiting for a decision.", true);
+            AddAlert(AlertLevel.Critical, "alert_event", Tr("Event"), () => RefreshEventInterface(),
+                Tr("A campaign event is waiting for a decision."));
+
         var peaceOffers = PeaceOffers.AwaitingAnswer(_campaign, player.Id).Count;
         if (peaceOffers > 0)
-            AddAlert($"\u262e PEACE OFFER{(peaceOffers == 1 ? "" : "S")} {peaceOffers}",
-                () => RefreshPeaceOfferInterface(),
-                "Another government has put a settlement to you and is waiting on an answer.", true);
-        if (playerBattles > 0)
-            AddAlert($"⚔ {playerBattles} BATTLE{(playerBattles == 1 ? "" : "S")}", OpenFirstPlayerBattle,
-                "Active battles involving your country.", true);
-        if (lowSupply > 0)
-            AddAlert($"△ SUPPLY {lowSupply}", () => FocusArmy(armies.First(army => army.SupplyLevel < 0.45f || army.CutOff)),
-                "Formations are undersupplied or cut off.");
+            AddAlert(AlertLevel.Critical, "alert_peace",
+                Simulation.Loc.Format("Peace offer: {0}", peaceOffers), () => RefreshPeaceOfferInterface(),
+                Tr("Another government has put a settlement to you and is waiting on an answer."));
+
         if (player.ShortageIndex > 0.10f)
-            AddAlert(Simulation.Loc.Format("Market access {0:P0}", player.MarketAccess), () => OpenEconomyTab("Market"),
-                "Essential goods are in shortage. Open Economy for production, demand, imports and prices.", true);
+            AddAlert(AlertLevel.Critical, "trade",
+                Simulation.Loc.Format("Shortages: {0}", Fmt.Percent(player.ShortageIndex)),
+                () => OpenEconomyTab("Market"),
+                Tr("Essential goods are in shortage. Open Economy for production, demand, imports and prices."));
+
+        if (lowSupply > 0)
+            AddAlert(AlertLevel.Warning, "alert_supply",
+                Simulation.Loc.Format("Out of supply: {0}", lowSupply),
+                () => FocusArmy(armies.First(army => army.SupplyLevel < 0.45f || army.CutOff)),
+                Tr("Formations are undersupplied or cut off."));
+
+        if (playerBattles > 0)
+            AddAlert(AlertLevel.Warning, "alert_battle",
+                Simulation.Loc.Format("Battles: {0}", playerBattles), OpenFirstPlayerBattle,
+                Tr("Active battles involving your country."));
+
+        // Prices are the one number on this rail that is a slow emergency rather than a
+        // fast one, and it belongs here for the same reason the shortage does: by the time
+        // a player goes looking for it in the economy screen it has already cost them.
+        if (player.Inflation > Simulation.InflationCore.Weights.Comfort * 2f)
+            AddAlert(AlertLevel.Warning, "inflation",
+                Simulation.Loc.Format("Inflation: {0}", player.Inflation.ToString("P0")),
+                () => OpenEconomyTab("Budget"),
+                Tr("Prices are rising well past the comfortable rate. The policy rate in the budget is the lever."));
+
         if (construction.Length == 0)
-            AddAlert("No construction", () => OpenEconomyTab("Construction"), "Construction capacity is idle.");
+            AddAlert(AlertLevel.Notice, "alert_construction", Tr("Nothing being built"),
+                () => OpenEconomyTab("Construction"), Tr("Construction capacity is idle."));
+
         if (availableDecisions > 0)
-            AddAlert(Simulation.Loc.Format("Decisions: {0}", availableDecisions), () => OpenScreen("Decisions"), "National decisions are available.");
+            AddAlert(AlertLevel.Chance, "decision",
+                Simulation.Loc.Format("Decisions: {0}", availableDecisions), () => OpenScreen("Decisions"),
+                Tr("National decisions are available."));
+
+        FlushAlerts();
 
         AddOutlinerHeader("WARS");
         var wars = _campaign.Wars.Where(war => !war.Ended && war.Involves(player.Id)).ToArray();
@@ -217,13 +246,71 @@ public partial class DealOrForceGame
     private float PlayerWarSupport(StrategicWar war) =>
         war.AttackerId == _campaign.Player.Id ? war.AttackerWarSupport : war.DefenderWarSupport;
 
-    private void AddAlert(string text, Action action, string tooltip, bool critical = false)
+    /// <summary>
+    /// How much an alert matters. The order is the order they appear in, because the one
+    /// thing an alert rail has to get right is that the worst news is at the top.
+    /// </summary>
+    private enum AlertLevel
     {
-        var button = ActionButton(text, action, 0, 30, critical);
-        button.Alignment = HorizontalAlignment.Left;
-        button.ClipText = true;
-        button.TooltipText = Ui.Tip(tooltip);
-        _alertRows.AddChild(button);
+        Critical,
+        Warning,
+        Notice,
+        Chance
+    }
+
+    private readonly List<(AlertLevel Level, string Icon, string Text, string Tooltip, Action Action)>
+        _pendingAlerts = new();
+
+    /// <summary>
+    /// Remember an alert. Nothing is drawn until <see cref="FlushAlerts"/>, because they
+    /// have to be sorted before any of them can be placed.
+    /// </summary>
+    private void AddAlert(AlertLevel level, string icon, string text, Action action, string tooltip) =>
+        _pendingAlerts.Add((level, icon, text, tooltip, action));
+
+    /// <summary>The colour of each level. Named in the skin, so a reskin moves them together.</summary>
+    private static string AlertColour(AlertLevel level) => level switch
+    {
+        AlertLevel.Critical => "state.critical",
+        AlertLevel.Warning => "state.warning",
+        AlertLevel.Notice => "state.info",
+        _ => "state.positive"
+    };
+
+    /// <summary>
+    /// Draw them, worst first.
+    ///
+    /// Each is an icon, a very short line, and a border in its level's colour; the sentence
+    /// explaining it is in the tooltip. A tooltip is a trade - screen space for a click -
+    /// and it is worth making here precisely because this rail is the one part of the
+    /// screen that is always short of room.
+    /// </summary>
+    private void FlushAlerts()
+    {
+        _pendingAlerts.Sort((left, right) => left.Level.CompareTo(right.Level));
+        foreach (var alert in _pendingAlerts)
+        {
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 6);
+            _alertRows.AddChild(row);
+
+            var button = ActionButton(alert.Text, alert.Action, 0, 30,
+                alert.Level == AlertLevel.Critical,
+                SpriteCatalog.TextureOf($"icon_{alert.Icon}",
+                    $"res://game/gfx/interface/icons/icon_{alert.Icon}.png"));
+            button.Alignment = HorizontalAlignment.Left;
+            button.ClipText = true;
+            button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            button.TooltipText = Ui.Tip(alert.Tooltip);
+
+            // The severity, in the one place a player's eye is already going: the edge of
+            // the thing they are reading.
+            var colour = Ui.Colour(AlertColour(alert.Level));
+            button.AddThemeColorOverride("font_color", colour);
+            button.AddThemeColorOverride("font_hover_color", colour.Lightened(0.25f));
+            row.AddChild(button);
+        }
+        _pendingAlerts.Clear();
     }
 
     private void AddOutlinerHeader(string text)
