@@ -161,3 +161,26 @@ public static class BreakdownPanel
         _ => Fmt.MoneyDelta(value)
     };
 }
+
+/// <summary>
+/// A section heading with a rule along its baseline.
+///
+/// A Label cannot draw anything of its own, and a heading followed by a separate one-pixel
+/// panel is two nodes and a layout argument for every heading in the game. This is one node
+/// that knows it is a heading.
+/// </summary>
+public partial class SectionHeading : Label
+{
+    /// <summary>The colour of the rule. Transparent draws nothing.</summary>
+    public Color Rule = new(1, 1, 1, 0);
+
+    public override void _Draw()
+    {
+        if (Rule.A <= 0.001f) return;
+        // Under the text, not through it, and fading out to the right so it reads as an
+        // underline for the words rather than a border on the panel.
+        var y = Size.Y - 3f;
+        DrawRect(new Rect2(0, y, Size.X * 0.34f, 1f), new Color(Rule, 0.55f));
+        DrawRect(new Rect2(Size.X * 0.34f, y, Size.X * 0.66f, 1f), new Color(Rule, 0.14f));
+    }
+}

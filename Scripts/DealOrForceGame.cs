@@ -1316,6 +1316,23 @@ public partial class DealOrForceGame : Control
 
         row.CustomMinimumSize = new Vector2(0, 30);
         row.AddThemeConstantOverride("separation", 14);
+        // The same mark for the same idea wherever it appears. Reusing one symbol across
+        // the top bar, the alert rail and every dossier row is the whole of what makes an
+        // icon set worth having, and a caption with no symbol declared simply has none.
+        var symbol = RowIcon(caption);
+        if (symbol.Length > 0 && SpriteCatalog.Has("icon_" + symbol))
+            row.AddChild(new TextureRect
+            {
+                Texture = Art("icon_" + symbol, $"res://game/gfx/interface/icons/icon_{symbol}.png"),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+                CustomMinimumSize = new Vector2(15, 15),
+                SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+                SizeFlagsVertical = SizeFlags.ShrinkCenter,
+                MouseFilter = MouseFilterEnum.Ignore,
+                Modulate = Ui.Colour("text.faint")
+            });
+
         var label = Title(CampaignUiCatalog.DetailLabel(_dossierScreen, caption, caption), 14, Ui.Colour("text.body_soft"));
         label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -1337,13 +1354,79 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>A small capitalised rule between groups of rows.</summary>
+
+    /// <summary>
+    /// Which of the thirty-two symbols stands for a dossier row, by its caption.
+    ///
+    /// Deliberately partial. A caption nobody has drawn for has no symbol and the row simply
+    /// carries none, so a mod or a new screen never has to supply art before it can add a
+    /// line - and the marks that ARE here are the same ones the top bar and the alert rail
+    /// use for the same ideas, which is the point of having a set at all.
+    /// </summary>
+    private static string RowIcon(string caption) => caption switch
+    {
+        // ---- the country -------------------------------------------------------------
+        "Population" or "Largest people" or "Largest minority" or "Minorities" => "population",
+        "Capital" or "Form of government" or "Politics" or "Ideology" or "Status" => "government",
+        "Literacy" => "literacy",
+        "Standard of living" => "welfare",
+        "Radicalism" or "Wants out" => "unrest",
+        "Stability" => "stability",
+        "Urbanisation" or "Urbanization" or "Buildings" or "Productivity" => "industry",
+        "Largest faith" => "research",
+
+        // ---- the money ---------------------------------------------------------------
+        "Treasury" => "treasury",
+        "GDP" or "GDP per head" => "gdp",
+        "Balance" or "Taxes" or "Tax rate" or "Expenses" or "Military spending"
+            or "Tariffs" or "Tribute" => "balance",
+        "Trade balance" or "Market access" => "trade",
+        "Inflation" => "inflation",
+
+        // ---- the ground --------------------------------------------------------------
+        "Provinces" or "States held" or "Neighbours" or "Owner" or "Controller" => "world",
+        "Occupation" => "war",
+        "River crossings" or "Lake shore" => "port",
+
+        // ---- the forces --------------------------------------------------------------
+        "Divisions" or "Divisions here" or "Field armies" or "Visible divisions"
+            or "Fighting strength" or "Reserve" or "Daily reinforcement" => "manpower",
+        "Fleets" => "navy",
+        "Supply" or "Cut off" => "alert_supply",
+        "Organisation" => "alert_battle",
+        "War score" => "victory",
+
+        // ---- the neighbours ----------------------------------------------------------
+        "Opinion" or "Stance" or "Intelligence" => "diplomacy",
+        "Guarantees" or "Guaranteed by" or "Answers to" or "Arranged" => "alliance",
+        "Non-aggression pact" or "Offered" => "treaty",
+
+        _ => ""
+    };
+
     private void DetailHeading(string text)
     {
         _detailGroup = text;
-        var heading = Title(CampaignUiCatalog.DetailLabel(_dossierScreen, "#" + text, text), 12, Ui.Colour("text.accent_dim"));
+        // A rule along the baseline, in the same brass the dossier frame uses. A heading was
+        // a dim line of small capitals with nothing between it and the rows above, so a
+        // window read as one column with occasional shouting in it; this is what makes the
+        // divisions inside a window agree with the window.
+        var source = CampaignUiCatalog.DetailLabel(_dossierScreen, "#" + text, text);
+        var heading = new SectionHeading
+        {
+            Text = Tr(source),
+            Rule = Ui.Colour("button.primary_border"),
+            AutowrapMode = TextServer.AutowrapMode.WordSmart
+        };
+        // The same three marks Title sets, so a heading follows a language change like every
+        // other caption in the game rather than freezing in whatever it was built in.
+        heading.SetMeta(LocSourceMeta, source);
+        heading.SetMeta(LocAppliedMeta, heading.Text);
+        heading.AddThemeColorOverride("font_color", Ui.Colour("text.accent_dim"));
+        heading.AddThemeFontSizeOverride("font_size", 12);
         heading.SetMeta("dossier_field", "#" + text);
         heading.SetMeta("dossier_group", text);
-        heading.CustomMinimumSize = new Vector2(0, 30);
+        heading.CustomMinimumSize = new Vector2(0, 32);
         heading.VerticalAlignment = VerticalAlignment.Bottom;
         _sideDetail.AddChild(heading);
     }
