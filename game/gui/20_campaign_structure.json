@@ -1,6 +1,6 @@
 {
   "campaign": {
-    "top_stats":["TREASURY","BALANCE","GDP","POPULATION","STABILITY","MANPOWER"],
+    "top_stats":["TREASURY","BALANCE","GDP","INFLATION","POPULATION","STABILITY","MANPOWER"],
     "outliner_order":["WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
     "hidden_outliner":[],
     "navigation": [

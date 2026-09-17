@@ -168,7 +168,15 @@ public static class BudgetCore
     private const int SlotEmployment = 4;
     private const int SlotAtWar = 5;
     private const int SlotShortage = 6;
-    private const int SlotCount = 7;
+
+    /// <summary>
+    /// How fast prices are rising. A line weighted against this costs more when they are:
+    /// wages, welfare and procurement all do, and saying so is a number in a file rather
+    /// than a second arithmetic beside the first.
+    /// </summary>
+    private const int SlotInflation = 7;
+
+    private const int SlotCount = 8;
 
     /// <summary>
     /// Filled once per country per week and read by every line. Static and reused for the
@@ -427,7 +435,7 @@ public static class BudgetCore
             {
                 errors?.Add($"budget line `{id}`: `{entry.Name}` is not a factor. Use one of " +
                             "stability, literacy, standard_of_living, urbanisation, employment, " +
-                            "at_war, shortage - or constant.");
+                            "at_war, shortage, inflation - or constant.");
                 continue;
             }
             factors.Add(slot);
@@ -496,6 +504,7 @@ public static class BudgetCore
         "employment" => SlotEmployment,
         "at_war" => SlotAtWar,
         "shortage" => SlotShortage,
+        "inflation" => SlotInflation,
         _ => -1
     };
 
@@ -549,6 +558,7 @@ public static class BudgetCore
         Slots[SlotEmployment] = nation.EmployedShare;
         Slots[SlotAtWar] = atWar ? 1f : 0f;
         Slots[SlotShortage] = nation.ShortageIndex;
+        Slots[SlotInflation] = nation.Inflation;
     }
 
     private static float BasisOf(Nation nation, BudgetLine line, float weeklyOutput) => line.Charge switch

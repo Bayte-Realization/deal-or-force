@@ -243,14 +243,15 @@
     },
 
     "debt_interest": {
-      "//": "Charged on what the treasury owes, and on nothing else. A solvent country never sees this line move.",
-      "name": "Debt interest",
-      "description": "What borrowing costs. It is charged on the outstanding debt each week, so a deficit that is never closed becomes an expense that grows on its own.",
+      "//": "The policy rate, and the bill for it. Charged on what the treasury owes and on nothing else, so a solvent country pays nothing for a high rate - but everybody pays for one in growth, which is the `growth` weight below and applies whatever the debt is.",
+      "name": "Policy interest rate",
+      "description": "What the central bank charges. Raising it slows prices and slows the economy with them; it is also what the country's own debt costs, so a government that has borrowed pays for its own tightening twice.",
       "order": 90,
       "basis": "debt",
       "yield": 0.0011,
       "scale": { "constant": 1.0 },
-      "rate": { "default": 1.0, "player": false }
+      "effects": { "growth": -0.012 },
+      "rate": { "default": 1.0, "min": 0.2, "max": 3.0, "neutral": 1.0, "player": true }
     }
   }
 }

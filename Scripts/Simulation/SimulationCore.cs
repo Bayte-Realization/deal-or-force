@@ -309,6 +309,17 @@ public sealed partial class Nation
     public readonly Breakdown Budget = new();
     public readonly Breakdown StabilityDrivers = new();
     public readonly Breakdown WarSupportDrivers = new();
+
+    /// <summary>
+    /// How fast prices are rising here, as an annual rate. 0.03 is three per cent.
+    ///
+    /// Seeded at the comfortable rate rather than zero: a world that opens with every
+    /// country in perfect price stability opens with two hundred and sixty central banks
+    /// that have nothing to do, and the first deficit anybody runs looks like a catastrophe.
+    /// </summary>
+    public float Inflation = 0.02f;
+
+    public readonly Breakdown InflationDrivers = new();
     public float Productivity = 1f;
 
     /// <summary>

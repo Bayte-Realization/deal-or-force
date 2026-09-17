@@ -113,6 +113,8 @@ public static class Program
         failures += Check("every folder of data is read by something", EveryFolderOfDataIsRead());
         failures += Check("the interface composes its prose through the table",
             TheInterfaceComposesThroughTheTable());
+        failures += Check("prices answer to the budget and to the rate",
+            PricesAnswerToTheBudgetAndTheRate());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -7056,6 +7058,112 @@ public static class Program
     /// The ceiling only ever goes down. Adding one of these means lowering a number in this
     /// file on purpose, which is the point.
     /// </summary>
+    /// <summary>
+    /// Inflation is caused by what a government does and answers to what it decides.
+    ///
+    /// The economy had no mechanism connecting what a state spends to what its people pay:
+    /// a deficit had no consequence until the money ran out, a war cost money and nothing
+    /// else, and a blockade that emptied the shelves left the cost of living exactly where
+    /// it was. Three claims, and each is a thing a player would do:
+    ///
+    ///   - a settled country with a balanced budget sits near the resting rate;
+    ///   - a country spending far beyond its income sees prices climb;
+    ///   - raising the policy rate brings them back down.
+    ///
+    /// Run on one country in a sandbox of its own, with the weeks stepped by hand, because
+    /// what is being tested is the arithmetic rather than what the world happens to do.
+    /// </summary>
+    private static string PricesAnswerToTheBudgetAndTheRate()
+    {
+        static float Settle(Nation nation, Campaign campaign, float balancePerWeek, int weeks,
+            float scarcity = 0f, bool atWar = false)
+        {
+            var weeklyOutput = nation.Gdp / 52f;
+            for (var week = 0; week < weeks; week++)
+            {
+                nation.WeeklyBalance = balancePerWeek * weeklyOutput;
+                InflationCore.Tick(campaign, nation, weeklyOutput, atWar, scarcity);
+            }
+            return nation.Inflation;
+        }
+
+        var weights = InflationCore.Weights;
+        if (weights.Deficit <= 0f && weights.Policy <= 0f)
+            return "";      // a mod has switched the model off; nothing to prove
+
+        // ---- a country doing nothing in particular ------------------------------------
+        var calm = Campaign.CreateBootstrap(20250104);
+        var nation = calm.Nations.FirstOrDefault(country => country.Gdp > 100f);
+        if (nation is null) return "no country large enough to have an economy";
+        var settled = Settle(nation, calm, 0f, 120);
+        if (MathF.Abs(settled - weights.Base) > 0.004f)
+            return $"a balanced budget settled at {settled:P1} rather than the resting rate " +
+                   $"of {weights.Base:P1}";
+
+        // ---- and one spending a fifth of its output it has not got ---------------------
+        var spent = Settle(nation, calm, -0.20f, 120);
+        if (spent <= settled + 0.01f)
+            return $"a country spending a fifth of its output beyond its income moved prices " +
+                   $"from {settled:P1} to {spent:P1}, which a player would never notice";
+
+        // ---- until somebody puts the rate up -------------------------------------------
+        var line = BudgetCore.Find(InflationCore.PolicyLineId);
+        if (line is null) return $"there is no '{InflationCore.PolicyLineId}' budget line to set a rate on";
+        if (!line.PlayerSet)
+            return $"the policy rate is not a government's to set, so there is no lever at all";
+
+        BudgetCore.SetRate(nation, line, MathF.Min(line.Maximum, line.Neutral + 1.5f));
+        var tightened = Settle(nation, calm, -0.20f, 120);
+        if (tightened >= spent - 0.005f)
+            return $"the same deficit at a policy rate {MathF.Min(line.Maximum, line.Neutral + 1.5f):0.##} " +
+                   $"against a neutral {line.Neutral:0.##} still sits at {tightened:P1} against " +
+                   $"{spent:P1}, so the rate does nothing";
+
+        // ---- and it explains itself ------------------------------------------------------
+        nation.IsHuman = true;
+        InflationCore.Target(calm, nation, nation.Gdp / 52f, false, 0f, nation.InflationDrivers);
+        if (!nation.InflationDrivers.HasEntries)
+            return "inflation cannot say where it came from";
+        if (MathF.Abs(nation.InflationDrivers.Total -
+                      InflationCore.Target(calm, nation, nation.Gdp / 52f, false, 0f)) > 0.0005f)
+            return $"the reasons add up to {nation.InflationDrivers.Total:P2} and the rate is " +
+                   $"{InflationCore.Target(calm, nation, nation.Gdp / 52f, false, 0f):P2}";
+
+        // ---- and a budget line can be weighted against it --------------------------------
+        var weighted = BudgetCore.All.Count(candidate => candidate.Factors.Length > 0);
+        Console.WriteLine($"  inflation: balanced {settled:P1}, a fifth-of-output deficit {spent:P1}, " +
+                          $"the same deficit with the rate up {tightened:P1}; " +
+                          $"{nation.InflationDrivers.Entries.Count} named driver(s), " +
+                          $"{weighted:N0} budget line(s) carry factors.");
+
+        // ---- nothing in the world runs away ----------------------------------------------
+        var world = Campaign.CreateBootstrap(20250211);
+        if (!AttachMap(world)) return "";
+        world.IsPaused = false;
+        for (var day = 0; day < 730; day++) world.Tick();
+        // The distribution, not the extremes. Two outliers say nothing about whether the
+        // model is calibrated; what matters is where the ordinary country sits, and a world
+        // where the median country is in double digits is a world in permanent crisis.
+        var rates = world.Nations.Select(country => country.Inflation).OrderBy(rate => rate).ToArray();
+        var median = rates[rates.Length / 2];
+        var hot = rates.Count(rate => rate > InflationCore.Weights.Comfort);
+        var worst = world.Nations.OrderByDescending(country => country.Inflation).First();
+        var lowest = world.Nations.OrderBy(country => country.Inflation).First();
+        Console.WriteLine($"  inflation: after two years the median country is at {median:P1}; " +
+                          $"{hot:N0} of {rates.Length:N0} are above the comfortable rate; " +
+                          $"the world runs from {lowest.Inflation:P1} ({lowest.Tag}) to " +
+                          $"{worst.Inflation:P1} ({worst.Tag}).");
+        foreach (var country in world.Nations)
+        {
+            if (float.IsNaN(country.Inflation) || float.IsInfinity(country.Inflation))
+                return $"{country.Tag} has an inflation of {country.Inflation}";
+            if (country.Inflation < weights.Floor - 0.0001f || country.Inflation > weights.Ceiling + 0.0001f)
+                return $"{country.Tag} is at {country.Inflation:P1}, outside the declared " +
+                       $"{weights.Floor:P1}\u2013{weights.Ceiling:P1}";
+        }
+        return "";
+    }
+
     private static string TheInterfaceComposesThroughTheTable()
     {
         const int Ceiling = 210;

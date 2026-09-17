@@ -435,8 +435,15 @@ public static class EconomySystem
 {
     public static void Seed(Campaign campaign)
     {
+        // Every country opens at the rate a settled economy rests at, not at zero and not
+        // at whatever the field defaulted to. Reading the weight here is also what loads
+        // `common/inflation` at a known moment rather than whenever something first asks -
+        // a catalogue that loads lazily loads after the first thing that needed it.
+        var restingInflation = InflationCore.Weights.Base;
+
         foreach (var nation in campaign.Nations)
         {
+            nation.Inflation = restingInflation;
             nation.Literacy = M.Clamp(0.42f + MathF.Log10(Math.Max(1f, nation.Gdp)) * 0.10f, 0.32f, 0.98f);
             nation.StandardOfLiving = M.Clamp(0.34f + MathF.Log10(Math.Max(0.1f,
                 nation.Gdp * 1_000_000_000f / Math.Max(1, nation.Population))) * 0.07f, 0.28f, 0.90f);
@@ -608,6 +615,9 @@ public static class EconomySystem
 
             StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
 
+            var scarcity = MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance);
+            InflationCore.Target(campaign, nation, weeklyOutput, atWar, scarcity, nation.InflationDrivers);
+
             var cabinet = GovernmentFocusCatalog.Of(nation.GovernmentFocus);
             var government = PoliticsCore.GovernmentOf(nation);
             var ideology = PoliticsCore.IdeologyOf(nation);
@@ -660,6 +670,17 @@ public static class EconomySystem
             }
 
             nation.Treasury += nation.WeeklyBalance;
+
+            // What the week did to prices, before what prices do to the week. Placed here
+            // on purpose: the budget has been worked out and paid, so the deficit inflation
+            // reads is the one that actually happened, and the standard of living and the
+            // radicalism it moves are read further down by everything that cares.
+            //
+            // The market's shortfall is forgiven up to a tolerance - a market that is 98 %
+            // supplied is a working market, not a shortage - so an ordinary world does not
+            // spend its whole campaign being told it has a supply crisis.
+            var scarcity = MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance);
+            InflationCore.Tick(campaign, nation, weeklyOutput, atWar, scarcity);
 
             var industrialSupply = nation.Market.GetValueOrDefault(Commodity.IndustrialMaterials)?.Satisfaction ?? 1f;
             var energySupply = nation.Market.GetValueOrDefault(Commodity.Energy)?.Satisfaction ?? 1f;

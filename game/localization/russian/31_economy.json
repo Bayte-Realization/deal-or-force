@@ -1,0 +1,23 @@
+{
+
+  // Инфляция и ключевая ставка.
+  "Inflation, where it comes from": "Инфляция: откуда она берётся",
+  "A settled economy": "Устоявшаяся экономика",
+  "Spending more than it takes": "Тратит больше, чем собирает",
+  "Taking more than it spends": "Собирает больше, чем тратит",
+  "Goods the market could not supply": "Товары, которых рынок не дал",
+  "A war economy": "Военная экономика",
+  "The size of the debt": "Размер долга",
+  "The policy rate": "Ключевая ставка",
+  "held at its limit": "упёрлось в предел",
+  "Policy interest rate": "Ключевая ставка",
+  "What the central bank charges. Raising it slows prices and slows the economy with them; it is also what the country's own debt costs, so a government that has borrowed pays for its own tightening twice.": "Ставка центрального банка. Поднять её — значит замедлить рост цен, а вместе с ними и экономику; это же и цена собственного долга страны, так что занимавшее правительство платит за своё ужесточение дважды.",
+
+  // Инфляция в верхней строке.
+  "INFLATION": "ИНФЛЯЦИЯ",
+  "How fast prices are rising. Caused by what the government spends, what the market cannot supply and what the war costs; answered with the policy rate in the budget.": "Насколько быстро растут цены. Их разгоняют траты правительства, нехватка товаров на рынке и война; сбивает их ключевая ставка в бюджете.",
+  "Prices are rising at {0} a year": "Цены растут на {0} в год",
+  "prices falling": "цены падают",
+  "above the comfortable rate": "выше комфортного уровня",
+  "comfortable": "в норме"
+}

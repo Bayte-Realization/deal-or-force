@@ -27,6 +27,7 @@
   "PeaceExhaustionWeight": 42,
   "PeaceTimePressureDays": 25,
   "PeaceTimePressureCap": 18,
+  "ScarcityTolerance": 0.06,
   "EconomyTickDays": 7,
   "PopulationTickDays": 30,
   "AutosaveIntervalDays": 30,

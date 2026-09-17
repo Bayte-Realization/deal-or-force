@@ -161,6 +161,7 @@ public sealed class ModLoader
         TradePolicyCatalog.ResetCatalog();
         TradeDesk.ResetCatalog();
         PeaceTermCatalog.ResetCatalog();
+        InflationCore.ResetCatalog();
         foreach (var (_, reset, _) in Tunables) reset();
         GovernmentCatalog.ResetCatalog();
         IdeologyCatalog.ResetCatalog();

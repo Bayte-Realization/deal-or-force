@@ -1,0 +1,84 @@
+// Deal or Force - prices, and what a government can do about them.
+//
+// Inflation is worked out from the country each economic week rather than stored as a fact
+// about it: what the budget did, what the market could not supply, whether there is a war
+// on, how large the debt is, and where the policy rate is set. Every one of those is a
+// weight here, so the whole monetary model can be re-tuned - or switched off, by setting
+// every cause to zero - without touching the game.
+//
+// Rates are annual. 0.02 is two per cent a year.
+//
+// It is felt in three places, and only the third is in code:
+//   · `common/budget` - any line can be weighted against the `inflation` factor, so wages
+//     and welfare cost more as prices rise. That is where most of the bite should live.
+//   · the policy rate - the `debt_interest` line in `common/budget`, which a government
+//     sets. Raising it damps prices, makes the country's own debt dearer, and costs growth.
+//   · the numbers below, which move the standard of living, radicalism and stability.
+{
+  // Where a settled country with a balanced budget, a supplied market and no war ends up.
+  // Not zero, deliberately: every central bank in the world this game is set in is aiming
+  // at about two per cent, and a model that rests at zero makes any inflation look like a
+  // crisis.
+  "base": 0.018,
+
+  // Per unit of deficit measured against a week of output. The largest thing a player does
+  // to their own prices, and the one the game had no way of showing before.
+  "deficit": 0.55,
+
+  // And the other way, by less: a government can always spend faster than it can save.
+  "surplus": 0.30,
+
+  // Too much money is one way to get inflation; too few goods is the other. A blockaded
+  // country finds the second one whatever its budget looks like.
+  "scarcity": 0.22,
+
+  // What fighting does on its own, before anything it costs.
+  "war": 0.020,
+
+  // Per unit of debt against annual output - not the interest on it, which is a budget
+  // line, but what the size of it does to everybody pricing anything.
+  "debt": 0.040,
+
+  // How much a whole point of policy rate above neutral takes off the target. The lever.
+  "policy": 0.055,
+
+  // How much of the gap to its target a country closes each economic week. Ten per cent is
+  // about half a year to a new level, which is roughly how fast this actually moves.
+  "approach": 0.10,
+
+  // Deflation is possible and is its own problem rather than the absence of one: a country
+  // in it is not enjoying cheap bread, it is one where nobody will build anything.
+  "floor": -0.04,
+  "ceiling": 1.20,
+
+  // Below this, nobody minds. Every effect is measured from here, so a country sitting at
+  // its target has a monetary policy rather than an emergency.
+  "comfort": 0.045,
+
+  // Per point past comfort, per economic week.
+  //
+  // Small, and they have to be: the routine drivers in the same tick move a region's
+  // radicalism by four ten-thousandths a week at their strongest. A first attempt at these
+  // moved it by eighteen, and fifteen years of that world changed a hundred and thirty-four
+  // governments - which is not politics, it is weather.
+  "living": -0.006,
+  "radicalism": 0.004,
+
+  // The most inflation past comfort that anybody reacts to. Unrest saturates and arithmetic
+  // does not: without a cap, a country at thirty per cent is six times as radicalising every
+  // week as one at nine, for ever. People in a currency crisis are not six times angrier
+  // than people in a bad year - they are already as angry as that gets. The standard of
+  // living is deliberately NOT capped, so the damage keeps arriving; it stops arriving as
+  // fury, not as poverty.
+  "bite": 0.080,
+
+  // Zero, and not because inflation does not shake a country: it reaches stability already
+  // through the two above, since national stability is worked out from what every region
+  // lives on and how angry it is. A term here counts the same pressure twice. Declared so a
+  // mod that wants the direct version can have it.
+  "stability": 0.0,
+
+  // And what falling prices cost, per point below zero - through the other door: not what
+  // things cost, but what anybody is willing to build.
+  "deflation_growth": -0.45
+}

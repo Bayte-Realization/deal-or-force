@@ -1,0 +1,23 @@
+{
+
+  // Inflation and the policy rate.
+  "Inflation, where it comes from": "Inflation, where it comes from",
+  "A settled economy": "A settled economy",
+  "Spending more than it takes": "Spending more than it takes",
+  "Taking more than it spends": "Taking more than it spends",
+  "Goods the market could not supply": "Goods the market could not supply",
+  "A war economy": "A war economy",
+  "The size of the debt": "The size of the debt",
+  "The policy rate": "The policy rate",
+  "held at its limit": "held at its limit",
+  "Policy interest rate": "Policy interest rate",
+  "What the central bank charges. Raising it slows prices and slows the economy with them; it is also what the country's own debt costs, so a government that has borrowed pays for its own tightening twice.": "What the central bank charges. Raising it slows prices and slows the economy with them; it is also what the country's own debt costs, so a government that has borrowed pays for its own tightening twice.",
+
+  // Inflation on the top bar.
+  "INFLATION": "INFLATION",
+  "How fast prices are rising. Caused by what the government spends, what the market cannot supply and what the war costs; answered with the policy rate in the budget.": "How fast prices are rising. Caused by what the government spends, what the market cannot supply and what the war costs; answered with the policy rate in the budget.",
+  "Prices are rising at {0} a year": "Prices are rising at {0} a year",
+  "prices falling": "prices falling",
+  "above the comfortable rate": "above the comfortable rate",
+  "comfortable": "comfortable"
+}

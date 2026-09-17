@@ -607,6 +607,13 @@ public sealed class Defines
 	public float PeaceTimePressureCap { get; set; } = 18f;
 
 	/// <summary>
+	/// The share of a country's demand that has to go unmet before the market counts as
+	/// short of anything. Below it, a market that is 99 % supplied is a working market
+	/// rather than a shortage, and inflation should not read it as one.
+	/// </summary>
+	public float ScarcityTolerance { get; set; } = 0.06f;
+
+	/// <summary>
 	/// Share of its fresh worth a formation still contributes to covering the ground
 	/// beside it, however worn down it is. Zero makes a front evaporate the moment a side
 	/// has a bad month; one makes casualties irrelevant to where the line sits.

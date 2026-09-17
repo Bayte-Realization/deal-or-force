@@ -22,6 +22,7 @@ public partial class DealOrForceGame : Control
     private StatReadout _balance = null!;
     private StatReadout _stability = null!;
     private StatReadout _manpower = null!;
+    private StatReadout _inflation = null!;
     private StatReadout _gdp = null!;
     private StatReadout _population = null!;
     private readonly Trend _treasuryTrend = new();
@@ -552,6 +553,9 @@ public partial class DealOrForceGame : Control
                 case "POPULATION": _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week."); break;
                 case "STABILITY": _stability = Stat(stats, field, "How settled the country is. Unrest costs money to police and output to bear.", () => _campaign?.Player?.StabilityDrivers); break;
                 case "MANPOWER": _manpower = Stat(stats, field, "People left to put in uniform. A war that outruns this is a war that ends."); break;
+                // Hover for the reasons, the same as stability: a rate with nothing behind
+                // it cannot answer the question a player actually asks about it.
+                case "INFLATION": _inflation = Stat(stats, field, "How fast prices are rising. Caused by what the government spends, what the market cannot supply and what the war costs; answered with the policy rate in the budget.", () => _campaign?.Player?.InflationDrivers); break;
             }
 
         var clock = new VBoxContainer { CustomMinimumSize = new Vector2(224, 0) };
@@ -1073,6 +1077,20 @@ public partial class DealOrForceGame : Control
                 : "", 0);
         WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
             Simulation.Loc.Format("{0}/day", Fmt.People(player.ReinforcementCapacity)), 0);
+
+        // Rising prices are bad news, so the arrow points the other way from every other
+        // stat on this bar: up is not good here.
+        if (_inflation is not null)
+        {
+            var comfort = Simulation.InflationCore.Weights.Comfort;
+            var rate = player.Inflation;
+            WriteStat(_inflation, rate.ToString("P1"),
+                Simulation.Loc.Format("Prices are rising at {0} a year", rate.ToString("P2")),
+                rate < 0f ? Tr("prices falling")
+                    : rate > comfort ? Tr("above the comfortable rate")
+                    : Tr("comfortable"),
+                rate > comfort ? -1 : rate < 0f ? -1 : 0);
+        }
 
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
         UpdateSpendingReadout(player);
