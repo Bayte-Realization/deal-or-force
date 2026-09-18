@@ -41,3 +41,8 @@ perf.log
 # game/ or Scripts/ reads any of it, and the game's own logo lives in game/gfx/interface/brand.
 # Kept on disk, out of the repository.
 /art/
+
+# Press and marketing material: the showcase plan, the Bayte Atlas typeface and the shots cut
+# for it. The author's own working material - nobody cloning the game needs a video script,
+# and no line of the game reads any of it. Same treatment as /art/: kept on disk, not shipped.
+/press/

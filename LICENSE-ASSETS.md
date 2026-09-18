@@ -27,7 +27,7 @@ Original artwork, audio and typefaces made for this game:
 
 - `game/gfx/globe/**`, `game/gfx/interface/**`, `game/gfx/terrain/**`
 - `game/sound/**`, `game/music/**`
-- `press/fonts/BayteAtlas-*.ttf` and the sources that build it
+- the **Bayte Atlas** typeface and the sources that build it (kept outside the repository)
 - the Deal or Force name, logo and brand marks
 
 **These are not licensed under the GPL and are not free to redistribute.** All rights
