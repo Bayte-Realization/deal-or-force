@@ -140,10 +140,10 @@ as a symbol is usually public domain; a particular drawing of it need not be, wh
 the file exists.
 
 **Code and art are not under the same terms**, and the split is written down in
-[`LICENSE-ASSETS.md`](LICENSE-ASSETS.md): the code is GPL, the original artwork, audio and
-the Bayte Atlas typeface are not. The flags keep whichever Creative Commons or public-domain
-terms they arrived with — 101 of them are share-alike and can never be closed, which is
-exactly why the credits file exists.
+[`LICENSE-ASSETS.md`](LICENSE-ASSETS.md): the code is GPL, the original artwork and audio
+are not. The flags keep whichever Creative Commons or public-domain terms they arrived
+with — 101 of them are share-alike and can never be closed, which is exactly why the
+credits file exists.
 
 **Steam.** GPLv3 and the proprietary Steamworks SDK cannot both be satisfied at once, so an
 additional permission under GPL §7 is granted for linking against it — see
