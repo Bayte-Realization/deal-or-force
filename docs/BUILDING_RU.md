@@ -25,7 +25,7 @@ Godot умеет запускать проект в редакторе без в
 powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 ```
 
-Скрипт экспортирует в `build\windows\`, проверяет сборку (см. ниже) и кладёт рядом
+Скрипт экспортирует в `build\Deal or Force\`, проверяет сборку (см. ниже) и кладёт рядом
 `build\Deal or Force <дата>.zip` — его и отправляй.
 
 Ключи: `-Debug` собрать отладочную версию (в ней есть консоль и подробные ошибки — полезно,
@@ -37,7 +37,7 @@ powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 ```powershell
 & "C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe" --headless `
     --path "D:\Godot Projects\by-deal-or-force" `
-    --export-release "Windows Desktop" "D:\Godot Projects\by-deal-or-force\build\windows\Deal or Force.exe"
+    --export-release "Windows Desktop" "D:\Godot Projects\by-deal-or-force\build\Deal or Force\Deal or Force.exe"
 ```
 
 ### Один нюанс про `export_presets.cfg`

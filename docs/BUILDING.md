@@ -27,7 +27,7 @@ not be empty.
 powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 ```
 
-The script exports to `build\windows\`, verifies the build (see below) and leaves
+The script exports to `build\Deal or Force\`, verifies the build (see below) and leaves
 `build\Deal or Force <date>.zip` beside it — that is the thing to send.
 
 Switches: `-Debug` builds the debug version (it has a console and detailed errors, which
@@ -39,7 +39,7 @@ The same thing by hand, if the script does not suit for some reason:
 ```powershell
 & "C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe" --headless `
     --path "D:\Godot Projects\by-deal-or-force" `
-    --export-release "Windows Desktop" "D:\Godot Projects\by-deal-or-force\build\windows\Deal or Force.exe"
+    --export-release "Windows Desktop" "D:\Godot Projects\by-deal-or-force\build\Deal or Force\Deal or Force.exe"
 ```
 
 ### One wrinkle about `export_presets.cfg`
