@@ -139,6 +139,15 @@ with its source, licence and author in [`game/gfx/CREDITS.md`](game/gfx/CREDITS.
 as a symbol is usually public domain; a particular drawing of it need not be, which is why
 the file exists.
 
-If this ever reaches Steam: GPLv3 and the Steamworks SDK sit badly together, and the usual
-answer is an additional permission under §7 for linking against Steamworks. Nothing turns on
-it today — `godotsteam` is local only and no line of the game talks to Steam.
+**Code and art are not under the same terms**, and the split is written down in
+[`LICENSE-ASSETS.md`](LICENSE-ASSETS.md): the code is GPL, the original artwork, audio and
+the Bayte Atlas typeface are not. The flags keep whichever Creative Commons or public-domain
+terms they arrived with — 101 of them are share-alike and can never be closed, which is
+exactly why the credits file exists.
+
+**Steam.** GPLv3 and the proprietary Steamworks SDK cannot both be satisfied at once, so an
+additional permission under GPL §7 is granted for linking against it — see
+[`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md). Nothing depends on it today: `godotsteam`
+is local only and no line of the game talks to Steam. It is granted in advance because such
+a permission needs every copyright holder's agreement, and that is easiest while there is
+one.
