@@ -1,0 +1,34 @@
+// Deal or Force - regions whose English name was somebody else's as well.
+//
+// These are the rows keying by id was for. `region.<id>.name` beats the English name, so
+// a lake and the province it sits in can finally be told apart - Lake Ontario and Ontario
+// shared one row until now, and so did Lake Van and Van, Lake Volta and Volta, and six
+// more pairs. Two are outright corrections: RU-ALT is Altai KRAI and was labelled Altai
+// Republic, which is its neighbour, and Madagascar's Sofia is not Bulgaria's.
+//
+// Loaded after 22_regions_by_id.json, which is generated; hand-written rows go here so a
+// regeneration never overwrites them.
+{
+  "region.ru_alt.name": "Altai Krai",
+  "region.lake_2068.name": "Lake Issyk-Kul",
+  "region.lake_2071.name": "Lake Van",
+  "region.lake_2051.name": "Lake Uvs",
+  "region.lake_2081.name": "Lake Volta",
+  "region.lake_2048.name": "Lake Manitoba",
+  "region.lake_2066.name": "Lake Ontario",
+  "region.lake_2073.name": "Lake Qinghai",
+  "region.lake_2085.name": "Lake Nyanza",
+  "region.mg_m_912.name": "Sofia",
+  "region.pt_02.name": "Beja",
+  "region.is_8.name": "Southern Region",
+  "region.is_3.name": "Western Region",
+  "region.is_5.name": "Westfjords",
+  "region.eg_ba.name": "Red Sea Governorate",
+  "region.sd_rs.name": "Red Sea State",
+  "region.il_d.name": "Southern District",
+  "region.bh_14.name": "Southern Governorate",
+  "region.bw_so.name": "Southern District",
+  "region.bw_ce.name": "Central District",
+  "region.fj_w.name": "Western Division",
+  "region.sd_no.name": "Northern State"
+}

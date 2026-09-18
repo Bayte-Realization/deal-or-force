@@ -140,19 +140,75 @@ public static class PeaceConference
 
         var ledger = new PeaceLedger(campaign, war, demand.ProposerId);
         var budget = ledger.Budget;
-        var cost = ledger.Cost(demand);
+
+        // Priced as it will be SIGNED, not as it was drawn.
+        //
+        // `Resolve` rounds a demand to whole regions before it applies it, and rounding up
+        // adds ground. Pricing the unrounded version here meant the conference could quote a
+        // number, say they would sign, and then refuse - because the thing actually put in
+        // front of them was bigger than the thing that was priced. One rounding, used by
+        // both.
+        var cost = ledger.Cost(Round(campaign, war, demand));
         if (cost > budget)
             return $"They will not sign: the demand is worth {cost:0} and the war is worth {budget:0}";
         return "";
     }
 
     /// <summary>
+    /// The demand as it would actually be signed: rounded to whole regions.
+    ///
+    /// Returns a copy. `BlockReason` has to be able to price this without changing the
+    /// demand the caller is still editing, and the peace screen calls it on every click.
+    /// </summary>
+    public static PeaceDemand Round(Campaign campaign, StrategicWar war, PeaceDemand demand)
+    {
+        if (demand is null) return null;
+        var rounded = new PeaceDemand
+        {
+            WarId = demand.WarId,
+            ProposerId = demand.ProposerId,
+            Subjugate = demand.Subjugate,
+            Reparations = demand.Reparations,
+            LongTruce = demand.LongTruce,
+            TradeConcessions = demand.TradeConcessions,
+            Demilitarise = demand.Demilitarise,
+            Humiliate = demand.Humiliate
+        };
+        var proposer = campaign?.NationById(demand.ProposerId);
+        if (demand.Provinces.Count == 0 || proposer is null)
+        {
+            foreach (var province in demand.Provinces) rounded.Provinces.Add(province);
+            return rounded;
+        }
+        foreach (var province in Tidy(campaign, war, demand.Provinces, proposer.MapIndex))
+            rounded.Provinces.Add(province);
+        return rounded;
+    }
+
+    /// <summary>
     /// Sign it. The provinces change owner through the ordinary annexation path, so every
     /// region the new border cuts is split exactly as it would be by any other border
     /// change - a written peace is not a special case of the map.
+    ///
+    /// Which is exactly why the rounding happens here as well as where the demand is
+    /// written. Every treaty in the game is signed through this method - the one the AI
+    /// wrote for itself, the one a player drew by hand, the one an ally's war handed over -
+    /// and a rule enforced at the place each of them is written is a rule with as many holes
+    /// as there are places. Enforced at the signature it has none.
+    ///
+    /// Before the price, not after: rounding a region up adds ground the winner was not
+    /// standing on, and a demand priced before that is a demand that gets the difference
+    /// free. Tidied first, then priced, then refused if the war was not worth it.
     /// </summary>
     public static bool Resolve(Campaign campaign, StrategicWar war, PeaceDemand demand)
     {
+        if (demand is not null && demand.Provinces.Count > 0)
+        {
+            var whole = Round(campaign, war, demand);
+            demand.Provinces.Clear();
+            foreach (var province in whole.Provinces) demand.Provinces.Add(province);
+        }
+
         var block = BlockReason(campaign, war, demand);
         war.LastPeaceProposalDay = campaign.ElapsedDays;
         war.LastNegotiation = block.Length == 0 ? "Agreement reached" : block;
@@ -333,7 +389,19 @@ public static class PeaceConference
             var share = asked.GetValueOrDefault(region) / (float)(size <= 0 ? 1 : size);
             var goal = war is not null && region == war.ClaimedStateMapIndex;
 
-            if (share >= up || (goal && share >= down))
+            // The region a war was declared over is taken whole for any share of it at all.
+            //
+            // It used to be exempt from being given back, which is right - a war fought over
+            // one region does not end with the winner deciding the region was not worth it -
+            // and exempt from being rounded up as well, which is how the one region the war
+            // was actually about became the one region the treaty cut in half. Every cut a
+            // decade of AI wars still left on the map came through here.
+            //
+            // The winner pays for the whole region: the demand is priced after this runs and
+            // the loser refuses a treaty worth more than the war, so an army that walked one
+            // province into its own war goal does not get the other thirty-nine for nothing -
+            // it gets a refusal, and asks again when it has won more of the war.
+            if (share >= up || (goal && share > 0f && up > 0f))
             {
                 // Whole. Including ground the winner does not stand on: the border follows
                 // the region, which is the entire point, and the alternative is the cut.
@@ -341,7 +409,7 @@ public static class PeaceConference
                     if (topology.ProvinceToState[province] == (ushort)region) wanted.Add(province);
                 continue;
             }
-            if (goal) continue;
+            if (goal && up <= 0f) continue;  // rounding up is forbidden; leave the goal as drawn
             if (share >= down) continue;     // the middle band, left exactly as it was drawn
 
             foreach (var province in wanted.Where(province =>

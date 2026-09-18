@@ -33,7 +33,12 @@ public sealed class ScenarioState
     /// the day somebody writes those rows they work, and so a mod that renames a region can
     /// ship its own translation the same day it ships the rename.
     /// </summary>
-    public string DisplayName => Loc.Get(Name);
+    /// <summary>
+    /// What a player should call this region. Asked for by id first - six regions are called
+    /// "Southern" and four "Amazonas", and a flat table keyed by name gives all of them the
+    /// same translation. See <see cref="RegionNames"/>.
+    /// </summary>
+    public string DisplayName => RegionNames.Resolve(this);
 
     /// <summary>
     /// The region this one was cut out of, or 0 for a region the scenario authored.

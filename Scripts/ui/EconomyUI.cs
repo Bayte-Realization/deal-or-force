@@ -122,7 +122,8 @@ public partial class DealOrForceGame
             : string.Join("\n", queue.Take(3).Select((project, index) =>
             {
                 var target = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == project.StateMapIndex);
-                return $"{index + 1}. {Tr(BuildingCatalog.Get(project.Building).Name)} — {target?.Name} · {project.Progress:P0}";
+                return $"{index + 1}. {Tr(BuildingCatalog.Get(project.Building).Name)} — " +
+                       $"{target?.DisplayName ?? ""} · {project.Progress:P0}";
             })) + (queue.Length > 3 ? "\n" + Simulation.Loc.Format("+{0} queued", queue.Length - 3) : "");
 
         RefreshEconomyWorkbench();

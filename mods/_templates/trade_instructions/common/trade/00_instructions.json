@@ -1,0 +1,53 @@
+// Example: what a country may decide about its own trade.
+//
+// The trade screen is drawn from this folder rather than from a list in the code: the
+// controls, their bounds, their step, their names and the sentence each one reads as. Name a
+// setting the base game already has and you replace it; name one nothing uses and you get a
+// new control, stored, saved and shown like the rest.
+//
+// A warning that is easy to miss: the weekly routing reads SEVEN of these by name, and they
+// are the seven the base game ships. A control you invent will be stored and shown and will
+// do nothing at all until a script or a patch reads it. That is worth having anyway - a
+// scripted mod can read it - but it is not a free mechanic.
+{
+  // ---- replacing one the game already has -------------------------------------------
+  //
+  // The same id, so this REPLACES the shipped control and leaves the other six alone. A
+  // ceiling that cannot go below a third: this world's countries are not allowed to decide
+  // they will simply do without.
+  "import_ceiling": {
+    "scope": "good",
+    "shape": "share",
+    "default": 1.0,
+    "minimum": 0.34,
+    "maximum": 1.0,
+    "step": 0.02,
+    "name": "Import ceiling",
+    "description": "The most of a shortfall this country is willing to cover by buying it in. It may not go below a third: doing entirely without is not something a modern economy can decide.",
+    "reads": {
+      "resting": "We buy in as much of the shortfall as we can.",
+      "off": "We buy in only what we cannot possibly do without.",
+      "set": "We cover at most {0} of the shortfall by buying; the rest is a shortage we accept."
+    }
+  },
+
+  // ---- and one that is new ------------------------------------------------------------
+  //
+  // An id nothing else uses, so it appears as its own control in the country card, under
+  // Preference and Forbidden. Nothing in the base game reads it - a scripted mod would -
+  // but it is stored on the country, saved, and shown with its own sentences.
+  "strategic_partner": {
+    "scope": "partner",
+    "shape": "flag",
+    "default": 0.0,
+    "minimum": 0.0,
+    "maximum": 1.0,
+    "step": 1.0,
+    "name": "Strategic partnership",
+    "description": "A standing arrangement with that country: their orders are honoured before anybody else's, and ours before theirs.",
+    "reads": {
+      "off": "An ordinary trading partner, like any other.",
+      "on": "A standing partnership. Their orders come first, and ours come first with them."
+    }
+  }
+}

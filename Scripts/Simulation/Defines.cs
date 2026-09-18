@@ -83,8 +83,15 @@ public sealed class Defines
 	/// that happens *on* a day - the weekly clearing, an event roll - runs once for each
 	/// whole day the step crossed, so the answer does not change with the step size.
 	/// Clamped to 1..240.
+	///
+	/// One hour is the default, which is what this genre's players expect of a modern
+	/// wargame: an army arrives in view rather than in jumps, a battle turns during the
+	/// afternoon rather than overnight, and the clock on the top bar means something. It
+	/// costs about four times a daily step per simulated day, which the frame budget in
+	/// DealOrForceGame._Process spends safely - a machine that cannot afford the speed
+	/// setting runs time slower rather than dropping frames.
 	/// </summary>
-	public int HoursPerTick { get; set; } = 24;
+	public int HoursPerTick { get; set; } = 1;
 
 	// --- how fast an army is ---
 

@@ -346,13 +346,14 @@ public partial class DealOrForceGame
         var group = _campaign.ArmyGroups.FirstOrDefault(candidate => candidate.Id == divisions[0].ArmyGroupId);
         _armyPanelTitle.Text = divisions.Count == 1
             ? divisions[0].Name
-            : group?.Name ?? $"{owner?.Tag ?? "?"} field forces";
+            : group?.Name ?? Simulation.Loc.Format("{0} field forces", owner?.Tag ?? "?");
         _armyPanelSubtitle.Text = divisions.Count == 1
             ? OneLineSummary(divisions[0])
-            : $"{group?.Commander ?? "No commander assigned"} · " +
-              $"{divisions.Sum(army => army.Personnel):N0} men · " +
-              $"{divisions.Select(army => army.ArmyGroupId).Distinct().Count()} headquarters";
-        _armyPanelCount.Text = divisions.Count == 1 ? "1 selected" : $"{divisions.Count} selected";
+            : Simulation.Loc.Format("{0} · {1:N0} men · {2:N0} headquarters",
+                group?.Commander ?? Simulation.Loc.Get("No commander assigned"),
+                divisions.Sum(army => army.Personnel),
+                divisions.Select(army => army.ArmyGroupId).Distinct().Count());
+        _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", divisions.Count);
 
         RefreshComposition(divisions);
         RefreshRoster(divisions, mine);
@@ -442,15 +443,18 @@ public partial class DealOrForceGame
             line.AddChild(Bar(army.Organisation, 54,
                 army.Organisation < 0.35f ? "state.negative" :
                 army.InBattle ? "state.warning" : "state.info",
-                $"Organisation {army.Organisation:P0} — how much fight is left in it"));
+                Simulation.Loc.Format("Organisation {0:P0} — how much fight is left in it",
+                    army.Organisation)));
             line.AddChild(Bar(army.Strength, 40,
                 army.Strength < 0.55f ? "state.warning" : "state.positive",
-                $"Fighting strength {army.Strength:P0} — {army.Personnel:N0} of {army.MaxPersonnel:N0} men"));
+                Simulation.Loc.Format("Fighting strength {0:P0} — {1:N0} of {2:N0} men",
+                    army.Strength, army.Personnel, army.MaxPersonnel)));
             line.AddChild(StatusPip(army));
         }
 
         if (divisions.Count > 120)
-            _armyRoster.AddChild(Title($"…and {divisions.Count - 120} more", 11, Ui.Colour("text.faint")));
+            _armyRoster.AddChild(Title(Simulation.Loc.Format("…and {0:N0} more", divisions.Count - 120),
+                11, Ui.Colour("text.faint")));
     }
 
     /// <summary>
@@ -518,29 +522,39 @@ public partial class DealOrForceGame
         var template = UnitTypeCatalog.Get(army.TemplateId);
         var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == army.StateMapIndex);
         var text =
-            $"{army.Name}\n{template.Name}\n\n" +
-            $"Organisation: {army.Organisation:P0} of {template.Organisation:P0}\n" +
-            $"Fighting strength: {army.Strength:P0}\n" +
-            $"Manpower: {army.Personnel:N0} of {army.MaxPersonnel:N0}\n" +
-            $"Equipment: {army.Equipment:P0} · experience: {army.Experience:P0}\n" +
-            $"Supply: {army.SupplyLevel:P0}" + (army.CutOff ? " — CUT OFF\n" : "\n") +
-            $"Entrenchment: {army.Entrenchment:P0}\n";
+            army.Name + "\n" + Simulation.Loc.Get(template.Name) + "\n\n" +
+            Simulation.Loc.Format("Organisation: {0:P0} of {1:P0}",
+                army.Organisation, template.Organisation) + "\n" +
+            Simulation.Loc.Format("Fighting strength: {0:P0}", army.Strength) + "\n" +
+            Simulation.Loc.Format("Manpower: {0:N0} of {1:N0}", army.Personnel, army.MaxPersonnel) + "\n" +
+            Simulation.Loc.Format("Equipment: {0:P0} · experience: {1:P0}",
+                army.Equipment, army.Experience) + "\n" +
+            Simulation.Loc.Format("Supply: {0:P0}", army.SupplyLevel) +
+            (army.CutOff ? " — " + Simulation.Loc.Get("CUT OFF") : "") + "\n" +
+            Simulation.Loc.Format("Entrenchment: {0:P0}", army.Entrenchment) + "\n";
         if (IsOffensive(army))
-            text += $"Plan preparation: {army.Planning:P0} " +
-                    $"(up to +{_campaign.Defines.MaxPlanningAttackBonus:P0} attack)\n";
-        text += $"\n{state?.Name ?? "Unmapped ground"} · province #{army.ProvinceId:N0}\n" +
-                $"Order: {OrderName(army.OrderKind)} · posture: {StanceName(army.Stance)}";
-        if (army.InBattle) text += $"\nEngaged in battle #{army.BattleId}";
+            text += Simulation.Loc.Format("Plan preparation: {0:P0} (up to +{1:P0} attack)",
+                army.Planning, _campaign.Defines.MaxPlanningAttackBonus) + "\n";
+        text += "\n" + Simulation.Loc.Format("{0} · province #{1:N0}",
+                    state is null ? Simulation.Loc.Get("Unmapped ground") : state.DisplayName,
+                    army.ProvinceId) + "\n" +
+                Simulation.Loc.Format("Order: {0} · posture: {1}",
+                    OrderName(army.OrderKind), StanceName(army.Stance));
+        if (army.InBattle)
+            text += "\n" + Simulation.Loc.Format("Engaged in battle #{0}", army.BattleId);
         if (army.LastMoveResult == ArmyMoveResult.RouteInterrupted)
-            text += "\nRoute interrupted: territorial control changed and no legal corridor remains. Issue a new destination.";
+            text += "\n" + Simulation.Loc.Get(
+                "Route interrupted: territorial control changed and no legal corridor remains. Issue a new destination.");
         return text;
     }
 
     private string OneLineSummary(Army army)
     {
         var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == army.StateMapIndex);
-        return $"{UnitTypeCatalog.Get(army.TemplateId).Name} · {state?.Name ?? "unmapped"} · " +
-               $"{army.Personnel:N0} men";
+        return Simulation.Loc.Format("{0} · {1} · {2:N0} men",
+            Simulation.Loc.Get(UnitTypeCatalog.Get(army.TemplateId).Name),
+            state is null ? Simulation.Loc.Get("unmapped") : state.DisplayName,
+            army.Personnel);
     }
 
     private static string Shorten(string text, int limit) =>
@@ -566,7 +580,9 @@ public partial class DealOrForceGame
             _selectedArmies.AddRange(_campaign.Armies.Where(candidate =>
                 candidate.NationId == _campaign.Player.Id && candidate.TemplateId == template));
             _selectedArmy = _selectedArmies.FirstOrDefault();
-            SetArmyFeedback($"{_selectedArmies.Count} division(s) of {UnitTypeCatalog.Get(template).Name} selected.");
+            SetArmyFeedback(Simulation.Loc.Format(
+                Simulation.Plural.Key("{0:N0} division of {1} selected.", _selectedArmies.Count),
+                _selectedArmies.Count, Simulation.Loc.Get(UnitTypeCatalog.Get(template).Name)));
         }
         else if (Input.IsKeyPressed(Key.Ctrl))
         {
@@ -574,7 +590,9 @@ public partial class DealOrForceGame
             else _selectedArmies.Add(army);
             if (_selectedArmies.Count == 0) { ClearArmySelectionAndClose(); return; }
             _selectedArmy = _selectedArmies[0];
-            SetArmyFeedback($"{_selectedArmies.Count} division(s) selected.");
+            SetArmyFeedback(Simulation.Loc.Format(
+                Simulation.Plural.Key("{0:N0} division selected.", _selectedArmies.Count),
+                _selectedArmies.Count));
         }
         else
         {
@@ -582,7 +600,7 @@ public partial class DealOrForceGame
             _selectedArmies.Add(army);
             _selectedArmy = army;
             _globe.FocusOn(army.Latitude, army.Longitude, 6.8f);
-            SetArmyFeedback($"{army.Name} has the orders.");
+            SetArmyFeedback(Simulation.Loc.Format("{0} has the orders.", army.Name));
         }
 
         _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));

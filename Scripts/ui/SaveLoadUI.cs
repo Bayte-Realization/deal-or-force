@@ -274,12 +274,19 @@ public partial class DealOrForceGame
 
     private async void LoadFromSlot(string slot)
     {
-        await RunLoadingOperation("Restoring a campaign", async () =>
+        var restored = await RunLoadingOperation("Restoring a campaign", async () =>
         {
             await LoadingPhase("Reading and checking the save", 20);
             await RestoreCampaignFromSlot(slot);
             await WaitForMapPresentation();
         }, canReturn: true);
+
+        // A load that did not happen used to leave the player at the main menu, because the
+        // menu was a panel drawn over the world and it was still there underneath. It is a
+        // scene of its own now, so there is nothing behind a refused load - and a globe with
+        // no interface on it is not an answer to anything. Back to the front door.
+        if (!restored && _hudLayer is { Visible: false } && _pickerLayer is { Visible: false })
+            ShowMainMenu();
     }
 
     private async System.Threading.Tasks.Task RestoreCampaignFromSlot(string slot)

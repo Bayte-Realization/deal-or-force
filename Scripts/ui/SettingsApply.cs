@@ -17,15 +17,47 @@ namespace DealOrForce;
 /// </summary>
 public partial class DealOrForceGame
 {
+    /// <summary>
+    /// Whether this is the sweep rather than one row changing.
+    ///
+    /// The sweep runs three times as the game comes up, and some options are expensive to
+    /// obey - renaming every country on the map rebuilds two hundred and sixty-one pieces of
+    /// 3D text. Doing that once at the end of the sweep is the same result for a sixth of
+    /// the work.
+    /// </summary>
+    private bool _applyingEverySetting;
+
     /// <summary>Put every saved preference into effect. Called once, as the game comes up.</summary>
     private void ApplyAllSettings()
     {
-        foreach (var definition in SettingsCatalog.All) ApplySetting(definition.Id);
+        _applyingEverySetting = true;
+        try
+        {
+            foreach (var definition in SettingsCatalog.All) ApplySetting(definition.Id);
+        }
+        finally
+        {
+            _applyingEverySetting = false;
+        }
+
+        CountryNames.Refresh();
         _settingsNeedRestart = false;
     }
 
     private void ApplySetting(string id)
     {
+        // A naming option is not one of a fixed list. `country_name_<tag>` is however many
+        // countries the base game and its mods argue about the name of, so it is matched by
+        // its shape rather than by a case per country - which is what makes a mod able to
+        // add one without touching this file.
+        if (id.StartsWith(CountryNames.VariantPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            if (_applyingEverySetting) return;
+            CountryNames.Refresh();
+            RefreshLocalisedText();
+            return;
+        }
+
         switch (id.ToLowerInvariant())
         {
             // ---- the game ------------------------------------------------------------
@@ -130,7 +162,12 @@ public partial class DealOrForceGame
             ? value
             : (int)MathF.Round(SettingsCatalog.Number(id));
 
-    private void ApplyWindowMode(string mode)
+    /// <summary>
+    /// The window mode, which is a DisplayServer call and nothing else - so the main menu,
+    /// which has no campaign behind it, applies it through the same code rather than a
+    /// second copy that drifts.
+    /// </summary>
+    internal static void ApplyWindowMode(string mode)
     {
         switch (mode.ToLowerInvariant())
         {

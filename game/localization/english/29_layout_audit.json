@@ -1,0 +1,11 @@
+// Deal or Force - the layout audit.
+//
+// Five times a caption in this game has been given less room than its own text and
+// shown up as something else entirely - a column of single letters, an empty space,
+// two stray dots, a sentence that appeared to begin mid-word. The `layout` console
+// command names them in one go, and in a debug build the same audit runs on its own
+// once a second over whatever is on screen.
+{
+  "Every visible caption has room for its own text.": "Every visible caption has room for its own text.",
+  "{0} caption(s) have not been given room for their text:": "{0} caption(s) have not been given room for their text:"
+}

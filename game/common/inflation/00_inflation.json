@@ -15,6 +15,64 @@
 //     sets. Raising it damps prices, makes the country's own debt dearer, and costs growth.
 //   · the numbers below, which move the standard of living, radicalism and stability.
 {
+  // ---------------------------------------------------------------- the central bank -----
+  //
+  // The key rate has always been the `debt_interest` line in `common/budget`: a multiplier
+  // between a fifth of neutral and three times it. What was missing was a bank to move it.
+  // These say what the bank is for and how it behaves, and they apply to every country in
+  // the world - a player's included, until the player takes the rate off them.
+  "central_bank": {
+    // What neutral MEANS, per annum. The line's multiplier is read against this, so a mod
+    // that wants a 1970s world raises it and every rate in the game reads higher.
+    "neutral_rate": 0.04,
+
+    // What the bank is holding prices at. The same figure `base` above rests near, on
+    // purpose: a bank aiming somewhere its own economy does not rest is a bank permanently
+    // fighting its own country.
+    "target": 0.02,
+
+    // Points of rate per point of overshoot. Above one deliberately - a bank that raises by
+    // less than prices rose has loosened while appearing to tighten.
+    "response": 1.6,
+
+    // How much of the distance it covers in an economic week. Banks move in steps.
+    "smoothing": 0.25,
+
+    // How much overshoot it forgives while the country is at war. Somebody has to fund it.
+    "war_tolerance": 0.015,
+
+    // And what a government pays for holding the rate below what the bank wanted, per point
+    // it holds it down. This is the price of taking the lever, and it is the real one:
+    // cheap money by decree is money nobody believes will stay cheap.
+    "credibility": 0.35,
+
+    // ---------------------------------------------------------------- the printing press --
+    //
+    // A government that has taken the bank can also have it print. The money is real, it
+    // arrives immediately, and it goes straight into the treasury - which is exactly why
+    // this is the most dangerous button in the game rather than a free one.
+    //
+    // It is deliberately downstream of the seizure above: a player who never took the bank
+    // never sees the press. Two levers, one unlocking the other, with different prices.
+
+    // The most of a year's output a government may have printed in a year. Fifteen per cent
+    // is well past what any solvent country does and short of what a collapsing one does.
+    "emission_ceiling": 0.15,
+
+    // Points of inflation per unit of annual output printed, directly. Money that was not
+    // earned, chasing goods that were not made.
+    "emission_inflation": 0.90,
+
+    // And what it costs in belief, per unit printed - which is larger, and is the mechanic.
+    // Holding the rate down says money will be cheap. Printing says there is no longer a
+    // limit, and that is a much more expensive thing to have said.
+    "emission_credibility": 1.60,
+
+    // How much of that belief comes back each economic week once the press stops. Slowly:
+    // a country that printed through a war goes on paying for it through the peace.
+    "emission_memory_decay": 0.12
+  },
+
   // Where a settled country with a balanced budget, a supplied market and no war ends up.
   // Not zero, deliberately: every central bank in the world this game is set in is aiming
   // at about two per cent, and a model that rests at zero makes any inflation look like a

@@ -409,6 +409,43 @@ public sealed partial class Nation
     /// </summary>
     public readonly Dictionary<string, float> PolicyRates = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Whether this government has taken the key rate off its own central bank.
+    ///
+    /// False is the ordinary arrangement and the default for every country in the world: the
+    /// bank holds the rate against its target and the government spends what it dares. True
+    /// hands the lever to the player - and hands them the bill, because money a government
+    /// has ordered to be cheap is money nobody believes will stay cheap. See
+    /// <see cref="CentralBank"/>.
+    ///
+    /// A public field, so the save carries it without anything being written to carry it.
+    /// </summary>
+    public bool GovernmentSetsKeyRate;
+
+    /// <summary>
+    /// How much money this government is having printed for it, as a share of a year's
+    /// output per year. Zero for everybody until somebody decides otherwise, and forced back
+    /// to zero the moment the central bank is independent again.
+    /// </summary>
+    /// <summary>
+    /// Portfolios this country has handed to its own civil service - see
+    /// <see cref="Delegation"/>. Empty for everybody except a player who asked.
+    /// </summary>
+    public readonly HashSet<string> Delegated = new(StringComparer.Ordinal);
+
+    public float MoneyPrinting;
+
+    /// <summary>
+    /// What the country is remembered for printing, which is not the same as what it is
+    /// printing now.
+    ///
+    /// The press stopping does not un-print the money or restore anybody's confidence that
+    /// it will stay stopped. This rises to whatever the press is running at and falls back
+    /// slowly on its own, and it is what prices actually answer to - so a government that
+    /// printed through a war goes on paying for it through the peace.
+    /// </summary>
+    public float EmissionMemory;
+
     public bool IsPlayer;
     public bool IsHuman;
 }
@@ -470,6 +507,23 @@ public sealed partial class Campaign
     /// enough to see, and beyond ten days a single step hides a war.
     /// </summary>
     public int TickHours => Math.Clamp(Defines?.HoursPerTick ?? 24, 1, 240);
+
+    /// <summary>
+    /// Whether this step is the one that opened its campaign day.
+    ///
+    /// Most of what runs per step accumulates - a march, a supply draw, a round of fighting -
+    /// and takes its share of the step through <see cref="TickScale"/>. A few things do not:
+    /// they are decisions that belong to a DAY, and they say so by dividing the day number.
+    /// "Every third day" written inside a pass that runs per step means every third step,
+    /// which at a daily step is the same sentence and at an hourly step is twenty-four times
+    /// on the third day and never on the other two.
+    ///
+    /// A pass that thinks in days asks this first. True at every step of a daily or longer
+    /// step, true for the first of the twenty-four hourly ones, and true by default so that a
+    /// pass called outside <see cref="Tick"/> - by the bench, by a test - behaves as it always
+    /// has.
+    /// </summary>
+    public bool StepOpensNewDay { get; private set; } = true;
 
     /// <summary>
     /// How much of a day one step covers. Every rate written "per day" is multiplied by
@@ -568,6 +622,26 @@ public sealed partial class Campaign
         string.Equals(n.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(n.Iso, tag, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Advance one whole campaign day, whatever the step length is.
+    ///
+    /// <see cref="Tick"/> advances a STEP, and a step has not been a day since the step
+    /// became a setting: at the shipped hour it takes twenty-four of them. Anything that
+    /// means "a day" - a harness measuring a day's cost, a test that wants a year of world -
+    /// has to say so, or it silently runs a twenty-fourth of what it thinks and every
+    /// duration it checks becomes a different claim.
+    ///
+    /// Bounded, because a paused campaign never advances and a step longer than a day
+    /// overshoots on purpose: a ten-day step crosses ten days and this returns after one
+    /// call, which is the honest answer to "advance a day" at that setting.
+    /// </summary>
+    public void TickDay()
+    {
+        if (IsPaused) return;
+        var until = ElapsedDays + 1;
+        for (var steps = 0; ElapsedDays < until && steps < 240; steps++) Tick();
+    }
+
     public void Tick()
     {
         if (IsPaused) return;
@@ -583,6 +657,10 @@ public sealed partial class Campaign
         ElapsedHours += hours;
         Date.Advance(hours);
         var daysCrossed = ElapsedDays - before;
+        // Read by the handful of per-step passes that are really once-a-day decisions. See
+        // StepOpensNewDay for why they cannot simply be moved into the day loop below: they
+        // have to run before the fighting, not after it.
+        StepOpensNewDay = daysCrossed > 0;
         DiagnosticLogs.SetDay(ElapsedDays);
 
         // Each pass is measured so both the in-game console (`sim`) and the headless
@@ -1030,6 +1108,14 @@ public static class SimProfiler
     private static readonly Dictionary<string, Sample> Samples = new();
 
     public static IReadOnlyCollection<Sample> All => Samples.Values;
+
+    /// <summary>
+    /// Forget every measurement.
+    ///
+    /// For a harness that wants to count one run's passes rather than a session's: how often
+    /// a system ran is only an answer if something said when to start counting.
+    /// </summary>
+    public static void Reset() => Samples.Clear();
 
     public static Scope Measure(string name) => new(name);
 

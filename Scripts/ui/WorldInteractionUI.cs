@@ -325,7 +325,7 @@ public partial class DealOrForceGame
         {
             DetailRow("Opinion", $"{relation.Opinion:+0;-0;0}", Tr("How this government regards you."),
                 relation.Opinion < 0 ? "state.negative" : "state.positive", () => relation.OpinionDrivers);
-            DetailRow("Stance", Tr(relation.Stance.ToString()));
+            DetailRow("Stance", Simulation.DiplomaticVocabulary.StanceName(relation.Stance));
             foreach (var entry in relation.OpinionDrivers.Entries.OrderByDescending(item => System.Math.Abs(item.Value)).Take(5))
                 DetailRow(entry.Source, $"{entry.Value:+0;-0;0}");
         }

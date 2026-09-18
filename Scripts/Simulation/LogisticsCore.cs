@@ -40,6 +40,10 @@ public static class LogisticsSystem
     public static void Tick(Campaign campaign)
     {
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        // Every third day, and once on it. Without the first half of this a campaign
+        // stepping an hour at a time rebuilt the whole supply network twenty-four times on
+        // the third day and not at all on the other two.
+        if (!campaign.StepOpensNewDay) return;
         if (campaign.ElapsedDays > 1 && campaign.ElapsedDays % 3 != 0) return;
 
         var topology = campaign.ProvinceMap;

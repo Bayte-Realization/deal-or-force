@@ -428,6 +428,13 @@ public sealed class SplitArmyCommand : ICampaignCommand
 
 public static class MilitaryOperations
 {
+    /// <summary>
+    /// How much of a country's replacement capacity each of its formations has a claim on,
+    /// rebuilt every step. Held here so the step does not allocate it; see the note at its
+    /// one use.
+    /// </summary>
+    private static readonly Dictionary<int, float> ReinforcementWeights = new();
+
     public static void Tick(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;
@@ -437,7 +444,12 @@ public static class MilitaryOperations
         // that returned it unused and quietly threw it away: Russia could field six million
         // reservists and still watch its line fall to 6 % strength, because most of what it
         // could move each day was allotted to divisions that were already full.
-        var reinforcementWeights = new Dictionary<int, float>();
+        // Reused rather than rebuilt. At a daily step this was one dictionary of two hundred
+        // and sixty entries a day and beneath noticing; at the shipped hourly one it is
+        // twenty-four, and the pass that builds it is already the largest single source of
+        // garbage in the simulation.
+        var reinforcementWeights = ReinforcementWeights;
+        reinforcementWeights.Clear();
         foreach (var formation in campaign.Armies)
         {
             if (!CanTakeReplacements(formation)) continue;
@@ -607,6 +619,31 @@ public static class MilitaryOperations
 public sealed class SetArmyOrderCommand : ICampaignCommand
 {
     /// <summary>
+    /// Whether a post already holds more than its share of the country's line.
+    ///
+    /// The bar is deliberately slack - half again over an even spread, and never fewer than
+    /// three - because re-tasking a division costs it a march, and a planner that rebalances
+    /// on every rounding error is the "my troops will not advance, they just walk about"
+    /// failure this file spent a long time getting rid of. This only fires on a genuine
+    /// pile.
+    /// </summary>
+    private static bool Overcrowded(Campaign campaign, Army army, StrategicWar war, int post, int posts)
+    {
+        if (posts <= 1 || war is null) return false;
+        var peers = 0;
+        var here = 0;
+        foreach (var other in campaign.Armies)
+        {
+            if (other.NationId != army.NationId || other.Id == army.Id) continue;
+            if (other.TemplateId == MilitiaCore.TemplateId) continue;
+            if (other.AssignedWarId != war.Id) continue;
+            peers++;
+            if (other.OrderProvinceId == post) here++;
+        }
+        return here > M.Max(3f, (peers + 1) / (float)posts * 1.5f);
+    }
+
+    /// <summary>
     /// Where on the line this division stands, when the player has not drawn one.
     ///
     /// It used to be `orderedFront[|id| % count]`, which looks like a spread and is not
@@ -622,15 +659,33 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
     /// along instead of permuting the whole army, and a division that is already where it
     /// was sent usually stays there.
     /// </summary>
-    private static int PostOnTheLine(Campaign campaign, Army army, ArmyOrder order, List<int> line)
+    private static int PostOnTheLine(Campaign campaign, Army army, ArmyOrder order, List<int> line, int warId)
     {
         if (line.Count == 0) return -1;
 
+        // Peers on THIS line, not everywhere the country has somebody standing.
+        //
+        // The count decides how far apart the posts are, and it used to be every division of
+        // the nation with the same duty - across every war it was in. A country fighting on
+        // two fronts therefore divided one front's length by both fronts' divisions, so each
+        // line's formations landed inside a slice of it a fraction of its length, and the
+        // rest of the line was held by nobody.
+        //
+        // The war is passed in rather than read off the division, and that is the whole of
+        // the pile. `Apply` clears `AssignedWarId` at the top, before it has worked out where
+        // to send anybody, and restores it at the bottom - so a filter written as
+        // `other.AssignedWarId != army.AssignedWarId` compares every division in the army
+        // against -1, matches nobody, counts one peer, takes the branch below and sends the
+        // division to the middle of the line. Every division. Sixty-nine of Russia's
+        // seventy-seven in one province, and the other eight somewhere behind them.
+        //
+        // The division being posted is its own peer whatever its field currently says.
         var peers = 0;
         var rank = 0;
         foreach (var other in campaign.Armies)
         {
             if (other.NationId != army.NationId || other.OrderKind != order) continue;
+            if (other.Id != army.Id && other.AssignedWarId != warId) continue;
             if (other.TemplateId == MilitiaCore.TemplateId) continue;
             peers++;
             if (other.Id < army.Id) rank++;
@@ -727,7 +782,16 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         // a division standing on a good post on the line is standing on a good post whatever
         // it has just been told to call itself; the two questions are separate, and only one
         // of them is a reason to start walking somewhere else.
-        var keeping = heldPost > 0 && orderedFront.Contains(heldPost);
+        //
+        // ...unless that post is already carrying more than its share. Keeping a post is
+        // what stops an army walking about, and it is also why a post never gives anybody
+        // up: a war that opens on a one-province front hands every division the same post,
+        // and when the front grows to five they all keep the one they were given while the
+        // other four provinces are held by nobody. Measured, that is how Turkey finished a
+        // decade with twenty-nine of forty divisions in one place - every one of them
+        // standing exactly where it had been told to stand.
+        var keeping = heldPost > 0 && orderedFront.Contains(heldPost) &&
+                      !Overcrowded(campaign, army, war, heldPost, orderedFront.Count);
 
         var target = PreferredProvinceId > 0 && orderedFront.Contains(PreferredProvinceId)
             ? PreferredProvinceId
@@ -735,7 +799,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                 ? heldPost
                 : drawn is not null
                     ? BattlePlanning.PostFor(drawn, army, orderedFront)
-                    : PostOnTheLine(campaign, army, Order, orderedFront);
+                    : PostOnTheLine(campaign, army, Order, orderedFront, war.Id);
         var enemyId = war.EnemyLeaderOf(army.NationId);
         var enemy = campaign.NationById(enemyId);
         var targetIsHostile = target > 0 && enemy is not null && controllers[target] == enemy.MapIndex;

@@ -1193,6 +1193,19 @@ public static class ConstructionSystem
 {
     public static void Tick(Campaign campaign)
     {
+        // A site works a day at a time, and this runs a step at a time.
+        //
+        // `ProgressDays++` and a day's payment, once per step, is correct exactly while a
+        // step is a day. At the shipped hourly step it was twenty-four days of building and
+        // twenty-four days of money every day: every country in the world finished
+        // everything it had queued in a twenty-fourth of the time, and the world came out
+        // the far end making five and a half times the industrial materials it wanted.
+        //
+        // Gated rather than scaled because the field is called ProgressDays and is counted
+        // in them. A fractional day of progress would be a different model, and a truer one;
+        // it is not the one this is.
+        if (!campaign.StepOpensNewDay) return;
+
         // The oldest unfinished project each country has, found by hand. Where().OrderBy()
         // .FirstOrDefault() built a closure, an enumerator, a sorter and its key buffer for
         // every one of the two hundred and sixty-one countries every single day, to pick

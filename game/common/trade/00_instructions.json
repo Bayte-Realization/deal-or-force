@@ -18,6 +18,17 @@
 // The base price a price limit is a multiple of is the good's own, from common/goods - so a
 // ceiling of 1.4 on oil means "not above forty per cent over what oil is normally worth",
 // and it keeps meaning that after a mod reprices oil.
+// Each control also says what it is DOING, at whatever it is set to. A number and its name
+// are not an instruction: "Price floor 0.4x" is a fact about a control, and "we will not
+// sell this below two fifths of what it is worth" is the decision the player made. The
+// screen shows the sentence under the slider and dims the row when the setting is resting.
+//
+//   reads.resting  at the declared default - this control is not doing anything
+//   reads.off      at the bottom of the range, where that means none rather than a little
+//   reads.on       at the top, or for a flag when it is on
+//   reads.set      anywhere else; {0} is the value as the screen prints it
+//
+// All four are ordinary localisation keys, like `name` and `description`.
 {
   "import_priority": {
     "scope": "good",
@@ -27,7 +38,12 @@
     "maximum": 5.0,
     "step": 0.25,
     "name": "Import priority",
-    "description": "How far up the queue this country stands when the world is short of this good. Buyers are served in order of how badly they need it; this weighs that need. It decides who is served first, not how much arrives."
+    "description": "How far up the queue this country stands when the world is short of this good. Buyers are served in order of how badly they need it; this weighs that need. It decides who is served first, not how much arrives.",
+    "reads": {
+      "resting": "We queue with everybody else when the world is short.",
+      "off": "We stand aside and let others be served first.",
+      "set": "Our claim weighs {0} when the world is short of it."
+    }
   },
 
   "import_ceiling": {
@@ -38,7 +54,12 @@
     "maximum": 1.0,
     "step": 0.05,
     "name": "Import ceiling",
-    "description": "The most of a shortfall this country is willing to cover by buying it in. Below one it goes short on purpose rather than depend on anybody for the rest."
+    "description": "The most of a shortfall this country is willing to cover by buying it in. Below one it goes short on purpose rather than depend on anybody for the rest.",
+    "reads": {
+      "resting": "We buy in as much of the shortfall as we can.",
+      "off": "We buy none of it in. Whatever we cannot make, we go without.",
+      "set": "We cover at most {0} of the shortfall by buying; the rest is a shortage we accept."
+    }
   },
 
   "export_reserve": {
@@ -49,7 +70,12 @@
     "maximum": 1.0,
     "step": 0.05,
     "name": "Export reserve",
-    "description": "The share of a surplus kept at home before any of it is sold. At one nothing leaves the country, whatever anybody offers."
+    "description": "The share of a surplus kept at home before any of it is sold. At one nothing leaves the country, whatever anybody offers.",
+    "reads": {
+      "resting": "Everything we do not need ourselves is for sale.",
+      "on": "Nothing leaves the country, whatever anybody offers.",
+      "set": "We keep {0} of the surplus at home before any of it is sold."
+    }
   },
 
   "price_ceiling": {
@@ -60,7 +86,11 @@
     "maximum": 5.0,
     "step": 0.1,
     "name": "Price ceiling",
-    "description": "Refuse to buy above this multiple of the good's base price. Nought is no limit, which is where every country starts."
+    "description": "Refuse to buy above this multiple of the good's base price. Nought is no limit, which is where every country starts.",
+    "reads": {
+      "resting": "We will pay whatever it costs.",
+      "set": "We will not buy above {0} of what it is normally worth."
+    }
   },
 
   "price_floor": {
@@ -71,7 +101,11 @@
     "maximum": 5.0,
     "step": 0.1,
     "name": "Price floor",
-    "description": "Refuse to sell below this multiple of the good's base price. Nought is no limit."
+    "description": "Refuse to sell below this multiple of the good's base price. Nought is no limit.",
+    "reads": {
+      "resting": "We will take whatever it fetches.",
+      "set": "We will not sell below {0} of what it is normally worth."
+    }
   },
 
   "preference": {
@@ -82,7 +116,12 @@
     "maximum": 3.0,
     "step": 0.25,
     "name": "Preference",
-    "description": "How much this country favours dealing with that one, over and above what distance and diplomacy already say. Both sides' preferences multiply, so a partner who dislikes you back is harder to reach than one who does not."
+    "description": "How much this country favours dealing with that one, over and above what distance and diplomacy already say. Both sides' preferences multiply, so a partner who dislikes you back is harder to reach than one who does not.",
+    "reads": {
+      "resting": "We deal with them on the ordinary terms.",
+      "off": "We do not seek them out at all.",
+      "set": "We favour dealing with them by {0}."
+    }
   },
 
   "forbid": {
@@ -93,6 +132,10 @@
     "maximum": 1.0,
     "step": 1.0,
     "name": "Forbidden",
-    "description": "No trade with that country - in everything, or in one good when the rule names one. Either side forbidding it is enough."
+    "description": "No trade with that country - in everything, or in one good when the rule names one. Either side forbidding it is enough.",
+    "reads": {
+      "off": "We trade with them.",
+      "on": "No trade with them at all. One side saying so is enough."
+    }
   }
 }

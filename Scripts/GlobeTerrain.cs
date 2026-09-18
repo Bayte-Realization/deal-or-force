@@ -9,13 +9,16 @@ namespace DealOrForce;
 public sealed partial class GlobePresentation
 {
     private static string TerrainDescription(TerrainDefinition t) =>
-        $"\n{t.Name} · march ×{t.MovementSpeed:0.##} · attack ×{t.Attack:0.##}" +
-        $"\nDefense ×{t.Defense:0.##} · frontage ×{t.CombatWidth:0.##} · supply ×{t.Supply:0.##}";
+        "\n" + Loc.Format("{0} · march ×{1:0.##} · attack ×{2:0.##}",
+            Loc.Get(t.Name), t.MovementSpeed, t.Attack) +
+        "\n" + Loc.Format("Defense ×{0:0.##} · frontage ×{1:0.##} · supply ×{2:0.##}",
+            t.Defense, t.CombatWidth, t.Supply);
 
     // All allocations happen once when the map loads, not once per province per frame.
     // Texture arrays isolate each tile's mip chain: neighbouring atlas slots cannot bleed.
     private void ApplyTerrainPresentation(ProvinceTopology topology)
     {
+        if (TerrainCatalog.LoadError.Length > 0) GD.PushWarning("[dof] terrain catalog: " + TerrainCatalog.LoadError);
         var definitions = TerrainCatalog.All;
         var images = new Godot.Collections.Array<Image>();
         var slots = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
@@ -26,7 +29,7 @@ public sealed partial class GlobePresentation
             var tile = File.Exists(definition.Texture) ? Image.LoadFromFile(definition.Texture) : null;
             if (tile is null || tile.IsEmpty())
             {
-                GD.PushWarning($"[dof] terrain {definition.Id}: texture unavailable; using its map color");
+                GD.PushWarning($"[dof] terrain {definition.Id}: texture unavailable; using its map color (data root: {GameDataLoader.DataFolder()})");
                 tile = Image.CreateEmpty(256, 256, false, Image.Format.Rgba8);
                 tile.Fill(new Color($"#{definition.Color:X6}"));
             }

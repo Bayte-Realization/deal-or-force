@@ -62,42 +62,50 @@ examples at all three levels: JSON, GDScript, compiled C#. The rest is in
 
 ## Building and running
 
-You need **Godot 4.7+ (.NET)** and the **.NET SDK 8**.
+**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) is the full account**, written for
+somebody who has never opened this project. The short version:
+
+You need **Godot 4.7.2 in its .NET build** — the plain download will open the project and
+find no scripts — and the **.NET SDK 8**.
 
 ```bash
+git clone https://github.com/Bayte-Realization/deal-or-force.git
+cd deal-or-force
 dotnet build DealOrForce.csproj
 ```
 
-Then open the folder in Godot and press Play — the main scene is `Scenes/Main.tscn`. To
-build a copy somebody else can run:
+Then open the folder in Godot and press **F5**. The game opens on `Scenes/MainMenu.tscn`,
+which is a scene of its own and comes up immediately; the world is built when you ask for a
+campaign, which takes ten to thirty seconds.
+
+On a fresh clone Godot will report two missing autoloads (`fennara`, `godot_ai`). They belong
+to editor plugins that are not in the repository and the game does not use them — remove them
+in *Project → Project Settings → Autoload*.
+
+**Before trusting a change**, play a campaign without the engine and check it against about a
+hundred invariants: that the economy adds up, that two identical worlds stay identical, that
+a front has not quietly stopped being contested.
+
+```bash
+dotnet run -c Release --project Tools/SimBench/SimBench.csproj -- 730
+```
+
+To build a copy somebody else can double-click — this needs Godot's export templates
+installed, see [docs/BUILDING.md](docs/BUILDING.md):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 ```
 
-`Tools/SimBench` plays a campaign without the engine and checks it against about a hundred
-invariants: that the economy adds up, that two identical worlds stay identical, that a front
-has not quietly stopped being contested. It is the thing to run before trusting a change.
-
-```bash
-dotnet run --project Tools/SimBench/SimBench.csproj -- 730
-```
-
-### After a fresh clone
-
-`addons/` is not in the repository — those are third-party editor plugins, about 1.6 GB, and
-the game does not reference them anywhere. But `project.godot` still registers two autoloads
-belonging to development tools (`fennara`, `godot_ai`), so Godot will report them missing.
-Remove them in *Project → Project Settings → Autoload*; the game does not care.
-
 ## Documentation
 
 | | |
 |---|---|
+| [GETTING_STARTED](docs/GETTING_STARTED.md) | how to run and build it |
 | [PLAYER_GUIDE](docs/PLAYER_GUIDE.md) | how to play |
 | [MODDING_GUIDE](docs/MODDING_GUIDE.md) | how to change it |
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | how it is built |
-| [CSHARP_GUIDE](docs/CSHARP_GUIDE.md) | for a first change in C# |
+| [CSHARP_GUIDE](docs/CSHARP_GUIDE.md) | **C# from scratch, taught on this game's own code** |
 | [NETWORK_MULTIPLAYER](docs/NETWORK_MULTIPLAYER.md) | LAN and direct IP |
 
 ## Known debts
@@ -105,7 +113,8 @@ Remove them in *Project → Project Settings → Autoload*; the game does not ca
 - The map rasters ship twice: Godot imports all 319 PNGs into the `.pck`, and they are also
   laid down as ordinary files because part of the code reads them directly. Tens of
   megabytes nobody needs.
-- The interface is built in code; there is no `gui/` folder a mod could restyle.
+- The interface is built in code, though where every panel sits is declared in
+  `game/gui/` and the palette in `game/interface/`, so a reskin needs no compiler.
 - No host migration in multiplayer: losing the host ends the session.
 
 ## Licence

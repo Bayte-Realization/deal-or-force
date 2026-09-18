@@ -44,6 +44,36 @@ public static class Program
         Console.WriteLine($"Campaign created in {setup.ElapsedMilliseconds} ms: " +
                           $"{campaign.Nations.Count} nations, {campaign.States.Count} states.");
 
+        // `--regions` prints the region table and stops. Region localisation is keyed by
+        // id, and an id is derived rather than authored - the ISO code where a region has
+        // one, the owner's tag and a slug of the name where it has not, a map index
+        // appended when two would otherwise collide, plus whatever the territorial
+        // corrections add afterwards. The generator that writes the localisation tables
+        // asks the simulation for those ids instead of reimplementing the derivation,
+        // because a reimplementation drifts and the drift shows up as a missing name.
+        if (Array.IndexOf(args, "--regions") >= 0)
+        {
+            foreach (var state in campaign.States)
+                Console.WriteLine(state.Id + "\t" + state.Name + "\t" + state.NationId);
+            return 0;
+        }
+
+        // `--gore-maps <folder>` plays the same decade twice and writes what the map looked
+        // like at the end of each - once with the rounding rule and once without.
+        //
+        // It exists because "no border gore" is a claim about how a map LOOKS, and the only
+        // honest way to make that claim is to put the two maps side by side. One raster of
+        // region ids per cell; the colouring is somebody else's job.
+        var goreAt = Array.IndexOf(args, "--gore-maps");
+        if (goreAt >= 0 && goreAt + 1 < args.Length)
+            return WriteGoreMaps(args[goreAt + 1]);
+
+        // `--borders` runs the border check alone. It plays the world twice for ten years
+        // each and is the slowest thing in this file, so working on the peace code meant a
+        // full bench run per idea; on its own it is a few minutes and an answer.
+        if (Array.IndexOf(args, "--borders") >= 0)
+            return Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
+
         var mapped = AttachMap(campaign);
         var frontBefore = new FrontSnapshot(campaign);
 
@@ -115,6 +145,10 @@ public static class Program
             TheInterfaceComposesThroughTheTable());
         failures += Check("prices answer to the budget and to the rate",
             PricesAnswerToTheBudgetAndTheRate());
+        failures += Check("the printing press prints real money and real prices",
+            ThePressPrintsRealMoneyAndRealPrices());
+        failures += Check("a delegated portfolio is governed by the civil service",
+            ADelegatedPortfolioIsGoverned());
 
         Console.WriteLine();
         Console.WriteLine($"Running {days} campaign day(s)…");
@@ -134,7 +168,7 @@ public static class Program
         var run = Stopwatch.StartNew();
         for (var day = 0; day < days; day++)
         {
-            campaign.Tick();
+            campaign.TickDay();
             // A front that ends the year where it started may still have collapsed and been
             // pushed back in between. Sampling as it goes is what makes "stalemate" mean
             // what it says.
@@ -169,7 +203,7 @@ public static class Program
 
         Console.WriteLine();
         failures += Check("a campaign day does not bury the collector",
-            ADayDoesNotBuryTheCollector(allocated / (double)days));
+            ADayDoesNotBuryTheCollector(allocated / (double)days, campaign.TickHours));
         failures += Check("the economy actually moved", EconomyMoved(campaign));
         failures += Check("every dependency in the world is one a country could be in",
             DependenciesInAWorldNobodySteered(campaign));
@@ -233,6 +267,14 @@ public static class Program
         failures += Check("the world governs itself", TheWorldGovernsItself(campaign, days));
         failures += Check("governments take decisions written in data",
             GovernmentsTakeScriptedDecisions(campaign, days));
+        failures += Check("a system that thinks in days runs once a day at any step",
+            EverySystemRunsOnItsOwnCadence());
+        failures += Check("an army at war holds a line rather than a province",
+            ArmiesHoldLinesRatherThanProvinces(campaign));
+        failures += Check("a country is named by its tag, not by an English sentence",
+            CountriesAreNamedByTag(campaign));
+        failures += Check("a country whose name is an argument answers to the option that settles it",
+            ANamingOptionRenamesTheCountry(campaign));
 
         // The destructive checks redraw the map and end wars, so they run against a fresh
         // campaign rather than the one that was just measured. Sharing one made them
@@ -247,7 +289,7 @@ public static class Program
             {
                 sandbox.IsPaused = false;
                 // Long enough for a war score to exist, so the peace has something to price.
-                for (var day = 0; day < 220; day++) sandbox.Tick();
+                for (var day = 0; day < 220; day++) sandbox.TickDay();
                 failures += Check("the length of a step is a pace, not a difficulty",
                     TheClockRunsAtAnyStep());
                 failures += Check("no region belongs to two countries at once",
@@ -267,13 +309,14 @@ public static class Program
                     AnAttackFormsUpAlongItsFront());
                 failures += Check("a battle plan survives a save",
                     ABattlePlanSurvivesASave(sandbox));
-                failures += Check("a navy is worth having", ANavyIsWorthHaving(sandbox));
+                failures += Check("a navy is worth having",
+                    ByTheDay(sandbox, () => ANavyIsWorthHaving(sandbox)));
                 failures += Check("an army can be put ashore across water",
-                    AnArmyCanBePutAshore(sandbox));
+                    ByTheDay(sandbox, () => AnArmyCanBePutAshore(sandbox)));
                 failures += Check("an AI mounts a landing of its own",
-                    AnAiMountsALanding(sandbox));
+                    ByTheDay(sandbox, () => AnAiMountsALanding(sandbox)));
                 failures += Check("a convoy caught at sea pays for it",
-                    AConvoyCaughtAtSeaPaysForIt(sandbox));
+                    ByTheDay(sandbox, () => AConvoyCaughtAtSeaPaysForIt(sandbox)));
                 failures += Check("troops trained for a landing land better",
                     MarinesLandBetter(sandbox));
                 failures += Check("a drawn line moves the formations put on it",
@@ -530,6 +573,100 @@ public static class Program
         return landless.Count == 0
             ? ""
             : $"{landless.Count} nation(s) hold no state: {string.Join(", ", landless.Take(12))}";
+    }
+
+    /// <summary>
+    /// Run a check with the campaign stepping a whole day at a time.
+    ///
+    /// The checks that use this count days at sea - a crossing, a blockade, an action fought
+    /// to a standstill - and at the shipped one-hour step every one of those days is
+    /// twenty-four passes over every fleet in the world. That is the correct simulation and
+    /// the wrong price for a check whose subject is not the length of a step.
+    ///
+    /// Whether an hourly step gives the same answer as a daily one is a real question, and it
+    /// is asked where it belongs: the clock checks run the world at four step lengths and
+    /// hold the results against each other. Here the step is set to a day, the check runs,
+    /// and the step goes back to whatever the defines said.
+    /// </summary>
+    private static string ByTheDay(Campaign campaign, Func<string> body)
+    {
+        var was = campaign.Defines.HoursPerTick;
+        campaign.Defines.HoursPerTick = 24;
+        try
+        {
+            return body();
+        }
+        finally
+        {
+            campaign.Defines.HoursPerTick = was;
+        }
+    }
+
+    /// <summary>
+    /// One day at sea.
+    ///
+    /// `NavalOperations.Tick` advances a step, and a step is an hour. Everything at sea
+    /// takes its share of the step - the degrees a fleet sails, the supply it burns, the
+    /// order it loses in action - so a call is a twenty-fourth of what it used to be, and
+    /// a loop that counts calls and prints "days" is off by that factor.
+    ///
+    /// The checks in this file reason in days, because days are what a player and a
+    /// designer reason in: a crossing takes a fortnight, a blockade bites in a month. So
+    /// they call this and keep their arithmetic, at any tick length the defines allow.
+    /// </summary>
+    private static void SailADay(Campaign campaign)
+    {
+        var steps = (int)MathF.Round(1f / MathF.Max(0.0001f, campaign.TickScale));
+        for (var step = 0; step < MathF.Max(1, steps); step++) NavalOperations.Tick(campaign);
+    }
+
+    /// <summary>
+    /// Two worlds, ten years each, one raster apiece: region id per map cell.
+    /// </summary>
+    private static int WriteGoreMaps(string folder)
+    {
+        Directory.CreateDirectory(folder);
+        var width = Globality.EarthData.Width;
+        var height = Globality.EarthData.Height;
+
+        foreach (var tidy in new[] { true, false })
+        {
+            var campaign = Campaign.CreateBootstrap(20241227);
+            if (!AttachMap(campaign))
+            {
+                Console.WriteLine("no province map; nothing to draw");
+                return 1;
+            }
+            if (!tidy)
+            {
+                campaign.Defines.PeaceRoundUpShare = 0f;
+                campaign.Defines.PeaceRoundDownShare = 0f;
+            }
+            campaign.IsPaused = false;
+            for (var day = 0; day < 365 * 10; day++) campaign.TickDay();
+
+            var topology = campaign.ProvinceMap!;
+            var cells = new byte[width * height * 4];
+            for (var cell = 0; cell < width * height; cell++)
+            {
+                var province = topology.CellToProvince[cell];
+                var region = province == 0 ? 0 : topology.ProvinceToState[province];
+                var owner = province == 0 ? 0 : topology.ProvinceToNation[province];
+                cells[cell * 4 + 0] = (byte)(region & 0xFF);
+                cells[cell * 4 + 1] = (byte)((region >> 8) & 0xFF);
+                cells[cell * 4 + 2] = (byte)(owner & 0xFF);
+                cells[cell * 4 + 3] = (byte)((owner >> 8) & 0xFF);
+            }
+
+            var name = tidy ? "tidy" : "ragged";
+            File.WriteAllBytes(Path.Combine(folder, $"{name}.bin"), cells);
+            Console.WriteLine($"  {name}: {campaign.States.Count:N0} region(s) after ten years, " +
+                              $"{campaign.Wars.Sum(war => war.CreatedStates):N0} cut in two");
+        }
+
+        File.WriteAllText(Path.Combine(folder, "size.txt"), $"{width} {height}");
+        Console.WriteLine($"  wrote {width}x{height} rasters to {folder}");
+        return 0;
     }
 
     /// <summary>
@@ -862,7 +999,7 @@ public static class Program
                 if (loadedOn < 0 && fleet.Carried.Count > 0) loadedOn = day;
                 if (launchedOn < 0 && fleet.Mission == FleetMission.Invasion) launchedOn = day;
                 if (launchedOn >= 0) break;
-                NavalOperations.Tick(campaign);
+                SailADay(campaign);
             }
             campaign.Defines.AiFleetDecisionInterval = interval;
             if (loadedOn < 0)
@@ -960,7 +1097,7 @@ public static class Program
             passenger.Organisation = 1f;
             convoy.Carried.Add(passenger.Id);
 
-            NavalOperations.Tick(campaign);
+            SailADay(campaign);
             if (!convoy.InAction) return "a convoy sat on top of a hostile fleet and was not found";
             if (passenger.Strength >= 1f)
                 return "an army was caught at sea aboard its transports and lost nobody";
@@ -1066,7 +1203,7 @@ public static class Program
 
             var before = aboard.Organisation;
             var sailed = 0;
-            for (; sailed < 400 && fleet.Carried.Count > 0; sailed++) NavalOperations.Tick(campaign);
+            for (; sailed < 400 && fleet.Carried.Count > 0; sailed++) SailADay(campaign);
             if (fleet.Carried.Count > 0) return $"the fleet never arrived after {sailed:N0} days at sea";
             if (aboard.ProvinceId <= 0) return "the landing left the formation nowhere";
             if (aboard.Organisation >= before) return "coming ashore on a hostile beach cost nothing";
@@ -1131,7 +1268,7 @@ public static class Program
             mine.Experience = theirs.Experience = 0f;
             mine.ReadyDay = theirs.ReadyDay = 0;
 
-            NavalOperations.Tick(campaign);
+            SailADay(campaign);
             if (!mine.InAction || !theirs.InAction)
                 return "two hostile fleets on the same spot did not find each other";
             if (mine.Organisation >= 1f || theirs.Organisation >= 1f)
@@ -1145,7 +1282,7 @@ public static class Program
             var fought = 1;
             for (; fought < 60 && mine.Mission == FleetMission.Patrol &&
                    theirs.Mission == FleetMission.Patrol; fought++)
-                NavalOperations.Tick(campaign);
+                SailADay(campaign);
             if (mine.Mission == FleetMission.Patrol && theirs.Mission == FleetMission.Patrol)
                 return $"neither fleet broke off after {fought:N0} days of action";
 
@@ -1260,8 +1397,372 @@ public static class Program
     /// half of it said Russia, and the interface had to pick one of them to believe.
     /// </summary>
     /// <summary>
-    /// Run the same month twice, once a day at a time and once three days at a time, and
-    /// see whether the two worlds recognise each other.
+    /// Whether every country is named by its tag.
+    ///
+    /// `CountryNames.Resolve` asks for `country.&lt;TAG&gt;.name` first and falls back to the
+    /// English name only when there is no such row. The fallback works, and it is what every
+    /// country used until now - which means a translation was keyed by an English sentence,
+    /// in a flat namespace shared with cultures, religions, buildings and goods. That is how
+    /// the language picker came to offer "Англичане": English is a language and also a
+    /// people, and the table could not tell them apart.
+    ///
+    /// Three letters mean one country. This check is what keeps it that way: a country added
+    /// without a tag row still WORKS, and says so here rather than being found by a player.
+    /// </summary>
+    private static string CountriesAreNamedByTag(Campaign campaign)
+    {
+        var english = ReadLocalizationTable("english");
+        if (english is null) return "";
+
+        var byFallback = new List<string>();
+        var checkedCount = 0;
+        foreach (var nation in campaign.Nations)
+        {
+            if (string.IsNullOrEmpty(nation.Tag)) continue;
+            checkedCount++;
+            // The same question Resolve asks, in the same order: anything more specific
+            // first, then the plain tag. A country named by any of them is named by its tag.
+            var named = english.ContainsKey($"country.{nation.Tag}.name") ||
+                        english.ContainsKey($"country.{nation.Tag}.map");
+            if (!named && byFallback.Count < 8) byFallback.Add($"{nation.Tag} ({nation.Name})");
+            if (!named && byFallback.Count >= 8) byFallback.Add("...");
+        }
+        if (checkedCount == 0) return "";
+        if (byFallback.Count > 0)
+            return $"{byFallback.Count:N0} country(ies) are named only by their English name and " +
+                   $"would lose their translation if that name were edited: {string.Join(", ", byFallback)}";
+
+        // And the tag route has to actually be the one taken, not merely present.
+        var sample = campaign.Nations.Find(nation => nation.Tag == "RUS") ?? campaign.Nations.FirstOrDefault();
+        if (sample is not null && string.IsNullOrEmpty(CountryNames.Resolve(sample, false)))
+            return $"{sample.Tag} resolves to nothing at all";
+
+        Console.WriteLine($"  countries: {checkedCount:N0} named by tag (country.<TAG>.name), " +
+                          "so renaming one in common/countries keeps its translation.");
+        return "";
+    }
+
+    /// <summary>
+    /// A country whose name is an argument answers to the option that settles it.
+    ///
+    /// `country_name_&lt;tag&gt;` is a settings value used as a suffix on a localisation key, so
+    /// the whole mechanism is two pieces of data that have to agree with each other and
+    /// nothing in between to raise an error when they do not. Three ways for it to be wrong,
+    /// all silent:
+    ///
+    ///   - the option names a country that is not on the map, so it does nothing for ever;
+    ///   - a variant has a row in one language and not another, so the same save reads
+    ///     Belarus in English and Белоруссия in Russian and nobody can see why;
+    ///   - the resolver stops asking, and every option on the screen quietly becomes decor.
+    ///
+    /// A variant with no row anywhere is fine and is checked as fine: Moldova's option has
+    /// exactly one value, no row behind it, and changes nothing on purpose.
+    ///
+    /// Settings are written to memory here - the bench never calls `UseDirectory`, so there
+    /// is no file to write to - and cleared again at the end, so nothing this check does is
+    /// visible to the checks after it.
+    /// </summary>
+    private static string ANamingOptionRenamesTheCountry(Campaign campaign)
+    {
+        var options = SettingsCatalog.All
+            .Where(definition => definition.Id.StartsWith(CountryNames.VariantPrefix,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (options.Count == 0) return "";
+
+        var scripts = FindScripts();
+        if (scripts is null) return "";
+        var tables = new List<(string Language, Dictionary<string, string> Rows)>();
+        foreach (var folder in Directory.GetDirectories(
+                     Path.Combine(Path.GetDirectoryName(scripts)!, "game", "localization")))
+        {
+            var name = Path.GetFileName(folder);
+            var rows = ReadLocalizationTable(name);
+            if (rows is not null) tables.Add((name, rows));
+        }
+        if (tables.Count == 0) return "";
+
+        var renamed = 0;
+        var inert = new List<string>();
+        try
+        {
+            foreach (var option in options)
+            {
+                var tag = option.Id[CountryNames.VariantPrefix.Length..].ToUpperInvariant();
+                var nation = campaign.NationByTag(tag);
+                if (nation is null)
+                    return $"'{option.Id}' offers to rename {tag}, and there is no such country";
+                if (option.Values.Count == 0)
+                    return $"'{option.Id}' offers no values, so there is nothing to choose";
+
+                foreach (var value in option.Values)
+                {
+                    var key = $"country.{tag}.name.{value}";
+                    var has = tables.Where(entry => entry.Rows.ContainsKey(key))
+                        .Select(entry => entry.Language).ToList();
+                    if (has.Count > 0 && has.Count != tables.Count)
+                    {
+                        var missing = tables.Select(entry => entry.Language).Except(has);
+                        return $"'{key}' is written in {string.Join(", ", has)} and missing from " +
+                               $"{string.Join(", ", missing)}, so what {tag} is called depends on " +
+                               "which language the screen is in";
+                    }
+
+                    // And the resolver has to actually reach it. Asked through the same path
+                    // the map uses, not by reading the table back.
+                    PlayerSettings.Set(option.Id, value);
+                    CountryNames.Refresh();
+                    var shown = CountryNames.Resolve(nation, false);
+                    if (has.Count == 0)
+                    {
+                        inert.Add($"{option.Id}={value}");
+                        continue;
+                    }
+                    var wanted = tables.First(entry =>
+                        string.Equals(entry.Language, Loc.Language, StringComparison.OrdinalIgnoreCase)
+                        || entry.Language == "english").Rows[key];
+                    if (!string.Equals(shown, wanted, StringComparison.Ordinal))
+                        return $"with '{option.Id}' set to '{value}', {tag} is still shown as " +
+                               $"'{shown}' rather than '{wanted}'";
+                    renamed++;
+                }
+            }
+        }
+        finally
+        {
+            foreach (var option in options) PlayerSettings.Clear(option.Id);
+            CountryNames.Refresh();
+        }
+
+        // And at least one of them has to do something, or the mechanism is unreachable and
+        // will rot without anybody noticing.
+        if (renamed == 0)
+            return $"{options.Count:N0} naming option(s) are on the screen and not one of them " +
+                   "changes a name in any language";
+
+        Console.WriteLine($"  naming: {options.Count:N0} option(s) over what a country is called, " +
+                          $"{renamed:N0} spelling(s) reached through the resolver in " +
+                          $"{tables.Count:N0} language(s)" +
+                          (inert.Count == 0
+                              ? "."
+                              : $"; {inert.Count:N0} deliberately change(s) nothing: {string.Join(", ", inert)}."));
+        return "";
+    }
+
+    /// <summary>
+    /// Whether a country at war holds a LINE or stands in a PROVINCE.
+    ///
+    /// A front is held by being on it. A country that puts a third of its field army into
+    /// one province has not concentrated, it has abandoned the rest of the line - and the
+    /// side opposite walks through the part nobody is standing on. It is the failure mode a
+    /// player sees first and the one the bench could not see at all: every check about
+    /// spacing asked about six divisions over nine posts, and the arithmetic that spaces
+    /// them only goes wrong once a country has enough of them for the spacing to matter.
+    ///
+    /// Militia is excluded, as everywhere else: it holds the region it stood up in and was
+    /// never part of the field army's order of battle.
+    /// </summary>
+    private static string ArmiesHoldLinesRatherThanProvinces(Campaign campaign)
+    {
+        if (campaign.ProvinceMap is null) return "";
+
+        // Enough of a war to have a line, and enough divisions for a pile to be a choice
+        // rather than an accident of having only a few.
+        const int enough = 10;
+        const double floorShare = 0.34;
+
+        // What a country with this much line is allowed to put in one province. An even
+        // spread over N posts is about 1/N each; an army concentrates where it is
+        // attacking, so twice that is fair. A long front falls back to the flat third.
+        static double Allowed(int front) =>
+            front <= 0 ? 1.0 : Math.Min(1.0, Math.Max(floorShare, 2.0 / front));
+
+        var worstShare = 0.0;
+        var worstExcess = double.NegativeInfinity;
+        var worstName = "";
+        var worstStack = 0;
+        var worstTotal = 0;
+        var worstWhere = "";
+        var worstFront = 0;
+        var worstFighting = 0;
+        var worstArrived = 0;
+        var worstPassing = 0;
+        var measured = 0;
+        var afloat = 0;
+
+        foreach (var nation in campaign.Nations)
+        {
+            var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(nation.Id));
+            if (war is null) continue;
+
+            var byProvince = new Dictionary<int, int>();
+            var total = 0;
+            foreach (var army in campaign.Armies)
+            {
+                if (army.NationId != nation.Id || army.TemplateId == MilitiaCore.TemplateId) continue;
+                if (army.OrderKind == ArmyOrder.Manual) continue;
+
+                // Not on the map is not a province. `ProvinceId` is -1 before an army is
+                // placed and 0 while it is aboard a fleet, and bucketing by province id
+                // without this puts every one of them in the same imaginary place and
+                // reports the result as the worst pile in the world.
+                if (army.ProvinceId <= 0) { afloat++; continue; }
+
+                total++;
+                byProvince[army.ProvinceId] = byProvince.GetValueOrDefault(army.ProvinceId) + 1;
+            }
+            if (total < enough) continue;
+            measured++;
+
+            var stack = 0;
+            var stackAt = 0;
+            foreach (var (province, count) in byProvince)
+                if (count > stack) { stack = count; stackAt = province; }
+
+            // Divisions in a battle are not a crowd, they are the battle. An assault is
+            // several formations in one province on purpose, and counting them as an
+            // abandoned line fails the planner for doing exactly what it should.
+            var fighting = campaign.Armies.Count(other =>
+                other.NationId == nation.Id && other.ProvinceId == stackAt && other.InBattle);
+            var idleStack = Math.Max(0, stack - fighting);
+            var share = idleStack / (double)total;
+
+            // How much line there is to hold, and whether the stack is a fight rather than
+            // a crowd. A country whose front is one province long cannot spread over forty,
+            // and divisions standing in a battle are standing where the war is.
+            var front = war.FriendlyFront(nation.Id)?.Count ?? 0;
+            var excess = share - Allowed(front);
+            if (excess <= worstExcess) continue;
+
+            worstExcess = excess;
+            worstShare = share;
+            worstName = $"{nation.Tag} {nation.DisplayName}";
+            worstStack = stack;
+            worstTotal = total;
+            worstFront = front;
+            worstWhere = string.Join(", ", byProvince
+                .OrderByDescending(entry => entry.Value)
+                .Take(4)
+                .Select(entry => $"{entry.Value:N0} in province {entry.Key:N0}"));
+            worstFighting = fighting;
+            // Standing on your post is holding a line. Standing in a province on the way to
+            // somewhere else is a traffic jam, and the two look identical to a head count.
+            worstArrived = campaign.Armies.Count(other =>
+                other.NationId == nation.Id && other.ProvinceId == stackAt &&
+                other.OrderProvinceId == stackAt);
+            worstPassing = campaign.Armies.Count(other =>
+                other.NationId == nation.Id && other.ProvinceId == stackAt &&
+                other.OrderProvinceId > 0 && other.OrderProvinceId != stackAt);
+        }
+
+        if (measured == 0) return "";
+        if (worstExcess > 0)
+            return $"{worstName} has {worstStack:N0} of its {worstTotal:N0} field divisions standing in " +
+                   $"one province, {worstStack - worstFighting:N0} of them not fighting " +
+                   $"({worstShare:P0}, and {Allowed(worstFront):P0} is what a front of " +
+                   $"{worstFront:N0} province(s) allows) - that is a pile, not a front, and the rest of " +
+                   $"the line is held by nobody. Its largest posts: {worstWhere}; of the stack " +
+                   $"{worstArrived:N0} are standing on the post they were given, {worstPassing:N0} " +
+                   $"are passing through on the way somewhere else, {worstFighting:N0} are in a battle";
+
+        Console.WriteLine($"  fronts: {measured:N0} country(ies) at war with {enough}+ field divisions; " +
+                          $"the worst pile is {worstName} with {worstStack:N0} of {worstTotal:N0} in one " +
+                          $"province ({worstShare:P0} against the {Allowed(worstFront):P0} a front of " +
+                          $"{worstFront:N0} allows); {afloat:N0} division(s) were at sea or not yet " +
+                          "placed and are not part of anybody's line.");
+        return "";
+    }
+
+    /// <summary>
+    /// How often each system runs over a month, at a day's step and at an hour's.
+    ///
+    /// <see cref="Campaign.Tick"/> divides its work in two, and which half a pass belongs to
+    /// is a decision about what that pass IS. Something that accumulates - a march, a supply
+    /// draw, a round of fighting - runs per step and takes its share through
+    /// <see cref="Campaign.TickScale"/>. Something that HAPPENS ON A DAY - the weekly
+    /// clearing, an event roll, an army rebuilt to its establishment - runs once for each
+    /// whole day the step crossed.
+    ///
+    /// Nothing checked which half a pass was in, and the failure is invisible at a daily
+    /// step because a step IS a day there. At an hourly one it is twenty-four economies a
+    /// day, twenty-four event rolls, and a country that rebuilds its army twenty-four times
+    /// in one morning - not a cost, a different simulation.
+    ///
+    /// Counting tells them apart, and the profiler already counts.
+    /// </summary>
+    private static string EverySystemRunsOnItsOwnCadence()
+    {
+        static Dictionary<string, int> RunsOverAMonth(int hoursPerTick, int days)
+        {
+            SimProfiler.Reset();
+            var campaign = Campaign.CreateBootstrap(20240404);
+            campaign.Defines.HoursPerTick = hoursPerTick;
+            campaign.IsPaused = false;
+            for (var day = 0; day < days; day++) campaign.TickDay();
+            var counted = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var sample in SimProfiler.All) counted[sample.Name] = sample.Runs;
+            return counted;
+        }
+
+        const int days = 30;
+        var atADay = RunsOverAMonth(24, days);
+        var atAnHour = RunsOverAMonth(1, days);
+        SimProfiler.Reset();
+
+        // Things that happen ON a day. Every one of these divides the day number somewhere
+        // inside it, or is called from the loop that runs once per whole day crossed.
+        var onceADay = new[]
+        {
+            "economy", "opinion", "modifiers", "militia", "diplomacy", "subjects",
+            "statecraft", "events", "history", "secession", "governance"
+        };
+        var daily = 0;
+        foreach (var name in onceADay)
+        {
+            if (!atADay.TryGetValue(name, out var slow) || !atAnHour.TryGetValue(name, out var fast)) continue;
+            daily++;
+            if (fast != slow)
+                return $"'{name}' happens on a day, and over {days} days it ran {slow:N0} time(s) at " +
+                       $"a daily step and {fast:N0} at an hourly one - it is running per step";
+        }
+        if (daily == 0) return "not one of the once-a-day passes reported itself to the profiler";
+
+        // And the ones that accumulate, which SHOULD multiply: twenty-four steps in a day,
+        // each taking a twenty-fourth. One of these that did not multiply is being skipped
+        // rather than scaled, which is the same bug seen from the other side.
+        var perStep = new[] { "logistics", "military", "naval", "warfare", "attrition", "construction" };
+        var stepped = 0;
+        foreach (var name in perStep)
+        {
+            if (!atADay.TryGetValue(name, out var slow) || !atAnHour.TryGetValue(name, out var fast)) continue;
+            stepped++;
+            if (fast != slow * 24)
+                return $"'{name}' accumulates, so over {days} days it should run {slow * 24:N0} time(s) " +
+                       $"at an hourly step against {slow:N0} at a daily one, and it ran {fast:N0}";
+        }
+        if (stepped == 0) return "not one of the per-step passes reported itself to the profiler";
+
+        Console.WriteLine($"  cadence: over {days} days, {daily:N0} pass(es) happen on a day and ran the " +
+                          $"same number of times at 1 and 24 hours a step; {stepped:N0} accumulate and ran " +
+                          "exactly twenty-four times as often.");
+        return "";
+    }
+
+    /// <summary>
+    /// Run the same stretch of world at every step length the game offers, and see whether
+    /// the worlds recognise each other - over a day, a week, a month and a year.
+    ///
+    /// This is the promise written into <see cref="Defines.HoursPerTick"/>: the step is a
+    /// pace, not a difficulty. It is four claims rather than one, and they break for
+    /// different reasons. A DAY is where a rounding shows, and where a pass that runs per
+    /// step instead of per day is out by exactly the number of steps in a day. A WEEK is the
+    /// shortest horizon by which the economy has had to clear. A MONTH is where things with
+    /// a duration - construction, training - either finish or do not. A YEAR is where
+    /// anything that compounds has had time to, and a drift of a tenth of a per cent a week
+    /// has become a different world.
+    ///
+    /// The step lengths come from `common/settings` rather than from a list here, so a mod
+    /// that offers a different pace is checked by these same lines.
     /// </summary>
     private static string TheClockRunsAtAnyStep()
     {
@@ -1275,31 +1776,89 @@ public static class Program
                     campaign.Nations.Sum(nation => nation.Population), campaign.Armies.Count);
         }
 
-        const int hours = 30 * 24;
-        var daily = Run(24, hours);
-        var thrice = Run(72, hours);
+        // What the settings screen offers, in hours, shortest first. Read rather than
+        // listed, so this checks whatever a mod decided the paces are.
+        var declaredSteps = new List<int>();
+        var stepSetting = SettingsCatalog.Of("hours_per_tick");
+        if (stepSetting is not null)
+            foreach (var value in stepSetting.Values)
+                if (int.TryParse(value, out var step) && step > 0) declaredSteps.Add(step);
+        if (declaredSteps.Count == 0) declaredSteps.Add(new Defines().HoursPerTick);
+        declaredSteps.Sort();
 
-        if (daily.Hours != thrice.Hours)
-            return $"the clocks disagree: {daily.Hours:N0} hours a day at a time, {thrice.Hours:N0} three at a time";
-        if (daily.Days != thrice.Days)
-            return $"the calendars disagree: day {daily.Days:N0} against day {thrice.Days:N0}";
-        if (!string.Equals(daily.Date, thrice.Date, StringComparison.Ordinal))
-            return $"the dates disagree: {daily.Date} against {thrice.Date}";
+        // A day, a week, a month, a year - and how far apart two worlds may end up at each,
+        // which is not one tolerance: a difference a day cannot show has had a year to grow.
+        var horizons = new (string Name, int Days, double People, double Armies)[]
+        {
+            ("a day", 1, 0.0010, 0.03),
+            ("a week", 7, 0.0030, 0.05),
+            ("a month", 30, 0.0100, 0.06),
+            ("a year", 365, 0.0400, 0.15)
+        };
 
-        // The world itself only has to be recognisable. A day pass that ran the wrong
-        // number of times shows up here as a population or an army count that is out by
-        // a multiple, not by a rounding.
-        var peopleDrift = Math.Abs(daily.People - thrice.People) / (double)Math.Max(1L, daily.People);
-        if (peopleDrift > 0.01)
-            return $"the populations disagree by {peopleDrift:P2}: {daily.People:N0} against {thrice.People:N0}";
-        var armyDrift = Math.Abs(daily.Armies - thrice.Armies) / (double)Math.Max(1, daily.Armies);
-        if (armyDrift > 0.05)
-            return $"the armies disagree by {armyDrift:P1}: {daily.Armies:N0} against {thrice.Armies:N0}";
+        var covered = new List<string>();
+        foreach (var (name, days, peopleAllowed, armiesAllowed) in horizons)
+        {
+            var hours = days * 24;
+            // A step that does not divide the horizon cannot land on it: one day at a
+            // three-day step is three days, and comparing the two would be comparing two
+            // different amounts of world. Saying so is part of the check rather than a
+            // convenience - it is why a 48-hour step is absent from the day and the week.
+            var steps = declaredSteps.Where(step => hours % step == 0).ToArray();
+            if (steps.Length < 2) continue;
 
-        // And a step under a day has to be a fraction of one rather than a whole one.
-        var quarter = Run(6, hours);
-        if (quarter.Days != daily.Days)
-            return $"a six-hour step reached day {quarter.Days:N0} where a daily step reached {daily.Days:N0}";
+            var baseline = Run(steps[^1], hours);
+            var worstPeople = 0.0;
+            var worstArmies = 0.0;
+            foreach (var step in steps)
+            {
+                var run = Run(step, hours);
+
+                if (run.Hours != baseline.Hours)
+                    return $"over {name}, a {step}-hour step reached {run.Hours:N0} hours where a " +
+                           $"{steps[^1]}-hour step reached {baseline.Hours:N0}";
+                if (run.Days != baseline.Days)
+                    return $"over {name}, a {step}-hour step reached day {run.Days:N0} where a " +
+                           $"{steps[^1]}-hour step reached day {baseline.Days:N0}";
+                if (!string.Equals(run.Date, baseline.Date, StringComparison.Ordinal))
+                    return $"over {name}, a {step}-hour step ended on {run.Date} and a " +
+                           $"{steps[^1]}-hour step on {baseline.Date}";
+
+                // The world itself only has to be recognisable. A pass that ran the wrong
+                // number of times shows up here as a figure out by a multiple rather than by
+                // a rounding, which is exactly what this is for.
+                var people = Math.Abs(run.People - baseline.People) / (double)Math.Max(1L, baseline.People);
+                var armies = Math.Abs(run.Armies - baseline.Armies) / (double)Math.Max(1, baseline.Armies);
+                if (people > peopleAllowed)
+                    return $"over {name}, a {step}-hour step and a {steps[^1]}-hour one disagree " +
+                           $"about the population by {people:P2}: {run.People:N0} against {baseline.People:N0}";
+                if (armies > armiesAllowed)
+                    return $"over {name}, a {step}-hour step and a {steps[^1]}-hour one disagree " +
+                           $"about the armies by {armies:P1}: {run.Armies:N0} against {baseline.Armies:N0}";
+                worstPeople = Math.Max(worstPeople, people);
+                worstArmies = Math.Max(worstArmies, armies);
+            }
+            covered.Add($"{name} at {string.Join("/", steps)}h (people \u00b1{worstPeople:P2}, " +
+                        $"armies \u00b1{worstArmies:P1})");
+        }
+        if (covered.Count < horizons.Length)
+            return $"only {covered.Count} of {horizons.Length} horizons could be checked - the " +
+                   "settings screen offers too few step lengths that divide a day";
+
+        // And a day is a day however it is reached: asking a campaign to advance one, at any
+        // step, has to advance exactly one until the step is longer than a day itself.
+        foreach (var step in declaredSteps)
+        {
+            var campaign = Campaign.CreateBootstrap(20240404);
+            campaign.Defines.HoursPerTick = step;
+            campaign.IsPaused = false;
+            var before = campaign.ElapsedDays;
+            campaign.TickDay();
+            var crossed = campaign.ElapsedDays - before;
+            var wanted = Math.Max(1, step / 24);
+            if (crossed != wanted)
+                return $"TickDay at a {step}-hour step advanced {crossed:N0} day(s) rather than {wanted:N0}";
+        }
 
         // The setting a player actually turns, against the value the code compiles with. They
         // drifted apart in the worst possible way once already: the preference was applied
@@ -1320,8 +1879,9 @@ public static class Program
         if (!midnight.Display(true).Contains("00:00", StringComparison.Ordinal))
             return $"a date asked to carry the time printed '{midnight.Display(true)}'";
 
-        Console.WriteLine($"  clock: {hours / 24} day(s) reached identically at 6, 24 and 72 hours a step " +
-                          $"({daily.Date}); populations within {peopleDrift:P2}, armies within {armyDrift:P1}.");
+        Console.WriteLine($"  clock: {declaredSteps.Count:N0} step length(s) offered " +
+                          $"({string.Join("/", declaredSteps)}h), default {new Defines().HoursPerTick}h; " +
+                          $"{string.Join("; ", covered)}.");
         return "";
     }
 
@@ -1960,7 +2520,7 @@ public static class Program
         for (var step = 0; step < 8 && Statecraft.CoalitionAgainst(campaign, attacker.Id) is null; step++)
         {
             campaign.IsPaused = false;
-            campaign.Tick();
+            campaign.TickDay();
         }
         var coalition = Statecraft.CoalitionAgainst(campaign, attacker.Id);
         if (coalition is null)
@@ -2245,8 +2805,45 @@ public static class Program
         var written = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
         AiStatecraft.WriteDemand(campaign, winner, war, ledger, written, shaping);
         if (written.Provinces.Count == 0)
-            return $"{winner.Tag} wrote an empty treaty out of {held.Count:N0} occupied province(s) " +
-                   $"with {shaping:0.00} to spend";
+        {
+            // No land is a real answer now, and this check used to call it a bug.
+            //
+            // Regions are indivisible: a treaty moves a whole one or none. So a winner with
+            // ten occupied provinces spread thinly across regions that each cost more than
+            // its whole war score signs for no land at all - correctly, and in preference to
+            // carving one of them along the line its army stopped on.
+            //
+            // What must still hold is that it signed for SOMETHING. A war score spent on
+            // nothing is the actual fault, and it is the one worth failing on.
+            var terms = new List<string>();
+            if (written.Reparations) terms.Add("reparations");
+            if (written.LongTruce) terms.Add("a long truce");
+            if (written.TradeConcessions) terms.Add("trade concessions");
+            if (written.Demilitarise) terms.Add("demilitarisation");
+            if (written.Humiliate) terms.Add("humiliation");
+            if (terms.Count == 0)
+                return $"{winner.Tag} wrote an entirely empty treaty out of {held.Count:N0} " +
+                       $"occupied province(s) with {shaping:0.00} to spend - no land and no terms";
+
+            // And the land really has to have been unaffordable, rather than simply missed.
+            var cheapestWhole = float.MaxValue;
+            foreach (var region in held.Select(province => (int)topology.ProvinceToState[province]).Distinct())
+            {
+                var whole = PeaceConference.ProvincesOfState(topology, region);
+                if (whole.Count == 0) continue;
+                var trial = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
+                foreach (var province in whole) trial.Provinces.Add(province);
+                cheapestWhole = MathF.Min(cheapestWhole, ledger.Cost(trial));
+            }
+            if (cheapestWhole <= shaping)
+                return $"{winner.Tag} took no land although a whole region was going for " +
+                       $"{cheapestWhole:0.00} against its {shaping:0.00}";
+
+            Console.WriteLine($"  ai peace: {winner.Tag} held {held.Count:N0} province(s) and signed for " +
+                              $"no land - the cheapest whole region on offer was {cheapestWhole:0.00} against " +
+                              $"{shaping:0.00} of war score - taking {string.Join(", ", terms)} instead.");
+            return "";
+        }
 
         var cost = ledger.Cost(written);
         if (cost > shaping)
@@ -2406,13 +3003,19 @@ public static class Program
             return $"the refusal does not explain itself: \"{refusal}\"";
 
         // A demand inside the budget has to be accepted, and has to move the border.
+        //
+        // Priced ROUNDED, because that is what the conference prices and what gets signed.
+        // A treaty moves whole regions, so adding one province can add a region: costing the
+        // provinces as drawn built a demand that looked affordable, was quoted at more, and
+        // was then refused - which is the bug this check exists to catch, arriving through
+        // the check itself.
         var demand = new PeaceDemand { WarId = war.Id, ProposerId = winner.Id };
         foreach (var province in claimable
                      .Where(province => campaign.ProvinceController[province] == (ushort)winner.MapIndex)
                      .OrderBy(province => ledger.Price(province).Cost))
         {
             demand.Provinces.Add(province);
-            if (ledger.Cost(demand) > ledger.Budget * 0.8f)
+            if (ledger.Cost(PeaceConference.Round(campaign, war, demand)) > ledger.Budget * 0.8f)
             {
                 demand.Provinces.Remove(province);
                 break;
@@ -2979,7 +3582,7 @@ public static class Program
         // Play it far enough to move a border and cut a region, which is what makes the
         // topology stop describing 2024.
         first.IsPaused = false;
-        for (var day = 0; day < 400; day++) first.Tick();
+        for (var day = 0; day < 400; day++) first.TickDay();
 
         var moved = 0;
         for (var province = 1; province < authoredOwners.Length; province++)
@@ -3054,7 +3657,7 @@ public static class Program
         var changes = new List<GovernanceReport>();
         for (var day = 0; day < 365 * 15; day++)
         {
-            campaign.Tick();
+            campaign.TickDay();
             changes.AddRange(GovernanceEvents.Recent);
         }
 
@@ -3176,7 +3779,7 @@ public static class Program
         const int days = 365 * 3;
         for (var day = 0; day < days; day++)
         {
-            campaign.Tick();
+            campaign.TickDay();
 
             var fighting = new HashSet<int>();
             foreach (var battle in campaign.Battles)
@@ -4143,7 +4746,7 @@ public static class Program
         var born = new List<SecessionReport>();
         for (var day = 0; day < 365 * 15; day++)
         {
-            campaign.Tick();
+            campaign.TickDay();
             born.AddRange(SecessionEvents.Recent);
         }
 
@@ -4263,7 +4866,7 @@ public static class Program
         left.IsPaused = false;
         right.IsPaused = false;
         var founded = left.Nations.Count;
-        for (var day = 0; day < 365 * 15; day++) { left.Tick(); right.Tick(); }
+        for (var day = 0; day < 365 * 15; day++) { left.TickDay(); right.TickDay(); }
 
         if (left.Nations.Count == founded)
             return "the world used to check that two peers come apart alike never came apart, " +
@@ -4313,7 +4916,7 @@ public static class Program
         if (ukraine is null) return "UKR is missing, so there is no invasion to rise against";
         var reserveBefore = ukraine.ManpowerReserve;
 
-        for (var day = 0; day < 200; day++) campaign.Tick();
+        for (var day = 0; day < 200; day++) campaign.TickDay();
 
         var risen = campaign.Armies
             .Where(army => army.TemplateId == MilitiaCore.TemplateId)
@@ -4803,7 +5406,7 @@ public static class Program
             "common/governments", "common/ideologies", "common/countries", "common/units",
             "common/settings", "common/goods", "common/buildings", "common/terrain",
             "common/professions", "common/religions", "common/cultures", "common/decisions",
-            "common/modifiers", "common/opinion_modifiers", "events"
+            "common/modifiers", "common/opinion_modifiers", "common/trade", "events"
         };
         foreach (var folder in folders)
         {
@@ -4874,7 +5477,16 @@ public static class Program
         ("SliderRow(", new[] { 0 }),
         ("StateSection(", new[] { 1, 2 }),
         ("Loc.Get(", new[] { 0 }),
-        ("Loc.Format(", new[] { 0 })
+        ("Loc.Format(", new[] { 0 }),
+        // A sentence that counts hands its singular key to Plural.Key and gets back one of
+        // three rows. The singular is still a literal a translator has to be shown, so it is
+        // scanned here; the "|few" and "|many" rows beside it are assembled at runtime and
+        // are the one place the table is allowed to hold a key the source never spells.
+        ("Plural.Key(", new[] { 0 }),
+        // The menu scene is not part of the campaign's widget helpers - it is its own scene
+        // with two of its own - so its captions are named here or they are named nowhere.
+        ("MenuCaption(", new[] { 0 }),
+        ("MenuAction(", new[] { 0 })
     };
 
     /// <summary>
@@ -4894,6 +5506,18 @@ public static class Program
                     {
                         var text = field.Value.GetString();
                         if (!string.IsNullOrWhiteSpace(text)) into.Add(text);
+                        continue;
+                    }
+                    // `reads` is a small object of sentences rather than one named string -
+                    // what a trade control is doing at rest, at nothing, at everything and
+                    // anywhere between - and every one of them is prose a player reads.
+                    if (field.Name == "reads" &&
+                        field.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        foreach (var sentence in field.Value.EnumerateObject())
+                            if (sentence.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                                !string.IsNullOrWhiteSpace(sentence.Value.GetString()))
+                                into.Add(sentence.Value.GetString());
                         continue;
                     }
                     CollectDeclaredNames(field.Value, into);
@@ -5122,7 +5746,7 @@ public static class Program
             if (region is null) return $"{nation.Tag} holds no region";
             region.Buildings[works] = 6;
 
-            for (var day = 0; day < 30; day++) campaign.Tick();
+            for (var day = 0; day < 30; day++) campaign.TickDay();
 
             if (!nation.Market.TryGetValue(alloy, out var quote))
                 return $"{nation.Tag} has no market quote for a good the catalog knows about";
@@ -5269,6 +5893,80 @@ public static class Program
         return true;
     }
 
+    /// <summary>
+    /// One trade control out of a template: a scope and a shape the game knows, bounds that
+    /// contain the default, and - where it says anything at all about what it reads like -
+    /// sentences the screen will actually look for.
+    /// </summary>
+    private static bool TradeControl(System.Text.Json.JsonProperty entry, string file,
+        string templates, List<string> complaints)
+    {
+        if (entry.Value.ValueKind != System.Text.Json.JsonValueKind.Object)
+        {
+            complaints.Add($"{Short(templates, file)}: '{entry.Name}' is not an object");
+            return false;
+        }
+
+        string Text(string name) =>
+            entry.Value.TryGetProperty(name, out var value) &&
+            value.ValueKind == System.Text.Json.JsonValueKind.String ? value.GetString() : null;
+        float? Number(string name) =>
+            entry.Value.TryGetProperty(name, out var value) && value.TryGetSingle(out var number)
+                ? number : null;
+
+        var sound = true;
+        var scope = Text("scope");
+        if (scope is not null && scope != TradeDesk.GoodScope && scope != TradeDesk.PartnerScope)
+        {
+            complaints.Add($"{Short(templates, file)}: '{entry.Name}' is scoped to '{scope}', " +
+                           $"which is neither '{TradeDesk.GoodScope}' nor '{TradeDesk.PartnerScope}'");
+            sound = false;
+        }
+
+        var shape = Text("shape");
+        if (shape is not null && shape is not ("share" or "multiplier" or "flag"))
+        {
+            complaints.Add($"{Short(templates, file)}: '{entry.Name}' has shape '{shape}', " +
+                           "which is not 'share', 'multiplier' or 'flag'");
+            sound = false;
+        }
+
+        var minimum = Number("minimum");
+        var maximum = Number("maximum");
+        var fallback = Number("default");
+        if (minimum is not null && maximum is not null && minimum > maximum)
+        {
+            complaints.Add($"{Short(templates, file)}: '{entry.Name}' has a minimum above its maximum");
+            sound = false;
+        }
+        if (fallback is not null &&
+            ((minimum is not null && fallback < minimum) || (maximum is not null && fallback > maximum)))
+        {
+            complaints.Add($"{Short(templates, file)}: '{entry.Name}' defaults to a value its own " +
+                           "bounds forbid, so every country would start outside them");
+            sound = false;
+        }
+
+        if (entry.Value.TryGetProperty("reads", out var reads))
+        {
+            if (reads.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                complaints.Add($"{Short(templates, file)}: '{entry.Name}' has a 'reads' that is not an object");
+                sound = false;
+            }
+            else
+                foreach (var sentence in reads.EnumerateObject())
+                    if (sentence.Name is not ("resting" or "off" or "on" or "set"))
+                    {
+                        complaints.Add($"{Short(templates, file)}: '{entry.Name}' reads '{sentence.Name}', " +
+                                       "which is not 'resting', 'off', 'on' or 'set'");
+                        sound = false;
+                    }
+        }
+
+        return sound;
+    }
+
     private static string TheTemplatesStillNameRealThings()
     {
         var templates = FindTemplates();
@@ -5332,6 +6030,20 @@ public static class Program
                 {
                     if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
                     var kind = Path.GetFileName(category);
+
+                    // The monetary model reports an unknown name rather than ignoring it, so
+                    // a template's file can go through the real parser instead of through a
+                    // list of names kept in step by hand. Both halves are asked, because
+                    // `central_bank` is an object the first one steps over.
+                    if (kind == "inflation")
+                    {
+                        var monetary = new List<string>();
+                        InflationCore.Merge(document.RootElement, monetary);
+                        CentralBank.Merge(document.RootElement, monetary);
+                        foreach (var complaint in monetary)
+                            complaints.Add($"{Short(templates, file)}: {complaint}");
+                    }
+
                     foreach (var entry in document.RootElement.EnumerateObject())
                     {
                         keys++;
@@ -5361,6 +6073,10 @@ public static class Program
                             "opinion_modifiers" =>
                                 entry.Value.ValueKind == System.Text.Json.JsonValueKind.Object &&
                                 entry.Value.TryGetProperty("opinion", out _),
+                            // A trade control's id is the mod's to choose - the seven the
+                            // weekly pass reads are only seven of them - so what has to be
+                            // sound is what it says about itself.
+                            "trade" => TradeControl(entry, file, templates, complaints),
                             _ => true
                         };
                         if (known) continue;
@@ -5373,6 +6089,8 @@ public static class Program
             CommodityCatalog.ResetCatalog();
             BuildingCatalog.ResetCatalog();
             ProductionChains.ResetCatalog();
+            InflationCore.ResetCatalog();
+            CentralBank.ResetCatalog();
         }
 
         if (complaints.Count > 0) return string.Join("; ", complaints);
@@ -5533,7 +6251,7 @@ public static class Program
         var radicalismBefore = taken.State.Radicalism;
         var foreignBefore = taken.Foreign;
         campaign.IsPaused = false;
-        for (var day = 0; day < 400; day++) campaign.Tick();
+        for (var day = 0; day < 400; day++) campaign.TickDay();
         var foreignAfter = EconomySystem.ForeignShare(taken.State, taken.Owner.Tag);
 
         Console.WriteLine($"  nationality: {taken.Owner.Tag} took {taken.State.Name}, " +
@@ -6367,7 +7085,7 @@ public static class Program
         // failed on their own staging every time; what is being checked is whether a
         // frightened country asks and whether a power with a reason says yes.
         if (friend.GuaranteedBy(power.Id)) return "CHN already guaranteed NPL before the check began";
-        campaign.Tick();
+        campaign.TickDay();
         if (!AiStatecraft.AskForShelter(campaign, small, bully))
             return $"NPL, worth {AiStatecraft.StrengthOf(campaign, small):0} beside a neighbour worth " +
                    $"{bullyStrength:0}, did not ask a country worth {powerStrength:0} that has its own " +
@@ -6418,7 +7136,7 @@ public static class Program
 
             // Let the deployment happen: at day zero the formations are on their seeded
             // coordinates and there is no line to find a gap in yet.
-            for (var day = 0; day < 10; day++) campaign.Tick();
+            for (var day = 0; day < 10; day++) campaign.TickDay();
 
             // Any war that is actually being fought. Taking the first unended one finds a
             // quarrel between two small states with no divisions in it, of which the world
@@ -6483,7 +7201,7 @@ public static class Program
             // The control keeps the order, the route, the objective and the war, and differs
             // only in having nobody behind it - which is the whole of what the fix reads.
             if (!asAnOrder) army.DirectOrder = false;
-            campaign.Tick();
+            campaign.TickDay();
             return war.UnopposedProgress.GetValueOrDefault(target);
         }
 
@@ -6653,7 +7371,7 @@ public static class Program
         // after and failed: France runs a deficit of several billion a week, and sixty
         // million of Luxembourgish tribute inside it is not something a subtraction can
         // see. The mechanic was right and the measurement was wrong.
-        for (var day = 0; day < 35; day++) campaign.Tick();
+        for (var day = 0; day < 35; day++) campaign.TickDay();
         var taken = overlord.TributeTakenWeekly;
         var paid = subject.TributePaidWeekly;
         if (subject.WeeklyTaxIncome > 0f && taken <= 0f)
@@ -6887,7 +7605,7 @@ public static class Program
 
         var organisationBefore = traveller.Organisation;
         campaign.IsPaused = false;
-        for (var day = 0; day < 6 && traveller.IsRedeploying; day++) campaign.Tick();
+        for (var day = 0; day < 6 && traveller.IsRedeploying; day++) campaign.TickDay();
 
         if (traveller.Organisation >= organisationBefore)
             return "a week on the trains cost nothing in organisation, which makes it a better march";
@@ -7059,6 +7777,170 @@ public static class Program
     /// file on purpose, which is the point.
     /// </summary>
     /// <summary>
+    /// A portfolio handed to the civil service is actually governed by it.
+    ///
+    /// Three claims, and the first is the one that rots silently: a delegation that is
+    /// switched on and never runs looks identical to one that runs and had nothing to do.
+    ///
+    ///   - a country that has delegated nothing is left entirely alone. A player who never
+    ///     asked must never find their tax rate moved;
+    ///   - a delegated budget is governed by the same reasoning every other country gets -
+    ///     an emptying treasury is taxed;
+    ///   - a delegated trade desk answers a shortage, and withdraws the instruction again
+    ///     when the shortage is over. A desk that only ever adds rules ends the decade with
+    ///     forty of them.
+    /// </summary>
+    private static string ADelegatedPortfolioIsGoverned()
+    {
+        var campaign = Campaign.CreateBootstrap(20250704);
+        var nation = campaign.Nations.FirstOrDefault(country => country.Gdp > 100f);
+        if (nation is null) return "no country large enough to have an economy";
+        nation.IsHuman = true;
+
+        // ---- nothing delegated, nothing touched ----------------------------------------
+        nation.Delegated.Clear();
+        nation.Treasury = -nation.Gdp * 0.5f;      // as broke as a country gets
+        var untouched = nation.TaxRate;
+        for (var day = 0; day < 120; day++) Delegation.Tick(campaign, nation);
+        if (MathF.Abs(nation.TaxRate - untouched) > 0.0001f)
+            return $"a country that delegated nothing had its tax moved from {untouched:P1} " +
+                   $"to {nation.TaxRate:P1}";
+
+        // ---- the budget, delegated -------------------------------------------------------
+        Delegation.Set(nation, Delegation.Budget, true);
+        var before = nation.TaxRate;
+        for (var month = 0; month < 6; month++) Delegation.Tick(campaign, nation);
+        if (nation.TaxRate <= before + 0.0001f)
+            return $"a delegated treasury sat on {nation.TaxRate:P1} tax through half a year " +
+                   $"of insolvency, having started at {before:P1}";
+
+        // ---- the trade desk, delegated ----------------------------------------------------
+        Delegation.Set(nation, Delegation.Budget, false);
+        Delegation.Set(nation, Delegation.Trade, true);
+        nation.TradeSettings.Clear();
+
+        var commodity = nation.Market.Keys.FirstOrDefault();
+        if (nation.Market.Count == 0) return "the country has no market to run a desk over";
+        var quote = nation.Market[commodity];
+
+        // A real shortage: they want far more than they make.
+        quote.Production = 10f;
+        quote.Demand = 100f;
+        quote.Satisfaction = 0.10f;
+        Delegation.Tick(campaign, nation);
+        var priority = TradeDesk.GoodKey(commodity, TradeDesk.ImportPriority);
+        if (!nation.TradeSettings.ContainsKey(priority))
+            return $"a delegated desk watched a {1f - quote.Satisfaction:P0} shortage of " +
+                   $"{CommodityCatalog.IdOf(commodity)} and gave no instruction about it";
+
+        // And over: they make more than they need, comfortably.
+        quote.Production = 200f;
+        quote.Demand = 100f;
+        quote.Satisfaction = 1f;
+        Delegation.Tick(campaign, nation);
+        if (nation.TradeSettings.ContainsKey(priority))
+            return $"the shortage of {CommodityCatalog.IdOf(commodity)} ended and the desk left " +
+                   "its import priority standing";
+
+        Console.WriteLine($"  delegation: {nation.Tag} left alone kept its tax; with the budget " +
+                          $"delegated it taxed an empty treasury up to {nation.TaxRate:P1}; with the " +
+                          "desk delegated it answered a shortage and withdrew the instruction after.");
+        return "";
+    }
+
+    /// <summary>
+    /// The printing press: real money now, and a bill that outlives the press.
+    ///
+    /// Four claims, and each is a thing a player does.
+    ///
+    ///   - a bank nobody has taken will not print. The press is downstream of the seizure,
+    ///     and a government that has not made the first decision cannot make the second;
+    ///   - once taken, the money is REAL and arrives at once. That is the whole appeal and
+    ///     the reason the mechanic is dangerous rather than decorative: a country a week from
+    ///     insolvency is solvent on Monday;
+    ///   - it shows up in prices, by more than the debt it just paid off takes out of them.
+    ///     Printing does not make the problem go away, it changes which problem it is;
+    ///   - and stopping does not undo it. What a country is remembered for printing decays
+    ///     slowly on its own, so a government that printed through a war goes on paying for
+    ///     it through the peace.
+    ///
+    /// Run on one country in a sandbox with the weeks stepped by hand, like its sibling
+    /// above: what is being tested is the arithmetic, not what the world happens to do.
+    /// </summary>
+    private static string ThePressPrintsRealMoneyAndRealPrices()
+    {
+        if (CentralBank.EmissionRange() <= 0f) return "";   // a mod switched the press off
+
+        static void Weeks(Nation nation, Campaign campaign, int weeks)
+        {
+            var weeklyOutput = nation.Gdp / 52f;
+            for (var week = 0; week < weeks; week++)
+                InflationCore.Tick(campaign, nation, weeklyOutput, false, 0f);
+        }
+
+        var campaign = Campaign.CreateBootstrap(20250211);
+        var nation = campaign.Nations.FirstOrDefault(country => country.Gdp > 100f);
+        if (nation is null) return "no country large enough to have an economy";
+
+        // ---- a bank nobody has taken will not print ------------------------------------
+        nation.GovernmentSetsKeyRate = false;
+        CentralBank.SetEmission(nation, CentralBank.EmissionRange());
+        if (nation.MoneyPrinting > 0f)
+            return "an independent central bank agreed to print money for the government";
+
+        var treasuryBefore = nation.Treasury;
+        Weeks(nation, campaign, 8);
+        if (nation.Treasury > treasuryBefore + 0.0001f)
+            return "the treasury grew while nothing was supposed to be printing";
+
+        // ---- taken, it prints, and the money is real -----------------------------------
+        nation.GovernmentSetsKeyRate = true;
+        nation.WeeklyBalance = 0f;
+        var settled = nation.Inflation;
+        var printing = MathF.Min(0.08f, CentralBank.EmissionRange());
+        CentralBank.SetEmission(nation, printing);
+        if (MathF.Abs(nation.MoneyPrinting - printing) > 0.0001f)
+            return $"asked for {printing:P1} of output and got {nation.MoneyPrinting:P1}";
+
+        var before = nation.Treasury;
+        Weeks(nation, campaign, 52);
+        var gained = nation.Treasury - before;
+        var expected = nation.Gdp * printing;
+        if (gained < expected * 0.8f)
+            return $"a year of printing {printing:P1} of output put {gained:0.0} in the treasury " +
+                   $"against the {expected:0.0} it should have";
+
+        // ---- and it is in the prices ---------------------------------------------------
+        var printed = nation.Inflation;
+        if (printed <= settled + 0.01f)
+            return $"a year of printing {printing:P1} of output moved prices from {settled:P1} " +
+                   $"to {printed:P1}, which a player would never notice";
+
+        // ---- stopping is not the same as never having started --------------------------
+        CentralBank.SetEmission(nation, 0f);
+        if (nation.EmissionMemory <= 0f)
+            return "the press stopped and the country was immediately forgiven for it";
+        Weeks(nation, campaign, 4);
+        var justAfter = nation.Inflation;
+        if (justAfter <= settled + 0.004f)
+            return $"a month after printing {printing:P1} of output for a year, prices were back " +
+                   $"to {justAfter:P1} against a resting {settled:P1} - the press cost nothing";
+
+        // ---- but it does fade ----------------------------------------------------------
+        Weeks(nation, campaign, 78);
+        var muchLater = nation.Inflation;
+        if (muchLater >= justAfter)
+            return $"eighteen months after the press stopped prices were still {muchLater:P1} " +
+                   $"against {justAfter:P1} a month after - nothing is ever forgiven";
+
+        Console.WriteLine($"  emission: printing {printing:P1} of output for a year put " +
+                          $"{gained:0.0} in the treasury and took prices from {settled:P1} to " +
+                          $"{printed:P1}; a month after stopping they were {justAfter:P1} and " +
+                          $"eighteen months after, {muchLater:P1}.");
+        return "";
+    }
+
+    /// <summary>
     /// Inflation is caused by what a government does and answers to what it decides.
     ///
     /// The economy had no mechanism connecting what a state spends to what its people pay:
@@ -7112,12 +7994,47 @@ public static class Program
         if (!line.PlayerSet)
             return $"the policy rate is not a government's to set, so there is no lever at all";
 
+        // The rate is the central bank's until a government takes it, and a bank left alone
+        // undoes anything else that moves it - so the test has to take it first, which is
+        // also what a player has to do.
+        nation.GovernmentSetsKeyRate = true;
         BudgetCore.SetRate(nation, line, MathF.Min(line.Maximum, line.Neutral + 1.5f));
         var tightened = Settle(nation, calm, -0.20f, 120);
         if (tightened >= spent - 0.005f)
             return $"the same deficit at a policy rate {MathF.Min(line.Maximum, line.Neutral + 1.5f):0.##} " +
                    $"against a neutral {line.Neutral:0.##} still sits at {tightened:P1} against " +
                    $"{spent:P1}, so the rate does nothing";
+
+        // ---- and cheap money by decree is not free ---------------------------------------
+        //
+        // The other half of the same lever. A government holding the rate under what the bank
+        // wanted is buying growth with prices, and if that costs nothing the decision is not
+        // one - cheap money would simply be correct.
+        BudgetCore.SetRate(nation, line, line.Minimum);
+        var cheap = Settle(nation, calm, -0.20f, 120);
+        if (CentralBank.Rule.Credibility > 0f && cheap <= tightened + 0.005f)
+            return $"holding the rate on the floor against a bank that wanted " +
+                   $"{CentralBank.Wanted(nation, false):P1} cost nothing: {cheap:P1} against " +
+                   $"{tightened:P1} with the rate up";
+
+        // ---- and a bank nobody has taken moves the rate itself ---------------------------
+        //
+        // The part that did not exist before: two hundred and sixty-one countries have a
+        // monetary policy now, and the check has to prove it is a policy rather than a
+        // number sitting where the scenario left it.
+        nation.GovernmentSetsKeyRate = false;
+        nation.Inflation = 0.14f;
+        var before = CentralBank.KeyRate(nation);
+        for (var week = 0; week < 12; week++) CentralBank.Tick(nation, false);
+        var after = CentralBank.KeyRate(nation);
+        if (CentralBank.Rule.Smoothing > 0f && after <= before + 0.0005f)
+            return $"an independent bank watched inflation at {nation.Inflation:P0} and left the " +
+                   $"rate at {after:P1}, so nobody in the world is running monetary policy";
+        Console.WriteLine($"  central bank: neutral {CentralBank.Rule.NeutralRate:P1}, target " +
+                          $"{CentralBank.Rule.Target:P1}; at {nation.Inflation:P0} inflation an " +
+                          $"independent bank went from {before:P1} to {after:P1} in twelve weeks.");
+        nation.Inflation = settled;
+        BudgetCore.SetRate(nation, line, line.Default);
 
         // ---- and it explains itself ------------------------------------------------------
         nation.IsHuman = true;
@@ -7140,7 +8057,7 @@ public static class Program
         var world = Campaign.CreateBootstrap(20250211);
         if (!AttachMap(world)) return "";
         world.IsPaused = false;
-        for (var day = 0; day < 730; day++) world.Tick();
+        for (var day = 0; day < 730; day++) world.TickDay();
         // The distribution, not the extremes. Two outliers say nothing about whether the
         // model is calibrated; what matters is where the ordinary country sits, and a world
         // where the median country is in double digits is a world in permanent crisis.
@@ -7369,10 +8286,24 @@ public static class Program
 
     private static string ADecadeOfWarsDoesNotShredTheMap()
     {
-        static (int Regions, int Created, int Wars) Run(bool tidy)
+        // Which settlement a war ended under, from what it wrote about itself. The peace
+        // code has four ways to move a border and they are not equally tidy; a count of
+        // cuts with no address is a number nobody can act on.
+        static string Ended(StrategicWar war)
         {
+            var summary = war.PeaceSummary ?? "";
+            if (summary.StartsWith("Secured provinces inside", StringComparison.Ordinal)) return "war goal enforced";
+            if (summary.StartsWith("Secured occupations", StringComparison.Ordinal)) return "occupations kept";
+            if (summary.Contains("capitulated", StringComparison.Ordinal)) return "capitulation";
+            if (summary.Length == 0) return "still running";
+            return "negotiated";
+        }
+
+        static (int Regions, int Created, int Wars, SortedDictionary<string, int> By) Run(bool tidy)
+        {
+            var blame = new SortedDictionary<string, int>(StringComparer.Ordinal);
             var campaign = Campaign.CreateBootstrap(20241227);
-            if (!AttachMap(campaign)) return (0, 0, 0);
+            if (!AttachMap(campaign)) return (0, 0, 0, blame);
             if (!tidy)
             {
                 campaign.Defines.PeaceRoundUpShare = 0f;
@@ -7380,9 +8311,15 @@ public static class Program
             }
             var before = campaign.States.Count;
             campaign.IsPaused = false;
-            for (var day = 0; day < 365 * 10; day++) campaign.Tick();
+            for (var day = 0; day < 365 * 10; day++) campaign.TickDay();
             var created = campaign.Wars.Sum(war => war.CreatedStates);
-            return (campaign.States.Count - before, created, campaign.Wars.Count(war => war.Ended));
+            foreach (var war in campaign.Wars)
+            {
+                if (war.CreatedStates <= 0) continue;
+                var how = Ended(war);
+                blame[how] = blame.GetValueOrDefault(how) + war.CreatedStates;
+            }
+            return (campaign.States.Count - before, created, campaign.Wars.Count(war => war.Ended), blame);
         }
 
         var tidy = Run(true);
@@ -7393,6 +8330,9 @@ public static class Program
                           $"with the rounding rule and {ragged.Created:N0} without " +
                           $"({tidy.Regions:N0} against {ragged.Regions:N0} new regions on the map, " +
                           $"{tidy.Wars:N0} and {ragged.Wars:N0} wars settled).");
+        if (tidy.By.Count > 0)
+            Console.WriteLine("    the cuts that remain came from: " +
+                              string.Join(", ", tidy.By.Select(entry => $"{entry.Value:N0} {entry.Key}")) + ".");
 
         if (ragged.Created == 0 && tidy.Created == 0)
             return "";     // no war in either world annexed anything; nothing to compare
@@ -7420,7 +8360,7 @@ public static class Program
 
         for (var day = 0; day < 365; day++)
         {
-            campaign.Tick();
+            campaign.TickDay();
             var now = campaign.ProvinceController;
             if (now is null) break;
             for (var province = 1; province < now.Length && province < before.Length; province++)
@@ -7480,7 +8420,7 @@ public static class Program
 
         // Mid-week, where the weekly tick has not yet run again.
         campaign.IsPaused = false;
-        for (var day = 0; day < 3; day++) campaign.Tick();
+        for (var day = 0; day < 3; day++) campaign.TickDay();
         var midweek = Blank("three days in", campaign.Player);
         if (midweek.Length > 0) return midweek;
 
@@ -7517,7 +8457,7 @@ public static class Program
         var cliffs = 0;
         for (var day = 0; day < 730; day++)
         {
-            campaign.Tick();
+            campaign.TickDay();
             foreach (var nation in campaign.Nations)
             {
                 var held = campaign.StatesOf(nation).Length;
@@ -7731,7 +8671,7 @@ public static class Program
 
         // The fighting knows about them, and so does the peace.
         Warfare.RebuildFronts(campaign);
-        for (var day = 0; day < 40; day++) campaign.Tick();
+        for (var day = 0; day < 40; day++) campaign.TickDay();
         if (war.Ended) return "";      // settled early; nothing left to prove here
 
         var committed = campaign.Armies.Count(army => army.AssignedWarId == war.Id &&
@@ -7880,7 +8820,7 @@ public static class Program
         var campaign = Campaign.CreateBootstrap(20240820);
         if (!AttachMap(campaign)) return "";
         campaign.IsPaused = false;
-        for (var day = 0; day < 10; day++) campaign.Tick();
+        for (var day = 0; day < 10; day++) campaign.TickDay();
 
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -8202,14 +9142,35 @@ public static class Program
     /// averaging it twice. That alone was 116 kB of the day. A budget nothing ever comes
     /// near is not a budget, so it now sits where the next feature will feel it.
     /// </summary>
-    private static string ADayDoesNotBuryTheCollector(double bytesPerDay)
+    private static string ADayDoesNotBuryTheCollector(double bytesPerDay, int hoursPerTick)
     {
-        const double budget = 300 * 1024;
-        var perDay = bytesPerDay / 1024.0;
-        if (bytesPerDay > budget)
-            return $"a campaign day allocated {perDay:N0} kB, over the {budget / 1024:N0} kB budget - " +
-                   "run the bench and read the pass table above: whichever line grew is the one that did it";
-        Console.WriteLine($"  garbage: {perDay:N0} kB a day against a {budget / 1024:N0} kB budget.");
+        // What one step hands the collector. This is the figure the budget was measured
+        // against and the one a new habit shows up in, because it does not move when the
+        // pace does.
+        const double perStepBudget = 300 * 1024;
+        var stepsADay = Math.Max(1, 24 / Math.Max(1, hoursPerTick));
+        var perStep = bytesPerDay / stepsADay;
+
+        // And what a day costs, which is what a second of play at speed five costs thirty
+        // times over. It scales with the pace by definition: twenty-four steps of a day's
+        // marching allocate twenty-four times what one does, and no amount of tidying takes
+        // that back to one. The ceiling is the per-step budget spread over the day.
+        var perDayBudget = perStepBudget * stepsADay;
+
+        var worst = SimProfiler.All
+            .OrderByDescending(entry => entry.AllocatedBytes)
+            .FirstOrDefault();
+        var blame = worst is null ? "" :
+            $" The largest single pass is '{worst.Name}' at " +
+            $"{worst.AllocatedBytes / (double)Math.Max(1, worst.Runs) / 1024.0:N0} kB a run.";
+
+        if (perStep > perStepBudget)
+            return $"one step allocated {perStep / 1024.0:N0} kB, over the {perStepBudget / 1024:N0} kB " +
+                   $"budget - a day at {hoursPerTick}h a step came to {bytesPerDay / 1024.0:N0} kB." + blame;
+
+        Console.WriteLine($"  garbage: {perStep / 1024.0:N0} kB a step against a {perStepBudget / 1024:N0} kB " +
+                          $"budget; at {hoursPerTick}h a step that is {bytesPerDay / 1024.0:N0} kB a campaign " +
+                          $"day against {perDayBudget / 1024:N0}.{blame}");
         return "";
     }
 
@@ -8346,7 +9307,7 @@ public static class Program
         host.IsPaused = false;
         // Long enough to have the state worth losing: regions cut by the 2024 borders,
         // stability baselines taken, militia part-way towards standing up.
-        for (var day = 0; day < 120; day++) host.Tick();
+        for (var day = 0; day < 120; day++) host.TickDay();
 
         var readiness = host.Nations.Sum(nation => nation.MilitiaReadiness.Count);
         var carved = host.States.Count(state => state.ParentMapIndex != 0);
@@ -8399,7 +9360,7 @@ public static class Program
         // And it has to stay that way: a snapshot that matches now and diverges on the next
         // step has carried the numbers and not the state behind them.
         client.IsPaused = false;
-        for (var day = 0; day < 10; day++) { host.Tick(); client.Tick(); }
+        for (var day = 0; day < 10; day++) { host.TickDay(); client.TickDay(); }
         if (CampaignFingerprint.Of(host) != CampaignFingerprint.Of(client))
             return "the two worlds agreed at the moment of the snapshot and diverged within ten " +
                    "days, so something the simulation reads is not in it: " + WhatDiffers(host, client);
@@ -8458,8 +9419,8 @@ public static class Program
         Halve(secondAlone);
         firstAlone.IsPaused = false;
         secondAlone.IsPaused = false;
-        for (var day = 0; day < days; day++) firstAlone.Tick();
-        for (var day = 0; day < days; day++) secondAlone.Tick();
+        for (var day = 0; day < days; day++) firstAlone.TickDay();
+        for (var day = 0; day < days; day++) secondAlone.TickDay();
         var expectedFirst = CampaignFingerprint.Of(firstAlone);
         var expectedSecond = CampaignFingerprint.Of(secondAlone);
 
@@ -8471,8 +9432,8 @@ public static class Program
         other.IsPaused = false;
         for (var day = 0; day < days; day++)
         {
-            same.Tick();
-            other.Tick();
+            same.TickDay();
+            other.TickDay();
         }
 
         var leaderMatches = CampaignFingerprint.Of(same) == expectedFirst;
@@ -8507,8 +9468,8 @@ public static class Program
         second.IsPaused = false;
         for (var day = 1; day <= days; day++)
         {
-            first.Tick();
-            second.Tick();
+            first.TickDay();
+            second.TickDay();
             var left = CampaignFingerprint.Of(first);
             var right = CampaignFingerprint.Of(second);
             if (left == right) continue;

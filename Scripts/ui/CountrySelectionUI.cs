@@ -92,6 +92,10 @@ public partial class DealOrForceGame
         actionRow.AddChild(ActionButton("Back", ShowMainMenu, 100, 38));
         actionRow.AddChild(ActionButton("Random nation", PickRandomNation, 150, 38));
         actionRow.AddChild(ActionButton("Scenarios / editor", OpenScenarioLibrary, 170, 38));
+        // The language, the step length and the sound are all decisions a player makes
+        // BEFORE they pick a country, and until now the only door to them was the pause
+        // menu, which does not exist until a campaign is running.
+        actionRow.AddChild(ActionButton("Settings", ShowSettings, 120, 38));
     }
 
     private async void OpenCountryPicker()
@@ -114,7 +118,10 @@ public partial class DealOrForceGame
         _sidePanel.Visible = false;
         _pickerSearch.Text = Tr("");
         _pickerHeading.Text = Tr("SELECT A COUNTRY");
-        _pickerSubheading.Text = $"{_campaign.Date} · {Tr("Click the map or search")}";
+        // Display, not ToString: the bare date is the invariant one that goes into save
+        // files, so interpolating it here put an English month beside a translated
+        // sentence on the first screen of every campaign.
+        _pickerSubheading.Text = $"{_campaign.Date.Display()} · {Tr("Click the map or search")}";
         _pickerSeats.Visible = false;
         _pickerSeatToggle.Visible = false;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
@@ -275,7 +282,9 @@ public partial class DealOrForceGame
 
     private void UpdatePickerLocation(GlobePick pick)
     {
-        var region = pick.State is null ? "Unmapped region" : $"{pick.State.Name} · {pick.State.Kind}";
+        var region = pick.State is null
+            ? Simulation.Loc.Get("Unmapped region")
+            : pick.State.DisplayName + " · " + Simulation.Loc.Get(pick.State.Kind);
         var province = pick.ProvinceId > 0 ? $"tactical province #{pick.ProvinceId:N0}" : "province topology loading";
         _pickerLocation.Text = Simulation.Loc.Format("Selected: {0} · {1}", region, province);
     }

@@ -152,6 +152,7 @@ public sealed class ModLoader
         SoundCatalog.Load();
         MusicCatalog.Load();
         FontCatalog.Load();
+        SubjectCatalog.ResetCatalog();
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
@@ -162,6 +163,7 @@ public sealed class ModLoader
         TradeDesk.ResetCatalog();
         PeaceTermCatalog.ResetCatalog();
         InflationCore.ResetCatalog();
+        CentralBank.ResetCatalog();
         foreach (var (_, reset, _) in Tunables) reset();
         GovernmentCatalog.ResetCatalog();
         IdeologyCatalog.ResetCatalog();

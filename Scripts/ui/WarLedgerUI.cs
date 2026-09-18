@@ -372,8 +372,8 @@ public partial class DealOrForceGame
         row.WarId = war.Id;
         row.AttackerColour.Color = NationColour(attacker);
         row.DefenderColour.Color = NationColour(defender);
-        row.Attacker.Text = attacker?.Name ?? "?";
-        row.Defender.Text = defender?.Name ?? "?";
+        row.Attacker.Text = attacker?.DisplayName ?? "?";
+        row.Defender.Text = defender?.DisplayName ?? "?";
         row.Attacker.AddThemeColorOverride("font_color",
             mine ? Ui.Colour("text.accent") : Ui.Colour("text.body"));
         row.Defender.AddThemeColorOverride("font_color",
@@ -463,7 +463,7 @@ public partial class DealOrForceGame
         // one produced a war per member; now it is one war with two sides, and the ledger is
         // where that has to be visible or it may as well not be true.
         string SideNames(bool attacking) => string.Join(", ", war.Side(attacking)
-            .Select(id => _campaign.NationById(id)?.Name)
+            .Select(id => _campaign.NationById(id)?.DisplayName)
             .Where(name => !string.IsNullOrEmpty(name)));
         Line(Simulation.Loc.Format("{0}   against   {1}", SideNames(true), SideNames(false)));
 
@@ -478,7 +478,7 @@ public partial class DealOrForceGame
         Heading("HOW IT IS GOING");
         Line(Simulation.Loc.Format("War score {0} towards {1}",
                  war.WarScore.ToString("+0.0;-0.0;0.0"),
-                 (war.WarScore >= 0f ? attacker?.Name : defender?.Name) ?? Tr("nobody")),
+                 (war.WarScore >= 0f ? attacker?.DisplayName : defender?.DisplayName) ?? Tr("nobody")),
              NationColour(war.WarScore >= 0f ? attacker : defender));
         Line("    " + Simulation.Loc.Format("occupation {0}", war.OccupationScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
              Simulation.Loc.Format("battles {0}", war.BattleScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
@@ -548,13 +548,13 @@ public partial class DealOrForceGame
                 if (friend is null) continue;
                 var captured = allyId;
                 var blocked = Simulation.Statecraft.CallRefusal(_campaign, war, player.Id, allyId);
-                var button = ActionButton(friend.Name, () => CallAllyToWar(war, captured), 150, 30);
+                var button = ActionButton(friend.DisplayName, () => CallAllyToWar(war, captured), 150, 30);
                 button.Disabled = blocked.Length > 0;
                 button.TooltipText = Ui.Tip(blocked.Length > 0
                     ? blocked
                     : Simulation.Loc.Format(
                         "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.",
-                        friend.Name));
+                        friend.DisplayName));
                 calls.AddChild(button);
             }
         }
@@ -608,6 +608,6 @@ public partial class DealOrForceGame
             return Simulation.Loc.Format("province {0}", provinceId.ToString("N0"));
         var stateIndex = topology.ProvinceToState[provinceId];
         var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == stateIndex);
-        return state?.Name ?? Simulation.Loc.Format("province {0}", provinceId.ToString("N0"));
+        return state?.DisplayName ?? Simulation.Loc.Format("province {0}", provinceId.ToString("N0"));
     }
 }

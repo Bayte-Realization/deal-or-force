@@ -1,0 +1,20 @@
+// Deal or Force - как называется страна, если это спор.
+//
+// Ключ - английская строка. Если её поправили в english/23_naming.json, то и здесь, и в
+// common/settings ключ нужно поменять тем же текстом, иначе перевод перестаёт находиться.
+//
+// `country.BLR.name.<вариант>` - значение настройки, приписанное к ключу: экран настроек
+// пишет `country_name_blr = belarus`, и каждая подпись в игре спрашивает эту строку
+// вместо обычной. Подписи выпадающего списка - те же ключи, поэтому список показывает
+// сами названия, а не английские слова о них.
+//
+// У Молдавии один вариант и ни одной строки за ним, так что он ничего не меняет.
+{
+  "What Belorussia is called": "Как называется Белоруссия",
+  "If you are that BelOrussian (or however you would have it) who takes offence at plain fact, and you want your favourite country's favourite name transliterated your way THAT badly, then fear not: I have seen to your feelings!": "Если Вы тот самый белОрус (или как Вас там правильно), который обижается на объективную правду, и Вам ТАК хочется видеть любимое название любимой страны на транслите, — не бойтесь, Я позаботился о Ваших чувствах!",
+  "country.BLR.name.belorussia": "Белоруссия",
+  "country.BLR.name.belarus": "Беларусь",
+  "What Moldova is called": "Как называется Молдавия",
+  "If the name of (a) (your) random semi-European third-world country matters to you that much, then fear not - I don't care))))": "Если Вам так важно название (Вашей) случайной полуевропейской страны третьего мира, то можете не переживать — Мне на это всё равно))))",
+  "Whatever": "Неважно"
+}

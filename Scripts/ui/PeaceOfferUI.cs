@@ -130,7 +130,7 @@ public partial class DealOrForceGame
         var war = _campaign.Wars.Find(candidate => candidate.Id == _shownPeaceOfferWar);
         HidePeaceOffer();
         if (accept && war is { Ended: true }) SetArmyFeedback(war.PeaceSummary);
-        else if (!accept) SetArmyFeedback("The offer was refused. The war continues.");
+        else if (!accept) SetArmyFeedback(Tr("The offer was refused. The war continues."));
         Refresh();
     }
 }

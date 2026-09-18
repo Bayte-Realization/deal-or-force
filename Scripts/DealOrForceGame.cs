@@ -87,11 +87,20 @@ public partial class DealOrForceGame : Control
             ApplyAllSettings();
             _startupComplete = true;
         });
+
+        // And then go where the player asked to go. After the loading operation, not inside
+        // BuildInterface: the intent can mean "load the last save", and a save cannot be
+        // loaded into a world that has not been created yet - which is exactly what happened
+        // the first time this was called from the interface pass.
+        OpenWhateverWasAskedFor();
     }
 
     public override void _Process(double delta)
     {
         if (_isLoading || !_startupComplete) return;
+        // Before any of the early returns below it: a panel is read while the game is
+        // paused, and a caption squeezed to nothing on a paused screen is still squeezed.
+        LayoutAudit.Watch(this, delta);
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false };
         // The lens and the roll move while a key is held, so the line that reports them
@@ -137,7 +146,10 @@ public partial class DealOrForceGame : Control
             if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
             using (SimProfiler.Measure("campaign.day"))
                 _campaign.Tick();
-            _modLoader.OnDayAdvanced(_campaign);
+            // A hook called "on day advanced" is called when a day advances. At the shipped
+            // hourly step a call per step would fire it twenty-four times a day, which would
+            // silently multiply by twenty-four whatever every mod in the world does in it.
+            if (_campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(_campaign);
             if (_networkConnected && _networkIsHost && _networkGameStarted)
             {
                 _applyingNetworkCommand = false;
@@ -169,8 +181,14 @@ public partial class DealOrForceGame : Control
     {
         if (IsInstanceValid(_authorCanvas))
         {
+            // Escape takes the window's OWN way out, which is not always "close".
+            //
+            // It used to close unconditionally, and opened to choose a country there is no
+            // campaign behind the window - so escape took the window away and left a globe
+            // with no interface on it, which is exactly the bug it looked like. See
+            // `AuthorWindow`: the window is told where its exit leads when it is opened.
             if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
-            { ConfirmAuthorExit(CloseAuthorWindow); GetViewport().SetInputAsHandled(); }
+            { EscapeAuthorWindow(); GetViewport().SetInputAsHandled(); }
             return;
         }
         if (_isLoading || !_startupComplete)
@@ -273,7 +291,7 @@ public partial class DealOrForceGame : Control
         if (key.Keycode == Key.Escape && _drawingKind is not null)
         {
             EndDrawing();
-            SetArmyFeedback("The line was abandoned.");
+            SetArmyFeedback(Tr("The line was abandoned."));
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -288,6 +306,8 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        // Escape while the workshop is up is answered in `_Input`, which runs first - see
+        // there. Nothing else in the campaign hears a key while that window covers it.
         if (IsInstanceValid(_authorCanvas)) return;
         if (_isLoading || !_startupComplete) return;
         if (inputEvent is InputEventKey && GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return;
@@ -438,6 +458,32 @@ public partial class DealOrForceGame : Control
         // here on the screen and the running game cannot disagree: both go through
         // ApplySetting, and this is the same call the screen makes when a row changes.
         ApplyAllSettings();
+    }
+
+    /// <summary>
+    /// Do the thing the front door was pressed for, once, on the way up.
+    ///
+    /// The intent is cleared as it is read: a campaign that later returns to the menu and
+    /// comes back must be told again what it is for, and a stale "load the last save" is the
+    /// kind of bug that only shows up on the second game of a session.
+    /// </summary>
+    private void OpenWhateverWasAskedFor()
+    {
+        var wanted = MainMenuScene.Wanted;
+        MainMenuScene.Wanted = MenuIntent.None;
+        _menuLayer.Visible = false;
+
+        switch (wanted)
+        {
+            case MenuIntent.NewCampaign: OpenScenarioLibrary(); break;
+            case MenuIntent.LoadLatest: LoadLatestSave(); break;
+            case MenuIntent.Multiplayer: OpenNetworkMultiplayer(); break;
+            case MenuIntent.Settings: ShowSettings(); break;
+            // Opened directly - from the editor, or by a scene reload - so there is nothing
+            // to act on. Only the layer is shown, not the whole hide-everything routine:
+            // that one pauses the campaign, and at this point in the boot there is not one.
+            default: _menuLayer.Visible = true; break;
+        }
     }
 
     private void BuildMainMenu()
@@ -726,12 +772,26 @@ public partial class DealOrForceGame : Control
         Refresh();
     }
 
+    /// <summary>
+    /// Leave the campaign and go back to the front door.
+    ///
+    /// One funnel, called by the pause menu, the lobby and the country picker's Back button,
+    /// so there is one path out of a campaign rather than three that have to agree. The
+    /// world is dropped with the scene, which is what "quit to menu" always meant and never
+    /// used to do - the old menu was a panel over a world that carried on existing.
+    /// </summary>
     private void ShowMainMenu()
+    {
+        MainMenuScene.ReturnTo(GetTree());
+    }
+
+    /// <summary>The panel the campaign scene shows when it is opened without an intent.</summary>
+    private void ShowLegacyMenuPanel()
     {
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
-        _campaign.IsPaused = true;
-        _pause.Text = Tr("▶");
+        if (_campaign is not null) _campaign.IsPaused = true;
+        if (_pause is not null) _pause.Text = Tr("▶");
         _hudLayer.Visible = false;
         _pickerLayer.Visible = false;
         _menuLayer.Visible = true;
@@ -840,7 +900,8 @@ public partial class DealOrForceGame : Control
                     "them is not the same as more strength in one province.");
                 DetailRow("Field armies", armies.Length.ToString("N0"),
                     "Formations on the map, counted as units rather than as strength.");
-                DetailRow("Fleets", $"{fleets.Length:N0} · {fleets.Sum(fleet => fleet.Hulls):N0} hulls",
+                DetailRow("Fleets", Simulation.Loc.Format("{0:N0} · {1:N0} hulls",
+                        fleets.Length, fleets.Sum(fleet => fleet.Hulls)),
                     "Commissioned squadrons and the hulls in them.");
                 DetailRow("Active personnel", Fmt.People(personnel), Fmt.PeopleExact(personnel));
 
@@ -927,9 +988,13 @@ public partial class DealOrForceGame : Control
         _militarySpending.Visible = false;
         _sideTitle.Text = pick.Nation.DisplayName;
         ShowSideFlag(pick.Nation.Tag);
-        var state = pick.State is null ? "Unmapped land" : $"{pick.State.Name} ({pick.State.Kind})";
-        var province = pick.ProvinceId > 0 ? $"Tactical province #{pick.ProvinceId:N0}" : "Province topology loading";
-        ShowCountryInteraction(pick.Nation, $"{state} · {province}");
+        var state = pick.State is null
+            ? Tr("Unmapped land")
+            : Tr(pick.State.Name) + " (" + Tr(pick.State.Kind) + ")";
+        var province = pick.ProvinceId > 0
+            ? Simulation.Loc.Format("Tactical province #{0:N0}", pick.ProvinceId)
+            : Tr("Province topology loading");
+        ShowCountryInteraction(pick.Nation, state + " · " + province);
         if (pick.State is not null) ShowRegionOverview();
     }
 
@@ -1045,7 +1110,9 @@ public partial class DealOrForceGame : Control
 
         var player = _campaign.Player;
         _identity.Text = player.DisplayName;
-        _identityTag.Text = _observerMode ? "OBS · observer mode" : $"{player.Tag} · player nation";
+        _identityTag.Text = _observerMode
+            ? Tr("OBS · observer mode")
+            : player.Tag + " · " + Tr("player nation");
         SetFlag(_identityFlag, player.Tag, 34);
         // The clock, whenever the campaign is running on something shorter than a day. At a
         // whole-day step the hour is always midnight and printing it would be noise; below
@@ -1069,9 +1136,12 @@ public partial class DealOrForceGame : Control
         var balanced = player.Budget.HasEntries;
         WriteStat(_balance,
             balanced ? Fmt.MoneyDelta(player.WeeklyBalance) : "—",
-            balanced ? $"{Fmt.MoneyExact(player.WeeklyBalance)} a week" : "The first economic week has not closed yet.",
-            balanced ? "a week" : "", balanced ? Fmt.Direction(player.WeeklyBalance, 0.005d) : 0);
-        WriteStat(_stability, $"{player.Stability:P0}", $"Stability {player.Stability:P1}",
+            balanced
+                ? Simulation.Loc.Format("{0} a week", Fmt.MoneyExact(player.WeeklyBalance))
+                : Tr("The first economic week has not closed yet."),
+            balanced ? Tr("a week") : "", balanced ? Fmt.Direction(player.WeeklyBalance, 0.005d) : 0);
+        WriteStat(_stability, Fmt.Percent(player.Stability),
+            Simulation.Loc.Format("Stability {0:P1}", player.Stability),
             player.WarSupport > 0f
                 ? Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport))
                 : "", 0);
@@ -1493,8 +1563,9 @@ public partial class DealOrForceGame : Control
             if (!GodotObject.IsInstanceValid(button)) continue;
             StyleButton(button, running && index + 1 == _speed);
             button.TooltipText = Ui.Tip(_campaign is null
-                ? $"Campaign speed {index + 1}"
-                : $"Campaign speed {index + 1} · {_campaign.Defines.SecondsForSpeed(index + 1):0.##}s per day");
+                ? Simulation.Loc.Format("Campaign speed {0}", index + 1)
+                : Simulation.Loc.Format("Campaign speed {0} · {1:0.##}s per day",
+                    index + 1, _campaign.Defines.SecondsForSpeed(index + 1)));
         }
     }
 
@@ -1677,6 +1748,24 @@ public partial class DealOrForceGame : Control
     /// sites - and an untranslated string still renders as its English source.</summary>
     internal static string Tr(string text) => Simulation.Loc.Get(text);
 
+    /// <summary>
+    /// A label that will never wrap, for a crowded row.
+    ///
+    /// The single most repeated layout bug in this interface, three times now: `Title`
+    /// wraps by default, which is right for a paragraph and catastrophic in an HBox where
+    /// something else already claims the width. The label gets no width of its own, wraps to
+    /// one character per line, and turns a two-line card into one the height of the panel.
+    /// Anything sharing a row with an ExpandFill sibling goes through this.
+    /// </summary>
+    private static Label Fixed(Label label, float minimumWidth = 0f)
+    {
+        label.AutowrapMode = TextServer.AutowrapMode.Off;
+        label.ClipText = true;
+        label.VerticalAlignment = VerticalAlignment.Center;
+        if (minimumWidth > 0f) label.CustomMinimumSize = new Vector2(minimumWidth, 0);
+        return label;
+    }
+
     private static Label Title(string text, int size, Color color, bool upper = false)
     {
         var label = new Label
@@ -1804,11 +1893,33 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>Re-translate every caption still showing its own translation, in place.</summary>
+    /// <summary>
+    /// Put the whole game into the language that has just been chosen.
+    ///
+    /// The tree walk below handles every caption that was built from a key, which is most of
+    /// them. What it cannot reach is anything whose text is not a key any more: the names
+    /// written across the MAP, which are three-dimensional text built once and left; and the
+    /// items of a dropdown, which carry no meta for the walk to find. Both are listed here
+    /// by hand, because there is no way to find them automatically and a half-translated
+    /// game is worse than an untranslated one.
+    /// </summary>
     private void RefreshLocalisedText()
     {
         RefreshLocalisedText(this);
         _strategicHudFingerprint = int.MinValue;
         RefreshStrategicHud();
+
+        // The names across the map. Built as 3D text once and rebuilt only when a country
+        // renames itself - which is what a change of language is, for every country at once.
+        _globe?.RefreshCountryNames();
+
+        // Dropdowns. An OptionButton item is a plain string with nothing attached, so each
+        // list is re-filled by whoever owns it.
+        RefreshBuildingPicker();
+        if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
+        if (_settingsLayer is { Visible: true }) ShowSettingsCategory(_settingsCategory);
+        if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
+
         if (_campaign is not null && _dossierScreen == "Economy") ShowEconomyScreen();
     }
 
@@ -1865,7 +1976,7 @@ public partial class DealOrForceGame : Control
     /// Steps through every language that actually has a table loaded, base game or mod.
     /// </summary>
     private string SmoothingButtonLabel() =>
-        $"Map smoothing: {(_globe is null || _globe.MapSmoothing ? "on" : "off")}";
+        Tr(_globe is null || _globe.MapSmoothing ? "Map smoothing: on" : "Map smoothing: off");
 
     private void ToggleMapSmoothing()
     {

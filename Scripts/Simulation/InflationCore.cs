@@ -262,6 +262,28 @@ public static class InflationCore
             into?.Add(Loc.Get("The policy rate"), fromPolicy);
         }
 
+        // And what it costs to have set that rate yourself. Only when the government holds
+        // it BELOW what the bank wanted: cheap money by decree is money nobody believes will
+        // stay cheap, and the belief moves prices before the spending does.
+        // The printing press, shown on its own line rather than folded into the rate.
+        //
+        // They are different decisions with different prices and a player has to be able to
+        // tell them apart in the breakdown: the rate buys growth and costs prices, the press
+        // buys solvency and costs the currency.
+        var fromEmission = CentralBank.EmissionCost(nation);
+        if (fromEmission != 0f)
+        {
+            target += fromEmission;
+            into?.Add(Loc.Get("Money printed to order"), fromEmission);
+        }
+
+        var fromCredibility = CentralBank.CredibilityCost(nation, atWar);
+        if (fromCredibility > 0f)
+        {
+            target += fromCredibility;
+            into?.Add(Loc.Get("The bank is not independent"), fromCredibility);
+        }
+
         // Settle takes the figure the screen will show, not the difference: it records the
         // gap between the parts and the answer as its own line and then adopts the answer.
         var clamped = M.Clamp(target, weights.Floor, weights.Ceiling);
@@ -279,6 +301,17 @@ public static class InflationCore
     {
         if (campaign is null || nation is null) return;
         var weights = Weights;
+
+        // The bank moves first and prices answer to where it put the rate, which is the
+        // order these two things happen in. A country whose government has taken the rate
+        // finds this does nothing, which is what taking it means.
+        CentralBank.Tick(nation, atWar);
+
+        // The press runs before prices are worked out, because the money is in the treasury
+        // before anybody reprices anything - and because printing shrinks the debt, which is
+        // itself one of the things prices answer to. That is the trade in one line: the debt
+        // term falls, the emission term rises by more.
+        CentralBank.RunThePress(nation, weeklyOutput);
 
         // Only a country somebody is looking at gets its reasons written down, for the same
         // reason the budget does: composing seven labels for two hundred and sixty cabinets

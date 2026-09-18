@@ -1,0 +1,15 @@
+// Deal or Force - печатный станок.
+//
+// Второй денежный рычаг, и открывает его первый: правительство, забравшее центробанк,
+// может заставить его печатать. Деньги настоящие и приходят сразу; платой становится
+// то, что в существование предела больше никто не верит, - а эта вера не возвращается,
+// когда печать останавливают.
+{
+  "Printing money": "Печать денег",
+  "Have the bank print money and hand it to the treasury, as a share of a year's output. The money is real and arrives at once. What it costs is that nobody believes there is a limit any more - and that belief does not come back when the press stops.": "Приказать банку напечатать денег и отдать их в казну — долей от годового выпуска. Деньги настоящие и приходят сразу. Платите вы тем, что в существование предела больше никто не верит, — и эта вера не возвращается, когда печать останавливают.",
+  "The bank is independent. It will not print for a government that does not own it.": "Банк независим. Он не станет печатать для правительства, которому не принадлежит.",
+  "Nothing is being printed.": "Ничего не печатается.",
+  "The press has stopped. It is still costing {0} on prices, because stopping is not the same as never having started.": "Печать остановлена. Она всё ещё стоит {0} в ценах: остановиться — не то же самое, что не начинать.",
+  "{0} a week into the treasury, and {1} on prices - {2} of that is what people remember rather than what you are doing now.": "{0} в неделю в казну и {1} в ценах, из них {2} — это то, что люди помнят, а не то, что вы делаете сейчас.",
+  "Money printed to order": "Напечатанные деньги"
+}

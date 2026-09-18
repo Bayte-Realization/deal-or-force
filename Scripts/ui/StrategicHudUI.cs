@@ -166,7 +166,8 @@ public partial class DealOrForceGame
         {
             var enemy = _campaign.NationById(war.AttackerId == player.Id ? war.DefenderId : war.AttackerId);
             var score = war.AttackerId == player.Id ? war.WarScore : -war.WarScore;
-            AddOutlinerButton($"{enemy?.Tag ?? "?"}  score {score:+0;-0;0}  support {PlayerWarSupport(war):P0}",
+            AddOutlinerButton(Simulation.Loc.Format("{0}  score {1:+0;-0;0}  support {2:P0}",
+                    enemy?.Tag ?? "?", score, PlayerWarSupport(war)),
                 () => FocusWar(war), "Open the war dossier and focus its frontline.");
         }
 
@@ -178,7 +179,8 @@ public partial class DealOrForceGame
         {
             var enemyId = battle.AttackerId == player.Id ? battle.DefenderId : battle.AttackerId;
             var enemy = _campaign.NationById(enemyId);
-            AddOutlinerButton($"⚔ province {battle.ProvinceId:N0} · {enemy?.Tag ?? "?"}",
+            AddOutlinerButton(Simulation.Loc.Format("⚔ province {0:N0} · {1}",
+                    battle.ProvinceId, enemy?.Tag ?? "?"),
                 () => ShowBattleDetails(battle), "Open the battle report and focus the engagement.");
         }
 
@@ -193,12 +195,14 @@ public partial class DealOrForceGame
             AddOutlinerHeader("NAVY");
             foreach (var fleet in fleets)
             {
-                var state = fleet.InAction ? "IN ACTION"
+                var state = fleet.InAction ? Tr("IN ACTION")
                     : fleet.IsMoving ? "→"
                     : MissionName(fleet.Mission).ToUpperInvariant();
                 AddOutlinerButton($"{Loc.Get(fleet.Name)}  {state}  {fleet.Hulls:N0}", () => FocusFleet(fleet),
-                    $"{fleet.Hulls:N0} hulls · strength {fleet.Strength:P0} · cohesion {fleet.Organisation:P0} · " +
-                    $"stores {fleet.Supply:P0}" + System.Environment.NewLine + MissionHelp(fleet.Mission));
+                    Simulation.Loc.Format(
+                        "{0:N0} hulls · strength {1:P0} · cohesion {2:P0} · stores {3:P0}",
+                        fleet.Hulls, fleet.Strength, fleet.Organisation, fleet.Supply) +
+                    System.Environment.NewLine + MissionHelp(fleet.Mission));
             }
         }
 
@@ -223,9 +227,17 @@ public partial class DealOrForceGame
         if (worstGood is not null)
         {
             var definition = CommodityCatalog.Get(worstGood.Commodity);
-            AddOutlinerButton($"{Tr(definition.Name)} · {worstGood.Satisfaction:P0} · {Fmt.Money(worstGood.Price)}",
+            // The name and how short we are, and nothing else - the same shape as a watchlist
+            // row above. The price used to sit on the end of this line and it is what a longer
+            // language cut off first: "Rare earths / 65 % / $145M" arrived in Russian as
+            // "... / 65 % / $14", a price that is wrong rather than missing. It reads in the
+            // tooltip with everything else about the good, where nothing is fighting for room.
+            AddOutlinerButton($"{Tr(definition.Name)} · {worstGood.Satisfaction:P0}",
                 () => OpenEconomyTab("Market"),
-                $"Production {worstGood.Production:0.0}, demand {worstGood.Demand:0.0}, imports {worstGood.Imports:0.0}, exports {worstGood.Exports:0.0}");
+                Simulation.Loc.Format("Price {0}", Fmt.Money(worstGood.Price)) +
+                System.Environment.NewLine + Simulation.Loc.Format(
+                    "Production {0:0.0}, demand {1:0.0}, imports {2:0.0}, exports {3:0.0}",
+                    worstGood.Production, worstGood.Demand, worstGood.Imports, worstGood.Exports));
         }
 
         AddOutlinerHeader("CONSTRUCTION");
@@ -237,7 +249,7 @@ public partial class DealOrForceGame
                 _selectedState = state;
                 OpenScreen("Economy");
                 SelectDossierTab("Construction");
-            }, state?.Name ?? "Construction project");
+            }, state?.DisplayName ?? Tr("Construction project"));
         }
 
         // One line where there used to be four. A country at peace, with no battles, no
@@ -402,6 +414,12 @@ public partial class DealOrForceGame
         button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         button.CustomMinimumSize = new Vector2(0, 29);
         button.ClipText = true;
+        // A row that does not fit says so. The rail is a fixed 270 pixels and a row's text is
+        // a name plus its figures, so a longer language simply runs out of room - and a clip
+        // with no ellipsis turns "Rare earths / 65 % / $145M" into "...65 % / $14", which is
+        // not a shortened row, it is a wrong number. The ellipsis costs one character and
+        // makes the cut visible; the whole line is in the tooltip either way.
+        button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         button.TooltipText = Ui.Tip(tooltip);
         _outlinerGroupRows.AddChild(button);
     }
@@ -495,31 +513,43 @@ public partial class DealOrForceGame
         var defenderFormations = battle.Defenders.Select(id => _campaign.Armies.Find(army => army.Id == id))
             .Where(army => army is not null).ToArray();
         var attackerTypes = string.Join(", ", attackerFormations.GroupBy(army => UnitTypeCatalog.Get(army!.TemplateId).Name)
-            .Select(group => $"{group.Count()}× {group.Key}"));
+            .Select(group => $"{group.Count()}× {Tr(group.Key)}"));
         var defenderTypes = string.Join(", ", defenderFormations.GroupBy(army => UnitTypeCatalog.Get(army!.TemplateId).Name)
-            .Select(group => $"{group.Count()}× {group.Key}"));
+            .Select(group => $"{group.Count()}× {Tr(group.Key)}"));
         _sideTitle.Text = battle.Ended ? "BATTLE REPORT" : "BATTLE IN PROGRESS";
         _attackerOrganisation.Value = (latest?.AttackerOrganisation ?? 1f) * 100f;
         _defenderOrganisation.Value = (latest?.DefenderOrganisation ?? 1f) * 100f;
         var recent = string.Join("\n", battle.Rounds.TakeLast(6).Reverse().Select(round =>
-            $"Day {round.Day - battle.StartedDay + 1}: {round.Note} · losses {round.AttackerLosses:N0}/{round.DefenderLosses:N0}"));
+            Simulation.Loc.Format("Day {0:N0}: {1} · losses {2:N0}/{3:N0}",
+                round.Day - battle.StartedDay + 1, Tr(round.Note),
+                round.AttackerLosses, round.DefenderLosses)));
         _sideBody.Text =
             Simulation.Loc.Format("{0}  vs  {1}\n{2} · province #{3:N0}\nDay {4} · {5}\n\n",
-                attacker?.Name ?? "?", defender?.Name ?? "?",
-                state?.Name ?? Tr("Unmapped theatre"), battle.ProvinceId,
+                attacker?.DisplayName ?? "?", defender?.DisplayName ?? "?",
+                state?.DisplayName ?? Tr("Unmapped theatre"), battle.ProvinceId,
                 _campaign.ElapsedDays - battle.StartedDay + 1,
                 battle.Ended ? battle.Outcome : Tr("Fighting")) +
-            $"Combat width: {battle.AttackerWidth:0}/{battle.DefenderWidth:0}\n" +
+            Simulation.Loc.Format("Combat width: {0:0}/{1:0}",
+                battle.AttackerWidth, battle.DefenderWidth) + "\n" +
             (battle.RiverCrossingStrength > 0f
-                ? $"River crossing: {(battle.RiverCrossingStrength > 0.66f ? "major" : "ordinary")} · defender advantage active\n"
+                ? Tr(battle.RiverCrossingStrength > 0.66f
+                    ? "River crossing: major · defender advantage active"
+                    : "River crossing: ordinary · defender advantage active") + "\n"
                 : "") +
-            $"Committed formations: {battle.Attackers.Count}/{battle.Defenders.Count}\n" +
-            $"Attacker: {(attackerTypes.Length == 0 ? "none" : attackerTypes)}\n" +
-            $"Defender: {(defenderTypes.Length == 0 ? "none" : defenderTypes)}\n" +
-            (latest is null ? "" : $"Effective power: {latest.AttackerPower:0.0}/{latest.DefenderPower:0.0} · planning {latest.AttackerPlanning:P0}\n") +
-            $"Reinforcements: +{battle.AttackerReinforcements}/+{battle.DefenderReinforcements}\n" +
-            $"Losses: {battle.AttackerLosses:N0}/{battle.DefenderLosses:N0}\n\n" +
-            (recent.Length == 0 ? "The first combat round has not resolved yet." : recent);
+            Simulation.Loc.Format("Committed formations: {0:N0}/{1:N0}",
+                battle.Attackers.Count, battle.Defenders.Count) + "\n" +
+            Simulation.Loc.Format("Attacker: {0}",
+                attackerTypes.Length == 0 ? Tr("none") : attackerTypes) + "\n" +
+            Simulation.Loc.Format("Defender: {0}",
+                defenderTypes.Length == 0 ? Tr("none") : defenderTypes) + "\n" +
+            (latest is null ? "" : Simulation.Loc.Format(
+                "Effective power: {0:0.0}/{1:0.0} · planning {2:P0}",
+                latest.AttackerPower, latest.DefenderPower, latest.AttackerPlanning) + "\n") +
+            Simulation.Loc.Format("Reinforcements: +{0:N0}/+{1:N0}",
+                battle.AttackerReinforcements, battle.DefenderReinforcements) + "\n" +
+            Simulation.Loc.Format("Losses: {0:N0}/{1:N0}",
+                battle.AttackerLosses, battle.DefenderLosses) + "\n\n" +
+            (recent.Length == 0 ? Tr("The first combat round has not resolved yet.") : recent);
         if (_campaign.Player.IsHuman && battle.AttackerId != _campaign.Player.Id && battle.DefenderId != _campaign.Player.Id)
         {
             _attackerOrganisation.Visible = false;
@@ -527,7 +557,7 @@ public partial class DealOrForceGame
             _sideBody.Text = Simulation.Loc.Format(
                     "{0} vs {1}\n{2} · province #{3:N0}\n{4} · Day {5}\n\n" +
                     "Observed battle between foreign countries. Detailed combat reports unavailable.\n",
-                    attacker?.Name, defender?.Name, state?.Name, battle.ProvinceId,
+                    attacker?.DisplayName, defender?.DisplayName, state?.DisplayName ?? "", battle.ProvinceId,
                     battle.Ended ? battle.Outcome : Tr("Fighting"),
                     _campaign.ElapsedDays - battle.StartedDay + 1) +
                 (battle.RiverCrossingStrength > 0 ? Tr("River crossing — defender advantage.") : "");

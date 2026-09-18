@@ -1,0 +1,21 @@
+// Deal or Force - what a country is called, when that is an argument.
+//
+// The English string is the KEY. Edit a line here and you have renamed the key, so
+// `common/settings` and every other language have to be re-keyed with it or they stop
+// matching and the screen falls back to raw English.
+//
+// `country.BLR.name.<variant>` is the option's value used as a suffix: the screen writes
+// `country_name_blr = belarus` and every label in the game asks for that row instead of
+// the plain one. The dropdown's own labels are those same keys, so the list shows the two
+// names themselves rather than two English words about them.
+//
+// Moldova has one value and no row behind it, so it changes nothing. That is the joke.
+{
+  "What Belorussia is called": "What Belorussia is called",
+  "If you are that BelOrussian (or however you would have it) who takes offence at plain fact, and you want your favourite country's favourite name transliterated your way THAT badly, then fear not: I have seen to your feelings!": "If you are that BelOrussian (or however you would have it) who takes offence at plain fact, and you want your favourite country's favourite name transliterated your way THAT badly, then fear not: I have seen to your feelings!",
+  "country.BLR.name.belorussia": "Belorussia",
+  "country.BLR.name.belarus": "Belarus",
+  "What Moldova is called": "What Moldova is called",
+  "If the name of (a) (your) random semi-European third-world country matters to you that much, then fear not - I don't care))))": "If the name of (a) (your) random semi-European third-world country matters to you that much, then fear not - I don't care))))",
+  "Whatever": "Whatever"
+}

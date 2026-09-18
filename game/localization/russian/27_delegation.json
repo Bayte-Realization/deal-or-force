@@ -1,0 +1,20 @@
+// Deal or Force - передача ведомства собственному аппарату и проверка того, что он сделал.
+//
+// Экономическая половина того, что уже есть у армии: вы рисуете линию и раздаёте
+// дивизиям роли, а не ведёте каждую за руку, - и точно так же отдаёте бюджет или
+// торговый стол вместо того, чтобы двигать каждый ползунок. По отдельности, обратимо,
+// и всё решённое ведомством видно рядом с решённым вами.
+{
+  "Let the trade desk run itself": "Передать торговлю ведомству",
+  "The trade desk is running itself": "Торговлей занимается ведомство",
+  "Hand the trade desk to your own civil service. Once a month it buys what the country is short of first, holds back what it cannot spare, sells a real surplus, and drops the instruction again when a good stops being a problem. Everything it does shows up in the list above beside your own decisions, and you can take the desk back at any time - the instructions it left stay until you change them.": "Отдать торговый стол собственному ведомству. Раз в месяц оно в первую очередь закупает то, чего стране не хватает, придерживает то, чем нельзя делиться, продаёт настоящий излишек и снимает указание, когда товар перестаёт быть проблемой. Всё, что оно делает, видно в списке выше рядом с вашими решениями, и забрать стол обратно можно в любой момент — оставленные им указания сохранятся, пока вы их не измените.",
+  "EVERYTHING IN FORCE": "ЧТО СЕЙЧАС ДЕЙСТВУЕТ",
+  "Nothing is in force. Every good and every country is traded on its merits.": "Ничего не действует. Каждый товар и каждая страна торгуются по общим правилам.",
+  "Withdraw this instruction.": "Отменить это указание.",
+  "Let the treasury run itself": "Передать бюджет ведомству",
+  "The treasury is running itself": "Бюджетом занимается ведомство",
+  "Hand tax and spending to your own civil service - the same staff that governs every other country in the world. Once a month it taxes what a thinning treasury needs, spends on the army when there is a war or a threat, buys quiet when the country is unhappy and can afford it, and builds with the rest. It does not take decisions and it does not touch the central bank; those stay yours. Take it back whenever you like.": "Отдать налоги и расходы собственному ведомству — тому же аппарату, который управляет всеми остальными странами мира. Раз в месяц оно поднимает налог, когда казна тает, тратит на армию при войне или угрозе, покупает спокойствие, когда страна недовольна и это по карману, а на остальное строит. Решений оно не принимает и центробанка не касается — это остаётся за вами. Забрать обратно можно когда угодно.",
+  "The government controls the central bank": "Центробанк управляется правительством",
+  "The central bank is independent": "Центробанк независим",
+  "Take the central bank off its own board. Both levers on this card come alive: you set the key rate yourself, and you can order money printed. Both are also priced - money a government has ordered to be cheap is money nobody believes will stay cheap, and money it has ordered to be printed is money nobody believes has a limit.": "Забрать центробанк у его собственного совета. Оба рычага на этой карточке оживают: ключевую ставку вы задаёте сами и можете приказать печатать деньги. У обоих есть цена — деньги, которые правительство велело сделать дешёвыми, это деньги, в чью дешевизну никто не верит, а деньги, которые оно велело напечатать, — деньги, в чей предел никто не верит."
+}

@@ -1,0 +1,12 @@
+// Deal or Force - экран титров и подпись в углу.
+//
+// `brand.title` - ключ, а не английская фраза, и это нарочно: название игры одинаково
+// на всех языках. Мод, переименовывающий игру, меняет одну эту строку.
+{
+  "Credits": "Титры",
+  "brand.title": "Deal or Force",
+  "© {0} Bayte Realization": "© {0} Bayte Realization",
+  "Made by": "В разработке участвовали",
+  "Bayte Realization (Kamil Suleymanov)": "Bayte Realization (Камиль Сулейманов)",
+  "With the explicit use of AI": "С неприкрытым использованием ИИ"
+}

@@ -1,0 +1,14 @@
+{
+  "The line was abandoned.": "The line was abandoned.",
+  "RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking the ground · Shift+click adds a division, Ctrl+click removes one.  H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · Ctrl+G guard an area · Ctrl+F plan cohesion.": "RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking the ground · Shift+click adds a division, Ctrl+click removes one.  H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · Ctrl+G guard an area · Ctrl+F plan cohesion.",
+  "That formation is foreign. Select one of your own divisions before issuing an order.": "That formation is foreign. Select one of your own divisions before issuing an order.",
+  "None of the selected divisions is on a drawn plan, so there is no cohesion to set.": "None of the selected divisions is on a drawn plan, so there is no cohesion to set.",
+  "Select at least two formations of the same kind, standing together, to consolidate.": "Select at least two formations of the same kind, standing together, to consolidate.",
+  "Assign the selected divisions to ONE border front first, then draw the offensive objective in that country's territory.": "Assign the selected divisions to ONE border front first, then draw the offensive objective in that country's territory.",
+  "Objective rejected: draw one connected land line in the front's target country. Existing orders were kept.": "Objective rejected: draw one connected land line in the front's target country. Existing orders were kept.",
+  "Back on the war's own front line.": "Back on the war's own front line.",
+  "Select divisions assigned to a border front before editing it.": "Select divisions assigned to a border front before editing it.",
+  "Start on a shared land border with another country.": "Start on a shared land border with another country.",
+  "Alt+RMB edits an existing offensive objective. Use RMB to create one.": "Alt+RMB edits an existing offensive objective. Use RMB to create one.",
+  "The offer was refused. The war continues.": "The offer was refused. The war continues."
+}

@@ -7,7 +7,6 @@ public partial class DealOrForceGame
 {
     private readonly Dictionary<StrategicMapMode, Button> _mapModeButtons = new();
     private Button _projectionButton = null!;
-    private OptionButton _mapModeLegend = null!;
 
     private void BuildMapControls()
     {
@@ -33,24 +32,19 @@ public partial class DealOrForceGame
         _projectionButton.TooltipText = Ui.Tip(Tr("Switch between the globe and an infinitely wrapping classic map (F2)."));
         row.AddChild(_projectionButton);
 
-        AddMode(row, StrategicMapMode.Political, "POL", "Political: countries, controllers and occupied provinces.");
-        AddMode(row, StrategicMapMode.Wars, "WAR", "Wars: belligerents, fronts and occupied territory.");
-        AddMode(row, StrategicMapMode.Terrain, "TER", "Terrain: geographical surface without political colours. Hover a province for combat and movement effects.");
-
-        // A dropdown keeps all seven layers reachable without pushing the strip past its artwork.
-        _mapModeLegend = new OptionButton { CustomMinimumSize = new Vector2(130, 34),
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, FitToLongestItem = false,
-            TooltipText = Ui.Tip(Tr("All map layers, including diplomatic, population, economy and the moddable relief layer.")) };
-        // Through the table: an enum's name is a C# identifier, and putting one straight on a
-        // control is how a Russian interface ends up with a dropdown reading "Political".
+        // One mark per layer, the name and what it shows in the tooltip.
+        //
+        // This was three abbreviations and a dropdown: "POL", "WAR", "TER", and the other
+        // four layers two clicks away behind a list. An abbreviation is a word a player has
+        // to learn before it tells them anything, it half-translates into every other
+        // language, and hiding four of seven layers meant most of what the map can show was
+        // never found. Seven buttons of forty pixels are narrower than that arrangement was.
         foreach (StrategicMapMode mode in System.Enum.GetValues<StrategicMapMode>())
-            _mapModeLegend.AddItem(Tr(mode.ToString()), (int)mode);
-        _mapModeLegend.ItemSelected += index => _globe.SetMapMode((StrategicMapMode)_mapModeLegend.GetItemId((int)index));
-        row.AddChild(_mapModeLegend);
+            AddMode(row, mode);
 
         _globe.ProjectionChanged += flat =>
         {
-            _projectionButton.Text = flat ? "2D MAP" : "3D GLOBE";
+            _projectionButton.Text = Tr(flat ? "2D MAP" : "3D GLOBE");
             if (_mainProjectionButton is not null)
                 _mainProjectionButton.Text = flat ? "Map view: 2D classic" : "Map view: 3D globe";
             if (_navigationHint is not null)
@@ -62,32 +56,53 @@ public partial class DealOrForceGame
         UpdateMapModeButtons(StrategicMapMode.Political);
     }
 
-    private void AddMode(Container row, StrategicMapMode mode, string caption, string tooltip)
+    /// <summary>
+    /// The mark for one map layer.
+    ///
+    /// Drawn from the same set the top bar and the alert rail use, so a flag means a country
+    /// wherever it appears and crossed swords mean a war. Terrain and relief borrow the
+    /// region and world marks until a contour and a mountain are drawn for them.
+    /// </summary>
+    private static string MapModeIcon(StrategicMapMode mode) => mode switch
     {
-        var button = ActionButton(caption, () => _globe.SetMapMode(mode), 54, 34,
-            mode == StrategicMapMode.Political);
-        button.TooltipText = Ui.Tip(tooltip);
+        StrategicMapMode.Political => "nation",
+        StrategicMapMode.Diplomatic => "diplomacy",
+        StrategicMapMode.Wars => "wars",
+        StrategicMapMode.Population => "population",
+        StrategicMapMode.Economy => "economy",
+        StrategicMapMode.Terrain => "region",
+        _ => "world"
+    };
+
+    /// <summary>What a layer actually shows, for the tooltip under its mark.</summary>
+    private static string MapModeHelp(StrategicMapMode mode) => mode switch
+    {
+        StrategicMapMode.Political => "Countries, who controls what, and every occupied province.",
+        StrategicMapMode.Diplomatic => "Who is allied to whom, who guarantees whom, and who answers to whom.",
+        StrategicMapMode.Wars => "Belligerents, the fronts between them and the ground that has changed hands.",
+        StrategicMapMode.Population => "Where the people are. Dark is empty, bright is crowded.",
+        StrategicMapMode.Economy => "What each region produces, against what it needs.",
+        StrategicMapMode.Terrain => "The ground itself, with no politics on it. Hover a province for what it does to a march and a battle.",
+        _ => "Height and shade, from the moddable relief layer."
+    };
+
+    private void AddMode(Container row, StrategicMapMode mode)
+    {
+        var icon = MapModeIcon(mode);
+        var button = ActionButton("", () => _globe.SetMapMode(mode), 40, 34,
+            mode == StrategicMapMode.Political,
+            Simulation.SpriteCatalog.TextureOf("icon_" + icon,
+                $"res://game/gfx/interface/icons/icon_{icon}.png"));
+        button.TooltipText = Ui.Tip(Tr(mode.ToString()) + " \u2014 " + Tr(MapModeHelp(mode)));
         row.AddChild(button);
         _mapModeButtons[mode] = button;
     }
 
     private void UpdateMapModeButtons(StrategicMapMode active)
     {
-        foreach (var pair in _mapModeButtons)
-        {
-            var shortName = pair.Key switch
-            {
-                StrategicMapMode.Political => "POL",
-                StrategicMapMode.Diplomatic => "DIP",
-                StrategicMapMode.Wars => "WAR",
-                StrategicMapMode.Population => "POP",
-                StrategicMapMode.Economy => "GDP",
-                StrategicMapMode.Terrain => "TER",
-                _ => "MAP"
-            };
-            pair.Value.Text = pair.Key == active ? $"[{shortName}]" : shortName;
-        }
-        if (_mapModeLegend is not null) _mapModeLegend.Select(_mapModeLegend.GetItemIndex((int)active));
+        // Which one is on is now a matter of how the button is drawn rather than of square
+        // brackets around an abbreviation.
+        foreach (var pair in _mapModeButtons) StyleButton(pair.Value, pair.Key == active);
     }
 
     private void ToggleProjection() => _globe.ToggleProjection();

@@ -96,7 +96,35 @@ public partial class DealOrForceGame
 
         StateSection(rows, "THE WEEK'S BUDGET",
             "What the country raised, what it spent, and every lever that decides both.");
+
+        // Who is running it. Above the levers rather than below them, because it is the
+        // question of whether a player is going to touch the levers at all.
+        _budgetDelegated = new CheckButton { Text = Tr("Let the treasury run itself") };
+        _budgetDelegated.TooltipText = Ui.Tip(Tr(
+            "Hand tax and spending to your own civil service - the same staff that governs every " +
+            "other country in the world. Once a month it taxes what a thinning treasury needs, " +
+            "spends on the army when there is a war or a threat, buys quiet when the country is " +
+            "unhappy and can afford it, and builds with the rest. It does not take decisions and " +
+            "it does not touch the central bank; those stay yours. Take it back whenever you like."));
+        _budgetDelegated.Toggled += OnBudgetDelegationToggled;
+        rows.AddChild(_budgetDelegated);
+
         BuildStateControls(rows);
+    }
+
+    private CheckButton _budgetDelegated;
+
+    private void OnBudgetDelegationToggled(bool delegated)
+    {
+        if (_campaign?.Player is null) return;
+        _campaign.Commands.Enqueue(new SetDelegationCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            Portfolio = Delegation.Budget,
+            Delegated = delegated
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        RefreshStateAffairs();
     }
 
     /// <summary>A heading and a sentence saying what the controls under it are for.</summary>
@@ -140,8 +168,46 @@ public partial class DealOrForceGame
     /// value back as a command would queue an order every time the screen refreshed, which
     /// at speed five is five orders a second.
     /// </summary>
+    /// <summary>
+    /// One line of the construction picker, in the player's language.
+    ///
+    /// Written by a method rather than inline because a dropdown's items are the one part of
+    /// this interface the language refresh cannot reach: every Label carries the key it was
+    /// built from and is re-translated when the language changes, and an OptionButton item
+    /// carries nothing. The list is rewritten on every refresh instead, which is cheap - the
+    /// picker has seventeen rows - and is the only thing that keeps "Agricultural complex"
+    /// from sitting in the middle of a Russian screen.
+    /// </summary>
+    private static string BuildingPickerItem(BuildingKind kind)
+    {
+        var definition = BuildingCatalog.Get(kind);
+        return Simulation.Loc.Format("{0} · {1}",
+            Simulation.Loc.Get(definition.Name), Fmt.Money(definition.Cost));
+    }
+
+    /// <summary>Put the picker back into the player's language, keeping what was chosen.</summary>
+    private void RefreshBuildingPicker()
+    {
+        if (_stateBuildingPicker is null) return;
+        for (var index = 0; index < _stateBuildingPicker.ItemCount; index++)
+        {
+            var kind = (BuildingKind)(int)_stateBuildingPicker.GetItemMetadata(index);
+            var wanted = BuildingPickerItem(kind);
+            if (_stateBuildingPicker.GetItemText(index) != wanted)
+                _stateBuildingPicker.SetItemText(index, wanted);
+        }
+    }
+
     private void RefreshStateAffairs()
     {
+        if (_budgetDelegated is not null && _campaign?.Player is { } governing)
+        {
+            _budgetDelegated.ButtonPressed = Delegation.Holds(governing, Delegation.Budget);
+            _budgetDelegated.Text = Tr(Delegation.Holds(governing, Delegation.Budget)
+                ? "The treasury is running itself"
+                : "Let the treasury run itself");
+        }
+
         if (_stateAffairsLayer is null || !_stateAffairsLayer.Visible || _campaign?.Player is null) return;
         var nation = _campaign.Player;
 
@@ -151,11 +217,13 @@ public partial class DealOrForceGame
         var spirits = DescribeModifiers(nation);
         if (!string.IsNullOrEmpty(spirits)) _stateAffairsSummary.Text += "\n" + spirits;
 
+        RefreshBuildingPicker();
         _stateBudgetControls.Visible = true;
         _stateTradeControls.Visible = true;
         _stateCabinetControls.Visible = true;
 
         _updatingStateAffairs = true;
+        RefreshCentralBank(nation);
         RefreshPolicyRates(nation);
         RefreshPolitics(nation);
         _updatingStateAffairs = false;
@@ -211,8 +279,7 @@ public partial class DealOrForceGame
         foreach (var kind in BuildingCatalog.All)
         {
             var definition = BuildingCatalog.Get(kind);
-            _stateBuildingPicker.AddItem(Simulation.Loc.Format("{0} · {1}",
-                Simulation.Loc.Get(definition.Name), Fmt.Money(definition.Cost)));
+            _stateBuildingPicker.AddItem(BuildingPickerItem(kind));
             _stateBuildingPicker.SetItemMetadata(_stateBuildingPicker.ItemCount - 1, (int)kind);
             _stateBuildingPicker.SetItemTooltip(_stateBuildingPicker.ItemCount - 1,
                 Waterfront.NeedsWater(kind)
@@ -312,6 +379,10 @@ public partial class DealOrForceGame
     /// </summary>
     private void BuildPolicyRates(VBoxContainer rows)
     {
+        // First, because it is the one lever on this screen that is not a tax and not a
+        // budget - and because the rate it shows is what everything below is borrowed at.
+        BuildCentralBank(rows);
+
         StateSection(rows, "REVENUE",
             "Everything the state levies. Each one raises money and costs something else - investment, " +
             "living standards, or the patience of the people paying - and all of them are charged " +

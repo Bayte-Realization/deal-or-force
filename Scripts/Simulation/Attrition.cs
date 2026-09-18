@@ -61,7 +61,10 @@ public static class Attrition
         if (campaign is null) return;
         StarveThePockets(campaign);
         BuryTheBroken(campaign);
-        RebuildTheLost(campaign);
+        // Starving and burying are rates and take their share of the step. Rebuilding is a
+        // decision a country makes on a day - it divides the day number by its own interval -
+        // so at an hourly step it must happen once on that day rather than every hour of it.
+        if (campaign.StepOpensNewDay) RebuildTheLost(campaign);
     }
 
     /// <summary>

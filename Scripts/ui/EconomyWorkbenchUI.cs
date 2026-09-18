@@ -103,23 +103,33 @@ public partial class DealOrForceGame
                 title.AddChild(mark);
             var name = Title(definition.Name, 15, Ui.Colour("text.bright"));
             name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            // Nothing in a crowded row may wrap. A label with word wrap left on, in a box
+            // where something else has already claimed the width, gets no width of its own
+            // and wraps to one character per line - which turned a card two rows tall into
+            // one the height of the panel, with the buttons stretched down its side.
+            name.AutowrapMode = TextServer.AutowrapMode.Off;
+            name.ClipText = true;
             title.AddChild(name);
-            var line = new HBoxContainer();
-            rows.AddChild(line);
-            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(definition.Cost), definition.Days), 12, Ui.Colour("text.caption"));
-            cost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            line.AddChild(cost);
-            var captured = kind;
 
-            // How many are standing here, so the row says what the region has rather than
-            // only what it could have. The minus is the whole of the tester's request and
-            // it needs this number to be worth showing at all.
+            // How many are standing here, beside the name, where "what this region has"
+            // reads as part of what the building IS rather than as part of its price.
             var standing = hasRegion ? _selectedState.Buildings.GetValueOrDefault(kind) : 0;
             if (standing > 0)
             {
                 var have = Title(Simulation.Loc.Format("{0} standing", standing), 12, Ui.Colour("text.accent"));
-                line.AddChild(have);
+                have.AutowrapMode = TextServer.AutowrapMode.Off;
+                have.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
+                title.AddChild(have);
             }
+
+            var line = new HBoxContainer();
+            rows.AddChild(line);
+            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(definition.Cost), definition.Days), 12, Ui.Colour("text.caption"));
+            cost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            cost.AutowrapMode = TextServer.AutowrapMode.Off;
+            cost.ClipText = true;
+            line.AddChild(cost);
+            var captured = kind;
 
             var remove = ActionButton("−", () => DemolishBuilding(captured), 36, 32);
             remove.Name = "Demolish" + kind;
@@ -128,7 +138,7 @@ public partial class DealOrForceGame
                 ? Tr("Nothing of this kind is standing in the selected region.")
                 : Simulation.Loc.Format(
                     "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.",
-                    _selectedState.Name,
+                    _selectedState.DisplayName,
                     Fmt.Money(definition.Cost * _campaign.Defines.DemolitionRefund)));
             line.AddChild(remove);
 
@@ -145,7 +155,8 @@ public partial class DealOrForceGame
                 : dry.Length > 0 ? dry
                 : count >= slots ? Simulation.Loc.Format("Every one of the {0} construction sites is taken.", slots)
                 : add.Disabled ? Tr("Insufficient treasury to start construction.")
-                : Tr(definition.Description) + "\n" + Simulation.Loc.Format("Queue in {0}", _selectedState.Name));
+                : Tr(definition.Description) + "\n" +
+                  Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName));
             line.AddChild(add);
         }
         if (_buildingCatalogRows.GetChildCount() == 0)
@@ -184,6 +195,8 @@ public partial class DealOrForceGame
                 heading.AddChild(mark);
             var label = Title(definition.Name, 15, Ui.Colour("text.bright"));
             label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            label.AutowrapMode = TextServer.AutowrapMode.Off;
+            label.ClipText = true;
             heading.AddChild(label);
             var commodity = quote.Commodity;
             var watching = PlayerSettings.Bool("watch.good." + commodity, false);

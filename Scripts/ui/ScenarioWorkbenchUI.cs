@@ -19,7 +19,18 @@ public partial class DealOrForceGame
     private string AuthorRoot => ProjectSettings.GlobalizePath("user://mods/editor_workspace");
     private IEnumerable<string> ScenarioRoots => _modLoader.Packages.Select(p => p.PhysicalRoot);
 
-    private VBoxContainer AuthorWindow(string heading)
+    /// <summary>
+    /// Where this window's way out leads. Set when the window is opened.
+    ///
+    /// The workshop is reached from two places and they are not the same place to go back
+    /// to. Opened from a running campaign it closes onto that campaign; opened to CHOOSE a
+    /// country there is no campaign behind it, and closing onto one was the bug - the window
+    /// went away and left a globe with no interface on it, because the interface belongs to
+    /// a campaign that had not been started.
+    /// </summary>
+    private Action _authorExit;
+
+    private VBoxContainer AuthorWindow(string heading, Action onClose = null, string closeLabel = "Close")
     {
         CloseAuthorWindow();
         _campaign.IsPaused = true;
@@ -36,7 +47,8 @@ public partial class DealOrForceGame
         var title = Title(heading, 25, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
-        header.AddChild(ActionButton("Close", () => ConfirmAuthorExit(CloseAuthorWindow), 90, 36));
+        _authorExit = onClose ?? CloseAuthorWindow;
+        header.AddChild(ActionButton(closeLabel, () => ConfirmAuthorExit(_authorExit), 200, 36));
         return rows;
     }
 
@@ -45,7 +57,14 @@ public partial class DealOrForceGame
         if (IsInstanceValid(_authorCanvas)) { RemoveChild(_authorCanvas); _authorCanvas.QueueFree(); _authorCanvas = null; }
         if (_globe is not null) _globe.LoadingInputBlocked = false;
         _authorDirty = false;
+        _authorExit = null;
     }
+
+    /// <summary>Whether the workshop is up, so escape knows it is the thing to answer to.</summary>
+    private bool AuthorWindowOpen => IsInstanceValid(_authorCanvas);
+
+    /// <summary>Escape takes the window's own way out, whichever one that is.</summary>
+    private void EscapeAuthorWindow() => ConfirmAuthorExit(_authorExit ?? CloseAuthorWindow);
 
     private void ConfirmAuthorExit(Action action)
     {
@@ -61,7 +80,10 @@ public partial class DealOrForceGame
     private void OpenScenarioLibrary()
     {
         if (_networkConnected || _isLoading) return;
-        var rows = AuthorWindow("Scenarios & workshop");
+        // Opened with no campaign behind it, so its way out is the front door rather than a
+        // world that does not exist yet.
+        var rows = AuthorWindow("Scenarios & workshop",
+            () => { CloseAuthorWindow(); ShowMainMenu(); }, "Back to the main menu");
         rows.AddChild(Title("Each scenario owns its date, countries, armies, wars and province ownership.", 14, Ui.Colour("text.muted")));
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         rows.AddChild(scroll);

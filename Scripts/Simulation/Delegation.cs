@@ -1,0 +1,153 @@
+using System;
+using System.Collections.Generic;
+
+namespace DealOrForce.Simulation;
+
+/// <summary>
+/// Handing a portfolio to your own civil service.
+///
+/// A country already has a staff that runs its budget and its trade - two hundred and sixty
+/// of them do it every month, competently enough to develop, arm and feed themselves without
+/// anybody watching. The player's country is the only one in the world that does not have
+/// one, and the result is that a player who wants to fight a war has to keep coming back to
+/// a tax slider.
+///
+/// So the same staff can be put to work for the player, one portfolio at a time. This is the
+/// economic half of what the army already has: you draw a front and give divisions a duty
+/// rather than walking each of them to a province, and here you hand over the budget or the
+/// trade desk rather than setting each line yourself.
+///
+/// Three rules it keeps, and they are what make it a delegation rather than an autopilot:
+///
+///   - it is PER PORTFOLIO. Delegate the trade desk and keep the budget, or the reverse.
+///     An all-or-nothing switch is a switch nobody dares touch;
+///   - it is REVERSIBLE and leaves the lever where it left it. Take a portfolio back and
+///     the numbers are whatever the staff last set, not whatever you had before - because
+///     that is what taking a department back actually gets you;
+///   - it WRITES DOWN WHAT IT DID. Every instruction it gives is an ordinary instruction,
+///     visible on the trade screen beside your own, with its reason attached. A delegate
+///     you cannot audit is a delegate you cannot trust.
+/// </summary>
+public static class Delegation
+{
+    /// <summary>Tax and spending: the levers the budget screen shows.</summary>
+    public const string Budget = "budget";
+
+    /// <summary>The trade desk: what to buy first, what to keep back, what to pay.</summary>
+    public const string Trade = "trade";
+
+    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade };
+
+    /// <summary>Whether this country has handed that portfolio over.</summary>
+    public static bool Holds(Nation nation, string portfolio) =>
+        nation is not null && nation.Delegated.Contains(portfolio);
+
+    public static void Set(Nation nation, string portfolio, bool delegated)
+    {
+        if (nation is null || Array.IndexOf(new[] { Budget, Trade }, portfolio) < 0) return;
+        if (delegated) nation.Delegated.Add(portfolio);
+        else nation.Delegated.Remove(portfolio);
+    }
+
+    /// <summary>
+    /// A month of whatever the player has handed over.
+    ///
+    /// Only the player's country passes through here. Everybody else is governed by
+    /// <see cref="AiStatecraft"/> in the ordinary way, and the budget half of this IS that
+    /// code - the same reasoning, reached through a different door, so a delegated budget is
+    /// exactly as good as the one every other country gets and gets better when that does.
+    /// </summary>
+    public static void Tick(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || nation.Delegated.Count == 0) return;
+        if (Holds(nation, Budget)) AiStatecraft.GovernTheBudget(campaign, nation);
+        if (Holds(nation, Trade)) RunTheTradeDesk(campaign, nation);
+    }
+
+    /// <summary>The instruction key a delegated desk writes, so its work can be told apart.</summary>
+    public const string DeskReason = "desk";
+
+    /// <summary>
+    /// What a trade desk does with a month.
+    ///
+    /// Deliberately the four moves a real one makes, and no more. It is not trying to be
+    /// clever - it is trying to be the thing a player would have done if they had remembered
+    /// to open the screen:
+    ///
+    ///   - a shortage of something people need gets bought first and without a ceiling. That
+    ///     is what import priority and the import ceiling are for, and leaving them at their
+    ///     resting values during a famine is the mistake this exists to stop;
+    ///   - a surplus that is not needed at home is sold, so the export reserve comes off;
+    ///   - something we are short of ourselves is NOT sold abroad, so the reserve goes on;
+    ///   - and when a good stops being a problem, the instruction is withdrawn. A desk that
+    ///     only ever adds rules is a desk that ends the decade with forty of them.
+    /// </summary>
+    private static void RunTheTradeDesk(Campaign campaign, Nation nation)
+    {
+        foreach (var (commodity, quote) in nation.Market)
+        {
+            var definition = CommodityCatalog.Get(commodity);
+            if (definition is null) continue;
+
+            var essential = definition.EssentialWeight >= 0.5f;
+            var short_ = quote.IsShortage;
+            var covered = quote.Demand <= 0.001f ? 1f : quote.Production / quote.Demand;
+
+            if (short_)
+            {
+                // Buy it first, and do not haggle while people are going without.
+                Instruct(nation, commodity, TradeDesk.ImportPriority, essential ? 2.5f : 1.6f);
+                Instruct(nation, commodity, TradeDesk.ImportCeiling, 1f);
+                // And stop selling what we do not have.
+                Instruct(nation, commodity, TradeDesk.ExportReserve,
+                    essential ? 1f : M.Clamp(1f - covered, 0f, 1f));
+                continue;
+            }
+
+            if (covered > 1.25f)
+            {
+                // A real surplus. Sell it, and keep nothing back beyond a prudent margin on
+                // the things people cannot do without.
+                Instruct(nation, commodity, TradeDesk.ExportReserve, essential ? 0.15f : 0f);
+                Withdraw(nation, commodity, TradeDesk.ImportPriority);
+                Withdraw(nation, commodity, TradeDesk.ImportCeiling);
+                continue;
+            }
+
+            // Neither short nor spare: no opinion, and say so by having none.
+            Withdraw(nation, commodity, TradeDesk.ImportPriority);
+            Withdraw(nation, commodity, TradeDesk.ImportCeiling);
+            Withdraw(nation, commodity, TradeDesk.ExportReserve);
+        }
+    }
+
+    private static void Instruct(Nation nation, Commodity commodity, string setting, float value)
+    {
+        var definition = TradeDesk.Of(setting);
+        if (definition is null) return;
+        TradeDesk.Set(nation, TradeDesk.GoodKey(commodity, setting), setting,
+            M.Clamp(value, definition.Minimum, definition.Maximum));
+    }
+
+    private static void Withdraw(Nation nation, Commodity commodity, string setting) =>
+        nation.TradeSettings.Remove(TradeDesk.GoodKey(commodity, setting));
+}
+
+/// <summary>
+/// Hand a portfolio to the civil service, or take it back.
+/// </summary>
+public sealed class SetDelegationCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public string Portfolio { get; init; } = "";
+    public bool Delegated { get; init; }
+
+    public void Apply(Campaign campaign)
+    {
+        var nation = campaign?.NationById(IssuerId);
+        if (nation is null) return;
+        Delegation.Set(nation, Portfolio, Delegated);
+        DiagnosticLogs.Write("orders",
+            $"DELEGATE nation={nation.Tag} portfolio={Portfolio} on={Delegated}");
+    }
+}

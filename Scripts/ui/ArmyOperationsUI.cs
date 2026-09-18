@@ -51,8 +51,10 @@ public partial class DealOrForceGame
             _selectedNation = _campaign.Player;
             _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));
             ShowSelectedArmies();
-            SetArmyFeedback($"{_selectedArmies.Count} division(s) selected. " +
-                            "Shift-click adds, Ctrl-click removes.");
+            SetArmyFeedback(Simulation.Loc.Format(
+                                Simulation.Plural.Key("{0:N0} division selected.", _selectedArmies.Count),
+                                _selectedArmies.Count) + " " +
+                            Simulation.Loc.Get("Shift-click adds, Ctrl-click removes."));
             return;
         }
         _selectedArmy = army;
@@ -61,10 +63,10 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.NationById(army.NationId);
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
-        SetArmyFeedback("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
+        SetArmyFeedback(Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
               "the ground · Shift+click adds a division, Ctrl+click removes one.  " +
               "H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · " +
-              "Ctrl+G guard an area · Ctrl+F plan cohesion.");
+              "Ctrl+G guard an area · Ctrl+F plan cohesion."));
     }
 
     private void OnArmiesBoxPicked(IReadOnlyList<Army> armies)
@@ -93,8 +95,10 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.Player;
         _globe.SelectArmies(_selectedArmies.Select(army => army.Id));
         ShowSelectedArmies();
-        SetArmyFeedback($"{_selectedArmies.Count} division(s) selected. RMB gives one shared destination; " +
-                        "Shift+RMB queues a waypoint.");
+        SetArmyFeedback(Simulation.Loc.Format(
+                            Simulation.Plural.Key("{0:N0} division selected.", _selectedArmies.Count),
+                            _selectedArmies.Count) + " " +
+                        Simulation.Loc.Get("RMB gives one shared destination; Shift+RMB queues a waypoint."));
     }
 
     /// <summary>
@@ -286,10 +290,21 @@ public partial class DealOrForceGame
         if (provinceId <= 0 || provinceId > topology.ProvinceCount) return;
 
         var owner = topology.ProvinceToNation[provinceId];
-        if (owner == 0 || owner == (ushort)player.MapIndex) return;
+        // Own ground, or none - so there is no country being asked about, and the last one
+        // stops being outlined. A highlight that outlived the question it answered would be
+        // the map asserting something about a country nobody is looking at.
+        if (owner == 0 || owner == (ushort)player.MapIndex)
+        {
+            _globe?.HighlightNation(-1);
+            return;
+        }
 
         var nation = _campaign.Nations.Find(candidate => candidate.MapIndex == owner);
         if (nation is null) return;
+        // Say which country, on the map, before saying anything about it in a window. A
+        // screen that has just changed to name a country without showing where it is has
+        // answered a question the player did not ask.
+        _globe?.HighlightNation(nation.MapIndex);
         _selectedNation = nation;
         OpenScreen("Diplomacy");
     }
@@ -318,7 +333,7 @@ public partial class DealOrForceGame
         }
         if (_selectedArmy.NationId != _campaign.Player.Id)
         {
-            SetArmyFeedback("That formation is foreign. Select one of your own divisions before issuing an order.");
+            SetArmyFeedback(Tr("That formation is foreign. Select one of your own divisions before issuing an order."));
             return;
         }
 
@@ -365,17 +380,24 @@ public partial class DealOrForceGame
         ShowSelectedArmies();
         if (IsNetworkClient)
         {
-            SetArmyFeedback($"Order for {targets.Length} division(s) submitted to the host. The authoritative route will appear after validation.");
+            SetArmyFeedback(Simulation.Loc.Format(
+                Simulation.Plural.Key("Order for {0:N0} division submitted to the host.", targets.Length),
+                targets.Length) + " " +
+                Simulation.Loc.Get("The authoritative route will appear after validation."));
             return;
         }
         SetArmyFeedback(MoveResultSummary(results, pick, append) +
-                        (supporting && targets.Any(army => army.SupportOnly) ? " · supporting: they will fight and hold their ground." : "") +
-                        (railing ? " · by rail: fast, and they will arrive shaken." : ""));
+                        (supporting && targets.Any(army => army.SupportOnly)
+                            ? " · " + Simulation.Loc.Get("supporting: they will fight and hold their ground.") : "") +
+                        (railing
+                            ? " · " + Simulation.Loc.Get("by rail: fast, and they will arrive shaken.") : ""));
     }
 
     private string MoveResultSummary(IReadOnlyDictionary<ArmyMoveResult, int> results, GlobePick pick, bool append)
     {
-        var destination = pick.State?.Name ?? $"province #{pick.ProvinceId:N0}";
+        var destination = pick.State is null
+            ? Simulation.Loc.Format("Province #{0:N0}", pick.ProvinceId)
+            : pick.State.DisplayName;
         var parts = new List<string>();
         AddResult(parts, results, ArmyMoveResult.Issued, append ? "waypoint appended" : "moving");
         AddResult(parts, results, ArmyMoveResult.AttackIssued, "advancing along the marked route; defended provinces require a battle");
@@ -387,13 +409,17 @@ public partial class DealOrForceGame
         AddResult(parts, results, ArmyMoveResult.NotControlled, "not under your control");
         AddResult(parts, results, ArmyMoveResult.InvalidTarget, "invalid destination");
         AddResult(parts, results, ArmyMoveResult.ArmyNotFound, "formation no longer exists");
-        return $"Order to {destination}: " + (parts.Count == 0 ? "no eligible divisions." : string.Join(" · ", parts));
+        return Simulation.Loc.Format("Order to {0}: {1}", destination,
+            parts.Count == 0 ? Simulation.Loc.Get("no eligible divisions.") : string.Join(" · ", parts));
     }
 
     private static void AddResult(List<string> parts, IReadOnlyDictionary<ArmyMoveResult, int> results,
         ArmyMoveResult result, string caption)
     {
-        if (results.TryGetValue(result, out var count) && count > 0) parts.Add($"{count} {caption}");
+        // The caption arrives as the English key its call site spells, so the ten reasons a
+        // move can fail are looked up here rather than translated ten times over.
+        if (results.TryGetValue(result, out var count) && count > 0)
+            parts.Add(count.ToString("N0") + " " + Simulation.Loc.Get(caption));
     }
 
     /// <summary>
@@ -419,9 +445,12 @@ public partial class DealOrForceGame
         }
         ShowSelectedArmies();
         SetArmyFeedback(stopped == 0
-            ? $"{targets.Length} division(s) were already standing still. They keep their plan."
-            : $"{stopped} division(s) stopped where they stand. They are still on their plan - " +
-              "Ctrl+H takes them off it.");
+            ? Simulation.Loc.Format(
+                Simulation.Plural.Key("{0:N0} division was already standing still. They keep their plan.",
+                    targets.Length), targets.Length)
+            : Simulation.Loc.Format(
+                Simulation.Plural.Key("{0:N0} division stopped where they stand.", stopped), stopped) + " " +
+              Simulation.Loc.Get("They are still on their plan - Ctrl+H takes them off it."));
     }
 
     private void DetachSelectedDivisions()
@@ -438,9 +467,12 @@ public partial class DealOrForceGame
         }
         ShowSelectedArmies();
         SetArmyFeedback(taken == 0
-            ? $"{targets.Length} division(s) were already under hand control."
-            : $"{taken} division(s) taken off their plan. Nothing will move them but you, and the front " +
-              "no longer counts them - Shift+H hands them back.");
+            ? Simulation.Loc.Format(
+                Simulation.Plural.Key("{0:N0} division was already under hand control.", targets.Length),
+                targets.Length)
+            : Simulation.Loc.Format(
+                Simulation.Plural.Key("{0:N0} division taken off their plan.", taken), taken) + " " +
+              Simulation.Loc.Get("Nothing will move them but you, and the front no longer counts them - Shift+H hands them back."));
     }
 
     private void ReturnSelectedDivisionsToPlan()
@@ -456,8 +488,10 @@ public partial class DealOrForceGame
             _campaign.Commands.ApplyAll(_campaign);
         }
         ShowSelectedArmies();
-        SetArmyFeedback($"{targets.Length} division(s) handed back to the plan. They will hold the line " +
-                        "until the operation orders them forward.");
+        SetArmyFeedback(Simulation.Loc.Format(
+                            Simulation.Plural.Key("{0:N0} division handed back to the plan.", targets.Length),
+                            targets.Length) + " " +
+                        Simulation.Loc.Get("They will hold the line until the operation orders them forward."));
     }
 
     /// <summary>
@@ -473,7 +507,7 @@ public partial class DealOrForceGame
         var army = SelectedPlayerDivisions().FirstOrDefault(candidate => candidate.FrontLineId >= 0);
         if (army is null)
         {
-            SetArmyFeedback("None of the selected divisions is on a drawn plan, so there is no cohesion to set.");
+            SetArmyFeedback(Tr("None of the selected divisions is on a drawn plan, so there is no cohesion to set."));
             return;
         }
         var line = _campaign.FrontLines.Find(candidate => candidate.Id == army.FrontLineId);
@@ -493,15 +527,14 @@ public partial class DealOrForceGame
             Cohesion = next
         });
         _campaign.Commands.ApplyAll(_campaign);
-        SetArmyFeedback($"Plan cohesion: {next}. " + next switch
-        {
-            PlanCohesion.Flexible => "Whoever is best, from anywhere on the line - it will close holes fast " +
-                                     "and its divisions will spend a lot of the war walking sideways.",
-            PlanCohesion.Balanced => "The planner prefers a formation's neighbours. Right nearly always.",
-            PlanCohesion.Rigid => "Only the next post along, and only when it is empty. Dispositions hold; " +
-                                  "a hole two provinces away stays open.",
-            _ => "Nobody moves. Where they are put is where they stay, and the plan will not shuffle them."
-        });
+        SetArmyFeedback(Simulation.Loc.Format("Plan cohesion: {0}.", CohesionName(next)) + " " +
+            Simulation.Loc.Get(next switch
+            {
+                PlanCohesion.Flexible => "Whoever is best, from anywhere on the line - it will close holes fast and its divisions will spend a lot of the war walking sideways.",
+                PlanCohesion.Balanced => "The planner prefers a formation's neighbours. Right nearly always.",
+                PlanCohesion.Rigid => "Only the next post along, and only when it is empty. Dispositions hold; a hole two provinces away stays open.",
+                _ => "Nobody moves. Where they are put is where they stay, and the plan will not shuffle them."
+            }));
     }
 
     /// <summary>Arm or disarm the railways for the next order.</summary>
@@ -526,7 +559,7 @@ public partial class DealOrForceGame
         var targets = SelectedPlayerDivisions();
         if (targets.Length < 2)
         {
-            SetArmyFeedback("Select at least two formations of the same kind, standing together, to consolidate.");
+            SetArmyFeedback(Tr("Select at least two formations of the same kind, standing together, to consolidate."));
             return;
         }
         var command = new ConsolidateArmiesCommand
@@ -550,8 +583,10 @@ public partial class DealOrForceGame
             ShowSelectedArmies();
         }
         SetArmyFeedback(command.Merged > 0
-            ? $"{command.Merged} formation(s) folded in; {command.PersonnelKept:N0} men kept and now in fewer " +
-              "divisions, which is fewer mouths for the supply network to reach."
+            ? Simulation.Loc.Format(
+                Simulation.Plural.Key("{0:N0} formation folded in; {1:N0} men kept.", command.Merged),
+                command.Merged, command.PersonnelKept) + " " +
+              Simulation.Loc.Get("They are now in fewer divisions, which is fewer mouths for the supply network to reach.")
             : command.Refusal);
     }
 
@@ -572,7 +607,9 @@ public partial class DealOrForceGame
         _selectedArmy = divisions[0];
         _globe.SelectArmies(divisions.Select(army => army.Id));
         ShowSelectedArmies();
-        SetArmyFeedback($"Selected all {divisions.Length} division(s) assigned to this headquarters.");
+        SetArmyFeedback(Simulation.Loc.Format(
+            Simulation.Plural.Key("Selected all {0:N0} division assigned to this headquarters.", divisions.Length),
+            divisions.Length));
     }
 
     private void ClearArmySelectionAndClose()
@@ -686,21 +723,20 @@ public partial class DealOrForceGame
         ShowRegionOverview();
     }
 
-    private static string OrderName(ArmyOrder order) => order switch
+    /// <summary>How tightly a plan is allowed to shuffle its divisions, in words.</summary>
+    private static string CohesionName(PlanCohesion cohesion) => Simulation.Loc.Get(cohesion switch
     {
-        ArmyOrder.DefendFront => "Defend front",
-        ArmyOrder.AdvanceFront => "Advance front",
-        ArmyOrder.ReserveFront => "Front reserve",
-        ArmyOrder.Spearhead => "Spearhead",
-        _ => "Manual"
-    };
+        PlanCohesion.Flexible => "Flexible",
+        PlanCohesion.Balanced => "Balanced plan",
+        PlanCohesion.Rigid => "Rigid",
+        _ => "Static"
+    });
 
-    private static string StanceName(ArmyStance stance) => stance switch
-    {
-        ArmyStance.Cautious => "Cautious",
-        ArmyStance.Aggressive => "Aggressive",
-        _ => "Balanced"
-    };
+    // The words themselves live with the orders, in Simulation/ArmyVocabulary.cs, so that
+    // the map tooltip and this panel cannot disagree about what a division is doing.
+    private static string OrderName(ArmyOrder order) => ArmyVocabulary.OrderName(order);
+
+    private static string StanceName(ArmyStance stance) => ArmyVocabulary.StanceName(stance);
 
     private static bool IsOffensive(Army army) => army is not null &&
         (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead);

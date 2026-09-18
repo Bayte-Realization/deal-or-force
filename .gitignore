@@ -30,6 +30,10 @@ demo/
 Thumbs.db
 desktop.ini
 perf.log
+# Bench output. A run writes tens of kilobytes of world state that is only ever read
+# once, on the day it was produced - it belongs in a scratch folder, not in history.
+/simbench*.log
+/bench*.log
 /Deal or Force Launcher.exe
 /Tools/TerrainCompiler/cache/
 

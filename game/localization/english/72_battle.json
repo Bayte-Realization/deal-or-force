@@ -1,0 +1,16 @@
+{
+  "{0}  score {1:+0;-0;0}  support {2:P0}": "{0}  score {1:+0;-0;0}  support {2:P0}",
+  "⚔ province {0:N0} · {1}": "⚔ province {0:N0} · {1}",
+  "IN ACTION": "IN ACTION",
+  "{0:N0} hulls · strength {1:P0} · cohesion {2:P0} · stores {3:P0}": "{0:N0} hulls · strength {1:P0} · cohesion {2:P0} · stores {3:P0}",
+  "Production {0:0.0}, demand {1:0.0}, imports {2:0.0}, exports {3:0.0}": "Production {0:0.0}, demand {1:0.0}, imports {2:0.0}, exports {3:0.0}",
+  "Day {0:N0}: {1} · losses {2:N0}/{3:N0}": "Day {0:N0}: {1} · losses {2:N0}/{3:N0}",
+  "Combat width: {0:0}/{1:0}": "Combat width: {0:0}/{1:0}",
+  "Committed formations: {0:N0}/{1:N0}": "Committed formations: {0:N0}/{1:N0}",
+  "Attacker: {0}": "Attacker: {0}",
+  "Defender: {0}": "Defender: {0}",
+  "none": "none",
+  "Effective power: {0:0.0}/{1:0.0} · planning {2:P0}": "Effective power: {0:0.0}/{1:0.0} · planning {2:P0}",
+  "Reinforcements: +{0:N0}/+{1:N0}": "Reinforcements: +{0:N0}/+{1:N0}",
+  "Losses: {0:N0}/{1:N0}": "Losses: {0:N0}/{1:N0}"
+}

@@ -63,6 +63,24 @@ public static class ScriptedEffects
             "National average standard of living, 0-1.");
         NationField("literacy", n => n.Literacy, (n, v) => n.Literacy = v, 0.05f, 0.999f,
             "Share of the population that is literate, 0-1.");
+        // Money, which a script could previously neither read nor move - so a mod could add
+        // a decision that emptied the treasury and none that noticed what it did to prices.
+        // Bounded by what the model itself allows rather than by a number written here, so a
+        // mod that widens the floor and ceiling in common/inflation widens these too.
+        // Bounded loosely on purpose. This runs once, in a static constructor, before any
+        // mod has been read - so a limit taken from `common/inflation` here would be the
+        // base game's for ever, and would quietly overrule a mod that widened it. Both of
+        // these are clamped again where they are stored: inflation by the weekly tick
+        // against the declared floor and ceiling, and the key rate by the budget line it
+        // lives on. What is left here is only a guard against a script writing nonsense.
+        NationField("inflation", n => n.Inflation, (n, v) => n.Inflation = v, -1f, 100f,
+            "Annual inflation. 0.04 is four per cent. Re-clamped to the floor and ceiling in common/inflation.");
+        NationField("key_rate", CentralBank.KeyRate, CentralBank.SetKeyRate, 0f, 100f,
+            "The central bank's key rate, per annum. Clamped to what the debt_interest budget line allows. Writing it does not take the rate off the bank - see government_sets_key_rate.");
+        NationField("government_sets_key_rate",
+            n => n.GovernmentSetsKeyRate ? 1f : 0f,
+            (n, v) => n.GovernmentSetsKeyRate = v >= 0.5f, 0f, 1f,
+            "1 when the government has taken the key rate off its own central bank, 0 when the bank is independent.");
         NationField("construction_capacity", n => n.ConstructionCapacity, (n, v) => n.ConstructionCapacity = v,
             0f, float.PositiveInfinity, "Parallel construction throughput.");
         NationField("manpower", n => n.ManpowerReserve, (n, v) => n.ManpowerReserve = v, 0f, float.PositiveInfinity,
@@ -397,6 +415,9 @@ public static class ScriptedValues
             case "war_support": value = nation.WarSupport; return true;
             case "standard_of_living": value = nation.StandardOfLiving; return true;
             case "literacy": value = nation.Literacy; return true;
+            case "inflation": value = nation.Inflation; return true;
+            case "key_rate": value = CentralBank.KeyRate(nation); return true;
+            case "government_sets_key_rate": value = nation.GovernmentSetsKeyRate ? 1f : 0f; return true;
             case "construction_capacity": value = nation.ConstructionCapacity; return true;
             case "manpower": value = nation.ManpowerReserve; return true;
             case "tax_rate": value = nation.TaxRate; return true;

@@ -24,6 +24,7 @@ public static class TerrainCatalog
     public static float TileRepeat { get; private set; } = 180;
     public static float ReliefStrength { get; private set; } = .8f;
     public static float ReliefColorOpacity { get; private set; } = 0;
+    public static string LoadError { get; private set; } = "";
     public static IReadOnlyList<TerrainDefinition> All => Definitions.Values.OrderBy(x => x.Id, StringComparer.Ordinal).ToArray();
     public static TerrainDefinition Get(string id) => Definitions.GetValueOrDefault(id ?? "") ?? Definitions["plains"];
     static TerrainCatalog() => ResetCatalog();
@@ -39,15 +40,22 @@ public static class TerrainCatalog
         ReliefStrength = .8f;
         ReliefColorOpacity = 0;
         var root = GameDataLoader.DataFolder();
-        if (root is not null) ApplyDirectory(root, new List<string>());
+        var errors = new List<string>();
+        if (root is not null) ApplyDirectory(root, errors);
+        else errors.Add("Game data directory was not found.");
+        LoadError = string.Join("\n", errors);
     }
 
     /// <summary>Ordered per-field overlays. Paths belong to the package that declares them.</summary>
     public static void ApplyDirectory(string root, List<string> errors)
     {
         foreach (var previous in Definitions.Values.ToArray())
-            if (!string.IsNullOrEmpty(previous.TextureRelative) && File.Exists(Path.Combine(root, previous.TextureRelative)))
+            if (!string.IsNullOrEmpty(previous.TextureRelative) && File.Exists(LocalPath(root, previous.TextureRelative)))
                 Definitions[previous.Id] = previous with { Texture = Asset(root, previous.TextureRelative) };
+        // Walked rather than asked for, because a terrain declaration carries texture
+        // paths that belong to the package that declared them - so the record the loader
+        // keeps of what is moddable has to be told by hand.
+        GameDataLoader.Asked.Add("common/terrain");
         foreach (var path in Files(root, "common/terrain"))
         try
         {
@@ -82,10 +90,10 @@ public static class TerrainCatalog
         }
         catch (Exception e) { errors.Add($"{path}: {e.Message}"); }
 
-        if (File.Exists(Path.Combine(root, "map_data/terrain.png"))) TerrainPath = Path.Combine(root, "map_data/terrain.png");
-        if (File.Exists(Path.Combine(root, "map_data/heightmap.png"))) HeightPath = Path.Combine(root, "map_data/heightmap.png");
-        if (File.Exists(Path.Combine(root, "map_data/relief_color.png"))) ReliefColorPath = Path.Combine(root, "map_data/relief_color.png");
-        var settingsPath = Path.Combine(root, "map_data/terrain_settings.json");
+        if (File.Exists(LocalPath(root, "map_data/terrain.png"))) TerrainPath = LocalPath(root, "map_data/terrain.png");
+        if (File.Exists(LocalPath(root, "map_data/heightmap.png"))) HeightPath = LocalPath(root, "map_data/heightmap.png");
+        if (File.Exists(LocalPath(root, "map_data/relief_color.png"))) ReliefColorPath = LocalPath(root, "map_data/relief_color.png");
+        var settingsPath = LocalPath(root, "map_data/terrain_settings.json");
         if (File.Exists(settingsPath))
         try
         {
@@ -157,12 +165,14 @@ public static class TerrainCatalog
         return result;
     }
 
-    private static IEnumerable<string> Files(string root, string folder) => Directory.Exists(Path.Combine(root, folder))
-        ? Directory.GetFiles(Path.Combine(root, folder), "*.json").OrderBy(x => x, StringComparer.Ordinal) : Array.Empty<string>();
+    // Extended Windows paths (\\?\) do not normalize forward slashes for us.
+    private static string LocalPath(string root, string relative) => Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+    private static IEnumerable<string> Files(string root, string folder) => Directory.Exists(LocalPath(root, folder))
+        ? Directory.GetFiles(LocalPath(root, folder), "*.json").OrderBy(x => x, StringComparer.Ordinal) : Array.Empty<string>();
     private static string Asset(string root, string path)
     {
-        var fullRoot = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
-        var full = Path.GetFullPath(Path.Combine(root, path));
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+        var full = Path.GetFullPath(LocalPath(root, path));
         if (!full.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("Terrain asset paths must stay inside their package.");
         return full;
     }

@@ -27,7 +27,7 @@ public partial class DealOrForceGame
     private Label _fleetFeedback;
     private readonly System.Collections.Generic.Dictionary<FleetMission, Button> _fleetMissionButtons = new();
 
-    private static string MissionName(FleetMission mission) => mission switch
+    private static string MissionName(FleetMission mission) => Simulation.Loc.Get(mission switch
     {
         FleetMission.Anchored => "In port",
         FleetMission.Patrol => "Patrol",
@@ -35,7 +35,7 @@ public partial class DealOrForceGame
         FleetMission.Raid => "Raid trade",
         FleetMission.Invasion => "Invasion",
         _ => "Escort"
-    };
+    });
 
     private static string MissionHelp(FleetMission mission) => mission switch
     {
@@ -105,8 +105,9 @@ public partial class DealOrForceGame
         }
         if (!IsInstanceValid(_fleetFeedback)) return;
         _fleetFeedback.Text = mine
-            ? "Right-click the map to send this fleet. The mission is what it does when it gets there."
-            : $"{owner?.Name ?? "Another country"}'s fleet. You may look, not order.";
+            ? Tr("Right-click the map to send this fleet. The mission is what it does when it gets there.")
+            : Simulation.Loc.Format("A fleet of {0}. You may look, not order.",
+                owner?.DisplayName ?? Tr("Another country"));
     }
 
     private void IssueFleetMission(FleetMission mission)
@@ -122,8 +123,8 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         ShowSelectedFleet();
         SetFleetFeedback(mission == FleetMission.Anchored
-            ? "Ordered home."
-            : $"Now on {MissionName(mission).ToLowerInvariant()}.");
+            ? Tr("Ordered home.")
+            : Simulation.Loc.Format("Now on {0}.", MissionName(mission).ToLowerInvariant()));
     }
 
     /// <summary>Send the selected fleet to a point on the globe, keeping its mission.</summary>
@@ -146,9 +147,9 @@ public partial class DealOrForceGame
             ShowSelectedFleet();
             var reach = NavalOperations.Distance(_selectedFleet.Latitude, _selectedFleet.Longitude,
                 latitude, longitude);
-            SetFleetFeedback($"Invasion under way — about " +
-                             $"{Mathf.CeilToInt(reach / Mathf.Max(0.01f, _campaign.Defines.FleetDegreesPerDay)):N0} " +
-                             "day(s) to the beach.");
+            var beach = Mathf.CeilToInt(reach / Mathf.Max(0.01f, _campaign.Defines.FleetDegreesPerDay));
+            SetFleetFeedback(Simulation.Loc.Format(
+                Simulation.Plural.Key("Invasion under way — about {0:N0} day to the beach.", beach), beach));
             return true;
         }
 
@@ -168,7 +169,9 @@ public partial class DealOrForceGame
         ShowSelectedFleet();
         var away = NavalOperations.Distance(_selectedFleet.Latitude, _selectedFleet.Longitude, latitude, longitude);
         var days = Mathf.CeilToInt(away / Mathf.Max(0.01f, _campaign.Defines.FleetDegreesPerDay));
-        SetFleetFeedback($"Under way — about {days:N0} day(s) out, on {MissionName(mission).ToLowerInvariant()}.");
+        SetFleetFeedback(Simulation.Loc.Format(
+            Simulation.Plural.Key("Under way — about {0:N0} day out, on {1}.", days),
+            days, MissionName(mission).ToLowerInvariant()));
         return true;
     }
 
@@ -206,8 +209,10 @@ public partial class DealOrForceGame
         });
         _campaign.Commands.ApplyAll(_campaign);
         ShowSelectedFleet();
-        SetFleetFeedback($"{_selectedFleet.Carried.Count:N0} division(s) aboard. " +
-                         "Right-click an enemy shore to land them there.");
+        SetFleetFeedback(Simulation.Loc.Format(
+                             Simulation.Plural.Key("{0:N0} division aboard.", _selectedFleet.Carried.Count),
+                             _selectedFleet.Carried.Count) + " " +
+                         Tr("Right-click an enemy shore to land them there."));
     }
 
     private void UnloadTroops()
@@ -219,7 +224,8 @@ public partial class DealOrForceGame
         _selectedFleet.Mission = FleetMission.Anchored;
         _selectedFleet.TargetProvinceId = -1;
         ShowSelectedFleet();
-        SetFleetFeedback($"{landed:N0} division(s) put ashore.");
+        SetFleetFeedback(Simulation.Loc.Format(
+            Simulation.Plural.Key("{0:N0} division put ashore.", landed), landed));
     }
 
     private void SetFleetFeedback(string text)

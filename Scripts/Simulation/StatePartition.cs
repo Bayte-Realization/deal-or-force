@@ -75,11 +75,25 @@ public static class StatePartition
         // hundred square kilometres of tundra is not what makes a neighbourhood nervous.
         if (asConquest) Statecraft.RecordAnnexation(campaign, newOwner, peopleTaken);
 
+        // One piece per owner, and nothing said about geography - the same rule the map is
+        // built under, and for the same reason it gives there.
+        //
+        // This used to separate pockets as well, so that a region arriving in two disconnected
+        // halves became two regions. It reads like tidiness and it was the last source of
+        // border gore in the game: a region's provinces are connected through LAND, so every
+        // region with an island in it, a lake through it or a strait across it is already in
+        // pieces before any war touches it, and handing such a region over WHOLE - the thing
+        // the peace code works hardest to do - shredded it on arrival. Twelve of them in a
+        // decade, every one from a treaty that had taken the entire region exactly as it was
+        // asked to.
+        //
+        // A region under one owner is one region, in two pockets or in twenty. Countries are
+        // shaped like that; so are provinces.
         var created = new List<ScenarioState>();
         foreach (var stateMapIndex in touched)
         {
             var state = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
-            if (state is not null) created.AddRange(Repartition(campaign, state));
+            if (state is not null) created.AddRange(Repartition(campaign, state, separatePockets: false));
         }
 
         // A border can put a region back together as easily as it can cut one: taking the

@@ -232,7 +232,15 @@ public static partial class Warfare
                 ResolveAdvances(campaign, war);
             }
 
-        using (SimProfiler.Measure("  war:battles")) ResolveBattles(campaign);
+        // A round is a DAY of fighting - it carries a date, a note and a line in the battle
+        // report - so it resolves on a day rather than on a step. At the shipped hourly step
+        // this ran twenty-four times a day: twenty-four days of casualties every day, and a
+        // war decided by one side running out of people instead of by the fighting.
+        //
+        // Gated inside the scope rather than around it, so the profiler still counts one
+        // entry per step and the cadence check still reads what it is written to read.
+        using (SimProfiler.Measure("  war:battles"))
+            if (campaign.StepOpensNewDay) ResolveBattles(campaign);
         using (SimProfiler.Measure("  war:occupation")) SecureOccupation(campaign);
         campaign.Battles.RemoveAll(battle => battle.Ended && campaign.ElapsedDays - battle.StartedDay > 180);
     }
@@ -911,7 +919,10 @@ public static partial class Warfare
             var garrison = 0f;
             foreach (var army in In(ByProvince, province))
                 if (!army.InBattle) garrison += army.Power;
-            occupation[province] = M.Clamp01(occupation[province] + campaign.Defines.OccupationDailyProgress *
+            // A rate, so it takes the step's share of a day. Without this a province was
+            // occupied twenty-four times faster at an hourly step than at a daily one.
+            occupation[province] = M.Clamp01(occupation[province] +
+                campaign.Defines.OccupationDailyProgress * campaign.TickScale *
                 M.Clamp(garrison / 3f, 0.25f, 1f));
         }
     }

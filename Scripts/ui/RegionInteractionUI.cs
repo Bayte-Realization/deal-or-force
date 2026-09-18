@@ -92,7 +92,7 @@ public partial class DealOrForceGame
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
         var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex;
         _sideBody.Text = Simulation.Loc.Format("{0} of {1}",
-                             _selectedState.Kind, owner?.Name ?? Tr("an unknown state")) +
+                             Tr(_selectedState.Kind), owner?.DisplayName ?? Tr("an unknown state")) +
                          (owned ? "" : Tr(" · foreign ground, read-only"));
 
         DetailHeading("PEOPLE");
@@ -124,12 +124,14 @@ public partial class DealOrForceGame
         var cultures = EconomySystem.Cultures(_selectedState);
         if (cultures.Count > 0)
             DetailRow("Largest people", DemographyCatalog.CultureName(cultures[0].Culture),
-                $"{Fmt.PeopleExact(cultures[0].Size)} of {Fmt.PeopleExact(_selectedState.Population)}. " +
-                "The whole table is under Population.");
+                Simulation.Loc.Format("{0} of {1}.",
+                    Fmt.PeopleExact(cultures[0].Size), Fmt.PeopleExact(_selectedState.Population)) + " " +
+                Tr("The whole table is under Population."));
         var faiths = EconomySystem.Religions(_selectedState);
         if (faiths.Count > 0)
             DetailRow("Largest faith", DemographyCatalog.ReligionName(faiths[0].Religion),
-                $"{faiths[0].Size / (double)Math.Max(1, _selectedState.Population):P0} of the region.");
+                Simulation.Loc.Format("{0:P0} of the region.",
+                    faiths[0].Size / (double)Math.Max(1, _selectedState.Population)));
 
         var foreign = EconomySystem.ForeignShare(_selectedState, owner?.Tag ?? "");
         if (foreign > 0.001f)
@@ -181,7 +183,8 @@ public partial class DealOrForceGame
             DetailHeading("UNDER CONSTRUCTION");
             foreach (var project in queue.Take(5))
                 DetailRow(BuildingCatalog.Get(project.Building).Name, Fmt.Percent(project.Progress),
-                    $"Costs {Fmt.Money(project.Cost)} over {project.DurationDays} days.");
+                    Simulation.Loc.Format("Costs {0} over {1:N0} days.",
+                        Fmt.Money(project.Cost), project.DurationDays));
         }
 
         var provinces = _campaign.ProvinceMap is null
@@ -219,7 +222,7 @@ public partial class DealOrForceGame
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
         var total = Math.Max(1L, _selectedState.Population);
         _sideBody.Text = Simulation.Loc.Format("{0} people under {1}",
-            Fmt.People(_selectedState.Population), owner?.Name ?? Tr("an unknown flag"));
+            Fmt.People(_selectedState.Population), owner?.DisplayName ?? Tr("an unknown flag"));
 
         DetailHeading("THE REGION");
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
@@ -279,8 +282,9 @@ public partial class DealOrForceGame
             var wealth = groups.Sum(group => group.Size * group.Wealth) / size;
             var living = groups.Sum(group => group.Size * group.StandardOfLiving) / size;
             return new Slice(name(value), size, Swatch(colour(value)),
-                $"{Fmt.PeopleExact(size)} people\n" +
-                $"Employed {employed:P0} · wealth {wealth:P0} · standard of living {living:P0}");
+                Simulation.Loc.Format("{0} people", Fmt.PeopleExact(size)) + "\n" +
+                Simulation.Loc.Format("Employed {0:P0} · wealth {1:P0} · standard of living {2:P0}",
+                    employed, wealth, living));
         }).ToList();
 
     /// <summary>The ladder, drawn as one: slate at the bottom, gold, then the owning red.</summary>
@@ -326,14 +330,14 @@ public partial class DealOrForceGame
 
         _sideTitle.Text = Simulation.Loc.Format("Province #{0:N0}", _selectedProvinceId);
         _sideBody.Text = Simulation.Loc.Format("{0} · {1:0.0}°{2} {3:0.0}°{4}",
-            _selectedState?.Name ?? Tr("Unmapped ground"),
+            _selectedState?.DisplayName ?? Tr("Unmapped ground"),
             MathF.Abs(centre.Latitude), centre.Latitude >= 0 ? Tr("N") : Tr("S"),
             MathF.Abs(centre.Longitude), centre.Longitude >= 0 ? Tr("E") : Tr("W"));
 
         DetailHeading("STANDING");
-        DetailRow("Owner", owner?.Name ?? "unknown",
+        DetailRow("Owner", owner?.DisplayName ?? Tr("unknown"),
             "Whose ground this is in law. Only a peace or an annexation changes it.");
-        DetailRow("Controller", controller?.Name ?? "unknown",
+        DetailRow("Controller", controller?.DisplayName ?? Tr("unknown"),
             "Who holds it right now. An army takes control; a treaty takes ownership.",
             controller == owner ? "text.bright" : "state.warning");
         if (controller != owner && controller is not null && CanInspectNation(controller.Id))
@@ -356,7 +360,7 @@ public partial class DealOrForceGame
             DetailRow("Visible divisions", "none", "No known formations. Foreign forces are hidden by fog of war.");
         foreach (var army in formations.Take(8))
             DetailRow(Shorten(army.Name, 18),
-                $"{army.Divisions:0.0} div · {army.Organisation:P0}",
+                Simulation.Loc.Format("{0:0.0} div · {1:P0}", army.Divisions, army.Organisation),
                 CanInspectNation(army.NationId) ? DivisionTooltip(army) : "Observed foreign formation. Orders and route are unavailable.",
                 army.CutOff ? "state.negative" : army.InBattle ? "state.warning" : "text.bright");
     }
@@ -377,8 +381,9 @@ public partial class DealOrForceGame
         });
         _campaign.Commands.ApplyAll(_campaign);
         _regionActionFeedback.Text = _campaign.Construction.Count > before
-            ? $"{Tr(BuildingCatalog.Get(kind).Name)} added to the {_selectedState.DisplayName} queue."
-            : "Could not queue the project: check treasury or the national construction limit.";
+            ? Simulation.Loc.Format("{0} added to the {1} queue.",
+                Tr(BuildingCatalog.Get(kind).Name), _selectedState.DisplayName)
+            : Tr("Could not queue the project: check treasury or the national construction limit.");
         ShowRegionOverview();
     }
 
@@ -406,9 +411,9 @@ public partial class DealOrForceGame
         _foreignRegionDiplomacy.Visible = offer;
         if (offer)
         {
-            _foreignRegionDiplomacy.Text = Simulation.Loc.Format("Talk to {0}", owner.Name);
+            _foreignRegionDiplomacy.Text = Simulation.Loc.Format("Talk to {0}", owner.DisplayName);
             _foreignRegionDiplomacy.TooltipText = Ui.Tip(Simulation.Loc.Format(
-                "Open the diplomacy screen with {0}, who this region belongs to.", owner.Name));
+                "Open the diplomacy screen with {0}, who this region belongs to.", owner.DisplayName));
         }
     }
 
@@ -427,12 +432,16 @@ public partial class DealOrForceGame
         OpenScreen("Diplomacy");
     }
 
-    private static string ClassName(SocialClass socialClass) => socialClass switch
+    private static string ClassName(SocialClass socialClass) => Simulation.Loc.Get(socialClass switch
     {
         SocialClass.Lower => "Lower class",
         SocialClass.Middle => "Middle class",
         _ => "Upper class"
-    };
+    });
 
-    private static string SectorName(Sector sector) => sector.ToString();
+    /// <summary>
+    /// The four halves of an economy, named. The enum's own spelling is the key, which is
+    /// what every other data-declared name in the game uses too.
+    /// </summary>
+    private static string SectorName(Sector sector) => Simulation.Loc.Get(sector.ToString());
 }

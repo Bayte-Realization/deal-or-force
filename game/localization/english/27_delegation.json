@@ -1,0 +1,20 @@
+// Deal or Force - handing a portfolio to your own civil service, and auditing it.
+//
+// The economic half of what the army already has: you draw a line and give divisions a
+// duty rather than walking each of them to a province, and here you hand over the budget
+// or the trade desk rather than setting every line yourself. Per portfolio, reversible,
+// and everything it decides is listed beside what you decided.
+{
+  "Let the trade desk run itself": "Let the trade desk run itself",
+  "The trade desk is running itself": "The trade desk is running itself",
+  "Hand the trade desk to your own civil service. Once a month it buys what the country is short of first, holds back what it cannot spare, sells a real surplus, and drops the instruction again when a good stops being a problem. Everything it does shows up in the list above beside your own decisions, and you can take the desk back at any time - the instructions it left stay until you change them.": "Hand the trade desk to your own civil service. Once a month it buys what the country is short of first, holds back what it cannot spare, sells a real surplus, and drops the instruction again when a good stops being a problem. Everything it does shows up in the list above beside your own decisions, and you can take the desk back at any time - the instructions it left stay until you change them.",
+  "EVERYTHING IN FORCE": "EVERYTHING IN FORCE",
+  "Nothing is in force. Every good and every country is traded on its merits.": "Nothing is in force. Every good and every country is traded on its merits.",
+  "Withdraw this instruction.": "Withdraw this instruction.",
+  "Let the treasury run itself": "Let the treasury run itself",
+  "The treasury is running itself": "The treasury is running itself",
+  "Hand tax and spending to your own civil service - the same staff that governs every other country in the world. Once a month it taxes what a thinning treasury needs, spends on the army when there is a war or a threat, buys quiet when the country is unhappy and can afford it, and builds with the rest. It does not take decisions and it does not touch the central bank; those stay yours. Take it back whenever you like.": "Hand tax and spending to your own civil service - the same staff that governs every other country in the world. Once a month it taxes what a thinning treasury needs, spends on the army when there is a war or a threat, buys quiet when the country is unhappy and can afford it, and builds with the rest. It does not take decisions and it does not touch the central bank; those stay yours. Take it back whenever you like.",
+  "The government controls the central bank": "The government controls the central bank",
+  "The central bank is independent": "The central bank is independent",
+  "Take the central bank off its own board. Both levers on this card come alive: you set the key rate yourself, and you can order money printed. Both are also priced - money a government has ordered to be cheap is money nobody believes will stay cheap, and money it has ordered to be printed is money nobody believes has a limit.": "Take the central bank off its own board. Both levers on this card come alive: you set the key rate yourself, and you can order money printed. Both are also priced - money a government has ordered to be cheap is money nobody believes will stay cheap, and money it has ordered to be printed is money nobody believes has a limit."
+}

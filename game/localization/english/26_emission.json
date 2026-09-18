@@ -1,0 +1,15 @@
+// Deal or Force - the printing press.
+//
+// The second monetary lever, and the one the first unlocks: a government that has
+// taken the central bank can also have it print. The money is real and arrives at
+// once; what it costs is that nobody believes there is a limit any more, and that
+// belief does not come back when the press stops.
+{
+  "Printing money": "Printing money",
+  "Have the bank print money and hand it to the treasury, as a share of a year's output. The money is real and arrives at once. What it costs is that nobody believes there is a limit any more - and that belief does not come back when the press stops.": "Have the bank print money and hand it to the treasury, as a share of a year's output. The money is real and arrives at once. What it costs is that nobody believes there is a limit any more - and that belief does not come back when the press stops.",
+  "The bank is independent. It will not print for a government that does not own it.": "The bank is independent. It will not print for a government that does not own it.",
+  "Nothing is being printed.": "Nothing is being printed.",
+  "The press has stopped. It is still costing {0} on prices, because stopping is not the same as never having started.": "The press has stopped. It is still costing {0} on prices, because stopping is not the same as never having started.",
+  "{0} a week into the treasury, and {1} on prices - {2} of that is what people remember rather than what you are doing now.": "{0} a week into the treasury, and {1} on prices - {2} of that is what people remember rather than what you are doing now.",
+  "Money printed to order": "Money printed to order"
+}

@@ -66,7 +66,10 @@ public partial class DealOrForceGame
         foreach (var category in SettingsCatalog.Categories())
         {
             var captured = category;
-            var button = ActionButton(CategoryName(category), () => ShowSettingsCategory(captured), 150, 34);
+            // The English, not the translation: `ActionButton` translates what it is
+            // given and remembers the original, and a tab that remembered the Russian
+            // had nothing to translate when the language changed back.
+            var button = ActionButton(SettingsRows.CategorySource(category), () => ShowSettingsCategory(captured), 150, 34);
             tabs.AddChild(button);
             _settingsTabs[category] = button;
         }
@@ -97,19 +100,9 @@ public partial class DealOrForceGame
         actions.AddChild(reset);
     }
 
-    /// <summary>The tab's own word. A category a mod invents is shown under its own id.</summary>
-    private static string CategoryName(string category) => Tr(category.ToLowerInvariant() switch
-    {
-        "game" => "Game",
-        "interface" => "Interface",
-        "video" => "Display",
-        "audio" => "Sound",
-        _ => category
-    });
-
     private void ShowSettings()
     {
-        RefreshLanguageChoices();
+        SettingsRows.RefreshLanguageChoices();
         if (_settingsCategory.Length == 0)
             _settingsCategory = SettingsCatalog.Categories().FirstOrDefault() ?? "game";
         _settingsLayer.Visible = true;
@@ -117,25 +110,20 @@ public partial class DealOrForceGame
         ShowSettingsCategory(_settingsCategory);
     }
 
-    private void HideSettings() => _settingsLayer.Visible = false;
-
     /// <summary>
-    /// The languages are not in the file, because which of them exist depends on what mods
-    /// are loaded. The option is declared with an empty list and filled in here.
+    /// Close the settings screen - and, when there is nothing behind it, go back to the
+    /// front door. Settings reached from the menu scene enter this scene with nothing else
+    /// showing, so hiding the layer on its own would leave a player looking at the globe
+    /// with no way out.
     /// </summary>
-    private static void RefreshLanguageChoices()
+    private void HideSettings()
     {
-        var definition = SettingsCatalog.Of("language");
-        if (definition is null) return;
-        definition.Values.Clear();
-        definition.Labels.Clear();
-        foreach (var language in Simulation.Loc.Languages)
-        {
-            definition.Values.Add(language);
-            definition.Labels.Add(Simulation.Loc.DisplayName(language));
-        }
-        if (definition.Values.Count > 0 && !definition.Values.Contains(definition.DefaultValue))
-            definition.DefaultValue = definition.Values[0];
+        _settingsLayer.Visible = false;
+        var somethingElseIsUp = (_hudLayer is { Visible: true }) ||
+                                (_pickerLayer is { Visible: true }) ||
+                                (_networkLayer is { Visible: true }) ||
+                                (_menuLayer is { Visible: true });
+        if (!somethingElseIsUp) ShowMainMenu();
     }
 
     private void ShowSettingsCategory(string category)
@@ -145,131 +133,14 @@ public partial class DealOrForceGame
             ApplyLedgerButtonState(button, string.Equals(id, category, StringComparison.OrdinalIgnoreCase));
 
         foreach (var child in _settingsRows.GetChildren()) child.QueueFree();
-        foreach (var definition in SettingsCatalog.In(category)) BuildSettingRow(definition);
+        foreach (var definition in SettingsCatalog.In(category))
+            SettingsRows.Build(definition, _settingsRows, ApplySetting);
         RefreshRestartNotice();
     }
 
-    private void BuildSettingRow(SettingDefinition definition)
-    {
-        var block = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        block.AddThemeConstantOverride("separation", 3);
-        _settingsRows.AddChild(block);
-
-        var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        row.AddThemeConstantOverride("separation", 10);
-        block.AddChild(row);
-
-        var name = RowLabel(Tr(definition.Name), 14, Ui.Colour("text.body"), 300);
-        name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        row.AddChild(name);
-
-        switch (definition.Kind)
-        {
-            case SettingKind.Toggle: BuildToggle(definition, row); break;
-            case SettingKind.Choice: BuildChoice(definition, row); break;
-            case SettingKind.Slider: BuildSlider(definition, row); break;
-        }
-
-        if (definition.Description.Length > 0)
-        {
-            var note = RowLabel(Tr(definition.Description), 11, Ui.Colour("text.hint"));
-            note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            block.AddChild(note);
-        }
-        if (definition.NeedsRestart)
-        {
-            var warning = RowLabel(Tr("Takes effect the next time the game starts."), 11,
-                Ui.Colour("text.accent_dim"));
-            block.AddChild(warning);
-        }
-        _settingsRows.AddChild(new ColorRect
-        {
-            Color = Ui.Colour("surface.line_faint"),
-            CustomMinimumSize = new Vector2(0, 1)
-        });
-    }
-
-    private void BuildToggle(SettingDefinition definition, Container row)
-    {
-        var id = definition.Id;
-        Button button = null;
-        button = ActionButton(SettingsCatalog.Flag(id) ? "On" : "Off", () =>
-        {
-            var value = !SettingsCatalog.Flag(id);
-            PlayerSettings.Set(id, value);
-            button!.Text = Tr(value ? "On" : "Off");
-            ApplyLedgerButtonState(button, value);
-            ApplySetting(id);
-        }, 150, 32, SettingsCatalog.Flag(id));
-        ApplyLedgerButtonState(button, SettingsCatalog.Flag(id));
-        row.AddChild(button);
-    }
-
-    private void BuildChoice(SettingDefinition definition, Container row)
-    {
-        var id = definition.Id;
-        var option = new OptionButton { CustomMinimumSize = new Vector2(220, 32), FitToLongestItem = false };
-        for (var index = 0; index < definition.Values.Count; index++)
-            option.AddItem(Tr(index < definition.Labels.Count && definition.Labels[index].Length > 0
-                ? definition.Labels[index]
-                : definition.Values[index]), index);
-        var chosen = definition.Values.IndexOf(SettingsCatalog.Chosen(id));
-        option.Selected = chosen >= 0 ? chosen : 0;
-        option.ItemSelected += index =>
-        {
-            var at = (int)index;
-            if (at < 0 || at >= definition.Values.Count) return;
-            PlayerSettings.Set(id, definition.Values[at]);
-            ApplySetting(id);
-        };
-        row.AddChild(option);
-    }
-
-    private void BuildSlider(SettingDefinition definition, Container row)
-    {
-        var id = definition.Id;
-        var reading = RowLabel("", 13, Ui.Colour("text.body"), 88);
-        reading.HorizontalAlignment = HorizontalAlignment.Right;
-
-        var slider = new HSlider
-        {
-            MinValue = definition.Minimum,
-            MaxValue = definition.Maximum,
-            Step = definition.Step,
-            Value = SettingsCatalog.Number(id),
-            CustomMinimumSize = new Vector2(220, 26),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            // The wheel scrolls the page. The same reason it does on the budget: a player
-            // reading down a list of options should not change one on the way past.
-            Scrollable = false
-        };
-        reading.Text = SettingText(definition, (float)slider.Value);
-        slider.ValueChanged += value =>
-        {
-            PlayerSettings.Set(id, (float)value);
-            reading.Text = SettingText(definition, (float)value);
-            ApplySetting(id);
-        };
-        row.AddChild(slider);
-        row.AddChild(reading);
-    }
-
-    private static string SettingText(SettingDefinition definition, float value) =>
-        definition.Unit.ToLowerInvariant() switch
-        {
-            "number" => value.ToString("0.##", CultureInfo.CurrentCulture),
-            "days" => Simulation.Loc.Format("{0} day(s)", value.ToString("0", CultureInfo.CurrentCulture)),
-            "pixels" => Simulation.Loc.Format("{0} px", value.ToString("0", CultureInfo.CurrentCulture)),
-            _ => value.ToString("P0", CultureInfo.CurrentCulture)
-        };
-
     private void ResetSettingsCategory()
     {
-        foreach (var definition in SettingsCatalog.In(_settingsCategory))
-        {
-            PlayerSettings.Clear(definition.Id);
-            ApplySetting(definition.Id);
-        }
+        SettingsRows.ResetCategory(_settingsCategory, ApplySetting);
         ShowSettingsCategory(_settingsCategory);
     }
 

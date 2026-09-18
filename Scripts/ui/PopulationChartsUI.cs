@@ -114,7 +114,9 @@ public partial class DealOrForceGame
             var culture = DemographyCatalog.Culture(entry.Culture);
             var ours = primary.Contains(entry.Culture, StringComparer.OrdinalIgnoreCase);
             var name = (ours ? "★ " : "") + DemographyCatalog.CultureName(entry.Culture);
-            var group = string.IsNullOrWhiteSpace(culture?.Group) ? "" : $"{Titled(culture.Group)} peoples\n";
+            var group = string.IsNullOrWhiteSpace(culture?.Group)
+                ? ""
+                : Simulation.Loc.Format("{0} peoples", Titled(culture.Group)) + "\n";
             return new Slice(name, entry.Size, Swatch(culture?.Colour), group + (ours
                 ? "One of the peoples this state is for. They are the calm everything else is measured against."
                 : "A minority here: governed by a state that is not theirs. More restive than their " +
@@ -128,7 +130,8 @@ public partial class DealOrForceGame
             var religion = DemographyCatalog.Religion(entry.Religion);
             var group = string.IsNullOrWhiteSpace(religion?.Group) ? "" : $"{Titled(religion.Group)}\n";
             return new Slice(DemographyCatalog.ReligionName(entry.Religion), entry.Size,
-                Swatch(religion?.Colour), group + $"{Fmt.PeopleExact(entry.Size)} people");
+                Swatch(religion?.Colour),
+                group + Simulation.Loc.Format("{0} people", Fmt.PeopleExact(entry.Size)));
         }).ToList();
 
     private static IReadOnlyList<Slice> ProfessionSlices(ScenarioState state) =>
@@ -141,8 +144,10 @@ public partial class DealOrForceGame
                 ? ""
                 : $"{ClassName(profession.Class)} · {SectorName(profession.Sector)}\n";
             return new Slice(DemographyCatalog.ProfessionName(entry.Profession), entry.Size,
-                Swatch(profession?.Colour), social + $"{Fmt.PeopleExact(entry.Size)} people" +
-                (profession is null ? "" : $"\nWealth {profession.Wealth:P0} · employed {profession.Employment:P0}"));
+                Swatch(profession?.Colour),
+                social + Simulation.Loc.Format("{0} people", Fmt.PeopleExact(entry.Size)) +
+                (profession is null ? "" : "\n" + Simulation.Loc.Format(
+                    "Wealth {0:P0} · employed {1:P0}", profession.Wealth, profession.Employment)));
         }).ToList();
 
     private static string Titled(string value) =>

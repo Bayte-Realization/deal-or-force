@@ -1,0 +1,18 @@
+{
+  "CENTRAL BANK": "CENTRAL BANK",
+  "What borrowing costs, who decides it, and what it is being aimed at. The bank holds the rate against its own target unless the government takes it away - and a government that holds the rate below what the bank wanted pays for the cheap money in prices. Everything here is declared in common/inflation and common/budget.": "What borrowing costs, who decides it, and what it is being aimed at. The bank holds the rate against its own target unless the government takes it away - and a government that holds the rate below what the bank wanted pays for the cheap money in prices. Everything here is declared in common/inflation and common/budget.",
+  "Key rate": "Key rate",
+  "tightening": "tightening",
+  "loosening": "loosening",
+  "neutral": "neutral",
+  "Inflation {0} · the bank's target {1} · neutral {2}": "Inflation {0} · the bank's target {1} · neutral {2}",
+  "The government sets the rate": "The government sets the rate",
+  "Take the key rate off the central bank. The slider above comes alive - and so does the bill: money a government has ordered to be cheap is money nobody believes will stay cheap, so holding the rate under what the bank wanted adds to inflation every week.": "Take the key rate off the central bank. The slider above comes alive - and so does the bill: money a government has ordered to be cheap is money nobody believes will stay cheap, so holding the rate under what the bank wanted adds to inflation every week.",
+  "The bank is raising the rate.": "The bank is raising the rate.",
+  "The bank is cutting the rate.": "The bank is cutting the rate.",
+  "The bank is holding. Prices are where it wants them.": "The bank is holding. Prices are where it wants them.",
+  "The bank is holding, and forgiving some of the war's prices while it does.": "The bank is holding, and forgiving some of the war's prices while it does.",
+  "You hold the rate. The bank wanted {0}, and you are not under it, so nothing is being paid for the privilege.": "You hold the rate. The bank wanted {0}, and you are not under it, so nothing is being paid for the privilege.",
+  "You hold {0} where the bank wanted {1}. Cheap money nobody believes in adds {2} to inflation every week it lasts.": "You hold {0} where the bank wanted {1}. Cheap money nobody believes in adds {2} to inflation every week it lasts.",
+  "The bank is not independent": "The bank is not independent"
+}

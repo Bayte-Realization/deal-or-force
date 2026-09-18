@@ -1,0 +1,9 @@
+{
+  "{0:N0} day of somebody else's": "{0:N0} day of somebody else's",
+  "{0:N0} day of somebody else's|few": "{0:N0} days of somebody else's",
+  "{0:N0} day of somebody else's|many": "{0:N0} days of somebody else's",
+  "{0:N0} year of somebody else's": "{0:N0} year of somebody else's",
+  "{0:N0} year of somebody else's|few": "{0:N0} years of somebody else's",
+  "{0:N0} year of somebody else's|many": "{0:N0} years of somebody else's",
+  "{0:h\\:mm} of your life for {1}. The grass is outside and it is not modelled.": "{0:h\\:mm} of your life for {1}. The grass is outside and it is not modelled."
+}

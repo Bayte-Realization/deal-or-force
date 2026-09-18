@@ -143,7 +143,15 @@ public partial class DealOrForceGame
         rows.AddChild(Title("3 · Players and countries", 16, Ui.Colour("text.accent")));
         _networkRoster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         rows.AddChild(_networkRoster);
-        rows.AddChild(ActionButton("DISCONNECT / BACK", CloseNetworkMultiplayer, 0, 36));
+        var lobbyActions = new HBoxContainer();
+        lobbyActions.AddThemeConstantOverride("separation", 6);
+        rows.AddChild(lobbyActions);
+        var disconnect = ActionButton("DISCONNECT / BACK", CloseNetworkMultiplayer, 0, 36);
+        disconnect.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        lobbyActions.AddChild(disconnect);
+        // Same reason as the country picker: a player waiting in a lobby has time to change
+        // their language and nowhere to do it.
+        lobbyActions.AddChild(ActionButton("Settings", ShowSettings, 120, 36));
         var help = Title("UDP must be allowed through Windows Firewall. Internet play also requires UDP port forwarding; virtual LAN normally does not.", 11, Ui.Colour("text.muted"));
         help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(help);
@@ -330,7 +338,9 @@ public partial class DealOrForceGame
             return;
         }
         _networkPeerNations[peerId] = assigned.Id;
-        _networkNames[peerId] = string.IsNullOrWhiteSpace(playerName) ? $"Player {peerId}" : playerName.Trim()[..Math.Min(32, playerName.Trim().Length)];
+        _networkNames[peerId] = string.IsNullOrWhiteSpace(playerName)
+            ? Simulation.Loc.Format("Player {0}", peerId)
+            : playerName.Trim()[..Math.Min(32, playerName.Trim().Length)];
         _networkReadyPeers.Clear();
         _networkRosterRevision++;
         RpcId(peerId, nameof(ClientAssignedNetworkNation), assigned.Tag);
@@ -366,7 +376,8 @@ public partial class DealOrForceGame
         var ids = _networkPeerNations.Keys.OrderBy(id => id).ToArray();
         Rpc(nameof(ClientReceiveNetworkRoster), ids,
             ids.Select(id => _networkPeerNations[id]).ToArray(),
-            ids.Select(id => _networkNames.GetValueOrDefault(id, $"Player {id}")).ToArray(),
+            ids.Select(id => _networkNames.GetValueOrDefault(id,
+                Simulation.Loc.Format("Player {0}", id))).ToArray(),
             ids.Select(id => _networkReadyPeers.Contains(id) ? 1 : 0).ToArray(), _networkRosterRevision);
     }
 
@@ -560,7 +571,11 @@ public partial class DealOrForceGame
         while (_campaign.ElapsedHours < target && ticks < budget)
         {
             _campaign.Tick();
-            _modLoader.OnDayAdvanced(_campaign);
+            // Once a day, for the same reason as the single-player loop: a hook named for a
+            // day that fires on every step multiplies whatever a mod does in it by the number
+            // of steps in a day, and the two loops must not disagree about that or a mod
+            // behaves differently in multiplayer.
+            if (_campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(_campaign);
             ticks++;
             // Orders given on the day we have just reached, applied before the next one is
             // simulated - which is the whole of what lockstep means.
@@ -661,8 +676,10 @@ public partial class DealOrForceGame
         _networkHud.Visible = _hudLayer.Visible && _networkConnected && _networkGameStarted;
         if (!_networkHud.Visible) return;
         _networkHudStatus.Text = _networkIsHost
-            ? $"HOST · {_networkPeerNations.Count} PLAYERS · UDP {RequestedNetworkPort()}"
-            : $"CLIENT · {_campaign.Player.Tag} · {_networkAddress.Text.Trim()}";
+            ? Simulation.Loc.Format("HOST · {0:N0} PLAYERS · UDP {1}",
+                _networkPeerNations.Count, RequestedNetworkPort())
+            : Simulation.Loc.Format("CLIENT · {0} · {1}",
+                _campaign.Player.Tag, _networkAddress.Text.Trim());
     }
 
     private void CloseNetworkMultiplayer()

@@ -119,7 +119,7 @@ public partial class DealOrForceGame
             _recruitmentQueue.AddChild(block);
             var state = _campaign.States.Find(s => s.MapIndex == order.StateMapIndex);
             var paused = RecruitmentSystem.DeploymentProvince(_campaign, order.NationId, order.StateMapIndex) <= 0;
-            block.AddChild(Title($"{order.Count} × {UnitTypeCatalog.Get(order.TemplateId).Name} — {state?.Name}\n" +
+            block.AddChild(Title($"{order.Count} × {Tr(UnitTypeCatalog.Get(order.TemplateId).Name)} — {state?.DisplayName}\n" +
                 $"{order.TrainedDays}/{order.DurationDays} days" + (paused ? " · PAUSED — region unavailable" : " · Training"), 14, Ui.Colour("text.body_soft")));
             block.AddChild(new ProgressBar { MaxValue = order.DurationDays, Value = order.TrainedDays, CustomMinimumSize = new Vector2(0,18) });
             var id = order.Id;

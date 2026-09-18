@@ -29,13 +29,13 @@ public partial class DealOrForceGame
     private readonly List<int> _offensiveStroke = new();
     private DrawnFrontLine _offensiveSource;
 
-    private static string DrawName(FrontLineKind kind) => kind switch
+    private static string DrawName(FrontLineKind kind) => Simulation.Loc.Get(kind switch
     {
         FrontLineKind.Defence => "front line",
         FrontLineKind.Offensive => "offensive line",
         FrontLineKind.AreaDefence => "area to guard",
         _ => "fallback line"
-    };
+    });
 
     /// <summary>Start, switch or finish a stroke. The same button twice puts the brush down.</summary>
     private void ToggleDrawing(FrontLineKind kind)
@@ -48,7 +48,7 @@ public partial class DealOrForceGame
 
         if (kind == FrontLineKind.Offensive && OffensivePlanning.Source(_campaign, SelectedPlayerArmies()) is null)
         {
-            SetArmyFeedback("Assign the selected divisions to ONE border front first, then draw the offensive objective in that country's territory.");
+            SetArmyFeedback(Tr("Assign the selected divisions to ONE border front first, then draw the offensive objective in that country's territory."));
             return;
         }
         var wasDrawing = _drawingKind.HasValue;
@@ -150,14 +150,17 @@ public partial class DealOrForceGame
         if (kind == FrontLineKind.Offensive && !SelectedPlayerArmies().Any(a =>
             BattlePlanning.LineFor(_campaign, a) is { Kind: FrontLineKind.Offensive } l && l.ObjectiveSequence.SequenceEqual(provinces)))
         {
-            SetArmyFeedback("Objective rejected: draw one connected land line in the front's target country. Existing orders were kept.");
+            SetArmyFeedback(Tr("Objective rejected: draw one connected land line in the front's target country. Existing orders were kept."));
             return;
         }
-        SetArmyFeedback($"{armies.Count:N0} formation(s) drawn onto a {DrawName(kind)} " +
-                               $"of {provinces.Count:N0} province(s)." +
-                               (kind == FrontLineKind.Offensive ? " Press Execute when the plan is ready." : "") +
+        SetArmyFeedback(Simulation.Loc.Format(
+                                   Simulation.Plural.Key("{0:N0} formation drawn onto a {1} of {2:N0} provinces.",
+                                       armies.Count),
+                                   armies.Count, DrawName(kind), provinces.Count) +
+                               (kind == FrontLineKind.Offensive
+                                   ? " " + Tr("Press Execute when the plan is ready.") : "") +
                                (kind == FrontLineKind.AreaDefence
-                                   ? " They will spread over the places worth holding rather than along an edge."
+                                   ? " " + Tr("They will spread over the places worth holding rather than along an edge.")
                                    : ""));
         ShowSelectedArmies();
     }
@@ -175,7 +178,7 @@ public partial class DealOrForceGame
         });
         _campaign.Commands.ApplyAll(_campaign);
         _globe.RefreshBattlePlans();
-        SetArmyFeedback("Back on the war's own front line.");
+        SetArmyFeedback(Tr("Back on the war's own front line."));
         ShowSelectedArmies();
     }
 
@@ -211,11 +214,15 @@ public partial class DealOrForceGame
         _drawFeedback.Text = _drawingKind is null
             ? OffensiveStatus()
             : _drawingKind == FrontLineKind.Defence
-                ? $"Border front: {_drawnProvinces.Count} posts · release RMB to assign. MMB pans."
+                ? Simulation.Loc.Format(
+                    "Border front: {0:N0} posts · release RMB to assign. MMB pans.", _drawnProvinces.Count)
             : _drawingKind == FrontLineKind.Offensive
-                ? $"Objective: {_offensiveStroke.Count} provinces · RMB drag in target country, release to save · Alt+RMB redraw · Esc cancel."
-                : $"Drawing a {DrawName(_drawingKind.Value)} — {_drawnProvinces.Count:N0} province(s). " +
-              "Click the same button again to commit.";
+                ? Simulation.Loc.Format(
+                    "Objective: {0:N0} provinces · RMB drag in target country, release to save · Alt+RMB redraw · Esc cancel.",
+                    _offensiveStroke.Count)
+                : Simulation.Loc.Format("Drawing a {0} — {1:N0} provinces.",
+                      DrawName(_drawingKind.Value), _drawnProvinces.Count) + " " +
+                  Tr("Click the same button again to commit.");
         _drawFeedback.AddThemeColorOverride("font_color",
             Ui.Colour(_drawingKind is null ? "text.muted" : "text.bright"));
     }
@@ -228,9 +235,12 @@ public partial class DealOrForceGame
             return Tr("Front: LMB whole border / RMB section. Attack: RMB destination / Alt+RMB redraw.");
         var reached = armies.Count(a => line.Objectives.GetValueOrDefault(a.Id, -1) == a.ProvinceId);
         var executing = armies.Count(a => a.PlanActive);
-        var phase = reached == armies.Length ? "Objective reached" : executing > 0 ? "Executing" : "Prepared / paused";
-        return $"{phase} · {reached}/{armies.Length} divisions at objective · {line.Provinces.Count} goal provinces. " +
-            "Execute advances; Prepare stops. Attack + Alt/RMB redraws the objective.";
+        var phase = Tr(reached == armies.Length ? "Objective reached"
+            : executing > 0 ? "Executing" : "Prepared / paused");
+        return Simulation.Loc.Format(
+                   "{0} · {1:N0}/{2:N0} divisions at objective · {3:N0} goal provinces.",
+                   phase, reached, armies.Length, line.Provinces.Count) + " " +
+               Tr("Execute advances; Prepare stops. Attack + Alt/RMB redraws the objective.");
     }
 
     private void BeginBorderStroke(GlobePick pick, bool whole, bool edit)
@@ -247,7 +257,7 @@ public partial class DealOrForceGame
                 .FirstOrDefault(l => l is { Kind: FrontLineKind.Defence, BorderNationId: >= 0 });
             if (existing is null)
             {
-                SetArmyFeedback("Select divisions assigned to a border front before editing it.");
+                SetArmyFeedback(Tr("Select divisions assigned to a border front before editing it."));
                 return;
             }
             _editingBorderId = existing.Id;
@@ -262,7 +272,7 @@ public partial class DealOrForceGame
             var foreign = BorderFronts.ForeignAt(_campaign, owner, pick.ProvinceId);
             if (foreign < 0)
             {
-                SetArmyFeedback("Start on a shared land border with another country.");
+                SetArmyFeedback(Tr("Start on a shared land border with another country."));
                 _globe.ClearPlanPreview();
                 return;
             }

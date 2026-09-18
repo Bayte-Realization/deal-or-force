@@ -1,0 +1,18 @@
+{
+  "CENTRAL BANK": "ЦЕНТРАЛЬНЫЙ БАНК",
+  "What borrowing costs, who decides it, and what it is being aimed at. The bank holds the rate against its own target unless the government takes it away - and a government that holds the rate below what the bank wanted pays for the cheap money in prices. Everything here is declared in common/inflation and common/budget.": "Сколько стоят деньги, кто это решает и к чему стремится. Банк держит ставку против собственной цели, пока правительство не заберёт её себе, — а правительство, которое держит ставку ниже, чем хотел банк, платит за дешёвые деньги ценами. Всё здесь объявлено в common/inflation и common/budget.",
+  "Key rate": "Ключевая ставка",
+  "tightening": "ужесточение",
+  "loosening": "смягчение",
+  "neutral": "нейтрально",
+  "Inflation {0} · the bank's target {1} · neutral {2}": "Инфляция {0} · цель банка {1} · нейтральная ставка {2}",
+  "The government sets the rate": "Ставку задаёт правительство",
+  "Take the key rate off the central bank. The slider above comes alive - and so does the bill: money a government has ordered to be cheap is money nobody believes will stay cheap, so holding the rate under what the bank wanted adds to inflation every week.": "Забрать ключевую ставку у центрального банка. Ползунок выше оживёт — вместе со счётом: деньги, которые правительство приказало сделать дешёвыми, — это деньги, в дешевизну которых никто не верит, так что ставка ниже желаемой банком каждую неделю добавляет к инфляции.",
+  "The bank is raising the rate.": "Банк поднимает ставку.",
+  "The bank is cutting the rate.": "Банк снижает ставку.",
+  "The bank is holding. Prices are where it wants them.": "Банк держит ставку. Цены там, где он хочет.",
+  "The bank is holding, and forgiving some of the war's prices while it does.": "Банк держит ставку и прощает часть военного роста цен.",
+  "You hold the rate. The bank wanted {0}, and you are not under it, so nothing is being paid for the privilege.": "Ставку держите вы. Банк хотел {0}, и вы не ниже этого — значит, за привилегию ничего не платится.",
+  "You hold {0} where the bank wanted {1}. Cheap money nobody believes in adds {2} to inflation every week it lasts.": "Вы держите {0} там, где банк хотел {1}. Дешёвые деньги, в которые никто не верит, добавляют {2} к инфляции каждую неделю.",
+  "The bank is not independent": "Банк не независим"
+}

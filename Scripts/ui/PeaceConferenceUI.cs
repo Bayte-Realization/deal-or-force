@@ -117,7 +117,8 @@ public partial class DealOrForceGame
         // a way to demand it without touching the interface. They exclude each other: a
         // country answers to you one way or not at all.
         foreach (var kind in SubjectCatalog.All)
-            AddPeaceTerm(terms, "subject:" + kind.Id, $"Make them a {kind.Name.ToLowerInvariant()}",
+            AddPeaceTerm(terms, "subject:" + kind.Id,
+                Simulation.Loc.Format("Make them a {0}", Tr(kind.Name).ToLowerInvariant()),
                 kind.Description);
 
         var actions = new HBoxContainer();
@@ -314,7 +315,7 @@ public partial class DealOrForceGame
 
         var player = _campaign.Player;
         var loser = _peaceLedgerModel.Loser;
-        _peaceTitle.Text = Simulation.Loc.Format("PEACE WITH {0}", loser?.Name?.ToUpperInvariant() ?? "?");
+        _peaceTitle.Text = Simulation.Loc.Format("PEACE WITH {0}", loser?.DisplayName?.ToUpperInvariant() ?? "?");
 
         var budget = _peaceLedgerModel.Budget;
         var cost = _peaceLedgerModel.Cost(_peaceDemand);
@@ -324,7 +325,7 @@ public partial class DealOrForceGame
 
         var block = PeaceConference.BlockReason(_campaign, _peaceWar, _peaceDemand);
         _peaceVerdict.Text = block.Length == 0
-            ? $"{loser?.Name} will sign this."
+            ? Simulation.Loc.Format("{0} will sign this.", loser?.DisplayName ?? Tr("Unknown"))
             : block;
         _peaceVerdict.AddThemeColorOverride("font_color",
             block.Length == 0 ? Ui.Colour("state.positive") : Ui.Colour("state.warning"));
@@ -382,29 +383,39 @@ public partial class DealOrForceGame
 
         foreach (var entry in groups.Take(40))
         {
-            var name = entry.State?.Name ?? $"region {entry.MapIndex}";
+            var name = entry.State is null
+                ? Simulation.Loc.Format("region {0}", entry.MapIndex)
+                : entry.State.DisplayName;
             var whole = entry.Total > 0 && entry.Claimed >= entry.Total;
             var unheld = entry.Claimed - entry.Held;
             var row = ActionButton(
                 $"{(whole ? "▣" : "▤")} {name}  {entry.Claimed}/{entry.Total}" +
-                (unheld > 0 ? $"  · {entry.Held} held" : "  · all held") +
+                "  · " + (unheld > 0
+                    ? Simulation.Loc.Format("{0} held", entry.Held)
+                    : Tr("all held")) +
                 $"  ·  {entry.Cost:0.0}",
                 () => TogglePeaceRegion(entry.MapIndex), 0, 26);
             row.Alignment = HorizontalAlignment.Left;
             row.ClipText = true;
             row.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             row.TooltipText = Ui.Tip((whole
-                    ? $"All {entry.Total} provinces of {name} are on the table. Click to give the region back."
-                    : $"{entry.Claimed} of {entry.Total} provinces of {name}. Click to demand the whole region.") +
+                    ? Simulation.Loc.Format(
+                        "All {0} provinces of {1} are on the table. Click to give the region back.",
+                        entry.Total, name)
+                    : Simulation.Loc.Format(
+                        "{0} of {1} provinces of {2}. Click to demand the whole region.",
+                        entry.Claimed, entry.Total, name)) + "\n" +
                 (unheld > 0
-                    ? $"\nYou occupy {entry.Held}; the other {unheld} are still theirs on the ground, " +
-                      "which is most of what this region is costing you."
-                    : "\nEvery province claimed here is already under your occupation, which is why it is cheap."));
+                    ? Simulation.Loc.Format(
+                        "You occupy {0}; the other {1} are still theirs on the ground, which is most of what this region is costing you.",
+                        entry.Held, unheld)
+                    : Tr("Every province claimed here is already under your occupation, which is why it is cheap.")));
             _peaceLedgerRows.AddChild(row);
         }
 
         if (groups.Count > 40)
-            _peaceLedgerRows.AddChild(Title($"…and {groups.Count - 40} more regions",
+            _peaceLedgerRows.AddChild(Title(
+                Simulation.Loc.Format("…and {0:N0} more regions", groups.Count - 40),
                 11, Ui.Colour("text.faint")));
     }
 }

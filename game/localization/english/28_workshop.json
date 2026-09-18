@@ -1,0 +1,7 @@
+// Deal or Force - the workshop's way out.
+//
+// Opened to choose a country there is no campaign behind the window, so closing it
+// leads to the front door rather than to a world that has not been created.
+{
+  "Back to the main menu": "Back to the main menu"
+}

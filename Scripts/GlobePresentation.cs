@@ -1411,6 +1411,21 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale, -1.20f, 1.20f);
     }
 
+    /// <summary>
+    /// Outline one country on the map, or none.
+    ///
+    /// Takes a map index rather than a nation so that clearing it is a number rather than a
+    /// null, and so the globe does not have to know what a Nation is to draw one.
+    /// </summary>
+    public void HighlightNation(int mapIndex)
+    {
+        if (_highlightedNation == mapIndex) return;
+        _highlightedNation = mapIndex;
+        _globeMaterial?.SetShaderParameter("highlighted_nation", (float)mapIndex);
+    }
+
+    private int _highlightedNation = -1;
+
     public override string _GetTooltip(Vector2 atPosition)
     {
         if (TryPickBattle(atPosition, out var battle))
@@ -1418,32 +1433,50 @@ public sealed partial class GlobePresentation : SubViewportContainer
             var attacker = _campaign?.NationById(battle.AttackerId);
             var defender = _campaign?.NationById(battle.DefenderId);
             var latest = battle.Rounds.LastOrDefault();
+            var unknown = Simulation.Loc.Get("Unknown");
             if (FogOfWarActive && _campaign?.Player is { IsHuman: true } player &&
                 battle.AttackerId != player.Id && battle.DefenderId != player.Id)
-                return $"Observed battle · province #{battle.ProvinceId:N0}\n{attacker?.Name} vs {defender?.Name}\nDetailed foreign combat reports unavailable.";
-            return $"BATTLE · province #{battle.ProvinceId:N0}\n" +
-                   $"{attacker?.Name ?? "?"} vs {defender?.Name ?? "?"}\n" +
-                   $"Losses {battle.AttackerLosses:N0} / {battle.DefenderLosses:N0}" +
-                   (latest is null ? "" : $"\nPower {latest.AttackerPower:0.0} / {latest.DefenderPower:0.0} · plan {latest.AttackerPlanning:P0}");
+                return Simulation.Loc.Format(
+                    "Observed battle · province #{0:N0}\n{1} vs {2}\nDetailed foreign combat reports unavailable.",
+                    battle.ProvinceId, attacker?.DisplayName ?? unknown, defender?.DisplayName ?? unknown);
+            return Simulation.Loc.Format("BATTLE · province #{0:N0}\n{1} vs {2}\nLosses {3:N0} / {4:N0}",
+                       battle.ProvinceId, attacker?.DisplayName ?? unknown, defender?.DisplayName ?? unknown,
+                       battle.AttackerLosses, battle.DefenderLosses) +
+                   (latest is null ? "" : "\n" + Simulation.Loc.Format(
+                       "Power {0:0.0} / {1:0.0} · plan {2:P0}",
+                       latest.AttackerPower, latest.DefenderPower, latest.AttackerPlanning));
         }
         if (TryPickArmyStack(atPosition, out var stack, selectableOnly: false))
         {
             if (stack.Count == 0) return "";
             var lead = stack[0];
             var owner = _campaign?.NationById(lead.NationId);
+            var name = owner?.DisplayName ?? Simulation.Loc.Get("Unknown");
             var personnel = stack.Sum(DivisionPersonnel);
             if (!Simulation.CampaignIntel.PlayerCanInspect(_campaign, lead.NationId))
-                return $"{owner?.Name ?? "Unknown"} · {stack.Count} observed divisions\n" +
-                    $"Observed personnel: {personnel:N0}\nForeign formation — orders and route are not available.";
-            return $"{owner?.Name ?? "Unknown"} · {stack.Count} division{(stack.Count == 1 ? "" : "s")}\n" +
-                   $"Personnel {personnel:N0} · organisation {stack.Average(army => army.Organisation):P0}\n" +
-                   $"Equipment {stack.Average(army => army.Equipment):P0} · experience {stack.Average(army => army.Experience):P0} · " +
-                   $"supply {stack.Average(army => army.SupplyLevel):P0}\n" +
-                   (stack.Count == 1 ? $"{lead.OrderKind} · {lead.Stance} posture · planning {lead.Planning:P0}" :
-                       "Click to select every independent division in this province.");
+                return Simulation.Loc.Format("{0} · {1:N0} observed divisions", name, stack.Count) + "\n" +
+                       Simulation.Loc.Format("Observed personnel: {0:N0}", personnel) + "\n" +
+                       Simulation.Loc.Get("Foreign formation — orders and route are not available.");
+            // Russian counts in three - 1 дивизия, 2 дивизии, 5 дивизий - so the count and
+            // its noun have to travel together through the table rather than have an "s"
+            // stitched onto the end of one language's plural.
+            return Simulation.Loc.Format(Simulation.Plural.Key("{0} · {1:N0} division", stack.Count),
+                       name, stack.Count) + "\n" +
+                   Simulation.Loc.Format("Personnel {0:N0} · organisation {1:P0}",
+                       personnel, stack.Average(army => army.Organisation)) + "\n" +
+                   Simulation.Loc.Format("Equipment {0:P0} · experience {1:P0} · supply {2:P0}",
+                       stack.Average(army => army.Equipment), stack.Average(army => army.Experience),
+                       stack.Average(army => army.SupplyLevel)) + "\n" +
+                   (stack.Count == 1
+                       ? Simulation.Loc.Format("{0} · {1} posture · planning {2:P0}",
+                           Simulation.ArmyVocabulary.OrderName(lead.OrderKind),
+                           Simulation.ArmyVocabulary.StanceName(lead.Stance), lead.Planning)
+                       : Simulation.Loc.Get("Click to select every independent division in this province."));
         }
         if (!TryPick(atPosition, out var pick)) return "";
-        var state = pick.State is null ? "Unmapped administrative area" : $"{pick.State.Name} · {pick.State.Kind}";
+        var state = pick.State is null
+            ? Simulation.Loc.Get("Unmapped administrative area")
+            : pick.State.DisplayName + " · " + Simulation.Loc.Get(pick.State.Kind);
         var controller = pick.ProvinceId > 0 && _campaign?.ProvinceController is { } controllers
             ? _nationByMapIndex.GetValueOrDefault(controllers[pick.ProvinceId])
             : pick.Nation;
@@ -1451,11 +1484,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             ? occupations[pick.ProvinceId]
             : 0f;
         var hydrology = pick.ProvinceId > 0 && _provinceTopology is not null
-            ? (_provinceTopology.HasRiver(pick.ProvinceId) ? "\nRiver terrain · crossings affect march and attack" : "") +
-              (_provinceTopology.HasLakeAccess(pick.ProvinceId) ? "\nLake shore · local supply access" : "")
+            ? (_provinceTopology.HasRiver(pick.ProvinceId)
+                ? "\n" + Simulation.Loc.Get("River terrain · crossings affect march and attack") : "") +
+              (_provinceTopology.HasLakeAccess(pick.ProvinceId)
+                ? "\n" + Simulation.Loc.Get("Lake shore · local supply access") : "")
             : "";
-        return $"{pick.Nation.DisplayName} ({pick.Nation.Tag})\n{state}\nProvince #{pick.ProvinceId:N0}" +
-               (controller is null || controller == pick.Nation ? "" : $"\nControlled by {controller.Name} · occupation {occupation:P0}") +
+        return pick.Nation.DisplayName + " (" + pick.Nation.Tag + ")\n" + state + "\n" +
+               Simulation.Loc.Format("Province #{0:N0}", pick.ProvinceId) +
+               (controller is null || controller == pick.Nation ? "" : "\n" + Simulation.Loc.Format(
+                   "Controlled by {0} · occupation {1:P0}", controller.DisplayName, occupation)) +
                hydrology + (pick.ProvinceId > 0 && _provinceTopology is not null
                    ? TerrainDescription(_provinceTopology.TerrainAt(pick.ProvinceId)) : "");
     }
@@ -1578,6 +1615,8 @@ uniform float relief_color_opacity = 0.0;
 // lit result is the source scenario's #0f4a6b rather than a washed-out cyan.
 uniform vec3 ocean_color = vec3(0.012, 0.065, 0.105);
 uniform float selection_active = 0.0;
+// The country the player last right-clicked, by map index, or -1 for none.
+uniform float highlighted_nation = -1.0;
 uniform float selected_region_id = -1.0;
 uniform float selected_province_id = -1.0;
 uniform float detail_mix = 0.0;
@@ -2038,6 +2077,16 @@ void fragment() {
     // The country border, drawn rather than baked. It replaces the one-texel darkening the
     // political raster used to carry, which was the most visible pixel grid on the map.
     base = mix(base, vec3(0.05, 0.07, 0.10), country_edge * detail_mix * political.a * 0.78);
+    // The country the player has asked about, drawn as one. Off the same coverage field as
+    // the border above - the same stroke at a different weight and colour, rather than a
+    // second idea of where a country ends - with a faint wash inside it so the outline reads
+    // as a country rather than as a region that happens to be lit.
+    float highlighted = step(0.0, highlighted_nation) *
+                        (abs(near_nation - highlighted_nation) < 0.5 ? 1.0 : 0.0) * political.a;
+    float highlight_edge = 1.0 - smoothstep(border_pixels * 0.5, border_pixels * 3.2, nation_edge_pixels);
+    highlight_edge *= step(0.5, abs(near_nation - other_nation)) * highlighted;
+    base = mix(base, vec3(0.91, 0.79, 0.42), highlighted * 0.085);
+    base = mix(base, vec3(1.00, 0.87, 0.48), highlight_edge * 0.88);
     // A line the player drew. Blue holds it, amber takes it, grey falls back to it.
     float plan = round(front.b * 4.0);
     vec3 plan_color = plan < 1.5 ? vec3(0.24, 0.56, 0.96)

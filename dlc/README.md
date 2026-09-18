@@ -64,11 +64,28 @@ testing a pack before there is anything to buy it with, and wrong in a shipped b
 
 ## Iron and Grain
 
-The pack in this folder is a worked example rather than a placeholder: two decisions, the
-triggers and AI scores they need, and a reason countries remember each other by. It is
-deliberately **not** owned in the shipped `entitlements.json`, so the base game is exactly
-what it was — which also means the gate is doing something you can see. Add its id to
-`owned`, or set `unlock_everything`, and two new decisions appear in the decisions panel.
+The pack in this folder is a worked example rather than a placeholder: three decisions, the
+triggers and AI scores they need, a reason countries remember each other by, and its own
+localisation in two languages. It is deliberately **not** owned in the shipped
+`entitlements.json`, so the base game is exactly what it was — which also means the gate is
+doing something you can see. Add its id to `owned`, or set `unlock_everything`, and the three
+decisions appear in the decisions panel.
 
 `Tools/SimBench` checks both halves of that: locked, the decisions are absent; unlocked,
 they are there and the AI will take them.
+
+The third decision, `break_the_bank`, is also this pack's job as a test. It is the only
+content in the repository that reads and writes the monetary model from data — `inflation`,
+`key_rate` and `government_sets_key_rate` are ordinary scripted fields, so a condition about
+money is written exactly like one about bread:
+
+```json
+"prices_climbing": { "min_inflation": 0.06, "min_key_rate": 0.03, "max_government_sets_key_rate": 0.5 }
+```
+
+```json
+"effects": { "government_sets_key_rate_set": 1.0, "key_rate_set": 0.012 }
+```
+
+If those three ever stop being scripted fields, this pack stops loading and says which one
+went.

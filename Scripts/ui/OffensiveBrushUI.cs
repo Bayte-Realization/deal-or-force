@@ -15,7 +15,7 @@ public partial class DealOrForceGame
             if (_offensiveSource.Kind != FrontLineKind.Offensive)
             {
                 _offensiveSource = null;
-                SetArmyFeedback("Alt+RMB edits an existing offensive objective. Use RMB to create one.");
+                SetArmyFeedback(Tr("Alt+RMB edits an existing offensive objective. Use RMB to create one."));
                 return;
             }
             _editingBorderId = _offensiveSource.Id;

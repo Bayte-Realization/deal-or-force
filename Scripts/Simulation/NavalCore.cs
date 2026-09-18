@@ -148,11 +148,16 @@ public static class NavalOperations
                 var port = fleet.HomeProvinceId;
                 if (fleet.Mission == FleetMission.Anchored && port > 0) NavalInvasion.Disembark(campaign, fleet, port);
             }
+            // Everything below is a rate per day and this runs per step, so each takes the
+            // step's share. Without it a fleet at an hourly step resupplied, repaired and
+            // recovered its order twenty-four times faster than the number beside it says.
+            var share = campaign.TickScale;
             if (inPort)
             {
-                fleet.Supply = M.Clamp01(fleet.Supply + defines.FleetSupplyInPortPerDay);
-                fleet.Organisation = M.Clamp01(fleet.Organisation + defines.FleetOrganisationInPortPerDay);
-                fleet.Strength = M.Clamp01(fleet.Strength + defines.FleetRepairInPortPerDay * fleet.Readiness);
+                fleet.Supply = M.Clamp01(fleet.Supply + defines.FleetSupplyInPortPerDay * share);
+                fleet.Organisation = M.Clamp01(fleet.Organisation + defines.FleetOrganisationInPortPerDay * share);
+                fleet.Strength = M.Clamp01(fleet.Strength +
+                    defines.FleetRepairInPortPerDay * share * fleet.Readiness);
             }
             else
             {
@@ -163,9 +168,9 @@ public static class NavalOperations
                 var fromHome = M.Clamp01(Distance(fleet.Latitude, fleet.Longitude,
                     fleet.HomeLatitude, fleet.HomeLongitude) / reach);
                 fleet.Supply = M.Clamp01(fleet.Supply -
-                    defines.FleetSupplyAtSeaPerDay * (0.45f + fromHome * 0.55f));
+                    defines.FleetSupplyAtSeaPerDay * share * (0.45f + fromHome * 0.55f));
                 fleet.Organisation = M.Clamp01(fleet.Organisation +
-                    defines.FleetOrganisationAtSeaPerDay * fleet.Supply);
+                    defines.FleetOrganisationAtSeaPerDay * share * fleet.Supply);
             }
 
             Sail(campaign, fleet);
@@ -191,7 +196,10 @@ public static class NavalOperations
         if (!fleet.HasOrder) return;
         var defines = campaign.Defines;
         var remaining = Distance(fleet.Latitude, fleet.Longitude, fleet.OrderLatitude, fleet.OrderLongitude);
-        var step = defines.FleetDegreesPerDay * M.Clamp(0.35f + fleet.Supply * 0.65f, 0.35f, 1f) *
+        // Degrees a DAY, and this is a step - so a crossing that is written as sixty days
+        // takes sixty days whatever the clock is set to.
+        var step = defines.FleetDegreesPerDay * campaign.TickScale *
+                   M.Clamp(0.35f + fleet.Supply * 0.65f, 0.35f, 1f) *
                    M.Clamp(0.50f + fleet.Readiness * 0.50f, 0.5f, 1f);
         if (remaining <= step)
         {

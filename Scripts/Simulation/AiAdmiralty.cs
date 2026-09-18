@@ -27,6 +27,9 @@ public static class AiAdmiralty
     public static void Tick(Campaign campaign)
     {
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        // Each fleet thinks on its own day (below), so this pass has nothing to do on a step
+        // that is not the start of one.
+        if (!campaign.StepOpensNewDay) return;
 
         foreach (var fleet in campaign.Fleets)
         {

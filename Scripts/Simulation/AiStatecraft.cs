@@ -196,7 +196,17 @@ public static partial class AiStatecraft
     {
         foreach (var nation in campaign.Nations)
         {
-            if (nation.IsHuman || nation.Population <= 0) continue;
+            if (nation.Population <= 0) continue;
+
+            // A player's country is governed by its player - except for the portfolios that
+            // player has handed to its own civil service, which are run here on the same
+            // monthly beat as everybody else's. See `Delegation`.
+            if (nation.IsHuman)
+            {
+                if ((campaign.ElapsedDays + nation.Id) % 30 == 0)
+                    using (SimProfiler.Measure("  ai:delegated")) Delegation.Tick(campaign, nation);
+                continue;
+            }
 
             // Staggered: a nation thinks about its neighbours once a week and about its
             // budget once a month, on its own day, so the cost is spread rather than spiked.
@@ -445,6 +455,22 @@ public static partial class AiStatecraft
     /// </summary>
     private static void Economy(Campaign campaign, Nation nation)
     {
+        GovernTheBudget(campaign, nation);
+        using (SimProfiler.Measure("    eco:cabinet")) Cabinet(campaign, nation);
+    }
+
+    /// <summary>
+    /// Tax, the army's share, what is spent on people, and what is built with the rest.
+    ///
+    /// Split out of <see cref="Economy"/> so a player can hand this portfolio to their own
+    /// civil service and get exactly what every other country in the world gets - see
+    /// <see cref="Delegation"/>. Deliberately NOT including the cabinet: a decision is a
+    /// thing a country does once and cannot undo, and delegating the budget is not consent
+    /// to have your government reformed while you were looking at the map.
+    /// </summary>
+    public static void GovernTheBudget(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return;
         var defines = campaign.Defines;
         // Any() with a closure over the nation, on a list of a hundred and forty wars,
         // for every country that thinks about its budget.
@@ -481,7 +507,6 @@ public static partial class AiStatecraft
         }
 
         using (SimProfiler.Measure("    eco:build")) Build(campaign, nation, atWar, reserves);
-        using (SimProfiler.Measure("    eco:cabinet")) Cabinet(campaign, nation);
     }
 
     /// <summary>
@@ -775,7 +800,18 @@ public static partial class AiStatecraft
         var candidates = PeaceConference.Claimable(campaign, war, nation.Id)
             .Where(province => controllers[province] == (ushort)nation.MapIndex)
             .ToList();
-        if (candidates.Count == 0) return;
+        if (candidates.Count == 0)
+        {
+            // There is no enemy ground to take - the winner may be standing on ten provinces
+            // and every one of them its own, retaken. That is a settlement with no land in
+            // it, not the absence of a settlement: an indemnity, a truce and the rest are
+            // still on the table and still paid for out of the same war score.
+            //
+            // Returning here without writing them was how a country that won a defensive war
+            // signed a piece of paper with nothing on it.
+            WriteTerms(campaign, nation, war, ledger, demand, budget);
+            return;
+        }
 
         // What a province of each region is worth, and how much of each region is on offer.
         var provincesPerState = new Dictionary<int, int>();
@@ -901,6 +937,33 @@ public static partial class AiStatecraft
             foreach (var province in missing) demand.Provinces.Add(province);
             if (ledger.Cost(demand) <= budget) continue;
             foreach (var province in missing) demand.Provinces.Remove(province);
+        }
+
+        // And if all of that came to nothing, the cheapest whole region the army has actually
+        // set foot in - provided the war score covers it.
+        //
+        // Regions are indivisible now, and some of them are worth more than a war. So it is
+        // possible to occupy ten provinces, hold war score to spend, and have every one of
+        // those provinces rounded away because the regions they belong to are each too dear
+        // on their own. Rounding them away is the right answer to "can this demand be
+        // afforded"; an empty treaty is the wrong answer to "what does the winner sign",
+        // because the winner won and can pay for something.
+        //
+        // Cheapest first, because what is being bought here is a settlement rather than a
+        // particular piece of ground - the particular pieces were chosen above, and this only
+        // runs when none of them survived.
+        if (demand.Provinces.Count == 0)
+        {
+            var wholeRegions = occupiedShare.Keys
+                .Select(region => PeaceConference.ProvincesOfState(topology, region))
+                .Where(whole => whole.Count > 0)
+                .OrderBy(whole => whole.Sum(province => ledger.Price(province).Cost));
+            foreach (var whole in wholeRegions)
+            {
+                foreach (var province in whole) demand.Provinces.Add(province);
+                if (ledger.Cost(demand) <= budget) break;
+                demand.Provinces.Clear();
+            }
         }
 
         WriteTerms(campaign, nation, war, ledger, demand, budget);

@@ -130,7 +130,7 @@ public partial class DealOrForceGame
     /// it. That is what the economy panel was doing - a sentence of hint text set
     /// vertically down the middle of the page, with the charts squeezed out below it.
     /// </summary>
-    private static Label RowLabel(string text, int size, Color colour, float minimumWidth = 0f,
+    internal static Label RowLabel(string text, int size, Color colour, float minimumWidth = 0f,
         bool upper = false)
     {
         var label = Title(text, size, colour, upper);
@@ -295,12 +295,14 @@ public partial class DealOrForceGame
             Series("Expenses", Red, samples, sample => sample.WeeklyExpenses),
             Series("Balance", Blue, samples, sample => sample.WeeklyBalance)
         }, StrategicChartFormat.MoneyBillions);
-        _ledgerBarsA.SetData("Fiscal controls", $"Tax {nation.TaxRate:P0} · military {nation.MilitarySpending:P0}", new[]
+        _ledgerBarsA.SetData("Fiscal controls",
+            Simulation.Loc.Format("Tax {0:P0} · military {1:P0}", nation.TaxRate, nation.MilitarySpending), new[]
         {
             new StrategicBarEntry("Tax rate", nation.TaxRate, Gold, "Raises public revenue; excessive taxation weighs on private growth."),
             new StrategicBarEntry("Military share", nation.MilitarySpending, Red, "Improves reinforcement and fleet readiness but increases expenditure."),
             new StrategicBarEntry("Stability", nation.Stability, Green),
-            new StrategicBarEntry("Productivity", nation.Productivity / 1.5f, Blue, $"Raw productivity {nation.Productivity:0.00}")
+            new StrategicBarEntry("Productivity", nation.Productivity / 1.5f, Blue,
+                Simulation.Loc.Format("Raw productivity {0:0.00}", nation.Productivity))
         }, StrategicChartFormat.Percent);
         var states = _campaign.StatesOf(nation);
         _ledgerBarsB.SetData("National building base", "Completed buildings by type", Enum.GetValues<BuildingKind>()
@@ -324,13 +326,15 @@ public partial class DealOrForceGame
         {
             var quote = nation.Market[commodity];
             return new StrategicBarEntry(CommodityCatalog.Get(commodity).Name, quote.Satisfaction,
-                quote.IsShortage ? Red : Green, $"Production {quote.Production:0.0} · demand {quote.Demand:0.0}");
+                quote.IsShortage ? Red : Green,
+                Simulation.Loc.Format("Production {0:0.0} · demand {1:0.0}", quote.Production, quote.Demand));
         }).ToArray(), StrategicChartFormat.Percent);
         _ledgerBarsB.SetData("Net commodity flow", "Positive is surplus; negative requires imports", CommodityCatalog.All.Select(commodity =>
         {
             var quote = nation.Market[commodity];
             return new StrategicBarEntry(CommodityCatalog.Get(commodity).Name, quote.Net,
-                quote.Net >= 0f ? Green : Red, $"Imports {quote.Imports:0.0} · exports {quote.Exports:0.0}");
+                quote.Net >= 0f ? Green : Red,
+                Simulation.Loc.Format("Imports {0:0.0} · exports {1:0.0}", quote.Imports, quote.Exports));
         }).ToArray(), StrategicChartFormat.Number);
     }
 
@@ -354,7 +358,8 @@ public partial class DealOrForceGame
         _ledgerBarsB.SetData("Largest states", "Population centres determine construction and social weight", states
             .OrderByDescending(state => state.Population).Take(7)
             .Select(state => new StrategicBarEntry(state.DisplayName, state.Population / 1_000_000f, Blue,
-                $"Living standard {state.StandardOfLiving:P0} · literacy {state.Literacy:P0}")).ToArray(),
+                Simulation.Loc.Format("Living standard {0:P0} · literacy {1:P0}",
+                    state.StandardOfLiving, state.Literacy))).ToArray(),
             StrategicChartFormat.Millions);
     }
 
@@ -367,14 +372,16 @@ public partial class DealOrForceGame
         var armies = _campaign.Armies.Where(army => army.NationId == nation.Id).OrderByDescending(army => army.Power).Take(8).ToArray();
         _ledgerBarsA.SetData("Field formations", "Current combat power, not raw division count", armies.Select(army =>
             new StrategicBarEntry(army.Name, army.Power, army.CutOff ? Red : Green,
-                $"{army.Divisions:0.0} divisions · organisation {army.Organisation:P0} · supply {army.SupplyLevel:P0}")).ToArray(),
+                Simulation.Loc.Format("{0:0.0} divisions · organisation {1:P0} · supply {2:P0}",
+                    army.Divisions, army.Organisation, army.SupplyLevel))).ToArray(),
             StrategicChartFormat.Number);
         var wars = _campaign.Wars.Where(war => !war.Ended && war.Involves(nation.Id)).ToArray();
         _ledgerBarsB.SetData("Active wars", "Signed score is shown from this country's perspective", wars.Select(war =>
         {
             var score = war.AttackerId == nation.Id ? war.WarScore : -war.WarScore;
             return new StrategicBarEntry(war.Name, score, score >= 0f ? Green : Red,
-                $"Support {(war.AttackerId == nation.Id ? war.AttackerWarSupport : war.DefenderWarSupport):P0}");
+                Simulation.Loc.Format("Support {0:P0}",
+                    war.AttackerId == nation.Id ? war.AttackerWarSupport : war.DefenderWarSupport));
         }).ToArray(), StrategicChartFormat.Number);
     }
 
@@ -443,7 +450,7 @@ public partial class DealOrForceGame
         _ => Gold
     };
 
-    private static void ApplyLedgerButtonState(Button button, bool selected) => StyleButton(button, selected);
+    internal static void ApplyLedgerButtonState(Button button, bool selected) => StyleButton(button, selected);
 
     /// <summary>
     /// Who governs and what they are for, under the bars that show what it has amounted to.

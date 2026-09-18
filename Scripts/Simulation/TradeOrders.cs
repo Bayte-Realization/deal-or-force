@@ -34,6 +34,39 @@ public sealed class TradeSettingDefinition
 
     /// <summary>How to read the number on screen: a share, a multiplier or a plain figure.</summary>
     public string Shape { get; init; } = "share";
+
+    /// <summary>
+    /// What this setting is DOING, at whatever it is currently set to, in a sentence.
+    ///
+    /// A number and its name are not an instruction. "Price floor 0.4x" is a fact about a
+    /// control; "we will not sell this below two fifths of what it is worth" is the decision
+    /// the player actually made, and it is the one they can act on. Declared here rather
+    /// than written into the screen so that a mod adding a control can say what its control
+    /// means - and so a translator sees four short sentences instead of inferring them.
+    /// </summary>
+    public TradeSettingReads Reads { get; init; } = new();
+}
+
+/// <summary>
+/// The four things a trade setting can be, and the sentence for each.
+///
+/// Every one is a localisation key like any other declared name, and every one may be left
+/// out - a setting with nothing to say falls back to its own description, which is what the
+/// screen showed before any of this existed.
+/// </summary>
+public sealed class TradeSettingReads
+{
+    /// <summary>At the declared default: this instruction is not doing anything.</summary>
+    public string Resting { get; init; } = "";
+
+    /// <summary>At the bottom of its range, where that means "none" rather than "a little".</summary>
+    public string Off { get; init; } = "";
+
+    /// <summary>For a flag, when it is on.</summary>
+    public string On { get; init; } = "";
+
+    /// <summary>Anywhere else. May carry {0}, which is the value as the screen prints it.</summary>
+    public string Set { get; init; } = "";
 }
 
 /// <summary>
@@ -153,9 +186,60 @@ public static class TradeDesk
                 Minimum = Number(entry.Value, "minimum") ?? known?.Minimum ?? 0f,
                 Maximum = Number(entry.Value, "maximum") ?? known?.Maximum ?? 1f,
                 Step = Number(entry.Value, "step") ?? known?.Step ?? 0.05f,
+                Reads = ReadsOf(entry.Value, known?.Reads)
             };
         }
     }
+
+    /// <summary>The four sentences, or whatever of them a file troubled to give.</summary>
+    private static TradeSettingReads ReadsOf(JsonElement element, TradeSettingReads known)
+    {
+        if (!element.TryGetProperty("reads", out var reads) || reads.ValueKind != JsonValueKind.Object)
+            return known ?? new TradeSettingReads();
+        return new TradeSettingReads
+        {
+            Resting = Text(reads, "resting") ?? known?.Resting ?? "",
+            Off = Text(reads, "off") ?? known?.Off ?? "",
+            On = Text(reads, "on") ?? known?.On ?? "",
+            Set = Text(reads, "set") ?? known?.Set ?? ""
+        };
+    }
+
+    /// <summary>
+    /// What this setting currently says, in the player's language.
+    ///
+    /// At rest first, because "this is not doing anything" is the most useful thing a screen
+    /// of seven controls can tell you about six of them. Then the ends of the range, then
+    /// anything else - and if the file declared none of it, the setting's own description,
+    /// which is at least true.
+    /// </summary>
+    public static string Reading(TradeSettingDefinition definition, float value, string formatted)
+    {
+        if (definition is null) return "";
+        var reads = definition.Reads;
+        var flag = string.Equals(definition.Shape, "flag", StringComparison.OrdinalIgnoreCase);
+
+        if (flag)
+        {
+            var on = value >= (definition.Minimum + definition.Maximum) * 0.5f;
+            var said = on ? reads.On : reads.Off.Length > 0 ? reads.Off : reads.Resting;
+            return said.Length > 0 ? Loc.Get(said) : Loc.Get(definition.Description);
+        }
+
+        if (MathF.Abs(value - definition.Default) < 0.0001f && reads.Resting.Length > 0)
+            return Loc.Get(reads.Resting);
+        if (MathF.Abs(value - definition.Minimum) < 0.0001f && reads.Off.Length > 0)
+            return Loc.Get(reads.Off);
+        if (MathF.Abs(value - definition.Maximum) < 0.0001f && reads.On.Length > 0)
+            return Loc.Get(reads.On);
+        if (reads.Set.Length > 0) return Loc.Format(reads.Set, formatted);
+        if (reads.Resting.Length > 0) return Loc.Get(reads.Resting);
+        return Loc.Get(definition.Description);
+    }
+
+    /// <summary>Whether this country has actually told its traders anything by this control.</summary>
+    public static bool InForce(TradeSettingDefinition definition, float value) =>
+        definition is not null && MathF.Abs(value - definition.Default) > 0.0001f;
 
     private static string Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
@@ -178,6 +262,58 @@ public static class TradeDesk
 
     public static string PartnerKey(string tag, Commodity commodity, string setting) =>
         "partner/" + tag + "/" + CommodityCatalog.IdOf(commodity) + "/" + setting;
+
+    /// <summary>
+    /// Read a stored key back: which setting it is about.
+    ///
+    /// The keys are written to be durable across a changed mod list, which makes them
+    /// machine-shaped - `good/Food/import_priority`. Anything that wants to LIST what a
+    /// country has decided has to be able to go the other way, and until there was a screen
+    /// that listed them, nothing did.
+    /// </summary>
+    public static string SettingOf(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return "";
+        var at = key.LastIndexOf('/');
+        return at < 0 ? "" : key[(at + 1)..];
+    }
+
+    /// <summary>
+    /// The same key as a sentence: what it is about, in the player's language.
+    ///
+    /// "Food" for a good, "Iran" for a country, "Iran, food" for an instruction about one
+    /// good with one country - which is the whole of what the key can say.
+    /// </summary>
+    public static string Describe(Nation nation, string key)
+    {
+        var definition = Of(SettingOf(key));
+        var name = definition is null ? SettingOf(key) : Loc.Get(definition.Name);
+        var parts = (key ?? "").Split('/');
+
+        if (parts.Length >= 3 && parts[0] == "good")
+            return Loc.Format("{0} · {1}", GoodName(parts[1]), name);
+
+        if (parts.Length == 4 && parts[0] == "partner")
+            return Loc.Format("{0} · {1} · {2}", CountryName(nation, parts[1]),
+                GoodName(parts[2]), name);
+
+        if (parts.Length == 3 && parts[0] == "partner")
+            return Loc.Format("{0} · {1}", CountryName(nation, parts[1]), name);
+
+        return key ?? "";
+    }
+
+    private static string GoodName(string id) =>
+        CommodityCatalog.TryParse(id, out var commodity)
+            ? Loc.Get(CommodityCatalog.Get(commodity)?.Name ?? id)
+            : id;
+
+    /// <summary>
+    /// The other country's own name, translated, with the tag as the fallback for a country
+    /// a mod removed after the instruction about it was written down.
+    /// </summary>
+    private static string CountryName(Nation nation, string tag) =>
+        CountryNames.Of(tag) is { Length: > 0 } name ? name : tag;
 
     // ------------------------------------------------------------------ reading ----
 

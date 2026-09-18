@@ -33,6 +33,16 @@ public sealed class SettingDefinition
     /// <summary>Choices: the values, and the words shown for them.</summary>
     public readonly List<string> Values = new();
     public readonly List<string> Labels = new();
+
+    /// <summary>
+    /// Whether the labels are already in the language they name, and must NOT be looked up.
+    ///
+    /// True for exactly one setting in the base game: the language picker, whose labels are
+    /// each language's own name for itself. Putting those through the table offered
+    /// "Англичане" - Russian for the English people - because English is also a culture on
+    /// the map with sixty million people in it, and the table is flat.
+    /// </summary>
+    public bool LabelsAreLiteral;
     public string DefaultValue = "";
 
     /// <summary>Sliders.</summary>
@@ -103,6 +113,11 @@ public static class SettingsCatalog
             using (document)
                 Merge(document.RootElement, errors);
         Sort();
+
+        // Naming options are declared here and read there, so a reloaded catalogue - a mod
+        // enabled, a file edited with the game running - must not leave the map spelling a
+        // country the way the old file said to.
+        CountryNames.Refresh();
     }
 
     public static void Merge(string json, List<string> errors = null)

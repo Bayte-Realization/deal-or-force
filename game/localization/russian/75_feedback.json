@@ -1,0 +1,14 @@
+{
+  "The line was abandoned.": "Линия оставлена.",
+  "RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking the ground · Shift+click adds a division, Ctrl+click removes one.  H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · Ctrl+G guard an area · Ctrl+F plan cohesion.": "ПКМ — марш или атака · Shift+ПКМ — добавить путевую точку · Ctrl+ПКМ — поддержать атаку, не занимая землю · Shift+клик добавляет дивизию, Ctrl+клик убирает.  H — стоп · Ctrl+H — снять с плана · Shift+H — вернуть в план · Ctrl+B — перебросить по железной дороге · Ctrl+K — объединить · Ctrl+G — прикрыть область · Ctrl+F — слаженность плана.",
+  "That formation is foreign. Select one of your own divisions before issuing an order.": "Это чужое соединение. Выберите свою дивизию, прежде чем отдавать приказ.",
+  "None of the selected divisions is on a drawn plan, so there is no cohesion to set.": "Ни одна из выбранных дивизий не состоит в нарисованном плане — слаженность задавать нечему.",
+  "Select at least two formations of the same kind, standing together, to consolidate.": "Чтобы объединить, выберите хотя бы два соединения одного типа, стоящих вместе.",
+  "Assign the selected divisions to ONE border front first, then draw the offensive objective in that country's territory.": "Сначала назначьте выбранные дивизии на ОДИН пограничный фронт, затем рисуйте цель наступления на территории той страны.",
+  "Objective rejected: draw one connected land line in the front's target country. Existing orders were kept.": "Цель отклонена: нарисуйте одну связную сухопутную линию в стране-цели фронта. Прежние приказы сохранены.",
+  "Back on the war's own front line.": "Возвращены на собственную линию фронта этой войны.",
+  "Select divisions assigned to a border front before editing it.": "Выберите дивизии, назначенные на пограничный фронт, прежде чем править его.",
+  "Start on a shared land border with another country.": "Начните с общей сухопутной границы с другой страной.",
+  "Alt+RMB edits an existing offensive objective. Use RMB to create one.": "Alt+ПКМ правит существующую цель наступления. ПКМ создаёт новую.",
+  "The offer was refused. The war continues.": "Предложение отклонено. Война продолжается."
+}

@@ -10,6 +10,21 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main()
     {
+        TerrainCatalog.ResetCatalog();
+        var terrainErrors = new List<string>();
+        TerrainCatalog.ApplyDirectory(GameDataLoader.DataFolder().TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, terrainErrors);
+        Check(terrainErrors.Count == 0 && TerrainCatalog.All.Count > 1 && File.Exists(TerrainCatalog.TerrainPath),
+            "terrain assets resolve with a trailing directory separator");
+        if (OperatingSystem.IsWindows())
+        {
+            var extendedRoot = Path.GetFullPath(GameDataLoader.DataFolder());
+            if (!extendedRoot.StartsWith(@"\\?\")) extendedRoot = @"\\?\" + extendedRoot;
+            terrainErrors.Clear();
+            TerrainCatalog.ApplyDirectory(extendedRoot, terrainErrors);
+            Check(terrainErrors.Count == 0 && TerrainCatalog.TerrainPath.StartsWith(@"\\?\") &&
+                File.Exists(TerrainCatalog.TerrainPath), "terrain resolves Godot extended Windows paths");
+            TerrainCatalog.ResetCatalog();
+        }
         InterfaceSkin.ResetCatalog();
         Check(CampaignUiCatalog.NavigationItems.Count == 8, "navigation read from game/gui");
         Check(CampaignUiCatalog.For("Decisions").Tabs.Any(t => t.Id == "Formables"), "formables tab registered");

@@ -1,0 +1,10 @@
+{
+  "2D MAP": "2D-КАРТА",
+  "Countries, who controls what, and every occupied province.": "Страны, кто чем владеет, и каждая оккупированная провинция.",
+  "Who is allied to whom, who guarantees whom, and who answers to whom.": "Кто с кем в союзе, кто кого гарантирует и кто кому подчиняется.",
+  "Belligerents, the fronts between them and the ground that has changed hands.": "Воюющие стороны, фронты между ними и земля, сменившая хозяина.",
+  "Where the people are. Dark is empty, bright is crowded.": "Где живут люди. Тёмное — пусто, светлое — тесно.",
+  "What each region produces, against what it needs.": "Что регион производит — против того, что ему нужно.",
+  "The ground itself, with no politics on it. Hover a province for what it does to a march and a battle.": "Сама земля, без политики. Наведите на провинцию, чтобы увидеть, как она влияет на марш и бой.",
+  "Height and shade, from the moddable relief layer.": "Высота и тень — из модифицируемого слоя рельефа."
+}
