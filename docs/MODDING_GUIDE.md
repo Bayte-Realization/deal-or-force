@@ -1,41 +1,50 @@
-# Руководство по моддингу
+# The modding guide
 
-## Философия и папки
+*Русская версия: [MODDING_GUIDE_RU.md](MODDING_GUIDE_RU.md)*
 
-Моддинг является публичным слоем игры. Базовый путь похож на игры Paradox: мод — обычная папка с манифестом и тематическими каталогами. Для изменения баланса не нужны IDE, компилятор или исходники движка.
+## Philosophy and folders
 
-Игра ищет моды в двух местах:
+Modding is the game's public layer. The basic path resembles Paradox games: a mod is an
+ordinary folder with a manifest and subject catalogues. Changing the balance needs no IDE, no
+compiler and no engine sources.
 
-- `res://mods` — моды разработчика рядом с проектом;
-- `user://mods` — установленные пользователем моды, переживающие обновление игры.
+The game looks for mods in two places:
 
-Если одинаковый `id` встречается в обоих местах, версия из `user://mods` имеет приоритет. Папки с именем, начинающимся с `_`, считаются шаблонами и не загружаются.
+- `res://mods` — a developer's mods beside the project;
+- `user://mods` — mods a user installed, which survive a game update.
 
-## Готовые примеры
+If the same `id` appears in both places, the `user://mods` version takes priority. Folders
+whose name begins with `_` are considered templates and are not loaded.
 
-В `mods/_templates` лежат рабочие примеры. Папки, начинающиеся с `_`, игра намеренно не загружает: скопируйте нужную наружу, дайте новый `id` и поставьте `enabled: true`.
+## Worked examples
 
-| Шаблон | Что показывает |
+`mods/_templates` holds working examples. Folders starting with `_` are deliberately not
+loaded by the game: copy the one you want out, give it a new `id` and set `enabled: true`.
+
+| Template | What it shows |
 |---|---|
-| `balance_and_script` | Первый мод: defines, страна, товар и GDScript-точка входа. |
-| `production_chains` | Экономика: товары, здания, **рецепты производства** и потолок торговли. |
-| `statecraft` | Дипломатия и ИИ: цена войны, репутация, коалиции, причины мнений. |
-| `border_redraw` | Кто чем владеет, без пересборки растра. |
-| `map_data_override` | Сама форма мира и пересборка карты. |
-| `interface_reskin` | Цвета, раскладка панелей и локализация. |
-| `central_bank` | Денежная модель: инфляция, ключевая ставка и цена дешёвых денег. |
-| `trade_instructions` | Торговые регуляторы и предложения, которыми они объясняют себя. |
-| `csharp_mod` | Новая механика на C#. |
+| `balance_and_script` | A first mod: defines, a country, a commodity and a GDScript entry point. |
+| `production_chains` | The economy: commodities, buildings, **production recipes** and the trade ceiling. |
+| `statecraft` | Diplomacy and the AI: the price of war, reputation, coalitions, reasons for opinions. |
+| `border_redraw` | Who owns what, without rebuilding the raster. |
+| `map_data_override` | The shape of the world itself, and rebuilding the map. |
+| `interface_reskin` | Colours, panel layout and localisation. |
+| `central_bank` | The monetary model: inflation, the key rate and the price of cheap money. |
+| `trade_instructions` | Trade controls and the sentences with which they explain themselves. |
+| `csharp_mod` | A new mechanic in C#. |
 
-Каждый ключ каждого шаблона проверяется постоянной проверкой бенча `every mod template names something the game actually has`, поэтому пример, отставший от кода, ломает сборку так же громко, как ломается сам код.
+Every key of every template is covered by the standing bench check `every mod template names
+something the game actually has`, so an example that has fallen behind the code breaks the
+build as loudly as the code itself would.
 
-## Быстрый старт без программирования
+## A quick start with no programming
 
-1. Скопируйте `mods/_templates/balance_and_script` в `mods/my_first_mod`.
-2. Измените `id`, `name` и поставьте `enabled: true` в `manifest.json`.
-3. Очистите `gdscript_entry`, если скрипт не нужен.
-4. Измените JSON в `common` и запустите игру.
-5. В главном меню появится число загруженных модов; подробности пишутся в Godot Output с префиксом `[mods]`.
+1. Copy `mods/_templates/balance_and_script` to `mods/my_first_mod`.
+2. Change `id` and `name`, and set `enabled: true` in `manifest.json`.
+3. Clear `gdscript_entry` if you do not need a script.
+4. Change the JSON in `common` and start the game.
+5. The main menu will show the number of loaded mods; the detail is written to Godot's Output
+   with the `[mods]` prefix.
 
 ```text
 my_first_mod/
@@ -65,17 +74,20 @@ my_first_mod/
 }
 ```
 
-- `id` — постоянный уникальный идентификатор; не переводить и не менять после публикации.
-- `load_order` — меньшие числа загружаются раньше. Более поздний мод переопределяет совпавшее значение.
-- `dependencies` — обязательные `id`; зависимость всегда загружается раньше.
-- `gdscript_entry` и `csharp_assembly` необязательны.
-- пути обязаны быть относительными и не могут выходить из папки мода.
+- `id` — a permanent unique identifier; do not translate it and do not change it after
+  publication.
+- `load_order` — lower numbers load earlier. A later mod overrides a value that matches.
+- `dependencies` — required `id`s; a dependency always loads first.
+- `gdscript_entry` and `csharp_assembly` are optional.
+- paths must be relative and cannot leave the mod's folder.
 
-Если зависимость отсутствует, мод не активируется. Циклические зависимости следует считать ошибкой композиции и устранять.
+If a dependency is missing, the mod is not activated. Circular dependencies should be treated
+as a composition error and removed.
 
-## Defines: изменение правил
+## Defines: changing the rules
 
-Каждый JSON в `common/defines` является объектом. Имена нечувствительны к регистру, `_` и `-`, поэтому `SupplyTraceRange`, `supply_trace_range` и `supply-trace-range` равнозначны.
+Every JSON in `common/defines` is an object. Names are insensitive to case, `_` and `-`, so
+`SupplyTraceRange`, `supply_trace_range` and `supply-trace-range` are the same thing.
 
 ```json
 {
@@ -87,19 +99,42 @@ my_first_mod/
 }
 ```
 
-Полный актуальный список находится в `Scripts/Simulation/Defines.cs`. Неизвестное имя не рушит запуск: загрузчик создаёт предупреждение и сохраняет базовое значение.
+The full current list is in `Scripts/Simulation/Defines.cs`. An unknown name does not break
+startup: the loader raises a warning and keeps the base value.
 
-Базовые военные значения самой игры вынесены в `game/common/defines/military.json`. Файл реально загружается до создания кампании и копируется в desktop-сборку. В нём доступны ширина боя, место одной дивизии на фронте, порог слома организации, скорость беспрепятственного захвата, плотность стартового эшелона, снабжение, оккупация и параметры военного AI. Модовый `common/defines/*.json` применяется поверх базового слоя.
+The game's own base military values are in `game/common/defines/military.json`. The file
+really is loaded before a campaign is created and is copied into the desktop build. It
+exposes combat width, the space one division takes on a front, the organisation-break
+threshold, the speed of an unopposed capture, the density of the starting echelon, supply,
+occupation and the military AI's parameters. A mod's `common/defines/*.json` is applied on
+top of that base layer.
 
-Геометрия базовой карты использует 16-битные ID и читается из `game/map_data/provinces.png`. Каждый из 37 833 многоугольников имеет уникальный RGB-цвет, сопоставленный ID в `definition.csv`. Карта-мод не должна превышать 65 535 сухопутных провинций; иначе запуск прекращается с явной ошибкой вместо повреждения контроллеров и сохранения. Встроенный `Tools/MapDataCompiler` является отдельным офлайн-инструментом для авторов карт: его результат — обычные PNG/CSV, которые можно дальше править вручную. Запущенная игра ничего процедурно не дорисовывает и не перенумеровывает; без полной валидной пары растров кампания выдаёт ошибку загрузки.
+The base map's geometry uses 16-bit IDs and is read from `game/map_data/provinces.png`. Each
+of the 37,833 polygons has a unique RGB colour mapped to an ID in `definition.csv`. A modded
+map must not exceed 65,535 land provinces; otherwise startup stops with an explicit error
+rather than corrupting controllers and the save. The bundled `Tools/MapDataCompiler` is a
+separate offline tool for map authors: its output is ordinary PNG/CSV that can be edited
+further by hand. A running game draws nothing procedurally and renumbers nothing; without a
+complete valid pair of rasters, a campaign raises a load error.
 
-Малые острова, которые теряются в исходном политическом растре, можно объявить в `region_overrides.json` через `seed_points`. Каждая запись имеет форму `[longitude, latitude, radius_pixels]`; компилятор добавит участок суши в административный и тактический растр, не закрашивая уже существующую чужую территорию. Так в базовой карте заданы цепи Лакшадвипа, Андаманских и Никобарских островов и Мальдив.
+Small islands lost in the source political raster can be declared in `region_overrides.json`
+through `seed_points`. Each entry has the form `[longitude, latitude, radius_pixels]`; the
+compiler adds that patch of land to the administrative and tactical rasters without painting
+over somebody else's existing territory. That is how the Lakshadweep, Andaman and Nicobar,
+and Maldive chains are declared in the base map.
 
-Историческая активная численность армий стартовой даты находится в `game/history/units/2024/active_personnel.json`. Ключ — стабильный трёхбуквенный тег страны, значение — число действующих военнослужащих. Симуляция переводит его в дивизии и полевые армии, после чего `StrategicDeploymentPlanner` расставляет их по live-графу фронтов, иностранных границ и столичного резерва. Это разделяет исторические данные и алгоритм: альтернативный сценарий меняет JSON и политический растр, а не C#-координаты.
+The historical active strength of armies at the start date is in
+`game/history/units/2024/active_personnel.json`. The key is a stable three-letter country
+tag, the value the number of serving personnel. The simulation turns that into divisions and
+field armies, after which `StrategicDeploymentPlanner` lays them out along the live graph of
+fronts, foreign borders and the capital reserve. That separates historical data from the
+algorithm: an alternative scenario changes JSON and the political raster, not C# coordinates.
 
-## Типы войск
+## Unit types
 
-`game/common/units/unit_types.json` — реально используемый каталог типов соединений. Стабильные ID стартовой версии: `line_infantry`, `motorized_corps`, `armored_corps`.
+`game/common/units/unit_types.json` is the catalogue of formation types actually in use. The
+stable IDs of the starting version are `line_infantry`, `motorized_corps` and
+`armored_corps`.
 
 ```json
 {
@@ -115,11 +150,15 @@ my_first_mod/
 }
 ```
 
-`attack` и `defense` изменяют эффективную силу соответствующей стороны боя; `speed` — скорость прохождения рёбер графа; `combat_width` — место дивизии в сражении; `supply_use` — нагрузку на логистический узел; `counter_symbol` выбирает условный знак на карте. Не меняйте ID после публикации сценария: армия хранит именно его.
+`attack` and `defense` change the effective strength of the corresponding side of a battle;
+`speed` is the pace of crossing graph edges; `combat_width` is the space a division takes in
+a battle; `supply_use` is the load on a logistics node; `counter_symbol` chooses the
+conventional mark on the map. Do not change an ID after publishing a scenario: an army stores
+exactly that.
 
-## Countries: изменение стран
+## Countries: changing countries
 
-Файлы в `common/countries` содержат объект, ключами которого служат теги стран:
+Files in `common/countries` contain an object keyed by country tags:
 
 ```json
 {
@@ -138,48 +177,56 @@ my_first_mod/
 }
 ```
 
-`common/countries` меняет параметры зарегистрированных стран, а полноценный сценарный слой может добавлять страну через базовый country/history registry и территориальное правило с `source_nation`. Так добавлено Приднестровье (`PMR`): стабильный тег, история, столица Тирасполь, цвет, вооружённые силы и авторитетная территория отделены от Молдовы до генерации провинций. Произвольная замена исходных 16-битных растров по-прежнему требует отдельного scenario-пакета и соблюдения лимита ID.
+`common/countries` changes the parameters of registered countries, while a full scenario
+layer can add a country through the base country/history registry and a territorial rule with
+`source_nation`. That is how Transnistria (`PMR`) was added: a stable tag, a history, the
+capital Tiraspol, a colour, armed forces and an authoritative territory carved out of Moldova
+before the provinces are generated. Arbitrarily replacing the source 16-bit rasters still
+requires a separate scenario package and respecting the ID limit.
 
-## States: переименование регионов
+## States: renaming regions
 
-`common/states` — то же самое, что `common/countries`, но на уровень ниже: 1 826 провинций,
-областей, департаментов и префектур мира. До недавнего времени их названия были вкомпилированы
-в игру, и мод не мог тронуть ни одно.
+`common/states` is the same thing as `common/countries`, one level down: the 1,826 provinces,
+oblasts, departments and prefectures of the world. Until recently their names were compiled
+into the game and a mod could not touch a single one.
 
 ```json
 {
-  "it_to": { "name": "Августа Тауринорум", "kind": "Province" },
-  "fr_57": { "name": "Медиоматрики", "kind": "Civitas" }
+  "it_to": { "name": "Augusta Taurinorum", "kind": "Province" },
+  "fr_57": { "name": "Mediomatrici", "kind": "Civitas" }
 }
 ```
 
-Ключ — **идентификатор региона**, а не его код. Коды не уникальны: девять из них носит больше
-одного региона (под `MG-F` скрыто пять мадагаскарских провинций), поэтому файл, ключом которого
-был бы код, переименовал бы не тот регион. Идентификаторы перечислены в
-`game/common/states/00_states.json` — откройте его и найдите нужное название.
+The key is the **region's identifier**, not its code. Codes are not unique: nine of them are
+carried by more than one region (five Madagascan provinces hide under `MG-F`), so a file
+keyed by code would rename the wrong region. The identifiers are listed in
+`game/common/states/00_states.json` — open it and find the name you want.
 
-`name` — то, как регион называется; `kind` — каким словом интерфейс обозначает тип единицы
-(Province, Oblast, Department, Canton — что угодно, что подходит вашему миру).
+`name` is what the region is called; `kind` is the word the interface uses for the type of
+unit (Province, Oblast, Department, Canton — whatever suits your world).
 
-Правила те же, что и у стран: все файлы папки читаются в порядке имён, поздние побеждают по
-ключу, и мод называет только то, что меняет. `game/common/states/00_states.json` — файл базовой
-игры; ваш называйте `50_...json`, и остальные 1 822 региона унаследуются.
+The rules are the same as for countries: every file in the folder is read in filename order,
+later ones win by key, and a mod names only what it changes.
+`game/common/states/00_states.json` is the base game's file; call yours `50_...json` and the
+other 1,822 regions are inherited.
 
-`name` — ещё и ключ локализации. Мод, который придумал регионам свои названия, кладёт рядом
-`localization/<язык>/50_....json` с переводом — иначе название покажется так, как написано.
+`name` is also a localisation key. A mod that has invented its own region names puts a
+`localization/<language>/50_....json` beside it with the translation — otherwise the name
+shows exactly as written.
 
-Готовый пример — `mods/_templates/rename_the_world`: шесть стран, четыре региона и русская
-локализация к ним.
+A worked example is `mods/_templates/rename_the_world`: six countries, four regions and a
+Russian localisation for them.
 
-## GDScript-моды
+## GDScript mods
 
-GDScript удобен для событий, периодических эффектов и прототипирования. Точка входа наследуется от `RefCounted` и может реализовать три необязательных callback:
+GDScript is convenient for events, periodic effects and prototyping. The entry point inherits
+from `RefCounted` and may implement three optional callbacks:
 
 ```gdscript
 extends RefCounted
 
 func on_load(api) -> void:
-	api.log("Мод загружен")
+	api.log("Mod loaded")
 
 func on_campaign_created(api) -> void:
 	var country := api.get_nation("KOR")
@@ -190,13 +237,17 @@ func on_day_advanced(api) -> void:
 		api.set_nation_number("KOR", "stability", 0.8)
 ```
 
-Доступные методы: `get_day()`, `get_date()`, `get_nation(tag)`, `set_nation_number(tag, key, value)`, `get_define(name, fallback)`, `set_define(name, value)` и `log(text)`.
+The available methods are `get_day()`, `get_date()`, `get_nation(tag)`,
+`set_nation_number(tag, key, value)`, `get_define(name, fallback)`, `set_define(name, value)`
+and `log(text)`.
 
-GDScript API намеренно уже внутреннего C# API: это уменьшает вероятность сломать сохранение или детерминизм. Новые безопасные действия следует добавлять в `ModApi`, а не раскрывать целиком сцену игры.
+The GDScript API is deliberately narrower than the internal C# one: that reduces the chance
+of breaking a save or determinism. New safe actions should be added to `ModApi` rather than
+exposing the whole game scene.
 
-## Goods: моддинг рынка
+## Goods: modding the market
 
-JSON в `common/goods` переопределяет публичные определения товаров без скрипта:
+JSON in `common/goods` overrides the public commodity definitions without a script:
 
 ```json
 {
@@ -214,23 +265,38 @@ JSON в `common/goods` переопределяет публичные опре�
 }
 ```
 
-Стабильные ID двадцати товаров:
+The stable IDs of the twenty commodities:
 
-**Первый ярус** — `Food`, `ConsumerGoods`, `IndustrialMaterials`, `Energy`, `Arms`, `Coal`, `Oil`, `IronOre`, `RareEarths`, `Machinery`.
+**The first tier** — `Food`, `ConsumerGoods`, `IndustrialMaterials`, `Energy`, `Arms`,
+`Coal`, `Oil`, `IronOre`, `RareEarths`, `Machinery`.
 
-**Второй ярус**, добавленный ради цепочек, — `NaturalGas`, `Timber`, `Bauxite`, `Uranium`, `Aluminium`, `Chemicals`, `Fertiliser`, `Electronics`, `Textiles`, `Pharmaceuticals`.
+**The second tier**, added for the sake of the chains — `NaturalGas`, `Timber`, `Bauxite`,
+`Uranium`, `Aluminium`, `Chemicals`, `Fertiliser`, `Electronics`, `Textiles`,
+`Pharmaceuticals`.
 
-`base_price` задаётся в миллиардах долларов на рыночную единицу; `essential_weight` определяет вклад полного дефицита в общий индекс нехватки страны, а через него — в ВВП, уровень жизни и радикализм.
+`base_price` is in billions of dollars per market unit; `essential_weight` decides how much a
+complete shortage contributes to a country's overall shortage index, and through that to GDP,
+the standard of living and radicalism.
 
-Второй ярус — это **звенья, а не предметы**. Бокситы бесполезны без плавильни и дешёвого электричества; электронике нужны редкозёмы, которые есть у восьми стран; современный урожай сделан из природного газа, и страна, отрезанная от удобрений, теряет около четверти его. Цепочка читает расчёт **прошлой** недели, поэтому обрыв поставки замедляет производство, а не останавливает, и делает это с задержкой — ровно как эмбарго в жизни.
+The second tier is **links, not objects**. Bauxite is useless without a smelter and cheap
+electricity; electronics want rare earths, which eight countries have; a modern harvest is
+made of natural gas, and a country cut off from fertiliser loses about a quarter of it. The
+chain reads **last** week's calculation, so a broken supply slows production rather than
+stopping it, and does so with a delay — exactly as an embargo does in life.
 
-### Двадцать первый товар
+### A twenty-first commodity
 
-Раньше здесь было написано, что новый товар мод добавить не может. Теперь может.
+This used to say that a mod could not add a new commodity. Now it can.
 
-Товары и здания — перечисления в коде, и это звучало как жёсткий предел, но им не было: перечисление в C# — это число, у части значений которого есть имена, а `(Commodity)20` — совершенно законное значение: ключ словаря, поле, число в сохранении. Мешало не перечисление, а то, что все дороги в каталог шли через `Enum.TryParse`, знающий только скомпилированные имена. Теперь каталоги ведут собственные таблицы имён и выдают следующий свободный номер имени, которого не видели.
+Commodities and buildings are enumerations in code, and that sounded like a hard limit, but
+it was not: an enumeration in C# is a number, some of whose values have names, and
+`(Commodity)20` is a perfectly legal value — a dictionary key, a field, a number in a save.
+What got in the way was not the enumeration but the fact that every road into the catalogue
+went through `Enum.TryParse`, which only knows the compiled names. The catalogues now keep
+their own name tables and hand out the next free number for a name they have not seen.
 
-Объявление ничем не отличается от переопределения — тот же файл, то же место. Разница в том, что имени ещё нет:
+Declaring one is no different from overriding one — the same file, the same place. The
+difference is that the name does not exist yet:
 
 ```json
 // my_mod/common/goods/50_alloys.json
@@ -259,9 +325,13 @@ JSON в `common/goods` переопределяет публичные опре�
 }
 ```
 
-Новому товару нужны **имя и базовая цена**, новому зданию — **имя, стоимость и срок**. Без них это опечатка, а отвергать опечатки — половина работы каталога. Остальное необязательно и берёт разумные значения.
+A new commodity needs **a name and a base price**, a new building **a name, a cost and a
+duration**. Without those it is a typo, and rejecting typos is half a catalogue's job. The
+rest is optional and takes sensible values.
 
-Дальше новый товар ничем не отличается от двадцати старых: он получает котировку на рынке каждой страны, торгуется, попадает в леджер и участвует в рецептах `common/production` — где и надо задать, из чего он делается:
+After that a new commodity is no different from the twenty old ones: it gets a quote on every
+country's market, it is traded, it appears in the ledger and it takes part in
+`common/production` recipes — which is where you say what it is made of:
 
 ```json
 // my_mod/common/production/50_titanium.json
@@ -275,17 +345,33 @@ JSON в `common/goods` переопределяет публичные опре�
 }
 ```
 
-Здание без рецепта поднимает ВВП и даёт рабочие места — и больше ничего. Это законное желание, и это же первое, что стоит проверить, когда новые заводы мода «ничего не делают».
+A building with no recipe raises GDP and provides jobs — and nothing else. That is a
+legitimate thing to want, and it is also the first thing to check when a mod's new factories
+"do nothing".
 
-**О сохранениях.** Номер мод-товару выдаётся по порядку чтения модов, поэтому одна и та же партия, открытая с теми же модами в другом порядке, нашла бы алюминий там, где лежали удобрения, — молча, потому что число есть число. Поэтому сохранение несёт с собой таблицу «имя → номер», а при загрузке номера пересчитываются по именам. Сохранения, сделанные до появления таблицы, читаются как прежде: у двадцати и семнадцати штатных номера не менялись никогда. Имя, которого в каталоге больше нет (мод убрали), остаётся на своём номере и не ломает остальное.
+**About saves.** A modded commodity's number is handed out in the order the mods are read, so
+the same game opened with the same mods in a different order would have found aluminium where
+fertiliser used to be — silently, because a number is a number. So a save carries a
+"name → number" table with it, and on load the numbers are recomputed from the names. Saves
+made before that table existed read as before: the numbers of the twenty and the seventeen
+built-in entries never changed. A name the catalogue no longer has (the mod was removed) stays
+on its number and breaks nothing else.
 
-Всё это проверяется стендом: `a mod can add a good and a building the game never had` объявляет товар и здание, которых нет нигде в игре, даёт зданию рецепт, строит его, убеждается, что производство пошло, сохраняет партию, **сдвигает номер товара** — ровно как сделал бы другой порядок модов — и требует, чтобы после загрузки товар нашёлся по имени с теми же цифрами.
+All of which is verified on the bench: `a mod can add a good and a building the game never
+had` declares a commodity and a building that exist nowhere in the game, gives the building a
+recipe, builds it, confirms production started, saves the game, **shifts the commodity's
+number** — exactly as a different mod order would — and requires that after loading the
+commodity is found by name with the same figures.
 
-## Production: из чего вещи сделаны
+## Production: what things are made of
 
-`common/production` — файл, который решает, кто кому нужен, а значит и как игра играется. Раньше это были сто тридцать строк арифметики внутри `MarketCore.cs`, и мод до них не доставал: можно было переименовать алюминий и переоценить его, но чем алюминий **является** — бокситы, плавильня и дешёвое электричество — было вкомпилировано.
+`common/production` is the file that decides who needs whom, and therefore how the game
+plays. It used to be a hundred and thirty lines of arithmetic inside `MarketCore.cs`, and a
+mod could not reach it: you could rename aluminium and reprice it, but what aluminium **is** —
+bauxite, a smelter and cheap electricity — was compiled in.
 
-Рецепт называет товар, взвешенную сумму слагаемых, которые его делают, взвешенную сумму слагаемых, которые его потребляют, и товары, чья прошлонедельная поставка масштабирует выпуск:
+A recipe names a commodity, a weighted sum of the terms that make it, a weighted sum of the
+terms that consume it, and the commodities whose last-week supply scales the output:
 
 ```json
 "aluminium_smelting": {
@@ -296,41 +382,60 @@ JSON в `common/goods` переопределяет публичные опре�
 }
 ```
 
-Слагаемое — произведение именованных множителей через `*`, поэтому `population*standard_of_living` означает ровно то, на что похоже. Доступные множители:
+A term is a product of named factors joined with `*`, so `population*standard_of_living` means
+exactly what it looks like. The available factors:
 
-| Множитель | Что это |
+| Factor | What it is |
 |---|---|
-| `population` | миллионы человек в регионе |
+| `population` | millions of people in the region |
 | `urbanization`, `standard_of_living` | 0..1 |
-| `output_factor` | какая доля затребованного труда закрыта, умноженная на его производительность |
-| `extraction_efficiency` | насколько регион умеет доставать что-либо из своей земли |
-| `timber_yield` | то же для леса — он отвечает фермам, а не рудникам |
-| `<Здание>` | укомплектованное число: постройки, умноженные на `output_factor` |
-| `raw:<Здание>` | просто число построек: дороги не перестают работать оттого, что заводу не хватает рук |
-| `deposit:<Товар>` | что лежит в земле, до того как это выкопали |
+| `output_factor` | the share of the labour asked for that is covered, times its productivity |
+| `extraction_efficiency` | how well a region can get things out of its own ground |
+| `timber_yield` | the same for forest — it answers to farms rather than mines |
+| `<Building>` | the staffed number: buildings times `output_factor` |
+| `raw:<Building>` | just the building count: roads do not stop working because a factory is short of hands |
+| `deposit:<Commodity>` | what lies in the ground, before it was dug up |
 
-Для рецепта со `"scope": "nation"` — считается один раз на страну, а не на каждый её регион — доступны ещё `projects`, `divisions`, `divisions_at_war` (то же, но ноль в мирное время, так что военная норма пишется как мирный вес плюс разница), `hulls`, `gdp` и `arms_productivity`.
+For a recipe with `"scope": "nation"` — computed once per country rather than per region —
+`projects`, `divisions`, `divisions_at_war` (the same, but zero in peacetime, so a wartime
+rate is written as the peacetime weight plus the difference), `hulls`, `gdp` and
+`arms_productivity` are also available.
 
-Ещё два поля:
+Two more fields:
 
-- `needs` умножает выпуск на то, как поставка каждого входа пришла на прошлой неделе, с полом: голодающая цепочка замедляется, а не встаёт.
-- `shortfall` умножает на (поставка − 1), то есть на ноль или отрицательное число: это штраф, который дефицит одной цепочки накладывает на другую. Единственный способ рецепту выдать отрицательное число — и то, как страна, отрезанная от удобрений, теряет часть урожая, который уже выращивала.
+- `needs` multiplies the output by how each input's supply arrived last week, with a floor: a
+  starved chain slows down rather than stopping.
+- `shortfall` multiplies by (supply − 1), that is, by zero or a negative number: it is the
+  penalty one chain's shortage imposes on another. It is the only way for a recipe to produce
+  a negative number, and it is how a country cut off from fertiliser loses part of a harvest
+  it had already grown.
 
-Несколько рецептов могут называть один товар: их выпуски складываются. Слияние идёт **по имени рецепта**, так что мод из трёх рецептов меняет три цепочки и наследует остальные тридцать шесть, включая их перебалансировку в следующем патче.
+Several recipes can name the same commodity: their outputs add up. Merging is **by recipe
+name**, so a mod of three recipes changes three chains and inherits the other thirty-six,
+including their rebalancing in the next patch.
 
-Полная справка по формату лежит первым комментарием в `game/common/production/00_chains.json` — это же и вся экономика базовой игры в одном файле. Рабочий пример — `mods/_templates/production_chains`.
+The full format reference is the first comment in `game/common/production/00_chains.json` —
+which is also the whole base game's economy in one file. A worked example is
+`mods/_templates/production_chains`.
 
-Опечатка в множителе или в названии товара раньше была бы ошибкой компиляции, а теперь это строка в файле, которая молча ничего не производит. Поэтому загрузчик жалуется, а проверка `every good is made by something and eaten by something` в `Tools/SimBench` падает с точным адресом:
+A typo in a factor or a commodity name used to be a compile error and is now a line in a file
+that silently produces nothing. So the loader complains, and the check `every good is made by
+something and eaten by something` in `Tools/SimBench` fails with an exact address:
 
 ```
 Production recipe 'consumer_goods_manufacture' asks for 'standard_of_life', which is not a factor.
 ```
 
-Чего рецепт не может: попросить множитель, которого симуляция не считает. Список множителей закрыт намеренно — иначе мод задавал бы вопрос, на который симуляция не умеет ответить. Открыто то, как они сочетаются, и вся конструкция игры именно там.
+What a recipe cannot do: ask for a factor the simulation does not compute. The factor list is
+deliberately closed — otherwise a mod would be asking a question the simulation cannot answer.
+What is open is how they combine, and the whole design of the game is right there.
 
-## Здания
+## Buildings
 
-JSON в `common/buildings` переопределяет постройки. Семнадцать стабильных ID: `Agriculture`, `CivilianIndustry`, `Infrastructure`, `University`, `Hospital`, `Barracks`, `ExtractionIndustry`, `PowerPlant`, `ArmsIndustry`, `Refinery`, `ChemicalPlant`, `Smelter`, `ElectronicsPlant`, `Shipyard`, `Port`, `RailNetwork`, `ResearchLab`.
+JSON in `common/buildings` overrides buildings. Seventeen stable IDs: `Agriculture`,
+`CivilianIndustry`, `Infrastructure`, `University`, `Hospital`, `Barracks`,
+`ExtractionIndustry`, `PowerPlant`, `ArmsIndustry`, `Refinery`, `ChemicalPlant`, `Smelter`,
+`ElectronicsPlant`, `Shipyard`, `Port`, `RailNetwork`, `ResearchLab`.
 
 ```json
 {
@@ -339,28 +444,33 @@ JSON в `common/buildings` переопределяет постройки. Се
 }
 ```
 
-Поля, которые вы не назвали, сохраняют базовые значения. `gdp_gain` — выпуск, `capacity_gain` — строительная мощность, то есть скорость следующей стройки.
+Fields you do not name keep their base values. `gdp_gain` is output, `capacity_gain` is
+construction capacity, that is, the speed of the next project.
 
-Два здания — не промышленность вовсе. **Порт** и **железнодорожная сеть** задают *охват*: сколько своего дефицита страна физически способна ввезти, независимо от того, сколько у неё друзей. Дешёвые доки — мир свободно торгует; дорогие — география начинает определять внешнюю политику.
+Two buildings are not industry at all. A **port** and a **rail network** set *reach*: how much
+of its own shortfall a country is physically able to bring in, regardless of how many friends
+it has. Cheap docks mean a world that trades freely; expensive ones mean geography starts to
+dictate foreign policy.
 
-## Деньги: инфляция и центральный банк
+## Money: inflation and the central bank
 
-Вся денежная модель — это `common/inflation`, примерно два десятка чисел, и ни одно из них не
-зашито в код. Мод называет только то, с чем не согласен; всё неназванное сохраняет базовое
-значение, поэтому такой мод не устаревает, когда в этом же файле что-то перенастроят.
+The whole monetary model is `common/inflation`, about two dozen numbers, and not one of them
+is hard-coded. A mod names only what it disagrees with; anything unnamed keeps its base value,
+so such a mod does not go stale when something else in that file is retuned.
 
-Инфляция каждой страны не хранится как факт о ней, а выводится раз в экономическую неделю из
-того, что сделало правительство: дефицит бюджета, нехватка на рынке, идёт ли война, насколько
-велик долг и где стоит ключевая ставка. Каждая причина — вес в этом файле, и каждая попадает в
-`Breakdown`, то есть в подсказку «почему инфляция девять процентов» отдельной строкой.
+A country's inflation is not stored as a fact about it but derived once an economic week from
+what the government did: the budget deficit, shortage on the market, whether there is a war,
+how large the debt is and where the key rate stands. Each cause is a weight in this file, and
+each reaches the `Breakdown` — that is, the "why is inflation nine per cent" tooltip — as its
+own line.
 
-### Ключевая ставка
+### The key rate
 
-Ставка не хранится дважды. Это статья `debt_interest` в `common/budget` — обычный
-устанавливаемый игроком множитель от пятой доли нейтрали до тройной, — а блок `central_bank`
-решает, **что этот множитель значит** и кто его двигает:
+The rate is not stored twice. It is the `debt_interest` line in `common/budget` — an ordinary
+player-settable multiplier from a fifth of neutral to triple it — and the `central_bank` block
+decides **what that multiplier means** and who moves it:
 
-    ключевая ставка = central_bank.neutral_rate × (ставка статьи ÷ нейтраль статьи)
+    key rate = central_bank.neutral_rate × (the line's rate ÷ the line's neutral)
 
 ```json
 {
@@ -376,27 +486,27 @@ JSON в `common/buildings` переопределяет постройки. Се
 }
 ```
 
-| строка | что это |
+| line | what it is |
 |---|---|
-| `neutral_rate` | что значит нейтральная точка статьи, годовых |
-| `target` | к чему банк держит цены |
-| `response` | пунктов ставки на пункт превышения — выше единицы, иначе банк смягчает, делая вид, что ужесточает |
-| `smoothing` | какую долю расстояния он проходит за экономическую неделю |
-| `war_tolerance` | сколько превышения он прощает, пока страна воюет |
-| `credibility` | сколько платит правительство за каждый пункт, на который держит ставку **ниже** желаемой банком |
+| `neutral_rate` | what the line's neutral point means, per annum |
+| `target` | what the bank holds prices to |
+| `response` | points of rate per point of excess — above one, or the bank eases while pretending to tighten |
+| `smoothing` | what share of the distance it covers in an economic week |
+| `war_tolerance` | how much excess it forgives while the country is at war |
+| `credibility` | what a government pays for every point it holds the rate **below** what the bank wanted |
 
-Правило банка — одна строка:
+The bank's rule is one line:
 
-    желаемая = neutral_rate + response × (инфляция − target − (война ? war_tolerance : 0))
+    wanted = neutral_rate + response × (inflation − target − (war ? war_tolerance : 0))
 
-зажатая пределами статьи и достигаемая по `smoothing` доли расстояния за неделю. Работает для
-**каждой страны мира**, а не только для игрока, — значит, изменение этих чисел меняет
-двести шестьдесят одну денежную политику, и ИИ будет жить под ними тоже.
+clamped by the line's limits and reached at `smoothing` of the distance per week. It works for
+**every country in the world**, not just the player's — so changing these numbers changes two
+hundred and sixty-one monetary policies, and the AI will live under them too.
 
-### Эмиссия
+### Emission
 
-Второй денежный рычаг, и открывает его первый: печатать может только правительство, уже
-забравшее банк. Всё в том же блоке `central_bank`.
+The second monetary lever, unlocked by the first: only a government that has already taken the
+bank can print. All in the same `central_bank` block.
 
 ```json
 {
@@ -409,64 +519,77 @@ JSON в `common/buildings` переопределяет постройки. Се
 }
 ```
 
-| Ключ | Что значит |
+| Key | What it means |
 |---|---|
-| `emission_ceiling` | сколько годового выпуска можно напечатать за год. `0` выключает станок целиком |
-| `emission_inflation` | очков инфляции за единицу напечатанного — прямая часть |
-| `emission_credibility` | и за то, во что перестали верить. Больше первой, и в этом механика |
-| `emission_memory_decay` | какая доля этой памяти уходит за экономическую неделю |
+| `emission_ceiling` | how much of a year's output can be printed in a year. `0` disables the press entirely |
+| `emission_inflation` | points of inflation per unit printed — the direct part |
+| `emission_credibility` | and for what people stopped believing. Larger than the first, and that is the mechanic |
+| `emission_memory_decay` | what share of that memory goes each economic week |
 
-Из скриптов: `nation.MoneyPrinting` — доля выпуска в год, `nation.EmissionMemory` — то, что
-стране помнят. Команда — `SetEmissionCommand { IssuerId, ShareOfOutput }`; она откажет, пока
-`GovernmentSetsKeyRate` не выставлен, ровно как и ставка.
+From scripts: `nation.MoneyPrinting` is the share of output per year, `nation.EmissionMemory`
+is what the country is remembered for. The command is
+`SetEmissionCommand { IssuerId, ShareOfOutput }`; it refuses until `GovernmentSetsKeyRate` is
+set, exactly as the rate does.
 
-Измерено на базовых числах: печать 8 % выпуска в течение года даёт 89.5 в казну и поднимает
-цены с 1.9 % до 24.8 %; через месяц после остановки — 21.1 %, через полтора года — 2.7 %.
+Measured on the base numbers: printing 8 % of output over a year gives 89.5 to the treasury
+and raises prices from 1.9 % to 24.8 %; a month after stopping it is 21.1 %, and eighteen
+months later 2.7 %.
 
-### Решение, ради которого это существует
+### The decision this exists for
 
-Правительство может забрать ставку у собственного банка. Забрать — бесплатно; платится за то,
-что ставку держат **ниже** желаемой банком: деньги, которые правительство приказало сделать
-дешёвыми, — это деньги, в дешевизну которых никто не верит. Это и есть `credibility`, за
-каждый пункт ниже, каждую неделю, отдельной строкой в разбивке.
+A government can take the rate away from its own bank. Taking it is free; what is paid for is
+holding the rate **below** what the bank wanted: money a government has ordered to be cheap is
+money nobody believes will stay cheap. That is `credibility`, for every point below, every
+week, as its own line in the breakdown.
 
-Поставьте `credibility` в ноль — рычаг станет бесплатным, дешёвые деньги строго выгодными, и
-решение исчезнет. Поставьте высоко — изъятие ставки станет мерой военного времени.
+Set `credibility` to zero and the lever becomes free, cheap money becomes strictly good, and
+the decision disappears. Set it high and seizing the rate becomes a wartime measure.
 
-### Из скриптов
+### From scripts
 
-`inflation`, `key_rate` и `government_sets_key_rate` — обычные скриптовые поля, то есть их
-читают условия и двигают эффекты, как `stability` или `treasury`:
+`inflation`, `key_rate` and `government_sets_key_rate` are ordinary scriptable fields, which is
+to say conditions read them and effects move them, just like `stability` or `treasury`:
 
 ```json
 "trigger": { "min_inflation": 0.06, "max_government_sets_key_rate": 0.5 },
 "effects": { "government_sets_key_rate_set": 1.0, "key_rate_set": 0.012 }
 ```
 
-Рабочий пример целиком — решение `break_the_bank` в `dlc/dof_iron_and_grain`.
+A complete worked example is the `break_the_bank` decision in `dlc/dof_iron_and_grain`.
 
-## Торговля: кто кому продаёт
+## Trade: who sells to whom
 
-Рынок не анонимный котёл. Каждую экономическую неделю дефицит каждой страны сводится с реальными излишками реальных стран, и получается список маршрутов — на первый день их около 2200.
+The market is not an anonymous pot. Every economic week each country's shortfall is matched
+against the real surpluses of real countries, and the result is a list of routes — about 2,200
+of them on day one.
 
-Кого выберут, решает дипломатия: война и эмбарго обнуляют пару, торговое соглашение умножает притяжение на 1.75, союз — на 1.3, вражда делит, мнение сдвигает в пределах ±65 %, а расстояние между столицами гасит связь тем сильнее, чем дальше и чем хуже порты и железные дороги обеих сторон.
+Who gets chosen is decided by diplomacy: war and an embargo zero a pair out, a trade agreement
+multiplies the pull by 1.75, an alliance by 1.3, a rivalry divides it, opinion shifts it within
+±65 %, and the distance between capitals damps the link the further apart they are and the
+worse both sides' ports and railways.
 
-Сколько удастся ввезти, решают доки и рельсы: потолок равен `world_market_access`, умноженному на охват страны. Ниже всего этого остаётся тонкий серый рынок — страна без друзей должна беднеть, а не умирать в тот же день.
+How much can actually be brought in is decided by docks and rails: the ceiling is
+`world_market_access` times the country's reach. Below all of that there remains a thin grey
+market — a country with no friends should get poorer, not die the same day.
 
-Отсюда и рычаги мода: `world_market_access` и `import_markup` в `common/defines`, стоимость порта и рельсов в `common/buildings`, вес мнений в `common/opinion_modifiers`.
+Hence the mod's levers: `world_market_access` and `import_markup` in `common/defines`, the cost
+of a port and a rail network in `common/buildings`, and the weight of opinions in
+`common/opinion_modifiers`.
 
-Ledger автоматически подхватывает изменённые названия, базовые цены и веса товаров. Индекс цены всегда считает модовую `base_price` за 100, поэтому график остаётся осмысленным после полного ребаланса рынка.
+The Ledger picks up changed names, base prices and commodity weights automatically. A price
+index always takes the modded `base_price` as 100, so the chart stays meaningful after a
+complete rebalance of the market.
 
-### Регуляторы торговли и то, как они себя объясняют
+### Trade controls and how they explain themselves
 
-Семь регуляторов, которыми страна распоряжается собственной торговлей, объявлены в
-`common/trade`, и экран рисуется из этого файла: сами регуляторы, их пределы, шаг, названия —
-и предложение, которым каждый описывает, что он делает **при текущем значении**.
+The seven controls a country runs its own trade with are declared in `common/trade`, and the
+screen is drawn from that file: the controls themselves, their limits, their step, their names
+— and the sentence each uses to describe what it does **at its current value**.
 
 ```json
 "price_floor": {
-  "scope": "good",          // "good" — на товар; "partner" — на другую страну
-  "shape": "multiplier",    // "share" (0..1), "multiplier" (×), "flag" (переключатель)
+  "scope": "good",          // "good" — about a commodity; "partner" — about another country
+  "shape": "multiplier",    // "share" (0..1), "multiplier" (×), "flag" (a toggle)
   "default": 0.0,
   "minimum": 0.0,
   "maximum": 5.0,
@@ -480,63 +603,83 @@ Ledger автоматически подхватывает изменённые 
 }
 ```
 
-Число и название — не инструкция. «Пол цены 0.4×» — правда о регуляторе, а «мы не продаём это
-дешевле двух пятых от того, что оно стоит» — решение, которое приняли. Экран показывает второе
-под ползунком и приглушает всю строку, когда регулятор стоит на значении по умолчанию, — так
-«действует 4 инструкции» превращается в четыре горящие строки, которые видно, а не в цифру.
+A number and a name are not an instruction. "Price floor 0.4×" is a truth about a control,
+while "we will not sell this below two fifths of what it is worth" is a decision somebody took.
+The screen shows the second one under the slider and dims the whole row when a control is at
+its default — which turns "4 instructions in force" into four lit rows you can see rather than
+a figure.
 
-| ключ | когда показывается |
+| key | when it is shown |
 |---|---|
-| `resting` | значение равно `default` — регулятор ничего не делает |
-| `off` | значение на `minimum`, где это значит *нисколько*, а не *немного* |
-| `on` | значение на `maximum`, либо переключатель включён |
-| `set` | во всех прочих случаях. `{0}` — значение так, как его печатает экран |
+| `resting` | the value equals `default` — the control is doing nothing |
+| `off` | the value is at `minimum`, where that means *none at all* rather than *a little* |
+| `on` | the value is at `maximum`, or a toggle is on |
+| `set` | in every other case. `{0}` is the value as the screen prints it |
 
-Все четыре — обычные ключи локализации, как `name` и `description`. `shape` решает и вид
-контрола: `flag` рисуется переключателем, а не ползунком.
+All four are ordinary localisation keys, like `name` and `description`. `shape` also decides
+the control's appearance: `flag` is drawn as a toggle rather than a slider.
 
-**Семь идентификаторов что-то делают, ваш — нет.** Недельный расчёт читает по имени
+**Seven identifiers do something; yours does not.** The weekly calculation reads, by name,
 `import_priority`, `import_ceiling`, `export_reserve`, `price_ceiling`, `price_floor`,
-`preference` и `forbid`. Придуманный вами регулятор хранится на стране, сохраняется,
-показывается и переводится — и не читается рынком, пока его не прочтёт скрипт или патч.
+`preference` and `forbid`. A control you invent is stored on the country, saved, shown and
+translated — and not read by the market until a script or a patch reads it.
 
-Шаблон `trade_instructions` заменяет один из семи и добавляет восьмой.
+The `trade_instructions` template replaces one of the seven and adds an eighth.
 
-## Дипломатия, репутация и коалиции
+## Diplomacy, reputation and coalitions
 
-`common/opinion_modifiers` — это причины, из которых складывается мнение. Мнение не число, которое кто-то ставит, а сумма названных причин, поэтому каждую можно переименовать, перевесить и дать ей другую память: `days: 0` — держится, пока верно; `decays: true` — гаснет в течение срока; `max_stacks` — сколько раз одно и то же считается.
+`common/opinion_modifiers` holds the reasons an opinion is made of. An opinion is not a number
+somebody sets but the sum of named reasons, so each can be renamed, reweighted and given a
+different memory: `days: 0` holds while it is true; `decays: true` fades over its term;
+`max_stacks` is how many times the same thing counts.
 
-Причины, появившиеся вместе с дипломатией: `embargoed_us`, `guaranteed_us`, `notoriety`, `coalition_partner`, `stood_by_us`, `abandoned_us`.
+The reasons that arrived with diplomacy: `embargoed_us`, `guaranteed_us`, `notoriety`,
+`coalition_partner`, `stood_by_us`, `abandoned_us`.
 
-Цены самой дипломатии — в `common/defines`:
+The prices of diplomacy itself are in `common/defines`:
 
-| Define | Что делает |
+| Define | What it does |
 |---|---|
-| `notoriety_per_million_taken` | Репутация за миллион аннексированных людей. По людям, а не по провинциям: тундра соседей не пугает. |
-| `notoriety_per_unjustified_war` | Репутация за войну, причину которой никто не принял. |
-| `unjustified_war_stability_cost` | Чего такая война стоит дома. |
-| `unjustified_war_support_cost` | И у населения. |
-| `broken_promise_stability_cost` | Чего стоит отказ выполнить собственный союзный долг. |
+| `notoriety_per_million_taken` | Reputation per million people annexed. By people rather than provinces: tundra frightens no neighbours. |
+| `notoriety_per_unjustified_war` | Reputation for a war whose reason nobody accepted. |
+| `unjustified_war_stability_cost` | What such a war costs at home. |
+| `unjustified_war_support_cost` | And with the population. |
+| `broken_promise_stability_cost` | What refusing your own alliance obligation costs. |
 
-Репутация гаснет только со временем. Перейдя порог, соседи собираются в коалицию, и коалиция отвечает, когда её цель на кого-нибудь нападает.
+Reputation fades only with time. Past a threshold, the neighbours gather into a coalition, and
+a coalition answers when its target attacks somebody.
 
-**Причина войны** не флаг, а вывод из состояния: отнятая у нас земля и не забытая, наш народ, живущий за границей, друг, которого уже бьют. Война без причины — дорогая.
+**A reason for war** is not a flag but an inference from the state of things: land taken from
+us and not forgotten, our people living across the border, a friend already being hit. A war
+with no reason is expensive.
 
-### Как ИИ решает воевать
+### How the AI decides to fight
 
-Раз в одиннадцать дней страна смотрит на всех, до кого дотянется, и считает, чего война **стоит** и во что **обойдётся**. Одно вычитается из другого. Выше `ai_war_desire_threshold` — можно объявлять; выше нуля, но ниже порога — страна оставляет цель как план, вооружается и начинает отваживать её друзей.
+Every eleven days a country looks at everybody it can reach and counts what a war is **worth**
+and what it will **cost**. One is subtracted from the other. Above `ai_war_desire_threshold` it
+may declare; above zero but below the threshold, the country keeps the target as a plan, arms
+itself and starts prising its friends away.
 
-Сторона выгоды: `ai_conquest_appetite`, `ai_irredenta_appetite`, `ai_resource_appetite`, `ai_hostility_appetite`, `ai_rivalry_appetite`, `ai_opportunism_appetite`, `ai_war_minimum_advantage`.
+On the benefit side: `ai_conquest_appetite`, `ai_irredenta_appetite`, `ai_resource_appetite`,
+`ai_hostility_appetite`, `ai_rivalry_appetite`, `ai_opportunism_appetite`,
+`ai_war_minimum_advantage`.
 
-Сторона цены: `ai_trade_loss_weight`, `ai_ally_deterrence`, `ai_coalition_deterrence`, `ai_notoriety_caution`, `ai_no_casus_belli_caution`, `ai_war_weariness_caution`, `ai_instability_caution`, `ai_poverty_caution`, `ai_overseas_caution`.
+On the cost side: `ai_trade_loss_weight`, `ai_ally_deterrence`, `ai_coalition_deterrence`,
+`ai_notoriety_caution`, `ai_no_casus_belli_caution`, `ai_war_weariness_caution`,
+`ai_instability_caution`, `ai_poverty_caution`, `ai_overseas_caution`.
 
-И терпение: `ai_war_plan_patience_days` — сколько правительство готовится, прежде чем бросить идею; `ai_embargo_leverage` — насколько сильнее соперник должен зависеть от нас, чтобы санкции показались лучше вторжения.
+And patience: `ai_war_plan_patience_days` is how long a government prepares before dropping the
+idea; `ai_embargo_leverage` is how much more dependent a rival has to be before sanctions look
+better than an invasion.
 
-Готовый пример — `mods/_templates/statecraft`. Результат проверяется бенчем: строка `the world after 730 day(s)` считает войны, аннексии, торговые соглашения, пакты, союзы и вражды за два года мира, который никто не играет.
+A worked example is `mods/_templates/statecraft`. The result is checked by the bench: the line
+`the world after 730 day(s)` counts the wars, annexations, trade agreements, pacts, alliances
+and rivalries over two years of a world nobody plays.
 
-## Ландшафт
+## Terrain
 
-`common/terrain` — каталог, а не перечисление: мод может **добавить новый тип местности, не трогая код**.
+`common/terrain` is a catalogue, not an enumeration: a mod can **add a new terrain type without
+touching code**.
 
 ```json
 {
@@ -553,23 +696,32 @@ Ledger автоматически подхватывает изменённые 
 }
 ```
 
-Поля, которые вы не назвали, наследуются, поэтому частичное переопределение существующего типа — это три строки. Что где лежит, решает растр `map_data/terrain.png`, собираемый `Tools/TerrainCompiler`; отдельные провинции можно переопределить историей, и она бьёт растр.
+Fields you do not name are inherited, so partially overriding an existing type is three lines.
+What lies where is decided by the raster `map_data/terrain.png`, built by
+`Tools/TerrainCompiler`; individual provinces can be overridden by history, and history beats
+the raster.
 
-## История и собственные диаграммы
+## History and your own charts
 
-Недельные точки находятся в `Campaign.History.ForNation(nationId)`. C#-мод может читать их для AI, отчётов и собственной UI-панели. Не изменяйте возвращённую коллекцию и не храните ссылку на отдельную точку как игровое состояние: история является производной телеметрией, а не источником правил.
+The weekly points are in `Campaign.History.ForNation(nationId)`. A C# mod can read them for
+AI, reports and a UI panel of its own. Do not modify the returned collection and do not keep a
+reference to an individual point as game state: the history is derived telemetry, not a source
+of rules.
 
-Для изменения результата используйте команды (`SetTaxRateCommand`, `SetTradePolicyCommand` либо собственный `ICampaignCommand`), а не визуальные контролы Ledger. Безопасный read-only доступ к истории из GDScript API будет добавлен после стабилизации формата сохранений.
+To change an outcome, use commands (`SetTaxRateCommand`, `SetTradePolicyCommand` or your own
+`ICampaignCommand`), not the Ledger's visual controls. Safe read-only access to the history
+from the GDScript API will be added once the save format has stabilised.
 
-## C#-моды
+## C# mods
 
-C# нужен для новых систем, сложного AI или больших библиотек. Скопируйте `mods/_templates/csharp_mod`, переименуйте папку и соберите вложенный проект:
+C# is for new systems, complex AI or large libraries. Copy `mods/_templates/csharp_mod`,
+rename the folder and build the nested project:
 
 ```powershell
 dotnet build .\mods\my_csharp_mod\csharp\ExampleCSharpMod.csproj
 ```
 
-Мод реализует `DealOrForce.Modding.IGlobalityMod`:
+The mod implements `DealOrForce.Modding.IGlobalityMod`:
 
 ```csharp
 public sealed class MyMod : IGlobalityMod
@@ -582,105 +734,157 @@ public sealed class MyMod : IGlobalityMod
 
     public void OnDayAdvanced(ModContext context)
     {
-        // Для игровых действий предпочтительно ставить ICampaignCommand в Queue.
+        // For game actions, prefer putting an ICampaignCommand in the Queue.
     }
 }
 ```
 
-C# DLL загружается только в desktop/.NET-сборке с JIT. Такой мод является исполняемым кодом и обладает правами процесса игры: устанавливайте DLL лишь из доверенного источника. Для Workshop по умолчанию следует рекомендовать data/GDScript-моды и явно помечать наличие DLL.
+A C# DLL is loaded only in a desktop/.NET build with JIT. Such a mod is executable code with
+the privileges of the game process: install a DLL only from a source you trust. For a Workshop,
+data and GDScript mods should be the default recommendation, with the presence of a DLL flagged
+explicitly.
 
-## Детерминизм и совместимость
+## Determinism and compatibility
 
-- Не используйте системное время или `System.Random` для игрового результата. В C# используйте `Campaign.Random`.
-- Не меняйте коллекции во время перечисления; откладывайте действия через `Campaign.Commands`.
-- Один эффект должен происходить в одном callback, чтобы скорость не умножала его дважды.
-- Сохраняйте старый `id` и повышайте `version`.
-- Разбивайте мод на маленькие JSON-файлы по теме.
-- При конфликте побеждает более поздний мод. Зависимость нужна, когда без чужого контента мод не работает.
+- Do not use the system clock or `System.Random` for a game outcome. In C#, use
+  `Campaign.Random`.
+- Do not modify collections while enumerating them; defer actions through `Campaign.Commands`.
+- One effect should happen in one callback, so that speed does not apply it twice.
+- Keep the old `id` and raise the `version`.
+- Split a mod into small JSON files by subject.
+- On a conflict, the later mod wins. A dependency is needed when a mod does not work without
+  somebody else's content.
 
-## Проверка мода
+## Testing a mod
 
-1. Проверьте строку модов в главном меню.
-2. Ищите `[mods]` и `[mod-api]` в Output.
-3. Начните новую кампанию: data overrides применяются при её создании.
-4. Прокрутите минимум месяц на скоростях 1 и 5.
-5. Сохранитесь и убедитесь, что после перезапуска набор модов тот же.
-6. Для C# отдельно соберите мод и игру с нулём warning’ов.
+1. Check the mod line in the main menu.
+2. Look for `[mods]` and `[mod-api]` in the Output.
+3. Start a new campaign: data overrides are applied when one is created.
+4. Run at least a month at speeds 1 and 5.
+5. Save, and confirm the mod set is the same after a restart.
+6. For C#, build the mod and the game separately with zero warnings.
 
-## Знакомая структура контента
+## A familiar content structure
 
-Базовая игра и мод имеют одинаковое дерево. Более поздний мод накладывает записи по стабильному ID, поэтому не нужно копировать целый файл ради одного изменения:
+The base game and a mod have the same tree. A later mod overlays entries by stable ID, so there
+is no need to copy a whole file for one change:
 
-Обозначения ниже: **live** — каталог уже загружается игрой; **next** — закреплённый публичный контракт следующего этапа. Планируемые папки не считаются реализованными, пока загрузчик и валидатор не принимают их содержимое.
+The notation below: **live** — the catalogue is already loaded by the game; **next** — a fixed
+public contract for the next stage. Planned folders do not count as implemented until the loader
+and the validator accept their contents.
 
 ```text
-game/ или my_mod/
-├── descriptor.json     # манифест пакета/мода и зависимости                 [live у модов]
+game/ or my_mod/
+├── descriptor.json     # the package/mod manifest and dependencies            [live for mods]
 ├── common/
-│   ├── buildings/     # стоимость, сроки и эффекты зданий
-│   ├── decisions/     # национальные решения и cooldown
-│   ├── defines/       # числовые правила симуляции
-│   ├── goods/         # товары, цены и важность дефицита
-│   ├── production/    # из чего вещи сделаны и кто их потребляет
-│   ├── units/         # типы соединений, combat width и снабжение
-│   ├── ai_strategy/   # веса и профили стратегического AI
-│   ├── modifiers/     # именованные состояния страны и их эффекты
-│   └── diplomacy/     # действия, стоимость, отношение и принятие          [next]
-├── events/            # события, триггеры, варианты и составные эффекты
+│   ├── buildings/     # building cost, duration and effects
+│   ├── decisions/     # national decisions and cooldowns
+│   ├── defines/       # numeric simulation rules
+│   ├── goods/         # commodities, prices and the importance of a shortage
+│   ├── production/    # what things are made of and who consumes them
+│   ├── units/         # formation types, combat width and supply
+│   ├── ai_strategy/   # strategic AI weights and profiles
+│   ├── modifiers/     # named country conditions and their effects
+│   └── diplomacy/     # actions, cost, attitude and acceptance             [next]
+├── events/            # events, triggers, options and composite effects
 ├── history/
-│   ├── provinces/     # кто владеет каждой провинцией и кто её держит
-│   ├── countries/2024/# страна и правительство на дату сценария
-│   ├── states/2024/   # население, здания и контроль регионов
-│   └── units/2024/    # стартовая численность вооружённых сил
-├── map_data/          # административные регионы, топология и гидрография
-│   ├── default.map    # имена авторитетных data-map и горизонтальный wrap
-│   ├── provinces.png # уникальный RGB на каждую тактическую провинцию
-│   ├── definition.csv# RGB → стабильный 16-битный ID
-│   ├── rivers.png    # фиксированные цвета классов рек
-│   ├── lakes.png     # маска озёр
-│   └── hydrography/  # GeoJSON-источники для перекомпиляции базовой карты
-├── localization/      # строки по языкам, ключ = английский исходный текст
-│   └── english/       # полный индекс: что вообще переводится
-├── interface/         # именованные цветовые токены интерфейса и карты
-├── gfx/               # материалы, текстуры и map-symbol definitions       [next]
-├── sound/             # sound effects, music и event-to-cue mappings        [next]
-└── scripts/           # необязательные GDScript/C# расширения мода          [live у модов]
+│   ├── provinces/     # who owns each province and who holds it
+│   ├── countries/2024/# the country and its government at the scenario date
+│   ├── states/2024/   # regional population, buildings and control
+│   └── units/2024/    # the starting strength of the armed forces
+├── map_data/          # administrative regions, topology and hydrography
+│   ├── default.map    # the names of the authoritative data maps and horizontal wrap
+│   ├── provinces.png # a unique RGB per tactical province
+│   ├── definition.csv# RGB → stable 16-bit ID
+│   ├── rivers.png    # fixed colours for river classes
+│   ├── lakes.png     # the lake mask
+│   └── hydrography/  # GeoJSON sources for recompiling the base map
+├── localization/      # strings by language, key = the English source text
+│   └── english/       # the full index: what there is to translate at all
+├── interface/         # named colour tokens for the interface and the map
+├── gfx/               # materials, textures and map symbol definitions        [next]
+├── sound/             # sound effects, music and event-to-cue mappings        [next]
+└── scripts/           # optional GDScript/C# extensions for the mod           [live for mods]
 ```
 
-Вместо закрытого собственного синтаксиса используется обычный JSON с комментариями, стабильными строковыми ID, валидацией и безопасными C#-fallback’ами. При новой кампании каталоги сначала сбрасываются к базе и лишь затем получают модовые слои — отключённый мод не «протекает» в следующий запуск.
+Instead of a closed syntax of its own, this uses ordinary JSON with comments, stable string
+IDs, validation and safe C# fallbacks. On a new campaign the catalogues are first reset to base
+and only then given the mod layers — a disabled mod does not "leak" into the next run.
 
-Список того, что «реально подключено», раньше жил здесь — и устаревал молча, потому что утверждение в документе никто не проверяет. Теперь его проверяет сборка: загрузчик записывает каждую категорию, которую у него спросили, а SimBench сверяет этот список с тем, что лежит на диске. Папка данных, которую никто не читает, роняет проверку — иначе моддер правил бы её весь день без единой ошибки и без единого эффекта.
+The list of what is "actually wired up" used to live here — and went stale silently, because
+nobody checks an assertion in a document. The build checks it now: the loader records every
+category it was asked for, and SimBench compares that list against what is on disk. A data
+folder nobody reads fails the check — otherwise a modder would edit it all day with no error
+and no effect.
 
-На сегодня под `common/` читается всё, а это 34 категорий:
+As of today, everything under `common/` is read, and that is 34 categories:
 
-`common/ai_strategy`, `common/budget`, `common/buildings`, `common/countries`, `common/cultures`, `common/decisions`, `common/defines`, `common/diagnostics`, `common/flags`, `common/formable_nations`, `common/goods`, `common/governance`, `common/government_focus`, `common/governments`, `common/ideologies`, `common/militia`, `common/modifiers`, `common/opinion_modifiers`, `common/peace_terms`, `common/production`, `common/professions`, `common/religions`, `common/scripted_effects`, `common/scripted_modifiers`, `common/scripted_triggers`, `common/secession`, `common/settings`, `common/stability`, `common/states`, `common/subjects`, `common/terrain`, `common/trade`, `common/trade_policies`, `common/units`.
+`common/ai_strategy`, `common/budget`, `common/buildings`, `common/countries`,
+`common/cultures`, `common/decisions`, `common/defines`, `common/diagnostics`, `common/flags`,
+`common/formable_nations`, `common/goods`, `common/governance`, `common/government_focus`,
+`common/governments`, `common/ideologies`, `common/militia`, `common/modifiers`,
+`common/opinion_modifiers`, `common/peace_terms`, `common/production`, `common/professions`,
+`common/religions`, `common/scripted_effects`, `common/scripted_modifiers`,
+`common/scripted_triggers`, `common/secession`, `common/settings`, `common/stability`,
+`common/states`, `common/subjects`, `common/terrain`, `common/trade`, `common/trade_policies`,
+`common/units`.
 
-Плюс `events`, `localization`, `interface`, `gui`, `gfx`, `fonts`, `sound`, `music`, `scenarios`, `history/countries`, `history/states`, `history/pops`, `history/units`, `history/provinces` и `map_data/*`.
+Plus `events`, `localization`, `interface`, `gui`, `gfx`, `fonts`, `sound`, `music`,
+`scenarios`, `history/countries`, `history/states`, `history/pops`, `history/units`,
+`history/provinces` and `map_data/*`.
 
-Из недавно вынесенного в данные: `common/peace_terms` (восемь стандартных условий мира — цена в очках войны, готовность противника, минимальная длительность войны), `common/trade` (правила закупок и продаж), `common/flags` → `identities` (флаг провозглашённого государства перебивает флаг страны, которая его провозгласила), `needs_water` у здания в `common/buildings` (порт и верфь бесполезны без воды) и новые `defines`: `MaxConstructionProjects`, `EventIntervalDays`, `EventMemoryDays`, `EventExpiryDays`, `InlandWaterworksYield`, `DemolitionRefund`, `PeaceRoundUpShare`, `PeaceRoundDownShare`.
+Recently moved out into data: `common/peace_terms` (the eight standard peace terms — their
+price in war score, the opponent's readiness, the minimum war duration), `common/trade` (the
+rules for buying and selling), `common/flags` → `identities` (a proclaimed nation's flag beats
+the flag of the country that proclaimed it), `needs_water` on a building in `common/buildings`
+(a port and a shipyard are useless without water), and the new defines
+`MaxConstructionProjects`, `EventIntervalDays`, `EventMemoryDays`, `EventExpiryDays`,
+`InlandWaterworksYield`, `DemolitionRefund`, `PeaceRoundUpShare` and `PeaceRoundDownShare`.
 
-### Правила совместимости
+### Compatibility rules
 
-- Контент адресуется стабильным строковым ID, а не положением в массиве или именем файла. Для публичных модов рекомендуется namespace `author_mod:item_id`.
-- Загрузка идёт `base game → dependencies → load_order → id`, поэтому результат детерминирован и одинаков в одиночной и локальной сетевой игре.
-- Более поздний слой меняет только явно переданные поля записи. Для полного удаления/замены будет отдельная декларация, чтобы пустое значение не означало сразу три разных операции.
-- Сценарная история отделена от общих определений: тип здания находится в `common`, а его уровень на 1 января 2024 года — в `history`.
-- C# и GDScript расширяют публичный API, но обычный баланс, карта, события, страны, войска и локализация должны моддиться без компиляции.
-- Сохранение хранит версию карты и fingerprint активных модов; несовместимый набор отклоняется до повреждения текущей кампании.
+- Content is addressed by a stable string ID, not by position in an array or a file name. For
+  public mods, the namespace `author_mod:item_id` is recommended.
+- Loading goes `base game → dependencies → load_order → id`, so the result is deterministic and
+  identical in single-player and in a local network game.
+- A later layer changes only the fields it explicitly passes. Full removal and replacement will
+  get a declaration of their own, so that an empty value does not mean three different
+  operations at once.
+- Scenario history is separate from common definitions: a building type lives in `common`, and
+  its level on 1 January 2024 lives in `history`.
+- C# and GDScript extend the public API, but ordinary balance, the map, events, countries,
+  troops and localisation must all be moddable without compiling anything.
+- A save stores the map version and a fingerprint of the active mods; an incompatible set is
+  rejected before the current campaign is damaged.
 
-Это намеренно знакомая, но не побайтовая копия форматов какой-либо чужой игры: берётся удачное разделение ответственности, а JSON, строгая диагностика и атомарные сохранения убирают типичные неоднозначности старых скриптовых форматов.
+This is deliberately a familiar structure but not a byte-for-byte copy of any other game's
+formats: the useful separation of responsibilities is taken, while JSON, strict diagnostics and
+atomic saves remove the usual ambiguities of older scripting formats.
 
-### Географические override
+### Geographic overrides
 
-`map_data/region_overrides.json` умеет добавлять/переопределять административные регионы по `map_index` и исправлять узкие ошибочные границы. Поле `source_nation` разрешает безопасно вырезать новую территорию из существующего контролёра до построения регионов и провинций. Это меняет авторитетный растр: выбор, провинции, AI, фронты и строительство видят одну географию, а не косметическую маску.
+`map_data/region_overrides.json` can add and override administrative regions by `map_index` and
+correct narrow mistaken borders. The `source_nation` field allows safely carving new territory
+out of an existing controller before the regions and provinces are built. This changes the
+authoritative raster: selection, provinces, the AI, fronts and construction all see one
+geography rather than a cosmetic mask.
 
-Необязательное поле `polygon` принимает массив пар `[longitude, latitude]`. Сначала применяется bounding box правила, затем point-in-polygon и проверка `source_nation`, поэтому сложная граница не перекрашивает море или третью страну. PMR служит рабочим примером: его 56-точечный контур упрощён из OpenStreetMap relation 65335 примерно до разрешения исходного растра; `boundary_source` хранит происхождение и лицензионную заметку рядом с данными.
+The optional `polygon` field takes an array of `[longitude, latitude]` pairs. The rule's
+bounding box is applied first, then a point-in-polygon test and the `source_nation` check, so a
+complex border does not repaint the sea or a third country. PMR serves as a worked example: its
+56-point outline is simplified from OpenStreetMap relation 65335 down to roughly the resolution
+of the source raster; `boundary_source` keeps the provenance and the licence note beside the
+data.
 
-### Политическая карта как данные
+### The political map as data
 
-Форма мира была данными давно: `provinces.png` и `definition.csv` вместе говорят, где находится каждая из 37 833 провинций. **Кому они принадлежат** — не была: владение приходило из растра контроля, вкомпилированного в исполняемый файл. Мод мог перекроить форму мира и не сдвинуть на нём ни одной границы.
+The shape of the world has been data for a long time: `provinces.png` and `definition.csv`
+together say where each of the 37,833 provinces is. **Who owns them** was not: ownership came
+from a control raster compiled into the executable. A mod could redraw the shape of the world
+and not move one border on it.
 
-Теперь есть вторая половина, в форме, знакомой по Paradox: папка `history/provinces` с файлами вида
+There is now a second half, in a form familiar from Paradox: a `history/provinces` folder with
+files of the form
 
 ```
 province;owner;controller
@@ -688,55 +892,100 @@ province;owner;controller
 12346;FRA;DEU
 ```
 
-`owner` — чья это земля по праву, `controller` — кто на ней стоит. Контролирующего можно не писать: значит, владелец её и держит. Провинции, которые файл не упоминает, сохраняют владельца базовой игры — мод, двигающий одну границу, не обязан переписывать остальные тридцать семь тысяч.
+`owner` is whose land it is by right, `controller` who stands on it. The controller can be left
+out: then the owner holds it. Provinces the file does not mention keep the base game's owner —
+a mod that moves one border does not have to rewrite the other thirty-seven thousand.
 
-Базовая игра поставляет полную карту (`game/history/provinces/ownership.csv`, 37 833 строк), и её **экспортирует тот же компилятор**, который собирает растр, — поэтому то, что правит моддер, это ровно то, на чём работает игра, а не рукописное приближение к ней. Бенч проверяет, что файл и карта не разошлись, и что правка в одну строку двигает ровно одну провинцию.
+The base game ships the full map (`game/history/provinces/ownership.csv`, 37,833 lines), and it
+is **exported by the same compiler** that builds the raster — so what a modder edits is exactly
+what the game runs on, not a hand-written approximation of it. The bench checks that the file
+and the map have not drifted apart, and that a one-line edit moves exactly one province.
 
-Всё, что ниже по течению — экономика, фронты, снабжение, ИИ, мирная конференция — читает владение из одного места, поэтому сдвинутая строка сдвигает их все.
+Everything downstream — the economy, fronts, supply, the AI, the peace conference — reads
+ownership from one place, so a moved line moves them all.
 
-**Чего этот слой не делает:** принадлежность к региону. Провинция выращивается внутри одного региона и никогда не пересекает его границу, поэтому её регион — факт о её форме, а не о политике. Чтобы поменять это, правится `map_data/region_overrides.json` и пересобирается растр.
+**What this layer does not do:** membership of a region. A province is grown inside one region
+and never crosses its border, so its region is a fact about its shape rather than about
+politics. To change that, edit `map_data/region_overrides.json` and rebuild the raster.
 
-Шаблон: `mods/_templates/border_redraw`.
+The template: `mods/_templates/border_redraw`.
 
-### Микрогосударства и растр
+### Microstates and the raster
 
-Три страны имели место в таблице стран и ни одной клетки на карте: Ватикан, Северный Кипр и Гибралтар. Строка в таблице — не государство: такую страну нельзя выбрать, захватить, включить в мирный договор или объявить ей войну.
+Three countries had a place in the country table and not one cell on the map: the Vatican,
+Northern Cyprus and Gibraltar. A row in a table is not a state: such a country cannot be
+picked, taken, included in a peace treaty or declared war on.
 
-Ватикан и Гибралтар добавлены как `seed_points` радиуса 0 — одна клетка, отрезанная от Рима и от Кадиса. Клетка растра около 0,0625° — примерно 36 км² против настоящих 0,49 км² Ватикана. Это грубо, но государство, которое существует, граничит с Италией и участвует в дипломатии, ближе к правде игры, чем точное, которого нет. Северный Кипр задан полигоном по линии разграничения ООН; его южная сторона следует линии, а остальные три намеренно уведены в море — закрашиваются только клетки, уже принадлежащие стране-источнику.
+The Vatican and Gibraltar were added as `seed_points` of radius 0 — one cell, cut out of Rome
+and out of Cádiz. A raster cell is about 0.0625°, which is roughly 36 km² against the Vatican's
+real 0.49 km². That is crude, but a state that exists, borders Italy and takes part in
+diplomacy is closer to the game's truth than an exact one that does not. Northern Cyprus is
+given as a polygon along the UN line of separation; its southern side follows the line and the
+other three are deliberately pushed out to sea — only cells already belonging to the source
+country are painted.
 
-Нахичевань — тот же случай с другой стороны: это эксклав Азербайджана, отрезанный Арменией, а исходная таблица даёт Азербайджану всего четыре района, поэтому эксклав сметало в тот из них, до которого дотягивался растр. Регион, до которого нельзя дойти из остальной части того же региона, — это не один регион.
+Nakhchivan is the same case from the other side: an exclave of Azerbaijan cut off by Armenia,
+while the source table gives Azerbaijan only four districts, so the exclave was swept into
+whichever of them the raster could reach. A region you cannot walk to from the rest of the same
+region is not one region.
 
-Донор населения теперь определяется по карте, если правило его не называет: берётся тот регион, который сейчас держит землю, которую правило собирается забрать. Указывать его руками — это то, что легко перепутать, а ответ и так лежит на карте.
+The population donor is now determined from the map if a rule does not name one: the region
+currently holding the land the rule is about to take. Naming it by hand is easy to get wrong,
+and the answer is on the map anyway.
 
-Кораллового моря и Спратли добавить нельзя: их суша меньше клетки растра, и закрашивать нечего. Проверка `Tools/SimBench` требует, чтобы у каждой населённой страны была земля, и явно перечисляет эти два исключения с причиной.
+The Coral Sea Islands and the Spratlys cannot be added: their land is smaller than a raster cell
+and there is nothing to paint. The `Tools/SimBench` check requires every populated country to
+have land, and lists those two exceptions explicitly with the reason.
 
-Важно: изменение регионов меняет и провинции. Провинция никогда не пересекает границу региона, поэтому после правки `region_overrides.json` нужно пересобрать растр:
+Note that changing regions changes provinces too. A province never crosses a regional border, so
+after editing `region_overrides.json` the raster has to be rebuilt:
 
 ```bash
-dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <путь к проекту>
+dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <path to the project>
 ```
 
-Иначе игра откажется грузить карту с явной ошибкой «province crosses an administrative or national border» — намеренно, вместо тихой перенумерации ID.
+Otherwise the game refuses to load the map with an explicit "province crosses an administrative
+or national border" — deliberately, rather than quietly renumbering IDs.
 
-### Растровая карта провинций
+### The province raster map
 
-Все data-map — обычные lossless RGB PNG размером 5760×2880 без indexed palette и interlace. `default.map` указывает относительные имена файлов и `wrap_x = yes`. Чёрный цвет в `provinces.png` означает море, любой участок суши обязан иметь цвет из `definition.csv`, а одна провинция не может пересекать административную или государственную границу стартового сценария. Загрузчик проверяет размеры, неизвестные/повторяющиеся цвета, пропавшие ID, окрашенное море и пересечение границ до создания кампании.
+All data maps are ordinary lossless RGB PNGs of 5760×2880 with no indexed palette and no
+interlacing. `default.map` gives the relative file names and `wrap_x = yes`. Black in
+`provinces.png` means sea, any patch of land must have a colour from `definition.csv`, and one
+province cannot cross an administrative or national border of the starting scenario. The loader
+checks the dimensions, unknown and duplicated colours, missing IDs, coloured sea and border
+crossings before a campaign is created.
 
-Мод, меняющий провинции, должен положить рядом и `provinces.png`, и `definition.csv`; частичная замена пары отклоняется. `rivers.png` и `lakes.png` можно заменять независимо. Полная палитра с RGB-кодами находится в `game/map_data/RASTER_PALETTE.md`.
+A mod that changes provinces must ship both `provinces.png` and `definition.csv`; replacing only
+one of the pair is refused. `rivers.png` and `lakes.png` can be replaced independently. The full
+palette with RGB codes is in `game/map_data/RASTER_PALETTE.md`.
 
-### Гидрография
+### Hydrography
 
-Во время игры авторитетны `rivers.png` и `lakes.png`. В `rivers.png` четыре допустимых цвета: чёрный, малая, обычная и крупная река; `lakes.png` использует чёрный и `#3366FF`. Именно эти пиксели одновременно рисуются и превращаются в игровые признаки графа.
+During play, `rivers.png` and `lakes.png` are authoritative. `rivers.png` has four permitted
+colours: black, a minor river, an ordinary river and a major one; `lakes.png` uses black and
+`#3366FF`. Those very pixels are both drawn and turned into game properties of the graph.
 
-`map_data/hydrography/*.json` сохраняются как редактируемые GeoJSON-источники компилятора: реки принимают `LineString`/`MultiLineString`, озёра — `Polygon`/`MultiPolygon`, координаты имеют порядок `[longitude, latitude]`. Они удобны для массового импорта реальных данных, но не перекрывают нарисованные PNG при запуске.
+`map_data/hydrography/*.json` are kept as editable GeoJSON sources for the compiler: rivers
+accept `LineString`/`MultiLineString`, lakes `Polygon`/`MultiPolygon`, with coordinates in
+`[longitude, latitude]` order. They are convenient for bulk-importing real data, but they do not
+override the drawn PNGs at startup.
 
-Один PNG одновременно создаёт видимый слой и игровые признаки провинций, поэтому нарисованная река автоматически участвует в поиске переправ, бою и движении. Числа находятся в `common/defines/military.json`: `river_movement_multiplier`, `river_attack_multiplier`, `major_river_attack_multiplier` и `lake_supply_bonus`. Значение проходимости здесь отсутствует намеренно — реки никогда не разрывают сухопутный граф.
+One PNG creates both the visible layer and the provinces' game properties, so a river you draw
+automatically takes part in crossing searches, in combat and in movement. The numbers are in
+`common/defines/military.json`: `river_movement_multiplier`, `river_attack_multiplier`,
+`major_river_attack_multiplier` and `lake_supply_bonus`. There is deliberately no impassability
+value here — rivers never break the land graph.
 
-### События и язык эффектов
+### Events and the effects language
 
-Файл в `events/*.json` содержит объект событий. Каждое событие имеет `title`, `description` и массив `options`; вариант содержит `title`, `consequence` и объект `effects`.
+A file in `events/*.json` contains an object of events. Every event has a `title`, a
+`description` and an array of `options`; an option has a `title`, a `consequence` and an
+`effects` object.
 
-Раньше `effect` был именем из закрытого C#-перечисления: мод мог написать новое событие, но выбрать только один из шести заранее написанных исходов. Теперь последствие — свободно составляемый набор пар «ключ-значение», и именно так его пишут события, решения и модификаторы:
+`effect` used to be a name from a closed C# enumeration: a mod could write a new event but only
+choose one of six pre-written outcomes. A consequence is now a freely composed set of key-value
+pairs, and that is how events, decisions and modifiers are all written:
 
 ```json
 {
@@ -760,21 +1009,30 @@ dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <путь �
 }
 ```
 
-Правила языка эффектов:
+The rules of the effects language:
 
-- голое число **прибавляется**: `"stability": 0.02`;
-- суффикс `_percent` умножает на `(1 + значение)`: `"treasury_percent": -0.08` — минус 8%;
-- суффикс `_mult` умножает напрямую, `_set` присваивает;
-- префикс `state.` применяет запись **к каждому региону страны**, а не к самой стране;
-- неизвестный ключ не ломает файл: он пишется в лог с перечнем допустимых ключей, а остальной мод продолжает грузиться.
+- a bare number is **added**: `"stability": 0.02`;
+- the `_percent` suffix multiplies by `(1 + value)`: `"treasury_percent": -0.08` is minus 8 %;
+- the `_mult` suffix multiplies directly, `_set` assigns;
+- the `state.` prefix applies the entry **to every region of the country** rather than to the
+  country;
+- an unknown key does not break the file: it is written to the log with the list of permitted
+  keys, and the rest of the mod goes on loading.
 
-Полный список ключей всегда доступен прямо в игре — команда консоли `effects`. Он же используется в триггерах: `min_<ключ>`, `max_<ключ>`, плюс `at_war` и `tags`. Пустой триггер означает «подходит любой стране», что и нужно обычному флейвор-событию. `weight` задаёт относительный вес при выборе среди подходящих событий.
+The full list of keys is always available in the game itself — the console command `effects`. It
+is also used in triggers: `min_<key>`, `max_<key>`, plus `at_war` and `tags`. An empty trigger
+means "any country will do", which is what an ordinary flavour event wants. `weight` sets the
+relative weight when choosing among the events that fit.
 
-Старая форма `"effect": "InvestIndustry"` продолжает работать как пресет, поэтому существующий контент не ломается — но новый лучше писать через `effects`.
+The old form `"effect": "InvestIndustry"` still works as a preset, so existing content does not
+break — but new content is better written through `effects`.
 
-### Модификаторы (national spirits)
+### Modifiers (national spirits)
 
-`common/modifiers/*.json` — именованные состояния страны, которые события и решения выдают на срок. Это то, что в Hearts of Iron называется national spirit, а в Victoria — модификатором, и нужно оно для того же: событие, разово подвинувшее число, забывается сразу, а событие, повесившее на страну именованное состояние на год, остаётся частью партии.
+`common/modifiers/*.json` holds named country conditions that events and decisions grant for a
+term. It is what Hearts of Iron calls a national spirit and Victoria calls a modifier, and it is
+there for the same reason: an event that moved a number once is forgotten at once, while an
+event that hung a named condition on a country for a year stays part of the game.
 
 ```json
 {
@@ -788,15 +1046,20 @@ dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <путь �
 }
 ```
 
-`days` = 0 делает модификатор постоянным. Эффекты применяются **раз в экономический тик**, пока модификатор активен, поэтому числа здесь — скорости за тик, а не разовые величины. Повторная выдача обновляет таймер, а не складывает второй экземпляр. Активные модификаторы страны видны игроку в National Ledger строкой «In effect».
+`days` = 0 makes a modifier permanent. The effects are applied **once per economic tick** while
+the modifier is active, so the numbers here are rates per tick, not one-off amounts. Granting it
+again refreshes the timer rather than stacking a second copy. A country's active modifiers are
+visible to the player in the National Ledger on the "In effect" line.
 
-Событие ссылается на них массивом `modifiers`: короткой формой `["war_economy"]` или полной `[{ "id": "war_economy", "days": 180 }]`.
+An event refers to them with a `modifiers` array: the short form `["war_economy"]` or the full
+`[{ "id": "war_economy", "days": 180 }]`.
 
-### Локализация
+### Localisation
 
-`localization/<язык>.json` — плоская карта «строка → перевод». Папка названа так же, как у Paradox, но формат — обычный JSON, а не их YAML-диалект.
+`localization/<language>.json` is a flat map of "string → translation". The folder is named the
+way Paradox names it, but the format is ordinary JSON rather than their YAML dialect.
 
-Ключом служит **английский исходный текст**, как в `tr()` самого Godot:
+The key is the **English source text**, as in Godot's own `tr()`:
 
 ```json
 {
@@ -806,20 +1069,35 @@ dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <путь �
 }
 ```
 
-Из этого следуют два удобных свойства: непереведённая строка просто показывается по-английски, а не пустотой, и мод-перевод не обязан покрывать интерфейс целиком, чтобы быть полезным. `language.name` задаёт, как язык называется в переключателе — на самом этом языке.
+Two convenient properties follow: an untranslated string simply shows in English rather than as
+nothing, and a translation mod does not have to cover the whole interface to be useful.
+`language.name` decides what the language is called in the switcher — in that language.
 
-**С чего начинать перевод.** `game/localization/english/00_english.json` — полный индекс того, что вообще переводится: каждая строка отображена сама в себя. Скопируй файл в `localization/<язык>/00_<язык>.json`, переведи правую половину каждой строки, левую не трогай.
+**Where to start a translation.** `game/localization/english/00_english.json` is the complete
+index of what there is to translate: every string mapped to itself. Copy the file to
+`localization/<language>/00_<language>.json`, translate the right half of each line and leave the
+left half alone.
 
-Выглядит избыточно и таковым не является. Поиск, не нашедший ключа, скатывается к текущему языку, потом к английскому, потом к самому ключу — то есть интерфейс работал бы и с пустым английским файлом, и он был пустым: три строки. Ценой было то, что `Loc.MissingKeys`, чья работа — быть списком дел переводчика, и печатающая его консольная команда `loc <язык>` сравнивали любой язык с этими тремя строками и всегда отвечали, что непереведённого нет.
+It looks redundant and is not. A lookup that fails to find a key falls back to the current
+language, then to English, then to the key itself — so the interface would work with an empty
+English file, and it was empty: three lines. The price was that `Loc.MissingKeys`, whose job is
+to be a translator's to-do list, and the console command `loc <language>` that prints it, were
+comparing every language against those three lines and always answering that nothing was
+untranslated.
 
-Индекс держится в актуальном состоянии проверкой стенда `the English table indexes every string the game shows`: она падает, если подпись из исходников в него не попала, и печатает покрытие каждого языка. Подписи, собираемые на ходу — название страны, число, дата — ключами не являются и в индексе не ожидаются.
+The index is kept current by the bench check `the English table indexes every string the game
+shows`: it fails if a caption from the sources did not reach it, and prints each language's
+coverage. Captions assembled on the fly — a country name, a number, a date — are not keys and are
+not expected in the index.
 
-Язык переключается кнопкой в главном меню; список собирается из всех загруженных таблиц, включая модовые. Команда консоли `loc <язык>` переключает язык и показывает, сколько ключей переведено и какие остались.
+The language is switched with the button in the main menu; the list is collected from every
+loaded table, modded ones included. The console command `loc <language>` switches the language
+and shows how many keys are translated and which are left.
 
-**Склонение по числам.** Русский считает на три — 1 дивизия, 2 дивизии, 5 дивизий, — а
-английский на два, и никакой перевод этого починить не может, если форма выбрана в исходнике.
-Поэтому число выбирает **ключ**, а слова выбирает таблица: строка, в которой есть счёт,
-существует в трёх вариантах — сам ключ, ключ с `|few` и ключ с `|many`.
+**Plurals.** Russian counts in threes — 1 division, 2 divisions, 5 divisions — and English in
+twos, and no translation can fix that if the form was chosen in the source. So the number chooses
+a **key** and the table chooses the words: a string with a count in it exists in three variants —
+the key itself, the key with `|few` and the key with `|many`.
 
 ```json
 {
@@ -829,19 +1107,23 @@ dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <путь �
 }
 ```
 
-Какое правило у языка — объявляет сам язык, в своей же таблице, рядом с `language.name`:
+Which rule a language uses is declared by the language itself, in its own table, beside
+`language.name`:
 
 ```json
 { "language.name": "Polski", "language.plural": "slavic" }
 ```
 
-Доступны `one-other` (английский и большинство, значение по умолчанию), `slavic` (русский,
-украинский, польский, чешский) и `single` (японский, китайский, корейский, турецкий — слово не
-меняется). Мод с новым языком пишет одну строку и кода не трогает.
+Available are `one-other` (English and most languages, the default), `slavic` (Russian,
+Ukrainian, Polish, Czech) and `single` (Japanese, Chinese, Korean, Turkish — the word does not
+change). A mod adding a new language writes one line and touches no code.
 
-### Интерфейс: цвета как данные
+### Interface: colours as data
 
-Раньше каждый цвет интерфейса был литералом в коде — 155 штук, разбросанных по 21 файлу, среди них два десятка почти одинаковых оттенков серого. Теперь все они — именованные токены в `game/interface/skin.json`, и мод накладывает свой слой ровно так же, как на любой другой контент:
+Every interface colour used to be a literal in code — 155 of them, scattered across 21 files,
+among them a couple of dozen nearly identical shades of grey. They are all named tokens now, in
+`game/interface/skin.json`, and a mod overlays its own layer exactly as it would over any other
+content:
 
 ```json
 // my_mod/interface/skin.json
@@ -854,31 +1136,42 @@ dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <путь �
 }
 ```
 
-Токены названы по роли, а не по внешнему виду: `text.caption`, а не `text.grey`. Из этого следует главное свойство — переопределив один `text.caption`, моддер меняет **все** заголовки секций в игре сразу, потому что базовая игра уже договорилась сама с собой о том, что такое заголовок секции.
+Tokens are named by role rather than by appearance: `text.caption`, not `text.grey`. From which
+the main property follows — overriding one `text.caption` changes **every** section heading in
+the game at once, because the base game has already agreed with itself about what a section
+heading is.
 
-Семейства токенов:
+The token families:
 
-| Семейство | Что задаёт |
+| Family | What it sets |
 |---|---|
-| `text.*` | пятиступенчатая шкала текста: `bright`, `body`, `body_soft`, `muted`, `hint`, `faint` + `accent`, `accent_dim`, `caption` |
-| `state.*` | смысловые цвета: `positive`, `negative`, `warning`, `info`, `critical` — только для смысла, не для украшения |
-| `surface.*` | фон, панели, вставки и линейки |
-| `button.*` | все состояния кнопки, обычной и акцентной |
-| `map.*` | режимы карты: политика, дипломатия, война, градиенты значений |
-| `globe.*` | небо и подписи 3D-глобуса |
-| `military.*` | счётчики соединений и маркеры боёв |
-| `series.*`, `chart.*` | палитра графиков |
-| `goods.*`, `building.*` | контентные цвета товаров и зданий |
+| `text.*` | the five-step text scale: `bright`, `body`, `body_soft`, `muted`, `hint`, `faint` plus `accent`, `accent_dim`, `caption` |
+| `state.*` | meaningful colours: `positive`, `negative`, `warning`, `info`, `critical` — for meaning only, never decoration |
+| `surface.*` | the ground, panels, insets and rules |
+| `button.*` | every state of a button, ordinary and accented |
+| `map.*` | map modes: politics, diplomacy, war, value gradients |
+| `globe.*` | the sky and labels of the 3D globe |
+| `military.*` | formation counters and battle markers |
+| `series.*`, `chart.*` | the chart palette |
+| `goods.*`, `building.*` | content colours for commodities and buildings |
 
-Правила те же, что и у остального контента: перечисляется только то, что меняется; неизвестный или битый токен стоит одной строки в списке ошибок мода, а не всего слоя; неизвестный токен в коде рисуется ярко-розовым, чтобы опечатка была видна на экране, а не роняла игру. Полный список с базовыми значениями лежит в `game/interface/skin.json` — его и надо копировать. Готовый шаблон: `mods/_templates/interface_reskin`.
+The rules are the same as for the rest of the content: list only what you change; an unknown or
+broken token costs one line in the mod's error list rather than the whole layer; an unknown token
+in code is drawn bright pink, so a typo is visible on screen rather than crashing the game. The
+full list with base values is in `game/interface/skin.json` — that is the file to copy. A
+ready-made template: `mods/_templates/interface_reskin`.
 
-Команда консоли `skin` показывает, какие токены сдвинуты модами относительно базовых; `skin text` печатает одно семейство с образцом цвета у каждой строки.
+The console command `skin` shows which tokens mods have moved relative to the base; `skin text`
+prints one family with a colour swatch on every line.
 
-### Раскладка панелей
+### Panel layout
 
-Цвет стал данными раньше; геометрия оставалась шестьюдесятью четырьмя присваиваниями якорей и отступов, размазанными по дюжине файлов, — мод, которому нужен более широкий Ledger или список армии справа, был вынужден форкать интерфейс.
+Colour became data earlier; geometry remained sixty-four assignments of anchors and offsets
+smeared across a dozen files — a mod that wanted a wider Ledger or the army list on the right was
+forced to fork the interface.
 
-Теперь панель — это **имя и прямоугольник**, а прямоугольник — данные. В `interface/skin.json` появилась секция `layout`:
+A panel is now **a name and a rectangle**, and a rectangle is data. `interface/skin.json` has
+gained a `layout` section:
 
 ```json
 "layout": {
@@ -887,22 +1180,46 @@ dotnet run --project Tools/MapDataCompiler/MapDataCompiler.csproj -- <путь �
 }
 ```
 
-Четыре якоря — доли экрана, четыре отступа — пиксели; порядок как у Godot: левый, верхний, правый, нижний. Якоря и отступы независимы: панели, которой нужно только стать шире, достаточно перечислить отступы и унаследовать якоря.
+Four anchors are fractions of the screen, four offsets are pixels; the order is Godot's: left,
+top, right, bottom. Anchors and offsets are independent: a panel that only needs to be wider can
+list the offsets and inherit the anchors.
 
-Двадцать имён покрывают весь интерфейс: `hud.top`, `hud.navigation`, `hud.side_panel`, `hud.army_panel`, `hud.peace_panel`, `hud.outliner`, `hud.alerts`, `hud.map_controls`, `hud.hotseat`, `hud.network`, `menu.main`, `picker.*`, `modal.*`. Команда консоли `skin hud.` печатает их с текущими прямоугольниками.
+Twenty names cover the whole interface: `hud.top`, `hud.navigation`, `hud.side_panel`,
+`hud.army_panel`, `hud.peace_panel`, `hud.outliner`, `hud.alerts`, `hud.map_controls`,
+`hud.hotseat`, `hud.network`, `menu.main`, `picker.*`, `modal.*`. The console command `skin hud.`
+prints them with their current rectangles.
 
-**Чего слой не делает:** содержимое панели. Файл раскладки может подвинуть, растянуть или убрать экран, который строит базовая игра, но не может придумать новый или добавить в существующий элемент. Для этого нужен C#-мод.
+**What the layer does not do:** a panel's contents. The layout file can move, stretch or remove a
+screen the base game builds, but it cannot invent a new one or add an element to an existing one.
+That needs a C# mod.
 
-### Авторитетное население и военные сущности
+### Authoritative population and military entities
 
-Демографические величины принадлежат `history/states`, а не дублируются как независимое состояние страны. Национальное население при тике вычисляется как сумма принадлежащих административных регионов. Мод, меняющий границу или владельца региона, тем самым меняет и национальный агрегат без отдельного патча страны.
+Demographic quantities belong to `history/states` and are not duplicated as independent country
+state. A national population is computed on tick as the sum of the administrative regions it
+owns. A mod that changes a border or a region's owner thereby changes the national aggregate
+with no separate country patch.
 
-Стартовый `active_personnel` из `history/units/2024` разворачивается в самостоятельные дивизии стандартного размера. В рантайме каждая дивизия хранит `personnel`, `max_personnel`, `experience`, `equipment`, `cohesion`, поддержку разведки, сапёров и артиллерии. Визуальный стек не является сохранённой сущностью: он каждый раз группирует дивизии одной страны в одной тактической провинции. `ArmyGroup` — отдельный штабной уровень для имени, командира и назначения общего плана.
+The starting `active_personnel` from `history/units/2024` is expanded into independent divisions
+of a standard size. At runtime each division holds `personnel`, `max_personnel`, `experience`,
+`equipment` and `cohesion`, plus reconnaissance, engineer and artillery support. A visual stack
+is not a saved entity: it groups a country's divisions in one tactical province afresh each time.
+`ArmyGroup` is a separate headquarters level for a name, a commander and the assignment of a
+shared plan.
 
-### Консоль и модовая диагностика
+### The console and mod diagnostics
 
-Консоль на `~` предназначена для проверки контента без специальных UI-кнопок. `tag`, `observe`, `focus`, `teleport`, `mapmode`, `province`, `armies`, `fronts` и `sim` позволяют быстро перейти к нужному сценарию и проверить результат. Новая команда должна оставаться локальной, детерминированно менять кампанию через её публичный API и возвращать понятную строку об ошибке вместо исключения наружу.
+The console on `~` exists for checking content without special UI buttons. `tag`, `observe`,
+`focus`, `teleport`, `mapmode`, `province`, `armies`, `fronts` and `sim` let you get to the
+scenario you want quickly and check the result. A new command should stay local, change the
+campaign deterministically through its public API, and return a readable error string rather than
+letting an exception out.
 
-Команды объявлены таблицей в `Scripts/ui/DeveloperConsoleCommands.cs`, а `help` печатается **из неё**: команда, которая есть, задокументирована, а задокументированная — есть. Добавление команды — это один вызов `Add(...)`.
+The commands are declared in a table in `Scripts/ui/DeveloperConsoleCommands.cs`, and `help` is
+printed **from it**: a command that exists is documented, and a documented one exists. Adding a
+command is one `Add(...)` call.
 
-Сама консоль намеренно английская — она печатает имена типов и синтаксис, и стенд пропускает её файлы при проверке локализации. Исключение — категория `FUN` в `DeveloperConsoleExtras.cs`: шутка на языке, который ты не читаешь, — не шутка, поэтому эти строки идут через таблицу как любой другой контент.
+The console itself is deliberately English — it prints type names and syntax, and the bench skips
+its files when checking localisation. The exception is the `FUN` category in
+`DeveloperConsoleExtras.cs`: a joke in a language you cannot read is not a joke, so those strings
+go through the table like any other content.

@@ -1,65 +1,100 @@
-# Сетевой мультиплеер
+# Network multiplayer
 
-## Быстрый запуск
+*Русская версия: [NETWORK_MULTIPLAYER_RU.md](NETWORK_MULTIPLAYER_RU.md)*
 
-1. У всех игроков должна быть одна версия игры и одинаковый набор модов.
-2. Хост открывает `Multiplayer · LAN / IP`, выбирает тег страны, оставляет UDP-порт `7270` и нажимает `HOST`.
-3. Остальные игроки вводят имя, уникальный тег страны, IPv4 хоста и тот же порт, затем нажимают `JOIN`.
-4. После регистрации минимум двух игроков хост нажимает `START CAMPAIGN`.
+## Getting started
 
-В обычной LAN используется локальный IPv4 хоста. В Radmin VPN или Hamachi — IPv4, показанный виртуальной сетью. Для прямого подключения через интернет без VPN маршрутизатор хоста должен пересылать UDP `7270` на его компьютер, а Windows Firewall — разрешать входящий UDP для игры.
+1. Everybody needs the same game version and the same set of mods.
+2. The host opens `Multiplayer · LAN / IP`, picks a country tag, leaves the UDP port at
+   `7270` and presses `HOST`.
+3. The others type a name, a distinct country tag, the host's IPv4 and the same port, then
+   press `JOIN`.
+4. Once at least two players are registered, the host presses `START CAMPAIGN`.
 
-## Модель синхронизации
+On an ordinary LAN, use the host's local IPv4. On Radmin VPN or Hamachi, use the IPv4 the
+virtual network shows. To connect directly over the internet without a VPN, the host's
+router has to forward UDP `7270` to their machine, and Windows Firewall has to allow
+incoming UDP for the game.
 
-Игра работает по схеме **lockstep**: узлы обмениваются не состоянием мира, а приказами к нему, и каждый прогоняет одну и ту же симуляцию над одним и тем же зерном. Мир целиком пересылается только при подключении и при починке.
+## The synchronisation model
 
-Хост — единственный авторитет:
+The game runs **lockstep**: the machines exchange orders to the world rather than the state
+of it, and each runs the same simulation over the same seed. The world as a whole is only
+sent when somebody joins and when something is being repaired.
 
-- клиент отправляет только сериализованную `ICampaignCommand`, никогда состояние;
-- хост сверяет `IssuerId` с назначенной игроку страной и **отклоняет подмену** — отклонённый приказ возвращает отправителю отказ, а не исчезает молча;
-- принятая команда надёжно рассылается всем участникам вместе с **днём, в который она была отдана**;
-- ход календаря, пауза и скорость принадлежат хосту;
-- стартовый и поздний вход получают сжатый snapshot кампании;
-- страны подключённых игроков помечаются human seat и не управляются AI.
+The host is the only authority:
 
-### Приказ применяется в тот день, в который отдан
+- a client sends only a serialised `ICampaignCommand`, never state;
+- the host checks `IssuerId` against the country assigned to that player and **rejects
+  impersonation** — a rejected order returns a refusal to its sender rather than vanishing
+  silently;
+- an accepted command is reliably broadcast to everybody together with **the day it was
+  given on**;
+- the calendar, the pause and the speed belong to the host;
+- joining at the start and joining late both receive a compressed campaign snapshot;
+- connected players' countries are marked as human seats and are not run by the AI.
 
-Это и есть весь смысл lockstep. Клиент, отставший на несколько дней, раньше применял приказ в момент получения — к миру на несколько дней моложе того, в котором приказ был отдан. Хост поднимает налог на 400-й день, клиент — на 396-й, и дальше миры тихо разные: ошибки нет, экран выглядит нормально, расхождение копится.
+### An order is applied on the day it was given
 
-Теперь приказ несёт день. Клиент, который до этого дня ещё не дошёл, **держит приказ в очереди** и применяет его между тиками — ровно когда доходит. Клиент, который день уже прошёл, применяет сразу; такое бывает при рассинхроне, и это чинит следующий пункт.
+That is the whole point of lockstep. A client a few days behind used to apply an order the
+moment it arrived — to a world several days younger than the one the order was given in. The
+host raises a tax on day 400, the client on day 396, and from then on the worlds quietly
+differ: there is no error, the screen looks fine, and the divergence accumulates.
 
-### Догоняние, контрольная сумма и resync
+Now the order carries its day. A client that has not reached that day yet **holds the order
+in a queue** and applies it between ticks, exactly when it arrives there. A client that has
+already passed the day applies it at once; that happens when things have desynchronised, and
+the next section is what fixes it.
 
-- Отставший клиент догоняет по дню за сообщение, не больше восьми дней за раз, и показывает `CATCHING UP · N day(s) behind the host`.
-- Отстав больше чем на **20 дней**, он перестаёт догонять и просит мир заново: догонять бесконечно хуже, чем один раз замереть.
-- Каждые **10 дней** хост рассылает контрольную сумму мира (`CampaignFingerprint`) — свёртку по странам, соединениям, войнам и контролю над провинциями, упорядоченную по идентификаторам, а не по порядку в списках.
-- Клиент сравнивает её только за тот же день. Несовпадение — `DESYNCHRONISED on day N` и запрос snapshot.
-- Запросы ограничены по частоте: клиент, который отстал, отстанет и к следующему сообщению, а мир такого размера не пересылают несколько раз в секунду.
+### Catching up, the checksum and resync
 
-### Почему детерминизм держится
+- A client that has fallen behind catches up by one day per message, at most eight days at a
+  time, and shows `CATCHING UP · N day(s) behind the host`.
+- More than **20 days** behind, it stops catching up and asks for the world again: catching
+  up for ever is worse than freezing once.
+- Every **10 days** the host broadcasts a checksum of the world (`CampaignFingerprint`) — a
+  fold over countries, formations, wars and provincial control, ordered by identifier rather
+  than by position in a list.
+- A client compares it only against the same day. A mismatch is `DESYNCHRONISED on day N`
+  and a snapshot request.
+- The requests are rate-limited: a client that has fallen behind will still be behind by the
+  next message, and a world this size is not resent several times a second.
 
-Детерминизм здесь — фундамент, а не следствие. Его держат три постоянные проверки в `Tools/SimBench`:
+### Why determinism holds
 
-| Проверка | Что утверждает |
+Determinism here is the foundation, not a consequence. Three standing checks in
+`Tools/SimBench` hold it up:
+
+| Check | What it asserts |
 |---|---|
-| `the same seed gives the same world twice` | Два прогона одного зерна совпадают побитово 90 дней. |
-| `two worlds in one process do not read each other's notes` | Кампания, прогнанная рядом с другой, совпадает с прогнанной в одиночку. |
-| `every order a player can give crosses the wire` | Каждая реализация `ICampaignCommand` проходит кодек. |
+| `the same seed gives the same world twice` | Two runs of one seed match bit for bit over 90 days. |
+| `two worlds in one process do not read each other's notes` | A campaign run beside another matches the one run alone. |
+| `every order a player can give crosses the wire` | Every implementation of `ICampaignCommand` survives the codec. |
 
-Вторая стоит отдельного слова, потому что ловит отказ, невидимый даже контрольной сумме. Несколько систем кешируют дорогие ответы — кто с кем граничит, чего стоит армия каждой страны, как далеко стоят столицы — и раньше помечали кеш днём, ревизией карты или числом стран. Каждая из этих меток верна ровно для одного мира. А клиент, перестраивающийся из snapshot, держит **два**: новую кампанию и старую, которую сборщик мусора ещё не забрал. Кто тикает первым, тот ставит метку; второй читает чужие ответы.
+The second deserves a word of its own, because it catches a failure even the checksum cannot
+see. Several systems cache expensive answers — who borders whom, what each country's army is
+worth, how far apart the capitals are — and used to tag that cache with a day, a map revision
+or a country count. Each of those tags is correct for exactly one world. But a client
+rebuilding from a snapshot holds **two**: the new campaign and the old one the garbage
+collector has not taken yet. Whichever ticks first sets the tag; the second reads somebody
+else's answers.
 
-Отсюда правило: **любой кеш, живущий между вызовами, помечается ссылкой на кампанию, которую описывает.** Добавляешь такой кеш — добавь и метку, иначе проверка упадёт.
+Hence the rule: **any cache that lives between calls is tagged with a reference to the
+campaign it describes.** Add such a cache and you add the tag, or the check fails.
 
-## Ограничения текущего этапа
+## Limits of the current stage
 
-- потеря хоста завершает сессию: миграции хоста пока нет;
-- NAT traversal/relay и публичный браузер серверов не реализованы;
-- перед большой кампанией стоит сделать короткий тест соединения и сверить набор модов.
+- losing the host ends the session: there is no host migration yet;
+- NAT traversal/relay and a public server browser are not implemented;
+- before a long campaign, do a short connection test and compare the mod sets.
 
-## Связанные файлы
+## Related files
 
-- `Scripts/NetworkMultiplayerUI.cs` — лобби, ENet, RPC, выдача стран, авторитетный календарь, отложенные приказы, контрольная сумма и resync;
-- `Scripts/Simulation/NetworkCommandCodec.cs` — белый список и сериализация команд; реализации `ICampaignCommand` находятся отражением, поэтому новая команда попадает в сеть сама;
-- `Scripts/Simulation/CampaignFingerprint.cs` — одно число на весь мир;
-- `Scripts/Simulation/SaveSystem.cs` — snapshot для подключения и для починки;
-- `Scripts/Simulation/SimulationCore.cs` — очередь команд и её перехватчик.
+- `Scripts/NetworkMultiplayerUI.cs` — the lobby, ENet, RPC, country assignment, the
+  authoritative calendar, deferred orders, the checksum and resync;
+- `Scripts/Simulation/NetworkCommandCodec.cs` — the allowlist and command serialisation;
+  implementations of `ICampaignCommand` are found by reflection, so a new command reaches the
+  wire by itself;
+- `Scripts/Simulation/CampaignFingerprint.cs` — one number for the whole world;
+- `Scripts/Simulation/SaveSystem.cs` — the snapshot for joining and for repair;
+- `Scripts/Simulation/SimulationCore.cs` — the command queue and its interceptor.

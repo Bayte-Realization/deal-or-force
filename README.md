@@ -99,8 +99,13 @@ powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 
 ## Documentation
 
+Everything below exists in English and in Russian; a `_RU` suffix is the Russian one, and
+[docs/README.md](docs/README.md) is the full index.
+
 | | |
 |---|---|
+| [TUTORIAL](docs/TUTORIAL.md) | **your first campaign, hand held** |
+| [MODDING_QUICKSTART](docs/MODDING_QUICKSTART.md) | **your first mod in fifteen minutes** |
 | [GETTING_STARTED](docs/GETTING_STARTED.md) | how to run and build it |
 | [PLAYER_GUIDE](docs/PLAYER_GUIDE.md) | how to play |
 | [MODDING_GUIDE](docs/MODDING_GUIDE.md) | how to change it |

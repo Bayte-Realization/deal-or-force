@@ -129,12 +129,6 @@ public partial class MainMenuScene : Control
         rows.AddChild(MenuAction("Credits", ShowCredits, 42));
         rows.AddChild(MenuAction("Quit to desktop", () => GetTree().Quit(), 42));
 
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
-        var note = MenuCaption("The world is built when you ask for one, so this screen costs nothing.",
-            11, "text.faint");
-        note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(note);
-
         BuildCopyright();
         BuildCredits();
         BuildSettings();

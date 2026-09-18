@@ -57,7 +57,7 @@ mods/my_mod/
 Голое число прибавляет, `_percent` масштабирует, `_mult` умножает, `_set` присваивает, а
 префикс `state.` применяет эффект к каждому региону страны. В `mods/_templates` лежат
 рабочие примеры на всех трёх уровнях: JSON, GDScript, скомпилированный C#. Остальное — в
-[MODDING_GUIDE](docs/MODDING_GUIDE.md).
+[MODDING_GUIDE_RU](docs/MODDING_GUIDE_RU.md).
 
 ## Сборка и запуск
 
@@ -90,7 +90,7 @@ dotnet run -c Release --project Tools/SimBench/SimBench.csproj -- 730
 ```
 
 Чтобы собрать то, что другой человек запустит двойным щелчком, — понадобятся шаблоны экспорта
-Godot, см. [docs/BUILDING.md](docs/BUILDING.md):
+Godot, см. [docs/BUILDING_RU.md](docs/BUILDING_RU.md):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File Tools\build.ps1
@@ -104,10 +104,10 @@ powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 | [MODDING_QUICKSTART_RU](docs/MODDING_QUICKSTART_RU.md) | **первый мод за пятнадцать минут** |
 | [GETTING_STARTED](docs/GETTING_STARTED_RU.md) | как запустить и собрать |
 | [PLAYER_GUIDE_RU](docs/PLAYER_GUIDE_RU.md) | как играть — полный справочник |
-| [MODDING_GUIDE](docs/MODDING_GUIDE.md) | как менять — полный справочник |
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | как устроено |
+| [MODDING_GUIDE_RU](docs/MODDING_GUIDE_RU.md) | как менять — полный справочник |
+| [ARCHITECTURE_RU](docs/ARCHITECTURE_RU.md) | как устроено |
 | [CSHARP_GUIDE_RU](docs/CSHARP_GUIDE_RU.md) | **C# с нуля на настоящем коде этой игры** |
-| [NETWORK_MULTIPLAYER](docs/NETWORK_MULTIPLAYER.md) | локальная сеть и прямой IP |
+| [NETWORK_MULTIPLAYER_RU](docs/NETWORK_MULTIPLAYER_RU.md) | локальная сеть и прямой IP |
 
 ## Открытые долги
 

@@ -1,62 +1,52 @@
-# Документация Deal or Force
+# Deal or Force documentation
 
-Документация соответствует Godot.NET-версии проекта на 18 сентября 2026 года.
+*Русская версия: [README_RU.md](README_RU.md)*
 
-Если вы здесь впервые — начинайте с учебников. Они написаны как проход за руку, а не как
-справочник: за ними садятся и делают, а не читают.
+The documentation matches the Godot.NET version of the project as of 18 September 2026.
 
-| Учебник | Для кого | Сколько это займёт |
+If this is your first time here, start with the tutorials. They are written as a walk
+through, not as a reference: you sit down with them and do things rather than read them.
+
+| Tutorial | For whom | How long |
 |---|---|---|
-| [TUTORIAL_RU.md](TUTORIAL_RU.md) — **первая кампания, за руку** | игрок | пара часов, с игрой |
-| [MODDING_QUICKSTART_RU.md](MODDING_QUICKSTART_RU.md) — **первый мод** | моддер | пятнадцать минут |
-| [CSHARP_GUIDE_RU.md](CSHARP_GUIDE_RU.md) — **C# через код этой игры** | программист с нуля | вечер на чтение, выходные на упражнения |
+| [TUTORIAL.md](TUTORIAL.md) — **your first campaign, hand held** | a player | a couple of hours, with the game running |
+| [MODDING_QUICKSTART.md](MODDING_QUICKSTART.md) — **your first mod** | a modder | fifteen minutes |
+| [CSHARP_GUIDE.md](CSHARP_GUIDE.md) — **C# through this game's code** | a programmer from scratch | an evening to read, a weekend for the exercises |
 
-Дальше — справочники, в которые ходят за деталью:
+After that come the references, which you visit for a detail:
 
-| Документ | Для кого | Что внутри |
+| Document | For whom | What is in it |
 |---|---|---|
-| [PLAYER_GUIDE_RU.md](PLAYER_GUIDE_RU.md) / [PLAYER_GUIDE.md](PLAYER_GUIDE.md) | игрок | управление, экономика, армия, война, мир, эмиссия, сетевой мультиплеер |
-| [NETWORK_MULTIPLAYER.md](NETWORK_MULTIPLAYER.md) | игрок/разработчик | LAN, direct IP, Radmin, UDP 7270 и модель синхронизации |
-| [MODDING_GUIDE.md](MODDING_GUIDE.md) | моддер | Paradox-подобная структура модов, JSON, GDScript, C#, порядок загрузки |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | разработчик | устройство симуляции, карта кода, тики, команды, производительность |
-| [CSHARP_GUIDE_RU.md](CSHARP_GUIDE_RU.md) / [CSHARP_GUIDE.md](CSHARP_GUIDE.md) | новичок в C# | язык на настоящих примерах из `Scripts/`, от переменной до своей механики с проверкой |
-| [BUILDING.md](BUILDING.md) | разработчик | сборка, конфигурации Debug/Release, выпуск |
-| [MIGRATION.md](MIGRATION.md) | команда | состояние переноса с s&box и технические решения миграции |
+| [PLAYER_GUIDE.md](PLAYER_GUIDE.md) | a player | controls, economy, the army, war, peace, emission, network multiplayer |
+| [NETWORK_MULTIPLAYER.md](NETWORK_MULTIPLAYER.md) | player/developer | LAN, direct IP, Radmin, UDP 7270 and the synchronisation model |
+| [MODDING_GUIDE.md](MODDING_GUIDE.md) | a modder | the Paradox-like mod structure, JSON, GDScript, C#, load order |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | a developer | how the simulation is built, a map of the code, ticks, commands, performance |
+| [BUILDING.md](BUILDING.md) | a developer | building, the Debug/Release configurations, release |
+| [SCENARIOS_AND_WORKSHOP.md](SCENARIOS_AND_WORKSHOP.md) | a scenario author | the world format, the data editor, map labels |
+| [MODDABLE_CAMPAIGN_UI.md](MODDABLE_CAMPAIGN_UI.md) | an interface modder | panel layout, tabs, formable nations, the lobby |
+| [LAUNCHER.md](LAUNCHER.md) | a player | choosing mods and DLC, load order, logs |
+| [DIAGNOSTICS.md](DIAGNOSTICS.md) | a tester | the five logs, how to read them and what to send after a crash |
+| [FOG_OF_WAR.md](FOG_OF_WAR.md), [OFFENSIVE_PLANS.md](OFFENSIVE_PLANS.md) | player/modder | visibility and drawing offensives |
+| [LOADING_SCREEN.md](LOADING_SCREEN.md), [INTERFACE_AUDIO.md](INTERFACE_AUDIO.md), [UI_REDESIGN.md](UI_REDESIGN.md) | a developer | the loading screen, the sounds, the first stage of the interface rework |
+| [MIGRATION.md](MIGRATION.md) | the team | the state of the port from s&box and the technical decisions behind it |
 
-## На каких языках что написано
+## Which languages things are written in
 
-Проверено по тексту файлов, а не по их именам — имя врёт: `PLAYER_GUIDE.md`, `BUILDING.md`
-и `ARCHITECTURE.md` долго были русскими под английскими названиями.
+Checked against the text of the files rather than their names — a name lies:
+`PLAYER_GUIDE.md`, `BUILDING.md` and `ARCHITECTURE.md` were Russian under English names for a
+long time.
 
-Соглашение: **голое имя — английский, `_RU` — русский.**
+The convention: **a bare name is English, `_RU` is Russian.**
 
-| Документ | 🇷🇺 | 🇬🇧 |
+Every document now exists in both languages, with two exceptions:
+
+| Document | 🇬🇧 | 🇷🇺 |
 |---|:--:|:--:|
-| **PLAYER_GUIDE** — как играть | ✅ `PLAYER_GUIDE_RU.md` | ✅ `PLAYER_GUIDE.md` |
-| **CSHARP_GUIDE** — C# с нуля | ✅ `CSHARP_GUIDE_RU.md` | ✅ `CSHARP_GUIDE.md` |
-| **GETTING_STARTED** — как запустить | ✅ `GETTING_STARTED_RU.md` | ✅ `GETTING_STARTED.md` |
-| TUTORIAL — первая кампания | ✅ | — |
-| MODDING_QUICKSTART — первый мод | ✅ | — |
-| MODDING_GUIDE — справочник моддера | ✅ | — |
-| ARCHITECTURE | ✅ | — |
-| BUILDING | ✅ | — |
-| NETWORK_MULTIPLAYER | ✅ | — |
-| SCENARIOS_AND_WORKSHOP | ✅ | — |
-| DIAGNOSTICS, LAUNCHER, FOG_OF_WAR, OFFENSIVE_PLANS,<br>LOADING_SCREEN, INTERFACE_AUDIO, UI_REDESIGN,<br>MODDABLE_CAMPAIGN_UI | ✅ | — |
-| MIGRATION | — | ✅ |
+| PLAYER_GUIDE, TUTORIAL, MODDING_GUIDE, MODDING_QUICKSTART,<br>CSHARP_GUIDE, ARCHITECTURE, BUILDING, GETTING_STARTED,<br>NETWORK_MULTIPLAYER, SCENARIOS_AND_WORKSHOP,<br>MODDABLE_CAMPAIGN_UI, LAUNCHER, DIAGNOSTICS, FOG_OF_WAR,<br>OFFENSIVE_PLANS, LOADING_SCREEN, INTERFACE_AUDIO, UI_REDESIGN | ✅ | ✅ |
+| MIGRATION — the log of the port from s&box | ✅ | — |
+| `*_2026-09-*.md` — a work journal rather than documentation | — | ✅ |
 
-Дыра — английская, а не русская: репозиторий открыт наружу, и человек со стороны читает
-именно английские имена. Порядок, в котором это стоит доводить (сверху — важнее):
-
-1. `MODDING_GUIDE` → английский. 900 строк, но это второй документ, который открывает
-   пришедший извне, и единственный справочник по данным игры.
-2. `MODDING_QUICKSTART` и `TUTORIAL` → английский: с них начинают.
-3. `ARCHITECTURE` и `BUILDING` → английский.
-4. `NETWORK_MULTIPLAYER` → английский.
-5. Заметки с датой в имени (`*_2026-09-*.md`) — это журнал работ, а не документация;
-   переводить их не нужно.
-
-Проверить, на каком языке файл на самом деле, можно так — считаем буквы, а не верим имени:
+To check what language a file is really in — count letters rather than trusting the name:
 
 ```bash
 cd docs && for f in *.md; do
@@ -66,33 +56,37 @@ cd docs && for f in *.md; do
 done | sort
 ```
 
-## Инструменты
+## Tools
 
-- `Tools/MapDataCompiler` — собирает растровую карту офлайн.
-- `Tools/TerrainCompiler` — собирает растр ландшафта (Python).
-- `Tools/SimBench` — прогоняет кампанию без Godot и проверяет инварианты симуляции:
+- `Tools/MapDataCompiler` — builds the raster map offline.
+- `Tools/TerrainCompiler` — builds the terrain raster (Python).
+- `Tools/SimBench` — runs a campaign without Godot and checks the simulation's invariants:
   `dotnet run --project Tools/SimBench/SimBench.csproj -c Release`.
-- `Tools/TerrainTests` — регрессии ландшафта и фронтов.
+- `Tools/TerrainTests` — terrain and front regressions.
 
-Бенч — основной способ узнать, что изменилось: он печатает мировой баланс товаров, что
-стало с миром за два года без игрока, и проверяет детерминизм, изоляцию кампаний друг от
-друга и то, что примеры модов ещё называют существующие вещи.
+The bench is the main way to find out what changed: it prints the world's commodity balance,
+what became of the world over two years with no player, and it checks determinism, the
+isolation of campaigns from each other, and that the mod examples still name things that
+exist.
 
-В самой игре есть ещё два инструмента: консоль разработчика (`~`, команда `help`) и
-проверка вёрстки — команда `layout`, которая называет каждую подпись на экране, которой не
-хватило места под собственный текст. В отладочной сборке та же проверка идёт сама раз в
-секунду и пишет находки в лог.
+There are two more tools inside the game itself: the developer console (`~`, the `help`
+command) and the layout audit — the `layout` command, which names every caption on screen
+that was not given room for its own text. In a debug build the same audit runs by itself once
+a second and writes its findings to the log.
 
-## Шаблоны модов
+## Mod templates
 
-Находятся в `mods/_templates`; папки, начинающиеся с `_`, игра намеренно не загружает.
+They are in `mods/_templates`; folders starting with `_` are deliberately not loaded by the
+game.
 
-| Шаблон | Что показывает |
+| Template | What it shows |
 |---|---|
-| `balance_and_script` | Первый мод: defines, страна, товар, GDScript. |
-| `production_chains` | Экономика: товары, здания, цепочки, потолок торговли. |
-| `statecraft` | Дипломатия и ИИ: цена войны, репутация, коалиции, мнения. |
-| `border_redraw` | Кто чем владеет. |
-| `map_data_override` | Форма мира и пересборка карты. |
-| `interface_reskin` | Цвета, раскладка, локализация. |
-| `csharp_mod` | Новая механика на C#. |
+| `balance_and_script` | A first mod: defines, a country, a commodity, GDScript. |
+| `production_chains` | The economy: commodities, buildings, chains, the trade ceiling. |
+| `statecraft` | Diplomacy and the AI: the price of war, reputation, coalitions, opinions. |
+| `central_bank` | The monetary model: inflation, the key rate, the price of cheap money. |
+| `trade_instructions` | Trade controls and how they explain themselves to a player. |
+| `border_redraw` | Who owns what. |
+| `map_data_override` | The shape of the world, and rebuilding the map. |
+| `interface_reskin` | Colours, layout, localisation. |
+| `csharp_mod` | A new mechanic in C#. |
