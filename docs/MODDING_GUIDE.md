@@ -110,7 +110,7 @@ occupation and the military AI's parameters. A mod's `common/defines/*.json` is 
 top of that base layer.
 
 The base map's geometry uses 16-bit IDs and is read from `game/map_data/provinces.png`. Each
-of the 37,833 polygons has a unique RGB colour mapped to an ID in `definition.csv`. A modded
+of the 37,909 polygons has a unique RGB colour mapped to an ID in `definition.csv`. A modded
 map must not exceed 65,535 land provinces; otherwise startup stops with an explicit error
 rather than corrupting controllers and the save. The bundled `Tools/MapDataCompiler` is a
 separate offline tool for map authors: its output is ordinary PNG/CSV that can be edited
@@ -879,7 +879,7 @@ data.
 ### The political map as data
 
 The shape of the world has been data for a long time: `provinces.png` and `definition.csv`
-together say where each of the 37,833 provinces is. **Who owns them** was not: ownership came
+together say where each of the 37,909 provinces is. **Who owns them** was not: ownership came
 from a control raster compiled into the executable. A mod could redraw the shape of the world
 and not move one border on it.
 
@@ -896,7 +896,7 @@ province;owner;controller
 out: then the owner holds it. Provinces the file does not mention keep the base game's owner —
 a mod that moves one border does not have to rewrite the other thirty-seven thousand.
 
-The base game ships the full map (`game/history/provinces/ownership.csv`, 37,833 lines), and it
+The base game ships the full map (`game/history/provinces/ownership.csv`, 37,909 lines), and it
 is **exported by the same compiler** that builds the raster — so what a modder edits is exactly
 what the game runs on, not a hand-written approximation of it. The bench checks that the file
 and the map have not drifted apart, and that a one-line edit moves exactly one province.

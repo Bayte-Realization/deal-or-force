@@ -334,7 +334,7 @@ worth up to 30 % offensive power, is spent by moving and burns off quickly in ba
 is why an immediate continuous advance is faster, and a prepared operation is more effective.
 
 The front line is built from genuinely adjacent provinces along the border between enemies
-and is pressed onto the surface of the map. The base scenario's map holds **37,833** tactical
+and is pressed onto the surface of the map. The base scenario's map holds **37,909** tactical
 provinces — about the forty thousand aimed for. After repartitioning, the area, elongation
 and asymmetry of neighbouring cells differ noticeably, so close in they do not form an even
 "scale pattern"; at strategic zoom the layer is hidden. The starting deployment is not a
