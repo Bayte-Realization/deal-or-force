@@ -61,6 +61,20 @@ try
     Check(catalog.SettingsError.Length > 0, "Corrupt profile reported");
     bool refused = false; try { catalog.Save(); } catch (InvalidDataException) { refused = true; }
     Check(refused && File.ReadAllText(catalog.SelectionPath) == "broken", "Corrupt profile never silently overwritten");
+
+    // The language button writes the game's own settings file, and nothing else in it.
+    var language = Path.Combine(temporary, "language");
+    Directory.CreateDirectory(language);
+    File.WriteAllText(Path.Combine(language, "settings.json"), "{ \"language\": \"english\", \"map_smoothing\": false }");
+    Check(L.Remember(language, "russian"), "Language written into the game's settings");
+    L.Choose(language);
+    using (var written = JsonDocument.Parse(File.ReadAllText(Path.Combine(language, "settings.json"))))
+        Check(L.IsRussian && written.RootElement.GetProperty("map_smoothing").GetBoolean() == false,
+            "Language read back, the game's other settings kept");
+    File.WriteAllText(Path.Combine(language, "settings.json"), "not json");
+    Check(!L.Remember(language, "english") && File.ReadAllText(Path.Combine(language, "settings.json")) == "not json",
+        "An unreadable settings file is left alone, not replaced");
+    L.Use("english");
     Console.WriteLine($"{checks} launcher checks passed.");
 }
 finally { Directory.Delete(temporary, true); }

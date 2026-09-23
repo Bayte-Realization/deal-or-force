@@ -50,6 +50,48 @@ public static partial class L
         catch (UnauthorizedAccessException) { }
     }
 
+    /// <summary>The two the launcher speaks, in the order its button steps through them.</summary>
+    public static readonly string[] Languages = { "english", "russian" };
+
+    /// <summary>What the language button says: each language named in itself, not translated.</summary>
+    public static string LanguageLabel => IsRussian ? "Язык: Русский" : "Language: English";
+
+    /// <summary>Speak this language from now on. Anything but Russian is English.</summary>
+    public static void Use(string language) =>
+        Language = string.Equals(language, "russian", StringComparison.OrdinalIgnoreCase) ? "russian" : "english";
+
+    /// <summary>
+    /// Tell the game too, by writing the choice into its settings.json - the file Choose reads
+    /// it back from, and the one the game's own options screen keeps. Every other setting in
+    /// it is kept as it was. A file that exists and will not parse is left alone rather than
+    /// replaced: the player's settings are worth more than the launcher's convenience.
+    /// </summary>
+    public static bool Remember(string profile, string language)
+    {
+        try
+        {
+            var path = Path.Combine(profile, "settings.json");
+            System.Text.Json.Nodes.JsonObject settings;
+            if (File.Exists(path))
+            {
+                var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path), null,
+                    new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                if (parsed is not System.Text.Json.Nodes.JsonObject existing) return false;
+                settings = existing;
+            }
+            else settings = new System.Text.Json.Nodes.JsonObject();
+            settings["language"] = language;
+            Directory.CreateDirectory(profile);
+            var temporary = path + ".tmp";
+            File.WriteAllText(temporary, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temporary, path, true);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (JsonException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
     public static string T(string english) =>
         IsRussian && Russian.TryGetValue(english, out var russian) ? russian : english;
 
@@ -147,5 +189,12 @@ public static partial class L
         ["Deal or Force.exe was not found beside the launcher."] = "Не найден Deal or Force.exe рядом с лаунчером.",
         ["The launcher is already open. Switch to its window."] = "Лаунчер уже открыт. Переключитесь на его окно.",
         ["Deal or Force — cannot start"] = "Deal or Force — запуск невозможен",
+
+        // The language button
+        ["Switch the launcher and the game between English and Russian."] =
+            "Переключить лаунчер и игру между английским и русским.",
+        ["Language changed. The game will start in it too."] = "Язык изменён. Игра тоже запустится на нём.",
+        ["The launcher changed language, but the game's settings file could not be written, so the game keeps its own."] =
+            "Лаунчер сменил язык, но файл настроек игры записать не удалось, поэтому игра останется на своём.",
     };
 }

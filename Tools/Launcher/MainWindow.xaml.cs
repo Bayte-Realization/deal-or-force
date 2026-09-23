@@ -22,6 +22,7 @@ public partial class MainWindow : Window
         _godot = godot ?? (File.Exists(_enginePath) ? File.ReadAllText(_enginePath).Trim() : Environment.GetEnvironmentVariable("GODOT_NET"));
         InitializeComponent();
         L.TranslateTree(this);
+        LanguageButton.Content = L.LanguageLabel;
         EngineButton.Visibility = catalog.IsProject ? Visibility.Visible : Visibility.Collapsed;
         EnvironmentLabel.Text = catalog.IsProject ? L.T("PROJECT  /  GODOT .NET") : L.T("WINDOWS  /  LOCAL INSTALLATION");
         _catalog.Discover();
@@ -70,6 +71,29 @@ public partial class MainWindow : Window
             (!p.Owned ? L.F("The expansion is installed, but the entitlement \"{0}\" is not owned. The launcher does not change entitlements.\n", p.Entitlement) : "") +
             (p.HasCode ? L.T("Contains executable code — only enable mods from sources you trust.\n") : "") +
             (!p.IsDlc && p.SupportedVersion != "*" ? L.F("Declared game version: {0} (compatibility is not checked automatically).\n", p.SupportedVersion) : "") + p.Path;
+    }
+
+    /// <summary>
+    /// The other language, now - for the launcher, and through the settings file they both read,
+    /// for the game it is about to start. The launcher followed the game's language and had no
+    /// way to change it, so a player who opened it in the wrong one had to start the game,
+    /// find the option there, quit and come back.
+    /// </summary>
+    private void LanguageClick(object sender, RoutedEventArgs e)
+    {
+        var next = L.Languages[(Array.IndexOf(L.Languages, L.Language) + 1) % L.Languages.Length];
+        L.Use(next);
+        var remembered = L.Remember(_catalog.Profile, next);
+        L.TranslateTree(this);
+        LanguageButton.Content = L.LanguageLabel;
+        // The captions the code writes rather than the XAML: written again in the new language.
+        EnvironmentLabel.Text = _catalog.IsProject ? L.T("PROJECT  /  GODOT .NET") : L.T("WINDOWS  /  LOCAL INSTALLATION");
+        Play.Content = L.T(_game is { HasExited: false } ? "GAME RUNNING" : "PLAY  ▶");
+        RefreshView();
+        Status.Text = remembered
+            ? L.T("Language changed. The game will start in it too.")
+            : L.T("The launcher changed language, but the game's settings file could not be written, so the game keeps its own.");
+        Log($"Language: {next}; game settings {(remembered ? "updated" : "not written")}.");
     }
 
     private static SolidColorBrush Brush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
