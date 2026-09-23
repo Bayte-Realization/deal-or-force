@@ -6663,15 +6663,47 @@ public static class Program
         // says where it was run from rather than whether the packs are sound. It also means
         // it now exercises the resolution an exported build depends on.
         var root = GameDataLoader.InstallFolders("dlc").FirstOrDefault();
-        if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
-            return "there is no dlc/ folder; the content pack framework is gone";
+        var packs = string.IsNullOrEmpty(root) || !Directory.Exists(root)
+            ? new List<string>()
+            : Directory.GetDirectories(root)
+                .Where(directory => File.Exists(Path.Combine(directory, "dlc.json")))
+                .OrderBy(directory => directory, StringComparer.Ordinal)
+                .ToList();
 
-        var packs = Directory.GetDirectories(root)
-            .Where(directory => File.Exists(Path.Combine(directory, "dlc.json")))
-            .OrderBy(directory => directory, StringComparer.Ordinal)
-            .ToList();
-        if (packs.Count == 0) return "dlc/ holds no content pack, so nothing proves the pipeline works";
+        // The public repository ships the framework and no pack - a pack is content somebody
+        // sells, and the source is not where it lives. So where none is installed the bench
+        // writes itself a small gated one and proves the gate on that, rather than passing
+        // because there was nothing to check.
+        var sample = packs.Count == 0 ? WriteSamplePack() : null;
+        if (sample is not null) packs.Add(sample);
+        try
+        {
+            return CheckContentPacks(packs, sample is not null);
+        }
+        finally
+        {
+            if (sample is not null)
+                try { Directory.Delete(Path.GetDirectoryName(sample)!, true); } catch (IOException) { }
+        }
+    }
 
+    /// <summary>A gated pack with one decision in it, in a folder of its own under the temp path.</summary>
+    private static string WriteSamplePack()
+    {
+        var pack = Path.Combine(Path.GetTempPath(), "dof_bench_dlc", "bench_sample_pack");
+        Directory.CreateDirectory(Path.Combine(pack, "common", "decisions"));
+        File.WriteAllText(Path.Combine(pack, "dlc.json"),
+            "{ \"id\": \"bench_sample_pack\", \"name\": \"Bench sample\", \"version\": \"1.0.0\", " +
+            "\"entitlement\": \"bench_sample_pack\", \"load_order\": 100, \"requires\": [], \"affects_rules\": true }");
+        File.WriteAllText(Path.Combine(pack, "common", "decisions", "00_bench_sample.json"),
+            "{ \"bench_sample_decision\": { \"name\": \"Bench sample decision\", " +
+            "\"description\": \"Exists only to prove a gated pack loads once owned.\", " +
+            "\"cooldown_days\": 365, \"gdp_cost_share\": 0.0, \"effects\": { \"stability\": 0.01 } } }");
+        return pack;
+    }
+
+    private static string CheckContentPacks(List<string> packs, bool sampled)
+    {
         var reported = new List<string>();
         foreach (var pack in packs)
         {
@@ -6726,7 +6758,9 @@ public static class Program
         // Put the game back: the pack was loaded to prove it works, not to play with it.
         DecisionCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
-        Console.WriteLine($"  content packs: {string.Join(", ", reported)} - absent while locked, complete once owned.");
+        if (reported.Count == 0) return "no content pack delivered a single decision, so nothing proves the pipeline works";
+        Console.WriteLine($"  content packs{(sampled ? " (none installed; the bench's own sample)" : "")}: " +
+                          $"{string.Join(", ", reported)} - absent while locked, complete once owned.");
         return "";
     }
 

@@ -45,10 +45,9 @@ can be toggled immediately. The rest use the existing `dlc/entitlements.json` an
 `unlock_everything` and does not rewrite manifests. An installed but unavailable package
 stays visible with an explanation.
 
-In the current project, Iron and Grain requires the `dof_iron_and_grain` entitlement, and
-the shipped `dlc/entitlements.json` does not grant it. So the absence of an active checkbox
-on it is not a broken toggle. Setting up entitlements as a developer remains separate from
-the launcher.
+So a gated pack whose entitlement the shipped `dlc/entitlements.json` does not grant shows
+no active checkbox, and that is not a broken toggle. Setting up entitlements as a developer
+remains separate from the launcher.
 
 ## Settings and logs
 

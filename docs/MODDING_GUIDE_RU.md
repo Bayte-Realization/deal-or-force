@@ -443,7 +443,17 @@ JSON в `common/buildings` переопределяет постройки. Се
 "effects": { "government_sets_key_rate_set": 1.0, "key_rate_set": 0.012 }
 ```
 
-Рабочий пример целиком — решение `break_the_bank` в `dlc/dof_iron_and_grain`.
+Целое решение на них, для `common/decisions`:
+
+```json
+"cheap_money_decree": {
+  "name": "Cheap money by decree",
+  "description": "Take the key rate off the central bank and put it on the floor.",
+  "cooldown_days": 1095,
+  "trigger": { "min_inflation": 0.06, "max_government_sets_key_rate": 0.5 },
+  "effects": { "government_sets_key_rate_set": 1.0, "key_rate_set": 0.012, "stability": 0.02 }
+}
+```
 
 ## Торговля: кто кому продаёт
 

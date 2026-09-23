@@ -555,7 +555,17 @@ to say conditions read them and effects move them, just like `stability` or `tre
 "effects": { "government_sets_key_rate_set": 1.0, "key_rate_set": 0.012 }
 ```
 
-A complete worked example is the `break_the_bank` decision in `dlc/dof_iron_and_grain`.
+A whole decision built on them, for `common/decisions`:
+
+```json
+"cheap_money_decree": {
+  "name": "Cheap money by decree",
+  "description": "Take the key rate off the central bank and put it on the floor.",
+  "cooldown_days": 1095,
+  "trigger": { "min_inflation": 0.06, "max_government_sets_key_rate": 0.5 },
+  "effects": { "government_sets_key_rate_set": 1.0, "key_rate_set": 0.012, "stability": 0.02 }
+}
+```
 
 ## Trade: who sells to whom
 

@@ -173,18 +173,14 @@ refuses to hand over a folder with data missing, and names what is missing.
   rebalancing to redrawing borders. The `user://mods` folder (that is,
   `%APPDATA%\Godot\app_userdata\Deal or Force\mods`) works as well and takes priority.
 
-### How to give testers a content pack
+### Content packs
 
-`Iron and Grain` ships in the build but is inactive: the game considers it unowned and writes
-`Content pack Iron and Grain present but not active (not owned)` to the log. There is no shop
-yet, and its role is played by the file
-`data_DealOrForce_windows_x86_64\dlc\entitlements.json`. To switch the pack on, one line in
-it is enough:
-
-    "unlock_everything": true
-
-After that the log says `Content pack Iron and Grain 1.0.0 active`. In a real build this
-should stay `false` — that is what the switch is for.
+The build carries no content packs: `Tools\build.ps1` leaves `dlc\` out and fails if one
+turns up. The framework is still in the game - a `dlc\` folder beside the executable, with a
+pack in it and an `entitlements.json` that owns it, is read exactly as in the editor. There
+is no shop yet, and `entitlements.json` plays its part; `"unlock_everything": true` treats
+every pack on disk as owned, which is for testing and should stay `false` anywhere else.
+`dlc\README.md` describes the format.
 
 ## What this build does not have yet
 

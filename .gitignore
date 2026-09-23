@@ -46,3 +46,7 @@ perf.log
 # for it. The author's own working material - nobody cloning the game needs a video script,
 # and no line of the game reads any of it. Same treatment as /art/: kept on disk, not shipped.
 /press/
+
+# Content packs are content somebody sells, not source: the framework ships, packs do not.
+# Only the pack folders - dlc/README.md and dlc/entitlements.json stay in the repository.
+/dlc/*/

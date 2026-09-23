@@ -137,8 +137,8 @@ if (Test-Path $modsSource) {
 }
 
 # ---------------------------------------------------------------------- no unreleased content
-# `dlc/` is deliberately not copied. Iron and Grain is an unreleased paid pack, and the first
-# public alpha is free: shipping it inactive means handing every player the pack plus the
+# `dlc/` is deliberately not copied. A content pack is paid content, and the first public
+# alpha is free: shipping one inactive means handing every player the pack plus the
 # entitlements.json that switches it on, which is a paywall anybody can read their way past.
 #
 # The loader is untouched and still works - DlcLoader returns quietly when the folder is not
