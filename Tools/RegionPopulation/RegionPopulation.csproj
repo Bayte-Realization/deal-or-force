@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Works out how many people live in each region of the 2024 map and writes
+    game/history/states/2024/20_population.json. Run it from the project root; see Program.cs
+    for where the one input it needs comes from. Like SimBench it compiles the simulation on
+    its own, with no Godot reference.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <RootNamespace>DealOrForce.Tools</RootNamespace>
+    <AssemblyName>RegionPopulation</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\Scripts\Simulation\**\*.cs" />
+    <Compile Include="..\..\Scripts\LegacySourceMap\**\*.cs" />
+  </ItemGroup>
+
+</Project>

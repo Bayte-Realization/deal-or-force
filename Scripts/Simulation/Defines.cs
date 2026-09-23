@@ -688,11 +688,22 @@ public sealed class Defines
 	/// </summary>
 	public int MaxConstructionProjects { get; set; } = 12;
 
-	/// <summary>People per agricultural complex when a region is first populated.</summary>
-	public float SeedPeoplePerFarm { get; set; } = 4_000_000f;
+	/// <summary>
+	/// People per agricultural complex when a country is first populated. Counted for the
+	/// country and dealt to its regions (EconomySystem.SeedBuildings). Was 4,000,000 when each
+	/// region rounded its own down with a floor of one; 3,200,000 opens the world with the same
+	/// two and a half thousand farms, now where the people are.
+	/// </summary>
+	public float SeedPeoplePerFarm { get; set; } = 3_200_000f;
 
-	/// <summary>Urban people per civilian industry when a region is first populated.</summary>
-	public float SeedUrbanPeoplePerIndustry { get; set; } = 5_000_000f;
+	/// <summary>
+	/// Town-dwellers per civilian industry when a country is first populated, counted the same
+	/// way. Was 5,000,000 when every region under that rounded to none - the world then opened
+	/// with about 430 factories, nearly all of them in the few countries of huge regions. The
+	/// markets were tuned against that total, so 10,500,000 keeps it and changes only where the
+	/// factories stand.
+	/// </summary>
+	public float SeedUrbanPeoplePerIndustry { get; set; } = 10_500_000f;
 
 	/// <summary>Infrastructure per unit of urbanisation when a region is first populated.</summary>
 	public float SeedInfrastructurePerUrbanisation { get; set; } = 4f;

@@ -1200,6 +1200,34 @@ state. A national population is computed on tick as the sum of the administrativ
 owns. A mod that changes a border or a region's owner thereby changes the national aggregate
 with no separate country patch.
 
+Where the 2024 start's people live is `history/states/2024/20_population.json`: a `population`
+and an `urbanization` for each of about sixteen hundred regions. They are read when the world is
+first populated, not applied afterwards, so a region's peoples, trades, farms and factories are
+dealt from its own figure. A region listed there has exactly the people written, and a country
+whose regions are listed is their sum - raising one region raises the country. A region left out
+shares whatever of the country's figure the listed ones leave. To change a region, list it again
+in a later file of your own:
+
+```json
+{ "ru_mow": { "population": 21500000, "urbanization": 0.96 } }
+```
+
+The shipped figures are estimates worked out from the map by `Tools/RegionPopulation` (Natural
+Earth populated places, public domain, spread over the land around each town; the countryside
+weighted by ground and by how settled the country around it is). Most regions on this map merge
+several real provinces, so no official table fits them; against regions whose population is
+known, the typical figure is within a quarter of the truth. To regenerate them after the map
+changes, from the project root:
+
+```
+dotnet run --project Tools/RegionPopulation -c Release -- path/to/ne_10m_populated_places_simple.dbf --write
+```
+
+Farms and factories are counted for the whole country (`SeedPeoplePerFarm`,
+`SeedUrbanPeoplePerIndustry` in `common/defines`) and dealt to its regions - farms by where its
+countryside is, factories by where its towns are - so the total does not depend on how finely the
+map cuts the country.
+
 The starting `active_personnel` from `history/units/2024` is expanded into independent divisions
 of a standard size. At runtime each division holds `personnel`, `max_personnel`, `experience`,
 `equipment` and `cohesion`, plus reconnaissance, engineer and artillery support. A visual stack

@@ -820,11 +820,17 @@ public static partial class AiStatecraft
             var state = topology.ProvinceToState[province];
             provincesPerState[state] = provincesPerState.GetValueOrDefault(state) + 1;
         }
+        // Valued by the people in it, whoever's region it is. The fog-of-war pass valued only
+        // the AI's own regions that way and every enemy one at one over its size, as though
+        // how many people live in the next country were intelligence - but fog hides armies,
+        // not a census. It made no difference while a country's people were spread evenly
+        // over its regions. Once they were not, every treaty the AI wrote took the emptiest
+        // ground it was standing on, which is the thing the region rule exists to stop.
         var worthPerProvince = new Dictionary<int, float>();
         foreach (var state in campaign.States)
         {
             if (!provincesPerState.TryGetValue(state.MapIndex, out var count) || count <= 0) continue;
-            worthPerProvince[state.MapIndex] = state.NationMapIndex == nation.MapIndex ? state.Population / (float)count / 1_000_000f : 1f / count;
+            worthPerProvince[state.MapIndex] = state.Population / (float)count / 1_000_000f;
         }
 
         var takenPerState = new Dictionary<int, int>();
@@ -949,15 +955,21 @@ public static partial class AiStatecraft
         // afforded"; an empty treaty is the wrong answer to "what does the winner sign",
         // because the winner won and can pay for something.
         //
-        // Cheapest first, because what is being bought here is a settlement rather than a
-        // particular piece of ground - the particular pieces were chosen above, and this only
-        // runs when none of them survived.
+        // Most people for the war score first, among the regions it can afford. What is being
+        // bought here is a settlement rather than a particular piece of ground - the particular
+        // pieces were chosen above, and this only runs when none of them survived - but it was
+        // cheapest first, and once regions carried their real populations the cheapest whole
+        // region was reliably the emptiest one: a two-province stretch of nobody, signed for
+        // with a war score that could have bought a town.
         if (demand.Provinces.Count == 0)
         {
             var wholeRegions = occupiedShare.Keys
-                .Select(region => PeaceConference.ProvincesOfState(topology, region))
-                .Where(whole => whole.Count > 0)
-                .OrderBy(whole => whole.Sum(province => ledger.Price(province).Cost));
+                .Select(region => (Region: region, Provinces: PeaceConference.ProvincesOfState(topology, region)))
+                .Where(entry => entry.Provinces.Count > 0)
+                .Select(entry => (entry.Provinces, Cost: entry.Provinces.Sum(province => ledger.Price(province).Cost),
+                    People: (double)(campaign.States.Find(state => state.MapIndex == entry.Region)?.Population ?? 0)))
+                .OrderByDescending(entry => entry.People / Math.Max(0.01, entry.Cost))
+                .Select(entry => entry.Provinces);
             foreach (var whole in wholeRegions)
             {
                 foreach (var province in whole) demand.Provinces.Add(province);

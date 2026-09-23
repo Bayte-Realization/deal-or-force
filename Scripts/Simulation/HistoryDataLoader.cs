@@ -181,22 +181,94 @@ public static class HistoryDataLoader
         }
     }
 
+    /// <summary>
+    /// Every region history/states gives a head-count for, by map index, the later file winning.
+    ///
+    /// Read by the deal itself (EconomySystem.Seed), before anybody is placed, rather than only
+    /// applied afterwards: a figure applied after the deal is one the region's peoples, trades
+    /// and buildings were never dealt from, and it moved the country's total by whatever it
+    /// added. ApplyStates still sets the same number once the deal is done, and finds nothing
+    /// left to change.
+    /// </summary>
+    public static Dictionary<int, long> StatedPopulations(Campaign campaign) =>
+        StatedRegions(campaign).Where(pair => pair.Value.Population.HasValue)
+            .ToDictionary(pair => pair.Key, pair => pair.Value.Population.Value);
+
+    /// <summary>What history/states writes down about a region that the deal needs before it starts.</summary>
+    public readonly record struct RegionFigures(long? Population, float? Urbanisation);
+
+    /// <summary>
+    /// Head-count and how much of it lives in towns, for every region history/states gives
+    /// either for, the later file winning field by field. How urban a region is decides which
+    /// trades its people follow and whether its share of the country's buildings is farms or
+    /// factories, so it has to be known at the deal too - otherwise Moscow was dealt as a
+    /// region of the national average, three quarters urban, with farms to match.
+    /// </summary>
+    public static Dictionary<int, RegionFigures> StatedRegions(Campaign campaign)
+    {
+        var stated = new Dictionary<int, RegionFigures>();
+        var regions = RegionLookup(campaign);
+        foreach (var file in GameDataLoader.DataFiles("history", "states", "2024"))
+        {
+            try
+            {
+                using var document = Parse(File.ReadAllText(file));
+                if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
+                foreach (var entry in document.RootElement.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind != JsonValueKind.Object || !regions.TryGetValue(entry.Name, out var state))
+                        continue;
+                    stated.TryGetValue(state.MapIndex, out var figures);
+                    if (entry.Value.TryGetProperty("population", out var population) &&
+                        population.ValueKind == JsonValueKind.Number && population.TryGetInt64(out var people))
+                        figures = figures with { Population = Math.Max(0, people) };
+                    if (entry.Value.TryGetProperty("urbanization", out var urbanisation) &&
+                        urbanisation.ValueKind == JsonValueKind.Number && urbanisation.TryGetSingle(out var share))
+                        figures = figures with { Urbanisation = M.Clamp01(share) };
+                    if (figures.Population.HasValue || figures.Urbanisation.HasValue) stated[state.MapIndex] = figures;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or JsonException)
+            {
+                // ApplyStates reports the same file when it reaches it; saying so twice helps nobody.
+            }
+        }
+        return stated;
+    }
+
+    /// <summary>
+    /// Regions by the names a history file may use for them: the id, or the ISO code. An id
+    /// wins over an ISO code of the same spelling. Built once per file rather than searching
+    /// eighteen hundred regions for each of the sixteen hundred a population file names.
+    /// </summary>
+    private static Dictionary<string, ScenarioState> RegionLookup(Campaign campaign)
+    {
+        var regions = new Dictionary<string, ScenarioState>(StringComparer.OrdinalIgnoreCase);
+        foreach (var state in campaign.States)
+            if (!string.IsNullOrEmpty(state.Iso)) regions.TryAdd(state.Iso, state);
+        foreach (var state in campaign.States)
+            if (!string.IsNullOrEmpty(state.Id)) regions[state.Id] = state;
+        return regions;
+    }
+
     public static void ApplyStates(Campaign campaign, string json, List<string> errors)
     {
         using var document = Parse(json);
         var populationChanged = new HashSet<int>();
+        var regions = RegionLookup(campaign);
         foreach (var entry in document.RootElement.EnumerateObject())
         {
-            var state = campaign.States.FirstOrDefault(candidate =>
-                string.Equals(candidate.Id, entry.Name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(candidate.Iso, entry.Name, StringComparison.OrdinalIgnoreCase));
+            regions.TryGetValue(entry.Name, out var state);
             if (state is null || entry.Value.ValueKind != JsonValueKind.Object)
             {
                 errors?.Add($"Unknown history state '{entry.Name}'.");
                 continue;
             }
             var value = entry.Value;
-            if (value.TryGetProperty("population", out var population) && population.TryGetInt64(out var people))
+            // The kind first: TryGetInt64 throws rather than answering false on a string, and a
+            // quoted number in a mod's file would otherwise cost the whole file.
+            if (value.TryGetProperty("population", out var population) &&
+                population.ValueKind == JsonValueKind.Number && population.TryGetInt64(out var people))
             {
                 EconomySystem.AdjustStatePopulation(state, Math.Max(0, people) - state.Population);
                 populationChanged.Add(state.NationMapIndex);

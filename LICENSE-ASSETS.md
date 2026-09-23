@@ -58,6 +58,12 @@ keeps that honest.
 All of these permit commercial use, so none of them stands in the way of a paid release.
 What they require is that the credits file ships with the game and stays accurate.
 
+`game/history/states/2024/20_population.json` is derived from
+[Natural Earth](https://www.naturalearthdata.com/)'s populated places, which are public
+domain: no conditions, credited here because it is right to say where the numbers came from.
+The places file itself is not in the repository; `Tools/RegionPopulation` reads it to produce
+the figures.
+
 ### c) Third-party editor plugins
 
 `addons/` is excluded from the repository. Each plugin there carries its own licence. Godot

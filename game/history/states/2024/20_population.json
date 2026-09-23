@@ -1,0 +1,1918 @@
+{
+  // How many people live in each region on 1 January 2024.
+  //
+  // Before this file, a country's people were dealt out almost evenly across its regions, so
+  // Magadan had as many people as Moscow and Iowa as many as Florida. Everything that reads a
+  // region's population inherited that: which region a country recruits from, where a lost
+  // capital moves to, how much a region weighs in stability, what a peace is worth.
+  //
+  // These are estimates, not a census. Most regions on this map are several real provinces
+  // merged together, so no official table fits them. The figures were worked out from the map
+  // by Tools/RegionPopulation: a country's town-dwellers go where its towns are, spread over
+  // the land around each town (Natural Earth populated places, public domain), and the rest
+  // go to farmland first, hills and forest less, desert and tundra hardly at all, weighted by
+  // how settled the country around them is. Against regions whose real population is known,
+  // the typical figure is within a quarter of the truth.
+  //
+  // A region listed here has exactly the people written. A country's total is then the sum of
+  // its regions, so raising one region raises the country. A region left out shares whatever
+  // of the country's figure (history/countries, or the map's) the listed ones leave. Countries
+  // with a single region are not listed: they have nowhere else to put anyone.
+  //
+  // "urbanization" is how much of the region lives in towns, from the same model: a city
+  // region is nearly all town, the land behind it hardly any. It decides which trades the
+  // region's people follow, and whether its share of the country's buildings is farms or
+  // factories. A region without one is spread around its country's figure.
+  //
+  // A mod changes a region by listing it again in a later file of its own.
+
+  // AFG Afghanistan: 38,041,754
+  "af_par": { "population": 5421463, "urbanization": 0.71 },   // Parwan
+  "af_kan": { "population": 4106394, "urbanization": 0.23 },   // Kandahar
+  "af_her": { "population": 3872738, "urbanization": 0.17 },   // Herat
+  "af_bgl": { "population": 3264414, "urbanization": 0.22 },   // Baghlan
+  "af_bam": { "population": 3127219, "urbanization": 0.12 },   // Bamyan
+  "af_nan": { "population": 2409122, "urbanization": 0.34 },   // Nangarhar
+  "af_gha": { "population": 1725839, "urbanization": 0.11 },   // Ghazni
+  "af_pka": { "population": 1651523, "urbanization": 0.32 },   // Paktia
+  "af_bal": { "population": 1442454, "urbanization": 0.59 },   // Balkh
+  "af_fyb": { "population": 1436929, "urbanization": 0.25 },   // Faryab
+  "af_pia": { "population": 959272, "urbanization": 0.05 },   // Paktika
+  "af_fra": { "population": 867901, "urbanization": 0.11 },   // Farah
+  "af_sar": { "population": 829571, "urbanization": 0.05 },   // Sar-e Pol
+  "af_hel": { "population": 816430, "urbanization": 0.33 },   // Helmand
+  "af_bds": { "population": 788114, "urbanization": 0.11 },   // Badakhshan
+  "af_bdg": { "population": 785547, "urbanization": 0.05 },   // Badghis
+  "af_gho": { "population": 777726, "urbanization": 0.05 },   // Ghōr
+  "af_zab": { "population": 763140, "urbanization": 0.05 },   // Zabul
+  "af_nur": { "population": 746093, "urbanization": 0.09 },   // Nuristan
+  "af_sam": { "population": 559431, "urbanization": 0.06 },   // Samangan
+  "af_tak": { "population": 516522, "urbanization": 0.17 },   // Takhar
+  "af_jow": { "population": 448872, "urbanization": 0.28 },   // Jowzjan
+  "af_uru": { "population": 348467, "urbanization": 0.05 },   // Urozgan
+  "af_nim": { "population": 189359, "urbanization": 0.35 },   // Nimruz
+  "af_uru_1536": { "population": 187214, "urbanization": 0.05 },   // Urozgan
+
+  // AGO Angola: 31,825,295
+  "ao_bgo": { "population": 14990972, "urbanization": 0.95 },   // Bengo
+  "ao_hua": { "population": 4381145, "urbanization": 0.69 },   // Huambo
+  "ao_bgu": { "population": 2138325, "urbanization": 0.47 },   // Benguela
+  "ao_nam": { "population": 1265150, "urbanization": 0.37 },   // Namibe
+  "ao_lno": { "population": 1054467, "urbanization": 0.32 },   // Lunda Norte
+  "ao_mal": { "population": 991382, "urbanization": 0.35 },   // Malanje
+  "ao_bie": { "population": 990119, "urbanization": 0.37 },   // Bié
+  "ao_hui": { "population": 958719, "urbanization": 0.37 },   // Huíla
+  "ao_zai": { "population": 936655, "urbanization": 0.44 },   // Zaire
+  "ao_ccu": { "population": 936159, "urbanization": 0.40 },   // Cuando Cubango
+  "ao_cus": { "population": 754465, "urbanization": 0.20 },   // Cuanza Sul
+  "ao_uig": { "population": 634118, "urbanization": 0.31 },   // Uíge
+  "ao_mox": { "population": 613777, "urbanization": 0.18 },   // Moxico
+  "ao_lsu": { "population": 488889, "urbanization": 0.25 },   // Lunda Sul
+  "ao_cno": { "population": 471369, "urbanization": 0.12 },   // Cuanza Norte
+  "ao_cnn": { "population": 219584, "urbanization": 0.14 },   // Cunene
+
+  // ALB Albania: 2,854,191
+  "al_10": { "population": 1971538, "urbanization": 0.71 },   // Shkodër
+  "al_05": { "population": 882653, "urbanization": 0.47 },   // Gjirokastër
+
+  // ARG Argentina: 44,938,712
+  "ar_b": { "population": 24401805, "urbanization": 0.94 },   // Buenos Aires
+  "ar_x": { "population": 3531338, "urbanization": 0.83 },   // Córdoba
+  "ar_s": { "population": 2864019, "urbanization": 0.85 },   // Santa Fe
+  "ar_e": { "population": 2031824, "urbanization": 0.90 },   // Entre Ríos
+  "ar_m": { "population": 1834690, "urbanization": 0.94 },   // Mendoza
+  "ar_t": { "population": 1324193, "urbanization": 0.94 },   // Tucumán
+  "ar_a": { "population": 1162155, "urbanization": 0.90 },   // Salta
+  "ar_h": { "population": 917502, "urbanization": 0.96 },   // Chaco
+  "ar_d": { "population": 766988, "urbanization": 0.94 },   // San Luis
+  "ar_y": { "population": 752566, "urbanization": 0.94 },   // Jujuy
+  "ar_j": { "population": 725172, "urbanization": 0.92 },   // San Juan
+  "ar_w": { "population": 662300, "urbanization": 0.97 },   // Corrientes
+  "ar_r": { "population": 649268, "urbanization": 0.89 },   // Río Negro
+  "ar_g": { "population": 643086, "urbanization": 0.91 },   // Santiago del Estero
+  "ar_u": { "population": 615516, "urbanization": 0.87 },   // Chubut
+  "ar_p": { "population": 389787, "urbanization": 0.92 },   // Formosa
+  "ar_l": { "population": 333536, "urbanization": 0.89 },   // La Pampa
+  "ar_k": { "population": 327710, "urbanization": 0.93 },   // Catamarca
+  "ar_f": { "population": 314197, "urbanization": 0.94 },   // La Rioja
+  "ar_q": { "population": 271742, "urbanization": 0.74 },   // Neuquén
+  "ar_z": { "population": 209120, "urbanization": 0.79 },   // Santa Cruz
+  "ar_v": { "population": 144150, "urbanization": 0.95 },   // Tierra del Fuego
+  "ar_n": { "population": 66048, "urbanization": 0.39 },   // Misiones
+
+  // ARM Armenia: 2,957,731
+  "am_gr": { "population": 1959880, "urbanization": 0.67 },   // Gegharkunik
+  "am_ag": { "population": 997851, "urbanization": 0.58 },   // Aragatsotn
+
+  // ATA Antarctica: 4,490
+  "aq_x01": { "population": 3490, "urbanization": 0.93 },   // Antarctica
+  "aq_x02": { "population": 1000, "urbanization": 0.54 },   // Region 2549
+
+  // AUS Australia: 25,364,307
+  "au_nsw": { "population": 8871097, "urbanization": 0.88 },   // New South Wales
+  "au_vic": { "population": 7093329, "urbanization": 0.85 },   // Victoria
+  "au_qld": { "population": 4219179, "urbanization": 0.91 },   // Queensland
+  "au_wa": { "population": 2697374, "urbanization": 0.81 },   // Western Australia
+  "au_sa": { "population": 1967036, "urbanization": 0.76 },   // South Australia
+  "au_tas": { "population": 325851, "urbanization": 0.77 },   // Tasmania
+  "au_nt": { "population": 190441, "urbanization": 0.86 },   // Northern Territory
+
+  // AUT Austria: 8,877,067
+  "at_3": { "population": 5921766, "urbanization": 0.62 },   // Lower Austria
+  "at_7": { "population": 919430, "urbanization": 0.62 },   // Tyrol
+  "at_6": { "population": 885989, "urbanization": 0.43 },   // Styria
+  "at_4": { "population": 852669, "urbanization": 0.60 },   // Upper Austria
+  "at_2": { "population": 297213, "urbanization": 0.45 },   // Carinthia
+
+  // AZE Azerbaijan: 10,023,318
+  "az_ism": { "population": 5977029, "urbanization": 0.72 },   // Ismayilli
+  "az_gor": { "population": 1464850, "urbanization": 0.55 },   // Goranboy
+  "az_sal": { "population": 1288205, "urbanization": 0.18 },   // Salyan
+  "az_agc": { "population": 830734, "urbanization": 0.12 },   // Aghjabadi
+
+  // BEL Belgium: 11,484,055
+  "be_vbr": { "population": 9380396, "urbanization": 0.97 },   // Flemish Brabant
+  "be_wlx": { "population": 2103659, "urbanization": 0.97 },   // Luxembourg
+
+  // BEN Benin: 11,801,151
+  "bj_zo": { "population": 5394572, "urbanization": 0.69 },   // Zou
+  "bj_al": { "population": 4127882, "urbanization": 0.10 },   // Alibori
+  "bj_bo": { "population": 1811490, "urbanization": 0.80 },   // Borgou
+  "bj_ak": { "population": 402426, "urbanization": 0.74 },   // Atakora
+  "bj_co": { "population": 64781, "urbanization": 0.05 },   // Collines
+
+  // BFA Burkina Faso: 20,321,378
+  "bf_kad": { "population": 5405506, "urbanization": 0.62 },   // Kadiogo
+  "bf_hou": { "population": 3571993, "urbanization": 0.33 },   // Houet
+  "bf_mou": { "population": 2951071, "urbanization": 0.15 },   // Mouhoun
+  "bf_yat": { "population": 1832268, "urbanization": 0.18 },   // Yatenga
+  "bf_blg": { "population": 1609718, "urbanization": 0.12 },   // Boulgou
+  "bf_com": { "population": 1112437, "urbanization": 0.22 },   // Comoé
+  "bf_gna": { "population": 1070565, "urbanization": 0.37 },   // Gnagna
+  "bf_sis": { "population": 1064584, "urbanization": 0.08 },   // Sissili
+  "bf_gou": { "population": 910726, "urbanization": 0.10 },   // Gourma
+  "bf_tap": { "population": 616352, "urbanization": 0.12 },   // Tapoa
+  "bf_som": { "population": 176158, "urbanization": 0.46 },   // Soum
+
+  // BGD Bangladesh: 163,046,161
+  "bd_c": { "population": 77670653, "urbanization": 0.45 },   // Dhaka
+  "bd_b": { "population": 32529197, "urbanization": 0.61 },   // Chattogram
+  "bd_d": { "population": 24877603, "urbanization": 0.21 },   // Khulna
+  "bd_e": { "population": 14404572, "urbanization": 0.23 },   // Rajshahi
+  "bd_f": { "population": 7441032, "urbanization": 0.20 },   // Rangpur
+  "bd_g": { "population": 6123104, "urbanization": 0.11 },   // Sylhet
+
+  // BGR Bulgaria: 6,975,761
+  "bg_23": { "population": 2376295, "urbanization": 0.91 },   // Sofia
+  "bg_25": { "population": 2156455, "urbanization": 0.70 },   // Targovishte
+  "bg_24": { "population": 1339801, "urbanization": 0.81 },   // Stara Zagora
+  "bg_15": { "population": 1103210, "urbanization": 0.50 },   // Pleven
+
+  // BIH Bosnia and Herzegovina: 3,301,000
+  "ba_bih_889": { "population": 1800740, "urbanization": 0.61 },   // Tuzla Canton
+  "ba_x02": { "population": 1032920, "urbanization": 0.36 },   // Banja Luka
+  "ba_bih": { "population": 467340, "urbanization": 0.39 },   // Herzegovina-Neretva Canton
+
+  // BLR Belarus: 9,466,856
+  "by_mi": { "population": 3549373, "urbanization": 0.91 },   // Minsk
+  "by_ma": { "population": 1331964, "urbanization": 0.70 },   // Mahilioŭ
+  "by_ho": { "population": 1260614, "urbanization": 0.74 },   // Gomel
+  "by_br": { "population": 1249281, "urbanization": 0.75 },   // Brest
+  "by_hr": { "population": 1039928, "urbanization": 0.63 },   // Grodno
+  "by_vi": { "population": 1035696, "urbanization": 0.85 },   // Vitebsk
+
+  // BOL Bolivia: 11,513,100
+  "bo_s": { "population": 4436359, "urbanization": 0.66 },   // Santa Cruz
+  "bo_l": { "population": 2571865, "urbanization": 0.81 },   // La Paz
+  "bo_c": { "population": 1484365, "urbanization": 0.87 },   // Cochabamba
+  "bo_b": { "population": 737638, "urbanization": 0.60 },   // Beni
+  "bo_p": { "population": 620464, "urbanization": 0.51 },   // Potosí
+  "bo_o": { "population": 490622, "urbanization": 0.65 },   // Oruro
+  "bo_t": { "population": 479491, "urbanization": 0.78 },   // Tarija
+  "bo_h": { "population": 417785, "urbanization": 0.70 },   // Chuquisaca
+  "bo_n": { "population": 274511, "urbanization": 0.54 },   // Pando
+
+  // BRA Brazil: 211,049,527
+  "br_sp": { "population": 52363143, "urbanization": 0.92 },   // São Paulo
+  "br_rj": { "population": 23690102, "urbanization": 0.97 },   // Rio de Janeiro
+  "br_mg": { "population": 19778723, "urbanization": 0.81 },   // Minas Gerais
+  "br_rs": { "population": 13468704, "urbanization": 0.85 },   // Rio Grande do Sul
+  "br_go": { "population": 13039889, "urbanization": 0.80 },   // Goiás
+  "br_pr": { "population": 11673456, "urbanization": 0.86 },   // Paraná
+  "br_ba": { "population": 11549202, "urbanization": 0.83 },   // Bahia
+  "br_pe": { "population": 7873447, "urbanization": 0.93 },   // Pernambuco
+  "br_ce": { "population": 7453113, "urbanization": 0.95 },   // Ceará
+  "br_pa": { "population": 6690897, "urbanization": 0.84 },   // Pará
+  "br_am": { "population": 6432775, "urbanization": 0.81 },   // Amazonas
+  "br_sc": { "population": 6359590, "urbanization": 0.92 },   // Santa Catarina
+  "br_ma": { "population": 4167309, "urbanization": 0.86 },   // Maranhão
+  "br_es": { "population": 3437187, "urbanization": 0.92 },   // Espírito Santo
+  "br_mt": { "population": 2996944, "urbanization": 0.65 },   // Mato Grosso
+  "br_ap": { "population": 2995685, "urbanization": 0.92 },   // Amapá
+  "br_ms": { "population": 2919154, "urbanization": 0.65 },   // Mato Grosso do Sul
+  "br_al": { "population": 2648661, "urbanization": 0.94 },   // Alagoas
+  "br_pb": { "population": 2648504, "urbanization": 0.86 },   // Paraíba
+  "br_rn": { "population": 2604507, "urbanization": 0.84 },   // Rio Grande do Norte
+  "br_pi": { "population": 1668446, "urbanization": 0.88 },   // Piauí
+  "br_se": { "population": 1298927, "urbanization": 0.87 },   // Sergipe
+  "br_ro": { "population": 1218539, "urbanization": 0.77 },   // Rondônia
+  "br_to": { "population": 953927, "urbanization": 0.65 },   // Tocantins
+  "br_ac": { "population": 651594, "urbanization": 0.80 },   // Acre
+  "br_rr": { "population": 467102, "urbanization": 0.81 },   // Roraima
+
+  // BTN Bhutan: 763,092
+  "bt_24": { "population": 663073, "urbanization": 0.51 },   // Wangdue Phodrang
+  "bt_41": { "population": 100019, "urbanization": 0.05 },   // Trashigang
+
+  // BWA Botswana: 2,303,697
+  "bw_ce": { "population": 868826, "urbanization": 0.70 },   // Central
+  "bw_kw": { "population": 598529, "urbanization": 0.88 },   // Kweneng
+  "bw_so": { "population": 436252, "urbanization": 0.82 },   // Southern
+  "bw_nw": { "population": 248427, "urbanization": 0.49 },   // North-West
+  "bw_kg": { "population": 84225, "urbanization": 0.35 },   // Kgalagadi
+  "bw_gh": { "population": 67438, "urbanization": 0.21 },   // Ghanzi
+
+  // CAF Central African Republic: 4,745,185
+  "cf_mp": { "population": 1482501, "urbanization": 0.77 },   // Ombella-M'Poko Prefecture
+  "cf_lb": { "population": 440050, "urbanization": 0.29 },   // Lobaye Prefecture
+  "cf_hs": { "population": 355659, "urbanization": 0.38 },   // Mambéré-Kadéï
+  "cf_uk": { "population": 315177, "urbanization": 0.27 },   // Ouaka Prefecture
+  "cf_ac": { "population": 300162, "urbanization": 0.29 },   // Ouham Prefecture
+  "cf_op": { "population": 204231, "urbanization": 0.27 },   // Ouham-Pendé Prefecture
+  "cf_nm": { "population": 199256, "urbanization": 0.24 },   // Nana-Mambéré Prefecture
+  "cf_mb": { "population": 199029, "urbanization": 0.23 },   // Mbomou Prefecture
+  "cf_hk": { "population": 195281, "urbanization": 0.24 },   // Haute-Kotto Prefecture
+  "cf_kb": { "population": 177052, "urbanization": 0.44 },   // Nana-Grébizi Economic Prefecture
+  "cf_se": { "population": 171663, "urbanization": 0.21 },   // Sangha-Mbaéré
+  "cf_bb": { "population": 152760, "urbanization": 0.11 },   // Bamingui-Bangoran Prefecture
+  "cf_vk": { "population": 146061, "urbanization": 0.10 },   // Vakaga Prefecture
+  "cf_hm": { "population": 145084, "urbanization": 0.31 },   // Haut-Mbomou Prefecture
+  "cf_kg": { "population": 144419, "urbanization": 0.32 },   // Kémo Prefecture
+  "cf_bk": { "population": 116800, "urbanization": 0.23 },   // Basse-Kotto Prefecture
+
+  // CAN Canada: 37,589,262
+  "ca_on": { "population": 14909859, "urbanization": 0.87 },   // Ontario
+  "ca_qc": { "population": 8445176, "urbanization": 0.84 },   // Quebec
+  "ca_bc": { "population": 5664435, "urbanization": 0.78 },   // British Columbia
+  "ca_ab": { "population": 4222637, "urbanization": 0.77 },   // Alberta
+  "ca_mb": { "population": 1324783, "urbanization": 0.71 },   // Manitoba
+  "ca_sk": { "population": 1069337, "urbanization": 0.64 },   // Saskatchewan
+  "ca_ns": { "population": 725377, "urbanization": 0.81 },   // Nova Scotia
+  "ca_nb": { "population": 456900, "urbanization": 0.72 },   // New Brunswick
+  "ca_nl": { "population": 429607, "urbanization": 0.60 },   // Newfoundland and Labrador
+  "ca_yt": { "population": 118853, "urbanization": 0.28 },   // Yukon
+  "ca_nu": { "population": 112192, "urbanization": 0.80 },   // Nunavut
+  "ca_nt": { "population": 110106, "urbanization": 0.38 },   // Northwest Territories
+
+  // CHE Switzerland: 8,574,832
+  "ch_be": { "population": 5436503, "urbanization": 0.75 },   // Bern
+  "ch_gr": { "population": 3138329, "urbanization": 0.72 },   // Grisons
+
+  // CHL Chile: 18,952,038
+  "cl_rm": { "population": 8569885, "urbanization": 0.96 },   // Santiago
+  "cl_vs": { "population": 1856354, "urbanization": 0.90 },   // Valparaíso
+  "cl_bi": { "population": 1818246, "urbanization": 0.91 },   // Biobío
+  "cl_an": { "population": 940443, "urbanization": 0.73 },   // Antofagasta
+  "cl_ar": { "population": 903810, "urbanization": 0.69 },   // Araucanía
+  "cl_ml": { "population": 789461, "urbanization": 0.82 },   // Maule
+  "cl_ll": { "population": 768826, "urbanization": 0.79 },   // Los Lagos
+  "cl_li": { "population": 622076, "urbanization": 0.76 },   // O'Higgins
+  "cl_co": { "population": 500768, "urbanization": 0.85 },   // Coquimbo
+  "cl_ta": { "population": 414930, "urbanization": 0.80 },   // Tarapacá
+  "cl_lr": { "population": 367913, "urbanization": 0.76 },   // Los Ríos
+  "cl_at": { "population": 346125, "urbanization": 0.88 },   // Atacama
+  "cl_ma": { "population": 322131, "urbanization": 0.60 },   // Magellan and the Chilean Antarctic
+  "cl_ap": { "population": 292937, "urbanization": 0.89 },   // Arica y Parinacota
+  "cl_nb": { "population": 265098, "urbanization": 0.83 },   // Ñuble
+  "cl_ai": { "population": 173035, "urbanization": 0.47 },   // Aysén
+
+  // CHN China: 1,397,715,000
+  "cn_js": { "population": 117701331, "urbanization": 0.71 },   // Jiangsu
+  "cn_sd": { "population": 105116602, "urbanization": 0.62 },   // Shandong
+  "cn_gd": { "population": 90227320, "urbanization": 0.71 },   // Guangdong
+  "cn_ln": { "population": 76425329, "urbanization": 0.73 },   // Liaoning
+  "cn_hb": { "population": 72773443, "urbanization": 0.59 },   // Hubei
+  "cn_ha": { "population": 71269701, "urbanization": 0.58 },   // Henan
+  "cn_sc": { "population": 69770715, "urbanization": 0.64 },   // Sichuan
+  "cn_hl": { "population": 65137046, "urbanization": 0.62 },   // Heilongjiang
+  "cn_ah": { "population": 64801825, "urbanization": 0.55 },   // Anhui
+  "cn_hn": { "population": 55211229, "urbanization": 0.59 },   // Hunan
+  "cn_zj": { "population": 51403555, "urbanization": 0.72 },   // Zhejiang
+  "cn_gx": { "population": 46318081, "urbanization": 0.63 },   // Guangxi
+  "cn_jl": { "population": 41269503, "urbanization": 0.61 },   // Jilin
+  "cn_jx": { "population": 41197828, "urbanization": 0.60 },   // Jiangxi
+  "cn_fj": { "population": 39225511, "urbanization": 0.78 },   // Fujian
+  "cn_xj": { "population": 38834644, "urbanization": 0.67 },   // Xinjiang
+  "cn_sx": { "population": 36852685, "urbanization": 0.70 },   // Shanxi
+  "cn_nm": { "population": 35580515, "urbanization": 0.58 },   // Inner Mongolia
+  "cn_sn": { "population": 30936013, "urbanization": 0.68 },   // Shaanxi
+  "cn_cq": { "population": 30593831, "urbanization": 0.69 },   // Chongqing
+  "cn_bj": { "population": 29378694, "urbanization": 0.85 },   // Beijing
+  "cn_gz": { "population": 29251773, "urbanization": 0.67 },   // Guizhou
+  "cn_yn": { "population": 28721382, "urbanization": 0.64 },   // Yunnan
+  "cn_tj": { "population": 26570756, "urbanization": 0.77 },   // Tianjin
+  "cn_gs": { "population": 26196367, "urbanization": 0.64 },   // Gansu
+  "cn_hi": { "population": 8569836, "urbanization": 0.70 },   // Hainan
+  "cn_qh": { "population": 6163104, "urbanization": 0.50 },   // Qinghai
+  "cn_xz": { "population": 4826211, "urbanization": 0.23 },   // Tibet
+  "cn_nx": { "population": 3890170, "urbanization": 0.73 },   // Ningxia
+
+  // CIV Ivory Coast: 25,716,544
+  "ci_01": { "population": 9432722, "urbanization": 0.84 },   // Lagunes
+  "ci_03": { "population": 3011517, "urbanization": 0.16 },   // Savanes
+  "ci_04": { "population": 1997843, "urbanization": 0.59 },   // Vallée du Bandama
+  "ci_11": { "population": 1851394, "urbanization": 0.35 },   // N'zi-Comoé
+  "ci_16": { "population": 1650228, "urbanization": 0.46 },   // Agnéby
+  "ci_02": { "population": 1503609, "urbanization": 0.43 },   // Haut-Sassandra
+  "ci_09": { "population": 1462268, "urbanization": 0.51 },   // Bas-Sassandra
+  "ci_06": { "population": 1386467, "urbanization": 0.26 },   // Dix-Huit Montagnes
+  "ci_15": { "population": 1174827, "urbanization": 0.44 },   // Sud-Bandama
+  "ci_14": { "population": 689999, "urbanization": 0.15 },   // Worodougou
+  "ci_08": { "population": 627163, "urbanization": 0.19 },   // Zanzan
+  "ci_19": { "population": 486088, "urbanization": 0.17 },   // Moyen-Cavally
+  "ci_10": { "population": 442419, "urbanization": 0.23 },   // Denguélé
+
+  // CMR Cameroon: 25,876,380
+  "cm_lt": { "population": 5169109, "urbanization": 0.79 },   // Littoral
+  "cm_ce": { "population": 5124934, "urbanization": 0.64 },   // Centre
+  "cm_en": { "population": 4600943, "urbanization": 0.53 },   // Far North
+  "cm_no": { "population": 2646941, "urbanization": 0.37 },   // North
+  "cm_nw": { "population": 1590074, "urbanization": 0.74 },   // Northwest
+  "cm_sw": { "population": 1469372, "urbanization": 0.49 },   // Southwest
+  "cm_ou": { "population": 1458692, "urbanization": 0.60 },   // West
+  "cm_es": { "population": 1434733, "urbanization": 0.39 },   // East
+  "cm_ad": { "population": 1308815, "urbanization": 0.50 },   // Adamawa
+  "cm_su": { "population": 1072767, "urbanization": 0.25 },   // South
+
+  // COD Democratic Republic of the Congo: 86,790,567
+  "cd_bc": { "population": 20373641, "urbanization": 0.88 },   // Kongo Central
+  "cd_ka": { "population": 15934982, "urbanization": 0.39 },   // Katanga
+  "cd_or": { "population": 12471936, "urbanization": 0.20 },   // Orientale
+  "cd_kw": { "population": 7532804, "urbanization": 0.34 },   // Kasaï-Occidental
+  "cd_ke": { "population": 7119152, "urbanization": 0.54 },   // Kasaï-Oriental
+  "cd_eq": { "population": 6796859, "urbanization": 0.29 },   // Équateur
+  "cd_bn": { "population": 6233158, "urbanization": 0.34 },   // Bandundu
+  "cd_nk": { "population": 4115153, "urbanization": 0.38 },   // North Kivu
+  "cd_sk": { "population": 3150571, "urbanization": 0.40 },   // South Kivu
+  "cd_ma": { "population": 3062311, "urbanization": 0.25 },   // Maniema
+
+  // COG Republic of the Congo: 5,380,508
+  "cg_5": { "population": 2486369, "urbanization": 0.90 },   // Kouilou
+  "cg_2": { "population": 654501, "urbanization": 0.56 },   // Lékoumou
+  "cg_9": { "population": 603720, "urbanization": 0.76 },   // Niari
+  "cg_13": { "population": 425989, "urbanization": 0.40 },   // Sangha
+  "cg_7": { "population": 301268, "urbanization": 0.24 },   // Likouala
+  "cg_8": { "population": 290162, "urbanization": 0.53 },   // Cuvette
+  "cg_12": { "population": 282034, "urbanization": 0.17 },   // Pool
+  "cg_14": { "population": 210181, "urbanization": 0.49 },   // Plateaux
+  "cg_15": { "population": 126284, "urbanization": 0.29 },   // Cuvette-Ouest
+
+  // COL Colombia: 50,339,443
+  "co_cun": { "population": 13167064, "urbanization": 0.94 },   // Cundinamarca
+  "co_ant": { "population": 8864063, "urbanization": 0.80 },   // Antioquia
+  "co_vac": { "population": 4719471, "urbanization": 0.92 },   // Valle del Cauca
+  "co_mag": { "population": 4428103, "urbanization": 0.92 },   // Magdalena
+  "co_bol": { "population": 2728593, "urbanization": 0.82 },   // Bolívar
+  "co_san": { "population": 2360217, "urbanization": 0.84 },   // Santander
+  "co_tol": { "population": 1854865, "urbanization": 0.73 },   // Tolima
+  "co_nsa": { "population": 1753727, "urbanization": 0.80 },   // Norte de Santander
+  "co_met": { "population": 1749088, "urbanization": 0.68 },   // Meta
+  "co_nar": { "population": 1261142, "urbanization": 0.79 },   // Nariño
+  "co_cau": { "population": 1104902, "urbanization": 0.63 },   // Cauca
+  "co_boy": { "population": 1015842, "urbanization": 0.71 },   // Boyacá
+  "co_cor": { "population": 900433, "urbanization": 0.66 },   // Córdoba
+  "co_hui": { "population": 894090, "urbanization": 0.79 },   // Huila
+  "co_cho": { "population": 676181, "urbanization": 0.24 },   // Chocó
+  "co_ces": { "population": 656741, "urbanization": 0.76 },   // Cesar
+  "co_caq": { "population": 468837, "urbanization": 0.46 },   // Caquetá
+  "co_lag": { "population": 380298, "urbanization": 0.59 },   // La Guajira
+  "co_ama": { "population": 328018, "urbanization": 0.59 },   // Amazonas
+  "co_cas": { "population": 257319, "urbanization": 0.41 },   // Casanare
+  "co_put": { "population": 166703, "urbanization": 0.22 },   // Putumayo
+  "co_guv": { "population": 145042, "urbanization": 0.25 },   // Guaviare
+  "co_ara": { "population": 136047, "urbanization": 0.35 },   // Arauca
+  "co_vid": { "population": 127728, "urbanization": 0.05 },   // Vichada
+  "co_gua": { "population": 109082, "urbanization": 0.14 },   // Guainía
+  "co_vau": { "population": 85847, "urbanization": 0.11 },   // Vaupés
+
+  // CRI Costa Rica: 5,047,561
+  "cr_a": { "population": 2067561, "urbanization": 0.76 },   // Alajuela
+  "cr_p": { "population": 1914938, "urbanization": 0.88 },   // Puntarenas
+  "cr_l": { "population": 1065062, "urbanization": 0.82 },   // Limón
+
+  // CUB Cuba: 11,333,483
+  "cu_04": { "population": 4659294, "urbanization": 0.87 },   // Matanzas
+  "cu_11": { "population": 3433334, "urbanization": 0.70 },   // Holguín
+  "cu_05": { "population": 1824738, "urbanization": 0.75 },   // Villa Clara
+  "cu_09": { "population": 1416117, "urbanization": 0.65 },   // Camagüey
+
+  // CZE Czechia: 10,669,709
+  "cz_st": { "population": 4446650, "urbanization": 0.81 },   // Central Bohemian
+  "cz_jm": { "population": 3721589, "urbanization": 0.78 },   // South Moravian
+  "cz_jc": { "population": 1010999, "urbanization": 0.40 },   // South Bohemian
+  "cz_kr": { "population": 758521, "urbanization": 0.71 },   // Hradec Králové
+  "cz_pl": { "population": 731950, "urbanization": 0.60 },   // Plzeň-
+
+  // DEU Germany: 83,132,799
+  "de_nw": { "population": 17735008, "urbanization": 0.84 },   // North Rhine-Westphalia
+  "de_bw": { "population": 13168848, "urbanization": 0.80 },   // Baden-Württemberg
+  "de_by": { "population": 9545234, "urbanization": 0.65 },   // Bavaria
+  "de_bb": { "population": 9121816, "urbanization": 0.77 },   // Brandenburg
+  "de_he": { "population": 8750069, "urbanization": 0.93 },   // Hesse
+  "de_ni": { "population": 6775740, "urbanization": 0.81 },   // Lower Saxony
+  "de_rp": { "population": 5010753, "urbanization": 0.87 },   // Rhineland-Palatinate
+  "de_sn": { "population": 4020891, "urbanization": 0.69 },   // Saxony
+  "de_sh": { "population": 3880587, "urbanization": 0.91 },   // Schleswig-Holstein
+  "de_st": { "population": 1858086, "urbanization": 0.24 },   // Saxony-Anhalt
+  "de_mv": { "population": 1814781, "urbanization": 0.39 },   // Mecklenburg-Western Pomerania
+  "de_th": { "population": 1450986, "urbanization": 0.54 },   // Thuringia
+
+  // DNK Denmark: 5,818,553
+  "dk_85": { "population": 3400120, "urbanization": 0.93 },   // Zealand
+  "dk_83": { "population": 1028402, "urbanization": 0.82 },   // Southern Denmark
+  "dk_82": { "population": 909272, "urbanization": 0.81 },   // Central Denmark
+  "dk_81": { "population": 480759, "urbanization": 0.82 },   // North Denmark
+
+  // DOM Dominican Republic: 10,738,958
+  "do_29": { "population": 7342894, "urbanization": 0.86 },   // Monte Plata
+  "do_25": { "population": 3396064, "urbanization": 0.83 },   // Santiago
+
+  // DZA Algeria: 43,053,054
+  "dz_26": { "population": 11295903, "urbanization": 0.88 },   // Médéa
+  "dz_19": { "population": 6170659, "urbanization": 0.68 },   // Sétif
+  "dz_24": { "population": 6170015, "urbanization": 0.73 },   // Guelma
+  "dz_22": { "population": 5468473, "urbanization": 0.73 },   // Sidi Bel Abbès
+  "dz_11": { "population": 2407718, "urbanization": 0.62 },   // Tamanghasset
+  "dz_48": { "population": 2268979, "urbanization": 0.76 },   // Relizane
+  "dz_05": { "population": 1286136, "urbanization": 0.59 },   // Batna
+  "dz_12": { "population": 1037810, "urbanization": 0.45 },   // Tébessa
+  "dz_28": { "population": 921131, "urbanization": 0.44 },   // M'Sila
+  "dz_30": { "population": 892454, "urbanization": 0.97 },   // Ouargla
+  "dz_14": { "population": 812519, "urbanization": 0.61 },   // Tiaret
+  "dz_17": { "population": 705511, "urbanization": 0.65 },   // Djelfa
+  "dz_07": { "population": 546984, "urbanization": 0.97 },   // Biskra
+  "dz_39": { "population": 482502, "urbanization": 0.97 },   // El Oued
+  "dz_03": { "population": 453247, "urbanization": 0.68 },   // Laghouat
+  "dz_08": { "population": 445409, "urbanization": 0.97 },   // Béchar
+  "dz_47": { "population": 428526, "urbanization": 0.97 },   // Ghardaïa
+  "dz_01": { "population": 384462, "urbanization": 0.97 },   // Adrar
+  "dz_32": { "population": 291148, "urbanization": 0.62 },   // El Bayadh
+  "dz_45": { "population": 283566, "urbanization": 0.60 },   // Naama
+  "dz_33": { "population": 248542, "urbanization": 0.10 },   // Illizi
+  "dz_37": { "population": 51360, "urbanization": 0.96 },   // Tindouf
+
+  // ECU Ecuador: 17,373,662
+  "ec_g": { "population": 5415000, "urbanization": 0.83 },   // Guayas
+  "ec_p": { "population": 3474212, "urbanization": 0.83 },   // Pichincha
+  "ec_m": { "population": 2295318, "urbanization": 0.35 },   // Manabí
+  "ec_e": { "population": 1555820, "urbanization": 0.40 },   // Esmeraldas
+  "ec_l": { "population": 940318, "urbanization": 0.66 },   // Loja
+  "ec_a": { "population": 858401, "urbanization": 0.70 },   // Azuay
+  "ec_t": { "population": 843448, "urbanization": 0.62 },   // Tungurahua
+  "ec_s": { "population": 747735, "urbanization": 0.52 },   // Morona-Santiago
+  "ec_r": { "population": 723054, "urbanization": 0.46 },   // Los Ríos
+  "ec_y": { "population": 235713, "urbanization": 0.18 },   // Pastaza
+  "ec_u": { "population": 192170, "urbanization": 0.05 },   // Sucumbíos
+  "ec_d": { "population": 92473, "urbanization": 0.05 },   // Orellana
+
+  // EGY Egypt: 100,388,073
+  "eg_shr": { "population": 40946554, "urbanization": 0.26 },   // Al Sharqia
+  "eg_gz": { "population": 21885124, "urbanization": 0.64 },   // Giza
+  "eg_bh": { "population": 20793496, "urbanization": 0.42 },   // Beheira
+  "eg_ba": { "population": 8894722, "urbanization": 0.41 },   // Red Sea
+  "eg_fym": { "population": 2224425, "urbanization": 0.97 },   // Faiyum
+  "eg_js": { "population": 1734572, "urbanization": 0.05 },   // South Sinai
+  "eg_mn": { "population": 1588859, "urbanization": 0.97 },   // Minya
+  "eg_asn": { "population": 914134, "urbanization": 0.97 },   // Aswan
+  "eg_wad": { "population": 747071, "urbanization": 0.89 },   // New Valley
+  "eg_mt": { "population": 338113, "urbanization": 0.90 },   // Matrouh
+  "eg_sin": { "population": 321003, "urbanization": 0.93 },   // North Sinai
+
+  // ERI Eritrea: 6,081,196
+  "er_du": { "population": 3179879, "urbanization": 0.59 },   // Debub
+  "er_gb": { "population": 1533909, "urbanization": 0.13 },   // Gash-Barka
+  "er_sk": { "population": 776243, "urbanization": 0.36 },   // Northern Red Sea
+  "er_dk": { "population": 591165, "urbanization": 0.35 },   // Southern Red Sea
+
+  // ESP Spain: 47,076,781
+  "es_m": { "population": 8860138, "urbanization": 0.90 },   // Community of Madrid
+  "es_b": { "population": 8850302, "urbanization": 0.95 },   // Barcelona
+  "es_bu": { "population": 4188192, "urbanization": 0.77 },   // Burgos
+  "es_ba": { "population": 2773872, "urbanization": 0.85 },   // Badajoz
+  "es_se": { "population": 2519080, "urbanization": 0.80 },   // Seville
+  "es_ca": { "population": 2275722, "urbanization": 0.88 },   // Cádiz
+  "es_mu": { "population": 1929988, "urbanization": 0.87 },   // Murcia
+  "es_c": { "population": 1576984, "urbanization": 0.89 },   // A Coruña
+  "es_v": { "population": 1510938, "urbanization": 0.89 },   // Valencia
+  "es_z": { "population": 1293278, "urbanization": 0.84 },   // Zaragoza
+  "es_na": { "population": 1265351, "urbanization": 0.84 },   // Navarre
+  "es_gr": { "population": 1175316, "urbanization": 0.80 },   // Granada
+  "es_to": { "population": 1070095, "urbanization": 0.81 },   // Toledo
+  "es_o": { "population": 1054045, "urbanization": 0.90 },   // Asturias
+  "es_gu": { "population": 954387, "urbanization": 0.69 },   // Guadalajara
+  "es_co": { "population": 744317, "urbanization": 0.72 },   // Córdoba
+  "es_l": { "population": 522227, "urbanization": 0.50 },   // Lleida
+  "es_te": { "population": 514529, "urbanization": 0.58 },   // Teruel
+  "es_ab": { "population": 489769, "urbanization": 0.54 },   // Albacete
+  "es_h": { "population": 480286, "urbanization": 0.50 },   // Huelva
+  "es_j": { "population": 431286, "urbanization": 0.68 },   // Jaén
+  "es_sa": { "population": 400698, "urbanization": 0.67 },   // Salamanca
+  "es_lu": { "population": 394169, "urbanization": 0.50 },   // Lugo
+  "es_cr": { "population": 387570, "urbanization": 0.05 },   // Ciudad Real
+  "es_le": { "population": 382413, "urbanization": 0.59 },   // León
+  "es_cu": { "population": 379910, "urbanization": 0.05 },   // Cuenca
+  "es_za": { "population": 219082, "urbanization": 0.05 },   // Zamora
+  "es_hu": { "population": 197857, "urbanization": 0.05 },   // Huesca
+  "es_so": { "population": 118856, "urbanization": 0.05 },   // Soria
+  "es_cc": { "population": 116124, "urbanization": 0.05 },   // Cáceres
+
+  // EST Estonia: 1,326,590
+  "ee_37": { "population": 1006746, "urbanization": 0.74 },   // Harju
+  "ee_78": { "population": 319844, "urbanization": 0.57 },   // Tartu
+
+  // ETH Ethiopia: 112,078,730
+  "et_or": { "population": 59340953, "urbanization": 0.31 },   // Oromia
+  "et_am": { "population": 18434343, "urbanization": 0.16 },   // Amhara
+  "et_so": { "population": 9771224, "urbanization": 0.16 },   // Somali
+  "et_sn": { "population": 8521741, "urbanization": 0.19 },   // Southern Nations
+  "et_ti": { "population": 6791226, "urbanization": 0.15 },   // Tigray
+  "et_af": { "population": 5824388, "urbanization": 0.05 },   // Afar
+  "et_be": { "population": 2924512, "urbanization": 0.05 },   // Benishangul-Gumuz
+  "et_ga": { "population": 470343, "urbanization": 0.05 },   // Gambela
+
+  // FIN Finland: 5,520,314
+  "fi_18": { "population": 2246225, "urbanization": 0.95 },   // Uusimaa
+  "fi_11": { "population": 718457, "urbanization": 0.81 },   // Pirkanmaa
+  "fi_19": { "population": 403995, "urbanization": 0.82 },   // Finland Proper
+  "fi_14": { "population": 396757, "urbanization": 0.88 },   // Northern Ostrobothnia
+  "fi_08": { "population": 240905, "urbanization": 0.77 },   // Central Finland
+  "fi_02": { "population": 232578, "urbanization": 0.74 },   // South Karelia
+  "fi_16": { "population": 224069, "urbanization": 0.83 },   // Päijänne Tavastia
+  "fi_15": { "population": 214398, "urbanization": 0.81 },   // Northern Savonia
+  "fi_04": { "population": 190248, "urbanization": 0.74 },   // Southern Savonia
+  "fi_17": { "population": 184841, "urbanization": 0.79 },   // Satakunta
+  "fi_10": { "population": 162952, "urbanization": 0.87 },   // Lapland
+  "fi_13": { "population": 138360, "urbanization": 0.73 },   // North Karelia
+  "fi_12": { "population": 123952, "urbanization": 0.87 },   // Ostrobothnia
+  "fi_03": { "population": 30282, "urbanization": 0.05 },   // Southern Ostrobothnia
+  "fi_05": { "population": 12295, "urbanization": 0.05 },   // Kainuu
+
+  // FRA France: 67,059,887
+  "fr_78": { "population": 24511699, "urbanization": 0.89 },   // Yvelines
+  "fr_26": { "population": 4735539, "urbanization": 0.92 },   // Drôme
+  "fr_63": { "population": 4017662, "urbanization": 0.91 },   // Puy-de-Dôme
+  "fr_62": { "population": 3641453, "urbanization": 0.79 },   // Pas-de-Calais
+  "fr_04": { "population": 2986316, "urbanization": 0.92 },   // Alpes-de-Haute-Provence
+  "fr_57": { "population": 2964762, "urbanization": 0.81 },   // Moselle
+  "fr_76": { "population": 2714471, "urbanization": 0.75 },   // Seine-Maritime
+  "fr_31": { "population": 2127155, "urbanization": 0.85 },   // Haute-Garonne
+  "fr_gf": { "population": 2051127, "urbanization": 0.91 },   // French Guiana
+  "fr_33": { "population": 1927327, "urbanization": 0.89 },   // Gironde
+  "fr_61": { "population": 1925062, "urbanization": 0.67 },   // Orne
+  "fr_44": { "population": 1872549, "urbanization": 0.72 },   // Loire-Atlantique
+  "fr_51": { "population": 1807375, "urbanization": 0.42 },   // Marne
+  "fr_86": { "population": 1671064, "urbanization": 0.51 },   // Vienne
+  "fr_30": { "population": 1540331, "urbanization": 0.80 },   // Gard
+  "fr_25": { "population": 1065663, "urbanization": 0.69 },   // Doubs
+  "fr_22": { "population": 754098, "urbanization": 0.80 },   // Côtes-d'Armor
+  "fr_88": { "population": 618788, "urbanization": 0.75 },   // Vosges
+  "fr_21": { "population": 514436, "urbanization": 0.71 },   // Côte-d’Or
+  "fr_89": { "population": 500691, "urbanization": 0.40 },   // Yonne
+  "fr_23": { "population": 496259, "urbanization": 0.90 },   // Creuse
+  "fr_64": { "population": 479539, "urbanization": 0.86 },   // Pyrenees-Atlantics
+  "fr_11": { "population": 429120, "urbanization": 0.73 },   // Aude
+  "fr_12": { "population": 422848, "urbanization": 0.05 },   // Aveyron
+  "fr_17": { "population": 413925, "urbanization": 0.40 },   // Charente-Maritime
+  "fr_24": { "population": 347864, "urbanization": 0.36 },   // Dordogne
+  "fr_73": { "population": 302490, "urbanization": 0.75 },   // Savoie
+  "fr_07": { "population": 161698, "urbanization": 0.25 },   // Ardèche
+  "fr_40": { "population": 58576, "urbanization": 0.24 },   // Landes
+
+  // GAB Gabon: 2,172,579
+  "ga_1": { "population": 1175435, "urbanization": 0.96 },   // Estuaire
+  "ga_8": { "population": 270461, "urbanization": 0.93 },   // Ogooué-Maritime
+  "ga_9": { "population": 218227, "urbanization": 0.86 },   // Woleu-Ntem
+  "ga_2": { "population": 181312, "urbanization": 0.86 },   // Haut-Ogooué
+  "ga_4": { "population": 92833, "urbanization": 0.72 },   // Ngounié
+  "ga_3": { "population": 64153, "urbanization": 0.77 },   // Moyen-Ogooué
+  "ga_5": { "population": 59962, "urbanization": 0.76 },   // Nyanga
+  "ga_6": { "population": 59223, "urbanization": 0.67 },   // Ogooué-Ivindo
+  "ga_7": { "population": 50973, "urbanization": 0.62 },   // Ogooué-Lolo
+
+  // GBR United Kingdom: 66,834,405
+  "gb_sry": { "population": 22685365, "urbanization": 0.87 },   // Surrey
+  "gb_dby": { "population": 8595172, "urbanization": 0.87 },   // Derbyshire
+  "gb_nyk": { "population": 7098397, "urbanization": 0.86 },   // North Yorkshire
+  "gb_lan": { "population": 6740028, "urbanization": 0.96 },   // Lancashire
+  "gb_som": { "population": 4948092, "urbanization": 0.74 },   // Somerset
+  "gb_lec": { "population": 3839084, "urbanization": 0.74 },   // Leicestershire
+  "gb_pow": { "population": 3611986, "urbanization": 0.85 },   // Powys
+  "gb_pkn": { "population": 2497043, "urbanization": 0.88 },   // Perth and Kinross
+  "gb_scb": { "population": 1649695, "urbanization": 0.91 },   // Scottish Borders
+  "gb_nfk": { "population": 1429606, "urbanization": 0.44 },   // Norfolk
+  "gb_stb": { "population": 1149893, "urbanization": 0.92 },   // Strabane
+  "gb_dgy": { "population": 895893, "urbanization": 0.85 },   // Dumfries and Galloway
+  "gb_dev": { "population": 835908, "urbanization": 0.85 },   // Devon
+  "gb_abd": { "population": 489652, "urbanization": 0.81 },   // Aberdeenshire
+  "gb_hld": { "population": 258965, "urbanization": 0.56 },   // Highland
+  "gb_agb": { "population": 109626, "urbanization": 0.06 },   // Argyll and Bute
+
+  // GEO Georgia: 3,720,382
+  "ge_mm": { "population": 2383688, "urbanization": 0.73 },   // Mtskheta-Mtianeti
+  "ge_im": { "population": 674122, "urbanization": 0.70 },   // Imereti
+  "ge_ka": { "population": 333116, "urbanization": 0.05 },   // Kakheti
+  "ge_sz": { "population": 329456, "urbanization": 0.20 },   // Samegrelo-Zemo Svaneti
+
+  // GHA Ghana: 30,417,856
+  "gh_ep": { "population": 10772715, "urbanization": 0.65 },   // Eastern
+  "gh_ah": { "population": 7883917, "urbanization": 0.72 },   // Ashanti
+  "gh_wp": { "population": 4730118, "urbanization": 0.50 },   // Western
+  "gh_np": { "population": 3924581, "urbanization": 0.44 },   // Northern
+  "gh_tv": { "population": 1422512, "urbanization": 0.20 },   // Volta
+  "gh_ba": { "population": 1340702, "urbanization": 0.27 },   // Brong-Ahafo
+  "gh_uw": { "population": 343311, "urbanization": 0.70 },   // Upper West
+
+  // GIN Guinea: 12,771,246
+  "gn_du": { "population": 5497203, "urbanization": 0.47 },   // Dubréka Prefecture
+  "gn_ks": { "population": 1640857, "urbanization": 0.34 },   // Kissidougou Prefecture
+  "gn_pi": { "population": 1153598, "urbanization": 0.24 },   // Pita Prefecture
+  "gn_fa": { "population": 938408, "urbanization": 0.19 },   // Faranah
+  "gn_be": { "population": 858449, "urbanization": 0.36 },   // Beyla Prefecture
+  "gn_k": { "population": 808661, "urbanization": 0.27 },   // Kankan
+  "gn_si": { "population": 652190, "urbanization": 0.87 },   // Siguiri Prefecture
+  "gn_ml": { "population": 491083, "urbanization": 0.11 },   // Mali Prefecture
+  "gn_ga": { "population": 350836, "urbanization": 0.10 },   // Gaoual Prefecture
+  "gn_ko": { "population": 270563, "urbanization": 0.09 },   // Kouroussa Prefecture
+  "gn_di": { "population": 109398, "urbanization": 0.09 },   // Dinguiraye Prefecture
+
+  // GRC Greece: 10,716,322
+  "gr_h": { "population": 5642166, "urbanization": 0.91 },   // Central Greece
+  "gr_b": { "population": 2536343, "urbanization": 0.79 },   // Centre Macedonia
+  "gr_g": { "population": 616940, "urbanization": 0.74 },   // West Greece
+  "gr_e": { "population": 546564, "urbanization": 0.67 },   // Thessalia
+  "gr_j": { "population": 485678, "urbanization": 0.37 },   // Peloponnese
+  "gr_a": { "population": 482126, "urbanization": 0.66 },   // East Macedonia and Thrace
+  "gr_c": { "population": 406505, "urbanization": 0.32 },   // West Macedonia
+
+  // GRL Greenland: 56,225
+  "gl_sm": { "population": 27027, "urbanization": 0.91 },   // Sermersooq
+  "gl_qa": { "population": 13039, "urbanization": 0.97 },   // Qaasuitsup
+  "gl_qe": { "population": 9152, "urbanization": 0.81 },   // Qeqqata
+  "gl_ku": { "population": 6007, "urbanization": 0.72 },   // Kujalleq
+  "gl_uo": { "population": 1000, "urbanization": 0.05 },   // Northeast Greenland National Park
+
+  // GTM Guatemala: 16,604,026
+  "gt_bv": { "population": 7478882, "urbanization": 0.66 },   // Baja Verapaz
+  "gt_qz": { "population": 4242727, "urbanization": 0.66 },   // Quetzaltenango
+  "gt_av": { "population": 2502133, "urbanization": 0.20 },   // Alta Verapaz
+  "gt_pe": { "population": 2380284, "urbanization": 0.23 },   // Petén
+
+  // GUY Guyana: 782,766
+  "gy_ut": { "population": 389216, "urbanization": 0.50 },   // Upper Takutu-Upper Essequibo
+  "gy_pm": { "population": 125231, "urbanization": 0.05 },   // Pomeroon-Supenaam
+  "gy_ba": { "population": 82594, "urbanization": 0.05 },   // Barima-Waini
+  "gy_ma": { "population": 77553, "urbanization": 0.08 },   // Mahaica-Berbice
+  "gy_ud": { "population": 76548, "urbanization": 0.05 },   // Upper Demerara-Berbice
+  "gy_pt": { "population": 31624, "urbanization": 0.05 },   // Potaro-Siparuni
+
+  // HND Honduras: 9,746,117
+  "hn_ep": { "population": 4547553, "urbanization": 0.65 },   // El Paraíso
+  "hn_yo": { "population": 4216112, "urbanization": 0.64 },   // Yoro
+  "hn_ol": { "population": 869264, "urbanization": 0.17 },   // Olancho
+  "hn_gd": { "population": 113188, "urbanization": 0.21 },   // Gracias a Dios
+
+  // HRV Croatia: 4,067,500
+  "hr_01": { "population": 1395498, "urbanization": 0.78 },   // Zagreb
+  "hr_12": { "population": 1044587, "urbanization": 0.28 },   // Požega-Slavonia
+  "hr_13": { "population": 861352, "urbanization": 0.63 },   // Zadar
+  "hr_09": { "population": 766063, "urbanization": 0.57 },   // Lika-Senj
+
+  // HUN Hungary: 9,769,949
+  "hu_pe": { "population": 3431612, "urbanization": 0.91 },   // Pest
+  "hu_ve": { "population": 1904986, "urbanization": 0.60 },   // Veszprém
+  "hu_bk": { "population": 1848606, "urbanization": 0.62 },   // Bács-Kiskun
+  "hu_hb": { "population": 1733762, "urbanization": 0.70 },   // Hajdú-Bihar
+  "hu_jn": { "population": 850983, "urbanization": 0.48 },   // Jász-Nagykun-Szolnok
+
+  // IDN Indonesia: 270,625,568
+  "id_jb": { "population": 65607428, "urbanization": 0.80 },   // West Java
+  "id_ji": { "population": 32568049, "urbanization": 0.67 },   // East Java
+  "id_su": { "population": 24074850, "urbanization": 0.52 },   // North Sumatra
+  "id_jt": { "population": 22299440, "urbanization": 0.69 },   // Central Java
+  "id_ss": { "population": 20815778, "urbanization": 0.30 },   // South Sumatra
+  "id_ri": { "population": 12050318, "urbanization": 0.22 },   // Riau
+  "id_kb": { "population": 11470688, "urbanization": 0.25 },   // West Kalimantan
+  "id_ki": { "population": 11257034, "urbanization": 0.39 },   // East Kalimantan
+  "id_sn": { "population": 7932555, "urbanization": 0.68 },   // South Sulawesi
+  "id_la": { "population": 7291744, "urbanization": 0.42 },   // Lampung
+  "id_ja": { "population": 6705842, "urbanization": 0.27 },   // Jambi
+  "id_sb": { "population": 5981970, "urbanization": 0.80 },   // West Sumatra
+  "id_pa": { "population": 5556651, "urbanization": 0.36 },   // Papua
+  "id_ks": { "population": 4996300, "urbanization": 0.53 },   // South Kalimantan
+  "id_st": { "population": 4820658, "urbanization": 0.74 },   // Central Sulawesi
+  "id_ac": { "population": 3775786, "urbanization": 0.68 },   // Aceh
+  "id_nt": { "population": 3517521, "urbanization": 0.53 },   // East Nusa Tenggara
+  "id_kt": { "population": 3453856, "urbanization": 0.26 },   // Central Kalimantan
+  "id_nb": { "population": 2787678, "urbanization": 0.76 },   // West Nusa Tenggara
+  "id_sa": { "population": 2193287, "urbanization": 0.68 },   // North Sulawesi
+  "id_bb": { "population": 2109423, "urbanization": 0.30 },   // Bangka Belitung Islands
+  "id_ma": { "population": 2074846, "urbanization": 0.64 },   // Maluku
+  "id_be": { "population": 1800113, "urbanization": 0.78 },   // Bengkulu
+  "id_pb": { "population": 1584088, "urbanization": 0.42 },   // West Papua
+  "id_sg": { "population": 1506878, "urbanization": 0.42 },   // Southeast Sulawesi
+  "id_sr": { "population": 1202695, "urbanization": 0.75 },   // West Sulawesi
+  "id_mu": { "population": 1190092, "urbanization": 0.52 },   // North Maluku
+
+  // IND India: 1,366,417,754
+  "in_mh": { "population": 195843051, "urbanization": 0.47 },   // Maharashtra
+  "in_up": { "population": 178440857, "urbanization": 0.37 },   // Uttar Pradesh
+  "in_ka": { "population": 99703498, "urbanization": 0.33 },   // Karnataka
+  "in_mp": { "population": 97208001, "urbanization": 0.19 },   // Madhya Pradesh
+  "in_wb": { "population": 96244509, "urbanization": 0.46 },   // West Bengal
+  "in_gj": { "population": 94666983, "urbanization": 0.35 },   // Gujarat
+  "in_rj": { "population": 80459638, "urbanization": 0.25 },   // Rajasthan
+  "in_tn": { "population": 79399182, "urbanization": 0.48 },   // Tamil Nadu
+  "in_ap": { "population": 79072293, "urbanization": 0.35 },   // Andhra Pradesh
+  "in_tg": { "population": 73133367, "urbanization": 0.30 },   // Telangana
+  "in_hr": { "population": 65812345, "urbanization": 0.49 },   // Haryana
+  "in_pb": { "population": 40107922, "urbanization": 0.31 },   // Punjab
+  "in_br": { "population": 38479058, "urbanization": 0.22 },   // Bihar
+  "in_jh": { "population": 33536110, "urbanization": 0.25 },   // Jharkhand
+  "in_or": { "population": 30366555, "urbanization": 0.23 },   // Odisha
+  "in_ct": { "population": 26826474, "urbanization": 0.23 },   // Chhattisgarh
+  "in_as": { "population": 16089237, "urbanization": 0.20 },   // Assam
+  "in_kl": { "population": 14537964, "urbanization": 0.67 },   // Kerala
+  "in_jk": { "population": 8229935, "urbanization": 0.64 },   // Jammu and Kashmir
+  "in_ut": { "population": 4330532, "urbanization": 0.40 },   // Uttarakhand
+  "in_mz": { "population": 3408056, "urbanization": 0.35 },   // Mizoram
+  "in_ml": { "population": 3060455, "urbanization": 0.37 },   // Meghalaya
+  "in_hp": { "population": 2927988, "urbanization": 0.29 },   // Himachal Pradesh
+  "in_mn": { "population": 2135874, "urbanization": 0.30 },   // Manipur
+  "in_ar": { "population": 749959, "urbanization": 0.15 },   // Arunachal Pradesh
+  "in_la": { "population": 635918, "urbanization": 0.12 },   // Ladakh
+  "in_nl": { "population": 513328, "urbanization": 0.43 },   // Nagaland
+
+  // IRL Ireland: 4,941,444
+  "ie_oy": { "population": 1821687, "urbanization": 0.60 },   // Offaly
+  "ie_cn": { "population": 1632902, "urbanization": 0.76 },   // Cavan
+  "ie_co": { "population": 811086, "urbanization": 0.59 },   // Cork
+  "ie_g": { "population": 544595, "urbanization": 0.56 },   // Galway
+  "ie_mo": { "population": 131174, "urbanization": 0.30 },   // Mayo
+
+  // IRN Iran: 82,913,906
+  "ir_07": { "population": 15169117, "urbanization": 0.97 },   // Tehran
+  "ir_30": { "population": 8600146, "urbanization": 0.76 },   // Razavi Khorasan
+  "ir_04": { "population": 6404806, "urbanization": 0.75 },   // Isfahan
+  "ir_14": { "population": 4710788, "urbanization": 0.63 },   // Fars
+  "ir_01": { "population": 4323092, "urbanization": 0.76 },   // East Azerbaijan
+  "ir_10": { "population": 4279477, "urbanization": 0.89 },   // Khuzestan
+  "ir_28": { "population": 3876709, "urbanization": 0.88 },   // Qazvin
+  "ir_15": { "population": 2696190, "urbanization": 0.62 },   // Kerman
+  "ir_02": { "population": 2628165, "urbanization": 0.71 },   // West Azerbaijan
+  "ir_13": { "population": 2570427, "urbanization": 0.69 },   // Sistan and Baluchestan
+  "ir_22": { "population": 2522221, "urbanization": 0.61 },   // Markazi
+  "ir_26": { "population": 2366391, "urbanization": 0.88 },   // Qom
+  "ir_17": { "population": 2285943, "urbanization": 0.73 },   // Kermanshah
+  "ir_21": { "population": 2017441, "urbanization": 0.82 },   // Mazandaran
+  "ir_24": { "population": 1930756, "urbanization": 0.72 },   // Hamadan
+  "ir_20": { "population": 1886825, "urbanization": 0.66 },   // Lorestan
+  "ir_25": { "population": 1771180, "urbanization": 0.53 },   // Yazd
+  "ir_12": { "population": 1674689, "urbanization": 0.50 },   // Semnan
+  "ir_16": { "population": 1408977, "urbanization": 0.57 },   // Kurdistan
+  "ir_23": { "population": 1356663, "urbanization": 0.67 },   // Hormozgan
+  "ir_29": { "population": 1352642, "urbanization": 0.48 },   // South Khorasan
+  "ir_19": { "population": 1314326, "urbanization": 0.89 },   // Gilan
+  "ir_27": { "population": 1069433, "urbanization": 0.82 },   // Golestan
+  "ir_11": { "population": 1067116, "urbanization": 0.66 },   // Zanjan
+  "ir_03": { "population": 1049184, "urbanization": 0.78 },   // Ardabil
+  "ir_31": { "population": 770183, "urbanization": 0.54 },   // North Khorasan
+  "ir_06": { "population": 563614, "urbanization": 0.59 },   // Bushehr
+  "ir_05": { "population": 553855, "urbanization": 0.55 },   // Ilam
+  "ir_08": { "population": 432579, "urbanization": 0.59 },   // Chaharmahal and Bakhtiari
+  "ir_18": { "population": 260971, "urbanization": 0.73 },   // Kohgiluyeh and Boyer-Ahmad
+
+  // IRQ Iraq: 39,309,783
+  "iq_ni": { "population": 9116245, "urbanization": 0.50 },   // Nineveh
+  "iq_an": { "population": 5925027, "urbanization": 0.97 },   // Al Anbar
+  "iq_di": { "population": 5867996, "urbanization": 0.97 },   // Diyala
+  "iq_su": { "population": 4545455, "urbanization": 0.28 },   // Sulaymaniyah
+  "iq_ar": { "population": 3874692, "urbanization": 0.42 },   // Erbil
+  "iq_ts": { "population": 2094757, "urbanization": 0.51 },   // Kirkuk
+  "iq_ba": { "population": 2021826, "urbanization": 0.97 },   // Basra
+  "iq_sd": { "population": 1208215, "urbanization": 0.97 },   // Saladin
+  "iq_na": { "population": 1161613, "urbanization": 0.97 },   // Najaf
+  "iq_dq": { "population": 1097337, "urbanization": 0.97 },   // Dhi Qar
+  "iq_mu": { "population": 980711, "urbanization": 0.97 },   // Al Muthanna
+  "iq_wa": { "population": 793645, "urbanization": 0.97 },   // Wasit
+  "iq_ma": { "population": 622264, "urbanization": 0.97 },   // Maysan
+
+  // ISL Iceland: 361,313
+  "is_8": { "population": 303434, "urbanization": 0.97 },   // Southern
+  "is_6": { "population": 29590, "urbanization": 0.91 },   // Northeastern
+  "is_3": { "population": 8216, "urbanization": 0.35 },   // Western
+  "is_7": { "population": 7847, "urbanization": 0.82 },   // Austurland
+  "is_5": { "population": 7120, "urbanization": 0.62 },   // Northwestern
+  "is_4": { "population": 5106, "urbanization": 0.81 },   // Westfjords
+
+  // ITA Italy: 60,297,396
+  "it_pz": { "population": 14075289, "urbanization": 0.81 },   // Potenza
+  "it_pr": { "population": 6934666, "urbanization": 0.54 },   // Parma
+  "it_vb": { "population": 6737242, "urbanization": 0.87 },   // Verbano-Cusio-Ossola
+  "it_fi": { "population": 4876957, "urbanization": 0.88 },   // Florence
+  "it_bo": { "population": 4581109, "urbanization": 0.58 },   // Bologna
+  "it_to": { "population": 4057579, "urbanization": 0.93 },   // Turin
+  "it_ct": { "population": 3183976, "urbanization": 0.81 },   // Catania
+  "it_pg": { "population": 3044869, "urbanization": 0.42 },   // Perugia
+  "it_pa": { "population": 2832123, "urbanization": 0.78 },   // Palermo
+  "it_ve": { "population": 1833364, "urbanization": 0.57 },   // Venice
+  "it_ss": { "population": 1599984, "urbanization": 0.67 },   // Sassari
+  "it_aq": { "population": 1505148, "urbanization": 0.59 },   // L'Aquila
+  "it_rm": { "population": 1323289, "urbanization": 0.11 },   // Rome
+  "it_bz": { "population": 1167041, "urbanization": 0.84 },   // Trentino-South Tyrol
+  "it_bs": { "population": 1043489, "urbanization": 0.73 },   // Brescia
+  "it_cs": { "population": 662080, "urbanization": 0.70 },   // Cosenza
+  "it_ud": { "population": 496314, "urbanization": 0.56 },   // Udine
+  "it_cn": { "population": 342877, "urbanization": 0.05 },   // Cuneo
+
+  // JOR Jordan: 10,101,694
+  "jo_ma": { "population": 9044477, "urbanization": 0.94 },   // Mafraq
+  "jo_mn": { "population": 1057217, "urbanization": 0.72 },   // Ma'an
+
+  // JPN Japan: 126,264,931
+  "jp_10": { "population": 33946906, "urbanization": 0.97 },   // Gunma Prefecture
+  "jp_08": { "population": 23011192, "urbanization": 0.89 },   // Ibaraki Prefecture
+  "jp_28": { "population": 12289305, "urbanization": 0.95 },   // Hyōgo Prefecture
+  "jp_21": { "population": 8955861, "urbanization": 0.90 },   // Gifu Prefecture
+  "jp_30": { "population": 8263128, "urbanization": 0.92 },   // Wakayama Prefecture
+  "jp_01": { "population": 7729109, "urbanization": 0.87 },   // Hokkaidō
+  "jp_40": { "population": 6262219, "urbanization": 0.95 },   // Fukuoka Prefecture
+  "jp_22": { "population": 4217561, "urbanization": 0.93 },   // Shizuoka Prefecture
+  "jp_06": { "population": 3965922, "urbanization": 0.91 },   // Yamagata Prefecture
+  "jp_32": { "population": 3939172, "urbanization": 0.88 },   // Shimane Prefecture
+  "jp_43": { "population": 3335960, "urbanization": 0.85 },   // Kumamoto Prefecture
+  "jp_39": { "population": 2552511, "urbanization": 0.85 },   // Kōchi Prefecture
+  "jp_07": { "population": 1586020, "urbanization": 0.83 },   // Fukushima Prefecture
+  "jp_33": { "population": 1585375, "urbanization": 0.85 },   // Okayama Prefecture
+  "jp_20": { "population": 1207769, "urbanization": 0.90 },   // Nagano Prefecture
+  "jp_15": { "population": 1172133, "urbanization": 0.86 },   // Niigata Prefecture
+  "jp_02": { "population": 1069349, "urbanization": 0.88 },   // Aomori Prefecture
+  "jp_03": { "population": 590423, "urbanization": 0.66 },   // Iwate Prefecture
+  "jp_05": { "population": 585016, "urbanization": 0.72 },   // Akita Prefecture
+
+  // KAZ Kazakhstan: 18,513,930
+  "kz_ala": { "population": 2622100, "urbanization": 0.80 },   // Almaty
+  "kz_akm": { "population": 2293696, "urbanization": 0.37 },   // Akmola
+  "kz_vos": { "population": 2230981, "urbanization": 0.53 },   // East Kazakhstan
+  "kz_kus": { "population": 1837504, "urbanization": 0.37 },   // Kostanay
+  "kz_yuz": { "population": 1567182, "urbanization": 0.61 },   // Turkistan
+  "kz_pav": { "population": 1523070, "urbanization": 0.43 },   // Pavlodar
+  "kz_kar": { "population": 1449603, "urbanization": 0.84 },   // Karaganda
+  "kz_sev": { "population": 1275888, "urbanization": 0.28 },   // North Kazakhstan
+  "kz_zha": { "population": 1261179, "urbanization": 0.53 },   // Jambyl
+  "kz_zap": { "population": 638486, "urbanization": 0.56 },   // West Kazakhstan
+  "kz_akt": { "population": 621535, "urbanization": 0.89 },   // Aktobe
+  "kz_kzy": { "population": 560301, "urbanization": 0.97 },   // Kyzylorda
+  "kz_aty": { "population": 361215, "urbanization": 0.93 },   // Atyrau
+  "kz_man": { "population": 271190, "urbanization": 0.97 },   // Mangystau
+
+  // KEN Kenya: 52,573,973
+  "ke_700": { "population": 22968812, "urbanization": 0.21 },   // Rift Valley
+  "ke_200": { "population": 8770643, "urbanization": 0.55 },   // Central
+  "ke_400": { "population": 7820882, "urbanization": 0.18 },   // Eastern
+  "ke_300": { "population": 6055303, "urbanization": 0.43 },   // Coast
+  "ke_500": { "population": 3692004, "urbanization": 0.10 },   // North Eastern
+  "ke_600": { "population": 3266329, "urbanization": 0.34 },   // Nyanza
+
+  // KGZ Kyrgyzstan: 6,456,900
+  "kg_c": { "population": 1816671, "urbanization": 0.69 },   // Chuy
+  "kg_j": { "population": 1284741, "urbanization": 0.30 },   // Jalal-Abad
+  "kg_o": { "population": 1149523, "urbanization": 0.41 },   // Osh
+  "kg_n": { "population": 751584, "urbanization": 0.11 },   // Naryn
+  "kg_y": { "population": 678266, "urbanization": 0.23 },   // Issyk-Kul
+  "kg_b": { "population": 527029, "urbanization": 0.05 },   // Batken
+  "kg_t": { "population": 249086, "urbanization": 0.17 },   // Talas
+
+  // KHM Cambodia: 16,486,542
+  "kh_6": { "population": 8968966, "urbanization": 0.33 },   // Kampong Thom
+  "kh_9": { "population": 2805840, "urbanization": 0.13 },   // Koh Kong
+  "kh_17": { "population": 1955011, "urbanization": 0.14 },   // Siem Reap
+  "kh_2": { "population": 1476143, "urbanization": 0.18 },   // Battambang
+  "kh_15": { "population": 790115, "urbanization": 0.12 },   // Pursat
+  "kh_16": { "population": 278441, "urbanization": 0.31 },   // Ratanakiri
+  "kh_13": { "population": 114571, "urbanization": 0.37 },   // Preah Vihear
+  "kh_11": { "population": 97455, "urbanization": 0.50 },   // Mondulkiri
+
+  // KOR South Korea: 51,709,098
+  "kr_41": { "population": 22280116 },   // Gyeonggi
+  "kr_47": { "population": 13124290 },   // North Gyeongsang
+  "kr_48": { "population": 7291173 },   // South Gyeongsang
+  "kr_46": { "population": 5826430, "urbanization": 0.75 },   // South Jeolla
+  "kr_42": { "population": 3187089, "urbanization": 0.47 },   // Gangwon
+
+  // LAO Laos: 7,169,455
+  "la_vi": { "population": 2692564, "urbanization": 0.61 },   // Vientiane
+  "la_sv": { "population": 873887, "urbanization": 0.21 },   // Savannakhet
+  "la_ch": { "population": 553297, "urbanization": 0.47 },   // Champasak
+  "la_sl": { "population": 517096, "urbanization": 0.05 },   // Salavan
+  "la_lp": { "population": 502564, "urbanization": 0.46 },   // Luang Prabang
+  "la_kh": { "population": 474668, "urbanization": 0.35 },   // Khammouane
+  "la_ho": { "population": 321086, "urbanization": 0.26 },   // Houaphanh
+  "la_xa": { "population": 305662, "urbanization": 0.12 },   // Sainyabuli
+  "la_bl": { "population": 295719, "urbanization": 0.05 },   // Bolikhamsai
+  "la_xi": { "population": 221854, "urbanization": 0.37 },   // Xiangkhouang
+  "la_lm": { "population": 149022, "urbanization": 0.05 },   // Luang Namtha
+  "la_ou": { "population": 145794, "urbanization": 0.05 },   // Oudomxay
+  "la_ph": { "population": 116242, "urbanization": 0.11 },   // Phongsaly
+
+  // LBR Liberia: 4,937,374
+  "lr_gb": { "population": 3263238, "urbanization": 0.73 },   // Grand Bassa
+  "lr_x1": { "population": 1139247, "urbanization": 0.07 },   // Gbarpolu
+  "lr_gg": { "population": 534889, "urbanization": 0.27 },   // Grand Gedeh
+
+  // LBY Libya: 6,777,452
+  "ly_mj": { "population": 2470128, "urbanization": 0.54 },   // Marj
+  "ly_mb": { "population": 1607148, "urbanization": 0.97 },   // Murqub
+  "ly_mz": { "population": 1195955, "urbanization": 0.97 },   // Mizdah
+  "ly_mi": { "population": 434641, "urbanization": 0.97 },   // Misrata
+  "ly_bu": { "population": 257265, "urbanization": 0.97 },   // Butnan
+  "ly_aj": { "population": 154174, "urbanization": 0.94 },   // Ajdabiya
+  "ly_sr": { "population": 124440, "urbanization": 0.97 },   // Sirte
+  "ly_qb": { "population": 124196, "urbanization": 0.97 },   // Al Qubbah
+  "ly_mq": { "population": 97871, "urbanization": 0.55 },   // Murzuq
+  "ly_sb": { "population": 97563, "urbanization": 0.97 },   // Sabha
+  "ly_gd": { "population": 74676, "urbanization": 0.94 },   // Ghadames
+  "ly_ws": { "population": 48325, "urbanization": 0.89 },   // Ash Shati
+  "ly_kf": { "population": 34129, "urbanization": 0.67 },   // Kufra
+  "ly_gt": { "population": 25247, "urbanization": 0.91 },   // Ghat
+  "ly_ju": { "population": 21880, "urbanization": 0.81 },   // Jufra
+  "ly_wd": { "population": 9814, "urbanization": 0.05 },   // Wadi al Hayaa
+
+  // LKA Sri Lanka: 21,803,000
+  "lk_71": { "population": 11655081, "urbanization": 0.14 },   // Anuradhapura
+  "lk_91": { "population": 6935741, "urbanization": 0.29 },   // Ratnapura
+  "lk_82": { "population": 3212178, "urbanization": 0.15 },   // Monaragala
+
+  // LSO Lesotho: 2,125,268
+  "ls_f": { "population": 1260708, "urbanization": 0.37 },   // Mohale's Hoek
+  "ls_k": { "population": 864560, "urbanization": 0.19 },   // Thaba-Tseka
+
+  // LTU Lithuania: 2,786,844
+  "lt_ku": { "population": 871228, "urbanization": 0.58 },   // Kaunas
+  "lt_vl": { "population": 831101, "urbanization": 0.87 },   // Vilnius
+  "lt_sa": { "population": 373486, "urbanization": 0.48 },   // Šiauliai
+  "lt_kl": { "population": 368751, "urbanization": 0.86 },   // Klaipėda
+  "lt_pn": { "population": 342278, "urbanization": 0.50 },   // Panevėžys
+
+  // LVA Latvia: 1,912,789
+  "lv_052": { "population": 1165511, "urbanization": 0.83 },   // Ķekava
+  "lv_059": { "population": 242241, "urbanization": 0.55 },   // Madona
+  "lv_ven": { "population": 218913, "urbanization": 0.70 },   // Ventspils
+  "lv_099": { "population": 120184, "urbanization": 0.05 },   // Tukums
+  "lv_101": { "population": 84111, "urbanization": 0.05 },   // Valka
+  "lv_rez": { "population": 81829, "urbanization": 0.56 },   // Rēzekne
+
+  // MAR Morocco: 36,471,769
+  "ma_09": { "population": 9461498, "urbanization": 0.68 },   // Chaouia-Ouardigha
+  "ma_06": { "population": 7063828, "urbanization": 0.71 },   // Meknès-Tafilalet
+  "ma_01": { "population": 5574614, "urbanization": 0.65 },   // Tangier-Tetouan
+  "ma_13": { "population": 2555419, "urbanization": 0.66 },   // Suss-Massa-Draa
+  "ma_10": { "population": 2425241, "urbanization": 0.43 },   // Doukkala Abda
+  "ma_11": { "population": 2279621, "urbanization": 0.74 },   // Marrakesh-Tensift-El Haouz
+  "ma_05": { "population": 2277580, "urbanization": 0.79 },   // Fès-méknas-boulmane
+  "ma_04": { "population": 1793377, "urbanization": 0.59 },   // Oriental
+  "ma_03": { "population": 1368458, "urbanization": 0.28 },   // Taza-Al Hoceïma-Taounate
+  "ma_14": { "population": 818466, "urbanization": 0.54 },   // Guelmim-Es Semara
+  "ma_15": { "population": 364863, "urbanization": 0.97 },   // Laâyoune-Boujdour-Sakia El Hamra
+  "ma_12": { "population": 302220, "urbanization": 0.05 },   // Tadla-Azilal
+  "ma_16": { "population": 186584, "urbanization": 0.97 },   // Oued Ed-Dahab
+
+  // MDA Moldova: 2,657,637
+  "md_or": { "population": 2006590, "urbanization": 0.47 },   // Orhei
+  "md_si": { "population": 651047, "urbanization": 0.29 },   // Sîngerei
+
+  // MDG Madagascar: 26,969,307
+  "mg_t": { "population": 6967195, "urbanization": 0.72 },   // Antananarivo
+  "mg_t_1426": { "population": 4162978, "urbanization": 0.41 },   // Antananarivo
+  "mg_a_1428": { "population": 1839712, "urbanization": 0.08 },   // Toamasina
+  "mg_a_916": { "population": 1803997, "urbanization": 0.39 },   // Toamasina
+  "mg_f_1708": { "population": 1440445, "urbanization": 0.43 },   // Haute Matsiatra
+  "mg_u_921": { "population": 1315125, "urbanization": 0.34 },   // Atsimo-Andrefana
+  "mg_m": { "population": 994365, "urbanization": 0.63 },   // Boeny
+  "mg_m_912": { "population": 985409, "urbanization": 0.11 },   // Sofia
+  "mg_d": { "population": 931345, "urbanization": 0.49 },   // Diana
+  "mg_d_914": { "population": 927913, "urbanization": 0.33 },   // Sava
+  "mg_f": { "population": 865219, "urbanization": 0.11 },   // Vatovavy-Fitovinany
+  "mg_f_1427": { "population": 835367, "urbanization": 0.05 },   // Amoron'i Mania
+  "mg_u_922": { "population": 707454, "urbanization": 0.28 },   // Menabe
+  "mg_a": { "population": 692533, "urbanization": 0.18 },   // Toamasina
+  "mg_t_1425": { "population": 570942, "urbanization": 0.05 },   // Antananarivo
+  "mg_m_1424": { "population": 496045, "urbanization": 0.05 },   // Betsiboka
+  "mg_f_1707": { "population": 484170, "urbanization": 0.12 },   // Ihorombe
+  "mg_f_918": { "population": 342901, "urbanization": 0.24 },   // Atsimo-Atsinanana
+  "mg_u": { "population": 317384, "urbanization": 0.18 },   // Anosy
+  "mg_m_923": { "population": 226467, "urbanization": 0.10 },   // Melaky
+  "mg_u_920": { "population": 62341, "urbanization": 0.23 },   // Androy
+
+  // MDV Maldives: 530,953
+  "mv_07": { "population": 1000 },   // Haa Alif Atoll
+
+  // MEX Mexico: 127,575,529
+  "mx_mex": { "population": 31658781, "urbanization": 0.95 },   // State of Mexico
+  "mx_jal": { "population": 10437888, "urbanization": 0.82 },   // Jalisco
+  "mx_pue": { "population": 7857998, "urbanization": 0.81 },   // Puebla
+  "mx_nle": { "population": 6978629, "urbanization": 0.82 },   // Nuevo León
+  "mx_chh": { "population": 5577410, "urbanization": 0.73 },   // Chihuahua
+  "mx_ver": { "population": 5531816, "urbanization": 0.87 },   // Veracruz
+  "mx_bcn": { "population": 5048313, "urbanization": 0.85 },   // Baja California
+  "mx_son": { "population": 4899428, "urbanization": 0.62 },   // Sonora
+  "mx_coa": { "population": 4874223, "urbanization": 0.68 },   // Coahuila
+  "mx_gua": { "population": 4499442, "urbanization": 0.77 },   // Guanajuato
+  "mx_tam": { "population": 4304676, "urbanization": 0.84 },   // Tamaulipas
+  "mx_hid": { "population": 4272864, "urbanization": 0.78 },   // Hidalgo
+  "mx_sin": { "population": 3551961, "urbanization": 0.74 },   // Sinaloa
+  "mx_mic": { "population": 3211391, "urbanization": 0.74 },   // Michoacán
+  "mx_zac": { "population": 3016141, "urbanization": 0.65 },   // Zacatecas
+  "mx_slp": { "population": 3015378, "urbanization": 0.70 },   // San Luis Potosí
+  "mx_dur": { "population": 2714912, "urbanization": 0.59 },   // Durango
+  "mx_gro": { "population": 2452505, "urbanization": 0.75 },   // Guerrero
+  "mx_yuc": { "population": 2413492, "urbanization": 0.79 },   // Yucatán
+  "mx_chp": { "population": 2344680, "urbanization": 0.69 },   // Chiapas
+  "mx_oax": { "population": 2073843, "urbanization": 0.65 },   // Oaxaca
+  "mx_que": { "population": 1898841, "urbanization": 0.86 },   // Querétaro
+  "mx_roo": { "population": 1575580, "urbanization": 0.79 },   // Quintana Roo
+  "mx_tab": { "population": 937480, "urbanization": 0.86 },   // Tabasco
+  "mx_cam": { "population": 931844, "urbanization": 0.66 },   // Campeche
+  "mx_nay": { "population": 761935, "urbanization": 0.79 },   // Nayarit
+  "mx_bcs": { "population": 734078, "urbanization": 0.66 },   // Baja California Sur
+
+  // MKD North Macedonia: 2,083,459
+  "mk_11": { "population": 1274159, "urbanization": 0.68 },   // Vasilevo
+  "mk_28": { "population": 809300, "urbanization": 0.45 },   // Drugovo
+
+  // MLI Mali: 19,658,031
+  "ml_2": { "population": 9778871, "urbanization": 0.52 },   // Koulikoro
+  "ml_3": { "population": 3362380, "urbanization": 0.35 },   // Wassoulou
+  "ml_1": { "population": 2390210, "urbanization": 0.23 },   // Kayes
+  "ml_4": { "population": 2176342, "urbanization": 0.33 },   // Ségou
+  "ml_5": { "population": 842120, "urbanization": 0.54 },   // Mopti
+  "ml_7": { "population": 643306, "urbanization": 0.78 },   // Gao
+  "ml_6": { "population": 414454, "urbanization": 0.66 },   // Tombouctou
+  "ml_8": { "population": 50348, "urbanization": 0.96 },   // Kidal
+
+  // MMR Myanmar: 54,045,420
+  "mm_02": { "population": 16820362, "urbanization": 0.46 },   // Bago
+  "mm_04": { "population": 8004690, "urbanization": 0.44 },   // Mandalay
+  "mm_07": { "population": 7202906, "urbanization": 0.18 },   // Ayeyarwady
+  "mm_03": { "population": 5681535, "urbanization": 0.15 },   // Magway
+  "mm_01": { "population": 4652041, "urbanization": 0.25 },   // Sagaing
+  "mm_17": { "population": 3496590, "urbanization": 0.11 },   // Shan State
+  "mm_13": { "population": 3214780, "urbanization": 0.36 },   // Kayin State
+  "mm_05": { "population": 1737257, "urbanization": 0.39 },   // Tanintharyi
+  "mm_16": { "population": 1570071, "urbanization": 0.19 },   // Rakhine State
+  "mm_11": { "population": 1034133, "urbanization": 0.22 },   // Kachin State
+  "mm_14": { "population": 631055, "urbanization": 0.05 },   // Chin State
+
+  // MNG Mongolia: 3,225,167
+  "mn_047": { "population": 1589084, "urbanization": 0.87 },   // Töv
+  "mn_049": { "population": 301337, "urbanization": 0.60 },   // Selenge
+  "mn_067": { "population": 225548, "urbanization": 0.66 },   // Bulgan
+  "mn_071": { "population": 125049, "urbanization": 0.43 },   // Bayan-Ölgii
+  "mn_065": { "population": 110625, "urbanization": 0.45 },   // Govi-Altai
+  "mn_041": { "population": 108529, "urbanization": 0.39 },   // Khövsgöl
+  "mn_061": { "population": 104454, "urbanization": 0.49 },   // Dornod
+  "mn_069": { "population": 99330, "urbanization": 0.40 },   // Bayankhongor
+  "mn_046": { "population": 97809, "urbanization": 0.56 },   // Uvs
+  "mn_043": { "population": 86213, "urbanization": 0.54 },   // Khovd
+  "mn_055": { "population": 80409, "urbanization": 0.53 },   // Övörkhangai
+  "mn_073": { "population": 70542, "urbanization": 0.43 },   // Arkhangai
+  "mn_039": { "population": 61367, "urbanization": 0.37 },   // Khentii
+  "mn_053": { "population": 57496, "urbanization": 0.40 },   // Ömnögovi
+  "mn_057": { "population": 53451, "urbanization": 0.23 },   // Zavkhan
+  "mn_051": { "population": 29753, "urbanization": 0.81 },   // Sükhbaatar
+  "mn_063": { "population": 19448, "urbanization": 0.97 },   // Dornogovi
+  "mn_059": { "population": 4723, "urbanization": 0.97 },   // Dundgovi
+
+  // MOZ Mozambique: 30,366,036
+  "mz_l": { "population": 5392834, "urbanization": 0.74 },   // Maputo
+  "mz_n": { "population": 4449142, "urbanization": 0.45 },   // Nampula
+  "mz_t": { "population": 4324599, "urbanization": 0.11 },   // Tete
+  "mz_s": { "population": 3625612, "urbanization": 0.46 },   // Sofala
+  "mz_q": { "population": 3127433, "urbanization": 0.26 },   // Zambezia
+  "mz_a": { "population": 2779220, "urbanization": 0.19 },   // Niassa
+  "mz_b": { "population": 2661463, "urbanization": 0.27 },   // Manica
+  "mz_p": { "population": 1908219, "urbanization": 0.30 },   // Cabo Delgado
+  "mz_g": { "population": 1154598, "urbanization": 0.36 },   // Gaza
+  "mz_i": { "population": 942916, "urbanization": 0.36 },   // Inhambane
+
+  // MRT Mauritania: 4,525,696
+  "mr_06": { "population": 2131681, "urbanization": 0.81 },   // Trarza
+  "mr_01": { "population": 920945, "urbanization": 0.37 },   // Hodh Ech Chargui
+  "mr_03": { "population": 435717, "urbanization": 0.29 },   // Assaba
+  "mr_04": { "population": 296803, "urbanization": 0.05 },   // Gorgol
+  "mr_05": { "population": 200905, "urbanization": 0.16 },   // Brakna
+  "mr_02": { "population": 152808, "urbanization": 0.05 },   // Hodh El Gharbi
+  "mr_08": { "population": 147641, "urbanization": 0.97 },   // Dakhlet Nouadhibou
+  "mr_11": { "population": 114678, "urbanization": 0.91 },   // Tiris Zemmour
+  "mr_07": { "population": 83533, "urbanization": 0.89 },   // Adrar
+  "mr_09": { "population": 38174, "urbanization": 0.88 },   // Tagant
+  "mr_12": { "population": 2811, "urbanization": 0.22 },   // Inchiri
+
+  // MWI Malawi: 18,628,747
+  "mw_mh": { "population": 8702245, "urbanization": 0.17 },   // Machinga
+  "mw_li": { "population": 6572474, "urbanization": 0.23 },   // Lilongwe
+  "mw_mz": { "population": 2331812, "urbanization": 0.12 },   // Mzimba
+  "mw_ct": { "population": 1022216, "urbanization": 0.09 },   // Chitipa
+
+  // MYS Malaysia: 31,949,777
+  "my_08": { "population": 14869659, "urbanization": 0.85 },   // Perak
+  "my_13": { "population": 3797836, "urbanization": 0.57 },   // Sarawak
+  "my_06": { "population": 3780482, "urbanization": 0.80 },   // Pahang
+  "my_01": { "population": 3696305, "urbanization": 0.73 },   // Johor
+  "my_12": { "population": 3594820, "urbanization": 0.70 },   // Sabah
+  "my_03": { "population": 1144014, "urbanization": 0.84 },   // Kelantan
+  "my_11": { "population": 1066661, "urbanization": 0.82 },   // Terengganu
+
+  // NAM Namibia: 2,494,530
+  "na_kh": { "population": 713077, "urbanization": 0.72 },   // Khomas
+  "na_er": { "population": 394780, "urbanization": 0.53 },   // Erongo
+  "na_ka": { "population": 351825, "urbanization": 0.32 },   // Karas
+  "na_od": { "population": 266790, "urbanization": 0.54 },   // Otjozondjupa
+  "na_ha": { "population": 175211, "urbanization": 0.45 },   // Hardap
+  "na_ok": { "population": 160571, "urbanization": 0.70 },   // Kavango
+  "na_ku": { "population": 128794, "urbanization": 0.17 },   // Kunene
+  "na_ot": { "population": 98322, "urbanization": 0.54 },   // Oshikoto
+  "na_oh": { "population": 84447, "urbanization": 0.37 },   // Omaheke
+  "na_os": { "population": 79015, "urbanization": 0.61 },   // Omusati
+  "na_ca": { "population": 41698, "urbanization": 0.43 },   // Zambezi
+
+  // NER Niger: 23,310,715
+  "ne_6": { "population": 10154007, "urbanization": 0.19 },   // Tillabéri
+  "ne_3": { "population": 2953977, "urbanization": 0.06 },   // Dosso
+  "ne_7": { "population": 2840077, "urbanization": 0.17 },   // Zinder
+  "ne_5": { "population": 2811413, "urbanization": 0.15 },   // Tahoua
+  "ne_4": { "population": 2505525, "urbanization": 0.18 },   // Maradi
+  "ne_1": { "population": 1110660, "urbanization": 0.39 },   // Agadez
+  "ne_2": { "population": 935056, "urbanization": 0.10 },   // Diffa
+
+  // NGA Nigeria: 200,963,599
+  "ng_og": { "population": 31120488, "urbanization": 0.91 },   // Ogun State
+  "ng_kd": { "population": 21475885, "urbanization": 0.30 },   // Kaduna State
+  "ng_oy": { "population": 17524231, "urbanization": 0.85 },   // Oyo State
+  "ng_kn": { "population": 14577761, "urbanization": 0.58 },   // Kano State
+  "ng_bo": { "population": 13348053, "urbanization": 0.22 },   // Borno State
+  "ng_ri": { "population": 11566073, "urbanization": 0.70 },   // Rivers State
+  "ng_ni": { "population": 10572796, "urbanization": 0.39 },   // Niger State
+  "ng_ba": { "population": 8360118, "urbanization": 0.15 },   // Bauchi State
+  "ng_on": { "population": 7753749, "urbanization": 0.82 },   // Ondo State
+  "ng_kt": { "population": 5309440, "urbanization": 0.31 },   // Katsina State
+  "ng_yo": { "population": 5269945, "urbanization": 0.30 },   // Yobe State
+  "ng_pl": { "population": 4978260, "urbanization": 0.43 },   // Plateau State
+  "ng_ad": { "population": 4915362, "urbanization": 0.22 },   // Adamawa State
+  "ng_za": { "population": 4691150, "urbanization": 0.13 },   // Zamfara State
+  "ng_de": { "population": 4615777, "urbanization": 0.67 },   // Delta State
+  "ng_en": { "population": 4507441, "urbanization": 0.82 },   // Enugu State
+  "ng_ed": { "population": 4434585, "urbanization": 0.73 },   // Edo State
+  "ng_so": { "population": 4234690, "urbanization": 0.47 },   // Sokoto State
+  "ng_go": { "population": 3933274, "urbanization": 0.21 },   // Gombe State
+  "ng_kw": { "population": 3158307, "urbanization": 0.66 },   // Kwara State
+  "ng_na": { "population": 2985928, "urbanization": 0.72 },   // Nasarawa State
+  "ng_ta": { "population": 2969182, "urbanization": 0.19 },   // Taraba State
+  "ng_ke": { "population": 2818050, "urbanization": 0.13 },   // Kebbi State
+  "ng_cr": { "population": 2167576, "urbanization": 0.58 },   // Cross River State
+  "ng_ji": { "population": 1273536, "urbanization": 0.05 },   // Jigawa State
+  "ng_be": { "population": 1235507, "urbanization": 0.79 },   // Benue State
+  "ng_ko": { "population": 1166435, "urbanization": 0.33 },   // Kogi State
+
+  // NIC Nicaragua: 6,545,502
+  "ni_mt": { "population": 4318813, "urbanization": 0.71 },   // Matagalpa
+  "ni_sj": { "population": 931988, "urbanization": 0.22 },   // Río San Juan
+  "ni_ji": { "population": 787772, "urbanization": 0.51 },   // Jinotega
+  "ni_as": { "population": 257184, "urbanization": 0.33 },   // South Caribbean Coast
+  "ni_an": { "population": 249745, "urbanization": 0.33 },   // North Caribbean Coast
+
+  // NLD Netherlands: 17,332,850
+  "nl_ge": { "population": 13244989, "urbanization": 0.97 },   // Gelderland
+  "nl_nb": { "population": 2905402, "urbanization": 0.67 },   // North Brabant
+  "nl_dr": { "population": 1182459, "urbanization": 0.95 },   // Drenthe
+
+  // NOR Norway: 5,347,896
+  "no_02": { "population": 2013344, "urbanization": 0.96 },   // Akershus
+  "no_12": { "population": 526334, "urbanization": 0.84 },   // Hordaland
+  "no_11": { "population": 494039, "urbanization": 0.87 },   // Rogaland
+  "no_06": { "population": 451123, "urbanization": 0.66 },   // Buskerud
+  "no_16": { "population": 342430, "urbanization": 0.86 },   // Sør-Trøndelag
+  "no_08": { "population": 255003, "urbanization": 0.58 },   // Telemark
+  "no_18": { "population": 171257, "urbanization": 0.92 },   // Nordland
+  "no_15": { "population": 168601, "urbanization": 0.79 },   // Møre og Romsdal
+  "no_05": { "population": 164304, "urbanization": 0.46 },   // Oppland
+  "no_10": { "population": 160321, "urbanization": 0.80 },   // Vest-Agder
+  "no_19": { "population": 157260, "urbanization": 0.97 },   // Troms
+  "no_04": { "population": 153601, "urbanization": 0.45 },   // Hedmark
+  "no_09": { "population": 100934, "urbanization": 0.61 },   // Aust-Agder
+  "no_17": { "population": 75447, "urbanization": 0.61 },   // Nord-Trøndelag
+  "no_20": { "population": 63242, "urbanization": 0.97 },   // Finnmark
+  "no_14": { "population": 48184, "urbanization": 0.08 },   // Sogn og Fjordane
+  "no_21": { "population": 2472, "urbanization": 0.97 },   // Svalbard
+
+  // NPL Nepal: 28,608,710
+  "np_na": { "population": 9916865, "urbanization": 0.40 },   // Narayani Zone
+  "np_ga": { "population": 5358147, "urbanization": 0.17 },   // Gandaki Zone
+  "np_sa": { "population": 5108973, "urbanization": 0.05 },   // Sagarmatha Zone
+  "np_ko": { "population": 4129102, "urbanization": 0.15 },   // Bhojpur
+  "np_se": { "population": 1993798, "urbanization": 0.17 },   // Seti Zone
+  "np_bh": { "population": 1650914, "urbanization": 0.15 },   // Bheri Zone
+  "np_ka": { "population": 450911, "urbanization": 0.06 },   // Karnali Zone
+
+  // NZL New Zealand: 4,917,000
+  "nz_wko": { "population": 2528008, "urbanization": 0.90 },   // Waikato
+  "nz_mwt": { "population": 859685, "urbanization": 0.91 },   // Manawatū-Whanganui
+  "nz_can": { "population": 511421, "urbanization": 0.86 },   // Canterbury
+  "nz_bop": { "population": 274990, "urbanization": 0.87 },   // Bay of Plenty
+  "nz_ota": { "population": 196449, "urbanization": 0.81 },   // Otago
+  "nz_hkb": { "population": 172134, "urbanization": 0.75 },   // Hawke's Bay
+  "nz_mbh": { "population": 123123, "urbanization": 0.79 },   // Marlborough
+  "nz_ntl": { "population": 114829, "urbanization": 0.57 },   // Northland
+  "nz_stl": { "population": 93319, "urbanization": 0.68 },   // Southland
+  "nz_wtc": { "population": 31987, "urbanization": 0.56 },   // West Coast
+  "nz_tas": { "population": 11055, "urbanization": 0.05 },   // Tasman
+
+  // OMN Oman: 4,974,986
+  "om_da": { "population": 3128269, "urbanization": 0.94 },   // Ad Dakhiliyah
+  "om_za": { "population": 966901, "urbanization": 0.70 },   // Ad Dhahirah
+  "om_zu": { "population": 623557, "urbanization": 0.88 },   // Dhofar
+  "om_sh": { "population": 214127, "urbanization": 0.97 },   // Ash Sharqiyah
+  "om_ss": { "population": 41132, "urbanization": 0.05 },   // Ash Sharqiyah North
+  "om_wu": { "population": 1000, "urbanization": 0.05 },   // Al Wusta
+
+  // PAK Pakistan: 216,565,318
+  "pk_pb": { "population": 123868145, "urbanization": 0.31 },   // Punjab
+  "pk_sd": { "population": 46294412, "urbanization": 0.51 },   // Sindh
+  "pk_kp": { "population": 20709432, "urbanization": 0.54 },   // Khyber Pakhtunkhwa
+  "pk_ba": { "population": 19010651, "urbanization": 0.44 },   // Balochistan
+  "pk_ta": { "population": 3755753, "urbanization": 0.21 },   // Federally Administered Tribal Areas
+  "pk_gb": { "population": 1595846, "urbanization": 0.27 },   // Gilgit-Baltistan
+  "pk_jk": { "population": 1331079, "urbanization": 0.05 },   // Azad Kashmir
+
+  // PAN Panama: 4,246,439
+  "pa_8": { "population": 3389722, "urbanization": 0.74 },   // Panamá
+  "pa_9": { "population": 398151, "urbanization": 0.42 },   // Veraguas
+  "pa_nb": { "population": 367999, "urbanization": 0.70 },   // Ngöbe-Buglé Comarca
+  "pa_5": { "population": 90567, "urbanization": 0.06 },   // Darién
+
+  // PER Peru: 32,510,453
+  "pe_lim": { "population": 13474432, "urbanization": 0.95 },   // Lima
+  "pe_lor": { "population": 2085066, "urbanization": 0.46 },   // Loreto
+  "pe_are": { "population": 1853211, "urbanization": 0.75 },   // Arequipa
+  "pe_piu": { "population": 1710543, "urbanization": 0.86 },   // Piura
+  "pe_lal": { "population": 1510354, "urbanization": 0.88 },   // La Libertad
+  "pe_jun": { "population": 1303828, "urbanization": 0.67 },   // Junín
+  "pe_pun": { "population": 1278834, "urbanization": 0.50 },   // Puno
+  "pe_lam": { "population": 1180386, "urbanization": 0.90 },   // Lambayeque
+  "pe_ica": { "population": 1050931, "urbanization": 0.81 },   // Ica
+  "pe_cus": { "population": 1016720, "urbanization": 0.63 },   // Cusco Departament
+  "pe_anc": { "population": 939294, "urbanization": 0.81 },   // Áncash
+  "pe_uca": { "population": 866485, "urbanization": 0.57 },   // Ucayali
+  "pe_tac": { "population": 538431, "urbanization": 0.82 },   // Tacna
+  "pe_caj": { "population": 536691, "urbanization": 0.66 },   // Cajamarca
+  "pe_huc": { "population": 519378, "urbanization": 0.64 },   // Huanuco
+  "pe_sam": { "population": 467815, "urbanization": 0.43 },   // San Martín
+  "pe_aya": { "population": 460921, "urbanization": 0.69 },   // Ayacucho
+  "pe_pas": { "population": 388778, "urbanization": 0.56 },   // Pasco
+  "pe_moq": { "population": 351764, "urbanization": 0.48 },   // Moquegua
+  "pe_mdd": { "population": 301672, "urbanization": 0.35 },   // Madre de Dios
+  "pe_huv": { "population": 280655, "urbanization": 0.33 },   // Huancavelica
+  "pe_ama": { "population": 202536, "urbanization": 0.20 },   // Amazonas
+  "pe_apu": { "population": 191728, "urbanization": 0.45 },   // Apurímac
+
+  // PHL Philippines: 108,116,615
+  "ph_que": { "population": 29352597, "urbanization": 0.62 },   // Quezon
+  "ph_zmb": { "population": 21877851, "urbanization": 0.54 },   // Zambales
+  "ph_ili": { "population": 7039195, "urbanization": 0.15 },   // Iloilo
+  "ph_plw": { "population": 6985184, "urbanization": 0.31 },   // Palawan
+  "ph_sco": { "population": 6916096, "urbanization": 0.40 },   // South Cotabato
+  "ph_buk": { "population": 5558266, "urbanization": 0.63 },   // Bukidnon
+  "ph_dao": { "population": 5322361, "urbanization": 0.57 },   // Davao Oriental
+  "ph_nec": { "population": 5119123, "urbanization": 0.53 },   // Negros Occidental
+  "ph_zan": { "population": 4454481, "urbanization": 0.50 },   // Zamboanga del Norte
+  "ph_wsa": { "population": 4229825, "urbanization": 0.27 },   // Samar
+  "ph_aur": { "population": 4126711, "urbanization": 0.19 },   // Aurora
+  "ph_abr": { "population": 3146371, "urbanization": 0.49 },   // Abra
+  "ph_ags": { "population": 2748354, "urbanization": 0.22 },   // Agusan del Sur
+  "ph_cag": { "population": 1240200, "urbanization": 0.20 },   // Cagayan
+
+  // PNG Papua New Guinea: 8,776,109
+  "pg_wpd": { "population": 1506095, "urbanization": 0.08 },   // Western
+  "pg_mpm": { "population": 1350266, "urbanization": 0.13 },   // Madang
+  "pg_cpm": { "population": 1236685, "urbanization": 0.32 },   // Central
+  "pg_esw": { "population": 1026968, "urbanization": 0.05 },   // East Sepik
+  "pg_mpl": { "population": 791186, "urbanization": 0.23 },   // Morobe
+  "pg_san": { "population": 616233, "urbanization": 0.05 },   // Sandaun
+  "pg_wbk": { "population": 415149, "urbanization": 0.07 },   // West New Britain
+  "pg_npp": { "population": 352742, "urbanization": 0.11 },   // Oro
+  "pg_ehg": { "population": 344007, "urbanization": 0.20 },   // Eastern Highlands
+  "pg_gpk": { "population": 337219, "urbanization": 0.05 },   // Gulf
+  "pg_shm": { "population": 314154, "urbanization": 0.12 },   // Southern Highlands
+  "pg_mba": { "population": 218703, "urbanization": 0.08 },   // Milne Bay
+  "pg_epw": { "population": 168979, "urbanization": 0.05 },   // Enga
+  "pg_ebr": { "population": 97723, "urbanization": 0.12 },   // East New Britain
+
+  // POL Poland: 37,970,874
+  "pl_sl": { "population": 6891565, "urbanization": 0.89 },   // Silesian Voivodeship
+  "pl_mz": { "population": 5782947, "urbanization": 0.58 },   // Masovian Voivodeship
+  "pl_wp": { "population": 2844567, "urbanization": 0.43 },   // Greater Poland Voivodeship
+  "pl_ld": { "population": 2796072, "urbanization": 0.53 },   // Łódź Voivodeship
+  "pl_ma": { "population": 2721151, "urbanization": 0.65 },   // Lesser Poland Voivodeship
+  "pl_pm": { "population": 2638977, "urbanization": 0.79 },   // Pomeranian Voivodeship
+  "pl_ds": { "population": 2294368, "urbanization": 0.54 },   // Lower Silesian Voivodeship
+  "pl_kp": { "population": 1994797, "urbanization": 0.54 },   // Kuyavian-Pomeranian Voivodeship
+  "pl_lu": { "population": 1946896, "urbanization": 0.36 },   // Lublin Voivodeship
+  "pl_zp": { "population": 1515453, "urbanization": 0.67 },   // West Pomeranian Voivodeship
+  "pl_wn": { "population": 1483058, "urbanization": 0.48 },   // Warmian-Masurian Voivodeship
+  "pl_pd": { "population": 1366665, "urbanization": 0.42 },   // Podlaskie Voivodeship
+  "pl_pk": { "population": 1302942, "urbanization": 0.37 },   // Podkarpackie Voivodeship
+  "pl_op": { "population": 1182765, "urbanization": 0.22 },   // Opole Voivodeship
+  "pl_sk": { "population": 824140, "urbanization": 0.51 },   // Świętokrzyskie Voivodeship
+  "pl_lb": { "population": 384511, "urbanization": 0.61 },   // Lubusz Voivodeship
+
+  // PRK North Korea: 25,666,161
+  "kp_02": { "population": 9131229 },   // South Pyongan
+  "kp_06": { "population": 4034439, "urbanization": 0.60 },   // North Hwanghae
+  "kp_09": { "population": 3175657 },   // North Hamgyong
+  "kp_08": { "population": 2711251, "urbanization": 0.52 },   // South Hamgyong
+  "kp_07": { "population": 2192581, "urbanization": 0.36 },   // Kangwon
+  "kp_04": { "population": 1967141, "urbanization": 0.45 },   // Chagang
+  "kp_10": { "population": 1231687, "urbanization": 0.34 },   // Ryanggang
+  "kp_03": { "population": 1222176, "urbanization": 0.21 },   // North Pyongan
+
+  // PRT Portugal: 10,269,417
+  "pt_03": { "population": 3136194, "urbanization": 0.77 },   // Braga
+  "pt_02": { "population": 2884826, "urbanization": 0.66 },   // Beja
+  "pt_14": { "population": 2774995, "urbanization": 0.73 },   // Santarém
+  "pt_18": { "population": 972639, "urbanization": 0.47 },   // Viseu
+  "pt_07": { "population": 500763, "urbanization": 0.16 },   // Évora
+
+  // PRY Paraguay: 7,044,636
+  "py_9": { "population": 2369270, "urbanization": 0.75 },   // Paraguarí
+  "py_15": { "population": 1491362, "urbanization": 0.92 },   // Presidente Hayes
+  "py_7": { "population": 950452, "urbanization": 0.63 },   // Itapúa
+  "py_5": { "population": 387299, "urbanization": 0.36 },   // Caaguazú
+  "py_2": { "population": 349177, "urbanization": 0.08 },   // San Pedro
+  "py_10": { "population": 344301, "urbanization": 0.05 },   // Alto Paraná
+  "py_6": { "population": 324721, "urbanization": 0.24 },   // Caazapá
+  "py_13": { "population": 281786, "urbanization": 0.68 },   // Amambay
+  "py_1": { "population": 202378, "urbanization": 0.68 },   // Concepción
+  "py_14": { "population": 122646, "urbanization": 0.05 },   // Canindeyú
+  "py_19": { "population": 86213, "urbanization": 0.37 },   // Boquerón
+  "py_12": { "population": 72253, "urbanization": 0.80 },   // Ñeembucú
+  "py_16": { "population": 62778, "urbanization": 0.22 },   // Alto Paraguay
+
+  // ROU Romania: 19,356,544
+  "ro_cl": { "population": 5514155, "urbanization": 0.63 },   // Călărași
+  "ro_ag": { "population": 2003739, "urbanization": 0.56 },   // Argeș
+  "ro_dj": { "population": 1409164, "urbanization": 0.47 },   // Dolj
+  "ro_tm": { "population": 1166179, "urbanization": 0.46 },   // Timiș
+  "ro_is": { "population": 1129794, "urbanization": 0.47 },   // Iași
+  "ro_ar": { "population": 1032883, "urbanization": 0.50 },   // Arad
+  "ro_vn": { "population": 953210, "urbanization": 0.54 },   // Vrancea
+  "ro_cj": { "population": 893917, "urbanization": 0.58 },   // Cluj
+  "ro_ab": { "population": 883183, "urbanization": 0.44 },   // Alba
+  "ro_bz": { "population": 840410, "urbanization": 0.48 },   // Buzău
+  "ro_sv": { "population": 789269, "urbanization": 0.38 },   // Suceava
+  "ro_ms": { "population": 664823, "urbanization": 0.47 },   // Mureș
+  "ro_bc": { "population": 637523, "urbanization": 0.64 },   // Bacău
+  "ro_mm": { "population": 591693, "urbanization": 0.57 },   // Maramureș
+  "ro_gj": { "population": 530837, "urbanization": 0.52 },   // Gorj
+  "ro_hr": { "population": 315765, "urbanization": 0.44 },   // Harghita
+
+  // RUS Russia: 144,373,535
+  "ru_mow": { "population": 16898852, "urbanization": 0.94 },   // Moscow
+  "ru_len": { "population": 7322593, "urbanization": 0.97 },   // Leningrad
+  "ru_ros": { "population": 4750418, "urbanization": 0.63 },   // Rostov
+  "ru_sam": { "population": 4367028, "urbanization": 0.73 },   // Samara
+  "ru_kda": { "population": 4333656, "urbanization": 0.66 },   // Krasnodar Krai
+  "ru_ba": { "population": 4276414, "urbanization": 0.65 },   // Bashkortostan
+  "ru_ta": { "population": 4217647, "urbanization": 0.73 },   // Republic of Tatarstan
+  "ru_sve": { "population": 4103577, "urbanization": 0.90 },   // Sverdlovsk
+  "ru_che": { "population": 3966307, "urbanization": 0.72 },   // Chelyabinsk
+  "ru_nvs": { "population": 3439513, "urbanization": 0.65 },   // Novosibirsk
+  "ru_vgg": { "population": 3424336, "urbanization": 0.63 },   // Volgograd
+  "ru_sar": { "population": 3202278, "urbanization": 0.55 },   // Saratov
+  "ru_kya": { "population": 3189357, "urbanization": 0.86 },   // Krasnoyarsk Krai
+  "ru_alt": { "population": 3167659, "urbanization": 0.52 },   // Altai Republic
+  "ru_niz": { "population": 3104098, "urbanization": 0.80 },   // Nizhny Novgorod
+  "ru_irk": { "population": 2819070, "urbanization": 0.79 },   // Irkutsk
+  "ru_ore": { "population": 2813910, "urbanization": 0.56 },   // Orenburg
+  "ru_kem": { "population": 2794038, "urbanization": 0.83 },   // Kemerovo
+  "ru_oms": { "population": 2643277, "urbanization": 0.63 },   // Omsk
+  "ru_per": { "population": 2323467, "urbanization": 0.90 },   // Perm Krai
+  "ru_sta": { "population": 2253686, "urbanization": 0.54 },   // Stavropol Krai
+  "ru_pri": { "population": 1992012, "urbanization": 0.78 },   // Primorsky Krai
+  "ru_vor": { "population": 1969363, "urbanization": 0.63 },   // Voronezh
+  "ru_kha": { "population": 1965138, "urbanization": 0.67 },   // Khabarovsk Krai
+  "ru_uly": { "population": 1661546, "urbanization": 0.63 },   // Ulyanovsk
+  "ru_tul": { "population": 1657320, "urbanization": 0.70 },   // Tula
+  "ru_ud": { "population": 1602954, "urbanization": 0.83 },   // Udmurt Republic
+  "ru_bel": { "population": 1589425, "urbanization": 0.59 },   // Belgorod
+  "ru_khm": { "population": 1555462, "urbanization": 0.90 },   // Khanty-Mansi Autonomous Okrug
+  "ru_pnz": { "population": 1543683, "urbanization": 0.58 },   // Penza
+  "ru_lip": { "population": 1456088, "urbanization": 0.63 },   // Lipetsk
+  "ru_yar": { "population": 1387170, "urbanization": 0.87 },   // Yaroslavl
+  "ru_tyu": { "population": 1379795, "urbanization": 0.74 },   // Tyumen
+  "ru_da": { "population": 1342027, "urbanization": 0.83 },   // Republic of Dagestan
+  "ru_vla": { "population": 1335936, "urbanization": 0.66 },   // Vladimir
+  "ru_rya": { "population": 1333603, "urbanization": 0.60 },   // Ryazan
+  "ru_krs": { "population": 1327753, "urbanization": 0.54 },   // Kursk
+  "ru_kgn": { "population": 1307580, "urbanization": 0.46 },   // Kurgan
+  "ru_zab": { "population": 1228601, "urbanization": 0.54 },   // Zabaykalsky Krai
+  "ru_tam": { "population": 1208990, "urbanization": 0.55 },   // Tambov
+  "ru_kir": { "population": 1188639, "urbanization": 0.78 },   // Kirov
+  "ru_tve": { "population": 1164718, "urbanization": 0.82 },   // Tver
+  "ru_bry": { "population": 1061826, "urbanization": 0.73 },   // Bryansk
+  "ru_bu": { "population": 1053115, "urbanization": 0.58 },   // Republic of Buryatia
+  "ru_orl": { "population": 1031934, "urbanization": 0.57 },   // Oryol
+  "ru_tom": { "population": 1030229, "urbanization": 0.83 },   // Tomsk
+  "ru_vlg": { "population": 1023858, "urbanization": 0.90 },   // Vologda
+  "ru_sa": { "population": 1001679, "urbanization": 0.70 },   // Sakha Republic
+  "ru_cu": { "population": 987581, "urbanization": 0.77 },   // Chuvash Republic
+  "ru_iva": { "population": 982318, "urbanization": 0.85 },   // Ivanovo
+  "ru_ark": { "population": 962664, "urbanization": 0.93 },   // Arkhangelsk
+  "ru_smo": { "population": 925654, "urbanization": 0.70 },   // Smolensk
+  "ru_amu": { "population": 883820, "urbanization": 0.71 },   // Amur
+  "ru_klu": { "population": 846953, "urbanization": 0.79 },   // Kaluga
+  "ru_ko": { "population": 795266, "urbanization": 0.90 },   // Komi Republic
+  "ru_ast": { "population": 764975, "urbanization": 0.97 },   // Astrakhan
+  "ru_kgd": { "population": 760700, "urbanization": 0.85 },   // Kaliningrad
+  "ru_se": { "population": 755089, "urbanization": 0.90 },   // Republic of North Ossetia-Alania
+  "ru_mur": { "population": 749672, "urbanization": 0.97 },   // Murmansk
+  "ru_mo": { "population": 739293, "urbanization": 0.65 },   // Republic of Mordovia
+  "ru_yan": { "population": 700773, "urbanization": 0.97 },   // Yamalo-Nenets Autonomous Okrug
+  "ru_sak": { "population": 629942, "urbanization": 0.78 },   // Sakhalin
+  "ru_me": { "population": 622884, "urbanization": 0.73 },   // Mari El Republic
+  "ru_kr": { "population": 531345, "urbanization": 0.91 },   // Karelia
+  "ru_kb": { "population": 529887, "urbanization": 0.79 },   // Kabardino-Balkaria
+  "ru_kos": { "population": 520397, "urbanization": 0.88 },   // Kostroma
+  "ru_ce": { "population": 502670, "urbanization": 0.61 },   // Chechen Republic
+  "ru_ngr": { "population": 491966, "urbanization": 0.86 },   // Novgorod
+  "ru_psk": { "population": 487019, "urbanization": 0.85 },   // Pskov
+  "ru_kam": { "population": 459347, "urbanization": 0.59 },   // Kamchatka Krai
+  "ru_ty": { "population": 330176, "urbanization": 0.46 },   // Tuva Republic
+  "ru_kk": { "population": 292233, "urbanization": 0.56 },   // Republic of Khakassia
+  "ru_mag": { "population": 280678, "urbanization": 0.63 },   // Magadan
+  "ru_kc": { "population": 253603, "urbanization": 0.76 },   // Karachay-Cherkess Republic
+  "ru_yev": { "population": 253565, "urbanization": 0.69 },   // Jewish
+  "ru_kl": { "population": 232393, "urbanization": 0.62 },   // Republic of Kalmykia
+  "ru_al": { "population": 192235, "urbanization": 0.42 },   // Altai Republic
+  "ru_chu": { "population": 65949, "urbanization": 0.65 },   // Chukotka Autonomous Okrug
+  "ru_nen": { "population": 30863, "urbanization": 0.97 },   // Nenets Autonomous Okrug
+
+  // SAU Saudi Arabia: 34,268,528
+  "sa_02": { "population": 10160603, "urbanization": 0.82 },   // Makkah
+  "sa_01": { "population": 9417540, "urbanization": 0.95 },   // Riyadh
+  "sa_04": { "population": 5442569, "urbanization": 0.97 },   // Eastern
+  "sa_03": { "population": 3429200, "urbanization": 0.62 },   // Al Madinah
+  "sa_07": { "population": 1630550, "urbanization": 0.60 },   // Tabuk
+  "sa_14": { "population": 885864, "urbanization": 0.56 },   // 'Asir
+  "sa_10": { "population": 857231, "urbanization": 0.71 },   // Najran
+  "sa_06": { "population": 682074, "urbanization": 0.94 },   // Ha'il
+  "sa_05": { "population": 663122, "urbanization": 0.97 },   // Al-Qassim
+  "sa_08": { "population": 479437, "urbanization": 0.97 },   // Northern Borders
+  "sa_12": { "population": 319460, "urbanization": 0.83 },   // Al-Jowf
+  "sa_09": { "population": 300878, "urbanization": 0.58 },   // Jazan
+
+  // SDN Sudan: 42,813,238
+  "sd_gz": { "population": 8716382, "urbanization": 0.10 },   // Al Jazirah
+  "sd_kh": { "population": 7609170, "urbanization": 0.97 },   // Khartoum
+  "sd_rs": { "population": 4307367, "urbanization": 0.23 },   // Red Sea
+  "sd_ds": { "population": 3792578, "urbanization": 0.17 },   // South Darfur
+  "sd_kn": { "population": 3706701, "urbanization": 0.31 },   // North Kordofan
+  "sd_ks": { "population": 3030514, "urbanization": 0.12 },   // South Kordofan
+  "sd_gd": { "population": 1850701, "urbanization": 0.18 },   // Al Qadarif
+  "sd_dn": { "population": 1668114, "urbanization": 0.25 },   // North Darfur
+  "sd_nb": { "population": 1500863, "urbanization": 0.21 },   // Blue Nile
+  "sd_nw": { "population": 1435012, "urbanization": 0.54 },   // White Nile
+  "sd_dw": { "population": 1047493, "urbanization": 0.26 },   // West Soudan
+  "sd_si": { "population": 1046841, "urbanization": 0.21 },   // Sennar
+  "sd_ds_858": { "population": 834060, "urbanization": 0.05 },   // East Darfur
+  "sd_de": { "population": 755176, "urbanization": 0.05 },   // Central Darfur
+  "sd_nr": { "population": 709964, "urbanization": 0.95 },   // River Nile
+  "sd_ka": { "population": 685816, "urbanization": 0.97 },   // Kassala
+  "sd_no": { "population": 116486, "urbanization": 0.83 },   // Northern
+
+  // SEN Senegal: 16,296,364
+  "sn_fk": { "population": 11989085, "urbanization": 0.58 },   // Fatick
+  "sn_kd": { "population": 1415921, "urbanization": 0.39 },   // Kolda
+  "sn_lg": { "population": 1323202, "urbanization": 0.13 },   // Louga
+  "sn_tc": { "population": 986446, "urbanization": 0.19 },   // Tambacounda
+  "sn_mt": { "population": 394161, "urbanization": 0.11 },   // Matam
+  "sn_sl": { "population": 131581, "urbanization": 0.05 },   // Saint-Louis
+  "sn_ke": { "population": 55968, "urbanization": 0.68 },   // Kédougou
+
+  // SLE Sierra Leone: 7,813,215
+  "sl_n": { "population": 5043878, "urbanization": 0.47 },   // Northern
+  "sl_s": { "population": 1421506, "urbanization": 0.32 },   // Southern
+  "sl_e": { "population": 1347831, "urbanization": 0.45 },   // Eastern
+
+  // SOM Somalia: 10,192,317
+  "so_sh": { "population": 2758845, "urbanization": 0.61 },   // Lower Shebelle
+  "so_sd": { "population": 2090496, "urbanization": 0.53 },   // Middle Shebelle
+  "so_jh": { "population": 1959701, "urbanization": 0.50 },   // Lower Juba
+  "so_by": { "population": 1420383, "urbanization": 0.26 },   // Bay
+  "so_hi": { "population": 484984, "urbanization": 0.33 },   // Hiran
+  "so_ge": { "population": 326756, "urbanization": 0.41 },   // Gedo
+  "so_jd": { "population": 320657, "urbanization": 0.05 },   // Middle Juba
+  "so_br": { "population": 301571, "urbanization": 0.48 },   // Bari
+  "so_mu": { "population": 260102, "urbanization": 0.54 },   // Mudug
+  "so_nu": { "population": 100985, "urbanization": 0.49 },   // Nugal
+  "so_bk": { "population": 88885, "urbanization": 0.05 },   // Bakool
+  "so_ga": { "population": 78952, "urbanization": 0.05 },   // Galguduud
+
+  // SRB Republic of Serbia: 6,944,975
+  "rs_00": { "population": 3132765, "urbanization": 0.75 },   // Belgrade
+  "rs_06": { "population": 1935840, "urbanization": 0.42 },   // South Bačka
+  "rs_15": { "population": 1144427, "urbanization": 0.42 },   // Zaječar
+  "rs_16": { "population": 731943, "urbanization": 0.44 },   // Zlatibor
+
+  // SSD South Sudan: 11,062,113
+  "ss_ec": { "population": 2247147, "urbanization": 0.38 },   // Central Equatoria
+  "ss_wr": { "population": 2210579, "urbanization": 0.06 },   // Warrap
+  "ss_nu": { "population": 1519608, "urbanization": 0.32 },   // Upper Nile
+  "ss_ee": { "population": 1325512, "urbanization": 0.05 },   // Eastern Equatoria
+  "ss_ew": { "population": 958465, "urbanization": 0.16 },   // Western Equatoria
+  "ss_bw": { "population": 936052, "urbanization": 0.39 },   // Western Bahr el Ghazal
+  "ss_jg": { "population": 669687, "urbanization": 0.11 },   // Jonglei
+  "ss_bn": { "population": 660436, "urbanization": 0.20 },   // Northern Bahr el Ghazal
+  "ss_lk": { "population": 299376, "urbanization": 0.30 },   // Lakes
+  "ss_uy": { "population": 235251, "urbanization": 0.09 },   // Unity
+
+  // SUR Suriname: 581,363
+  "sr_pr": { "population": 388727, "urbanization": 0.81 },   // Para
+  "sr_si": { "population": 192636, "urbanization": 0.36 },   // Sipaliwini
+
+  // SVK Slovakia: 5,454,073
+  "sk_ta": { "population": 2822744, "urbanization": 0.50 },   // Trnava
+  "sk_pv": { "population": 1359934, "urbanization": 0.69 },   // Prešov
+  "sk_bc": { "population": 647964, "urbanization": 0.55 },   // Banská Bystrica
+  "sk_zi": { "population": 623431, "urbanization": 0.40 },   // Žilina
+
+  // SWE Sweden: 10,285,453
+  "se_ab": { "population": 3122351, "urbanization": 0.97 },   // Stockholm
+  "se_o": { "population": 1968307, "urbanization": 0.88 },   // Västra Götaland
+  "se_m": { "population": 1097030, "urbanization": 0.87 },   // Skåne
+  "se_e": { "population": 514754, "urbanization": 0.87 },   // Östergötland
+  "se_c": { "population": 376103, "urbanization": 0.86 },   // Uppsala
+  "se_y": { "population": 319120, "urbanization": 0.90 },   // Västernorrland
+  "se_u": { "population": 305343, "urbanization": 0.85 },   // Västmanland
+  "se_ac": { "population": 299822, "urbanization": 0.88 },   // Västerbotten
+  "se_g": { "population": 295840, "urbanization": 0.78 },   // Kronoberg
+  "se_t": { "population": 285431, "urbanization": 0.84 },   // Örebro
+  "se_f": { "population": 276818, "urbanization": 0.78 },   // Jönköping
+  "se_s": { "population": 260067, "urbanization": 0.69 },   // Värmland
+  "se_w": { "population": 247829, "urbanization": 0.74 },   // Dalarna
+  "se_bd": { "population": 243576, "urbanization": 0.89 },   // Norrbotten
+  "se_x": { "population": 242478, "urbanization": 0.82 },   // Gävleborg
+  "se_z": { "population": 177913, "urbanization": 0.63 },   // Jämtland
+  "se_h": { "population": 128087, "urbanization": 0.66 },   // Kalmar
+  "se_d": { "population": 124584, "urbanization": 0.54 },   // Södermanland
+
+  // SYR Syria: 17,070,135
+  "sy_hl": { "population": 5111439, "urbanization": 0.61 },   // Aleppo
+  "sy_rd": { "population": 3296981, "urbanization": 0.82 },   // Rif Dimashq
+  "sy_hm": { "population": 2701276, "urbanization": 0.54 },   // Hama
+  "sy_hi": { "population": 2378198, "urbanization": 0.49 },   // Homs
+  "sy_ha": { "population": 1530761, "urbanization": 0.09 },   // Al-Hasakah
+  "sy_su": { "population": 1328455, "urbanization": 0.22 },   // As-Suwayda
+  "sy_dy": { "population": 429521, "urbanization": 0.97 },   // Deir ez-Zor
+  "sy_ra": { "population": 293504, "urbanization": 0.97 },   // Al-Raqqah
+
+  // TCD Chad: 15,946,876
+  "td_cb": { "population": 3349067, "urbanization": 0.05 },   // Chari-Baguirmi
+  "td_me": { "population": 2966775, "urbanization": 0.25 },   // Mayo-Kebbi Est
+  "td_lr": { "population": 1896360, "urbanization": 0.37 },   // Logone Oriental
+  "td_mc": { "population": 1210604, "urbanization": 0.53 },   // Moyen-Chari
+  "td_od": { "population": 1013620, "urbanization": 0.59 },   // Ouaddaï
+  "td_mo": { "population": 999268, "urbanization": 0.13 },   // Mayo-Kebbi Ouest
+  "td_ta": { "population": 921746, "urbanization": 0.48 },   // Tandjilé
+  "td_si": { "population": 683710, "urbanization": 0.05 },   // Sila
+  "td_ba": { "population": 522108, "urbanization": 0.32 },   // Batha
+  "td_sa": { "population": 493377, "urbanization": 0.23 },   // Salamat
+  "td_hl": { "population": 446821, "urbanization": 0.05 },   // Hadjer-Lamis
+  "td_gr": { "population": 418157, "urbanization": 0.25 },   // Guéra
+  "td_wf": { "population": 286458, "urbanization": 0.15 },   // Wadi Fira
+  "td_ka": { "population": 151197, "urbanization": 0.45 },   // Kanem
+  "td_bo": { "population": 143739, "urbanization": 0.35 },   // Borkou
+  "td_lc": { "population": 135878, "urbanization": 0.09 },   // Lac
+  "td_ti": { "population": 126711, "urbanization": 0.05 },   // Tibesti
+  "td_ma": { "population": 113638, "urbanization": 0.05 },   // Mandoul
+  "td_bg": { "population": 62418, "urbanization": 0.05 },   // Bahr el Gazel
+  "td_x01": { "population": 5224, "urbanization": 0.33 },   // Ennedi
+
+  // TGO Togo: 8,082,366
+  "tg_p": { "population": 4634969, "urbanization": 0.67 },   // Plateaux
+  "tg_k": { "population": 2741835, "urbanization": 0.07 },   // Kara
+  "tg_c": { "population": 705562, "urbanization": 0.37 },   // Centre
+
+  // THA Thailand: 69,625,582
+  "th_16": { "population": 24182926, "urbanization": 0.80 },   // Lopburi
+  "th_25": { "population": 6868665, "urbanization": 0.44 },   // Prachin Buri
+  "th_80": { "population": 5877900, "urbanization": 0.55 },   // Nakhon Si Thammarat
+  "th_41": { "population": 5098822, "urbanization": 0.33 },   // Udon Thani
+  "th_76": { "population": 2765651, "urbanization": 0.35 },   // Phetchaburi
+  "th_84": { "population": 2562198, "urbanization": 0.47 },   // Surat Thani
+  "th_34": { "population": 2560689, "urbanization": 0.33 },   // Ubon Ratchathani
+  "th_30": { "population": 2461359, "urbanization": 0.38 },   // Nakhon Ratchasima
+  "th_50": { "population": 2417720, "urbanization": 0.59 },   // Chiang Mai
+  "th_45": { "population": 2325184, "urbanization": 0.19 },   // Roi Et
+  "th_71": { "population": 2136055, "urbanization": 0.18 },   // Kanchanaburi
+  "th_60": { "population": 2066978, "urbanization": 0.30 },   // Nakhon Sawan
+  "th_52": { "population": 2010231, "urbanization": 0.44 },   // Lampang
+  "th_31": { "population": 1346080, "urbanization": 0.22 },   // Buri Ram
+  "th_47": { "population": 1345900, "urbanization": 0.15 },   // Sakon Nakhon
+  "th_65": { "population": 1131513, "urbanization": 0.47 },   // Phitsanulok
+  "th_36": { "population": 709712, "urbanization": 0.22 },   // Chaiyaphum
+  "th_55": { "population": 616767, "urbanization": 0.45 },   // Nan
+  "th_63": { "population": 524725, "urbanization": 0.40 },   // Tak
+  "th_67": { "population": 377377, "urbanization": 0.36 },   // Phetchabun
+  "th_58": { "population": 239130, "urbanization": 0.10 },   // Mae Hong Son
+
+  // TJK Tajikistan: 9,321,018
+  "tj_kt": { "population": 3602362, "urbanization": 0.14 },   // Khatlon
+  "tj_su": { "population": 3045394, "urbanization": 0.31 },   // Khujand
+  "tj_x01": { "population": 2231497, "urbanization": 0.52 },   // districts of Republican Subordination
+  "tj_gb": { "population": 441765, "urbanization": 0.07 },   // Gorno-Badakhshan
+
+  // TKM Turkmenistan: 5,942,089
+  "tm_a": { "population": 1923853, "urbanization": 0.80 },   // Ahal
+  "tm_d": { "population": 1480506, "urbanization": 0.28 },   // Daşoguz
+  "tm_m": { "population": 1438177, "urbanization": 0.22 },   // Mary
+  "tm_l": { "population": 605341, "urbanization": 0.78 },   // Lebap
+  "tm_b": { "population": 494212, "urbanization": 0.82 },   // Balkan
+
+  // TUN Tunisia: 11,694,719
+  "tn_41": { "population": 4901092, "urbanization": 0.73 },   // Kairouan
+  "tn_31": { "population": 4566330, "urbanization": 0.68 },   // Beja
+  "tn_73": { "population": 870254, "urbanization": 0.80 },   // Kebili
+  "tn_33": { "population": 825279, "urbanization": 0.33 },   // Kef
+  "tn_83": { "population": 531764, "urbanization": 0.97 },   // Tataouine
+
+  // TUR Turkey: 83,429,615
+  "tr_54": { "population": 18173009, "urbanization": 0.97 },   // Sakarya
+  "tr_06": { "population": 8874595, "urbanization": 0.80 },   // Ankara
+  "tr_35": { "population": 4846973, "urbanization": 0.88 },   // İzmir
+  "tr_01": { "population": 4690434, "urbanization": 0.70 },   // Adana
+  "tr_16": { "population": 4662273, "urbanization": 0.81 },   // Bursa
+  "tr_42": { "population": 3330057, "urbanization": 0.64 },   // Konya
+  "tr_46": { "population": 3258436, "urbanization": 0.80 },   // Kahramanmaraş
+  "tr_33": { "population": 2692597, "urbanization": 0.93 },   // Mersin
+  "tr_07": { "population": 2275576, "urbanization": 0.78 },   // Antalya
+  "tr_21": { "population": 2133453, "urbanization": 0.77 },   // Diyarbakır
+  "tr_59": { "population": 1989309, "urbanization": 0.38 },   // Tekirdağ
+  "tr_63": { "population": 1814385, "urbanization": 0.43 },   // Şanlıurfa
+  "tr_25": { "population": 1812793, "urbanization": 0.56 },   // Erzurum
+  "tr_29": { "population": 1750578, "urbanization": 0.89 },   // Gümüşhane
+  "tr_44": { "population": 1516677, "urbanization": 0.78 },   // Malatya
+  "tr_55": { "population": 1436038, "urbanization": 0.85 },   // Samsun
+  "tr_38": { "population": 1404723, "urbanization": 0.73 },   // Kayseri
+  "tr_26": { "population": 1269289, "urbanization": 0.70 },   // Eskişehir
+  "tr_20": { "population": 1228573, "urbanization": 0.74 },   // Denizli
+  "tr_65": { "population": 1198415, "urbanization": 0.65 },   // Van
+  "tr_24": { "population": 1141771, "urbanization": 0.65 },   // Erzincan
+  "tr_10": { "population": 1134173, "urbanization": 0.53 },   // Balıkesir
+  "tr_60": { "population": 1031502, "urbanization": 0.62 },   // Tokat
+  "tr_45": { "population": 1028207, "urbanization": 0.62 },   // Manisa
+  "tr_58": { "population": 888052, "urbanization": 0.52 },   // Sivas
+  "tr_48": { "population": 839649, "urbanization": 0.67 },   // Muğla
+  "tr_56": { "population": 812211, "urbanization": 0.53 },   // Siirt
+  "tr_78": { "population": 667284, "urbanization": 0.74 },   // Karabük
+  "tr_47": { "population": 636164, "urbanization": 0.61 },   // Mardin
+  "tr_43": { "population": 633237, "urbanization": 0.51 },   // Kütahya
+  "tr_08": { "population": 620325, "urbanization": 0.87 },   // Artvin
+  "tr_40": { "population": 574083, "urbanization": 0.51 },   // Kırşehir
+  "tr_19": { "population": 549047, "urbanization": 0.58 },   // Çorum
+  "tr_03": { "population": 546105, "urbanization": 0.50 },   // Afyonkarahisar
+  "tr_14": { "population": 463119, "urbanization": 0.36 },   // Bolu
+  "tr_37": { "population": 413849, "urbanization": 0.44 },   // Kastamonu
+  "tr_66": { "population": 411327, "urbanization": 0.37 },   // Yozgat
+  "tr_36": { "population": 379416, "urbanization": 0.35 },   // Kars
+  "tr_04": { "population": 301911, "urbanization": 0.50 },   // Ağrı
+
+  // TWN Taiwan: 23,568,378
+  "tw_nan": { "population": 15291282, "urbanization": 0.86 },   // Nantou
+  "tw_khh": { "population": 8277096, "urbanization": 0.68 },   // Kaohsiung
+
+  // TZA United Republic of Tanzania: 58,005,463
+  "tz_19": { "population": 10772900, "urbanization": 0.74 },   // Pwani
+  "tz_16": { "population": 4920243, "urbanization": 0.22 },   // Morogoro
+  "tz_24": { "population": 4727198, "urbanization": 0.38 },   // Tabora
+  "tz_14": { "population": 4416341, "urbanization": 0.27 },   // Mbeya
+  "tz_01": { "population": 3400544, "urbanization": 0.27 },   // Arusha
+  "tz_09": { "population": 2915287, "urbanization": 0.65 },   // Kilimanjaro
+  "tz_08": { "population": 2694915, "urbanization": 0.30 },   // Kigoma
+  "tz_26": { "population": 2667653, "urbanization": 0.05 },   // Manyara
+  "tz_03": { "population": 2554078, "urbanization": 0.24 },   // Dodoma
+  "tz_25": { "population": 2339252, "urbanization": 0.31 },   // Tanga
+  "tz_21": { "population": 2194720, "urbanization": 0.16 },   // Ruvuma
+  "tz_28": { "population": 1844104, "urbanization": 0.13 },   // Katavi
+  "tz_18": { "population": 1822673, "urbanization": 0.70 },   // Mwanza
+  "tz_04": { "population": 1662718, "urbanization": 0.17 },   // Iringa
+  "tz_29": { "population": 1375457, "urbanization": 0.09 },   // Njombe
+  "tz_20": { "population": 1277348, "urbanization": 0.18 },   // Rukwa
+  "tz_12": { "population": 977227, "urbanization": 0.11 },   // Lindi
+  "tz_05": { "population": 969242, "urbanization": 0.31 },   // Kagera
+  "tz_23": { "population": 897522, "urbanization": 0.24 },   // Singida
+  "tz_22": { "population": 859293, "urbanization": 0.43 },   // Shinyanga
+  "tz_17": { "population": 837531, "urbanization": 0.41 },   // Mtwara
+  "tz_13": { "population": 744706, "urbanization": 0.46 },   // Mara
+  "tz_27": { "population": 718952, "urbanization": 0.13 },   // Geita
+  "tz_30": { "population": 415559, "urbanization": 0.10 },   // Simiyu
+
+  // UGA Uganda: 44,269,594
+  "ug_107": { "population": 10446924, "urbanization": 0.44 },   // Mubende
+  "ug_219": { "population": 9630918, "urbanization": 0.28 },   // Butaleja
+  "ug_328": { "population": 7357970, "urbanization": 0.06 },   // Napak
+  "ug_301": { "population": 5669699, "urbanization": 0.19 },   // Adjumani
+  "ug_410": { "population": 4016674, "urbanization": 0.16 },   // Mbarara
+  "ug_413": { "population": 3036550, "urbanization": 0.11 },   // Kamwenge
+  "ug_120": { "population": 1912252, "urbanization": 0.60 },   // Buvuma
+  "ug_327": { "population": 1521749, "urbanization": 0.40 },   // Lamwo
+  "ug_306": { "population": 676858, "urbanization": 0.05 },   // Kotido
+
+  // UKR Ukraine: 25,000,000
+  "ua_32": { "population": 3365443, "urbanization": 0.82 },   // Kyiv
+  "ua_14": { "population": 2411208, "urbanization": 0.79 },   // Donetsk
+  "ua_12": { "population": 2296524, "urbanization": 0.74 },   // Dnipropetrovsk
+  "ua_63": { "population": 1964792, "urbanization": 0.73 },   // Kharkiv
+  "ua_51": { "population": 1489994, "urbanization": 0.70 },   // Odessa
+  "ua_23": { "population": 1375809, "urbanization": 0.72 },   // Zaporizhzhia
+  "ua_43": { "population": 1268345, "urbanization": 0.82 },   // Autonomous Republic of Crimea
+  "ua_46": { "population": 1115787, "urbanization": 0.77 },   // Lviv
+  "ua_09": { "population": 896292, "urbanization": 0.60 },   // Luhansk
+  "ua_53": { "population": 841870, "urbanization": 0.60 },   // Poltava
+  "ua_48": { "population": 832450, "urbanization": 0.62 },   // Mykolaiv
+  "ua_74": { "population": 794949, "urbanization": 0.49 },   // Chernihiv
+  "ua_68": { "population": 739577, "urbanization": 0.64 },   // Khmelnytskyi
+  "ua_59": { "population": 695475, "urbanization": 0.66 },   // Sumy
+  "ua_26": { "population": 675826, "urbanization": 0.74 },   // Ivano-Frankivsk
+  "ua_05": { "population": 609511, "urbanization": 0.53 },   // Vinnytsia
+  "ua_71": { "population": 596723, "urbanization": 0.60 },   // Cherkasy
+  "ua_18": { "population": 589851, "urbanization": 0.56 },   // Zhytomyr
+  "ua_65": { "population": 584564, "urbanization": 0.51 },   // Kherson
+  "ua_35": { "population": 516399, "urbanization": 0.45 },   // Kirovohrad
+  "ua_61": { "population": 419064, "urbanization": 0.54 },   // Ternopil
+  "ua_07": { "population": 365664, "urbanization": 0.69 },   // Volyn
+  "ua_56": { "population": 348019, "urbanization": 0.71 },   // Rivne
+  "ua_21": { "population": 205864, "urbanization": 0.68 },   // Zakarpattia
+
+  // URY Uruguay: 3,461,734
+  "uy_fd": { "population": 2062566, "urbanization": 0.97 },   // Florida
+  "uy_ta": { "population": 371260, "urbanization": 0.97 },   // Tacuarembó
+  "uy_la": { "population": 301949, "urbanization": 0.90 },   // Lavalleja
+  "uy_so": { "population": 228899, "urbanization": 0.87 },   // Soriano
+  "uy_pa": { "population": 143169, "urbanization": 0.94 },   // Paysandú
+  "uy_cl": { "population": 132545, "urbanization": 0.87 },   // Cerro Largo
+  "uy_ar": { "population": 92772, "urbanization": 0.95 },   // Artigas
+  "uy_ro": { "population": 78859, "urbanization": 0.75 },   // Rocha
+  "uy_du": { "population": 45124, "urbanization": 0.94 },   // Durazno
+  "uy_sa": { "population": 4591, "urbanization": 0.05 },   // Salto
+
+  // USA United States of America: 328,239,523
+  "us_ca": { "population": 50586032, "urbanization": 0.87 },   // California
+  "us_tx": { "population": 25328740, "urbanization": 0.86 },   // Texas
+  "us_fl": { "population": 23696998, "urbanization": 0.93 },   // Florida
+  "us_il": { "population": 16449234, "urbanization": 0.93 },   // Illinois
+  "us_ny": { "population": 15876830, "urbanization": 0.89 },   // New York
+  "us_nj": { "population": 15840199, "urbanization": 0.96 },   // New Jersey
+  "us_oh": { "population": 10666986, "urbanization": 0.81 },   // Ohio
+  "us_pa": { "population": 10382309, "urbanization": 0.87 },   // Pennsylvania
+  "us_az": { "population": 9608586, "urbanization": 0.74 },   // Arizona
+  "us_ma": { "population": 9359695, "urbanization": 0.94 },   // Massachusetts
+  "us_wa": { "population": 9061552, "urbanization": 0.76 },   // Washington
+  "us_mi": { "population": 8958768, "urbanization": 0.85 },   // Michigan
+  "us_va": { "population": 8219177, "urbanization": 0.86 },   // Virginia
+  "us_ga": { "population": 8115281, "urbanization": 0.83 },   // Georgia
+  "us_in": { "population": 7792151, "urbanization": 0.65 },   // Indiana
+  "us_md": { "population": 7559555, "urbanization": 0.92 },   // Maryland
+  "us_co": { "population": 6497505, "urbanization": 0.77 },   // Colorado
+  "us_nc": { "population": 6201959, "urbanization": 0.79 },   // North Carolina
+  "us_ct": { "population": 5756896, "urbanization": 0.94 },   // Connecticut
+  "us_mo": { "population": 5033019, "urbanization": 0.82 },   // Missouri
+  "us_tn": { "population": 4975612, "urbanization": 0.83 },   // Tennessee
+  "us_mn": { "population": 4954708, "urbanization": 0.84 },   // Minnesota
+  "us_or": { "population": 4827451, "urbanization": 0.62 },   // Oregon
+  "us_wi": { "population": 4486411, "urbanization": 0.82 },   // Wisconsin
+  "us_ok": { "population": 4269719, "urbanization": 0.63 },   // Oklahoma
+  "us_nv": { "population": 3992007, "urbanization": 0.69 },   // Nevada
+  "us_al": { "population": 3536932, "urbanization": 0.75 },   // Alabama
+  "us_ut": { "population": 3407401, "urbanization": 0.68 },   // Utah
+  "us_la": { "population": 3062125, "urbanization": 0.80 },   // Louisiana
+  "us_nm": { "population": 2930336, "urbanization": 0.58 },   // New Mexico
+  "us_sc": { "population": 2797710, "urbanization": 0.78 },   // South Carolina
+  "us_ia": { "population": 2682688, "urbanization": 0.60 },   // Iowa
+  "us_ky": { "population": 2584977, "urbanization": 0.74 },   // Kentucky
+  "us_ks": { "population": 2390816, "urbanization": 0.70 },   // Kansas
+  "us_ne": { "population": 2197105, "urbanization": 0.65 },   // Nebraska
+  "us_id": { "population": 2025918, "urbanization": 0.45 },   // Idaho
+  "us_ar": { "population": 1802209, "urbanization": 0.67 },   // Arkansas
+  "us_ms": { "population": 1642708, "urbanization": 0.65 },   // Mississippi
+  "us_hi": { "population": 1372803, "urbanization": 0.95 },   // Hawaii
+  "us_mt": { "population": 1333318, "urbanization": 0.39 },   // Montana
+  "us_wv": { "population": 931725, "urbanization": 0.57 },   // West Virginia
+  "us_ak": { "population": 930314, "urbanization": 0.60 },   // Alaska
+  "us_wy": { "population": 877697, "urbanization": 0.34 },   // Wyoming
+  "us_nh": { "population": 843282, "urbanization": 0.68 },   // New Hampshire
+  "us_sd": { "population": 725086, "urbanization": 0.54 },   // South Dakota
+  "us_me": { "population": 654810, "urbanization": 0.58 },   // Maine
+  "us_nd": { "population": 626588, "urbanization": 0.57 },   // North Dakota
+  "us_vt": { "population": 385595, "urbanization": 0.32 },   // Vermont
+
+  // UZB Uzbekistan: 33,580,650
+  "uz_to": { "population": 8477188, "urbanization": 0.58 },   // Tashkent
+  "uz_ng": { "population": 8145471, "urbanization": 0.56 },   // Namangan
+  "uz_qr": { "population": 3864858, "urbanization": 0.33 },   // Karakalpakstan
+  "uz_qa": { "population": 3491974, "urbanization": 0.46 },   // Qashqadaryo
+  "uz_sa": { "population": 3473159, "urbanization": 0.56 },   // Samarqand
+  "uz_ji": { "population": 2848708, "urbanization": 0.21 },   // Jizzakh
+  "uz_su": { "population": 1696994, "urbanization": 0.43 },   // Surxondaryo
+  "uz_nw": { "population": 989037, "urbanization": 0.52 },   // Navoiy
+  "uz_bu": { "population": 593261, "urbanization": 0.97 },   // Bukhara
+
+  // VEN Venezuela: 28,515,829
+  "ve_d": { "population": 9981021, "urbanization": 0.95 },   // Aragua
+  "ve_v": { "population": 4394457, "urbanization": 0.94 },   // Zulia
+  "ve_k": { "population": 2934721, "urbanization": 0.83 },   // Lara
+  "ve_f": { "population": 2087701, "urbanization": 0.84 },   // Bolívar
+  "ve_n": { "population": 1767880, "urbanization": 0.83 },   // Monagas
+  "ve_b": { "population": 1738315, "urbanization": 0.89 },   // Anzoátegui
+  "ve_l": { "population": 1329595, "urbanization": 0.91 },   // Merida
+  "ve_i": { "population": 1023043, "urbanization": 0.65 },   // Falcón
+  "ve_j": { "population": 949523, "urbanization": 0.77 },   // Guárico State
+  "ve_p": { "population": 744182, "urbanization": 0.88 },   // Portuguesa
+  "ve_e": { "population": 572185, "urbanization": 0.79 },   // Barinas
+  "ve_c": { "population": 308100, "urbanization": 0.68 },   // Apure
+  "ve_y": { "population": 256434, "urbanization": 0.55 },   // Delta Amacuro
+  "ve_z": { "population": 223045, "urbanization": 0.44 },   // Amazonas
+  "ve_h": { "population": 205627, "urbanization": 0.58 },   // Cojedes
+
+  // VNM Vietnam: 96,462,106
+  "vn_hn": { "population": 15921357, "urbanization": 0.45 },   // Hanoi
+  "vn_41": { "population": 14837173, "urbanization": 0.44 },   // Long An
+  "vn_ct": { "population": 13787247, "urbanization": 0.28 },   // Cần Thơ
+  "vn_39": { "population": 13334219, "urbanization": 0.36 },   // Đông Nam Bộ
+  "vn_54": { "population": 10881213, "urbanization": 0.46 },   // Bắc Giang
+  "vn_27": { "population": 7027379, "urbanization": 0.51 },   // Quảng Nam
+  "vn_35": { "population": 4968416, "urbanization": 0.40 },   // Lâm Đồng
+  "vn_30": { "population": 3885733, "urbanization": 0.40 },   // Gia Lai
+  "vn_53": { "population": 3708057, "urbanization": 0.30 },   // Northeast Vietnam
+  "vn_22": { "population": 2350365, "urbanization": 0.35 },   // Nghệ An
+  "vn_24": { "population": 2268554, "urbanization": 0.27 },   // Quảng Bình
+  "vn_33": { "population": 1586270, "urbanization": 0.33 },   // Đắk Lắk
+  "vn_05": { "population": 840734, "urbanization": 0.05 },   // Sơn La
+  "vn_02": { "population": 793872, "urbanization": 0.18 },   // Lào Cai
+  "vn_71": { "population": 271517, "urbanization": 0.05 },   // Điện Biên
+
+  // YEM Yemen: 29,161,922
+  "ye_la": { "population": 8540872, "urbanization": 0.42 },   // Lahij
+  "ye_sn": { "population": 5795337, "urbanization": 0.65 },   // Sanaa
+  "ye_dh": { "population": 3102400, "urbanization": 0.26 },   // Dhamar
+  "ye_hd": { "population": 2568024, "urbanization": 0.29 },   // Hadhramaut
+  "ye_hj": { "population": 1907450, "urbanization": 0.22 },   // Hajjah
+  "ye_hu": { "population": 1763957, "urbanization": 0.97 },   // Al Hudaydah
+  "ye_sd": { "population": 1455596, "urbanization": 0.14 },   // Sa'dah
+  "ye_ma": { "population": 1166664, "urbanization": 0.05 },   // Ma'rib
+  "ye_sh": { "population": 890961, "urbanization": 0.08 },   // Shabwah
+  "ye_ja": { "population": 733444, "urbanization": 0.05 },   // Al Jawf
+  "ye_mr": { "population": 664803, "urbanization": 0.08 },   // Al Mahrah
+  "ye_ab": { "population": 572414, "urbanization": 0.05 },   // Abyan
+
+  // ZAF South Africa: 58,558,270
+  "za_gt": { "population": 16069557, "urbanization": 0.94 },   // Gauteng
+  "za_nl": { "population": 9932603, "urbanization": 0.66 },   // KwaZulu-Natal
+  "za_wc": { "population": 9774174, "urbanization": 0.72 },   // Western Cape
+  "za_ec": { "population": 7697946, "urbanization": 0.52 },   // Eastern Cape
+  "za_fs": { "population": 4051463, "urbanization": 0.59 },   // Free State
+  "za_mp": { "population": 3743698, "urbanization": 0.45 },   // Mpumalanga
+  "za_lp": { "population": 3218666, "urbanization": 0.35 },   // Limpopo
+  "za_nw": { "population": 2547332, "urbanization": 0.53 },   // North West
+  "za_nc": { "population": 1522831, "urbanization": 0.34 },   // Northern Cape
+
+  // ZMB Zambia: 17,861,030
+  "zm_08": { "population": 3990159, "urbanization": 0.72 },   // Copperbelt
+  "zm_09": { "population": 3379047, "urbanization": 0.65 },   // Lusaka
+  "zm_07": { "population": 2412519, "urbanization": 0.28 },   // Southern
+  "zm_02": { "population": 2063111, "urbanization": 0.53 },   // Central
+  "zm_10": { "population": 1373048, "urbanization": 0.06 },   // Muchinga
+  "zm_05": { "population": 1224381, "urbanization": 0.38 },   // Northern
+  "zm_06": { "population": 1166855, "urbanization": 0.16 },   // Northwestern
+  "zm_01": { "population": 892948, "urbanization": 0.26 },   // Western
+  "zm_03": { "population": 709215, "urbanization": 0.29 },   // Eastern
+  "zm_04": { "population": 649747, "urbanization": 0.28 },   // Luapula
+
+  // ZWE Zimbabwe: 14,645,468
+  "zw_me": { "population": 3369392, "urbanization": 0.59 },   // Mashonaland East
+  "zw_mw": { "population": 2520951, "urbanization": 0.25 },   // Mashonaland West
+  "zw_mn": { "population": 2189019, "urbanization": 0.40 },   // Matabeleland North
+  "zw_ma": { "population": 2101458, "urbanization": 0.16 },   // Manicaland
+  "zw_mc": { "population": 1440477, "urbanization": 0.13 },   // Mashonaland Central
+  "zw_ms": { "population": 1278661, "urbanization": 0.09 },   // Matabeleland South
+  "zw_mi": { "population": 1098172, "urbanization": 0.38 },   // Midlands
+  "zw_mv": { "population": 647338, "urbanization": 0.21 }   // Masvingo
+}

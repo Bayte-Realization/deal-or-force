@@ -339,6 +339,8 @@ public static class Program
                     TradeAnswersToItsGovernment(sandbox));
                 failures += Check("the world makes what the world needs",
                     TheWorldMakesWhatItNeeds(sandbox));
+                failures += Check("a region holds the people who live in it",
+                    RegionsHoldTheirPeople());
                 failures += Check("a peace can be written, priced, refused and signed",
                     APeaceCanBeWritten(sandbox));
                 failures += Check("a moved border leaves a national minority behind",
@@ -1614,6 +1616,14 @@ public static class Program
                 if (army.ProvinceId <= 0) { afloat++; continue; }
 
                 total++;
+                // A formation marching through on its way to a post elsewhere is part of the
+                // army and not part of the pile: it is leaving. Counting it stood the check on
+                // the timing of a snapshot - Iran's sixteen divisions on their post were well
+                // inside what a four-province front allows, and seven more passing through the
+                // same province towards the other posts made it "a pile". One that has stopped
+                // short of its post, with no road left, is standing there and still counts.
+                if (army.Route.Count > 0 && army.OrderProvinceId > 0 && army.OrderProvinceId != army.ProvinceId)
+                    continue;
                 byProvince[army.ProvinceId] = byProvince.GetValueOrDefault(army.ProvinceId) + 1;
             }
             if (total < enough) continue;
@@ -4351,6 +4361,79 @@ public static class Program
     /// generated file nothing verifies is a file that drifts from the game the first time
     /// somebody edits the generator.
     /// </summary>
+    /// <summary>
+    /// A region holds the people who live in it, and a country's farms and factories do not
+    /// depend on how finely the map happens to cut it.
+    ///
+    /// A country's people used to be dealt almost evenly across its regions - Magadan as big
+    /// as Moscow, Iowa as Florida - and each region rounded its own farms and factories down,
+    /// so a country cut into many small regions opened with a farm apiece and no industry at
+    /// all: Russia, France, Britain, Turkey and Poland among them. The people are now where
+    /// history/states/2024/20_population.json says, and the buildings are counted for the
+    /// country and dealt to its regions.
+    /// </summary>
+    private static string RegionsHoldTheirPeople()
+    {
+        // Its own world: the sandbox's regions have been fought over by the time this runs.
+        var campaign = Campaign.CreateBootstrap(20240302);
+        var byId = campaign.States.ToDictionary(state => state.Id, StringComparer.OrdinalIgnoreCase);
+        foreach (var (big, small, factor) in new[] { ("ru_mow", "ru_mag", 20.0), ("ru_len", "ru_chu", 20.0), ("us_fl", "us_ia", 3.0) })
+        {
+            if (!byId.TryGetValue(big, out var many) || !byId.TryGetValue(small, out var few))
+                return $"the map has no region {(byId.ContainsKey(big) ? small : big)}";
+            if (many.Population < few.Population * factor)
+                return $"{many.Name} holds {many.Population:N0} people and {few.Name} {few.Population:N0}: " +
+                       "the deal is still spreading a country's people evenly";
+        }
+
+        // What the file writes is what the region has, and a country it lists is the sum of it.
+        var written = HistoryDataLoader.StatedPopulations(campaign);
+        if (written.Count < 1000)
+            return $"only {written.Count:N0} region(s) have a population written down";
+        var byIndex = campaign.States.ToDictionary(state => state.MapIndex);
+        var wrong = written.Where(pair => byIndex.TryGetValue(pair.Key, out var state) && state.Population != pair.Value)
+            .Select(pair => $"{byIndex[pair.Key].Id} has {byIndex[pair.Key].Population:N0}, the file says {pair.Value:N0}")
+            .Take(3).ToList();
+        if (wrong.Count > 0) return string.Join("; ", wrong);
+
+        // A city region is a city: more urban than its country, and holding fewer of its farms
+        // than its people alone would give it.
+        var moscow = byId["ru_mow"];
+        var russia = campaign.NationByTag("RUS");
+        if (moscow.Urbanization <= EconomySystem.NationalUrbanisation(russia))
+            return $"{moscow.Name} is {moscow.Urbanization:P0} urban, no more than Russia as a whole";
+        var russianFarms = campaign.StatesOf(russia).Sum(state => state.Buildings.GetValueOrDefault(BuildingKind.Agriculture));
+        var moscowFarms = moscow.Buildings.GetValueOrDefault(BuildingKind.Agriculture);
+        if (moscowFarms > 0 && moscowFarms >= russianFarms * (double)moscow.Population / Math.Max(1, russia.Population))
+            return $"{moscow.Name} holds {moscowFarms} of Russia's {russianFarms} farms - a city's share of the countryside";
+
+        // Farms and factories counted for the country.
+        var defines = campaign.Defines;
+        foreach (var tag in new[] { "RUS", "FRA", "GBR", "TUR", "POL" })
+        {
+            var nation = campaign.NationByTag(tag);
+            var regions = campaign.StatesOf(nation);
+            var industry = regions.Sum(state => state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry));
+            var farms = regions.Sum(state => state.Buildings.GetValueOrDefault(BuildingKind.Agriculture));
+            if (industry == 0)
+                return $"{nation.Name} opens with no civilian industry across {regions.Length} region(s)";
+            var expected = Math.Max(1, (int)Math.Round(regions.Sum(state => (double)state.Population) / defines.SeedPeoplePerFarm));
+            if (Math.Abs(farms - expected) > 1)
+                return $"{nation.Name} opens with {farms} farm(s) for {nation.Population:N0} people, where the country's " +
+                       $"figure is {expected}: the regions are rounding for themselves again";
+        }
+
+        // The markets were tuned against the world's old total, which the recount keeps.
+        var world = campaign.States.Sum(state => state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry));
+        if (world < 380 || world > 480)
+            return $"the world opens with {world:N0} civilian industries, outside the 380-480 the markets are tuned for";
+
+        Console.WriteLine($"  regions: {written.Count:N0} with their people written down; {byId["ru_mow"].Name} " +
+                          $"{byId["ru_mow"].Population:N0}, {byId["ru_mag"].Name} {byId["ru_mag"].Population:N0}; " +
+                          $"{world:N0} civilian industries in the world, none of the five countries above without them.");
+        return "";
+    }
+
     private static string TheRegionsOfTheWorldAreData()
     {
         // Its own world rather than the shared sandbox: by the time this runs, earlier

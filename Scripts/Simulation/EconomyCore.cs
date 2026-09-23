@@ -441,6 +441,11 @@ public static class EconomySystem
         // a catalogue that loads lazily loads after the first thing that needed it.
         var restingInflation = InflationCore.Weights.Base;
 
+        // How many people history/states says live in a region. The map's own figures are one
+        // number a country, and dealing that out almost evenly put as many people in Magadan
+        // as in Moscow; the regions' figures are in history/states/2024/20_population.json.
+        var written = HistoryDataLoader.StatedRegions(campaign);
+
         foreach (var nation in campaign.Nations)
         {
             nation.Inflation = restingInflation;
@@ -458,35 +463,50 @@ public static class EconomySystem
             // over every region discarded those numbers without saying so - which is how
             // the Andaman Islands ended up with fifty million people and Nakhchivan with
             // one and a half.
+            //
+            // A region history/states writes a number for has exactly that number, ahead of any
+            // compiled correction: the file is the figure a mod can change.
             var authored = new long[states.Length];
-            long claimed = 0;
+            var fixedAt = new long[states.Length];
+            var isFixed = new bool[states.Length];
+            long claimed = 0, settled = 0;
             for (var index = 0; index < states.Length; index++)
-                if (TerritorialTopology.AuthoredPopulation(states[index].MapIndex, out var stated))
+            {
+                if (written.TryGetValue(states[index].MapIndex, out var figures) && figures.Population is { } people)
+                {
+                    isFixed[index] = true;
+                    fixedAt[index] = people;
+                    settled += people;
+                }
+                else if (TerritorialTopology.AuthoredPopulation(states[index].MapIndex, out var stated))
                 {
                     authored[index] = stated;
                     claimed += stated;
                 }
+            }
 
             // If the authored regions between them claim more than the country has, they
             // are scaled to fit rather than allowed to invent people.
-            var remaining = nation.Population - claimed;
+            var remaining = nation.Population - settled - claimed;
             var scale = 1.0;
             if (remaining < 0 && claimed > 0)
             {
-                scale = nation.Population / (double)claimed;
+                scale = Math.Max(0, nation.Population - settled) / (double)claimed;
                 remaining = 0;
             }
+            remaining = Math.Max(0, remaining);
 
             // Nobody lives on a lake. Water regions are owned and drawn like any other, so
             // without this they take a full share of the country's population - which put two
             // million Ukrainians in the Kakhovka reservoir and forty-seven million Chinese in
             // Qinghai Lake, and took those people away from the land they actually live on.
             var free = Enumerable.Range(0, states.Length)
-                .Where(index => authored[index] == 0 && !LakeRegions.IsWaterState(states[index])).ToArray();
+                .Where(index => authored[index] == 0 && !isFixed[index] && !LakeRegions.IsWaterState(states[index]))
+                .ToArray();
             // Unless there is nowhere else: a country of nothing but water still has to put
             // its people somewhere, and losing them silently is worse than drowning them.
             if (free.Length == 0)
-                free = Enumerable.Range(0, states.Length).Where(index => authored[index] == 0).ToArray();
+                free = Enumerable.Range(0, states.Length).Where(index => authored[index] == 0 && !isFixed[index]).ToArray();
             var weights = free.Select(index => 0.75 + StableFraction(states[index].MapIndex) * 0.50).ToArray();
             var totalWeight = weights.Sum();
 
@@ -505,13 +525,107 @@ public static class EconomySystem
                 assigned += counts[index];
             }
             for (var index = 0; index < states.Length; index++)
-                if (authored[index] > 0) counts[index] = Math.Max(0, (long)(authored[index] * scale));
+                if (isFixed[index]) counts[index] = Math.Max(0, fixedAt[index]);
+                else if (authored[index] > 0) counts[index] = Math.Max(0, (long)(authored[index] * scale));
+
+            // Where the file wrote regions down, the country is the sum of them: raising one
+            // region in a mod raises the country, rather than being taken back from its
+            // neighbours or quietly lost. A country nobody wrote a region for keeps its own
+            // figure exactly as before.
+            if (isFixed.Any(value => value)) nation.Population = counts.Sum();
+
+            // How urban each region is: as history writes it where it does, and otherwise spread
+            // around the national figure the way it always was.
+            var urban = new float[states.Length];
+            for (var index = 0; index < states.Length; index++)
+                urban[index] = written.TryGetValue(states[index].MapIndex, out var figures) && figures.Urbanisation is { } share
+                    ? share
+                    : StateUrbanisation(nation, states[index].MapIndex);
 
             var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts);
-            var farming = StatedAgricultureScale(nation, states, counts);
+            var farming = StatedAgricultureScale(nation, states, counts, urban);
+            var buildings = SeedBuildings(campaign, nation, states, counts, urban);
             for (var index = 0; index < states.Length; index++)
-                SeedState(campaign, states[index], nation, counts[index], composition[index], farming);
+                SeedState(campaign, states[index], nation, counts[index], composition[index], farming, buildings[index],
+                    urban[index]);
         }
+    }
+
+    /// <summary>
+    /// How many farms and factories each region opens with, decided for the country first.
+    ///
+    /// Each region used to work out its own and round down: a farm per four million people
+    /// with at least one, and a factory per five million town-dwellers. That made the count
+    /// depend on how finely the map happened to cut the country rather than on the country.
+    /// Russia is seventy-nine regions of under two million, so it opened with seventy-nine
+    /// farms - twice what its people call for - and not one factory; France, Britain, Turkey
+    /// and Poland the same. China, in thirty-two regions of forty million, had a hundred and
+    /// seventy-three. The total now comes from all of a country's people at once and is handed
+    /// to its regions by largest remainder, so it is the same however the map is drawn and a
+    /// region still gets the part of it its own people account for.
+    ///
+    /// Which people: the country's farms go where its countryside is and its factories where
+    /// its towns are. The number of farms is still a farm per so many people - that is what
+    /// the markets were tuned against - but a city region holds few of them.
+    /// </summary>
+    internal static (int Farms, int Industry)[] SeedBuildings(Campaign campaign, Nation nation,
+        IReadOnlyList<ScenarioState> states, IReadOnlyList<long> counts, IReadOnlyList<float> urban = null)
+    {
+        var defines = campaign?.Defines ?? new Defines();
+        var rural = new double[states.Count];
+        var industry = new double[states.Count];
+        double everyone = 0;
+        for (var index = 0; index < states.Count; index++)
+        {
+            var people = Math.Max(0, counts[index]);
+            everyone += people;
+            var share = urban is null ? StateUrbanisation(nation, states[index].MapIndex) : urban[index];
+            rural[index] = people * (1.0 - share);
+            industry[index] = people * (double)share / MathF.Max(1f, defines.SeedUrbanPeoplePerIndustry);
+        }
+
+        // The old floor of one farm, kept for the country rather than for each of its regions:
+        // a country with anybody in it farms somewhere, however small it is.
+        var farmTotal = (int)Math.Round(everyone / MathF.Max(1f, defines.SeedPeoplePerFarm));
+        if (farmTotal == 0 && everyone > 0) farmTotal = 1;
+        var countryside = rural.Sum();
+        var farms = new double[states.Count];
+        for (var index = 0; index < states.Count; index++)
+            farms[index] = countryside > 0
+                ? farmTotal * rural[index] / countryside
+                : everyone > 0 ? farmTotal * Math.Max(0, counts[index]) / everyone : 0;
+        var farmShares = LargestRemainder(farms, farmTotal, counts);
+        var industryShares = LargestRemainder(industry, (int)Math.Round(industry.Sum()), counts);
+
+        var result = new (int Farms, int Industry)[states.Count];
+        for (var index = 0; index < states.Count; index++) result[index] = (farmShares[index], industryShares[index]);
+        return result;
+    }
+
+    /// <summary>
+    /// Whole shares of a whole total, in proportion to exact ones: everybody gets the whole
+    /// part of theirs, and what is left goes one at a time to the largest fractions. Ties go to
+    /// the more populous region and then to the earlier one, so the answer is the same on every
+    /// machine.
+    /// </summary>
+    internal static int[] LargestRemainder(IReadOnlyList<double> exact, int total, IReadOnlyList<long> people)
+    {
+        var shares = new int[exact.Count];
+        var given = 0;
+        for (var index = 0; index < exact.Count; index++)
+        {
+            shares[index] = (int)Math.Floor(Math.Max(0, exact[index]));
+            given += shares[index];
+        }
+        if (given >= total) return shares;
+        var order = Enumerable.Range(0, exact.Count)
+            .OrderByDescending(index => Math.Max(0, exact[index]) - shares[index])
+            .ThenByDescending(index => people[index])
+            .ThenBy(index => index)
+            .ToArray();
+        for (var step = 0; given < total && order.Length > 0; step++, given++)
+            shares[order[step % order.Length]]++;
+        return shares;
     }
 
     /// <summary>
@@ -905,7 +1019,7 @@ public static class EconomySystem
     }
 
     internal static void SeedState(Campaign campaign, ScenarioState state, Nation nation, long population) =>
-        SeedState(campaign, state, nation, population, null, (1f, 1f));
+        SeedState(campaign, state, nation, population, null, (1f, 1f), null);
 
     /// <summary>
     /// Fill one region with the people who live in it.
@@ -919,22 +1033,28 @@ public static class EconomySystem
     ///
     /// Groups below a thousandth of the region are folded away. They are noise on any chart
     /// and they are a tenth of the simulation's population objects.
+    ///
+    /// <paramref name="buildings"/> is the region's part of its country's farms and factories
+    /// (see SeedBuildings). Without it - one region seeded on its own - the region works out
+    /// its own, the old way. <paramref name="urbanisation"/> likewise: how urban history says
+    /// the region is, or null for the spread around the national figure.
     /// </summary>
     internal static void SeedState(Campaign campaign, ScenarioState state, Nation nation, long population,
-        IReadOnlyList<(string Culture, float Share)> composition, (float Fields, float Town) farming)
+        IReadOnlyList<(string Culture, float Share)> composition, (float Fields, float Town) farming,
+        (int Farms, int Industry)? buildings, float? urbanisation = null)
     {
         var defines = campaign?.Defines ?? new Defines();
         state.Population = population;
         state.Literacy = M.Clamp01(nation.Literacy + (StableFraction(state.MapIndex + 17) - 0.5f) * 0.12f);
         state.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + (StableFraction(state.MapIndex + 31) - 0.5f) * 0.10f);
         state.Radicalism = M.Clamp01((0.52f - state.StandardOfLiving) * 0.40f);
-        state.Urbanization = StateUrbanisation(nation, state.MapIndex);
+        state.Urbanization = urbanisation ?? StateUrbanisation(nation, state.MapIndex);
         state.PopulationGroups.Clear();
         BuildGroups(state, nation, population, composition, farming);
-        state.Buildings[BuildingKind.Agriculture] =
+        state.Buildings[BuildingKind.Agriculture] = buildings?.Farms ??
             Math.Max(1, (int)(population / MathF.Max(1f, defines.SeedPeoplePerFarm)));
-        state.Buildings[BuildingKind.CivilianIndustry] = Math.Max(0, (int)(population * state.Urbanization /
-            MathF.Max(1f, defines.SeedUrbanPeoplePerIndustry)));
+        state.Buildings[BuildingKind.CivilianIndustry] = buildings?.Industry ?? Math.Max(0, (int)(population *
+            state.Urbanization / MathF.Max(1f, defines.SeedUrbanPeoplePerIndustry)));
         state.Buildings[BuildingKind.Infrastructure] =
             Math.Max(1, (int)(state.Urbanization * defines.SeedInfrastructurePerUrbanisation));
         SeedResources(state, nation);
@@ -1112,37 +1232,66 @@ public static class EconomySystem
     /// because the curve bends. The average of a bent line is not the line at the average -
     /// aiming at the midpoint left Rwanda ten points too agricultural and Liberia ten points
     /// too little, in opposite directions, which is exactly the signature of that mistake.
+    ///
+    /// And solved rather than divided. Each region is normalised on its own after the fields
+    /// are scaled, so a region's share of farmers is k·f / (k·f + 1 − f) for its own f, not k·f:
+    /// dividing the stated figure by the believed one is right only while every region sits
+    /// near the same f. It did, while regions were spread a few points around the national
+    /// urbanisation; once they carry their own - Moscow nearly all town, the steppe behind it
+    /// nearly none - Guyana came out seven points more agricultural than it says it is. The
+    /// ratio that actually delivers the stated figure is found by bisection instead.
     /// </summary>
     private static (float Fields, float Town) StatedAgricultureScale(Nation nation,
-        IReadOnlyList<ScenarioState> states, IReadOnlyList<long> counts)
+        IReadOnlyList<ScenarioState> states, IReadOnlyList<long> counts, IReadOnlyList<float> urbanisation)
     {
         var trades = DemographyCatalog.Professions;
         if (nation.AgricultureShare <= 0f || trades.Count == 0) return (1f, 1f);
 
-        double farmed = 0, everything = 0;
+        var people = new List<double>();
+        var fieldShare = new List<double>();
+        double everything = 0;
         for (var index = 0; index < states.Count; index++)
         {
-            var people = Math.Max(0, counts[index]);
-            if (people <= 0) continue;
-            var urban = StateUrbanisation(nation, states[index].MapIndex);
-            double here = 0, fields = 0;
+            var here = Math.Max(0, counts[index]);
+            if (here <= 0) continue;
+            double all = 0, fields = 0;
             foreach (var trade in trades)
             {
-                var share = Math.Max(0f, trade.ShareAt(urban));
-                here += share;
+                var share = Math.Max(0f, trade.ShareAt(urbanisation[index]));
+                all += share;
                 if (trade.Sector == Sector.Agriculture) fields += share;
             }
-            if (here <= 0) continue;
-            farmed += people * (fields / here);
-            everything += people;
+            if (all <= 0) continue;
+            people.Add(here);
+            fieldShare.Add(fields / all);
+            everything += here;
         }
-        if (everything <= 0 || farmed <= 0) return (1f, 1f);
+        if (everything <= 0 || fieldShare.All(share => share <= 0)) return (1f, 1f);
 
-        var believed = farmed / everything;
         var stated = M.Clamp(nation.AgricultureShare, 0.001f, 0.95f);
-        // Scale the fields by one factor and everything else by another, so the two together
-        // still fill the country: no trade is invented and none is quietly lost.
-        return ((float)(stated / believed), (float)((1 - stated) / Math.Max(0.0001, 1 - believed)));
+        double Farming(double ratio)
+        {
+            double farmers = 0;
+            for (var index = 0; index < people.Count; index++)
+            {
+                var f = fieldShare[index];
+                var denominator = ratio * f + (1 - f);
+                if (denominator > 0) farmers += people[index] * ratio * f / denominator;
+            }
+            return farmers / everything;
+        }
+
+        // Farming rises with the ratio, from nobody at zero towards everybody who can farm at
+        // all, so the answer is bracketed and bisection on its logarithm finds it.
+        double low = -12, high = 12;
+        for (var step = 0; step < 60; step++)
+        {
+            var middle = (low + high) / 2;
+            if (Farming(Math.Exp(middle)) < stated) low = middle; else high = middle;
+        }
+        // The fields scaled and the towns left alone: only the ratio between them survives each
+        // region's normalisation, so no trade is invented and none is quietly lost.
+        return ((float)Math.Exp((low + high) / 2), 1f);
     }
 
     private static PopulationGroup Add(ScenarioState state, string culture, string religion,
