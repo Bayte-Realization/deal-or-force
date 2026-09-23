@@ -1,0 +1,352 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace DealOrForce.Simulation;
+
+public sealed partial class ScenarioState
+{
+    /// <summary>
+    /// Land that belongs to nobody by design, which any country able to reach it may settle.
+    /// Set by history ("owner": "none"), cleared the day a colony is founded.
+    /// </summary>
+    public bool Unclaimed;
+
+    /// <summary>
+    /// The map index of the country settling it, or 0 - the map's own "nobody", which a
+    /// country's id is not: the first country in the table has id 0. One settler at a time:
+    /// whoever lands first has the field.
+    /// </summary>
+    public int ColonistMapIndex;
+
+    /// <summary>How far the settlement has got, from nothing to a colony.</summary>
+    public float ColonisationProgress;
+}
+
+public sealed partial class Defines
+{
+    /// <summary>What founding a colony costs whatever its size, in the treasury's money.</summary>
+    public float ColonisationCostBase { get; set; } = 2.0f;
+
+    /// <summary>
+    /// And for each province of it, taken as a square root: a region twice the size is not
+    /// twice the work to plant a flag in, and Antarctica is nine thousand provinces of ice.
+    /// </summary>
+    public float ColonisationCostPerProvinceRoot { get; set; } = 0.3f;
+
+    /// <summary>How long a colony takes to found whatever its size, in days.</summary>
+    public int ColonisationDaysBase { get; set; } = 180;
+
+    /// <summary>And for each province, again as a square root.</summary>
+    public float ColonisationDaysPerProvinceRoot { get; set; } = 4f;
+
+    /// <summary>
+    /// The settlers who found it, taken from the colonising country's most populous region -
+    /// at most a hundredth of that region, so nobody empties a province to plant a flag.
+    /// </summary>
+    public int ColonistsOnFounding { get; set; } = 2000;
+
+    /// <summary>How many colonies one country may be founding at once.</summary>
+    public int MaxColoniesAtOnce { get; set; } = 1;
+
+    /// <summary>
+    /// The chance each month that a country nobody plays sets out to settle land it can reach
+    /// and afford. Small, because it is asked of every such country: on 1 January 2024 about
+    /// fifty can afford the small Antarctic region and fourteen the ice sheet, which at this
+    /// rate leaves the first a year or so and the second some four years before anybody goes.
+    /// </summary>
+    public float AiColonisationChancePerMonth { get; set; } = 0.0015f;
+
+    /// <summary>How many times the price a country nobody plays wants in the treasury before it spends it on a colony.</summary>
+    public float AiColonisationTreasuryMultiple { get; set; } = 4f;
+}
+
+/// <summary>
+/// Land nobody owns, and how somebody comes to own it (item 60).
+///
+/// Every region on the map belonged to a country, so a world that had anywhere left to claim -
+/// a colonial-era scenario, or Antarctica under its treaty today - could not be written at
+/// all. A region can now be nobody's: history marks it "owner": "none", its provinces stay
+/// unowned when the map is attached, and it is drawn as the grey of ground no flag flies over.
+///
+/// A country that can reach it may settle it: over land from a province of its own next to
+/// it, or by sea from a coast of its own when the land is coastal. It pays once, waits while
+/// the settlement grows, and the region is its own the day it is founded, with the settlers
+/// who founded it. One settler at a time holds the field. A country nobody plays does the same
+/// when it has the money and nothing better to do.
+/// </summary>
+public static class ColonisationCore
+{
+    public static bool IsUnclaimed(ScenarioState state) =>
+        state is { Unclaimed: true, NationMapIndex: 0 } && !LakeRegions.IsWaterState(state);
+
+    public static int Provinces(Campaign campaign, ScenarioState state) =>
+        campaign?.ProvinceMap is null || state is null
+            ? 0
+            : PeaceConference.ProvincesOfState(campaign.ProvinceMap, state.MapIndex).Count;
+
+    /// <summary>What founding a colony here costs.</summary>
+    public static float Cost(Campaign campaign, ScenarioState state)
+    {
+        var defines = campaign.Defines;
+        return defines.ColonisationCostBase +
+               defines.ColonisationCostPerProvinceRoot * MathF.Sqrt(Provinces(campaign, state));
+    }
+
+    /// <summary>How many days it takes.</summary>
+    public static int Days(Campaign campaign, ScenarioState state)
+    {
+        var defines = campaign.Defines;
+        return Math.Max(1, defines.ColonisationDaysBase +
+                           (int)MathF.Round(defines.ColonisationDaysPerProvinceRoot * MathF.Sqrt(Provinces(campaign, state))));
+    }
+
+    /// <summary>
+    /// Whether a country can get settlers there: across a land border from ground of its own,
+    /// or by sea, when both the land and the country have a coast.
+    /// </summary>
+    public static bool Reaches(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || nation is null || state is null) return false;
+        var own = (ushort)nation.MapIndex;
+        foreach (var province in PeaceConference.ProvincesOfState(map, state.MapIndex))
+            foreach (var neighbour in map.Neighbors[province])
+                if (map.ProvinceToNation[neighbour] == own) return true;
+
+        if (Waterfront.OfRegion(campaign, state) != WaterAccess.Sea) return false;
+        foreach (var region in campaign.StatesOf(nation))
+            if (Waterfront.OfRegion(campaign, region) == WaterAccess.Sea) return true;
+        return false;
+    }
+
+    /// <summary>Who is settling a region, or null.</summary>
+    public static Nation Colonist(Campaign campaign, ScenarioState state) =>
+        state is null || state.ColonistMapIndex == 0
+            ? null
+            : campaign.Nations.FirstOrDefault(nation => nation.MapIndex == state.ColonistMapIndex);
+
+    /// <summary>How many colonies a country is founding now.</summary>
+    public static int Settling(Campaign campaign, Nation nation) =>
+        nation is null ? 0 : campaign.States.Count(state => state.ColonistMapIndex == nation.MapIndex);
+
+    /// <summary>Why this country cannot start settling this region now, or empty when it can.</summary>
+    public static string Refusal(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        if (campaign is null || nation is null || state is null) return Loc.Get("Choose a region.");
+        if (!IsUnclaimed(state)) return Loc.Get("Only land that belongs to nobody can be settled.");
+        if (state.ColonistMapIndex == nation.MapIndex) return Loc.Get("Our settlers are already there.");
+        if (state.ColonistMapIndex != 0)
+            return Loc.Format("{0} is already settling it.",
+                Colonist(campaign, state)?.DisplayName ?? Loc.Get("Somebody"));
+        if (Settling(campaign, nation) >= campaign.Defines.MaxColoniesAtOnce)
+            return Loc.Get("Our settlers are already busy founding another colony.");
+        if (!Reaches(campaign, nation, state))
+            return Loc.Get("We cannot reach it: it borders none of our land, and we have no coast to sail from.");
+        var cost = Cost(campaign, state);
+        if (nation.Treasury < cost)
+            return Loc.Format("Founding a colony here costs {0:0.00}; the treasury holds {1:0.00}.", cost, nation.Treasury);
+        return "";
+    }
+
+    /// <summary>Send the settlers: paid for now, and a colony in <see cref="Days"/>.</summary>
+    public static bool Start(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        if (Refusal(campaign, nation, state).Length > 0) return false;
+        nation.Treasury -= Cost(campaign, state);
+        state.ColonistMapIndex = nation.MapIndex;
+        state.ColonisationProgress = 0f;
+        DiagnosticLogs.Write("simulation",
+            $"COLONY_STARTED nation={nation.Tag} region={state.Id} days={Days(campaign, state)} day={campaign.ElapsedDays}");
+        campaign.MarkStrategicChange();
+        return true;
+    }
+
+    /// <summary>Bring the settlers home. What was spent is spent.</summary>
+    public static bool Abandon(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        if (nation is null || state is null || state.ColonistMapIndex != nation.MapIndex) return false;
+        state.ColonistMapIndex = 0;
+        state.ColonisationProgress = 0f;
+        DiagnosticLogs.Write("simulation", $"COLONY_ABANDONED nation={nation.Tag} region={state.Id} day={campaign.ElapsedDays}");
+        campaign.MarkStrategicChange();
+        return true;
+    }
+
+    /// <summary>A day of settling, and a month's thinking for the countries nobody plays. Once a day.</summary>
+    public static void Tick(Campaign campaign)
+    {
+        if (campaign?.ProvinceMap is null) return;
+        foreach (var state in campaign.States)
+        {
+            if (state.ColonistMapIndex == 0) continue;
+            var nation = Colonist(campaign, state);
+            // Somebody else got there, or the settlers' country is gone.
+            if (nation is null || !IsUnclaimed(state))
+            {
+                state.ColonistMapIndex = 0;
+                state.ColonisationProgress = 0f;
+                continue;
+            }
+            // A country that has lost its way there - its coast, the border it crossed - waits.
+            if (!Reaches(campaign, nation, state)) continue;
+            // Half a day's grace on the finish: a day's share added up a few hundred times in
+            // single precision can land a hair short of one, and the colony would be a day late.
+            var days = Days(campaign, state);
+            state.ColonisationProgress += 1f / days;
+            if (state.ColonisationProgress >= 1f - 0.5f / days) Found(campaign, nation, state);
+        }
+        ThinkAboutColonies(campaign);
+    }
+
+    /// <summary>The colony is founded: the ground is theirs, and so are the people who came to it.</summary>
+    private static void Found(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        var map = campaign.ProvinceMap;
+        var own = (ushort)nation.MapIndex;
+        foreach (var province in PeaceConference.ProvincesOfState(map, state.MapIndex))
+        {
+            map.ProvinceToNation[province] = own;
+            if (campaign.ProvinceController is { } controllers && province < controllers.Length) controllers[province] = own;
+            if (campaign.ProvinceOccupation is { } occupation && province < occupation.Length) occupation[province] = 0f;
+        }
+        state.NationMapIndex = nation.MapIndex;
+        state.NationId = nation.Tag;
+        state.Unclaimed = false;
+        state.ColonistMapIndex = 0;
+        state.ColonisationProgress = 0f;
+
+        // The settlers, from wherever the country has most people to spare.
+        var source = campaign.StatesOf(nation).Where(region => region.MapIndex != state.MapIndex)
+            .OrderByDescending(region => region.Population).FirstOrDefault();
+        var settlers = source is null ? 0 : Math.Min(campaign.Defines.ColonistsOnFounding, source.Population / 100);
+        if (settlers > 0)
+        {
+            EconomySystem.AdjustStatePopulation(source, -settlers);
+            var culture = DemographyCatalog.PrimaryCulture(nation.Tag);
+            state.PopulationGroups.Add(new PopulationGroup
+            {
+                Class = SocialClass.Lower,
+                Sector = Sector.Industry,
+                Culture = culture,
+                Religion = DemographyCatalog.FaithOf(culture)[0].Religion,
+                Profession = "labourers",
+                Size = settlers,
+                Employment = 0.90f,
+                Wealth = 0.40f,
+                StandardOfLiving = nation.StandardOfLiving,
+                Radicalism = 0f
+            });
+            state.Population += settlers;
+        }
+
+        DiagnosticLogs.Write("simulation",
+            $"COLONY_FOUNDED nation={nation.Tag} region={state.Id} settlers={settlers} day={campaign.ElapsedDays}");
+        campaign.InvalidateStateIndex();
+        campaign.MarkMapChanged();
+        campaign.MarkStrategicChange();
+    }
+
+    /// <summary>
+    /// A country nobody plays settles land it can reach when it is at peace, has several times
+    /// the price to spare, and is not already founding a colony - once in a while, not the
+    /// moment it becomes possible. Each country thinks on its own day of the month.
+    ///
+    /// Whether it does this month comes from a hash of the country and the month rather than
+    /// from the campaign's random stream: drawing from that stream here would move every
+    /// random roll after it, and a world whose other wars turn on a roll is a world that should
+    /// not change because somebody considered Antarctica.
+    /// </summary>
+    private static void ThinkAboutColonies(Campaign campaign)
+    {
+        var open = campaign.States.Where(state => IsUnclaimed(state) && state.ColonistMapIndex == 0).ToList();
+        if (open.Count == 0) return;
+        var defines = campaign.Defines;
+        var month = campaign.ElapsedDays / 30;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.IsHuman || nation.Population <= 0) continue;
+            if (campaign.ElapsedDays % 30 != Math.Abs(nation.Id) % 30) continue;
+            if (Settling(campaign, nation) >= defines.MaxColoniesAtOnce) continue;
+            if (campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id))) continue;
+            if (Chance(nation.Id, month) >= defines.AiColonisationChancePerMonth) continue;
+
+            ScenarioState best = null;
+            var bestCost = float.MaxValue;
+            foreach (var state in open)
+            {
+                if (state.ColonistMapIndex != 0) continue;
+                var cost = Cost(campaign, state);
+                if (cost >= bestCost || nation.Treasury < cost * defines.AiColonisationTreasuryMultiple) continue;
+                if (!Reaches(campaign, nation, state)) continue;
+                best = state;
+                bestCost = cost;
+            }
+            if (best is not null) Start(campaign, nation, best);
+        }
+    }
+
+    private static float Chance(int nation, int month)
+    {
+        unchecked
+        {
+            var hash = (uint)(nation * 73856093) ^ (uint)(month * 19349663) ^ 0x9E3779B9u;
+            hash ^= hash >> 16; hash *= 0x7FEB352Du; hash ^= hash >> 15; hash *= 0x846CA68Bu; hash ^= hash >> 16;
+            return (hash >> 8) * (1f / 16777216f);
+        }
+    }
+}
+
+/// <summary>
+/// Regions history says belong to nobody, made to belong to nobody on the ground too. Run when
+/// the map is attached, after the political map and before the region list is made to agree
+/// with it - so the provinces of an unclaimed region are unowned before anything reads them,
+/// and a region whose record says "nobody" is not handed back to whoever the raster names.
+/// </summary>
+public static class UnclaimedLand
+{
+    public static int ApplyToGround(Campaign campaign, ProvinceTopology topology, ushort[] controllers)
+    {
+        if (campaign is null || topology is null) return 0;
+        var unclaimed = new HashSet<int>(campaign.States.Where(ColonisationCore.IsUnclaimed).Select(state => state.MapIndex));
+        if (unclaimed.Count == 0) return 0;
+        var cleared = 0;
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            if (!unclaimed.Contains(topology.ProvinceToState[province])) continue;
+            topology.ProvinceToNation[province] = 0;
+            if (controllers is not null && province < controllers.Length) controllers[province] = 0;
+            cleared++;
+        }
+        return cleared;
+    }
+}
+
+/// <summary>Send settlers to a region nobody owns. See ColonisationCore.</summary>
+public sealed class ColoniseCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int StateMapIndex { get; init; }
+    public bool Started { get; private set; }
+
+    public void Apply(Campaign campaign)
+    {
+        var nation = campaign.NationById(IssuerId);
+        var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
+        Started = ColonisationCore.Start(campaign, nation, state);
+    }
+}
+
+/// <summary>Call the settlers home. See ColonisationCore.</summary>
+public sealed class AbandonColonyCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int StateMapIndex { get; init; }
+
+    public void Apply(Campaign campaign)
+    {
+        var nation = campaign.NationById(IssuerId);
+        var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
+        ColonisationCore.Abandon(campaign, nation, state);
+    }
+}

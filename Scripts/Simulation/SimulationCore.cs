@@ -713,6 +713,9 @@ public sealed partial class Campaign
             // condition this reads.
             using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
 
+            // Settlers on land nobody owns, and whether anybody new sets out for it.
+            ColonisationCore.Tick(this);
+
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.
             CapitalCore.Tick(this);
@@ -837,6 +840,10 @@ public sealed partial class Campaign
         ProvinceController = (ushort[])topology.ProvinceToNation.Clone();
         var politicalOverrides = ScenarioId == "2024" ? ProvinceOwnership.Apply(this, topology, ProvinceController) : 0;
         if (politicalOverrides > 0) PoliticalOverridesApplied = politicalOverrides;
+        // And where history says nobody owns the land, nobody does - whatever the raster
+        // painted there. Before the region list is reconciled with the ground below, which
+        // would otherwise hand the region straight back to the raster's owner.
+        UnclaimedLand.ApplyToGround(this, topology, ProvinceController);
         ProvinceOccupation = new float[topology.ProvinceCount + 1];
 
         // A fleet's home port is a province, and provinces only exist once the map is

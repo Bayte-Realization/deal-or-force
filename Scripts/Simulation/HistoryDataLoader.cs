@@ -255,6 +255,7 @@ public static class HistoryDataLoader
     {
         using var document = Parse(json);
         var populationChanged = new HashSet<int>();
+        var ownersChanged = false;
         var regions = RegionLookup(campaign);
         foreach (var entry in document.RootElement.EnumerateObject())
         {
@@ -265,6 +266,23 @@ public static class HistoryDataLoader
                 continue;
             }
             var value = entry.Value;
+            // Land that belongs to nobody (ColonisationCore). Before the population, so that
+            // the country it is taken from has its own figure recounted without it. Who owns
+            // land is otherwise the province map's business (provinces/ownership.csv), and a
+            // tag here would be a second answer to that question, so "none" is the only one.
+            if (value.TryGetProperty("owner", out var owner))
+            {
+                if (owner.ValueKind == JsonValueKind.String &&
+                    string.Equals(owner.GetString(), "none", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (state.NationMapIndex != 0) populationChanged.Add(state.NationMapIndex);
+                    state.Unclaimed = true;
+                    state.NationMapIndex = 0;
+                    state.NationId = "";
+                    ownersChanged = true;
+                }
+                else errors?.Add($"State '{entry.Name}': \"owner\" can only be \"none\"; who owns a province is set in history/provinces/ownership.csv.");
+            }
             // The kind first: TryGetInt64 throws rather than answering false on a string, and a
             // quoted number in a mod's file would otherwise cost the whole file.
             if (value.TryGetProperty("population", out var population) &&
@@ -293,6 +311,7 @@ public static class HistoryDataLoader
                 ApplyCultureMix(state, nationalities, errors);
         }
 
+        if (ownersChanged) campaign.InvalidateStateIndex();
         foreach (var mapIndex in populationChanged)
         {
             var nation = campaign.Nations.FirstOrDefault(item => item.MapIndex == mapIndex);

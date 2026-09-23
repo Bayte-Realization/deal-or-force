@@ -1,0 +1,20 @@
+// Deal or Force - Land that belongs to nobody, and settling it.
+//
+// Every key here overrides the value compiled into Defines.cs (ColonisationCore.cs). A key
+// no file mentions keeps its compiled value, so a balance mod only lists what it changes.
+//
+// A colony costs ColonisationCostBase plus ColonisationCostPerProvinceRoot for every
+// province of it, taken as a square root, and takes ColonisationDaysBase plus
+// ColonisationDaysPerProvinceRoot days on the same scale. Antarctica is 9,203 provinces:
+// about 30.8 in the treasury's money and 564 days. The small Antarctic region is 135:
+// about 5.5 and 226 days.
+{
+  "ColonisationCostBase": 2.0,
+  "ColonisationCostPerProvinceRoot": 0.3,
+  "ColonisationDaysBase": 180,
+  "ColonisationDaysPerProvinceRoot": 4,
+  "ColonistsOnFounding": 2000,
+  "MaxColoniesAtOnce": 1,
+  "AiColonisationChancePerMonth": 0.0015,
+  "AiColonisationTreasuryMultiple": 4
+}

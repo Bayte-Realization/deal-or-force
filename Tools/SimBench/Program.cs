@@ -3263,24 +3263,32 @@ public static class Program
         var topology = campaign.ProvinceMap;
         if (topology is null) return "";
 
+        // Land history says belongs to nobody (ColonisationCore) is the one place the ground and
+        // the owner are meant to differ: the raster still paints Antarctica as a country. There
+        // the answer is nobody - and it has to be nobody, in every province of the region.
+        var unclaimed = campaign.States.Where(ColonisationCore.IsUnclaimed).Select(state => state.MapIndex).ToHashSet();
+        var nobodys = 0;
         var checkedProvinces = 0;
         var wrong = new List<string>();
+        string Tag(int mapIndex) =>
+            campaign.Nations.Find(nation => nation.MapIndex == mapIndex)?.Tag ?? $"#{mapIndex}";
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var cell = topology.ProvinceCenterCell[province];
             if (cell < 0 || cell >= Globality.EarthData.Control.Length) continue;
             var ground = Globality.EarthData.Control[cell];
+            var owner = topology.ProvinceToNation[province];
+            if (unclaimed.Contains(topology.ProvinceToState[province]))
+            {
+                checkedProvinces++;
+                if (owner == 0) { nobodys++; continue; }
+                wrong.Add(wrong.Count < 4 ? $"province {province:N0} is in land nobody owns and belongs to {Tag(owner)}" : "");
+                continue;
+            }
             if (ground == 0) continue;
             checkedProvinces++;
-            var owner = topology.ProvinceToNation[province];
             if (owner == ground) continue;
-            if (wrong.Count < 4)
-            {
-                string Tag(int mapIndex) =>
-                    campaign.Nations.Find(nation => nation.MapIndex == mapIndex)?.Tag ?? $"#{mapIndex}";
-                wrong.Add($"province {province:N0} stands on {Tag(ground)} ground and belongs to {Tag(owner)}");
-            }
-            else wrong.Add("");
+            wrong.Add(wrong.Count < 4 ? $"province {province:N0} stands on {Tag(ground)} ground and belongs to {Tag(owner)}" : "");
         }
 
         if (wrong.Count > 0)
@@ -3288,7 +3296,7 @@ public static class Program
                    $"country they are standing on: {string.Join("; ", wrong.Where(entry => entry.Length > 0))}";
 
         Console.WriteLine($"  geography: all {checkedProvinces:N0} provinces belong to the country whose " +
-                          "ground they are drawn on.");
+                          $"ground they are drawn on, or to nobody where history says so ({nobodys:N0}).");
         return "";
     }
 

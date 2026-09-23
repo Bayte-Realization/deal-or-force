@@ -449,6 +449,7 @@ public partial class DealOrForceGame : Control
 
         _globe = new GlobePresentation();
         _globe.CountryPicked += OnCountryPicked;
+        _globe.UnclaimedPicked += OnUnclaimedPicked;
         _globe.ArmyPicked += OnArmyPicked;
         _globe.FleetPicked += OnFleetPicked;
         _globe.BattlePicked += ShowBattleDetails;

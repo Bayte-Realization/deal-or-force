@@ -185,7 +185,10 @@ public partial class DealOrForceGame
         }
 
         var query = _pickerSearch?.Text?.Trim() ?? "";
+        // A country with no land is not one you can play: Antarctica's, once its ice
+        // belongs to nobody, or one a war has already swallowed.
         var matches = _campaign.Nations
+            .Where(nation => _campaign.StatesOf(nation).Length > 0)
             .Where(nation => query.Length == 0 ||
                 nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||

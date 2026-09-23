@@ -920,6 +920,36 @@ politics. To change that, edit `map_data/region_overrides.json` and rebuild the 
 
 The template: `mods/_templates/border_redraw`.
 
+### Land that belongs to nobody
+
+A region can belong to no country at all. In a `history/states` file:
+
+```json
+{ "aq_x01": { "owner": "none", "population": 0 } }
+```
+
+Its provinces are then unowned whatever the map painted there, it is drawn in the grey of land no
+flag flies over, and it opens with nobody's name on it. `"none"` is the only owner this key takes -
+who owns a province is otherwise `history/provinces/ownership.csv`, and two answers to one
+question would disagree sooner or later. The base game uses it for Antarctica
+(`history/states/2024/30_unclaimed.json`), which no state holds under the 1959 treaty; a
+colonial-era scenario would list its unclaimed regions the same way.
+
+Any country that can reach such a region may settle it - across a land border from a province of
+its own, or by sea when both the region and the country have a coast. Clicking the region shows
+what it costs and how long it takes; the country pays once, the settlers work for the given
+number of days, and on the last one the region is its own, with the settlers (taken from its most
+populous region) living there. One country settles a region at a time, and a country founds one
+colony at a time. Countries nobody plays do the same, rarely, when they are at peace and have
+several times the price to spare.
+
+The numbers are in `common/defines/08_colonisation.json`: `ColonisationCostBase` and
+`ColonisationCostPerProvinceRoot` (the price grows with the square root of the region's
+provinces), `ColonisationDaysBase` and `ColonisationDaysPerProvinceRoot` (the same for time),
+`ColonistsOnFounding`, `MaxColoniesAtOnce`, `AiColonisationChancePerMonth` and
+`AiColonisationTreasuryMultiple`. From code, `ColonisationCore.Start` / `Abandon` or the
+`ColoniseCommand` / `AbandonColonyCommand` commands.
+
 ### Microstates and the raster
 
 Three countries had a place in the country table and not one cell on the map: the Vatican,

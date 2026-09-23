@@ -9,7 +9,7 @@ namespace DealOrForce.Simulation;
 /// 2024 scenario.  Geometry stays in the map layer; this record is the authoritative
 /// moddable political/economic identity of the state.
 /// </summary>
-public sealed class ScenarioState
+public sealed partial class ScenarioState
 {
     public int MapIndex;
     public int NationMapIndex;

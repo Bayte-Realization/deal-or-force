@@ -7,7 +7,7 @@ namespace DealOrForce.Simulation;
 /// change rather than a code change. Mods override individual fields; anything they
 /// do not mention keeps the value below.
 /// </summary>
-public sealed class Defines
+public sealed partial class Defines
 {
 	/// <summary>
 	/// How long a formation is left to reach the post it was sent to before the front

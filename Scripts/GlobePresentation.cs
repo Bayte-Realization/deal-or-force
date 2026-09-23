@@ -762,12 +762,29 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private bool TryPick(Vector2 pixel, out GlobePick pick, bool updateSelection = true)
     {
         pick = default;
+        if (!TryLocate(pixel, out var latitude, out var longitude, out var cell, out var provinceId)) return false;
+        var nationMapIndex = provinceId > 0 && _campaign?.ProvinceController is { } liveControllers
+            ? liveControllers[provinceId]
+            : SourceEarthData.Control[cell];
+        if (nationMapIndex == 0 || !_nationByMapIndex.TryGetValue(nationMapIndex, out var nation))
+            return false;
+        return FinishPick(nation, latitude, longitude, cell, provinceId, updateSelection, out pick);
+    }
+
+    /// <summary>
+    /// Where on the Earth a pixel of the screen is: latitude and longitude, the raster cell,
+    /// and the province under it (0 or less when the map has no provinces yet). False off the
+    /// edge of the globe or the flat map.
+    /// </summary>
+    private bool TryLocate(Vector2 pixel, out float latitude, out float longitude, out int cell, out int provinceId)
+    {
+        latitude = longitude = 0f;
+        cell = 0;
+        provinceId = -1;
         if (!IsInstanceValid(_camera)) return false;
 
         var origin = _camera.ProjectRayOrigin(pixel);
         var direction = _camera.ProjectRayNormal(pixel).Normalized();
-        float latitude;
-        float longitude;
         if (_flatMap)
         {
             if (Mathf.Abs(direction.Z) < 0.0001f) return false;
@@ -795,14 +812,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         var x = Mathf.Clamp((int)((longitude + 180f) / 360f * SourceEarthData.Width), 0, SourceEarthData.Width - 1);
         var y = Mathf.Clamp((int)((90f - latitude) / 180f * SourceEarthData.Height), 0, SourceEarthData.Height - 1);
-        var cell = y * SourceEarthData.Width + x;
-        var provinceId = _provinceTopology is null ? -1 : _provinceTopology.CellToProvince[cell];
-        var nationMapIndex = provinceId > 0 && _campaign?.ProvinceController is { } liveControllers
-            ? liveControllers[provinceId]
-            : SourceEarthData.Control[cell];
-        if (nationMapIndex == 0 || !_nationByMapIndex.TryGetValue(nationMapIndex, out var nation))
-            return false;
+        cell = y * SourceEarthData.Width + x;
+        provinceId = _provinceTopology is null ? -1 : _provinceTopology.CellToProvince[cell];
+        return true;
+    }
 
+    private bool FinishPick(Simulation.Nation nation, float latitude, float longitude, int cell, int provinceId,
+        bool updateSelection, out GlobePick pick)
+    {
         // The live region, not the authored one. `SourceEarthData.States` is the raster as
         // it was drawn: it still says the whole of Luhansk is one region long after a border
         // has cut it in two, so reading the panel off it answers about a region the player
@@ -1326,6 +1343,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                             else if (stack.Count > 1) ArmiesBoxPicked?.Invoke(stack);
                         }
                         else if (TryPick(button.Position, out var pick)) CountryPicked?.Invoke(pick);
+                        else if (TryPickUnclaimed(button.Position, out var unclaimed, out var unclaimedProvince))
+                            UnclaimedPicked?.Invoke(unclaimed, unclaimedProvince);
                     }
                     else
                     {
@@ -1497,7 +1516,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                            Simulation.ArmyVocabulary.StanceName(lead.Stance), lead.Planning)
                        : Simulation.Loc.Get("Click to select every independent division in this province."));
         }
-        if (!TryPick(atPosition, out var pick)) return "";
+        if (!TryPick(atPosition, out var pick)) return UnclaimedTooltip(atPosition);
         var state = pick.State is null
             ? Simulation.Loc.Get("Unmapped administrative area")
             : pick.State.DisplayName + " · " + Simulation.Loc.Get(pick.State.Kind);
