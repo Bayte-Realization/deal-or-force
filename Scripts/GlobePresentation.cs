@@ -236,6 +236,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     public event Action<IReadOnlyList<int>, bool> ProvincesBoxPainted;
 
+    /// <summary>
+    /// Every drag is a rectangle, with no Shift to hold - the conference's frame button. The
+    /// rectangle was only ever behind a modifier the hint mentioned in passing, so a player who
+    /// had asked for exactly this could not find it; a button on the table says it exists.
+    /// </summary>
+    public bool PaintBoxMode { get; set; }
+
     private bool _painting;
     private bool _paintingClaims;
     private int _lastPaintedProvince = -1;
@@ -678,13 +685,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             return true;
         }
 
-        // Shift turns the brush into a rectangle. Left takes what is inside it, right gives
-        // it back - the same two hands as the brush, so nothing new has to be learned.
+        // Shift, or the frame button, turns the brush into a rectangle. Left takes what is
+        // inside it, right gives it back - the same two hands as the brush, so nothing new has
+        // to be learned.
+        var framing = PaintBoxMode;
         if (inputEvent is InputEventMouseButton boxButton &&
             boxButton.ButtonIndex is MouseButton.Left or MouseButton.Right &&
-            (boxButton.ShiftPressed || _paintBoxing))
+            (boxButton.ShiftPressed || framing || _paintBoxing))
         {
-            if (boxButton.Pressed && boxButton.ShiftPressed)
+            if (boxButton.Pressed && (boxButton.ShiftPressed || framing))
             {
                 _paintBoxing = true;
                 _paintBoxClaims = boxButton.ButtonIndex == MouseButton.Left;

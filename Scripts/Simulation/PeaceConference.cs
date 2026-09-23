@@ -107,35 +107,39 @@ public static class PeaceConference
     /// <summary>
     /// Why the other side will not sign this, in words a player can act on. An empty
     /// string means they will.
+    ///
+    /// In the player's language: the conference prints this as it comes, and it used to come
+    /// in English whatever the table was set to - the one line on the screen that says what to
+    /// do next.
     /// </summary>
     public static string BlockReason(Campaign campaign, StrategicWar war, PeaceDemand demand)
     {
-        if (war is null || war.Ended) return "There is no war to end";
-        if (demand is null || demand.IsEmpty) return "The demand is empty; offer a white peace instead";
-        if (!war.Involves(demand.ProposerId)) return "You are not a belligerent in this war";
+        if (war is null || war.Ended) return Loc.Get("There is no war to end");
+        if (demand is null || demand.IsEmpty) return Loc.Get("The demand is empty; offer a white peace instead");
+        if (!war.Involves(demand.ProposerId)) return Loc.Get("You are not a belligerent in this war");
 
         var topology = campaign.ProvinceMap;
-        if (topology is null) return "The map is not ready";
+        if (topology is null) return Loc.Get("The map is not ready");
 
         var loser = campaign.NationById(demand.ProposerId == war.AttackerId ? war.DefenderId : war.AttackerId);
         foreach (var province in demand.Provinces)
             if (province <= 0 || province > topology.ProvinceCount ||
                 topology.ProvinceToNation[province] != (ushort)(loser?.MapIndex ?? -1))
-                return "The demand includes ground that is not theirs to give";
+                return Loc.Get("The demand includes ground that is not theirs to give");
 
         if (demand.Subjugate.Length > 0)
         {
             if (!SubjectCatalog.Knows(demand.Subjugate))
-                return $"There is no such arrangement as '{demand.Subjugate}'";
-            if (loser is null) return "There is nobody left to answer to you";
+                return Loc.Format("There is no such arrangement as '{0}'", demand.Subjugate);
+            if (loser is null) return Loc.Get("There is nobody left to answer to you");
             if (loser.OverlordId == demand.ProposerId)
-                return $"{loser.Name} already answers to you";
+                return Loc.Format("{0} already answers to you", loser.DisplayName);
             if (loser.OverlordId != 0)
-                return $"{loser.Name} answers to somebody else; that has to end first";
+                return Loc.Format("{0} answers to somebody else; that has to end first", loser.DisplayName);
             // A country you have taken entirely is not a country that can answer to you.
             // The demand has to leave something standing for the arrangement to be about.
             if (Claimable(campaign, war, demand.ProposerId).Count - demand.Provinces.Count <= 0)
-                return "A country you are annexing whole cannot also answer to you";
+                return Loc.Get("A country you are annexing whole cannot also answer to you");
         }
 
         var ledger = new PeaceLedger(campaign, war, demand.ProposerId);
@@ -150,7 +154,7 @@ public static class PeaceConference
         // both.
         var cost = ledger.Cost(Round(campaign, war, demand));
         if (cost > budget)
-            return $"They will not sign: the demand is worth {cost:0} and the war is worth {budget:0}";
+            return Loc.Format("They will not sign: the demand is worth {0:0} and the war is worth {1:0}", cost, budget);
         return "";
     }
 

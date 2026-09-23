@@ -79,12 +79,13 @@ public partial class DealOrForceGame
         _developerConsoleOutput.AddThemeFontSizeOverride("normal_font_size", 14);
         rows.AddChild(_developerConsoleOutput);
 
-        _developerConsoleInput = new LineEdit
+        // Through Placeholder rather than straight into the field, so the hint follows a change
+        // of language like every other caption instead of staying in the one it was built in.
+        _developerConsoleInput = Placeholder(new LineEdit
         {
-            PlaceholderText = Tr("Enter command…"),
             CustomMinimumSize = new Vector2(0, 38),
             ClearButtonEnabled = true
-        };
+        }, "Enter command…");
         _developerConsoleInput.TextSubmitted += ExecuteDeveloperCommand;
         _developerConsoleInput.GuiInput += ConsoleInputKey;
         rows.AddChild(_developerConsoleInput);

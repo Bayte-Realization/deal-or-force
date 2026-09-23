@@ -373,14 +373,6 @@ public partial class DealOrForceGame
             _campaign.Armies.Count(army => army.NationId == player.Id));
     }
 
-    /// <summary>How long this has been going on.</summary>
-    /// <summary>The verse `touchgrass` answers with. One key, so a translation is one line in a table.</summary>
-    private const string TouchGrassVerse =
-        "For a hundred years you steered the fate of states,\n" +
-        "Carved up the seas and moved the borders round.\n" +
-        "Outside, there is grass that no map ever drew.\n" +
-        "It is real. Go out and feel it on the ground.";
-
     /// <summary>Set once the game has been told to close, so asking twice does not start two clocks.</summary>
     private bool _touchingGrass;
 
@@ -391,21 +383,12 @@ public partial class DealOrForceGame
     /// </summary>
     private string ConsoleTouchGrass()
     {
-        var real = TimeSpan.FromMilliseconds(Time.GetTicksMsec());
-        var days = _campaign?.ElapsedDays ?? 0;
-        // Days until there are years to count. "0 year(s)" is a true statement and a useless
-        // one, and the comparison is the whole of the line.
-        var lived = days >= 365
-            ? Loc.Format(Simulation.Plural.Key("{0:N0} year of somebody else's", days / 365), days / 365)
-            : Loc.Format(Simulation.Plural.Key("{0:N0} day of somebody else's", days), days);
-        var tally = Loc.Format("{0:h\\:mm} of your life for {1}. The grass is outside and it is not modelled.",
-            real, lived);
         if (!_touchingGrass)
         {
             _touchingGrass = true;
             GetTree().CreateTimer(8.0, true).Timeout += () => GetTree().Quit();
         }
-        return Loc.Get(TouchGrassVerse) + "\n\n" + tally + "\n" +
+        return Simulation.ConsoleVerse.TouchGrass(Loc.Language) + "\n\n" +
                Loc.Get("The game closes in eight seconds. Nothing has been saved.");
     }
 

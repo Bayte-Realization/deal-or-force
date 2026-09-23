@@ -8189,12 +8189,14 @@ public static class Program
         var game = Path.Combine(Path.GetDirectoryName(scripts)!, "game");
         if (!Directory.Exists(game)) return "";
 
-        // Loading a campaign asks for nearly everything, and these two are asked for by the
-        // shell rather than the simulation - the options screen and the diagnostic channels -
-        // so the bench asks for them here rather than pretending nothing reads them.
+        // Loading a campaign asks for nearly everything, and these are asked for by the shell
+        // rather than the simulation - the options screen, the diagnostic channels, the skin and
+        // the console's verse - so the bench asks for them here rather than pretending nothing
+        // reads them.
         SettingsCatalog.ResetCatalog();
         DiagnosticLogs.ResetCatalog();
         InterfaceSkin.ResetCatalog();
+        if (ConsoleVerse.TouchGrass("english").Length == 0) return "the console's verse came back empty";
 
         var asked = new HashSet<string>(GameDataLoader.Asked, StringComparer.OrdinalIgnoreCase);
         if (asked.Count == 0) return "nothing has asked the loader for any data at all";

@@ -29,6 +29,9 @@ public partial class DealOrForceGame
     private Label _peaceHint = null!;
     private Label _peaceLegend = null!;
     private readonly Dictionary<string, Button> _peaceTermButtons = new();
+    private Button _peaceBrushButton;
+    private Button _peaceFrameButton;
+    private bool _peaceFraming;
     private PeaceDemand _peaceDemand;
     private PeaceLedger _peaceLedgerModel;
     private StrategicWar _peaceWar;
@@ -65,9 +68,23 @@ public partial class DealOrForceGame
         _peaceVerdict.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceVerdict);
 
+        // Two tools, the way a unit selection has two: a brush that goes province by province
+        // along a border, and a frame that takes or gives back everything inside a rectangle.
+        // The frame used to exist only as Shift held during a drag, mentioned once in the hint,
+        // which is as good as not existing.
+        var tools = new HBoxContainer();
+        tools.AddThemeConstantOverride("separation", 6);
+        rows.AddChild(tools);
+        _peaceBrushButton = ActionButton("Brush", () => SetPeaceFraming(false), 120, 32);
+        Tip(_peaceBrushButton, "Paint province by province: the left button takes, the right gives back.");
+        tools.AddChild(_peaceBrushButton);
+        _peaceFrameButton = ActionButton("Frame", () => SetPeaceFraming(true), 120, 32);
+        Tip(_peaceFrameButton, "Drag a rectangle: the left button takes everything inside it, the right gives it all back.");
+        tools.AddChild(_peaceFrameButton);
+
         _peaceHint = Title(
-            "Drag the left button across the map to claim ground · drag the right button to give it back · " +
-            "hold Shift and drag to take or release a whole rectangle · " +
+            "The left button takes ground, the right gives it back · the brush goes province by province, " +
+            "the frame takes or releases everything inside a rectangle (Shift does the same with the brush) · " +
             "click a region below to take or release all of it · " +
             "WASD and the middle mouse button move the camera",
             12, Ui.Colour("text.faint"));
@@ -138,12 +155,34 @@ public partial class DealOrForceGame
         actions.AddChild(cancel);
     }
 
+    /// <summary>Brush or frame. Kept between conferences: whoever chose the frame once wants it again.</summary>
+    private void SetPeaceFraming(bool framing)
+    {
+        _peaceFraming = framing;
+        if (_globe is not null && _peaceLayer is { Visible: true }) _globe.PaintBoxMode = framing;
+        if (IsInstanceValid(_peaceBrushButton)) StyleButton(_peaceBrushButton, !framing);
+        if (IsInstanceValid(_peaceFrameButton)) StyleButton(_peaceFrameButton, framing);
+    }
+
     private void AddPeaceTerm(Container parent, string key, string caption, string help)
     {
         var button = ActionButton(caption, () => TogglePeaceTerm(key), 300, 30);
-        button.TooltipText = Ui.Tip(help);
+        Tip(button, help);
         _peaceTermButtons[key] = button;
         parent.AddChild(button);
+    }
+
+    /// <summary>
+    /// "Make them a protectorate" is a sentence with a word put into it, not a key, so the
+    /// language sweep has nothing to translate it from: a player who changed language after
+    /// the game had started met the arrangements in English on an otherwise Russian table.
+    /// They are written again, in whatever the language is now, each time the table opens.
+    /// </summary>
+    private void RecaptionSubjectTerms()
+    {
+        foreach (var kind in SubjectCatalog.All)
+            if (_peaceTermButtons.TryGetValue("subject:" + kind.Id, out var button) && IsInstanceValid(button))
+                button.Text = Simulation.Loc.Format("Make them a {0}", Tr(kind.Name).ToLowerInvariant());
     }
 
     /// <summary>Open the table for a war the player is fighting.</summary>
@@ -160,6 +199,8 @@ public partial class DealOrForceGame
         if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _globe.PaintMode = true;
+        SetPeaceFraming(_peaceFraming);
+        RecaptionSubjectTerms();
         _globe.ProvincePainted -= OnProvincePainted;
         _globe.ProvincePainted += OnProvincePainted;
         _globe.ProvincesBoxPainted -= OnProvincesBoxPainted;
@@ -174,6 +215,7 @@ public partial class DealOrForceGame
         if (_peaceLayer is null) return;
         _peaceLayer.Visible = false;
         _globe.PaintMode = false;
+        _globe.PaintBoxMode = false;
         _globe.ProvincePainted -= OnProvincePainted;
         _globe.ProvincesBoxPainted -= OnProvincesBoxPainted;
         _globe.ClearPeacePreview();

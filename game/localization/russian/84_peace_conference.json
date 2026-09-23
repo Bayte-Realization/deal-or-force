@@ -1,0 +1,13 @@
+{
+  "There is no war to end": "Нет войны, которую нужно заканчивать",
+  "The demand is empty; offer a white peace instead": "Требование пустое — предложите белый мир",
+  "You are not a belligerent in this war": "Вы не участвуете в этой войне",
+  "The map is not ready": "Карта ещё не готова",
+  "The demand includes ground that is not theirs to give": "В требовании есть земля, которую они не могут отдать",
+  "There is no such arrangement as '{0}'": "Нет такого договора: «{0}»",
+  "There is nobody left to answer to you": "Не осталось никого, кто мог бы вам подчиняться",
+  "{0} already answers to you": "{0} уже подчиняется вам",
+  "{0} answers to somebody else; that has to end first": "{0} подчиняется другому; сначала это должно закончиться",
+  "A country you are annexing whole cannot also answer to you": "Страна, которую вы присоединяете целиком, не может ещё и подчиняться вам",
+  "They will not sign: the demand is worth {0:0} and the war is worth {1:0}": "Они не подпишут: требование стоит {0:0}, а война — {1:0}"
+}

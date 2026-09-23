@@ -307,9 +307,9 @@ defines          every rule constant the game computes with
 
 `help` lists them. `commands` lists them with descriptions.
 
-And yes, there are unserious ones. `touchgrass` tells you how much of your life went into the
-campaign and reminds you that grass is outside and is not simulated. That is an honest joke:
-the time counted is real.
+And yes, there are unserious ones. `touchgrass` reads you a verse about the grass outside and
+closes the game eight seconds later, without saving - it takes its own advice. The verse is
+`game/common/console/00_touchgrass.json`, one entry per language, and yours to rewrite.
 
 > **The best way to learn:** pause, run `blame` on a number that surprised you, and read the
 > breakdown. This game can explain its own numbers — which is not always true in the genre.

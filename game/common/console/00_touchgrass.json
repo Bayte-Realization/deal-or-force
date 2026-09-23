@@ -1,0 +1,11 @@
+{
+  // What the console's `touchgrass` says before it closes the game, eight seconds later.
+  //
+  // One entry per language, named after the language's folder under game/localization. A
+  // language without an entry of its own is given the English one. Lines are separated by \n.
+  // A mod can say something else by shipping a file of its own here; the later file wins.
+  "touchgrass": {
+    "english": "For a hundred years you steered the fate of states,\nCarved up the seas and moved the borders round.\nOutside, there is grass that no map ever drew.\nIt is real. Go out and feel it on the ground.",
+    "russian": "Ты сотню лет вершил судьбу держав,\nКроил моря и двигал рубежи.\nА за окном — трава, её нет в картах.\nОна живая. Выйди — подержи."
+  }
+}

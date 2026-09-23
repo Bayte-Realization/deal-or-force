@@ -559,7 +559,6 @@
   "{0} — people": "{0} — население",
   "{0}: {1}, {2} days. {3}": "{0}: {1}, {2} дн. {3}",
   "A record, for any country in the world. Nothing on this screen changes anything: what you can decide is in State Affairs.": "Сводка по любой стране мира. Ничто на этом экране ничего не меняет: то, что вы решаете, — в «Государственных делах».",
-  "Drag the left button across the map to claim ground · drag the right button to give it back · hold Shift and drag to take or release a whole rectangle · click a region below to take or release all of it · WASD and the middle mouse button move the camera": "Проведите левой кнопкой по карте, чтобы затребовать землю · правой — чтобы вернуть · с зажатым Shift — целым прямоугольником · щелчок по региону внизу берёт или отдаёт его целиком · WASD и средняя кнопка двигают камеру",
   "Draw the settlement on the map: claim the ground you mean to keep, priced against what the war is actually worth.": "Начертите урегулирование на карте: затребуйте землю, которую намерены оставить себе, — по цене того, чего война на самом деле стоит.",
   "Load troops\nTake aboard your divisions standing at this fleet's port. What fits is set by the hulls.": "Погрузить войска\nВзять на борт ваши дивизии, стоящие в порту этого флота. Сколько поместится, решают корабли.",
   "Smoothing rebuilds country, region and terrain boundaries so the map has no visible texel grid. Turn it off for the raster exactly as authored - pixels and all - which is also the cheaper picture on a slower machine (F3).": "Сглаживание перестраивает границы стран, регионов и рельефа так, чтобы на карте не было видно сетки текселей. Выключите его, чтобы увидеть растр ровно таким, каким он нарисован, — со всеми пикселями; это ещё и более дешёвая картинка на слабой машине (F3).",
@@ -885,5 +884,10 @@
   "Effects": "Эффекты",
   "Settings": "Настройки",
   "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu.": "Только для этой кампании — хранится в её сохранении. Новые кампании начинаются со значения из главного меню.",
-  "Where new campaigns start. A campaign keeps its own value once it has begun.": "С этого значения начинаются новые кампании. Начатая кампания хранит своё."
+  "Where new campaigns start. A campaign keeps its own value once it has begun.": "С этого значения начинаются новые кампании. Начатая кампания хранит своё.",
+  "The left button takes ground, the right gives it back · the brush goes province by province, the frame takes or releases everything inside a rectangle (Shift does the same with the brush) · click a region below to take or release all of it · WASD and the middle mouse button move the camera": "Левая кнопка забирает землю, правая возвращает · кисть идёт от провинции к провинции, рамка забирает или отдаёт всё внутри прямоугольника (с кистью то же делает Shift) · щелчок по региону внизу берёт или отдаёт его целиком · WASD и средняя кнопка двигают камеру",
+  "Brush": "Кисть",
+  "Frame": "Рамка",
+  "Paint province by province: the left button takes, the right gives back.": "Провинция за провинцией: левая кнопка забирает, правая возвращает.",
+  "Drag a rectangle: the left button takes everything inside it, the right gives it all back.": "Растяните рамку: левая кнопка забирает всё внутри, правая всё возвращает."
 }

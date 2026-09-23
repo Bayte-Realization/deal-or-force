@@ -352,8 +352,8 @@ public partial class DealOrForceGame
             "Everything the simulation knows about you, which is less than you would like.",
             _ => ConsoleWhoAmI());
         Add("touchgrass", "FUN", "touchgrass",
-            "A verse, how long this session has been going against how long the world has - and " +
-            "eight seconds later the game closes. It does not save first.",
+            "A verse, and eight seconds later the game closes. It does not save first. " +
+            "The verse is in game/common/console.",
             _ => ConsoleTouchGrass());
         Add("sudo", "FUN", "sudo [anything]",
             "There is nobody above you to ask.", ConsoleSudo);

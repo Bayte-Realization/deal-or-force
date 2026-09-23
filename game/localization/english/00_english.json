@@ -210,7 +210,6 @@
   "Divisions": "Divisions",
   "Divisions here": "Divisions here",
   "Drag the left button across the map to claim ground · drag the right button to give it back · ": "Drag the left button across the map to claim ground · drag the right button to give it back · ",
-  "Drag the left button across the map to claim ground · drag the right button to give it back · hold Shift and drag to take or release a whole rectangle · click a region below to take or release all of it · WASD and the middle mouse button move the camera": "Drag the left button across the map to claim ground · drag the right button to give it back · hold Shift and drag to take or release a whole rectangle · click a region below to take or release all of it · WASD and the middle mouse button move the camera",
   "Drag this bar to move the window. The map underneath stays live.": "Drag this bar to move the window. The map underneath stays live.",
   "Draw each country's name across its territory.": "Draw each country's name across its territory.",
   "DRAW ON THE MAP": "DRAW ON THE MAP",
@@ -850,5 +849,10 @@
   "≡": "≡",
   "▶": "▶",
   "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu.": "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu.",
-  "Where new campaigns start. A campaign keeps its own value once it has begun.": "Where new campaigns start. A campaign keeps its own value once it has begun."
+  "Where new campaigns start. A campaign keeps its own value once it has begun.": "Where new campaigns start. A campaign keeps its own value once it has begun.",
+  "The left button takes ground, the right gives it back · the brush goes province by province, the frame takes or releases everything inside a rectangle (Shift does the same with the brush) · click a region below to take or release all of it · WASD and the middle mouse button move the camera": "The left button takes ground, the right gives it back · the brush goes province by province, the frame takes or releases everything inside a rectangle (Shift does the same with the brush) · click a region below to take or release all of it · WASD and the middle mouse button move the camera",
+  "Brush": "Brush",
+  "Frame": "Frame",
+  "Paint province by province: the left button takes, the right gives back.": "Paint province by province: the left button takes, the right gives back.",
+  "Drag a rectangle: the left button takes everything inside it, the right gives it all back.": "Drag a rectangle: the left button takes everything inside it, the right gives it all back."
 }
