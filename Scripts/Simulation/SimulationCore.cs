@@ -716,6 +716,9 @@ public sealed partial class Campaign
             // Settlers on land nobody owns, and whether anybody new sets out for it.
             ColonisationCore.Tick(this);
 
+            // And whether any country nobody plays asks a smaller one to answer to it.
+            SubmissionSystem.Tick(this);
+
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.
             CapitalCore.Tick(this);

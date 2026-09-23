@@ -1,0 +1,33 @@
+// What two countries remember about one of them asking the other to answer to it - the ways
+// to a dependency that do not go through a war (SubmissionSystem).
+//
+// Asking is not free. A small country that is asked to give up its foreign policy and says no
+// minds having been asked; one whose politics a foreign embassy tried to buy minds a great
+// deal more, and for longer. The one that said yes chose it, and that is worth something too.
+{
+  // Asked, by protection or by money, and refused.
+  "sought_our_submission": {
+    "name": "Asked us to answer to them",
+    "opinion": -10,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // Tried to put a friendly government in, and failed. Everybody finds out.
+  "meddled_in_our_politics": {
+    "name": "Meddled in our politics",
+    "opinion": -30,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // And the other ending: it was asked, and it agreed.
+  "chose_to_answer_to_us": {
+    "name": "Chose to answer to them",
+    "opinion": 20,
+    "days": 3650,
+    "decays": true
+  }
+}

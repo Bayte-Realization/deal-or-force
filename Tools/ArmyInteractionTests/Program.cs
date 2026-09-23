@@ -66,6 +66,7 @@ static class Program
         if (args.Contains("--options-only")) { CampaignOptionsTests.Run(map); return; }
         if (args.Contains("--colony-only")) { ColonisationTests.Run(map); return; }
         if (args.Contains("--subject-only")) { SubjectIdentityTests.Run(map); return; }
+        if (args.Contains("--submission-only")) { SubmissionTests.Run(map); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();
         var border = BorderFronts.Candidates(c, rus.Id, ukr.Id);
@@ -237,5 +238,6 @@ static class Program
         CampaignOptionsTests.Run(map);
         ColonisationTests.Run(map);
         SubjectIdentityTests.Run(map);
+        SubmissionTests.Run(map);
     }
 }

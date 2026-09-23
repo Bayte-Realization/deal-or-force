@@ -6310,6 +6310,14 @@ public static class Program
             if (property.PropertyType == typeof(int) &&
                 entry.Value.TryGetInt32(out var whole) &&
                 whole == (int)property.GetValue(compiled)) continue;
+            // Words as well as numbers: which kind of dependency a route makes is a define
+            // (SubmissionProtectionKind), and the loader reads strings and enums by name.
+            if (property.PropertyType == typeof(string) &&
+                entry.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                string.Equals(entry.Value.GetString(), code, StringComparison.Ordinal)) continue;
+            if (property.PropertyType.IsEnum &&
+                entry.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
+                string.Equals(entry.Value.GetString(), code, StringComparison.OrdinalIgnoreCase)) continue;
             drifted.Add($"{entry.Name}: file {shipped}, code {code}");
         }
 

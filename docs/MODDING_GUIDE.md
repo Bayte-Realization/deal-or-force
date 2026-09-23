@@ -686,6 +686,33 @@ A worked example is `mods/_templates/statecraft`. The result is checked by the b
 `the world after 730 day(s)` counts the wars, annexations, trade agreements, pacts, alliances
 and rivalries over two years of a world nobody plays.
 
+### Dependency without a war
+
+A subject used to be something only a peace treaty could make. There are now three more ways,
+each a button beside the alliance in a foreign country's panel, and each ending in a row of
+`common/subjects`:
+
+- **Offer protection** - a protectorate. Costs nothing; weighed by how much the smaller country
+  fears somebody else (a war, or a relation as bad as a rivalry, with a country stronger than it).
+- **Buy influence** - a client state. Pays `SubmissionEconomicPayment` of the smaller country's
+  GDP, and only if it accepts; a trade agreement and a treasury in debt make it readier.
+- **Back a government** - a satellite. Costs `SubmissionPoliticalCost` of its GDP up front and
+  `SubmissionPoliticalNotoriety` of notoriety whether it works or not; shared ideology and a
+  shaky government make it readier.
+
+The smaller country decides, the way an alliance is decided, and the tooltip shows the terms
+before anything is spent: how it regards the asker, how much stronger the asker is (nothing
+below `SubmissionMinimumStrengthRatio`), and what the kind of dependency costs it - its
+`liberty_desire` times `SubmissionReluctanceScale` - plus the route's own reason. Above
+`SubmissionWillingness` is yes. A refusal is remembered (`common/opinion_modifiers/20_submission.json`)
+and the same country is not asked again for `SubmissionRefusalDays`. A player is never made a
+subject this way, a country with subjects of its own answers to nobody, and a subject cannot take
+subjects. Countries nobody plays do it too, rarely (`SubmissionAiChancePerMonth`), and only when
+the odds clear the bar by `SubmissionAiMargin`. Which row each route makes is a define as well
+(`SubmissionProtectionKind`, `SubmissionEconomicKind`, `SubmissionPoliticalKind`), so a mod can
+point a route at a kind of its own. Everything is in `common/defines/09_submission.json`; from code,
+`SubmissionSystem.Offer` or `OfferSubmissionCommand`.
+
 ## Terrain
 
 `common/terrain` is a catalogue, not an enumeration: a mod can **add a new terrain type without

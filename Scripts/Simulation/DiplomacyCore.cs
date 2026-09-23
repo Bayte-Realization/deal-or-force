@@ -57,6 +57,9 @@ public sealed class DiplomaticRelation
     /// <summary>When the current alliance was signed, for the screen that shows it.</summary>
     public int AllianceSinceDay = -9999;
 
+    /// <summary>When one of them last asked the other to answer to it and was told no (SubmissionSystem).</summary>
+    public int SubmissionAskedDay = -9999;
+
     public bool EmbargoBy(int nationId) => nationId == A ? EmbargoByA : EmbargoByB;
     public bool GuaranteedBy(int nationId) => nationId == A ? GuaranteeByA : GuaranteeByB;
 

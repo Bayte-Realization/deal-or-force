@@ -1,0 +1,38 @@
+// Deal or Force - Dependency without a war: protection, money and politics.
+//
+// Every key here overrides the value compiled into Defines.cs (SubmissionCore.cs). A key no
+// file mentions keeps its compiled value, so a balance mod only lists what it changes.
+//
+// The smaller country decides, as for an alliance: how it regards the asker (opinion / 100),
+// plus how much stronger the asker is (SubmissionStrengthWeight per tenfold beyond
+// SubmissionMinimumStrengthRatio), minus what the kind of dependency costs it (its
+// liberty_desire in common/subjects times SubmissionReluctanceScale), plus the route's own
+// reason. Above SubmissionWillingness is yes.
+{
+  "SubmissionWillingness": 0.5,
+  "SubmissionMinimumStrengthRatio": 3,
+  "SubmissionStrengthWeight": 0.6,
+  "SubmissionReluctanceScale": 2.5,
+  "SubmissionRefusalDays": 365,
+
+  // Protection: fear of somebody else.
+  "SubmissionThreatWeight": 0.6,
+
+  // Money: paid only if they accept, as a share of their GDP.
+  "SubmissionEconomicPayment": 0.25,
+  "SubmissionEconomicPaymentWeight": 0.35,
+
+  // Politics: paid up front, and noticed.
+  "SubmissionPoliticalCost": 0.15,
+  "SubmissionPoliticalNotoriety": 6,
+
+  // The countries nobody plays.
+  "SubmissionAiChancePerMonth": 0.01,
+  "SubmissionAiMargin": 0.15,
+  "SubmissionAiMaxSubjects": 3,
+
+  // Which row of common/subjects each route makes.
+  "SubmissionProtectionKind": "protectorate",
+  "SubmissionEconomicKind": "client",
+  "SubmissionPoliticalKind": "satellite"
+}

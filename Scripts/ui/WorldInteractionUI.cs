@@ -35,6 +35,7 @@ public partial class DealOrForceGame
         _guaranteeButton = ActionButton("Guarantee", ToggleSelectedGuarantee, 140, 32);
         pacts.AddChild(_allianceButton);
         pacts.AddChild(_guaranteeButton);
+        BuildSubmissionControls(_countryActions);
 
         _subjectActions = new HBoxContainer { Visible = false };
         _subjectActions.AddThemeConstantOverride("separation", 5);
@@ -334,6 +335,7 @@ public partial class DealOrForceGame
         ShowDependencies(nation);
         _countryActions.Visible = nation != _campaign.Player;
         RefreshPactButtons(nation);
+        RefreshSubmissionButtons(nation);
         _subjectActions.Visible = nation.AnswersTo(_campaign.Player.Id);
         if (_subjectActions.Visible)
         {
