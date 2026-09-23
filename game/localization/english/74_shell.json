@@ -83,5 +83,7 @@
   "HOST · {0:N0} PLAYERS · UDP {1}": "HOST · {0:N0} PLAYERS · UDP {1}",
   "CLIENT · {0} · {1}": "CLIENT · {0} · {1}",
   "a week": "a week",
-  "unknown": "unknown"
+  "unknown": "unknown",
+  "At this rate it also does:": "At this rate it also does:",
+  "While it lasts:": "While it lasts:"
 }

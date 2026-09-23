@@ -11,5 +11,8 @@
   "Urbanisation in every region": "Урбанизация во всех регионах",
   "Population of every region": "Население каждого региона",
   "Inflation": "Инфляция",
-  "Manpower": "Людские резервы"
+  "Manpower": "Людские резервы",
+  "Annual growth": "Годовой рост",
+  "{0} points a year": "{0} пункта в год",
+  "{0} points a week": "{0} пункта в неделю"
 }

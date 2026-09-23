@@ -23,37 +23,44 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     /// <summary>
-    /// The channels a policy pushes, in the units a player thinks in.
+    /// The channels a policy pushes, one line each, in the units a player thinks in - the same
+    /// "Stability: +0.12 points a week" shape events and decisions use (item 67). They were one
+    /// run-on sentence joined with dots, which is readable once and not comparable at all.
     ///
     /// Growth is quoted in percentage points a year because that is how growth is quoted;
     /// the rest move slowly enough that a week is the honest unit. A channel that does
     /// nothing is left out rather than printed as zero - a list of five zeroes is a list
     /// nobody reads to the end of.
     /// </summary>
-    private static string DescribeEffects(float growth, float living, float literacy,
+    private static List<string> EffectLines(float growth, float living, float literacy,
         float radicalism, float stability, float warSupport, float scale)
     {
-        var parts = new List<string>();
-        void Add(string key, float value, float factor)
+        var lines = new List<string>();
+        void Add(string label, string unit, float value)
         {
-            var amount = value * scale * factor;
+            // All six are stored as a fraction of a 0-to-1 quantity, so a hundred turns each
+            // of them into the percentage points a player reads them in on every other screen.
+            var amount = value * scale * 100f;
             // Matched to the two decimals it is about to be printed with: a smaller cutoff
             // lets through effects that render as "+0.00", which is a line of the tooltip
             // spent telling the player nothing.
             if (Math.Abs(amount) < 0.005f) return;
-            parts.Add(Simulation.Loc.Format(key, amount.ToString("+0.00;-0.00", CultureInfo.CurrentCulture)));
+            lines.Add(Simulation.Loc.Format("{0}: {1}", Tr(label),
+                Simulation.Loc.Format(unit, amount.ToString("+0.00;-0.00", CultureInfo.CurrentCulture))));
         }
 
-        // All six are stored as a fraction of a 0-to-1 quantity, so a hundred turns each of
-        // them into the percentage points a player reads them in on every other screen.
-        Add("annual growth {0} points", growth, 100f);
-        Add("standard of living {0} points a week", living, 100f);
-        Add("literacy {0} points a week", literacy, 100f);
-        Add("radicalism {0} points a week", radicalism, 100f);
-        Add("stability {0} points a week", stability, 100f);
-        Add("war support {0} points a week", warSupport, 100f);
-        return parts.Count == 0 ? "" : string.Join(" · ", parts);
+        Add("Annual growth", "{0} points a year", growth);
+        Add("Standard of living", "{0} points a week", living);
+        Add("Literacy", "{0} points a week", literacy);
+        Add("Radicalism", "{0} points a week", radicalism);
+        Add("Stability", "{0} points a week", stability);
+        Add("War support", "{0} points a week", warSupport);
+        return lines;
     }
+
+    /// <summary>A heading and its lines, indented under it the way every effect block is. Empty when there are none.</summary>
+    private static string EffectBlock(string heading, IReadOnlyList<string> lines) =>
+        lines.Count == 0 ? "" : heading + "\n" + string.Join("\n", lines.Select(line => "  " + line));
 
     private static string BasisName(BudgetLine line) => Tr(line.Charge switch
     {
@@ -90,13 +97,13 @@ public partial class DealOrForceGame
             return Ui.Tip(text);
         }
 
-        var doing = DescribeEffects(line.Growth, line.Living, line.Literacy,
+        var doing = EffectLines(line.Growth, line.Living, line.Literacy,
             line.Radicalism, line.Stability, 0f, rate - line.Neutral);
         // A levy that moves none of the six channels really is only moving money. Spending is
         // the other way round: what it buys - an army, a road, a hospital - is the point of it,
         // and saying it does nothing would be the tooltip calling the money wasted.
-        text += "\n" + (doing.Length > 0
-            ? Simulation.Loc.Format("At this rate it is also doing: {0}.", doing)
+        text += "\n" + (doing.Count > 0
+            ? EffectBlock(Tr("At this rate it also does:"), doing)
             : Tr(line.Side == BudgetSide.Revenue
                 ? "At this rate it does nothing but move money."
                 : "What this buys is the thing itself, not a change to the figures above."));
@@ -104,16 +111,13 @@ public partial class DealOrForceGame
         if (Math.Abs(line.Maximum - rate) > 0.0005f)
         {
             var atMax = BudgetCore.AmountAtRate(nation, line, weeklyOutput, atWar, line.Maximum);
-            var wound = DescribeEffects(line.Growth, line.Living, line.Literacy,
+            var wound = EffectLines(line.Growth, line.Living, line.Literacy,
                 line.Radicalism, line.Stability, 0f, line.Maximum - line.Neutral);
-            // Two frames rather than one frame with a hole that is sometimes empty: the
-            // join between the money and the effects is a piece of language, and ", and "
-            // is only one language's way of writing it.
-            var ceiling = line.Maximum.ToString("P0", CultureInfo.CurrentCulture);
-            text += "\n" + (wound.Length > 0
-                ? Simulation.Loc.Format("Wound up to {0}: {1} a week, and {2}.",
-                    ceiling, Fmt.Money(atMax), wound)
-                : Simulation.Loc.Format("Wound up to {0}: {1} a week.", ceiling, Fmt.Money(atMax)));
+            // The money is the heading and what the rate would do comes under it, line by line,
+            // so the two rates can be read against each other.
+            var ceiling = Simulation.Loc.Format("Wound up to {0}: {1} a week.",
+                line.Maximum.ToString("P0", CultureInfo.CurrentCulture), Fmt.Money(atMax));
+            text += "\n" + (wound.Count > 0 ? EffectBlock(ceiling, wound) : ceiling);
         }
 
         if (line.ResentedAbove > 0f)
@@ -133,9 +137,9 @@ public partial class DealOrForceGame
         var text = Tr(government.Description);
         text += "\n\n" + Simulation.Loc.Format("The centre decides {0} of it.",
             government.Centralisation.ToString("P0", CultureInfo.CurrentCulture));
-        var doing = DescribeEffects(government.Growth, government.Living, government.Literacy,
+        var doing = EffectLines(government.Growth, government.Living, government.Literacy,
             government.Radicalism, government.Stability, government.WarSupport, 1f);
-        if (doing.Length > 0) text += "\n" + Simulation.Loc.Format("While it lasts: {0}.", doing);
+        if (doing.Count > 0) text += "\n" + EffectBlock(Tr("While it lasts:"), doing);
         text += "\n" + Simulation.Loc.Format("Leaving it costs about {0} stability.",
             (PoliticsCore.BaseChangeCost * government.ChangeCost).ToString("P0", CultureInfo.CurrentCulture));
         return Ui.Tip(text);
@@ -144,9 +148,9 @@ public partial class DealOrForceGame
     private static string IdeologyTooltip(IdeologyDefinition ideology)
     {
         var text = Tr(ideology.Description);
-        var doing = DescribeEffects(ideology.Growth, ideology.Living, ideology.Literacy,
+        var doing = EffectLines(ideology.Growth, ideology.Living, ideology.Literacy,
             ideology.Radicalism, ideology.Stability, ideology.WarSupport, 1f);
-        if (doing.Length > 0) text += "\n\n" + Simulation.Loc.Format("While it lasts: {0}.", doing);
+        if (doing.Count > 0) text += "\n\n" + EffectBlock(Tr("While it lasts:"), doing);
         if (ideology.PrefersGovernments.Count > 0)
             text += "\n" + Simulation.Loc.Format("At home in: {0}. Anywhere else costs stability every week.",
                 string.Join(", ", ideology.PrefersGovernments
