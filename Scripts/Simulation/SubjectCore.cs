@@ -5,6 +5,23 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Nation
+{
+    /// <summary>
+    /// Whether this country answers to anybody - read from the kind, never from the id.
+    ///
+    /// "No overlord" is written as an id of zero, and zero is a country: the first in the
+    /// table, Indonesia. Everything that asked `OverlordId == indonesia.Id` was told yes about
+    /// every free country in the world, so a player in Jakarta saw two hundred subjects with
+    /// an Annex button each, and Indonesia's own subjects were skipped as free.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsSubject => !string.IsNullOrEmpty(SubjectType);
+
+    /// <summary>Whether this country is a subject of that one.</summary>
+    public bool AnswersTo(int overlordId) => IsSubject && OverlordId == overlordId;
+}
+
 /// <summary>One kind of dependency, as `common/subjects` describes it.</summary>
 public sealed class SubjectType
 {
@@ -190,12 +207,12 @@ public static class SubjectSystem
         var found = new List<Nation>();
         if (campaign is null || overlord is null) return found;
         foreach (var nation in campaign.Nations)
-            if (nation.OverlordId == overlord.Id) found.Add(nation);
+            if (nation.AnswersTo(overlord.Id)) found.Add(nation);
         return found;
     }
 
     public static Nation OverlordOf(Campaign campaign, Nation subject) =>
-        subject is null || subject.OverlordId == 0 ? null : campaign?.NationById(subject.OverlordId);
+        subject is null || !subject.IsSubject ? null : campaign?.NationById(subject.OverlordId);
 
     /// <summary>
     /// Make one country answer to another.
@@ -217,13 +234,13 @@ public static class SubjectSystem
             refusal = $"no such kind of dependency as '{typeId}'";
             return false;
         }
-        if (subject.OverlordId != 0)
+        if (subject.IsSubject)
         {
             refusal = $"{subject.Tag} already answers to " +
                       (campaign.NationById(subject.OverlordId)?.Tag ?? "somebody");
             return false;
         }
-        if (overlord.OverlordId == subject.Id)
+        if (overlord.AnswersTo(subject.Id))
         {
             refusal = $"{overlord.Tag} already answers to {subject.Tag}";
             return false;
@@ -255,7 +272,7 @@ public static class SubjectSystem
     /// <summary>Let one go. `broke` records whether it left rather than being released.</summary>
     public static void Release(Campaign campaign, Nation subject, bool broke = false)
     {
-        if (campaign is null || subject is null || subject.OverlordId == 0) return;
+        if (campaign is null || subject is null || !subject.IsSubject) return;
         var overlord = campaign.NationById(subject.OverlordId);
         subject.OverlordId = 0;
         subject.SubjectType = "";
@@ -282,7 +299,7 @@ public static class SubjectSystem
     {
         refusal = "";
         if (campaign is null || overlord is null || subject is null) { refusal = "no such country"; return false; }
-        if (subject.OverlordId != overlord.Id)
+        if (!subject.AnswersTo(overlord.Id))
         {
             refusal = $"{subject.Tag} does not answer to {overlord.Tag}";
             return false;
@@ -387,7 +404,7 @@ public static class SubjectSystem
 
         foreach (var subject in campaign.Nations)
         {
-            if (subject.OverlordId == 0) continue;
+            if (!subject.IsSubject) continue;
             var type = SubjectCatalog.Of(subject.SubjectType);
             var overlord = campaign.NationById(subject.OverlordId);
             if (type is null || overlord is null)

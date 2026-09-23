@@ -4196,7 +4196,7 @@ public static class Program
                 return "the Philippines at peace does not fly its own flag";
 
             var enemy = campaign.Nations.FirstOrDefault(
-                other => other.Id != philippines.Id && other.OverlordId == 0 &&
+                other => other.Id != philippines.Id && !other.IsSubject &&
                          CampaignDiplomacy.CanDeclareWar(campaign, other.Id, philippines.Id, out _));
             if (enemy is null)
                 return "nobody in the world was able to declare war on the Philippines";
@@ -6862,7 +6862,7 @@ public static class Program
         var block = PeaceConference.BlockReason(campaign, war, demand);
         if (block.Length > 0) return $"a puppet at a hundred war score was refused: {block}";
         if (!PeaceConference.Resolve(campaign, war, demand)) return "the settlement would not resolve";
-        if (loser.OverlordId != winner.Id) return "LUX signed and does not answer to FRA";
+        if (!loser.AnswersTo(winner.Id)) return "LUX signed and does not answer to FRA";
         if (!war.Ended) return "the war went on after the settlement that ended it";
         if (FlagCatalog.ValueOf("subject", campaign, loser) != "puppet")
             return "the flag search cannot see that LUX is a puppet";
@@ -6964,14 +6964,14 @@ public static class Program
         var counted = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var subject in campaign.Nations)
         {
-            if (subject.OverlordId == 0) continue;
+            if (!subject.IsSubject) continue;
             var overlord = campaign.NationById(subject.OverlordId);
             if (overlord is null)
                 return $"{subject.Tag} answers to country {subject.OverlordId}, which is not on the list";
             if (overlord.Id == subject.Id) return $"{subject.Tag} answers to itself";
             if (!SubjectCatalog.Knows(subject.SubjectType))
                 return $"{subject.Tag} answers as a '{subject.SubjectType}', which is not a kind";
-            if (overlord.OverlordId == subject.Id)
+            if (overlord.AnswersTo(subject.Id))
                 return $"{subject.Tag} and {overlord.Tag} answer to each other";
             if (subject.Population <= 0)
                 return $"{subject.Tag} answers to {overlord.Tag} and has nobody living in it";
@@ -7504,7 +7504,7 @@ public static class Program
         Estrange(campaign, subject, other);
         if (!SubjectSystem.Subjugate(campaign, overlord, subject, "puppet", out var refusal))
             return $"could not make LUX a puppet of FRA: {refusal}";
-        if (subject.OverlordId != overlord.Id) return "LUX does not think it answers to FRA";
+        if (!subject.AnswersTo(overlord.Id)) return "LUX does not think it answers to FRA";
 
         // Refusals that matter.
         if (SubjectSystem.Subjugate(campaign, other, subject, "puppet", out _))
@@ -8763,11 +8763,11 @@ public static class Program
         Nation aggressor = null;
         foreach (var candidate in campaign.Nations)
         {
-            if (candidate.Population < 5_000_000 || candidate.OverlordId != 0) continue;
+            if (candidate.Population < 5_000_000 || candidate.IsSubject) continue;
             foreach (var other in campaign.Nations)
             {
                 if (other.Id == candidate.Id || other.Population < 5_000_000) continue;
-                if (other.OverlordId != 0) continue;
+                if (other.IsSubject) continue;
                 if (!CampaignDiplomacy.CanDeclareWar(campaign, other.Id, candidate.Id, out _)) continue;
                 victim = candidate;
                 aggressor = other;
@@ -8783,7 +8783,7 @@ public static class Program
         {
             if (friends.Count == 3) break;
             if (candidate.Id == victim.Id || candidate.Id == aggressor.Id) continue;
-            if (candidate.Population < 2_000_000 || candidate.OverlordId != 0) continue;
+            if (candidate.Population < 2_000_000 || candidate.IsSubject) continue;
             if (!CampaignDiplomacy.CanDeclareWar(campaign, candidate.Id, aggressor.Id, out _)) continue;
             var bond = CampaignDiplomacy.Get(campaign, candidate.Id, victim.Id);
             bond.Stance = DiplomaticStance.Allied;

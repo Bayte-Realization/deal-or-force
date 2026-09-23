@@ -132,9 +132,9 @@ public static class PeaceConference
             if (!SubjectCatalog.Knows(demand.Subjugate))
                 return Loc.Format("There is no such arrangement as '{0}'", demand.Subjugate);
             if (loser is null) return Loc.Get("There is nobody left to answer to you");
-            if (loser.OverlordId == demand.ProposerId)
+            if (loser.AnswersTo(demand.ProposerId))
                 return Loc.Format("{0} already answers to you", loser.DisplayName);
-            if (loser.OverlordId != 0)
+            if (loser.IsSubject)
                 return Loc.Format("{0} answers to somebody else; that has to end first", loser.DisplayName);
             // A country you have taken entirely is not a country that can answer to you.
             // The demand has to leave something standing for the arrangement to be about.
@@ -478,7 +478,7 @@ public static class PeaceConference
         if (demand.Demilitarise) parts.Add($"the {loser.Name} armed forces were partially demobilised");
         if (demand.Humiliate) parts.Add($"{loser.Name} was publicly humbled");
         if (demand.LongTruce) parts.Add("a ten-year truce was signed");
-        if (demand.Subjugate.Length > 0 && loser.OverlordId == winner.Id)
+        if (demand.Subjugate.Length > 0 && loser.AnswersTo(winner.Id))
             parts.Add($"{loser.Name} became a " +
                       $"{SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate} of {winner.Name}");
         return parts.Count == 0

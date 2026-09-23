@@ -187,7 +187,7 @@ public partial class DealOrForceGame
                                          Simulation.Loc.Format("of its taxes, {0} last week",
                                              Fmt.Money(nation.TributePaidWeekly)));
             }
-            if (nation.OverlordId == _campaign.Player.Id || CanInspectNation(nation.Id))
+            if (nation.AnswersTo(_campaign.Player.Id) || CanInspectNation(nation.Id))
                 DetailRow("Wants out", $"{nation.LibertyDesire:P0}",
                     Tr("What it wants this week is worked out from how large it has grown, whether " +
                        "its overlord can govern itself, and whether that overlord is at war. At a " +
@@ -271,7 +271,7 @@ public partial class DealOrForceGame
     private void ReleaseSelectedSubject()
     {
         if (_campaign?.Player is null || _selectedNation is null) return;
-        if (_selectedNation.OverlordId != _campaign.Player.Id) return;
+        if (!_selectedNation.AnswersTo(_campaign.Player.Id)) return;
         var name = _selectedNation.DisplayName;
         SubjectSystem.Release(_campaign, _selectedNation);
         _countryActionFeedback.Text = Simulation.Loc.Format("{0} answers to nobody now.", name);
@@ -334,7 +334,7 @@ public partial class DealOrForceGame
         ShowDependencies(nation);
         _countryActions.Visible = nation != _campaign.Player;
         RefreshPactButtons(nation);
-        _subjectActions.Visible = nation.OverlordId == _campaign.Player.Id;
+        _subjectActions.Visible = nation.AnswersTo(_campaign.Player.Id);
         if (_subjectActions.Visible)
         {
             var may = SubjectSystem.MayAnnex(_campaign, _campaign.Player, nation, out var why);

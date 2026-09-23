@@ -133,13 +133,13 @@ public static class CampaignDiplomacy
         if (relation.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }
         if (relation.NonAggressionPact) { reason = Loc.Get("A non-aggression pact is active."); return false; }
         if (relation.TruceUntil > campaign.ElapsedDays) { reason = Loc.Format("Truce: {0} days remain.", relation.TruceUntil - campaign.ElapsedDays); return false; }
-        if (attacker.OverlordId != 0)
+        if (attacker.IsSubject)
         {
             // A country that answers to another one does not have a foreign policy of its
             // own, which is the whole of what the arrangement means. The kind says how much
             // of one it keeps.
             var overlord = campaign.NationById(attacker.OverlordId);
-            if (attacker.OverlordId == defenderId)
+            if (attacker.AnswersTo(defenderId))
             {
                 reason = Loc.Format("{0} answers to {1}, and has to stop first.", attacker.Tag, defender.Tag);
                 return false;

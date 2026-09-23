@@ -873,7 +873,8 @@ public partial class DealOrForceGame
         {
             war.Ended = true;
             war.EndedDay = _campaign.ElapsedDays;
-            war.WinnerId = 0;
+            // Nobody won: -1, as a war that has not ended says. Zero is Indonesia.
+            war.WinnerId = -1;
             war.PeaceSummary = "White peace, from the console.";
         }
         _campaign.MarkStrategicChange();
@@ -1406,7 +1407,7 @@ public partial class DealOrForceGame
     {
         if (_campaign is null) return "No campaign.";
         var target = ConsoleNation(argument);
-        if (target is null || target.OverlordId == 0)
+        if (target is null || !target.IsSubject)
             return "Usage: release LUX - and it has to answer to somebody.";
         var was = _campaign.NationById(target.OverlordId);
         SubjectSystem.Release(_campaign, target);

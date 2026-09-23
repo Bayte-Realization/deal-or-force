@@ -744,7 +744,7 @@ public static partial class AiStatecraft
         PeaceLedger ledger, PeaceDemand demand, float budget)
     {
         var loser = campaign.NationById(nation.Id == war.AttackerId ? war.DefenderId : war.AttackerId);
-        if (loser is null || loser.OverlordId != 0) return;
+        if (loser is null || loser.IsSubject) return;
 
         var claimable = PeaceConference.Claimable(campaign, war, nation.Id).Count;
         if (claimable == 0 || demand.Provinces.Count * 2 >= claimable) return;
@@ -1112,7 +1112,7 @@ public static partial class AiStatecraft
         var bestAnswer = float.MinValue;
         foreach (var other in Circle)
         {
-            if (other.Id == rival.Id || other.Id == nation.Id || other.OverlordId != 0) continue;
+            if (other.Id == rival.Id || other.Id == nation.Id || other.IsSubject) continue;
 
             var ours = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
             if (ours.GuaranteedBy(other.Id) || ours.Stance == DiplomaticStance.AtWar) continue;

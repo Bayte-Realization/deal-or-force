@@ -79,20 +79,22 @@ public static class AllianceSystem
 
         // A country that answers to another one does not have a foreign policy to pledge,
         // which is the whole of what answering to somebody means - see SubjectSystem.
-        if (proposer.OverlordId != 0)
+        if (proposer.IsSubject)
         {
             var overlord = campaign.NationById(proposer.OverlordId);
             refusal = $"{proposer.Tag} answers to {overlord?.Tag ?? "somebody"}; its alliances are theirs to make.";
             return false;
         }
-        if (target.OverlordId != 0)
+        if (target.IsSubject)
         {
             var overlord = campaign.NationById(target.OverlordId);
             refusal = $"{target.Tag} answers to {overlord?.Tag ?? "somebody"}; ask them instead.";
             return false;
         }
 
-        if (relation.AllianceOfferedBy != 0 && !Expired(campaign, relation))
+        // Whether an offer is pending is the date, not who made it: an offer from country 0
+        // (Indonesia) was stored as the same 0 that meant "no offer".
+        if (!Expired(campaign, relation))
         {
             refusal = relation.AllianceOfferedBy == proposer.Id
                 ? $"{target.Tag} has not answered the last offer yet."
@@ -232,6 +234,7 @@ public static class AllianceSystem
         }
         var relation = CampaignDiplomacy.Get(campaign, answering.Id, proposer.Id);
         relation.AllianceOfferedBy = 0;
+        relation.AllianceOfferedDay = -9999;
         relation.LastActionDay = campaign.ElapsedDays;
 
         if (!accept)
@@ -251,6 +254,7 @@ public static class AllianceSystem
     {
         relation.Stance = DiplomaticStance.Allied;
         relation.AllianceOfferedBy = 0;
+        relation.AllianceOfferedDay = -9999;
         relation.AllianceSinceDay = campaign.ElapsedDays;
         relation.LastActionDay = campaign.ElapsedDays;
         OpinionSystem.Remember(campaign, relation, "alliance");

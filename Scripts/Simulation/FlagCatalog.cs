@@ -351,7 +351,7 @@ public static class FlagCatalog
             // What it answers to somebody else as. This is where Vichy, Manchukuo and every
             // other government installed from outside belongs: not a thing the country
             // believes, and not how it is arranged, but who it is arranged BY.
-            "subject" => nation.OverlordId == 0 ? "" : nation.SubjectType,
+            "subject" => nation.IsSubject ? nation.SubjectType : "",
             _ => ""
         };
         return Slug(value);

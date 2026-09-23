@@ -331,7 +331,7 @@ public static class Statecraft
         // and is done at the end of this method.
         foreach (var nation in campaign.Nations)
         {
-            if (nation.OverlordId != defender.Id || nation.Id == attacker.Id) continue;
+            if (!nation.AnswersTo(defender.Id) || nation.Id == attacker.Id) continue;
             if (SubjectCatalog.Of(nation.SubjectType) is not { JoinsWars: true }) continue;
             if (!Candidates.Contains(nation.Id)) Candidates.Add(nation.Id);
         }
@@ -395,7 +395,7 @@ public static class Statecraft
         // dependency is attacking them. Not run through WillAnswer - an overlord defending
         // what it holds is not keeping a promise it weighed up, and the kind of arrangement
         // is what decides whether it comes at all.
-        if (defender.OverlordId != 0 && defender.OverlordId != attacker.Id &&
+        if (defender.IsSubject && defender.OverlordId != attacker.Id &&
             SubjectCatalog.Of(defender.SubjectType) is { OverlordDefends: true } &&
             campaign.NationById(defender.OverlordId) is { } master &&
             (campaign.Player is null || campaign.Player.Id != master.Id) &&
@@ -405,7 +405,7 @@ public static class Statecraft
 
         foreach (var nation in campaign.Nations.ToArray())
         {
-            if (nation.OverlordId != attacker.Id || nation.Id == defender.Id) continue;
+            if (!nation.AnswersTo(attacker.Id) || nation.Id == defender.Id) continue;
             if (SubjectCatalog.Of(nation.SubjectType) is not { DraggedIntoWars: true }) continue;
             if (campaign.Player is not null && campaign.Player.Id == nation.Id) continue;
             if (CampaignDiplomacy.AtWar(campaign, nation.Id, defender.Id)) continue;
@@ -455,7 +455,7 @@ public static class Statecraft
         // having one is for.
         foreach (var nation in campaign.Nations)
         {
-            if (nation.OverlordId != callerId || war.Involves(nation.Id)) continue;
+            if (!nation.AnswersTo(callerId) || war.Involves(nation.Id)) continue;
             if (SubjectCatalog.Of(nation.SubjectType) is not { DraggedIntoWars: true }) continue;
             if (!result.Contains(nation.Id)) result.Add(nation.Id);
         }
@@ -506,7 +506,7 @@ public static class Statecraft
         var enemy = campaign.NationById(war.EnemyLeaderOf(callerId));
 
         // Told rather than asked.
-        var obliged = ally.OverlordId == callerId &&
+        var obliged = ally.AnswersTo(callerId) &&
                       SubjectCatalog.Of(ally.SubjectType) is { DraggedIntoWars: true } &&
                       !ally.IsHuman;
 
