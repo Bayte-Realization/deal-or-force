@@ -883,5 +883,7 @@
   "The volume every other one is measured against.": "Громкость, относительно которой считаются остальные.",
   "Music": "Музыка",
   "Effects": "Эффекты",
-  "Settings": "Настройки"
+  "Settings": "Настройки",
+  "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu.": "Только для этой кампании — хранится в её сохранении. Новые кампании начинаются со значения из главного меню.",
+  "Where new campaigns start. A campaign keeps its own value once it has begun.": "С этого значения начинаются новые кампании. Начатая кампания хранит своё."
 }

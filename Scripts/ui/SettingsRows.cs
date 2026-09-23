@@ -62,6 +62,15 @@ public static class SettingsRows
             note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             block.AddChild(note);
         }
+        // Say whose option this is. Inside a campaign it is that campaign's alone; from the
+        // main menu it is only where new campaigns start.
+        if (definition.Campaign)
+        {
+            block.AddChild(DealOrForceGame.RowLabel(DealOrForceGame.Tr(SettingsCatalog.CampaignBound
+                    ? "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu."
+                    : "Where new campaigns start. A campaign keeps its own value once it has begun."), 11,
+                Ui.Colour("text.accent_dim")));
+        }
         if (definition.NeedsRestart)
         {
             block.AddChild(DealOrForceGame.RowLabel(
@@ -87,7 +96,7 @@ public static class SettingsRows
         button.Pressed += () =>
         {
             var value = !SettingsCatalog.Flag(id);
-            PlayerSettings.Set(id, value);
+            SettingsCatalog.Store(id, value);
             button.Text = DealOrForceGame.Tr(value ? "On" : "Off");
             DealOrForceGame.ApplyLedgerButtonState(button, value);
             applied?.Invoke(id);
@@ -115,7 +124,7 @@ public static class SettingsRows
         {
             var at = (int)index;
             if (at < 0 || at >= definition.Values.Count) return;
-            PlayerSettings.Set(id, definition.Values[at]);
+            SettingsCatalog.Store(id, definition.Values[at]);
             applied?.Invoke(id);
         };
         row.AddChild(option);
@@ -142,7 +151,7 @@ public static class SettingsRows
         reading.Text = Reading(definition, (float)slider.Value);
         slider.ValueChanged += value =>
         {
-            PlayerSettings.Set(id, (float)value);
+            SettingsCatalog.Store(id, (float)value);
             reading.Text = Reading(definition, (float)value);
             applied?.Invoke(id);
         };
@@ -203,7 +212,7 @@ public static class SettingsRows
     {
         foreach (var definition in SettingsCatalog.In(category))
         {
-            PlayerSettings.Clear(definition.Id);
+            SettingsCatalog.Reset(definition.Id);
             applied?.Invoke(definition.Id);
         }
     }

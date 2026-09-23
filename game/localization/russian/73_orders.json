@@ -14,6 +14,7 @@
   "advancing along the marked route; defended provinces require a battle": "наступают по намеченному маршруту; за оборонённые провинции придётся драться",
   "route blocked": "маршрут перекрыт",
   "queued until battle ends": "ждут окончания боя",
+  "order cancelled": "приказ отменён",
   "already there": "уже на месте",
   "neutral territory: no military access or active war": "нейтральная территория: нет ни прохода войск, ни войны",
   "no legal land corridor (water or neutral territory may block the route)": "нет законного сухопутного коридора (путь могут перекрывать вода или нейтральная земля)",

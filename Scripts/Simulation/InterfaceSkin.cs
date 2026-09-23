@@ -106,6 +106,20 @@ public static class InterfaceSkin
         ("map.terrain_mid",     "#477f73"),
         ("map.terrain_high",    "#d6c45d"),
 
+        // The campaign shell - the frame the screen sits in and the striped rows inside it.
+        // These were named in game/gui/20_campaign_structure.json and never added here, so
+        // every one of them counted as a mod override of a default that did not exist. A
+        // token the shipped data defines and the defaults do not is also a token a modder
+        // copying the defaults never sees.
+        //
+        // shell.space is what the globe hangs against when a skin supplies no sky of its
+        // own, which is why it is a shade deeper than globe.space rather than equal to it.
+        ("shell.background",    "#101d28f7"),
+        ("shell.border",        "#536775"),
+        ("shell.row",           "#152532"),
+        ("shell.row_alternate", "#1b2d3b"),
+        ("shell.space",         "#080f18"),
+
         // Globe
         ("globe.space",                  "#030914"),
         ("globe.ambient",                "#9eb7d4"),
@@ -186,17 +200,23 @@ public static class InterfaceSkin
     private static readonly (string Key, PanelRect Rect)[] DefaultLayouts =
     {
         // The campaign HUD
-        ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,      14f, 12f, -14f, 104f)),
-        ("hud.navigation",     new PanelRect(0.5f, 1f, 0.5f, 1f, -475f, -96f, 475f, -12f)),
-        ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      20f, 140f, 404f, -170f)),
-        ("hud.map_controls",   new PanelRect(0f, 1f, 0f, 1f,      14f, -174f, 660f, -112f)),
+        //
+        // Eight of these had drifted from what game/gui/10_campaign_shell.json actually
+        // ships - the HUD was rearranged in the data, where the layout editor writes, and
+        // the defaults were never brought along. Data wins at runtime, so the player saw
+        // the new arrangement and only a modder copying the defaults would have met the
+        // old one. They are the shipped numbers now.
+        ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,       8f, 6f, -8f, 80f)),
+        ("hud.navigation",     new PanelRect(0f, 0f, 0f, 1f,       8f, 90f, 74f, -60f)),
+        ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 526f, -60f)),
+        ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -564f, -52f, -8f, -8f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
-        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 1f,    -354f, 116f, -14f, -116f)),
-        ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      14f, 140f, 500f, -190f)),
-        ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      14f, 140f, 360f, 430f)),
+        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -300f, 90f, -8f, 620f)),
+        ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 590f, -60f)),
+        ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 526f, -60f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
-        ("hud.hotseat",        new PanelRect(0f, 0f, 0f, 0f,      14f, 146f, 294f, 224f)),
-        ("hud.network",        new PanelRect(0f, 0f, 0f, 0f,      14f, 146f, 350f, 208f)),
+        ("hud.hotseat",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 365f, -6f)),
+        ("hud.network",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 425f, -6f)),
 
         // Full-screen and modal panels
         ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -270f, -400f, 270f, 400f)),
@@ -212,6 +232,14 @@ public static class InterfaceSkin
         ("modal.multiplayer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -285f, -340f, 285f, 340f)),
         ("modal.ledger",       new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
         ("modal.war_ledger",   new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+
+        // The lobby and the workshop. These three were laid out in game/gui only - named in
+        // 22_multiplayer.json and 24_workshop.json and never given a compiled default - so
+        // the code's answer for them was the blank full-screen rectangle Layout() falls back
+        // to, and a mod that removed the data file would have got that instead of a panel.
+        ("multiplayer.connection", new PanelRect(0f, 0f, 0f, 1f,    12f, 12f, 368f, -12f)),
+        ("multiplayer.countries",  new PanelRect(1f, 0f, 1f, 1f,  -324f, 12f, -12f, -12f)),
+        ("workshop.panel",         new PanelRect(0f, 0f, 1f, 1f,    40f, 30f, -40f, -30f)),
     };
 
     /// <summary>A panel's rectangle, or a sane full-screen one if the name is unknown.</summary>

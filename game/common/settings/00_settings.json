@@ -17,7 +17,7 @@
 {
   // ---------------------------------------------------------------- the game itself -----
   "autosave_interval": {
-    "category": "game", "order": 100, "kind": "choice",
+    "category": "game", "scope": "campaign", "order": 100, "kind": "choice",
     "name": "Autosave",
     "description": "How often the campaign saves itself. Autosaves are kept apart from your own and never overwrite them.",
     "values": ["0", "7", "30", "90", "365"],
@@ -37,7 +37,7 @@
     "default": true
   },
   "hours_per_tick": {
-    "category": "game", "order": 130, "kind": "choice",
+    "category": "game", "scope": "campaign", "order": 130, "kind": "choice",
     "name": "Length of a simulation step",
     "description": "How much campaign time one step covers. Six hours moves armies in smaller pieces more often; seventy-two runs three days at once, which is a real fast-forward for a quiet decade. The answer does not change with it.",
     "values": ["1", "3", "6", "12", "24", "48", "72"],

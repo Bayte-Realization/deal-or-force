@@ -60,6 +60,10 @@ static class Program
             Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
         if (args.Contains("--offensive-only")) { OffensivePlanTests.Run(c); return; }
+        if (args.Contains("--pocket-only")) { PocketTests.Run(map); return; }
+        if (args.Contains("--loss-only")) { LossTests.Run(map); return; }
+        if (args.Contains("--capital-only")) { CapitalTests.Run(map); return; }
+        if (args.Contains("--options-only")) { CampaignOptionsTests.Run(map); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();
         var border = BorderFronts.Candidates(c, rus.Id, ukr.Id);
@@ -225,5 +229,9 @@ static class Program
         DiagnosticLogTests.Run(c);
         ProvinceVisionTests.Run(c);
         OffensivePlanTests.Run(c);
+        PocketTests.Run(map);
+        LossTests.Run(map);
+        CapitalTests.Run(map);
+        CampaignOptionsTests.Run(map);
     }
 }

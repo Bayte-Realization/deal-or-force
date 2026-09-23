@@ -18,6 +18,9 @@ public enum MenuIntent
     None,
     NewCampaign,
     LoadLatest,
+
+    /// <summary>One particular save, chosen from the archive on this screen: <see cref="MainMenuScene.WantedSlot"/>.</summary>
+    LoadSlot,
     Multiplayer,
     Settings
 }
@@ -44,6 +47,9 @@ public partial class MainMenuScene : Control
     /// <summary>What the player asked for, read and cleared by the campaign scene.</summary>
     public static MenuIntent Wanted = MenuIntent.None;
 
+    /// <summary>Which save, when the intent is <see cref="MenuIntent.LoadSlot"/>.</summary>
+    public static string WantedSlot = "";
+
     private const string CampaignScene = "res://Scenes/Main.tscn";
     private const string MenuScene = "res://Scenes/MainMenu.tscn";
 
@@ -53,6 +59,8 @@ public partial class MainMenuScene : Control
     private Control _menu;
     private Control _credits;
     private Control _settings;
+    private Control _archive;
+    private VBoxContainer _archiveRows;
     private VBoxContainer _settingsRows;
     private readonly Dictionary<string, Button> _settingsTabs = new(StringComparer.OrdinalIgnoreCase);
     private string _settingsCategory = "";
@@ -61,6 +69,8 @@ public partial class MainMenuScene : Control
     {
         Name = "MainMenu";
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        // No campaign here: a campaign option set from this screen is where new ones start.
+        SettingsCatalog.CurrentCampaign = null;
 
         // The catalogues this screen needs and nothing else.
         //
@@ -122,6 +132,7 @@ public partial class MainMenuScene : Control
 
         rows.AddChild(MenuAction("Singleplayer", () => Enter(MenuIntent.NewCampaign), 46, true));
         rows.AddChild(MenuAction("Load latest campaign", () => Enter(MenuIntent.LoadLatest), 42));
+        rows.AddChild(MenuAction("Load campaign", ShowArchive, 42));
         rows.AddChild(MenuAction("Multiplayer · LAN / IP", () => Enter(MenuIntent.Multiplayer), 42));
         rows.AddChild(MenuAction("Settings", ShowSettings, 42));
         _language = MenuAction(LanguageLabel(), CycleLanguage, 42);
@@ -132,6 +143,120 @@ public partial class MainMenuScene : Control
         BuildCopyright();
         BuildCredits();
         BuildSettings();
+        BuildArchive();
+    }
+
+    /// <summary>
+    /// Every saved campaign, from the front door.
+    ///
+    /// Loading used to be two things from here: the newest save, or starting a campaign in
+    /// order to reach the archive inside it - which built a whole world, all thirty-eight
+    /// thousand provinces of it, only to throw it away for the one being loaded. The list is
+    /// read straight from the save folder, which is only files and needs no world at all, and
+    /// the world that gets built is the one that was asked for.
+    /// </summary>
+    private void BuildArchive()
+    {
+        var veil = new ColorRect
+        {
+            Color = new Color(0.01f, 0.02f, 0.04f, 0.72f),
+            MouseFilter = MouseFilterEnum.Stop,
+            Visible = false
+        };
+        veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(veil);
+        _archive = veil;
+
+        var panel = new PanelContainer { ClipContents = true };
+        panel.AddThemeStyleboxOverride("panel", MenuPanelStyle());
+        panel.SetAnchorsPreset(LayoutPreset.Center);
+        panel.AnchorLeft = panel.AnchorTop = 0.5f;
+        panel.AnchorRight = panel.AnchorBottom = 0.5f;
+        panel.OffsetLeft = -400;
+        panel.OffsetRight = 400;
+        panel.OffsetTop = -310;
+        panel.OffsetBottom = 310;
+        panel.GrowHorizontal = GrowDirection.Both;
+        panel.GrowVertical = GrowDirection.Both;
+        veil.AddChild(panel);
+
+        var margin = new MarginContainer();
+        foreach (var side in new[] { "left", "right" }) margin.AddThemeConstantOverride("margin_" + side, 26);
+        foreach (var side in new[] { "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + side, 20);
+        panel.AddChild(margin);
+        var frame = new VBoxContainer();
+        frame.AddThemeConstantOverride("separation", 12);
+        margin.AddChild(frame);
+
+        frame.AddChild(MenuCaption("CAMPAIGN ARCHIVE", 24, "text.accent"));
+        var scroll = new ScrollContainer
+        {
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        frame.AddChild(scroll);
+        _archiveRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _archiveRows.AddThemeConstantOverride("separation", 6);
+        scroll.AddChild(_archiveRows);
+
+        var actions = new HBoxContainer();
+        actions.AddThemeConstantOverride("separation", 8);
+        frame.AddChild(actions);
+        actions.AddChild(MenuAction("Back", HideArchive, 40));
+        actions.AddChild(MenuAction("Open folder", () => OS.ShellOpen(DealOrForceGame.ResolveSaveRoot()), 40));
+    }
+
+    private void ShowArchive()
+    {
+        if (_archive is null) return;
+        foreach (var child in _archiveRows.GetChildren()) child.QueueFree();
+
+        var saves = SaveSystem.List(DealOrForceGame.ResolveSaveRoot());
+        if (saves.Count == 0)
+            _archiveRows.AddChild(MenuCaption("No campaigns saved yet.", 14, "text.muted"));
+        foreach (var save in saves)
+        {
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 10);
+            _archiveRows.AddChild(row);
+
+            var title = save.Slot switch
+            {
+                SaveSystem.AutoSlot => Loc.Get("AUTOSAVE"),
+                SaveSystem.QuickSlot => Loc.Get("QUICKSAVE"),
+                _ => string.IsNullOrWhiteSpace(save.DisplayName) ? save.Slot : save.DisplayName
+            };
+            var info = new Label
+            {
+                Text = Loc.Format("{0}\n{1} · {2} · {3} · {4} KiB", title, save.NationName, save.GameDate,
+                    save.SavedUtc.ToLocalTime().ToString("g"), (save.CompressedBytes / 1024f).ToString("0")),
+                AutowrapMode = TextServer.AutowrapMode.Off,
+                ClipText = true,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            info.AddThemeFontSizeOverride("font_size", 13);
+            info.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
+            row.AddChild(info);
+
+            var slot = save.Slot;
+            var load = MenuAction("Load", () =>
+            {
+                WantedSlot = slot;
+                Enter(MenuIntent.LoadSlot);
+            }, 38, true);
+            load.CustomMinimumSize = new Vector2(110, 38);
+            row.AddChild(load);
+        }
+
+        if (_menu is not null) _menu.Visible = false;
+        _archive.Visible = true;
+    }
+
+    private void HideArchive()
+    {
+        if (_archive is not null) _archive.Visible = false;
+        if (_menu is not null) _menu.Visible = true;
     }
 
     /// <summary>
@@ -427,6 +552,7 @@ public partial class MainMenuScene : Control
     {
         if (!@event.IsActionPressed("ui_cancel")) return;
         if (_settings is { Visible: true }) HideSettings();
+        else if (_archive is { Visible: true }) HideArchive();
         else if (_credits is { Visible: true }) HideCredits();
         else return;
         GetViewport().SetInputAsHandled();
@@ -446,6 +572,7 @@ public partial class MainMenuScene : Control
     public static void ReturnTo(SceneTree tree)
     {
         Wanted = MenuIntent.None;
+        WantedSlot = "";
         tree?.ChangeSceneToFile(MenuScene);
     }
 

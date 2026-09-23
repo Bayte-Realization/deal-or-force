@@ -1,0 +1,15 @@
+{
+  // What an effect is called in a tooltip: "Stability: +3%". See ScriptedEffects.Lines.
+  "Effects:": "Effects:",
+  "The government sets the key rate": "The government sets the key rate",
+  "Construction capacity": "Construction capacity",
+  "Welfare spending": "Welfare spending",
+  "Education spending": "Education spending",
+  "Standard of living in every region": "Standard of living in every region",
+  "Radicalism in every region": "Radicalism in every region",
+  "Literacy in every region": "Literacy in every region",
+  "Urbanisation in every region": "Urbanisation in every region",
+  "Population of every region": "Population of every region",
+  "Inflation": "Inflation",
+  "Manpower": "Manpower"
+}

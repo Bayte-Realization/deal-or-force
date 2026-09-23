@@ -848,5 +848,7 @@
   "…and {0} more": "…and {0} more",
   "← All wars": "← All wars",
   "≡": "≡",
-  "▶": "▶"
+  "▶": "▶",
+  "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu.": "This campaign only - it is kept in its save. New campaigns start from the value set in the main menu.",
+  "Where new campaigns start. A campaign keeps its own value once it has begun.": "Where new campaigns start. A campaign keeps its own value once it has begun."
 }

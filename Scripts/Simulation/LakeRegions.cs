@@ -13,9 +13,16 @@ namespace DealOrForce.Simulation;
 /// and an army could march straight across Lake Michigan without anything in the game
 /// noticing - which is not a difficulty, it is simply wrong.
 ///
-/// A lake big enough to matter is a region of its own now. It belongs to a country, the
-/// way any region does; it is drawn in that country's colour; and no army can set foot in
-/// it, because the ground it would be standing on is water.
+/// A lake big enough to matter is a region of its own now, and no army can set foot in it,
+/// because the ground it would be standing on is water.
+///
+/// And it belongs to nobody (item 39 on the list). It used to go to whichever country held
+/// the longest stretch of its shore and was painted in that country's colour - so Lake
+/// Victoria was Ugandan ground, the Caspian was a Kazakh province and Baikal read as a
+/// patch of Russia. Nobody lives on a lake, nothing is built on one and no army stands on
+/// one, so owning it gave nothing and cost the map its water. A lake is the first region in
+/// the game with no owner: it is drawn as water, it has no border of its own, and a country
+/// whose shore it is keeps the shore.
 ///
 /// Which lakes count is data. `map_data/lakes/` says how large a lake has to be before it
 /// becomes a region and what to call the ones worth naming, and the shapes themselves come
@@ -157,19 +164,6 @@ public static class LakeRegions
             // And water you can see across is not a barrier either, however far it runs.
             if (WidthOf(component, width, height) < MinimumWidthCells) continue;
 
-            var holder = (ushort)0;
-            var longest = 0;
-            foreach (var (owner, edge) in shore)
-                if (edge > longest || (edge == longest && owner < holder))
-                {
-                    longest = edge;
-                    holder = owner;
-                }
-            if (holder == 0) continue;
-
-            var nation = campaign.Nations.Find(candidate => candidate.MapIndex == holder);
-            if (nation is null) continue;
-
             var mapIndex = next++;
             var name = NameFor(component, width, height);
             var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == mapIndex);
@@ -178,8 +172,8 @@ public static class LakeRegions
                 state = new ScenarioState
                 {
                     MapIndex = mapIndex,
-                    NationMapIndex = nation.MapIndex,
-                    NationId = nation.Tag,
+                    NationMapIndex = 0,
+                    NationId = "",
                     Id = $"lake_{mapIndex}",
                     Name = name,
                     Iso = $"LAKE-{mapIndex}",
@@ -191,15 +185,15 @@ public static class LakeRegions
             else
             {
                 state.Name = name;
-                state.NationMapIndex = nation.MapIndex;
-                state.NationId = nation.Tag;
+                state.NationMapIndex = 0;
+                state.NationId = "";
             }
 
             LakeStateIndices.Add(mapIndex);
             foreach (var cell in component)
             {
                 states[cell] = (ushort)mapIndex;
-                control[cell] = holder;
+                control[cell] = 0;
             }
         }
 

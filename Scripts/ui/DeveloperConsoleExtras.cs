@@ -374,6 +374,21 @@ public partial class DealOrForceGame
     }
 
     /// <summary>How long this has been going on.</summary>
+    /// <summary>The verse `touchgrass` answers with. One key, so a translation is one line in a table.</summary>
+    private const string TouchGrassVerse =
+        "For a hundred years you steered the fate of states,\n" +
+        "Carved up the seas and moved the borders round.\n" +
+        "Outside, there is grass that no map ever drew.\n" +
+        "It is real. Go out and feel it on the ground.";
+
+    /// <summary>Set once the game has been told to close, so asking twice does not start two clocks.</summary>
+    private bool _touchingGrass;
+
+    /// <summary>
+    /// The one console command that takes its own advice: it says its piece, and eight seconds
+    /// later the game closes. Nothing is saved first, and it says so - the joke is on the
+    /// session, not on the campaign somebody forgot to save.
+    /// </summary>
     private string ConsoleTouchGrass()
     {
         var real = TimeSpan.FromMilliseconds(Time.GetTicksMsec());
@@ -383,8 +398,15 @@ public partial class DealOrForceGame
         var lived = days >= 365
             ? Loc.Format(Simulation.Plural.Key("{0:N0} year of somebody else's", days / 365), days / 365)
             : Loc.Format(Simulation.Plural.Key("{0:N0} day of somebody else's", days), days);
-        return Loc.Format("{0:h\\:mm} of your life for {1}. The grass is outside and it is not modelled.",
+        var tally = Loc.Format("{0:h\\:mm} of your life for {1}. The grass is outside and it is not modelled.",
             real, lived);
+        if (!_touchingGrass)
+        {
+            _touchingGrass = true;
+            GetTree().CreateTimer(8.0, true).Timeout += () => GetTree().Quit();
+        }
+        return Loc.Get(TouchGrassVerse) + "\n\n" + tally + "\n" +
+               Loc.Get("The game closes in eight seconds. Nothing has been saved.");
     }
 
     /// <summary>The region a map index belongs to, by name, or something honest instead.</summary>

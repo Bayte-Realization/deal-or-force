@@ -6,5 +6,6 @@
   "Where the people are. Dark is empty, bright is crowded.": "Где живут люди. Тёмное — пусто, светлое — тесно.",
   "What each region produces, against what it needs.": "Что регион производит — против того, что ему нужно.",
   "The ground itself, with no politics on it. Hover a province for what it does to a march and a battle.": "Сама земля, без политики. Наведите на провинцию, чтобы увидеть, как она влияет на марш и бой.",
-  "Height and shade, from the moddable relief layer.": "Высота и тень — из модифицируемого слоя рельефа."
+  "Height and shade, from the moddable relief layer.": "Высота и тень — из модифицируемого слоя рельефа.",
+  "Seen from {0}. Pick another country on the map to see it from theirs; close the panel to come back to your own.": "Вид со стороны: {0}. Выберите на карте другую страну, чтобы увидеть её взгляд; закройте панель, чтобы вернуться к своему."
 }

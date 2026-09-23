@@ -127,7 +127,7 @@ public partial class DealOrForceGame
         _warListHeader.AddChild(defenderCaption);
         _warListHeader.AddChild(Caption("WHO IS WINNING", 140, HorizontalAlignment.Center));
         _warListHeader.AddChild(Caption("SCORE", 62, HorizontalAlignment.Right));
-        _warListHeader.AddChild(Caption("DEAD", 104, HorizontalAlignment.Right));
+        _warListHeader.AddChild(Caption("LOSSES", 104, HorizontalAlignment.Right));
         _warListHeader.AddChild(Caption("FRONT", 96, HorizontalAlignment.Right));
         _warListHeader.AddChild(Caption("LENGTH", 86, HorizontalAlignment.Right));
 
@@ -254,7 +254,7 @@ public partial class DealOrForceGame
         _warLedgerSummary.Text = _warLedgerOrder.Count == 0
             ? _warLedgerMineOnly ? "You are at peace." : "The world is at peace."
             : Simulation.Loc.Format("{0} of {1} war(s) shown", _warLedgerOrder.Count.ToString("N0"), fighting.ToString("N0")) + "  ·  " +
-              Simulation.Loc.Format("{0} dead in the wars still being fought", Fmt.People(worldwide)) + "  ·  " +
+              Simulation.Loc.Format("{0} lost in the wars still being fought", Fmt.People(worldwide)) + "  ·  " +
               "click a war for its own page";
 
         while (_warLedgerRows.Count < _warLedgerOrder.Count) _warLedgerRows.Add(CreateWarLedgerRow());
@@ -424,6 +424,18 @@ public partial class DealOrForceGame
         RefreshWarLedger();
     }
 
+    private void ExchangePrisoners(StrategicWar war, int counterpartId)
+    {
+        if (_campaign?.Player is null || war is null) return;
+        _campaign.Commands.Enqueue(new ExchangePrisonersCommand
+        {
+            IssuerId = _campaign.Player.Id, WarId = war.Id, CounterpartId = counterpartId
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        _warDetailBuiltFor = -1;
+        RefreshWarLedger();
+    }
+
     private void RefreshWarLedgerDetail()
     {
         var war = _campaign.Wars.Find(candidate => candidate.Id == _warLedgerOpenWarId);
@@ -497,8 +509,27 @@ public partial class DealOrForceGame
             attackingDivisions.ToString("N0"), defendingDivisions.ToString("N0")));
 
         Heading("WHAT IT HAS COST");
-        Line(Simulation.Loc.Format("Dead: {0} against {1}",
+        // Losses rather than dead: the total always had the wounded in it, and now it has the
+        // prisoners too. The breakdown underneath is what the word used to hide.
+        Line(Simulation.Loc.Format("Losses: {0} against {1}",
             Fmt.People(war.AttackerLosses), Fmt.People(war.DefenderLosses)));
+        void Breakdown(Nation leader, float killed, float wounded, float captured)
+        {
+            // A war carried over from a save made before losses were broken down has a total
+            // and nothing under it; a row of zeros would say nobody died.
+            if (killed + wounded + captured < 1f) return;
+            Line("    " + Simulation.Loc.Format("{0}: {1} killed · {2} wounded · {3} captured",
+                leader?.DisplayName ?? Tr("nobody"), Fmt.People(killed), Fmt.People(wounded), Fmt.People(captured)),
+                NationColour(leader));
+        }
+        Breakdown(attacker, war.AttackerKilled, war.AttackerWounded, war.AttackerCaptured);
+        Breakdown(defender, war.DefenderKilled, war.DefenderWounded, war.DefenderCaptured);
+        var heldFromAttackers = war.Side(true).Sum(id => WarLosses.HeldFrom(war, id));
+        var heldFromDefenders = war.Side(false).Sum(id => WarLosses.HeldFrom(war, id));
+        if (heldFromAttackers + heldFromDefenders >= 1f)
+            Line(Simulation.Loc.Format("Prisoners still held: {0} of {1}'s side, {2} of {3}'s",
+                Fmt.People(heldFromAttackers), attacker?.DisplayName ?? "",
+                Fmt.People(heldFromDefenders), defender?.DisplayName ?? ""));
         Line(Simulation.Loc.Format("War support at home: {0} against {1}",
             war.AttackerWarSupport.ToString("P0"), war.DefenderWarSupport.ToString("P0")));
 
@@ -517,7 +548,7 @@ public partial class DealOrForceGame
                 : StateNameOfProvince(battle.ProvinceId);
             Line(place + "  ·  " +
                  Simulation.Loc.Format("day {0}", (_campaign.ElapsedDays - battle.StartedDay + 1).ToString("N0")) + "  ·  " +
-                 Simulation.Loc.Format("{0} dead", Fmt.People(battle.AttackerLosses + battle.DefenderLosses)) + "  ·  " +
+                 Simulation.Loc.Format("{0} casualties", Fmt.People(battle.AttackerLosses + battle.DefenderLosses)) + "  ·  " +
                  Simulation.Loc.Get(battle.Outcome));
         }
 
@@ -556,6 +587,37 @@ public partial class DealOrForceGame
                         "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.",
                         friend.DisplayName));
                 calls.AddChild(button);
+            }
+        }
+
+        // Prisoners. One for one, as many as the smaller side holds - which is why governments
+        // that agree on nothing else still agree on this - and at most once a month.
+        var holders = war.EnemiesOf(player.Id)
+            .Where(id => WarLosses.HeldFrom(war, id) >= 1f)
+            .Take(4)
+            .ToList();
+        if (holders.Count > 0 || WarLosses.HeldFrom(war, player.Id) >= 1f)
+        {
+            _warDetailActions.AddChild(RowLabel("PRISONERS", 12, Ui.Colour("text.caption")));
+            var exchanges = new HBoxContainer();
+            exchanges.AddThemeConstantOverride("separation", 6);
+            _warDetailActions.AddChild(exchanges);
+            foreach (var enemyId in holders.Count > 0 ? holders : war.EnemiesOf(player.Id).Take(1).ToList())
+            {
+                var enemy = _campaign.NationById(enemyId);
+                if (enemy is null) continue;
+                var captured = enemyId;
+                var refusal = WarLosses.ExchangeRefusal(_campaign, war, player.Id, enemyId);
+                var button = ActionButton(Simulation.Loc.Format("Exchange with {0}", enemy.DisplayName),
+                    () => ExchangePrisoners(war, captured), 220, 30);
+                button.Disabled = refusal.Length > 0;
+                var men = MathF.Min(WarLosses.HeldFrom(war, player.Id), WarLosses.HeldFrom(war, enemyId));
+                button.TooltipText = Ui.Tip(refusal.Length > 0
+                    ? Tr(refusal)
+                    : Simulation.Loc.Format(
+                        "{0} of our men for {0} of theirs. They go back into the reserve, less the {1} who did not survive captivity.",
+                        Fmt.People(men), (1f - _campaign.Defines.PrisonersRepatriatedShare).ToString("P0")));
+                exchanges.AddChild(button);
             }
         }
 

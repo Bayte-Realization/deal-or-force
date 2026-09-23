@@ -74,14 +74,45 @@ if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 $mode = if ($Debug) { "--export-debug" } else { "--export-release" }
+
+# ------------------------------------------------ the editor's tooling stays in the editor
+# Godot AI and Fennara register runtime helpers as autoloads in project.godot whenever their
+# plugins are enabled, so deleting those lines by hand does not hold - the plugin writes them
+# straight back. The scripts they point at live under addons/, which export_presets excludes,
+# and the result is a shipped build carrying autoloads whose scripts are not in it: the
+# player's log opens with a load failure on every single run. Development hooks also have no
+# business running inside somebody else's copy of the game.
+#
+# So the export runs against a project.godot with those lines taken out, and the file goes
+# back exactly as it was afterwards. Matching on res://addons/ rather than on the two names
+# means a third tool added later is held back too, without anybody remembering to do it.
+$projectFile = Join-Path $project "project.godot"
+$projectBackup = Get-Content -LiteralPath $projectFile -Raw
+$keptLines = $projectBackup -split "`r?`n" | Where-Object { $_ -notmatch '^\s*_\w+\s*=\s*"\*?res://addons/' }
+$heldBack = ($projectBackup -split "`r?`n").Count - $keptLines.Count
+if ($heldBack -gt 0) {
+    Set-Content -LiteralPath $projectFile -Value ($keptLines -join "`r`n") -NoNewline
+    Write-Host "  $heldBack development autoload(s) held back from the export" -ForegroundColor DarkGray
+}
+
 # Godot writes a good deal to stderr on a perfectly successful export - deprecation notes,
 # the "safe save" grumble, its own plugins' chatter - and with ErrorActionPreference set to
 # Stop that ends the script before any of the checks run. Its output is information here,
 # not failure, so the preference steps aside for exactly this one call.
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
-& $Godot --headless --path $project $mode $Preset $exe 2>&1 | Out-Host
-$ErrorActionPreference = $previousPreference
+try {
+    & $Godot --headless --path $project $mode $Preset $exe 2>&1 | Out-Host
+}
+finally {
+    # The finally is the point of the whole arrangement: an export that throws half way must
+    # not leave the project sitting there without its tooling.
+    $ErrorActionPreference = $previousPreference
+    if ($heldBack -gt 0) {
+        Set-Content -LiteralPath $projectFile -Value $projectBackup -NoNewline
+        Write-Host "  project.godot put back" -ForegroundColor DarkGray
+    }
+}
 
 # Godot's exit code is not worth believing here: a headless export that finished perfectly
 # well leaves $LASTEXITCODE empty, and one that failed to build the C# still reports its own
@@ -105,10 +136,13 @@ if (Test-Path $modsSource) {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ---------------------------------------------------------------- content, beside the game
-# Content packs sit beside the executable, where somebody looking for them will look.
-$dlcSource = Join-Path $project "dlc"
-if (Test-Path $dlcSource) { Copy-Item -LiteralPath $dlcSource -Destination $out -Recurse -Force }
+# ---------------------------------------------------------------------- no unreleased content
+# `dlc/` is deliberately not copied. Iron and Grain is an unreleased paid pack, and the first
+# public alpha is free: shipping it inactive means handing every player the pack plus the
+# entitlements.json that switches it on, which is a paywall anybody can read their way past.
+#
+# The loader is untouched and still works - DlcLoader returns quietly when the folder is not
+# there - so the day there is something to sell, one line here puts it back.
 & (Join-Path $PSScriptRoot "build-launcher.ps1") -OutputDirectory $out
 
 # ---------------------------------------------------------------- one folder of each
@@ -133,10 +167,13 @@ if ($dataDirectory) {
         Move-Item -LiteralPath $dataGame -Destination $rootGame -Force
         Write-Host "  game moved beside the executable" -ForegroundColor DarkGray
     }
+    # Nothing copies dlc beside the executable any more, but the csproj could start publishing
+    # it again the moment somebody restores that Content line, so the sweep stays and is now
+    # unconditional: whatever put a dlc folder in here, it does not ship.
     $dataDlc = Join-Path $dataDirectory.FullName "dlc"
-    if ((Test-Path $dataDlc) -and (Test-Path (Join-Path $out "dlc"))) {
+    if (Test-Path $dataDlc) {
         Remove-Item -LiteralPath $dataDlc -Recurse -Force
-        Write-Host "  the second copy of dlc removed" -ForegroundColor DarkGray
+        Write-Host "  dlc removed from the build" -ForegroundColor DarkGray
     }
     $dataMods = Join-Path $dataDirectory.FullName "mods"
     if ((Test-Path $dataMods) -and (Test-Path (Join-Path $out "mods"))) {
@@ -158,12 +195,15 @@ $needed = @(
     "game\localization\english",
     "game\map_data\definition.csv",
     "game\map_data\default.map",
-    # Content packs are read from disk like everything else, so they have to be on disk. The
-    # first build shipped without them and the game simply had no content packs at all - it
-    # said so quietly in the log and carried on, which is exactly how this goes unnoticed.
-    "dlc\entitlements.json",
-    "dlc\dof_iron_and_grain\dlc.json",
     "mods"
+)
+
+# And the other half of a check: things that must NOT be in the build. A missing file is loud
+# - the game shows an empty world - but a file that should not have shipped is silent, which
+# is why it needs asking about explicitly rather than being left to whoever reads the folder.
+$forbidden = @(
+    @{ Path = "dlc"; Why = "unreleased content pack and its entitlement switch" },
+    @{ Path = "LAUNCHER_RU.md"; Why = "internal documentation, and Russian-only at that" }
 )
 
 $assemblies = Get-ChildItem -Path $out -Recurse -Force -Filter "DealOrForce.dll" -ErrorAction SilentlyContinue |
@@ -195,8 +235,25 @@ if ($missing.Count -gt 0) {
     throw "Build incomplete."
 }
 
+$leaked = @()
+foreach ($item in $forbidden) {
+    $found = Get-ChildItem -Path $out -Recurse -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -like "*\$($item.Path)" } | Select-Object -First 1
+    if ($found) { $leaked += $item }
+}
+
+if ($leaked.Count -gt 0) {
+    Write-Host ""
+    Write-Host "The build contains things a player should not be given:" -ForegroundColor Red
+    $leaked | ForEach-Object { Write-Host "    $($_.Path)  -  $($_.Why)" -ForegroundColor Red }
+    Write-Host ""
+    Write-Host "Nothing here is fatal to the game, which is the problem: it ships quietly." -ForegroundColor Yellow
+    throw "Build carries material that must not ship."
+}
+
 $size = [math]::Round((Get-ChildItem -Path $out -Recurse -Force | Measure-Object -Property Length -Sum).Sum / 1MB, 1)
 Write-Host "  every data folder the game needs is in the build ($size MB)" -ForegroundColor Green
+Write-Host "  nothing in the build that should not be there" -ForegroundColor Green
 
 # ---------------------------------------------------------------- something to send
 if (-not $NoZip) {

@@ -21,8 +21,9 @@ public partial class MainWindow : Window
         _enginePath = Path.Combine(catalog.Profile, "launcher_engine.txt");
         _godot = godot ?? (File.Exists(_enginePath) ? File.ReadAllText(_enginePath).Trim() : Environment.GetEnvironmentVariable("GODOT_NET"));
         InitializeComponent();
+        L.TranslateTree(this);
         EngineButton.Visibility = catalog.IsProject ? Visibility.Visible : Visibility.Collapsed;
-        EnvironmentLabel.Text = catalog.IsProject ? "ПРОЕКТ  /  GODOT .NET" : "WINDOWS  /  ЛОКАЛЬНАЯ УСТАНОВКА";
+        EnvironmentLabel.Text = catalog.IsProject ? L.T("PROJECT  /  GODOT .NET") : L.T("WINDOWS  /  LOCAL INSTALLATION");
         _catalog.Discover();
         LogDiscovery();
         _dlc = !_catalog.Packages.Any(p => !p.IsDlc) && _catalog.Packages.Any(p => p.IsDlc);
@@ -30,7 +31,7 @@ public partial class MainWindow : Window
         Closing += (_, e) =>
         {
             if (!_dirty) return;
-            var result = MessageBox.Show(this, "Сохранить изменения состава игры?", Title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            var result = MessageBox.Show(this, L.T("Save the changes to the game's content?"), Title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (result == MessageBoxResult.Cancel) e.Cancel = true;
             if (result == MessageBoxResult.Yes && !Save()) e.Cancel = true;
         };
@@ -45,29 +46,30 @@ public partial class MainWindow : Window
         PackageList.ItemsSource = visible;
         PackageList.SelectedItem = visible.FirstOrDefault(p => p.Id == selected) ?? visible.FirstOrDefault();
         EmptyMessage.Visibility = visible.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        EmptyMessage.Text = Search.Text.Length > 0 ? "Ничего не найдено. Попробуйте другое название или ID." : _dlc
-            ? "Дополнения не найдены.\n\nДобавьте папку дополнения с dlc.json в dlc и нажмите «Обновить»."
-            : "Моды пока не установлены.\n\nДобавьте папку мода с manifest.json в mods и нажмите «Обновить».\n\n_templates — примеры для авторов, не активные моды.";
+        EmptyMessage.Text = Search.Text.Length > 0 ? L.T("Nothing found. Try another name or ID.") : _dlc
+            ? L.T("No expansions found.\n\nAdd an expansion folder with a dlc.json to dlc, then press \"Refresh\".")
+            : L.T("No mods installed yet.\n\nAdd a mod folder with a manifest.json to mods, then press \"Refresh\".\n\n_templates holds examples for authors; they are not active mods.");
         ModsTab.Background = Brush(!_dlc ? "#665632" : "#213340");
         DlcTab.Background = Brush(_dlc ? "#665632" : "#213340");
-        Summary.Text = $"К ЗАПУСКУ\n{_catalog.Packages.Count(p => p.IsDlc && p.Active)} дополнений  ·  {_catalog.Packages.Count(p => !p.IsDlc && p.Active)} модов";
+        Summary.Text = L.F("READY TO LAUNCH\n{0} expansions  ·  {1} mods",
+            _catalog.Packages.Count(p => p.IsDlc && p.Active), _catalog.Packages.Count(p => !p.IsDlc && p.Active));
         Earlier.IsEnabled = Later.IsEnabled = !_dlc && PackageList.SelectedItem != null;
-        if (_catalog.SettingsError.Length > 0) Status.Text = "Ошибка настроек. Откройте папку профиля; резервная копия — .bak.";
-        else if (_catalog.Warnings.Count > 0) Status.Text = $"Предупреждения обнаружения: {_catalog.Warnings.Count}. Подробности — в журнале.";
+        if (_catalog.SettingsError.Length > 0) Status.Text = L.T("Settings error. Open the profile folder; the backup is the .bak file.");
+        else if (_catalog.Warnings.Count > 0) Status.Text = L.F("Discovery warnings: {0}. Details are in the log.", _catalog.Warnings.Count);
         UpdateDetails();
     }
 
     private void UpdateDetails()
     {
         if (Details == null) return;
-        if (PackageList.SelectedItem is not Package p) { Details.Text = "Выберите элемент для просмотра сведений.\n\nНастройки хранятся отдельно от файлов модов и DLC."; return; }
+        if (PackageList.SelectedItem is not Package p) { Details.Text = L.T("Choose an item to see its details.\n\nSettings are kept apart from the mod and DLC files."); return; }
         var position = _catalog.EffectiveOrder(p.IsDlc).FindIndex(id => id.Equals(p.Id, StringComparison.OrdinalIgnoreCase));
         Details.Text = $"{p.Name}  /  {p.Id}\n" + (p.Description.Length > 0 ? p.Description + "\n" : "") +
-            (p.Active ? $"Порядок в категории: {position + 1}. " : "") +
-            (p.Dependencies.Length > 0 ? "Зависимости: " + string.Join(", ", p.Dependencies) + ".\n" : "Без зависимостей.\n") +
-            (!p.Owned ? $"Дополнение установлено, но entitlement «{p.Entitlement}» не получен. Лаунчер не изменяет права доступа.\n" : "") +
-            (p.HasCode ? "Содержит исполняемый код — включайте только моды из доверенных источников.\n" : "") +
-            (!p.IsDlc && p.SupportedVersion != "*" ? $"Заявленная версия игры: {p.SupportedVersion} (совместимость не проверена автоматически).\n" : "") + p.Path;
+            (p.Active ? L.F("Position in its category: {0}. ", position + 1) : "") +
+            (p.Dependencies.Length > 0 ? L.F("Dependencies: {0}.\n", string.Join(", ", p.Dependencies)) : L.T("No dependencies.\n")) +
+            (!p.Owned ? L.F("The expansion is installed, but the entitlement \"{0}\" is not owned. The launcher does not change entitlements.\n", p.Entitlement) : "") +
+            (p.HasCode ? L.T("Contains executable code — only enable mods from sources you trust.\n") : "") +
+            (!p.IsDlc && p.SupportedVersion != "*" ? L.F("Declared game version: {0} (compatibility is not checked automatically).\n", p.SupportedVersion) : "") + p.Path;
     }
 
     private static SolidColorBrush Brush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
@@ -82,7 +84,7 @@ public partial class MainWindow : Window
         if (!p.Owned) return;
         p.Enabled = check.IsChecked == true;
         _dirty = true; _catalog.Resolve();
-        Status.Text = "Есть изменения. Сохраните их или нажмите «Играть».";
+        Status.Text = L.T("There are unsaved changes. Save them, or press \"Play\".");
         RefreshView(p.Id);
     }
     private void EarlierClick(object sender, RoutedEventArgs e) => Move(-1);
@@ -95,11 +97,11 @@ public partial class MainWindow : Window
         if (next < 0 || next >= _catalog.Packages.Count || _catalog.Packages[next].IsDlc) return;
         (_catalog.Packages[i], _catalog.Packages[next]) = (_catalog.Packages[next], _catalog.Packages[i]);
         _dirty = true; _catalog.Resolve(); RefreshView(p.Id);
-        Status.Text = "Порядок изменён. Зависимости всегда загружаются перед зависимым модом.";
+        Status.Text = L.T("Order changed. Dependencies always load before the mod that needs them.");
     }
     private bool Save()
     {
-        try { _catalog.Save(); _dirty = false; Status.Text = "Сохранено. Изменения вступят в силу при следующем запуске."; Log("Content selection saved."); return true; }
+        try { _catalog.Save(); _dirty = false; Status.Text = L.T("Saved. The changes take effect at the next launch."); Log("Content selection saved."); return true; }
         catch (Exception ex) { Report(ex); return false; }
     }
     private void SaveClick(object sender, RoutedEventArgs e) => Save();
@@ -107,7 +109,7 @@ public partial class MainWindow : Window
     {
         if (_dirty && !Save()) return;
         _catalog.Discover(); LogDiscovery();
-        Status.Text = "Список обновлён. Настройки применяются при следующем запуске.";
+        Status.Text = L.T("List refreshed. Settings take effect at the next launch.");
         RefreshView();
     }
     private void OpenPackageFolder(object sender, RoutedEventArgs e) => OpenFolder((PackageList.SelectedItem as Package)?.Path ?? Path.Combine(_catalog.Root, _dlc ? "dlc" : "mods"));
@@ -119,10 +121,10 @@ public partial class MainWindow : Window
     }
     private void ChooseEngine(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Title = "Выберите Godot .NET (mono), не обычную версию Godot", Filter = "Godot .NET (*.exe)|*.exe", CheckFileExists = true };
+        var dialog = new OpenFileDialog { Title = L.T("Choose Godot .NET (mono), not the standard build of Godot"), Filter = "Godot .NET (*.exe)|*.exe", CheckFileExists = true };
         if (dialog.ShowDialog(this) != true) return;
         _godot = dialog.FileName;
-        try { Directory.CreateDirectory(_catalog.Profile); File.WriteAllText(_enginePath, _godot); Status.Text = "Godot выбран: " + Path.GetFileName(_godot); }
+        try { Directory.CreateDirectory(_catalog.Profile); File.WriteAllText(_enginePath, _godot); Status.Text = L.F("Godot chosen: {0}", Path.GetFileName(_godot)); }
         catch (Exception ex) { Report(ex); }
     }
     private async void PlayClick(object sender, RoutedEventArgs e)
@@ -131,7 +133,7 @@ public partial class MainWindow : Window
         _catalog.Resolve();
         if (_catalog.Packages.Any(p => p.Enabled && p.Owned && !p.Active))
         {
-            MessageBox.Show(this, "Некоторые включённые элементы имеют недоступные зависимости или цикл. Включите необходимые зависимости либо выключите проблемные элементы.", Title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, L.T("Some enabled items have missing dependencies or a cycle. Enable the dependencies they need, or turn the problem items off."), Title, MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (_catalog.IsProject && (string.IsNullOrWhiteSpace(_godot) || !File.Exists(_godot)))
@@ -140,23 +142,23 @@ public partial class MainWindow : Window
         try
         {
             var info = _catalog.LaunchInfo(_godot);
-            _game = Process.Start(info) ?? throw new InvalidOperationException("Не удалось создать процесс игры.");
+            _game = Process.Start(info) ?? throw new InvalidOperationException(L.T("Could not start the game process."));
             Log($"Started {info.FileName}; PID {_game.Id}; profile {_catalog.SelectionPath}");
-            Play.IsEnabled = false; Play.Content = "ИГРА ЗАПУЩЕНА";
-            Status.Text = "Игра запускается. Дождитесь главного меню; повторный запуск заблокирован.";
+            Play.IsEnabled = false; Play.Content = L.T("GAME RUNNING");
+            Status.Text = L.T("The game is starting. Wait for the main menu; a second launch is blocked.");
             await _game.WaitForExitAsync();
             var code = _game.ExitCode;
             _game.Dispose(); _game = null;
-            Play.IsEnabled = true; Play.Content = "ИГРАТЬ  ▶";
-            Status.Text = code == 0 ? "Игра закрыта. Можно изменить состав следующей кампании." : $"Игра завершилась с кодом {code}. Проверьте логи игры.";
+            Play.IsEnabled = true; Play.Content = L.T("PLAY  ▶");
+            Status.Text = code == 0 ? L.T("The game has closed. You can change the content for the next campaign.") : L.F("The game exited with code {0}. Check the game's logs.", code);
             Log("Game exited: " + code);
         }
-        catch (Exception ex) { Play.IsEnabled = true; Play.Content = "ИГРАТЬ  ▶"; Report(ex); }
+        catch (Exception ex) { Play.IsEnabled = true; Play.Content = L.T("PLAY  ▶"); Report(ex); }
     }
     private void Report(Exception ex)
     {
         Log(ex.ToString()); Status.Text = ex.Message;
-        MessageBox.Show(this, ex.Message, "Deal or Force — ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show(this, ex.Message, L.T("Deal or Force — error"), MessageBoxButton.OK, MessageBoxImage.Error);
     }
     private void LogDiscovery()
     {

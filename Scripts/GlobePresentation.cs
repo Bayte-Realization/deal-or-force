@@ -106,6 +106,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         public Node3D Node;
         public Sprite3D Plate;
+        public Sprite3D Glow;
         public Label3D Count;
         public readonly List<Simulation.Army> Stack = new();
         public Vector3 Normal;
@@ -157,6 +158,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private byte[] _ownerPixels;
     private Image _ownerImage;
     private ImageTexture _ownerTexture;
+    private byte[] _ownerIdPixels;
+    private Image _ownerIdImage;
+    private ImageTexture _ownerIdTexture;
     private int _frontRevision = -1;
 
     // The two overlay textures are rewritten whenever a province changes hands, which in a
@@ -302,6 +306,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public void BindCampaign(Simulation.Campaign campaign)
     {
         _campaign = campaign;
+        // A country picked in the last campaign is an id in somebody else's world.
+        _mapModeSubjectId = -1;
         var repairs = campaign.ScenarioId == "2024" ? Simulation.TerritorialTopology.Apply(
             campaign,
             SourceEarthData.Control,
@@ -473,6 +479,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
         UpdateFogTint();
         UpdateFogVisibility();
+        // A capital that moved - by choice, or because its region was ceded - moves its marker.
+        if (_mapApplied && _campaign is not null && _capitalRevision != _campaign.CapitalRevision)
+            BuildCapitalMarkers(_campaign);
         UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f);
         var armyLod = ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
@@ -883,6 +892,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
             marker.Plate.FixedSize = !_flatMap;
             marker.Count.FixedSize = !_flatMap;
             marker.Plate.PixelSize = _flatMap ? 52f / 176f : CounterPlatePixelSize * _counterScale;
+            if (marker.Glow is not null)
+            {
+                marker.Glow.FixedSize = marker.Plate.FixedSize;
+                marker.Glow.PixelSize = marker.Plate.PixelSize;
+            }
             marker.Count.PixelSize = _flatMap ? .60f : CounterTextPixelSize * _counterScale;
             marker.Count.OutlineSize = _flatMap ? 2 : Mathf.RoundToInt(CounterOutlineSize * _counterScale);
             marker.Count.Position = _flatMap ? new Vector3(10f, -1f, 4f) : new Vector3(0f, -.004f, .004f);
@@ -896,6 +910,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             marker.Node.Scale = Vector3.One;
             marker.Plate.PixelSize = CounterPlatePixelSize * _counterScale;
+            if (marker.Glow is not null) marker.Glow.PixelSize = marker.Plate.PixelSize;
             marker.Count.PixelSize = CounterTextPixelSize * _counterScale;
             marker.Count.OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale);
         }
@@ -992,9 +1007,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (!IsInstanceValid(node)) continue;
             var plate = node.GetChildOrNull<Sprite3D>(0);
             if (plate is null) continue;
-            plate.Modulate = armies.Any(army => selected.Contains(army.Id))
-                ? new Color(1f, 0.86f, 0.42f, 1f)
-                : Colors.White;
+            var chosen = armies.Any(army => selected.Contains(army.Id));
+            plate.Modulate = chosen ? new Color(1f, 0.96f, 0.86f, 1f) : Colors.White;
+            if (plate.GetChildOrNull<Sprite3D>(0) is { } glow) glow.Visible = chosen;
         }
     }
 
@@ -1577,6 +1592,11 @@ uniform sampler2D nation_ids : filter_nearest;
 uniform sampler2D hydrology_map : filter_linear, repeat_enable;
 uniform sampler2D province_control_colors : source_color, filter_nearest, repeat_disable;
 uniform sampler2D province_owner_colors : source_color, filter_nearest, repeat_disable;
+// Who owns each province now, for the provinces whose owner has changed since the country id
+// map was drawn: owner id in r/g, and b set where the entry means anything. Read as data, so
+// no source_color on it.
+uniform sampler2D province_owner_ids : filter_nearest, repeat_disable;
+uniform float owners_moved = 0.0;
 uniform sampler2D nation_palette : source_color, filter_nearest, repeat_disable;
 uniform float border_pixels = 1.35;
 uniform float province_border_pixels = 2.0;
@@ -1749,6 +1769,56 @@ float boundary_coverage(sampler2D ids, vec2 uv, out float near_id, out float oth
     return coverage;
 }
 
+/// The country a map cell belongs to NOW. The id map was drawn from the authored world and is
+/// never rewritten - it is sixteen million cells - so a province a peace signed over still
+/// says its old owner in it. Everything drawn off the country id (the border stroke, the
+/// highlighted country, the map modes) goes through this instead, and a province whose owner
+/// has moved answers with its new one.
+float nation_at(vec2 cell, vec2 size) {
+    float nation = id_at(nation_ids, cell, size);
+    if (owners_moved < 0.5) return nation;
+    float province = id_at(province_ids, cell, size);
+    if (province < 0.5) return nation;
+    float low = mod(province, 256.0);
+    float high = floor(province / 256.0);
+    vec4 moved = texture(province_owner_ids, (vec2(low, high) + vec2(0.5)) / 256.0);
+    return moved.b > 0.5 ? floor(moved.r * 255.0 + 0.5) + floor(moved.g * 255.0 + 0.5) * 256.0 : nation;
+}
+
+/// boundary_coverage, for countries: the same reconstruction, read through nation_at.
+float nation_coverage(vec2 uv, out float near_id, out float other_id) {
+    vec2 size = vec2(textureSize(nation_ids, 0));
+    vec2 grid = uv * size - vec2(0.5);
+    vec2 base_cell = floor(grid);
+    vec2 f = grid - base_cell;
+
+    float i00 = nation_at(base_cell, size);
+    float i10 = nation_at(base_cell + vec2(1.0, 0.0), size);
+    float i01 = nation_at(base_cell + vec2(0.0, 1.0), size);
+    float i11 = nation_at(base_cell + vec2(1.0, 1.0), size);
+
+    float w00 = (1.0 - f.x) * (1.0 - f.y);
+    float w10 = f.x * (1.0 - f.y);
+    float w01 = (1.0 - f.x) * f.y;
+    float w11 = f.x * f.y;
+
+    near_id = f.x < 0.5 ? (f.y < 0.5 ? i00 : i01) : (f.y < 0.5 ? i10 : i11);
+
+    float coverage = 0.0;
+    coverage += abs(i00 - near_id) < 0.5 ? w00 : 0.0;
+    coverage += abs(i10 - near_id) < 0.5 ? w10 : 0.0;
+    coverage += abs(i01 - near_id) < 0.5 ? w01 : 0.0;
+    coverage += abs(i11 - near_id) < 0.5 ? w11 : 0.0;
+
+    other_id = near_id;
+    float claim = 0.0;
+    if (abs(i00 - near_id) >= 0.5 && w00 > claim) { claim = w00; other_id = i00; }
+    if (abs(i10 - near_id) >= 0.5 && w10 > claim) { claim = w10; other_id = i10; }
+    if (abs(i01 - near_id) >= 0.5 && w01 > claim) { claim = w01; other_id = i01; }
+    if (abs(i11 - near_id) >= 0.5 && w11 > claim) { claim = w11; other_id = i11; }
+    return coverage;
+}
+
 vec4 owner_color(float province) {
     float low = mod(province, 256.0);
     float high = floor(province / 256.0);
@@ -1858,7 +1928,7 @@ void fragment() {
     vec4 political_smooth = texture(political_map, UV);
     float near_nation;
     float other_nation;
-    float nation_cover = boundary_coverage(nation_ids, map_uv, near_nation, other_nation);
+    float nation_cover = nation_coverage(map_uv, near_nation, other_nation);
     float nation_aa = id_aa;
     float nation_share = smoothstep(0.5 - nation_aa, 0.5 + nation_aa, nation_cover);
 
@@ -2132,6 +2202,8 @@ void fragment() {
         _globeMaterial.SetShaderParameter("nation_ids", emptyIds);
         _globeMaterial.SetShaderParameter("hydrology_map", emptyIds);
         _globeMaterial.SetShaderParameter("province_owner_colors", placeholder);
+        _globeMaterial.SetShaderParameter("province_owner_ids",
+            ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
         _globeMaterial.SetShaderParameter("province_control_colors",
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
         _globeMaterial.SetShaderParameter("front_membership",
@@ -2240,10 +2312,10 @@ void fragment() {
         if (_flatMap && !typing)
         {
             var flatSpeed = _flatZoom * 0.62f * (float)delta;
-            if (Input.IsKeyPressed(Key.W)) _targetFlatY += flatSpeed;
-            if (Input.IsKeyPressed(Key.S)) _targetFlatY -= flatSpeed;
-            if (Input.IsKeyPressed(Key.A)) _targetFlatX -= flatSpeed;
-            if (Input.IsKeyPressed(Key.D)) _targetFlatX += flatSpeed;
+            if (DealOrForceGame.Held(Key.W)) _targetFlatY += flatSpeed;
+            if (DealOrForceGame.Held(Key.S)) _targetFlatY -= flatSpeed;
+            if (DealOrForceGame.Held(Key.A)) _targetFlatX -= flatSpeed;
+            if (DealOrForceGame.Held(Key.D)) _targetFlatX += flatSpeed;
             ClampFlatCamera();
         }
         else if (!_flatMap && !typing)
@@ -2259,10 +2331,10 @@ void fragment() {
             // the thing under the pointer and reads correctly as taking hold of the globe;
             // the keyboard is not holding anything, and a key that walks the viewpoint is
             // what every map in the genre does.
-            if (Input.IsKeyPressed(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -1.20f, 1.20f);
-            if (Input.IsKeyPressed(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -1.20f, 1.20f);
-            if (Input.IsKeyPressed(Key.A)) _targetYaw -= (float)delta * 0.7f;
-            if (Input.IsKeyPressed(Key.D)) _targetYaw += (float)delta * 0.7f;
+            if (DealOrForceGame.Held(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -1.20f, 1.20f);
+            if (DealOrForceGame.Held(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -1.20f, 1.20f);
+            if (DealOrForceGame.Held(Key.A)) _targetYaw -= (float)delta * 0.7f;
+            if (DealOrForceGame.Held(Key.D)) _targetYaw += (float)delta * 0.7f;
         }
 
         ApplyCamera();
@@ -2392,15 +2464,15 @@ void fragment() {
         // Roll, because a horizon that is allowed to tilt is the difference between footage
         // and a map screenshot; and R to put it back, because finding level again by hand
         // is the part nobody enjoys.
-        if (Input.IsKeyPressed(Key.Q)) _freeRoll -= 1.1f * step * fast * slow;
-        if (Input.IsKeyPressed(Key.E)) _freeRoll += 1.1f * step * fast * slow;
-        if (Input.IsKeyPressed(Key.R)) _freeRoll = Mathf.MoveToward(_freeRoll, 0f, 2.2f * step);
+        if (DealOrForceGame.Held(Key.Q)) _freeRoll -= 1.1f * step * fast * slow;
+        if (DealOrForceGame.Held(Key.E)) _freeRoll += 1.1f * step * fast * slow;
+        if (DealOrForceGame.Held(Key.R)) _freeRoll = Mathf.MoveToward(_freeRoll, 0f, 2.2f * step);
 
         // A lens rather than a throttle: moving closer and zooming in look nothing alike,
         // and only one of them can be done from orbit.
-        if (Input.IsKeyPressed(Key.Z)) _freeFov = Mathf.Clamp(_freeFov - 26f * step, 12f, 110f);
-        if (Input.IsKeyPressed(Key.X)) _freeFov = Mathf.Clamp(_freeFov + 26f * step, 12f, 110f);
-        if (Input.IsKeyPressed(Key.F)) _freeFov = Mathf.MoveToward(_freeFov, RigFieldOfView, 60f * step);
+        if (DealOrForceGame.Held(Key.Z)) _freeFov = Mathf.Clamp(_freeFov - 26f * step, 12f, 110f);
+        if (DealOrForceGame.Held(Key.X)) _freeFov = Mathf.Clamp(_freeFov + 26f * step, 12f, 110f);
+        if (DealOrForceGame.Held(Key.F)) _freeFov = Mathf.MoveToward(_freeFov, RigFieldOfView, 60f * step);
 
         if (_freeOrbiting) UpdateFreeOrbit(step, fast * slow);
         else UpdateFreeFlight(step, fast * slow);
@@ -2419,10 +2491,10 @@ void fragment() {
         var right = new Basis(Quaternion.FromEuler(new Vector3(0f, _freeYaw, 0f))).X;
 
         var move = Vector3.Zero;
-        if (Input.IsKeyPressed(Key.W)) move += forward;
-        if (Input.IsKeyPressed(Key.S)) move -= forward;
-        if (Input.IsKeyPressed(Key.D)) move += right;
-        if (Input.IsKeyPressed(Key.A)) move -= right;
+        if (DealOrForceGame.Held(Key.W)) move += forward;
+        if (DealOrForceGame.Held(Key.S)) move -= forward;
+        if (DealOrForceGame.Held(Key.D)) move += right;
+        if (DealOrForceGame.Held(Key.A)) move -= right;
         if (Input.IsKeyPressed(Key.Space)) move += Vector3.Up;
         if (Input.IsKeyPressed(Key.Ctrl)) move -= Vector3.Up;
 
@@ -2443,15 +2515,15 @@ void fragment() {
         _freeOrbitYaw += _freeAutoOrbit * step;
 
         var turn = 0.85f * step * scale;
-        if (Input.IsKeyPressed(Key.A)) _freeOrbitYaw -= turn;
-        if (Input.IsKeyPressed(Key.D)) _freeOrbitYaw += turn;
+        if (DealOrForceGame.Held(Key.A)) _freeOrbitYaw -= turn;
+        if (DealOrForceGame.Held(Key.D)) _freeOrbitYaw += turn;
         if (Input.IsKeyPressed(Key.Space)) _freeOrbitPitch += turn;
         if (Input.IsKeyPressed(Key.Ctrl)) _freeOrbitPitch -= turn;
         _freeOrbitPitch = Mathf.Clamp(_freeOrbitPitch, -1.45f, 1.45f);
 
         var closing = _freeOrbitRadius * 0.9f * step * scale;
-        if (Input.IsKeyPressed(Key.W)) _freeOrbitRadius -= closing;
-        if (Input.IsKeyPressed(Key.S)) _freeOrbitRadius += closing;
+        if (DealOrForceGame.Held(Key.W)) _freeOrbitRadius -= closing;
+        if (DealOrForceGame.Held(Key.S)) _freeOrbitRadius += closing;
         _freeOrbitRadius = Mathf.Clamp(_freeOrbitRadius, GlobeRadius * 0.06f, MaximumDistance * 2.5f);
 
         _freePosition = _freeOrbitCentre + OrbitOffset();
@@ -2783,6 +2855,7 @@ void fragment() {
             };
             node.AddChild(plate);
             marker.Plate = plate;
+            marker.Glow = AttachSelectionGlow(plate, 176, 104, 0);
 
             var divisions = new Label3D
             {
@@ -2911,6 +2984,8 @@ void fragment() {
                 Modulate = flag.Lerp(Colors.White, 0.22f) with { A = 0.94f }
             };
             marker.AddChild(plate);
+            var fleetGlow = AttachSelectionGlow(plate, 160, 96, 3);
+            fleetGlow.Visible = fleet.Id == _selectedFleetId;
             var strength = new Label3D
             {
                 Text = fleet.Hulls.ToString(), FontSize = 24, PixelSize = 0.00024f,
@@ -2951,6 +3026,11 @@ void fragment() {
             node.Position = point;
             _fleetMarkers[index] = (node, point.Normalized());
             if (!_fleetNodes.TryGetValue(fleet.Id, out var parts)) continue;
+            if (IsInstanceValid(parts.Plate) && parts.Plate.GetChildOrNull<Sprite3D>(0) is { } fleetGlow)
+            {
+                var chosen = fleet.Id == _selectedFleetId;
+                if (fleetGlow.Visible != chosen) fleetGlow.Visible = chosen;
+            }
             if (IsInstanceValid(parts.Count))
             {
                 var text = fleet.Hulls.ToString();
@@ -3145,8 +3225,11 @@ void fragment() {
         var topology = _campaign.ProvinceMap;
         var pixels = _controlPixels ??= new byte[256 * 256 * 4];
         var ownerPixels = _ownerPixels ??= new byte[256 * 256 * 4];
+        var ownerIds = _ownerIdPixels ??= new byte[256 * 256 * 4];
+        var ownersMoved = false;
         Array.Clear(pixels);
         Array.Clear(ownerPixels);
+        Array.Clear(ownerIds);
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var owner = topology.ProvinceToNation[province];
@@ -3163,6 +3246,13 @@ void fragment() {
                 ownerPixels[ownerWrite + 1] = (byte)((ownerPacked >> 16) & 0xFF);
                 ownerPixels[ownerWrite + 2] = (byte)((ownerPacked >> 8) & 0xFF);
                 ownerPixels[ownerWrite + 3] = 255;
+                // And the id, for the border stroke - otherwise a country that has been
+                // annexed goes on being outlined inside the country that annexed it.
+                ownerIds[ownerWrite] = (byte)(owner & 0xFF);
+                ownerIds[ownerWrite + 1] = (byte)((owner >> 8) & 0xFF);
+                ownerIds[ownerWrite + 2] = 255;
+                ownerIds[ownerWrite + 3] = 255;
+                ownersMoved = true;
             }
 
             var controller = _campaign.ProvinceController[province];
@@ -3220,6 +3310,19 @@ void fragment() {
             _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, ownerPixels);
             _ownerTexture.Update(_ownerImage);
         }
+
+        if (_ownerIdTexture is null)
+        {
+            _ownerIdImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerIds);
+            _ownerIdTexture = ImageTexture.CreateFromImage(_ownerIdImage);
+            _globeMaterial.SetShaderParameter("province_owner_ids", _ownerIdTexture);
+        }
+        else
+        {
+            _ownerIdImage.SetData(256, 256, false, Image.Format.Rgba8, ownerIds);
+            _ownerIdTexture.Update(_ownerIdImage);
+        }
+        _globeMaterial.SetShaderParameter("owners_moved", ownersMoved ? 1.0f : 0.0f);
         _controlRevision = _campaign.MapRevision;
         BuildFrontPreview();
         _frontRevision = _controlRevision;
@@ -3235,6 +3338,7 @@ void fragment() {
     private void BuildCapitalMarkers(Simulation.Campaign campaign)
     {
         if (!IsInstanceValid(_capitalRoot) || _capitalTexture is null) return;
+        _capitalRevision = campaign.CapitalRevision;
 
         foreach (var child in _capitalRoot.GetChildren())
             child.QueueFree();
@@ -3243,6 +3347,11 @@ void fragment() {
         foreach (var nation in campaign.Nations)
         {
             if (string.IsNullOrWhiteSpace(nation.CapitalName)) continue;
+            // A country that has been conquered has nowhere to be governed from, and its
+            // marker used to go on standing in the middle of somebody else's country. One
+            // the map never placed - too small for the raster - keeps the point it was given.
+            if (campaign.StatesOf(nation).Length == 0) continue;
+            if (nation.CapitalStateMapIndex > 0 && !Simulation.CapitalCore.HasCapital(campaign, nation)) continue;
 
             var marker = new Sprite3D
             {
@@ -3261,6 +3370,9 @@ void fragment() {
             _capitalMarkers.Add((marker, marker.Position.Normalized()));
         }
     }
+
+    /// <summary>The campaign's capital revision the markers were last built for.</summary>
+    private int _capitalRevision = -1;
 
     private Dictionary<int, TerritoryLabelAnchor> _lastLabelAnchors;
     private readonly Dictionary<int, string> _lastLabelNames = new();

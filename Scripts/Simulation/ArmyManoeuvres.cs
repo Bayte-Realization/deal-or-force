@@ -109,6 +109,8 @@ public sealed class StrategicRedeploymentCommand : ICampaignCommand
 /// </summary>
 public static class StrategicRedeployment
 {
+    // Kept as the fallback for a caller without a campaign, the same arrangement the march
+    // rates use. The live numbers are on Defines, where a movement mod can reach them.
     /// <summary>How much faster the railways are than a road march.</summary>
     public const float SpeedMultiplier = 3.2f;
 
@@ -118,12 +120,14 @@ public static class StrategicRedeployment
     public static float DayOf(Campaign campaign, Army army)
     {
         if (army is null || !army.IsRedeploying) return 1f;
-        army.Organisation = M.Clamp01(army.Organisation - OrganisationPerDay);
+        var defines = campaign?.Defines;
+        army.Organisation = M.Clamp01(army.Organisation -
+            (defines?.RailRedeploymentOrganisationPerDay ?? OrganisationPerDay));
         // Nothing dug in survives being loaded onto a train, and a plan made for one part of
         // the front is not a plan for the other end of it.
         army.Entrenchment = 0f;
         army.Planning = M.Clamp01(army.Planning * 0.5f);
-        return SpeedMultiplier;
+        return defines?.RailRedeploymentSpeed ?? SpeedMultiplier;
     }
 }
 

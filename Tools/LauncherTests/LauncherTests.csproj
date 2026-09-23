@@ -3,5 +3,6 @@
  <ItemGroup>
   <Compile Include="../../Scripts/Modding/ContentSelection.cs" Link="ContentSelection.cs"/>
   <Compile Include="../Launcher/LauncherCatalog.cs" Link="LauncherCatalog.cs"/>
+  <Compile Include="../Launcher/LauncherText.cs" Link="LauncherText.cs"/>
  </ItemGroup>
 </Project>

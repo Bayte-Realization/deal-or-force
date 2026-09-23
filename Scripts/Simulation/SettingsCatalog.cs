@@ -59,6 +59,18 @@ public sealed class SettingDefinition
     /// live; the ones it cannot should say so rather than looking broken.
     /// </summary>
     public bool NeedsRestart;
+
+    /// <summary>
+    /// Whether this belongs to a campaign rather than to the player (item 55 on the list).
+    ///
+    /// Most options are the player's: a volume, a language, a window. A few are the
+    /// campaign's - how long a step of the world is, how often it saves itself - and those
+    /// used to be the player's too, so a campaign played at a daily step came back from a
+    /// save at whatever step the player had set since. A campaign option is kept on the
+    /// campaign and in its save; the value set from the main menu is only what a new
+    /// campaign starts with.
+    /// </summary>
+    public bool Campaign;
 }
 
 /// <summary>
@@ -160,6 +172,10 @@ public static class SettingsCatalog
                 case "order": definition.Order = (int)Number(field.Value, definition.Order); break;
                 case "unit": definition.Unit = Text(field.Value, definition.Unit); break;
                 case "needs_restart": definition.NeedsRestart = Flag(field.Value, definition.NeedsRestart); break;
+                case "scope":
+                    definition.Campaign = string.Equals(Text(field.Value, "player"), "campaign",
+                        StringComparison.OrdinalIgnoreCase);
+                    break;
                 case "kind":
                     definition.Kind = Text(field.Value, "toggle").ToLowerInvariant() switch
                     {
@@ -227,14 +243,83 @@ public static class SettingsCatalog
         _ => fallback
     };
 
+    // ---- the campaign's own options --------------------------------------------------------
+
+    /// <summary>
+    /// The campaign whose options are being read, if one is running. Asked rather than
+    /// remembered, so it can never go on pointing at the campaign before the one on screen;
+    /// the main menu, which has no campaign, sets it to nothing.
+    /// </summary>
+    public static Func<Campaign> CurrentCampaign;
+
+    /// <summary>Whether campaign options are being read from and written to a campaign right now.</summary>
+    public static bool CampaignBound => CurrentCampaign?.Invoke() is not null;
+
+    /// <summary>
+    /// The campaign's own value for one of its options, as text. A campaign that has never
+    /// been asked - a new one, or a save written before campaigns kept their options - takes
+    /// the player's current value there and then, and keeps it.
+    /// </summary>
+    private static string CampaignValue(SettingDefinition definition, string playerValue)
+    {
+        var campaign = CurrentCampaign?.Invoke();
+        if (campaign is null || definition is null || !definition.Campaign) return null;
+        if (campaign.Settings.TryGetValue(definition.Id, out var kept)) return kept;
+        campaign.Settings[definition.Id] = playerValue;
+        return playerValue;
+    }
+
+    /// <summary>Write an option where it lives: on the campaign if it is the campaign's, otherwise for the player.</summary>
+    public static void Store(string id, string value)
+    {
+        var definition = Of(id);
+        var campaign = CurrentCampaign?.Invoke();
+        if (definition is { Campaign: true } && campaign is not null) campaign.Settings[id] = value;
+        else PlayerSettings.Set(id, value);
+    }
+
+    public static void Store(string id, bool value) =>
+        Store(id, value ? "true" : "false", () => PlayerSettings.Set(id, value));
+
+    public static void Store(string id, float value) =>
+        Store(id, value.ToString("R", System.Globalization.CultureInfo.InvariantCulture), () => PlayerSettings.Set(id, value));
+
+    private static void Store(string id, string text, Action player)
+    {
+        var definition = Of(id);
+        var campaign = CurrentCampaign?.Invoke();
+        if (definition is { Campaign: true } && campaign is not null) campaign.Settings[id] = text;
+        else player();
+    }
+
+    /// <summary>Put an option back to what the game ships with, where it lives.</summary>
+    public static void Reset(string id)
+    {
+        var definition = Of(id);
+        var campaign = CurrentCampaign?.Invoke();
+        if (definition is { Campaign: true } && campaign is not null) campaign.Settings.Remove(id);
+        else PlayerSettings.Clear(id);
+        // A campaign option reset inside a campaign goes back to the game's default, not to
+        // the player's: it is removed here and the next read writes the default back.
+        if (definition is { Campaign: true } && campaign is not null)
+            campaign.Settings[id] = definition.Kind switch
+            {
+                SettingKind.Toggle => definition.Default ? "true" : "false",
+                SettingKind.Slider => definition.DefaultNumber.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                _ => definition.DefaultValue
+            };
+    }
+
     // ---- what the player has actually chosen -------------------------------------------
 
     public static bool Flag(string id)
     {
         var definition = Of(id);
-        return definition is null
+        var player = definition is null
             ? PlayerSettings.Bool(id, false)
             : PlayerSettings.Bool(id, definition.Default);
+        var kept = CampaignValue(definition, player ? "true" : "false");
+        return kept is null ? player : string.Equals(kept, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string Chosen(string id)
@@ -242,6 +327,7 @@ public static class SettingsCatalog
         var definition = Of(id);
         var fallback = definition?.DefaultValue ?? "";
         var value = PlayerSettings.Text(id, fallback);
+        value = CampaignValue(definition, value) ?? value;
         // A value the option no longer offers - a resolution a new monitor does not have, a
         // language a mod stopped shipping - is not a value.
         if (definition is not null && definition.Values.Count > 0 &&
@@ -255,6 +341,10 @@ public static class SettingsCatalog
         var definition = Of(id);
         if (definition is null) return PlayerSettings.Float(id, 0f);
         var value = PlayerSettings.Float(id, definition.DefaultNumber);
+        var kept = CampaignValue(definition, value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+        if (kept is not null && float.TryParse(kept, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var campaignValue))
+            value = campaignValue;
         return Math.Clamp(value, definition.Minimum, definition.Maximum);
     }
 }

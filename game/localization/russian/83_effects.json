@@ -1,0 +1,15 @@
+{
+  // Как эффект называется в подсказке: «Стабильность: +3%». См. ScriptedEffects.Lines.
+  "Effects:": "Эффекты:",
+  "The government sets the key rate": "Ключевую ставку назначает правительство",
+  "Construction capacity": "Строительные мощности",
+  "Welfare spending": "Социальные расходы",
+  "Education spending": "Расходы на образование",
+  "Standard of living in every region": "Уровень жизни во всех регионах",
+  "Radicalism in every region": "Радикализм во всех регионах",
+  "Literacy in every region": "Грамотность во всех регионах",
+  "Urbanisation in every region": "Урбанизация во всех регионах",
+  "Population of every region": "Население каждого региона",
+  "Inflation": "Инфляция",
+  "Manpower": "Людские резервы"
+}

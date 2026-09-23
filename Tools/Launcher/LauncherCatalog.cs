@@ -23,7 +23,7 @@ public sealed class Package
     public bool HasCode { get; set; }
     public int Order { get; set; }
     public string Error { get; set; } = "";
-    public string Status => !Owned ? "Нет права доступа" : !Enabled ? "Выключено" : Error.Length > 0 ? Error : "Будет загружено";
+    public string Status => !Owned ? L.T("Not owned") : !Enabled ? L.T("Off") : Error.Length > 0 ? Error : L.T("Will load");
 }
 
 public sealed class LauncherCatalog
@@ -49,7 +49,7 @@ public sealed class LauncherCatalog
         for (var directory = new DirectoryInfo(start); directory != null; directory = directory.Parent)
             if (File.Exists(System.IO.Path.Combine(directory.FullName, "project.godot")) ||
                 File.Exists(System.IO.Path.Combine(directory.FullName, "Deal or Force.exe"))) return directory.FullName;
-        throw new DirectoryNotFoundException("Поместите лаунчер рядом с Deal or Force.exe или project.godot. Можно указать --root <папка>.");
+        throw new DirectoryNotFoundException(L.T("Put the launcher beside Deal or Force.exe or project.godot, or give --root <folder>."));
     }
 
     // Same precedence as GameDataLoader: published managed data, installation, then user data.
@@ -65,7 +65,7 @@ public sealed class LauncherCatalog
     {
         Packages.Clear(); Warnings.Clear(); DiscoveryNotes.Clear(); SettingsError = "";
         try { Selection = ContentSelection.Load(SelectionPath); }
-        catch (Exception e) { SettingsError = e.Message; Warnings.Add("Настройки повреждены: " + SelectionPath + "\n" + e.Message); }
+        catch (Exception e) { SettingsError = e.Message; Warnings.Add("Settings are damaged: " + SelectionPath + "\n" + e.Message); }
         var owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         bool unlock = false;
         var entitlementFile = InstallRoots().Select(p => System.IO.Path.Combine(p, "dlc", "entitlements.json")).FirstOrDefault(File.Exists);
@@ -97,7 +97,7 @@ public sealed class LauncherCatalog
                         using var doc = Parse(manifest);
                         var value = doc.RootElement;
                         var id = Text(value, "id");
-                        if (string.IsNullOrWhiteSpace(id)) throw new InvalidDataException("В манифесте отсутствует id.");
+                        if (string.IsNullOrWhiteSpace(id)) throw new InvalidDataException(L.T("The manifest has no id."));
                         var entitlement = Text(value, "entitlement");
                         var package = new Package
                         {
@@ -110,7 +110,7 @@ public sealed class LauncherCatalog
                             Enabled = Selection.IsEnabled(id, dlc, dlc || !value.TryGetProperty("enabled", out var en) || en.GetBoolean()),
                             HasCode = Text(value, "gdscript_entry").Length > 0 || Text(value, "csharp_assembly").Length > 0
                         };
-                        if (found.TryGetValue(id, out var previous)) DiscoveryNotes.Add($"{id}: используется {directory}; заменяет {previous.Path}");
+                        if (found.TryGetValue(id, out var previous)) DiscoveryNotes.Add($"{id}: using {directory}; it replaces {previous.Path}");
                         found[id] = package;
                     }
                     catch (Exception e) { Warnings.Add(manifest + ": " + e.Message); }
@@ -142,7 +142,7 @@ public sealed class LauncherCatalog
 
     public void Save()
     {
-        if (SettingsError.Length > 0) throw new InvalidDataException("Исправьте content_selection.json или восстановите .bak перед сохранением.");
+        if (SettingsError.Length > 0) throw new InvalidDataException(L.T("Fix content_selection.json, or restore the .bak, before saving."));
         foreach (var p in Packages) (p.IsDlc ? Selection.Dlc : Selection.Mods)[p.Id] = p.Enabled;
         Selection.ModOrder = Packages.Where(p => !p.IsDlc).Select(p => p.Id).ToList();
         Selection.Save(SelectionPath);
@@ -153,14 +153,14 @@ public sealed class LauncherCatalog
         ProcessStartInfo info;
         if (IsProject)
         {
-            if (string.IsNullOrWhiteSpace(godot) || !File.Exists(godot)) throw new FileNotFoundException("Выберите Godot .NET для запуска проекта.");
+            if (string.IsNullOrWhiteSpace(godot) || !File.Exists(godot)) throw new FileNotFoundException(L.T("Choose Godot .NET to run the project."));
             info = new(godot);
             info.ArgumentList.Add("--path"); info.ArgumentList.Add(Root);
         }
         else
         {
             var exe = System.IO.Path.Combine(Root, "Deal or Force.exe");
-            if (!File.Exists(exe)) throw new FileNotFoundException("Не найден Deal or Force.exe рядом с лаунчером.");
+            if (!File.Exists(exe)) throw new FileNotFoundException(L.T("Deal or Force.exe was not found beside the launcher."));
             info = new(exe);
         }
         info.UseShellExecute = false;

@@ -32,5 +32,8 @@
   "You are the head of state. Do it yourself: {0}": "You are the head of state. Do it yourself: {0}",
   "Nothing happens.": "Nothing happens.",
   "{0} ({1}). {2}, {3}. {4:N0} people, {5} in the treasury, {6:N0} division(s). The simulation knows nothing else about you and has no opinion.": "{0} ({1}). {2}, {3}. {4:N0} people, {5} in the treasury, {6:N0} division(s). The simulation knows nothing else about you and has no opinion.",
-  "{0:h\\:mm} of your life for {1:N0} year(s) of somebody else's. The grass is outside and it is not modelled.": "{0:h\\:mm} of your life for {1:N0} year(s) of somebody else's. The grass is outside and it is not modelled."
+  "{0:h\\:mm} of your life for {1:N0} year(s) of somebody else's. The grass is outside and it is not modelled.": "{0:h\\:mm} of your life for {1:N0} year(s) of somebody else's. The grass is outside and it is not modelled.",
+  "For a hundred years you steered the fate of states,\nCarved up the seas and moved the borders round.\nOutside, there is grass that no map ever drew.\nIt is real. Go out and feel it on the ground.": "For a hundred years you steered the fate of states,\nCarved up the seas and moved the borders round.\nOutside, there is grass that no map ever drew.\nIt is real. Go out and feel it on the ground.",
+  "A verse, how long this session has been going against how long the world has - and eight seconds later the game closes. It does not save first.": "A verse, how long this session has been going against how long the world has - and eight seconds later the game closes. It does not save first.",
+  "The game closes in eight seconds. Nothing has been saved.": "The game closes in eight seconds. Nothing has been saved."
 }

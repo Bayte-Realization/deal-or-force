@@ -1,0 +1,14 @@
+{
+
+  // Перенос столицы из панели региона.
+  "Move the capital here": "Перенести столицу сюда",
+  "Move the government to {0}. It costs {1} from the treasury and {2} of the country's stability, which fades the way any upheaval does, and the government cannot move again for {3} day(s). The capital's region weighs far more in the country's stability than its size.": "Перенести правительство в регион «{0}». Это стоит {1} из казны и {2} стабильности страны — удар проходит со временем, как любое потрясение, — и следующий перенос возможен только через {3} дн. Регион столицы весит в стабильности страны гораздо больше своего размера.",
+  "The government has moved to {0}.": "Правительство переехало: {0}.",
+  "Choose a region.": "Выберите регион.",
+  "Only a region we own can hold the capital.": "Столица может быть только в нашем регионе.",
+  "The capital is already here.": "Столица уже здесь.",
+  "None of this region's ground is ours to govern from.": "В этом регионе нет нашей земли, откуда можно управлять страной.",
+  "Most of this region is occupied; a government cannot sit there.": "Регион большей частью оккупирован — правительству там не место.",
+  "The government moved recently; it can move again in {0} day(s).": "Правительство недавно переезжало; следующий перенос возможен через {0} дн.",
+  "Moving the government costs {0:0.00}; the treasury holds {1:0.00}.": "Перенос правительства стоит {0:0.00}; в казне {1:0.00}."
+}

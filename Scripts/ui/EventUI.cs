@@ -93,9 +93,9 @@ public partial class DealOrForceGame
         _eventTitle.Text = Loc.Get(pending.Title);
         _eventDescription.Text = Loc.Get(pending.Description);
         _eventOptionA.Text = Loc.Get(pending.Options[0].Title);
-        _eventOptionA.TooltipText = Ui.Tip(pending.Options[0].Consequence);
+        _eventOptionA.TooltipText = Ui.Tip(OptionTooltip(pending.Options[0]));
         _eventOptionB.Text = Loc.Get(pending.Options[1].Title);
-        _eventOptionB.TooltipText = Ui.Tip(pending.Options[1].Consequence);
+        _eventOptionB.TooltipText = Ui.Tip(OptionTooltip(pending.Options[1]));
         _eventLayer.Visible = true;
         _eventLayer.MoveToFront();
         if (newlyShown) PlayStrategicCue("event_alert");
@@ -165,5 +165,17 @@ public partial class DealOrForceGame
         control.SetAnchorsPreset(LayoutPreset.TopLeft, false);
         control.Position = where;
         control.Size = size;
+    }
+
+    /// <summary>
+    /// What choosing an option says it will do, and then what it will actually do: the
+    /// prose first, and under it every number the choice moves, in the one format every
+    /// tooltip in the game now uses.
+    /// </summary>
+    private static string OptionTooltip(CampaignEventOption option)
+    {
+        var text = Loc.Get(option.Consequence);
+        var effects = ScriptedEffects.Block(option.Effect);
+        return effects.Length == 0 ? text : text + "\n\n" + effects;
     }
 }

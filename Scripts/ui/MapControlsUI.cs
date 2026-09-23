@@ -53,7 +53,27 @@ public partial class DealOrForceGame
                     : "Right-drag to turn the globe · wheel to zoom · WASD to move.";
         };
         _globe.MapModeChanged += UpdateMapModeButtons;
+        _globe.MapModeSubjectChanged += _ => UpdateMapModeTooltips();
         UpdateMapModeButtons(StrategicMapMode.Political);
+    }
+
+    /// <summary>
+    /// The two layers that are about somebody say whose. Diplomacy and war are drawn for the
+    /// country picked on the map, and a tooltip that did not say so would leave a player
+    /// reading Brazil's alliances as their own.
+    /// </summary>
+    private void UpdateMapModeTooltips()
+    {
+        var subject = _globe.MapModeSubject;
+        foreach (var pair in _mapModeButtons)
+        {
+            var tip = Tr(pair.Key.ToString()) + " \u2014 " + Tr(MapModeHelp(pair.Key));
+            if (pair.Key is StrategicMapMode.Diplomatic or StrategicMapMode.Wars && subject is not null)
+                tip += "\n" + Simulation.Loc.Format(
+                    "Seen from {0}. Pick another country on the map to see it from theirs; close the panel to come back to your own.",
+                    subject.DisplayName);
+            pair.Value.TooltipText = Ui.Tip(tip);
+        }
     }
 
     /// <summary>
@@ -103,6 +123,7 @@ public partial class DealOrForceGame
         // Which one is on is now a matter of how the button is drawn rather than of square
         // brackets around an abbreviation.
         foreach (var pair in _mapModeButtons) StyleButton(pair.Value, pair.Key == active);
+        UpdateMapModeTooltips();
     }
 
     private void ToggleProjection() => _globe.ToggleProjection();

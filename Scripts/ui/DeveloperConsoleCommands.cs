@@ -265,6 +265,10 @@ public partial class DealOrForceGame
         Add("secession", "CONTENT", "secession [DEU]",
             "Which regions are pulling away, how hard, and which are close to going.",
             ConsoleSecession, "discontent");
+        Add("secede", "CONTENT", "secede [region]",
+            "Make a region declare independence now - the selected one, or the one named - " +
+            "by the same road a secession takes on its own: a new country, its militia, and an " +
+            "answer from the one it left.", ConsoleSecede);
         Add("reload", "CONTENT", "reload",
             "Re-read every data file into the running campaign. Text, art, sound, tunables and " +
             "catalogues all come back changed without restarting the game.", _ => ConsoleReload());
@@ -348,7 +352,8 @@ public partial class DealOrForceGame
             "Everything the simulation knows about you, which is less than you would like.",
             _ => ConsoleWhoAmI());
         Add("touchgrass", "FUN", "touchgrass",
-            "How long this session has been going, against how long the world has.",
+            "A verse, how long this session has been going against how long the world has - and " +
+            "eight seconds later the game closes. It does not save first.",
             _ => ConsoleTouchGrass());
         Add("sudo", "FUN", "sudo [anything]",
             "There is nobody above you to ask.", ConsoleSudo);
@@ -416,8 +421,9 @@ public partial class DealOrForceGame
         var ran = 0;
         foreach (var command in _consoleCommands)
         {
-            // Not itself, or it recurses; not `clear`, or the report is wiped as it is written.
-            if (command.Name is "selftest" or "clear") continue;
+            // Not itself, or it recurses; not `clear`, or the report is wiped as it is written;
+            // not `touchgrass`, or the test closes the game it is testing.
+            if (command.Name is "selftest" or "clear" or "touchgrass") continue;
             try
             {
                 command.Run("");
@@ -516,6 +522,19 @@ public partial class DealOrForceGame
         return _campaign.NationByTag(tag) ??
                _campaign.Nations.FirstOrDefault(nation =>
                    nation.Name.Contains(tag, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string ConsoleSecede(string argument)
+    {
+        var state = ConsoleState(argument);
+        if (state is null) return "Usage: secede Crimea - or select a region first.";
+        var report = SecessionEvents.Force(_campaign, state);
+        if (report?.Seceded is null)
+            return $"{state.Name} cannot go on its own: a lake, a region with no owner, or its country's last.";
+        _campaign.MarkMapChanged();
+        Refresh();
+        return $"{report.Seceded.Name} ({report.Seceded.Tag}) has left {report.Parent.Name}, " +
+               $"{report.Population:N0} people - {report.Outcome}.";
     }
 
     /// <summary>The region a command is about: the one named, else the selected.</summary>

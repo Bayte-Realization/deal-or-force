@@ -712,6 +712,10 @@ public sealed partial class Campaign
             // because a state that has just lost a province is a state in exactly the
             // condition this reads.
             using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
+
+            // And last, where each government now sits: a region ceded today takes its
+            // capital with it, and the country moves to what it has left.
+            CapitalCore.Tick(this);
         }
         CampaignIntel.Invalidate(this);
         if (DiagnosticLogs.Enabled)
@@ -937,6 +941,7 @@ public sealed partial class Campaign
         foreach (var nation in Nations)
         {
             nation.CapitalStateMapIndex = 0;
+            nation.CapitalProvinceId = 0;
             if (!byNation.TryGetValue((ushort)nation.MapIndex, out var provinces) || provinces.Count == 0)
                 continue;
             var best = provinces[0];
@@ -954,6 +959,7 @@ public sealed partial class Campaign
                 best = province;
             }
             nation.CapitalStateMapIndex = topology.ProvinceToState[best];
+            nation.CapitalProvinceId = best;
         }
     }
 

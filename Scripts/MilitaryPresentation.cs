@@ -78,6 +78,83 @@ public sealed partial class GlobePresentation
         return texture;
     }
 
+    private readonly Dictionary<(int, int, int), Texture2D> _selectionGlows = new();
+
+    /// <summary>
+    /// The glow a selected counter wears: a thin bright line along its edge and a soft light
+    /// falling away outside it, with nothing over the counter itself.
+    ///
+    /// Selection used to be the whole plate turning amber, which is loud and says the wrong
+    /// thing - a colour on a counter already means something here (in battle, on the march),
+    /// and "selected" competed with those. An outline is what HOI4 does and what this game did
+    /// on s&box: the counter keeps its own face, and the light is around it rather than on it.
+    ///
+    /// Made to measure for each plate texture, at the plate's own pixel scale, and hung under
+    /// the plate as a child - so it follows the plate's size, its visibility and the flat map's
+    /// pin shrinking without being told about any of them. The middle is empty, so which of the
+    /// two draws first cannot matter.
+    /// </summary>
+    private Texture2D SelectionGlowTexture(int width, int height, int inset)
+    {
+        var key = (width, height, inset);
+        if (_selectionGlows.TryGetValue(key, out var cached)) return cached;
+        // In the counter's own pixels. A plate is drawn at about a sixth of its texture size,
+        // so these read on screen as a glow of five or six pixels and a line of one - thin,
+        // which is the point, and still there.
+        const int reach = 34;
+        const float rim = 7f;
+        const float corner = 6f;
+        var glowWidth = width + reach * 2;
+        var glowHeight = height + reach * 2;
+        var pixels = new byte[glowWidth * glowHeight * 4];
+        // The plate's opaque rectangle, in the glow's coordinates.
+        var left = reach + inset + corner;
+        var right = reach + width - inset - corner;
+        var top = reach + inset + corner;
+        var bottom = reach + height - inset - corner;
+        for (var y = 0; y < glowHeight; y++)
+        for (var x = 0; x < glowWidth; x++)
+        {
+            // Signed distance to a rounded rectangle: negative inside.
+            var dx = MathF.Max(MathF.Max(left - (x + 0.5f), (x + 0.5f) - right), 0f);
+            var dy = MathF.Max(MathF.Max(top - (y + 0.5f), (y + 0.5f) - bottom), 0f);
+            var inside = MathF.Min(MathF.Max(MathF.Max(left - (x + 0.5f), (x + 0.5f) - right),
+                MathF.Max(top - (y + 0.5f), (y + 0.5f) - bottom)), 0f);
+            var distance = MathF.Sqrt(dx * dx + dy * dy) + inside - corner;
+
+            float alpha;
+            if (distance < -rim) alpha = 0f;
+            else if (distance <= 0f) alpha = 0.95f * Mathf.Clamp((distance + rim) / 2.5f, 0f, 1f);
+            else
+            {
+                var fall = Mathf.Clamp(1f - distance / reach, 0f, 1f);
+                alpha = 0.85f * fall * fall;
+            }
+            WritePixel(pixels, glowWidth, x, y, new Color(1f, 1f, 1f, alpha));
+        }
+        var texture = ImageTexture.CreateFromImage(Image.CreateFromData(glowWidth, glowHeight, false, Image.Format.Rgba8, pixels));
+        _selectionGlows[key] = texture;
+        return texture;
+    }
+
+    /// <summary>A selection glow for one plate, hung under it and hidden until it is wanted.</summary>
+    private Sprite3D AttachSelectionGlow(Sprite3D plate, int width, int height, int inset)
+    {
+        var glow = new Sprite3D
+        {
+            Name = "SelectionGlow",
+            Texture = SelectionGlowTexture(width, height, inset),
+            PixelSize = plate.PixelSize,
+            FixedSize = plate.FixedSize,
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Modulate = Ui.Colour("globe.selection"),
+            Visible = false
+        };
+        plate.AddChild(glow);
+        return glow;
+    }
+
     private static void WritePixel(byte[] pixels, int width, int x, int y, Color color)
     {
         if (x < 0 || y < 0 || x >= width || y * width * 4 >= pixels.Length) return;
@@ -123,10 +200,14 @@ public sealed partial class GlobePresentation
             var supply = supplySum / stack.Count;
             var plate = cachedMarker.Plate;
             var count = cachedMarker.Count;
+            if (cachedMarker.Glow is not null && cachedMarker.Glow.Visible != anySelected)
+                cachedMarker.Glow.Visible = anySelected;
             if (plate is not null)
             {
+                // Selection is the glow around the counter now; the plate keeps only a warm
+                // breath of it, so the colours that mean battle and march still read.
                 var tint = anySelected
-                    ? new Color(1f, 0.86f, 0.42f, 1f)
+                    ? new Color(1f, 0.96f, 0.86f, 1f)
                     : anyBattle
                         ? new Color(1f, 0.58f, 0.48f, 1f)
                         : anyMoving ? new Color(0.76f, 0.92f, 1f, 1f) : Colors.White;

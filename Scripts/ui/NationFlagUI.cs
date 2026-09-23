@@ -50,7 +50,74 @@ public partial class DealOrForceGame
             if (!string.IsNullOrEmpty(resolved)) sprite = resolved;
         }
 
-        return FlagSpriteTexture(sprite);
+        return FlagSpriteTexture(sprite) ?? (nation is null ? null : ProvisionalFlag(nation));
+    }
+
+    /// <summary>
+    /// A flag for a country nobody drew one for (item 42 on the list).
+    ///
+    /// The search above ends with the people's flag and the ideology's banner, and a state
+    /// founded this morning often has neither: there is no flag for "Korean" that is not the
+    /// communist one, and no banner for nationalism at all - so the new country's badge was an
+    /// empty frame. It gets a provisional flag instead, drawn from its own map colour, the way
+    /// a new state's first flag usually is: a bicolour or a tricolour, sometimes a star. The
+    /// pattern comes from the tag, so a country keeps the same flag from one session to the
+    /// next, and any file a mod names after it still wins.
+    /// </summary>
+    private static Texture2D ProvisionalFlag(Nation nation)
+    {
+        var key = $"provisional|{nation.Tag}|{nation.Color}";
+        if (FlagCache.TryGetValue(key, out var cached)) return cached;
+
+        const int width = 300;
+        const int height = 200;
+        var colour = Color.FromString(nation.Color ?? "#888888", new Color(0.45f, 0.48f, 0.52f));
+        var light = new Color(0.94f, 0.93f, 0.90f);
+        var dark = colour.Darkened(0.45f);
+        var hash = 2166136261u;
+        foreach (var character in nation.Tag ?? "") hash = (hash ^ character) * 16777619u;
+        var pattern = (int)(hash % 6);
+
+        var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var band = pattern switch
+            {
+                0 => y < height / 2 ? colour : light,
+                1 => y < height / 3 ? colour : y < height * 2 / 3 ? light : dark,
+                2 => x < width / 3 ? colour : x < width * 2 / 3 ? light : dark,
+                3 => y < height / 2 ? colour : light,
+                4 => y >= height * 3 / 10 && y < height * 7 / 10 ? light : colour,
+                _ => Mathf.Abs(y - height / 2) < 16 || Mathf.Abs(x - width * 3 / 8) < 16 ? light : colour
+            };
+            image.SetPixel(x, y, band);
+        }
+
+        // A star where the pattern leaves room for one: in the upper band of the bicolour,
+        // in the middle of the band across the centre.
+        if (pattern is 3 or 4)
+        {
+            var centre = pattern == 3 ? new Vector2(width * 0.22f, height * 0.25f) : new Vector2(width * 0.5f, height * 0.5f);
+            var radius = pattern == 3 ? 34f : 30f;
+            var fill = pattern == 3 ? light : colour;
+            var points = new Vector2[10];
+            for (var point = 0; point < 10; point++)
+            {
+                var angle = -Mathf.Pi / 2f + point * Mathf.Pi / 5f;
+                var reach = point % 2 == 0 ? radius : radius * 0.40f;
+                points[point] = centre + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * reach;
+            }
+            for (var y = (int)(centre.Y - radius); y <= (int)(centre.Y + radius); y++)
+            for (var x = (int)(centre.X - radius); x <= (int)(centre.X + radius); x++)
+                if (x >= 0 && y >= 0 && x < width && y < height &&
+                    Geometry2D.IsPointInPolygon(new Vector2(x + 0.5f, y + 0.5f), points))
+                    image.SetPixel(x, y, fill);
+        }
+
+        var texture = ImageTexture.CreateFromImage(image);
+        FlagCache[key] = texture;
+        return texture;
     }
 
     private static Texture2D FlagSpriteTexture(string sprite)

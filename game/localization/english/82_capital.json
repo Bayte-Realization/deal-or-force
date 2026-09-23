@@ -1,0 +1,14 @@
+{
+
+  // Moving the capital, from the region panel.
+  "Move the capital here": "Move the capital here",
+  "Move the government to {0}. It costs {1} from the treasury and {2} of the country's stability, which fades the way any upheaval does, and the government cannot move again for {3} day(s). The capital's region weighs far more in the country's stability than its size.": "Move the government to {0}. It costs {1} from the treasury and {2} of the country's stability, which fades the way any upheaval does, and the government cannot move again for {3} day(s). The capital's region weighs far more in the country's stability than its size.",
+  "The government has moved to {0}.": "The government has moved to {0}.",
+  "Choose a region.": "Choose a region.",
+  "Only a region we own can hold the capital.": "Only a region we own can hold the capital.",
+  "The capital is already here.": "The capital is already here.",
+  "None of this region's ground is ours to govern from.": "None of this region's ground is ours to govern from.",
+  "Most of this region is occupied; a government cannot sit there.": "Most of this region is occupied; a government cannot sit there.",
+  "The government moved recently; it can move again in {0} day(s).": "The government moved recently; it can move again in {0} day(s).",
+  "Moving the government costs {0:0.00}; the treasury holds {1:0.00}.": "Moving the government costs {0:0.00}; the treasury holds {1:0.00}."
+}

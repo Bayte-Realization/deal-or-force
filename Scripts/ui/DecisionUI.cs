@@ -37,7 +37,12 @@ public partial class DealOrForceGame
             var button = ActionButton("Enact decision", () => TakeDecision(captured), 0, 32, block.Length == 0);
             button.Name = "Decision_" + captured;
             button.Disabled = block.Length > 0;
-            Tip(button, block.Length == 0 ? definition.Description : block);
+            // The description, then exactly what enacting it does - the same lines an event
+            // option shows - or, while it cannot be enacted, why not.
+            var effects = ScriptedEffects.Block(definition.Effect);
+            Tip(button, block.Length > 0 ? block
+                : effects.Length == 0 ? definition.Description
+                : Tr(definition.Description) + "\n\n" + effects);
             card.AddChild(button);
             if (block.Length > 0) card.AddChild(Title(block, 12, Ui.Colour("state.warning")));
         }

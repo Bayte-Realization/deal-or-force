@@ -170,6 +170,10 @@ public static class ProvinceOwnership
         foreach (var entry in Entries.Values)
         {
             if (entry.Province <= 0 || entry.Province > topology.ProvinceCount) continue;
+            // Water is nobody's. The shipped file was written when a lake went to whoever held
+            // the longest shore, and still names an owner for every lake province; honouring
+            // it would hand the lakes straight back.
+            if (topology.IsWater(entry.Province)) continue;
             if (!byTag.TryGetValue(entry.Owner, out var owner)) continue;
             topology.ProvinceToNation[entry.Province] = owner;
             if (controllers is not null && entry.Province < controllers.Length)

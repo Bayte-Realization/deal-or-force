@@ -22,6 +22,9 @@ public partial class DealOrForceGame
     /// <summary>And what a foreign region offers instead, which is its owner.</summary>
     private Button _foreignRegionDiplomacy = null!;
 
+    /// <summary>Move the government here. Its tooltip is the price, or why not.</summary>
+    private Button _moveCapitalButton = null!;
+
     private void BuildRegionInteractionControls(VBoxContainer parent)
     {
         _regionControls = new VBoxContainer { Visible = false };
@@ -62,6 +65,10 @@ public partial class DealOrForceGame
         strategic.AddChild(ActionButton("Power", () => QueueRegionalBuilding(BuildingKind.PowerPlant), 92, 31));
         strategic.AddChild(ActionButton("Arms", () => QueueRegionalBuilding(BuildingKind.ArmsIndustry), 105, 31));
 
+        _moveCapitalButton = ActionButton("Move the capital here", MoveCapitalHere, 0, 31);
+        _moveCapitalButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _ownedRegionActions.AddChild(_moveCapitalButton);
+
         _regionActionFeedback = Title("", 12, Ui.Colour("text.accent_dim"));
         _regionActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _ownedRegionActions.AddChild(_regionActionFeedback);
@@ -87,6 +94,7 @@ public partial class DealOrForceGame
         if (HideForeignRegionDetails()) return;
         _sideTitle.Text = _selectedState.DisplayName;
         _regionControls.Visible = true;
+        RefreshMoveCapitalButton();
         ClearDetail();
 
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
@@ -384,6 +392,35 @@ public partial class DealOrForceGame
             ? Simulation.Loc.Format("{0} added to the {1} queue.",
                 Tr(BuildingCatalog.Get(kind).Name), _selectedState.DisplayName)
             : Tr("Could not queue the project: check treasury or the national construction limit.");
+        ShowRegionOverview();
+    }
+
+    private void RefreshMoveCapitalButton()
+    {
+        if (_moveCapitalButton is null || _selectedState is null || _campaign?.Player is null) return;
+        var player = _campaign.Player;
+        var refusal = CapitalCore.Refusal(_campaign, player, _selectedState);
+        _moveCapitalButton.Disabled = refusal.Length > 0;
+        _moveCapitalButton.TooltipText = Ui.Tip(refusal.Length > 0
+            ? Tr(refusal)
+            : Simulation.Loc.Format(
+                "Move the government to {0}. It costs {1} from the treasury and {2} of the country's stability, " +
+                "which fades the way any upheaval does, and the government cannot move again for {3} day(s). " +
+                "The capital's region weighs far more in the country's stability than its size.",
+                _selectedState.DisplayName, Fmt.Money(CapitalCore.Cost(_campaign, player)),
+                _campaign.Defines.CapitalMoveStabilityCost.ToString("P0"),
+                _campaign.Defines.CapitalMoveIntervalDays.ToString("N0")));
+    }
+
+    private void MoveCapitalHere()
+    {
+        if (_selectedState is null || _campaign?.Player is null) return;
+        var command = new MoveCapitalCommand { IssuerId = _campaign.Player.Id, StateMapIndex = _selectedState.MapIndex };
+        _campaign.Commands.Enqueue(command);
+        _campaign.Commands.ApplyAll(_campaign);
+        _regionActionFeedback.Text = command.Moved
+            ? Simulation.Loc.Format("The government has moved to {0}.", _selectedState.DisplayName)
+            : Tr(CapitalCore.Refusal(_campaign, _campaign.Player, _selectedState));
         ShowRegionOverview();
     }
 

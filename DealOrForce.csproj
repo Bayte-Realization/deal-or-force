@@ -59,15 +59,16 @@
     <Content Include="game\**\*.map" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!--
-      Content packs are game content and travel with the data, the same way `game/` does.
-      Published only, not copied to the build output: in the editor the loader reads `dlc/`
-      out of the project itself, and a second copy under bin would shadow it and go stale
-      the moment a pack was edited.
+      `dlc/` used to be published here, and is not any more. Iron and Grain is unreleased paid
+      content and the first public alpha is free, so shipping the pack inactive would hand
+      every player both the content and the entitlements.json that switches it on - a paywall
+      with the key taped to it. In the editor the loader still reads `dlc/` out of the project
+      itself, so nothing about developing a pack changes; only the build stops carrying one.
+      Tools\build.ps1 sweeps up any copy that reappears and fails the build if one does.
 
-      `mods/` is deliberately not here. It is the one folder a player writes into, so the
-      build script puts it beside the executable where it can be found, rather than a level
-      down among the data.
+      `mods/` is deliberately not here either, for a different reason. It is the one folder a
+      player writes into, so the build script puts it beside the executable where it can be
+      found, rather than a level down among the data.
     -->
-    <Content Include="dlc\**" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

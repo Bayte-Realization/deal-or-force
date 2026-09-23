@@ -301,6 +301,9 @@ public static class SaveSystem
 
         /// <summary>Whether the campaign was being watched rather than played.</summary>
         public bool ObserverMode;
+
+        /// <summary>The campaign's own options: its step, how often it saves. Absent in older saves.</summary>
+        public Dictionary<string, string> Settings = new();
         public bool IsPaused;
         public uint RandomState;
         public int PlayerId;
@@ -376,6 +379,7 @@ public static class SaveSystem
             Date = campaign.Date,
             ElapsedDays = campaign.ElapsedDays,
             ObserverMode = campaign.ObserverMode,
+            Settings = new Dictionary<string, string>(campaign.Settings),
             IsPaused = campaign.IsPaused,
             RandomState = campaign.Random.State,
             PlayerId = campaign.Player?.Id ?? 0,
@@ -433,6 +437,7 @@ public static class SaveSystem
             foreach (var entry in Relations) campaign.Relations[entry.Key] = entry.Value;
             campaign.History.Restore(History);
             campaign.ObserverMode = ObserverMode;
+            foreach (var (id, value) in Settings) campaign.Settings[id] = value;
             campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
                 HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
                 ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState);

@@ -252,6 +252,30 @@ public sealed partial class GlobePresentation
         ReprojectBattleMarkers();
     }
 
+    /// <summary>
+    /// Whose eyes the diplomatic and war layers see through: the country last picked on the
+    /// map, or the player's own when nothing is picked. These two layers used to answer only
+    /// "who is this to ME" - so a player looking at Brazil's neighbours, or at who is fighting
+    /// on Turkey's side, had to work it out from a list. Pick the country and the map says.
+    /// </summary>
+    private int _mapModeSubjectId = -1;
+
+    /// <summary>Raised when the country the layers are drawn for changes.</summary>
+    public event Action<Nation> MapModeSubjectChanged;
+
+    /// <summary>The country the diplomatic and war layers are currently drawn for.</summary>
+    public Nation MapModeSubject =>
+        _campaign is null ? null : _campaign.NationById(_mapModeSubjectId) ?? _campaign.Player;
+
+    public void SetMapModeSubject(Nation nation)
+    {
+        var id = nation is null || nation == _campaign?.Player ? -1 : nation.Id;
+        if (id == _mapModeSubjectId) return;
+        _mapModeSubjectId = id;
+        if (_mapMode is StrategicMapMode.Diplomatic or StrategicMapMode.Wars) RefreshMapModePalette();
+        MapModeSubjectChanged?.Invoke(MapModeSubject);
+    }
+
     public void SetMapMode(StrategicMapMode mode)
     {
         _mapMode = mode;
@@ -304,7 +328,9 @@ public sealed partial class GlobePresentation
 
     private Color ModeColor(Nation nation, double minPopulation, double maxPopulation, double minGdp, double maxGdp)
     {
-        var player = _campaign.Player;
+        // "player" is whoever the layer is seen from; the player's own country unless another
+        // has been picked on the map.
+        var player = MapModeSubject ?? _campaign.Player;
         switch (_mapMode)
         {
             case StrategicMapMode.Diplomatic:

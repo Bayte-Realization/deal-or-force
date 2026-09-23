@@ -35,6 +35,8 @@ public enum ArmyMoveResult
     AttackIssued,
     QueuedAfterBattle,
     AlreadyAtDestination,
+    /// <summary>Told to march where it already stands, which is how a player cancels.</summary>
+    OrderCancelled,
     ArmyNotFound,
     NotControlled,
     InvalidTarget,
@@ -255,6 +257,18 @@ public sealed class MoveArmyCommand : ICampaignCommand
             : AppendWaypoint && army.Route.Count > 0 ? army.Route[^1] : army.ProvinceId;
         if (routeStart == TargetProvinceId)
         {
+            // Clicking the province a formation is standing in is how a player takes an order
+            // back - it is the gesture the genre has used for twenty years, and it did nothing
+            // here but report that the army was already there. A marching formation stops; one
+            // that was standing still anyway keeps the old answer, because cancelling nothing
+            // is not a cancellation and should not read like one.
+            if (!AppendWaypoint && TargetProvinceId == army.ProvinceId &&
+                (army.Route.Count > 0 || army.PlannedRoute.Count > 0 || army.OrderProvinceId >= 0))
+            {
+                new HaltArmyCommand { IssuerId = IssuerId, ArmyId = ArmyId }.Apply(campaign);
+                SetResult(army, campaign, ArmyMoveResult.OrderCancelled);
+                return;
+            }
             SetResult(army, campaign, ArmyMoveResult.AlreadyAtDestination);
             return;
         }
@@ -286,6 +300,37 @@ public sealed class MoveArmyCommand : ICampaignCommand
             route = topology.FindRoute(routeStart, TargetProvinceId, (ushort)nation.MapIndex, controllers,
                 allowUncontrolledStart: routeStart == army.ProvinceId);
             plannedRoute = route;
+
+            // Breaking out of a pocket. Whether an order is a march or an attack was decided
+            // by the destination alone, so a formation surrounded on enemy ground and sent
+            // home was routed as a march - through friendly provinces only, of which a pocket
+            // has none - and was told there was "no legal land corridor" while the corridor it
+            // needed ran straight through the country it was already at war with. From inside
+            // a pocket the way home IS an attack, and that is how it is routed now: through
+            // the captor's ground to the nearest of its own, one contested province at a
+            // time, fighting where somebody is standing in the way.
+            //
+            // Only when the friendly route has failed, and only from where the formation
+            // actually stands: a formation that can walk home through its own lines still
+            // does, and a queued waypoint is not a breakout.
+            if (route.Length == 0 && routeStart == army.ProvinceId && !AppendWaypoint)
+            {
+                var standing = controllers[army.ProvinceId];
+                var captor = standing == nation.MapIndex ? null
+                    : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == standing);
+                var captorWar = captor is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+                    !candidate.Ended && candidate.Opposes(nation.Id, captor.Id));
+                var breakout = captorWar is null ? Array.Empty<int>()
+                    : topology.FindOperationalRoute(routeStart, TargetProvinceId,
+                        (ushort)nation.MapIndex, (ushort)captor.MapIndex, controllers);
+                if (breakout.Length > 0)
+                {
+                    war = captorWar;
+                    enemy = captor;
+                    plannedRoute = breakout;
+                    route = Array.Empty<int>();
+                }
+            }
         }
         else
         {
@@ -308,6 +353,10 @@ public sealed class MoveArmyCommand : ICampaignCommand
                 return;
             }
         }
+        // MoveProgress is progress into the NEXT province, not along the route as a whole, so
+        // it stays valid exactly when that next province is unchanged. Noted before the route
+        // is cleared, because after that there is nothing left to compare against.
+        var previousNextProvince = army.Route.Count > 0 ? army.Route[0] : -1;
         if (!AppendWaypoint)
         {
             army.Route.Clear();
@@ -328,7 +377,12 @@ public sealed class MoveArmyCommand : ICampaignCommand
         army.OrderStateMapIndex = topology.ProvinceToState[TargetProvinceId];
         army.ObjectiveStateMapIndex = war is null ? -1 : topology.ProvinceToState[TargetProvinceId];
         army.PlanActive = war is not null;
-        if (!AppendWaypoint) army.MoveProgress = 0f;
+        // Extending the destination further along the same road - or re-issuing the same march,
+        // which a player does constantly to check the order took - used to throw away up to a
+        // full province of walking. It only has to be thrown away when the formation is being
+        // sent somewhere that starts with a different first step.
+        if (!AppendWaypoint && (army.Route.Count == 0 || army.Route[0] != previousNextProvince))
+            army.MoveProgress = 0f;
         army.SupportOnly = SupportAttack && war is not null;
         army.RedeployTarget = -1;
         // Being told to go somewhere does not fill in a trench; marching out of it does,
@@ -528,7 +582,8 @@ public static class MilitaryOperations
             var crossingStrength = topology.RiverCrossingStrength(army.ProvinceId, nextProvince);
             var riverMovement = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier, crossingStrength);
             army.MoveProgress += campaign.Defines.MarchProgressPerDay * campaign.TickScale * template.Speed *
-                MilitaryDoctrine.Movement(army.Stance) * M.Clamp(army.SupplyLevel, 0.25f, 1f) * riverMovement *
+                MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
+                M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) * riverMovement *
                 topology.TerrainAt(nextProvince).MovementSpeed *
                 StrategicRedeployment.DayOf(campaign, army);
             if (army.MoveProgress < 1f) continue;
@@ -574,8 +629,11 @@ public static class MilitaryOperations
         if (army.Recovering <= 0f || army.Divisions <= 0f) return;
         if (army.SupplyLevel < campaign.Defines.WoundedReturnMinimumSupply)
         {
-            // Untreated, they stop being wounded and start being losses.
-            army.Recovering *= 1f - campaign.Defines.WoundedLostWhenUnsuppliedPerDay * campaign.TickScale;
+            // Untreated, they stop being wounded and start being losses - and on the war's
+            // books they stop being wounded and start being dead.
+            var died = army.Recovering * campaign.Defines.WoundedLostWhenUnsuppliedPerDay * campaign.TickScale;
+            army.Recovering -= died;
+            WarLosses.DiedOfWounds(WarLosses.WarOf(campaign, army), army.NationId, died);
             return;
         }
         var capacity = army.Divisions * MilitaryBootstrap.DivisionSize;
@@ -900,12 +958,28 @@ public sealed class SetArmyPlanExecutionCommand : ICampaignCommand
 
 public static class MilitaryDoctrine
 {
+    // The constants are the fallback a caller without a campaign in its hand still gets, the
+    // same arrangement the rates above use. Anything that can reach the defines should take
+    // the overload, because that is the copy a mod can change.
+    public const float CautiousMovement = 0.86f;
+    public const float AggressiveMovement = 1.14f;
+
     public static float Movement(ArmyStance stance) => stance switch
     {
-        ArmyStance.Cautious => 0.86f,
-        ArmyStance.Aggressive => 1.14f,
+        ArmyStance.Cautious => CautiousMovement,
+        ArmyStance.Aggressive => AggressiveMovement,
         _ => 1f
     };
+
+    /// <summary>The same multiplier, taken from the defines so a mod can retune it.</summary>
+    public static float Movement(ArmyStance stance, Defines defines) => defines is null
+        ? Movement(stance)
+        : stance switch
+        {
+            ArmyStance.Cautious => defines.MarchCautiousMultiplier,
+            ArmyStance.Aggressive => defines.MarchAggressiveMultiplier,
+            _ => 1f
+        };
 
     public static float Recovery(ArmyStance stance) => stance switch
     {

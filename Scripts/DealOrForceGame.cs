@@ -61,6 +61,9 @@ public partial class DealOrForceGame : Control
     public override async void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        // A campaign's own options are read from whichever campaign is on screen now - asked
+        // each time, so a loaded save or a new scenario is never answered for by the last one.
+        Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
         await RunLoadingOperation("Preparing the world", async () =>
         {
             StartDiagnostics();
@@ -250,7 +253,7 @@ public partial class DealOrForceGame : Control
         // on the camera being up, so none of these letters mean anything to a campaign.
         if (_globe is { FreeCamera: true })
         {
-            switch (key.Keycode)
+            switch (Letter(key))
             {
                 case Key.G:
                     _globe.SetFreeOrbit(!_globe.FreeOrbiting);
@@ -304,6 +307,20 @@ public partial class DealOrForceGame : Control
         GetViewport().SetInputAsHandled();
     }
 
+    /// <summary>
+    /// Which key was pressed, by where it is rather than by what it types.
+    ///
+    /// `Keycode` is the letter the current layout puts on the key, so with a Russian layout
+    /// the key marked H types Р and every letter hotkey here - halt, the free camera, the
+    /// plan shortcuts - silently did nothing for anybody playing in Russian. The physical
+    /// code is the key's place on the board, which is what a hotkey means and what HOI4 uses.
+    /// </summary>
+    internal static Key Letter(InputEventKey key) =>
+        key.PhysicalKeycode != Key.None ? key.PhysicalKeycode : key.Keycode;
+
+    /// <summary>The same question for a key being held: its place on the board, whatever the layout.</summary>
+    internal static bool Held(Key key) => Input.IsPhysicalKeyPressed(key) || Input.IsKeyPressed(key);
+
     public override void _UnhandledInput(InputEvent inputEvent)
     {
         // Escape while the workshop is up is answered in `_Input`, which runs first - see
@@ -321,7 +338,7 @@ public partial class DealOrForceGame : Control
         if (inputEvent is InputEventKey { Pressed: true, Echo: false } key &&
             _hudLayer is { Visible: true } && _selectedArmies.Count > 0)
         {
-            switch (key.Keycode)
+            switch (Letter(key))
             {
                 case Key.H:
                     if (Input.IsKeyPressed(Key.Ctrl)) DetachSelectedDivisions();
@@ -477,6 +494,12 @@ public partial class DealOrForceGame : Control
         {
             case MenuIntent.NewCampaign: OpenScenarioLibrary(); break;
             case MenuIntent.LoadLatest: LoadLatestSave(); break;
+            case MenuIntent.LoadSlot:
+                var slot = MainMenuScene.WantedSlot;
+                MainMenuScene.WantedSlot = "";
+                if (string.IsNullOrWhiteSpace(slot)) LoadLatestSave();
+                else LoadFromSlot(slot);
+                break;
             case MenuIntent.Multiplayer: OpenNetworkMultiplayer(); break;
             case MenuIntent.Settings: ShowSettings(); break;
             // Opened directly - from the editor, or by a scene reload - so there is nothing
@@ -949,6 +972,7 @@ public partial class DealOrForceGame : Control
     private void CloseSidePanel()
     {
         _sidePanel.Visible = false;
+        _globe.SetMapModeSubject(null);
         _openScreen = "";
         UpdateScreenButtons();
         _selectedArmy = null;
@@ -973,6 +997,8 @@ public partial class DealOrForceGame : Control
             return;
         }
         if (!_hudLayer.Visible) return;
+        // The diplomatic and war layers now answer for the country that was picked.
+        _globe.SetMapModeSubject(pick.Nation);
 
         _selectedArmy = null;
         _selectedArmies.Clear();

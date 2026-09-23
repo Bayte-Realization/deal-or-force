@@ -114,6 +114,43 @@ public sealed class Defines
 	/// </summary>
 	public float MarchProgressPerDay { get; set; } = 0.22f;
 
+	/// <summary>
+	/// The least a formation's supply can slow it down, as a share of its full pace.
+	///
+	/// Supply multiplies march speed directly, and a formation whose trace has been cut sits
+	/// at 0.06 - so without a floor an army that walked out of its own supply range would
+	/// cross a province in about seventy days, which is not slow, it is stopped. The floor is
+	/// what turns "cut off" into a penalty rather than a full stop.
+	///
+	/// It was 0.25, written twice into the middle of the two movement formulas rather than
+	/// declared anywhere, and it is the single number most responsible for the complaint that
+	/// armies crawl through enemy country: that ground is exactly where the trace fails, so
+	/// the floor is what an advance actually runs at for most of a campaign. At 0.45 an army
+	/// beyond its depots moves at a little under half pace instead of a quarter.
+	///
+	/// Raising it towards 1 makes supply stop mattering to movement at all; dropping it to 0
+	/// hands the defender a perfect wall the moment an attacker outruns its logistics.
+	/// </summary>
+	public float MarchSupplyFloor { get; set; } = 0.45f;
+
+	/// <summary>
+	/// What a cautious stance does to marching pace, as a multiplier. Below 1 trades ground
+	/// for the organisation and recovery a careful advance keeps.
+	/// </summary>
+	public float MarchCautiousMultiplier { get; set; } = 0.86f;
+
+	/// <summary>
+	/// What an aggressive stance does to marching pace. Above 1 buys ground with the
+	/// organisation that the same stance spends faster everywhere else.
+	/// </summary>
+	public float MarchAggressiveMultiplier { get; set; } = 1.14f;
+
+	/// <summary>How much faster the railways are than a road march.</summary>
+	public float RailRedeploymentSpeed { get; set; } = 3.2f;
+
+	/// <summary>What a day on the trains costs a formation in organisation.</summary>
+	public float RailRedeploymentOrganisationPerDay { get; set; } = 0.16f;
+
 	/// <summary>Organisation a formation out of battle recovers in a day.</summary>
 	public float OrganisationRecoveryPerDay { get; set; } = 0.06f;
 
@@ -203,6 +240,65 @@ public sealed class Defines
 
 	/// <summary>How much faster a pocket collapses while it is also being attacked.</summary>
 	public float EncircledUnderAttack { get; set; } = 1.8f;
+
+	/// <summary>
+	/// How much harder a day of fighting falls on a formation that is cut off. Nothing comes
+	/// up the road to it - no ammunition, no replacements, no relief - and it has nowhere to
+	/// pull back to, so the same fire takes more of it.
+	/// </summary>
+	public float EncircledCasualtyMultiplier { get; set; } = 1.5f;
+
+	/// <summary>
+	/// Of the men a starving pocket loses, the share who surrender rather than die. The rest
+	/// are killed by the shelling and by wounds nobody can treat.
+	/// </summary>
+	public float EncircledLossCapturedShare { get; set; } = 0.45f;
+
+	/// <summary>
+	/// Of a formation that surrenders - a pocket that has collapsed, or a beaten formation with
+	/// no friendly ground to fall back on - the share killed in its last fighting. The rest
+	/// are taken prisoner, together with the wounded it was carrying.
+	/// </summary>
+	public float SurrenderKilledShare { get; set; } = 0.12f;
+
+	// --- losses and prisoners ---
+
+	/// <summary>
+	/// Share of the casualties of a day's fighting who are wounded rather than killed. About
+	/// three in four in a modern war. How many of the wounded come back to their formation
+	/// is WoundedReturningShare below, which is a share of the same casualties and so can be
+	/// no larger than this.
+	/// </summary>
+	public float WoundedShareOfCasualties { get; set; } = 0.75f;
+
+	/// <summary>
+	/// Share of prisoners who come home when they are released - by an exchange, or at the
+	/// peace. The rest died in captivity or did not come back.
+	/// </summary>
+	public float PrisonersRepatriatedShare { get; set; } = 0.92f;
+
+	/// <summary>The fewest prisoners on each side an exchange is worth arranging for.</summary>
+	public float PrisonerExchangeMinimum { get; set; } = 500f;
+
+	/// <summary>Days between two exchanges in the same war.</summary>
+	public int PrisonerExchangeIntervalDays { get; set; } = 30;
+
+	// --- the capital ---
+
+	/// <summary>What moving the government costs, as a share of GDP.</summary>
+	public float CapitalMoveCostShare { get; set; } = 0.0015f;
+
+	/// <summary>And the least it costs, however small the country.</summary>
+	public float CapitalMoveCostFloor { get; set; } = 0.05f;
+
+	/// <summary>
+	/// What it costs the country's settledness, taken off how it has been governed lately -
+	/// so it is felt at once and fades the way any other upheaval does.
+	/// </summary>
+	public float CapitalMoveStabilityCost { get; set; } = 0.02f;
+
+	/// <summary>Days before a government that has moved can move again.</summary>
+	public int CapitalMoveIntervalDays { get; set; } = 365;
 
 	/// <summary>How often a country below its establishment raises another formation.</summary>
 	public int ArmyRebuildIntervalDays { get; set; } = 24;

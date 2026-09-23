@@ -15,15 +15,17 @@ internal static class Program
         }
         try
         {
-            var root = Option("--root") ?? LauncherCatalog.FindRoot(AppContext.BaseDirectory);
             var profile = Option("--profile") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Godot", "app_userdata", "Deal or Force");
+            // Before anything can be said to the player: the language the game was last set to.
+            L.Choose(profile);
+            var root = Option("--root") ?? LauncherCatalog.FindRoot(AppContext.BaseDirectory);
             // One settings editor per user session prevents two launchers overwriting each other.
             using var mutex = new Mutex(true, "Local\\DealOrForceLauncher", out var first);
-            if (!first) { MessageBox.Show("Лаунчер уже открыт. Переключитесь на его окно.", "Deal or Force"); return 0; }
+            if (!first) { MessageBox.Show(L.T("The launcher is already open. Switch to its window."), "Deal or Force"); return 0; }
             var app = new Application();
             var window = new MainWindow(new LauncherCatalog(root, profile), Option("--godot"));
             return app.Run(window);
         }
-        catch (Exception ex) { MessageBox.Show(ex.Message, "Deal or Force — запуск невозможен", MessageBoxButton.OK, MessageBoxImage.Error); return 1; }
+        catch (Exception ex) { MessageBox.Show(ex.Message, L.T("Deal or Force — cannot start"), MessageBoxButton.OK, MessageBoxImage.Error); return 1; }
     }
 }

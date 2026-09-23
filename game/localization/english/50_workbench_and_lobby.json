@@ -115,5 +115,6 @@
   "Terrain": "Terrain",
   "Relief": "Relief",
   "WAR": "WAR",
-  "TER": "TER"
+  "TER": "TER",
+  "Click to choose this scenario, double-click to start it.": "Click to choose this scenario, double-click to start it."
 }

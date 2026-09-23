@@ -64,7 +64,12 @@ public static class Attrition
         // Starving and burying are rates and take their share of the step. Rebuilding is a
         // decision a country makes on a day - it divides the day number by its own interval -
         // so at an hourly step it must happen once on that day rather than every hour of it.
-        if (campaign.StepOpensNewDay) RebuildTheLost(campaign);
+        // Sending home the prisoners of a war that has ended is the same kind of thing.
+        if (campaign.StepOpensNewDay)
+        {
+            RebuildTheLost(campaign);
+            WarLosses.Repatriate(campaign);
+        }
     }
 
     /// <summary>
@@ -80,16 +85,32 @@ public static class Attrition
     /// starves. That is long enough to be relieved by a counter-attack, which is the whole
     /// point: it makes cutting an enemy off a real threat and breaking through to them a real
     /// answer, and it gives both sides something to be doing besides pushing.
+    ///
+    /// Two things it did not do. The loss is a rate per day and this runs every step, and it
+    /// took a whole day's loss each time: at the hourly step a pocket was gone in two days,
+    /// which is no time to relieve it and no time for the player to notice it had formed.
+    /// And the men it cost were never counted - they came off the formation and out of the
+    /// world, so the war that closed the pocket showed none of it. Now they are killed or
+    /// taken, on the books of the war that is starving them (see WarLosses).
     /// </summary>
     private static void StarveThePockets(Campaign campaign)
     {
         var defines = campaign.Defines;
+        var scale = campaign.TickScale;
+        var captured = M.Clamp01(defines.EncircledLossCapturedShare);
         foreach (var army in campaign.Armies)
         {
             if (!army.CutOff || army.Divisions <= 0f) continue;
-            var pressed = army.InBattle ? defines.EncircledUnderAttack : 1f;
+            var pressed = (army.InBattle ? defines.EncircledUnderAttack : 1f) * scale;
+            var before = army.Strength;
             army.Strength = M.Clamp01(army.Strength - defines.EncircledStrengthLoss * pressed);
             army.Organisation = M.Clamp01(army.Organisation - defines.EncircledOrganisationLoss * pressed);
+
+            var men = (before - army.Strength) * army.Divisions * MilitaryBootstrap.DivisionSize;
+            if (men <= 0f) continue;
+            army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(men));
+            WarLosses.Record(WarLosses.WarOf(campaign, army), army.NationId,
+                men * (1f - captured), 0f, men * captured);
         }
     }
 
@@ -109,7 +130,13 @@ public static class Attrition
                 Broken.Add(army);
         if (Broken.Count == 0) return;
 
-        foreach (var army in Broken) Destroy(campaign, army, "destroyed: broken in the field");
+        foreach (var army in Broken)
+        {
+            // A pocket that has starved down to nothing did not dissolve: what was left of it
+            // surrendered, and those men are the other side's prisoners now.
+            if (army.CutOff) WarLosses.Surrender(campaign, army);
+            Destroy(campaign, army, "destroyed: broken in the field");
+        }
         campaign.MarkStrategicChange();
     }
 

@@ -473,6 +473,11 @@ public static class Program
                    string.Join(", ", moved.Take(8));
 
         // A mod's layout override has to take, and must not need to restate the anchors.
+        // What "undone" means is read off the panel before the override rather than written
+        // in as a number: it used to say 14, which was hud.top's compiled offset until the HUD
+        // was rearranged, and the moment the defaults caught up with the rearrangement this
+        // check failed on a layout that was correct.
+        var shippedLeft = InterfaceSkin.Layout("hud.top").OffsetLeft;
         InterfaceSkin.Merge("{\"layout\":{\"hud.top\":{\"offsets\":[1,2,3,4]}}}", "bench", null);
         var moving = InterfaceSkin.Layout("hud.top");
         if (Math.Abs(moving.OffsetLeft - 1f) > 0.001f || Math.Abs(moving.OffsetBottom - 4f) > 0.001f)
@@ -480,7 +485,7 @@ public static class Program
         if (Math.Abs(moving.AnchorRight - 1f) > 0.001f)
             return "a layout override that only set offsets also lost the anchors";
         InterfaceSkin.ResetCatalog();
-        if (Math.Abs(InterfaceSkin.Layout("hud.top").OffsetLeft - 14f) > 0.001f)
+        if (Math.Abs(InterfaceSkin.Layout("hud.top").OffsetLeft - shippedLeft) > 0.001f)
             return "resetting the skin did not undo a layout override";
 
         foreach (var (token, value) in tokens)
@@ -5486,7 +5491,17 @@ public static class Program
         // The menu scene is not part of the campaign's widget helpers - it is its own scene
         // with two of its own - so its captions are named here or they are named nowhere.
         ("MenuCaption(", new[] { 0 }),
-        ("MenuAction(", new[] { 0 })
+        ("MenuAction(", new[] { 0 }),
+        // And the local helpers a screen builds for itself: the war ledger's `Heading`, `Line`,
+        // `Caption` and `Cell`, the layout editor's `Caption` and `Button`. Each reaches `Tr`
+        // or `Loc.Get` one call down, so each caption was translated at runtime and invisible
+        // here - which is how the war screen's headings shipped in English to Russian players,
+        // missing from both tables, while this check reported the tables complete.
+        ("Heading(", new[] { 0 }),
+        ("Line(", new[] { 0 }),
+        ("Caption(", new[] { 0 }),
+        ("Cell(", new[] { 0 }),
+        ("Button(", new[] { 0 })
     };
 
     /// <summary>
@@ -6377,8 +6392,10 @@ public static class Program
     ///
     /// Water used to be paint over land: a province could span half a reservoir and a column
     /// could march across Lake Michigan without anything noticing. Now every lake above the
-    /// threshold is a region, so three things have to hold together - it belongs to somebody,
-    /// nobody lives on it, and no route on foot ever enters one. The third is the one that
+    /// threshold is a region, so three things have to hold together - it belongs to nobody,
+    /// nobody lives on it, and no route on foot ever enters one. (It used to have to belong to
+    /// somebody; item 39 made lakes the first regions with no owner, drawn as water rather than
+    /// in the colour of whoever held the longest shore.) The third is the one that
     /// matters and the easiest to lose: it is enforced in one place each for movement, fronts
     /// and supply, and any of those three could be edited back out without a symptom until
     /// somebody watched an army walk over Baikal.
@@ -6394,7 +6411,14 @@ public static class Program
         var faults = new List<string>();
         foreach (var lake in lakes)
         {
-            if (lake.NationMapIndex <= 0) faults.Add($"{lake.Name} belongs to nobody");
+            if (lake.NationMapIndex > 0)
+                faults.Add($"{lake.Name} belongs to {campaign.Nations.Find(n => n.MapIndex == lake.NationMapIndex)?.Tag ?? "somebody"}, and a lake is nobody's ground");
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+                if (topology.ProvinceToState[province] == lake.MapIndex && topology.ProvinceToNation[province] != 0)
+                {
+                    faults.Add($"{lake.Name} has water owned by map index {topology.ProvinceToNation[province]}");
+                    break;
+                }
             if (lake.Population > 0) faults.Add($"{lake.Name} has {Fmt.People(lake.Population)} living on the water");
         }
 
@@ -6428,7 +6452,7 @@ public static class Program
 
         if (faults.Count > 0) return string.Join("; ", faults.Take(6));
         Console.WriteLine($"  lakes: {lakes.Count:N0} region(s) over {water:N0} province(s) of water, " +
-            $"every one owned, empty of people and closed to marching ({sampled:N0} shoreline(s) tried).");
+            $"none of them anybody's, empty of people and closed to marching ({sampled:N0} shoreline(s) tried).");
         return "";
     }
 

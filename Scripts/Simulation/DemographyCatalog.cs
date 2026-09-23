@@ -15,6 +15,13 @@ public sealed class CultureDefinition
     public string Colour = "#8a8f98";
 
     /// <summary>
+    /// What a state this people founds is called, when it has a name of its own: Kurdistan,
+    /// Catalonia, Ichkeria. Empty for most peoples, whose new state takes the name of the
+    /// region it is founded on instead.
+    /// </summary>
+    public string Country = "";
+
+    /// <summary>
     /// What this people believes, as weights. One entry is the usual case; two is a people
     /// genuinely split down the middle, which is a fact about Yoruba and Albanians and
     /// Lebanese and pretending otherwise would lose the most interesting thing about them.
@@ -290,6 +297,7 @@ public static class DemographyCatalog
             if (entry.Value.TryGetProperty("name", out var name)) culture.Name = name.GetString() ?? culture.Name;
             if (entry.Value.TryGetProperty("group", out var group)) culture.Group = group.GetString() ?? "";
             if (entry.Value.TryGetProperty("colour", out var colour)) culture.Colour = colour.GetString() ?? culture.Colour;
+            if (entry.Value.TryGetProperty("country", out var country)) culture.Country = country.GetString() ?? "";
 
             // "religion": "orthodox", or a split: { "christian": 0.55, "sunni": 0.45 }
             if (!entry.Value.TryGetProperty("religion", out var faith)) continue;

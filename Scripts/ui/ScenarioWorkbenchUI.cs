@@ -30,9 +30,32 @@ public partial class DealOrForceGame
     /// </summary>
     private Action _authorExit;
 
+    /// <summary>
+    /// The way out of the workshop as a whole, kept while one of its windows opens another.
+    ///
+    /// Routing the library's exit to the main menu fixed the library and nothing else: the
+    /// content editor and the scenario copier are reached THROUGH the library and were opened
+    /// without a way out of their own, so they fell back on closing the canvas and leaving
+    /// whatever was behind it. Reached from the country picker, that is the same globe with no
+    /// interface on it as before, one level deeper. A window opened from inside another now
+    /// inherits where that one was going to go.
+    /// </summary>
+    private Action _authorHomeExit;
+
+    /// <summary>Whether the campaign was already paused when the workshop opened.</summary>
+    private bool _authorPausedBefore;
+
     private VBoxContainer AuthorWindow(string heading, Action onClose = null, string closeLabel = "Close")
     {
-        CloseAuthorWindow();
+        var inheritedExit = onClose ?? _authorHomeExit;
+        var pausedBefore = _authorCanvas is null
+            ? _campaign is not null && _campaign.IsPaused
+            : _authorPausedBefore;
+        // Not restoring the clock here: this close is only making room for the window about
+        // to replace it, and the line below pauses again immediately.
+        CloseAuthorWindow(restoreClock: false);
+        _authorHomeExit = inheritedExit;
+        _authorPausedBefore = pausedBefore;
         _campaign.IsPaused = true;
         _globe.LoadingInputBlocked = true;
         _authorCanvas = new CanvasLayer { Name = "ContentWorkshop", Layer = 60 };
@@ -47,24 +70,45 @@ public partial class DealOrForceGame
         var title = Title(heading, 25, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
-        _authorExit = onClose ?? CloseAuthorWindow;
+        _authorExit = inheritedExit ?? (() => CloseAuthorWindow());
         header.AddChild(ActionButton(closeLabel, () => ConfirmAuthorExit(_authorExit), 200, 36));
         return rows;
     }
 
-    private void CloseAuthorWindow()
+    /// <param name="restoreClock">
+    /// Whether to put the campaign clock back the way the workshop found it. False where the
+    /// caller is about to set the clock itself - opening another window, or arriving on a
+    /// campaign it has just loaded and deliberately paused.
+    /// </param>
+    private void CloseAuthorWindow(bool restoreClock = true)
     {
         if (IsInstanceValid(_authorCanvas)) { RemoveChild(_authorCanvas); _authorCanvas.QueueFree(); _authorCanvas = null; }
         if (_globe is not null) _globe.LoadingInputBlocked = false;
         _authorDirty = false;
         _authorExit = null;
+        _authorHomeExit = null;
+        // The workshop pauses the campaign to open, and used to leave it that way: the world
+        // stood still afterwards while the pause button said it was running, because the
+        // button follows a flag that had been set behind its back. Whatever the clock was
+        // doing before is what it goes back to.
+        if (restoreClock && _campaign is not null && !_authorPausedBefore)
+        {
+            _campaign.IsPaused = false;
+            if (GodotObject.IsInstanceValid(_pause))
+            {
+                _pause.Text = "II";
+                StyleButton(_pause, false);
+            }
+            UpdateSpeedButtons();
+        }
+        _authorPausedBefore = false;
     }
 
     /// <summary>Whether the workshop is up, so escape knows it is the thing to answer to.</summary>
     private bool AuthorWindowOpen => IsInstanceValid(_authorCanvas);
 
     /// <summary>Escape takes the window's own way out, whichever one that is.</summary>
-    private void EscapeAuthorWindow() => ConfirmAuthorExit(_authorExit ?? CloseAuthorWindow);
+    private void EscapeAuthorWindow() => ConfirmAuthorExit(_authorExit ?? (() => CloseAuthorWindow()));
 
     private void ConfirmAuthorExit(Action action)
     {
@@ -88,19 +132,72 @@ public partial class DealOrForceGame
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         rows.AddChild(scroll);
         var cards = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        cards.AddThemeConstantOverride("separation", 12);
+        cards.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(cards);
-        foreach (var entry in ScenarioLibrary.Discover(ScenarioRoots, Path.Combine(AuthorRoot, "scenarios")))
+
+        // Each scenario is a card that is chosen by clicking it, lit while it is the one
+        // chosen, and started by the one button underneath - or by a double click, the way a
+        // list of saves or servers works anywhere else. They were three lines of text with a
+        // start button apiece, which with one scenario looked like a heading and with several
+        // would have been a column of identical buttons with the thing that tells them apart
+        // written above each one.
+        var entries = ScenarioLibrary.Discover(ScenarioRoots, Path.Combine(AuthorRoot, "scenarios")).ToList();
+        var pickedCards = new List<(PanelContainer Card, ScenarioEntry Entry)>();
+        ScenarioEntry chosen = null;
+        var start = ActionButton("Choose country on map", () => { if (chosen is not null) LoadAuthoredScenario(chosen); }, 300, 42, true);
+
+        void Paint(PanelContainer card, ScenarioEntry entry, bool hovered) =>
+            card.AddThemeStyleboxOverride("panel", ButtonStyle(entry == chosen, hovered ? 1 : 0));
+
+        void Choose(ScenarioEntry entry)
         {
-            var card = new VBoxContainer();
+            chosen = entry;
+            foreach (var (card, candidate) in pickedCards) Paint(card, candidate, false);
+            start.Disabled = chosen is null;
+        }
+
+        foreach (var entry in entries)
+        {
+            var card = new PanelContainer
+            {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                MouseFilter = MouseFilterEnum.Stop,
+                MouseDefaultCursorShape = CursorShape.PointingHand,
+                TooltipText = Ui.Tip(Tr("Click to choose this scenario, double-click to start it."))
+            };
             cards.AddChild(card);
-            card.AddChild(Title(entry.Name, 21, Ui.Colour("text.bright")));
+            var margin = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
+            foreach (var side in new[] { "left", "right" }) margin.AddThemeConstantOverride("margin_" + side, 16);
+            foreach (var side in new[] { "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + side, 10);
+            card.AddChild(margin);
+            var lines = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+            lines.AddThemeConstantOverride("separation", 3);
+            margin.AddChild(lines);
+            var name = Title(entry.Name, 21, Ui.Colour("text.bright"));
             var description = Title(entry.Description, 14, Ui.Colour("text.muted"));
             description.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            card.AddChild(description);
-            card.AddChild(Title(entry.Id, 12, Ui.Colour("text.caption")));
-            card.AddChild(ActionButton("Choose country on map", () => LoadAuthoredScenario(entry), 260, 40, true));
+            var id = Title(entry.Id, 12, Ui.Colour("text.caption"));
+            foreach (var label in new[] { name, description, id })
+            {
+                label.MouseFilter = MouseFilterEnum.Ignore;
+                lines.AddChild(label);
+            }
+
+            var captured = entry;
+            card.MouseEntered += () => Paint(card, captured, true);
+            card.MouseExited += () => Paint(card, captured, false);
+            card.GuiInput += input =>
+            {
+                if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } click) return;
+                Choose(captured);
+                if (click.DoubleClick) LoadAuthoredScenario(captured);
+                card.AcceptEvent();
+            };
+            pickedCards.Add((card, entry));
         }
+        Choose(entries.FirstOrDefault());
+        rows.AddChild(start);
+
         var actions = new HBoxContainer();
         rows.AddChild(actions);
         actions.AddChild(ActionButton("Content editor", OpenContentEditor, 220, 42));
@@ -139,7 +236,8 @@ public partial class DealOrForceGame
             await LoadingPhase("Ready", 100);
         }, true);
         if (!success) return;
-        CloseAuthorWindow();
+        // The campaign above was loaded and paused on purpose; the picker is what unpauses it.
+        CloseAuthorWindow(restoreClock: false);
         OpenCountryPicker();
     }
 

@@ -68,5 +68,29 @@
   "PlanningGainPerDay": 0.018,
   "PlanningLossPerProvince": 0.025,
   "PlanningBurnPerCombatDay": 0.055,
-  "MaxPlanningAttackBonus": 0.30
+  "MaxPlanningAttackBonus": 0.30,
+
+  // Pockets. A formation cut off from supply loses strength and organisation every day it
+  // stays cut off - faster while it is also being attacked - and takes more from the same
+  // fire, because nothing reaches it and it has nowhere to fall back to. Of what a starving
+  // pocket loses, EncircledLossCapturedShare surrender and the rest die. When it breaks,
+  // what is left of it surrenders: SurrenderKilledShare of them die in the last of it, the
+  // rest are taken, and so are the wounded it was carrying.
+  "DivisionBrokenStrength": 0.06,
+  "EncircledStrengthLoss": 0.022,
+  "EncircledOrganisationLoss": 0.035,
+  "EncircledUnderAttack": 1.8,
+  "EncircledCasualtyMultiplier": 1.5,
+  "EncircledLossCapturedShare": 0.45,
+  "SurrenderKilledShare": 0.12,
+
+  // Losses and prisoners. Of a day's casualties, WoundedShareOfCasualties are wounded and
+  // the rest killed; WoundedReturningShare above is how many of the same casualties come
+  // back to their formation, so it can be no larger. Prisoners go home by an exchange -
+  // one for one, at most every PrisonerExchangeIntervalDays - or at the peace, and
+  // PrisonersRepatriatedShare of them survive captivity to do it.
+  "WoundedShareOfCasualties": 0.75,
+  "PrisonersRepatriatedShare": 0.92,
+  "PrisonerExchangeMinimum": 500,
+  "PrisonerExchangeIntervalDays": 30
 }

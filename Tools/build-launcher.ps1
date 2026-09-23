@@ -10,7 +10,10 @@ $launcherPublish = Join-Path $launcherProjectRoot 'build\launcher-publish'
 if ($LASTEXITCODE -ne 0) { throw 'Launcher publish failed.' }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $launcherPublish 'Deal or Force Launcher.exe') -Destination (Join-Path $OutputDirectory 'Deal or Force Launcher.exe') -Force
-if ([IO.Path]::GetFullPath($OutputDirectory).TrimEnd('\','/') -ne [IO.Path]::GetFullPath($launcherProjectRoot).TrimEnd('\','/')) {
-    Copy-Item -LiteralPath (Join-Path $launcherProjectRoot 'docs\LAUNCHER_RU.md') -Destination (Join-Path $OutputDirectory 'LAUNCHER_RU.md') -Force
-}
+
+# docs\LAUNCHER_RU.md used to be copied in beside the executable. It is written for whoever
+# builds the launcher, not for whoever plays the game, and it is Russian-only next to an
+# English build - so a player opening the folder met a document in a language they may not
+# read, about a thing that is not their problem. It stays in docs/, where it belongs.
+
 Write-Host "Launcher ready: $OutputDirectory\Deal or Force Launcher.exe"

@@ -116,5 +116,6 @@
   "Terrain": "Местность",
   "Relief": "Рельеф",
   "WAR": "ВОЙ",
-  "TER": "МЕС"
+  "TER": "МЕС",
+  "Click to choose this scenario, double-click to start it.": "Щелчок — выбрать сценарий, двойной щелчок — начать."
 }

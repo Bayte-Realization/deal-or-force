@@ -15,6 +15,27 @@ public sealed class StrategicWar
     public float DefenderWarSupport = 1f;
     public float AttackerLosses;
     public float DefenderLosses;
+
+    /// <summary>
+    /// What those losses were made of. The two totals above stay the totals - the war score
+    /// and home support read them - and these break the same men down into the three things
+    /// that happen to a soldier a war takes: killed, wounded, or taken. See WarLosses.
+    /// </summary>
+    public float AttackerKilled;
+    public float AttackerWounded;
+    public float AttackerCaptured;
+    public float DefenderKilled;
+    public float DefenderWounded;
+    public float DefenderCaptured;
+
+    /// <summary>
+    /// Prisoners still held, by the country they were taken from. An exchange sends some
+    /// home during the war; the peace sends the rest.
+    /// </summary>
+    public readonly Dictionary<int, float> Prisoners = new();
+
+    /// <summary>The day of the last prisoner exchange in this war, or -1.</summary>
+    public int LastPrisonerExchangeDay = -1;
     public float OccupationScore;
     public float BattleScore;
     public float ObjectiveScore;

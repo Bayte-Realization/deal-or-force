@@ -42,39 +42,35 @@ public partial class DealOrForceGame
     /// `user://save_games`, which is where saves have always been: never wrong, only hard
     /// to find.
     /// </summary>
-    private string SaveRoot
+    private string SaveRoot => string.IsNullOrEmpty(_saveRoot) ? _saveRoot = ResolveSaveRoot() : _saveRoot;
+
+    /// <summary>
+    /// The folder itself, worked out without a campaign - so the main menu, which is a scene
+    /// of its own with no campaign behind it, lists the same saves the game writes.
+    /// </summary>
+    internal static string ResolveSaveRoot()
     {
-        get
+        var legacy = ProjectSettings.GlobalizePath("user://save_games");
+        var documents = OS.GetSystemDir(OS.SystemDir.Documents);
+        if (string.IsNullOrWhiteSpace(documents) || !Directory.Exists(documents)) return legacy;
+
+        // Godot hands back a path with forward slashes and Path.Combine adds backslashes,
+        // so without this the folder is shown to the player as
+        // `C:/Users/User/Documents\Deal or Force\save games`, which reads like a bug.
+        var chosen = Path.GetFullPath(Path.Combine(documents, "Deal or Force", "save games"));
+        try
         {
-            if (!string.IsNullOrEmpty(_saveRoot)) return _saveRoot;
-
-            var legacy = ProjectSettings.GlobalizePath("user://save_games");
-            var documents = OS.GetSystemDir(OS.SystemDir.Documents);
-            if (string.IsNullOrWhiteSpace(documents) || !Directory.Exists(documents))
-            {
-                _saveRoot = legacy;
-                return _saveRoot;
-            }
-
-            // Godot hands back a path with forward slashes and Path.Combine adds backslashes,
-            // so without this the folder is shown to the player as
-            // `C:/Users/User/Documents\Deal or Force\save games`, which reads like a bug.
-            var chosen = Path.GetFullPath(Path.Combine(documents, "Deal or Force", "save games"));
-            try
-            {
-                Directory.CreateDirectory(chosen);
-                MigrateSaves(legacy, chosen);
-                _saveRoot = chosen;
-            }
-            catch (Exception exception)
-            {
-                // A documents folder that cannot be written to is a real situation - a
-                // redirected profile, a locked-down machine - and not worth losing the
-                // ability to save over.
-                DiagnosticLogs.Write("errors", $"SAVE_ROOT_FALLBACK {exception.Message}");
-                _saveRoot = legacy;
-            }
-            return _saveRoot;
+            Directory.CreateDirectory(chosen);
+            MigrateSaves(legacy, chosen);
+            return chosen;
+        }
+        catch (Exception exception)
+        {
+            // A documents folder that cannot be written to is a real situation - a
+            // redirected profile, a locked-down machine - and not worth losing the
+            // ability to save over.
+            DiagnosticLogs.Write("errors", $"SAVE_ROOT_FALLBACK {exception.Message}");
+            return legacy;
         }
     }
 
@@ -325,6 +321,11 @@ public partial class DealOrForceGame
 
         _modApi.Bind(_campaign);
         _globe.BindCampaign(_campaign);
+        // The save's own step and autosave, not whatever the player has set since - and for
+        // a save written before campaigns kept their options, the player's current ones,
+        // which the first read writes into it.
+        foreach (var definition in SettingsCatalog.All)
+            if (definition.Campaign) ApplySetting(definition.Id);
         ResetStrategicAudioState();
         _menuLayer.Visible = false;
         _pickerLayer.Visible = false;

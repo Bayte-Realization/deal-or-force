@@ -403,6 +403,7 @@ public partial class DealOrForceGame
         AddResult(parts, results, ArmyMoveResult.AttackIssued, "advancing along the marked route; defended provinces require a battle");
         AddResult(parts, results, ArmyMoveResult.RouteInterrupted, "route blocked");
         AddResult(parts, results, ArmyMoveResult.QueuedAfterBattle, "queued until battle ends");
+        AddResult(parts, results, ArmyMoveResult.OrderCancelled, "order cancelled");
         AddResult(parts, results, ArmyMoveResult.AlreadyAtDestination, "already there");
         AddResult(parts, results, ArmyMoveResult.TargetNotControlled, "neutral territory: no military access or active war");
         AddResult(parts, results, ArmyMoveResult.NoLandRoute, "no legal land corridor (water or neutral territory may block the route)");

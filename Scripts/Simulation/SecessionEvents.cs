@@ -478,6 +478,32 @@ public static class SecessionEvents
     private static string Slug(string value) =>
         string.IsNullOrWhiteSpace(value) ? "" : value.Trim().ToLowerInvariant().Replace(' ', '_');
 
+    /// <summary>
+    /// One region goes now, by the same road the week takes: founded, given the ground it
+    /// stands on, armed, and answered by the country it left. For the console and for a mod's
+    /// scripted event - a secession somebody wants to happen rather than one that has built
+    /// up. The people who found it are the region's own largest, unless a mod names others.
+    /// </summary>
+    public static SecessionReport Force(Campaign campaign, ScenarioState state, string culture = null)
+    {
+        if (campaign?.ProvinceMap is null || state is null || LakeRegions.IsWaterState(state)) return null;
+        var parent = campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
+        if (parent is null || campaign.StatesOf(parent).Length < 2) return null;
+        if (string.IsNullOrWhiteSpace(culture))
+        {
+            var byCulture = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in state.PopulationGroups)
+                byCulture[group.Culture] = byCulture.GetValueOrDefault(group.Culture) + group.Size;
+            culture = byCulture.Count == 0 ? parent.Tag : byCulture.OrderByDescending(pair => pair.Value).First().Key;
+        }
+        var piece = new SecessionPiece
+        {
+            MapIndex = state.MapIndex, Name = state.Name,
+            Cause = SecessionCause.Nationality, Population = state.Population
+        };
+        return Secede(campaign, parent, new List<SecessionPiece> { piece }, culture, state.Population);
+    }
+
     private static SecessionReport Secede(Campaign campaign, Nation parent,
         List<SecessionPiece> leaving, string culture, long people)
     {
@@ -586,7 +612,7 @@ public static class SecessionEvents
         {
             Tag = tag,
             Iso = tag,
-            Name = NameFor(culture, seat.Name),
+            Name = NameFor(culture, seat.Name, parent),
             Continent = parent.Continent,
             Region = parent.Region,
             Color = ColourFor(culture, parent),
@@ -703,14 +729,24 @@ public static class SecessionEvents
     }
 
     /// <summary>
-    /// What to call it. The people's own name where there is one, because "Tatarstan" is
-    /// what a Tatar secession is called; the seat region's name otherwise, which is what
-    /// a secession with no single people has always been called.
+    /// What to call it (item 42 on the list).
+    ///
+    /// It used to be the people's adjective: a Tatar secession was a country called "Tatar",
+    /// and Koreans leaving South Korea founded "Korean", which is not a country name so much
+    /// as a word left over. Now, in order: the name the people's state has where it has one
+    /// (`country` in common/cultures - Kurdistan, Catalonia, Ichkeria); otherwise the region
+    /// it was founded on, because that is what such a state is called - Tatarstan,
+    /// Transnistria, Somaliland - and certainly when the people leaving are the same people
+    /// as the country they left, where the adjective would be the country's own; and the
+    /// adjective only when there is not even a region name to use.
     /// </summary>
-    private static string NameFor(string culture, string seat)
+    private static string NameFor(string culture, string seat, Nation parent)
     {
+        var country = DemographyCatalog.Culture(culture)?.Country;
+        if (!string.IsNullOrWhiteSpace(country)) return country;
+        if (!string.IsNullOrWhiteSpace(seat)) return seat;
         var people = DemographyCatalog.CultureName(culture);
-        return string.IsNullOrWhiteSpace(people) ? seat : people;
+        return string.IsNullOrWhiteSpace(people) ? parent?.Name ?? "" : people;
     }
 
     /// <summary>

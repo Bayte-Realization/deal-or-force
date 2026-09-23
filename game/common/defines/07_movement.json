@@ -1,0 +1,58 @@
+// Deal or Force - Movement.
+//
+// How fast an army walks, and what slows it down. Every key here overrides the value
+// compiled into Defines.cs; a key no file mentions keeps its compiled value, so a mod only
+// lists what it changes and never has to fork this file.
+//
+// These numbers used to exist only in the source. They are here because "how fast do armies
+// move" is the first thing anybody wants to retune and the last thing they should have to
+// read C# to find.
+//
+// The march is one multiplication, and every term in it is listed below or beside it:
+//
+//   progress per day
+//     = MarchProgressPerDay        this file
+//     x unit speed                 common/unit_types
+//     x stance                     this file
+//     x supply, floored            this file
+//     x river crossing             00_combat.json, RiverMovementMultiplier
+//     x terrain                    common/terrain
+//     x rail redeployment          this file, when being railed
+//
+// Progress accumulates until it reaches 1, and then the formation is in the next province.
+// So 0.22 a day is four and a half days to cross one - and a province here is a district,
+// not a country, because there are thirty-eight thousand of them.
+//
+// Taking ground that belongs to somebody else is a different sum and lives in 00_combat.json:
+// UnopposedCapturePerDay, ZoneOfControlResistance and OrderedAdvanceFloor between them decide
+// how fast an advance moves through a defended country, and they matter far more to the pace
+// of a war than anything in this file.
+{
+
+  // The march
+  //
+  // Raising MarchProgressPerDay alone is the obvious change and the one to be careful with:
+  // the 2024 front is chaotically sensitive to it. At 0.27 Ukraine keeps 56 % of its ground
+  // after two years of nobody playing, at 0.32 it keeps 75 %, and the bench's stalemate check
+  // fails at both. Armies feeling right is not one number - it is a pass over entrenchment,
+  // defence and how a front absorbs a breakthrough. Change it in a mod and see for yourself.
+  "MarchProgressPerDay": 0.22,
+
+  // What supply can cost a march, at worst.
+  //
+  // Supply multiplies pace directly, and a formation whose trace has been cut sits at 0.06 -
+  // so without a floor, walking out of your own supply range would mean seventy days to a
+  // province, which is not slow but stopped. This is the number that decides what an advance
+  // through enemy country actually runs at, because that is exactly where the trace fails.
+  "MarchSupplyFloor": 0.45,
+
+  // Stance
+  "MarchCautiousMultiplier": 0.86,
+  "MarchAggressiveMultiplier": 1.14,
+
+  // The railways: faster, and worse when it arrives. The organisation is charged per day of
+  // travel, and entrenchment is lost outright - a formation that has been railed somewhere
+  // arrives quickly and in no condition to attack on the day it gets there.
+  "RailRedeploymentSpeed": 3.2,
+  "RailRedeploymentOrganisationPerDay": 0.16
+}

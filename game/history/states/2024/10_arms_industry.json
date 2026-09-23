@@ -1,0 +1,48 @@
+// The arms industry the opening war is fought with.
+//
+// The seeding in the economy gives every region farms, workshops and roads from its people
+// and how urban they are - and no arms industry at all, anywhere. For most of the world that
+// is close enough: `national_arms_output` in common/production makes a share of GDP into
+// weapons, and a country at peace needs little more. It is not close enough for a country
+// that opens the game at war. Russia's nominal GDP makes about a sixth of what its field army
+// burns at war, so it began the campaign with 40 % of the equipment it needed, and was still
+// there half a year later - with the largest defence industry in Europe standing in the
+// regions below. With the plants written in it opens at 98 %, and falls to about 90 % as the
+// army grows, which is where buying from abroad starts to matter again.
+//
+// So the plants are written down where they are. Each one is the building of the same name
+// in common/buildings - 4.5 Arms a week when fully staffed, by the `arms_industry` recipe in
+// common/production - and each is a real cluster rather than a single factory:
+//
+//   Sverdlovsk     Uralvagonzavod in Nizhny Tagil, Uraltransmash - tanks and self-propelled guns
+//   Udmurtia       Kalashnikov in Izhevsk, the Votkinsk missile plant
+//   Tula           KBP, Splav, Tulamashzavod - guided weapons and rocket artillery
+//   Moscow         Almaz-Antey, Tactical Missiles Corporation, the aviation design bureaux
+//   Nizhny Novgorod  Arzamas, the Sverdlov explosives works in Dzerzhinsk
+//   Tatarstan      Kazan helicopters, the Alabuga drone works
+//   Kurgan         Kurganmashzavod - infantry fighting vehicles
+//   Perm           Motovilikha - artillery and rocket launchers; the Perm powder works
+//   Omsk           Omsktransmash - tanks
+//   Vladimir       Degtyarev in Kovrov - small arms, anti-tank weapons, drones
+//
+//   Kyiv           Artem, Antonov, Kuznya na Rybalskomu
+//   Dnipropetrovsk Pivdenmash, the Pavlohrad chemical plant
+//
+// Ukraine's industry is smaller and the rest of what it fights with is bought or given, which
+// the trade pass already covers. A later file naming the same region wins, as everywhere else
+// in history/: a mod that disagrees with a number changes that one region and inherits the rest.
+{
+  "ru_sve": { "buildings": { "ArmsIndustry": 2 } },
+  "ru_ud":  { "buildings": { "ArmsIndustry": 1 } },
+  "ru_tul": { "buildings": { "ArmsIndustry": 1 } },
+  "ru_mow": { "buildings": { "ArmsIndustry": 1 } },
+  "ru_niz": { "buildings": { "ArmsIndustry": 1 } },
+  "ru_ta":  { "buildings": { "ArmsIndustry": 1 } },
+  "ru_kgn": { "buildings": { "ArmsIndustry": 1 } },
+  "ru_per": { "buildings": { "ArmsIndustry": 1 } },
+  "ru_oms": { "buildings": { "ArmsIndustry": 1 } },
+  "ru_vla": { "buildings": { "ArmsIndustry": 1 } },
+
+  "ua_32":  { "buildings": { "ArmsIndustry": 1 } },
+  "ua_12":  { "buildings": { "ArmsIndustry": 1 } }
+}

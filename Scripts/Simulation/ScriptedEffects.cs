@@ -258,6 +258,85 @@ public static class ScriptedEffects
         return effect;
     }
 
+    /// <summary>
+    /// What a player reads for an effect: one line per consequence, in the same shape
+    /// everywhere - "Stability: +3%", "Treasury: -2%", "Manpower: +50,000" (item 67).
+    ///
+    /// Events and decisions used to show only their prose - "the country is smaller, and
+    /// every other region has watched it work" - with the numbers underneath it nowhere, so a
+    /// player choosing between two options was choosing between two paragraphs. The lines
+    /// are read out of the effect itself, so they cannot disagree with what it does, and a
+    /// mod's effect is described in the same words as the game's own without writing any.
+    /// </summary>
+    public static IReadOnlyList<string> Lines(Effect effect)
+    {
+        var lines = new List<string>();
+        if (effect is null) return lines;
+        foreach (var entry in effect.Entries)
+        {
+            if (!Resolve(entry.Key, out var field, out var operation)) continue;
+            var label = Loc.Get(Labels.GetValueOrDefault(field.Name, field.Name));
+            // The same word is a heading elsewhere - the top bar's STABILITY - and a table that
+            // capitalised it there shouts it here. Put back into sentence case, unless it is a
+            // short acronym like GDP, which is capitals in every language.
+            if (label.Length > 4 && label == label.ToUpper(CultureInfo.CurrentCulture))
+                label = label[..1] + label[1..].ToLower(CultureInfo.CurrentCulture);
+            var fraction = Fractions.Contains(field.Name);
+            var culture = CultureInfo.CurrentCulture;
+            var value = operation switch
+            {
+                // A share of what is there now.
+                Operation.Percent => (entry.Value * 100f).ToString("+0.#;-0.#", culture) + "%",
+                Operation.Mult => "×" + entry.Value.ToString("0.##", culture),
+                Operation.Set => "= " + (fraction
+                    ? (entry.Value * 100f).ToString("0.#", culture) + "%"
+                    : entry.Value.ToString("N0", culture)),
+                // A 0-to-1 quantity moves in percentage points; everything else in its own units.
+                _ => fraction
+                    ? (entry.Value * 100f).ToString("+0.#;-0.#", culture) + "%"
+                    : Math.Abs(entry.Value) >= 1000f
+                        ? entry.Value.ToString("+#,0;-#,0", culture)
+                        : entry.Value.ToString("+0.##;-0.##", culture)
+            };
+            lines.Add(Loc.Format("{0}: {1}", label, value));
+        }
+        return lines;
+    }
+
+    /// <summary>The same lines under a heading, ready to go under a tooltip's prose. Empty when there are none.</summary>
+    public static string Block(Effect effect)
+    {
+        var lines = Lines(effect);
+        return lines.Count == 0 ? "" : Loc.Get("Effects:") + "\n" + string.Join("\n", lines.Select(line => "  " + line));
+    }
+
+    /// <summary>Which fields are a share of one, so that +0.03 reads as three percentage points.</summary>
+    private static readonly HashSet<string> Fractions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "stability", "war_support", "standard_of_living", "literacy", "inflation", "key_rate",
+        "tax_rate", "military_spending", "welfare_spending", "education_spending", "market_access",
+        "state.standard_of_living", "state.radicalism", "state.literacy", "state.urbanization"
+    };
+
+    /// <summary>What each field is called on screen - an English key the tables translate.</summary>
+    private static readonly Dictionary<string, string> Labels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["treasury"] = "Treasury", ["gdp"] = "GDP", ["productivity"] = "Productivity",
+        ["stability"] = "Stability", ["war_support"] = "War support",
+        ["standard_of_living"] = "Standard of living", ["literacy"] = "Literacy",
+        ["inflation"] = "Inflation", ["key_rate"] = "Key rate",
+        ["government_sets_key_rate"] = "The government sets the key rate",
+        ["construction_capacity"] = "Construction capacity", ["manpower"] = "Manpower",
+        ["tax_rate"] = "Tax rate", ["military_spending"] = "Military spending",
+        ["welfare_spending"] = "Welfare spending", ["education_spending"] = "Education spending",
+        ["market_access"] = "Market access", ["population"] = "Population",
+        ["state.standard_of_living"] = "Standard of living in every region",
+        ["state.radicalism"] = "Radicalism in every region",
+        ["state.literacy"] = "Literacy in every region",
+        ["state.urbanization"] = "Urbanisation in every region",
+        ["state.population"] = "Population of every region"
+    };
+
     /// <summary>Build an effect in code, for the compiled-in defaults.</summary>
     public static Effect From(params (string Key, float Value)[] entries)
     {

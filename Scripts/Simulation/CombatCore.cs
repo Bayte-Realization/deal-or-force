@@ -387,9 +387,10 @@ public static partial class Warfare
                 // Progress belongs to the division, not a pooled province counter: a
                 // hundred divisions must not teleport one another across the border.
                 army.MoveProgress += campaign.Defines.UnopposedCapturePerDay * campaign.TickScale *
-                    UnitTypeCatalog.Get(army.TemplateId).Speed * MilitaryDoctrine.Movement(army.Stance) *
-                    M.Clamp(army.SupplyLevel, 0.25f, 1f) * topology.TerrainAt(target).MovementSpeed *
-                    riverAdvance * contested;
+                    UnitTypeCatalog.Get(army.TemplateId).Speed *
+                    MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
+                    M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) *
+                    topology.TerrainAt(target).MovementSpeed * riverAdvance * contested;
                 war.UnopposedProgress[target] = MathF.Max(war.UnopposedProgress.GetValueOrDefault(target), army.MoveProgress);
                 if (army.MoveProgress >= 1f)
                     Capture(campaign, war, target, army.NationId, new[] { army }, Array.Empty<Army>(), "walked into a gap");
@@ -644,24 +645,18 @@ public static partial class Warfare
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
             var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker),
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
-            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss, 1f);
+            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss, 1f, out var defenderKilled);
             var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss,
-                defines.AttackerCasualtyMultiplier);
+                defines.AttackerCasualtyMultiplier, out var attackerKilled);
             foreach (var army in attacking)
                 army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningBurnPerCombatDay);
             battle.AttackerLosses += attackerLoss;
             battle.DefenderLosses += defenderLoss;
 
-            if (war.AttackerId == battle.AttackerId)
-            {
-                war.AttackerLosses += attackerLoss;
-                war.DefenderLosses += defenderLoss;
-            }
-            else
-            {
-                war.AttackerLosses += defenderLoss;
-                war.DefenderLosses += attackerLoss;
-            }
+            // By side rather than by leader. This compared the battle's attacker with the
+            // war's, so an ally's assault in a coalition war put each side's dead on the other.
+            WarLosses.Record(war, battle.AttackerId, attackerKilled, attackerLoss - attackerKilled, 0f);
+            WarLosses.Record(war, battle.DefenderId, defenderKilled, defenderLoss - defenderKilled, 0f);
 
             var attackerOrg = AverageOrganisation(attacking);
             var defenderOrg = AverageOrganisation(defending);
@@ -882,6 +877,7 @@ public static partial class Warfare
             if (retreat <= 0)
             {
                 DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={provinceId} war={war.Id} reason=no_line_of_retreat");
+                WarLosses.Surrender(campaign, army);
                 Attrition.Destroy(campaign, army, "destroyed: cut off with no line of retreat");
                 continue;
             }
@@ -1060,11 +1056,13 @@ public static partial class Warfare
     /// crossing open ground into a prepared position has never cost what holding one does.
     /// </summary>
     private static float ApplyDamage(Campaign campaign, IReadOnlyCollection<Army> side,
-        float organisationLoss, float casualtyScale)
+        float organisationLoss, float casualtyScale, out float killed)
     {
         var defines = campaign.Defines;
         var totalPower = side.Sum(army => M.Max(0.01f, army.Power));
         var lost = 0f;
+        killed = 0f;
+        var woundedShare = M.Clamp01(defines.WoundedShareOfCasualties);
         foreach (var army in side)
         {
             var template = UnitTypeCatalog.Get(army.TemplateId);
@@ -1087,13 +1085,15 @@ public static partial class Warfare
             var personnel = army.Divisions * MilitaryBootstrap.DivisionSize * army.Strength;
             var casualties = personnel * loss * defines.CasualtiesPerOrganisationPoint *
                              brokenExposure * casualtyScale *
-                             MilitaryDoctrine.CasualtyExposure(army.Stance);
+                             MilitaryDoctrine.CasualtyExposure(army.Stance) *
+                             (army.CutOff ? defines.EncircledCasualtyMultiplier : 1f);
             if (personnel > 1f) army.Strength = M.Clamp01(army.Strength - casualties / personnel);
             army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(casualties));
             army.Recovering += casualties * defines.WoundedReturningShare;
             army.Experience = M.Clamp01(army.Experience + loss * 0.004f);
             army.Cohesion = M.Clamp01(army.Cohesion - loss * 0.08f);
             lost += casualties;
+            killed += casualties * (1f - woundedShare);
         }
         return lost;
     }

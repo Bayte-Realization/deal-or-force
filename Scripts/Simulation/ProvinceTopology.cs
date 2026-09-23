@@ -236,7 +236,10 @@ public sealed class ProvinceTopology
         {
             var read = cell * 3;
             var color = (raster.Pixels[read] << 16) | (raster.Pixels[read + 1] << 8) | raster.Pixels[read + 2];
-            var land = states[cell] != 0 && control[cell] != 0;
+            // Mapped ground is a cell with a region under it and an owner over it - or a lake,
+            // which has a region and, since lakes stopped belonging to whoever held the longest
+            // shore, no owner. Without the second half every lake province read as ocean.
+            var land = states[cell] != 0 && (control[cell] != 0 || LakeRegions.IsLakeRegion(states[cell]));
             if (!land)
             {
                 if (color != 0) throw new InvalidDataException($"provinces.png colours ocean pixel {cell}.");
