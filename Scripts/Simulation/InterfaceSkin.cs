@@ -216,6 +216,10 @@ public static class InterfaceSkin
         // Top-anchored and as tall as what it holds, rather than stretched to the bottom of
         // the screen: a fleet panel is a dozen lines, and the rest of the column was empty.
         ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 470f)),
+        // What a left click on the map selects: the country, as tall as what it holds, and
+        // its region and province along the bottom, clear of the map controls.
+        ("hud.country_card",   new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 90f)),
+        ("hud.region_card",    new PanelRect(0f, 1f, 0f, 1f,     540f, -292f, 1300f, -62f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
         ("hud.hotseat",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 365f, -6f)),
         ("hud.network",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 425f, -6f)),

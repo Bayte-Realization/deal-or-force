@@ -32,25 +32,54 @@ public partial class DealOrForceGame
     private static Texture2D FlagTexture(string tag)
     {
         if (string.IsNullOrWhiteSpace(tag)) return null;
-        var key = tag.ToLowerInvariant();
-
-        // Which flag this country flies today, which is no longer a fixed answer: a country
-        // that has gone communist flies something else, a restored monarchy flies its old
-        // ensign, and a country founded this morning by a secession has no file named after
-        // it at all and falls back to the flag of the people who founded it. See
-        // <see cref="FlagCatalog"/>, where all of that is data.
-        var sprite = $"flag_{key}";
-        var nation = FlagWorld?.NationByTag(tag);
-        if (nation is not null)
-        {
-            var situation = key + "|" + string.Join("|", FlagCatalog.All.Select(q =>
-                FlagCatalog.ValueOf(q.Source, FlagWorld, nation))) + $"|{FlagWorld.MapRevision}";
-            if (!ResolvedFlags.TryGetValue(situation, out var resolved))
-                ResolvedFlags[situation] = resolved = FlagCatalog.Resolve(FlagWorld, nation);
-            if (!string.IsNullOrEmpty(resolved)) sprite = resolved;
-        }
-
+        var sprite = FlagSprite(tag, out var nation);
         return FlagSpriteTexture(sprite) ?? (nation is null ? null : ProvisionalFlag(nation));
+    }
+
+    /// <summary>
+    /// Which flag this country flies today, which is no longer a fixed answer: a country
+    /// that has gone communist flies something else, a restored monarchy flies its old
+    /// ensign, and a country founded this morning by a secession has no file named after it
+    /// at all and falls back to the flag of the people who founded it. See
+    /// <see cref="FlagCatalog"/>, where all of that is data.
+    /// </summary>
+    private static string FlagSprite(string tag, out Nation nation)
+    {
+        var key = tag.ToLowerInvariant();
+        var sprite = $"flag_{key}";
+        nation = FlagWorld?.NationByTag(tag);
+        if (nation is null) return sprite;
+        var country = nation;
+        var situation = key + "|" + string.Join("|", FlagCatalog.All.Select(q =>
+            FlagCatalog.ValueOf(q.Source, FlagWorld, country))) + $"|{FlagWorld.MapRevision}";
+        if (!ResolvedFlags.TryGetValue(situation, out var resolved))
+            ResolvedFlags[situation] = resolved = FlagCatalog.Resolve(FlagWorld, nation);
+        return string.IsNullOrEmpty(resolved) ? sprite : resolved;
+    }
+
+    /// <summary>
+    /// Flags being read from disk in the background, by sprite, with the path each was asked for.
+    ///
+    /// The first diplomacy screen of a session drew two hundred and sixty flags and read every
+    /// one of them from disk on the frame that opened it: thirteen seconds in the editor, the
+    /// freeze a right click on a country cost. Every flag the world flies is asked for the
+    /// moment a campaign starts, on the loader's own threads, so the screen finds them read.
+    /// </summary>
+    private static readonly Dictionary<string, string> FlagsLoading = new();
+
+    /// <summary>Ask for every flag the world flies now, without waiting for any of them.</summary>
+    private static void WarmFlags(Campaign campaign)
+    {
+        if (campaign is null) return;
+        foreach (var nation in campaign.Nations)
+        {
+            if (string.IsNullOrWhiteSpace(nation.Tag)) continue;
+            var sprite = FlagSprite(nation.Tag, out _);
+            if (FlagCache.ContainsKey(sprite) || FlagsLoading.ContainsKey(sprite)) continue;
+            var path = SpriteCatalog.TextureOf(sprite, $"res://game/gfx/flags/{sprite}.png");
+            if (string.IsNullOrWhiteSpace(path) || !ResourceLoader.Exists(path)) continue;
+            if (ResourceLoader.LoadThreadedRequest(path) == Error.Ok) FlagsLoading[sprite] = path;
+        }
     }
 
     /// <summary>
@@ -124,6 +153,10 @@ public partial class DealOrForceGame
     {
         if (string.IsNullOrEmpty(sprite)) return null;
         if (FlagCache.TryGetValue(sprite, out var cached)) return cached;
+        // Asked for in the background already: take it, waiting only for what is left of it.
+        if (FlagsLoading.Remove(sprite, out var loading) &&
+            ResourceLoader.LoadThreadedGet(loading) is Texture2D warmed)
+            return FlagCache[sprite] = warmed;
         var path = SpriteCatalog.TextureOf(sprite, $"res://game/gfx/flags/{sprite}.png");
         var texture = !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path)
             ? GD.Load<Texture2D>(path)
@@ -149,6 +182,7 @@ public partial class DealOrForceGame
     {
         FlagWorld = campaign;
         ForgetFlags();
+        WarmFlags(campaign);
     }
 
     /// <summary>Drop the cache when the sprite catalogue changes under it - a mod reload.</summary>
@@ -156,6 +190,7 @@ public partial class DealOrForceGame
     {
         FlagCache.Clear();
         ResolvedFlags.Clear();
+        FlagsLoading.Clear();
     }
 
     /// <summary>

@@ -391,6 +391,8 @@ public partial class DealOrForceGame : Control
             CloseWarLedger();
         else if (_sidePanel.Visible)
             CloseSidePanel();
+        else if (MapSelectionShowing)
+            CloseMapSelection();
         else if (_pickerLayer.Visible)
             ShowMainMenu();
         else if (_hudLayer.Visible)
@@ -1006,24 +1008,12 @@ public partial class DealOrForceGame : Control
         _selectedArmies.Clear();
         _globe.SelectArmy(-1);
         _openScreen = "";
-        _sidePanel.Visible = true;
+        // The country on the left and the ground along the bottom, rather than the dossier:
+        // see MapSelectionUI. The dossier is still a button away on either panel.
+        _sidePanel.Visible = false;
         SetArmyPanelVisible(false);
-        _countryActions.Visible = pick.Nation != _campaign.Player;
-        _regionControls.Visible = pick.State is not null;
-        _economyControls.Visible = false;
-        _decisionControls.Visible = false;
-        _battleDetailControls.Visible = false;
-        _militarySpending.Visible = false;
-        _sideTitle.Text = pick.Nation.DisplayName;
-        ShowSideFlag(pick.Nation.Tag);
-        var state = pick.State is null
-            ? Tr("Unmapped land")
-            : Tr(pick.State.Name) + " (" + Tr(pick.State.Kind) + ")";
-        var province = pick.ProvinceId > 0
-            ? Simulation.Loc.Format("Tactical province #{0:N0}", pick.ProvinceId)
-            : Tr("Province topology loading");
-        ShowCountryInteraction(pick.Nation, state + " · " + province);
-        if (pick.State is not null) ShowRegionOverview();
+        UpdateScreenButtons();
+        ShowMapSelection(pick);
     }
 
     private Control _freeCameraOverlay = null!;

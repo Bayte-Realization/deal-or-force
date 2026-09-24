@@ -92,7 +92,7 @@ public partial class DealOrForceGame
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         var answer = command.Answer;
-        ShowCountryInteraction(_selectedNation, "Diplomacy");
+        RefreshCountryViews("Diplomacy");
         _countryActionFeedback.Text = answer;
     }
 }

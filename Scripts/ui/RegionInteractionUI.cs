@@ -392,7 +392,7 @@ public partial class DealOrForceGame
             ? Simulation.Loc.Format("{0} added to the {1} queue.",
                 Tr(BuildingCatalog.Get(kind).Name), _selectedState.DisplayName)
             : Tr("Could not queue the project: check treasury or the national construction limit.");
-        ShowRegionOverview();
+        RefreshRegionViews();
     }
 
     private void RefreshMoveCapitalButton()
@@ -421,7 +421,7 @@ public partial class DealOrForceGame
         _regionActionFeedback.Text = command.Moved
             ? Simulation.Loc.Format("The government has moved to {0}.", _selectedState.DisplayName)
             : Tr(CapitalCore.Refusal(_campaign, _campaign.Player, _selectedState));
-        ShowRegionOverview();
+        RefreshRegionViews();
     }
 
     private void RaiseRegionalArmy()

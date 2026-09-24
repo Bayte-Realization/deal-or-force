@@ -139,7 +139,7 @@ public partial class DealOrForceGame
                 ? Simulation.Loc.Format("{0} accepted.", target.DisplayName)
                 : Simulation.Loc.Format("{0} declined.", target.DisplayName);
         }
-        ShowCountryInteraction(_selectedNation, "Diplomacy");
+        RefreshCountryViews("Diplomacy");
     }
 
     /// <summary>The cheap half of an alliance, which commits nothing until it commits everything.</summary>
@@ -156,7 +156,7 @@ public partial class DealOrForceGame
         _countryActionFeedback.Text = relation.GuaranteedBy(_campaign.Player.Id)
             ? Simulation.Loc.Format("You guarantee {0}.", _selectedNation.DisplayName)
             : Simulation.Loc.Format("You no longer guarantee {0}.", _selectedNation.DisplayName);
-        ShowCountryInteraction(_selectedNation, "Diplomacy");
+        RefreshCountryViews("Diplomacy");
     }
 
     /// <summary>
@@ -277,6 +277,7 @@ public partial class DealOrForceGame
         SubjectSystem.Release(_campaign, _selectedNation);
         _countryActionFeedback.Text = Simulation.Loc.Format("{0} answers to nobody now.", name);
         Refresh();
+        if (MapSelectionShowing) ShowMapSelectionContent();
     }
 
     private void IntegrateSelectedSubject()
@@ -292,11 +293,13 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.Player;
         _countryActionFeedback.Text = Simulation.Loc.Format("{0} is part of your country now.", name);
         Refresh();
+        if (MapSelectionShowing) ShowMapSelectionContent();
     }
 
     private void ShowCountryInteraction(Nation nation, string location)
     {
         if (nation is null || _campaign?.Player is null) return;
+        ReturnCountryActions();
         PrepareDossierTabs("Diplomacy");
         ApplyDossierTab();
         ClearDetail();
@@ -333,6 +336,15 @@ public partial class DealOrForceGame
         if (war is not null) DetailRow("War score", $"{(war.AttackerId == _campaign.Player.Id ? war.WarScore : -war.WarScore):+0.0;-0.0;0.0}");
         ShowPacts(nation);
         ShowDependencies(nation);
+        RefreshCountryActions(nation);
+    }
+
+    /// <summary>
+    /// Bring the diplomatic buttons up to date for this country - what each would do, and
+    /// whether it may. Wherever the buttons are standing: the dossier or the country panel.
+    /// </summary>
+    private void RefreshCountryActions(Nation nation)
+    {
         _countryActions.Visible = nation != _campaign.Player;
         RefreshPactButtons(nation);
         RefreshSubmissionButtons(nation);
@@ -367,7 +379,7 @@ public partial class DealOrForceGame
         _countryActionFeedback.Text = relation.Opinion > before
             ? $"Diplomatic mission succeeded: relations {relation.Opinion:+0;-0;0}."
             : "Diplomatic action is on cooldown or the treasury is insufficient.";
-        ShowCountryInteraction(_selectedNation, "Diplomatic mission");
+        RefreshCountryViews("Diplomatic mission");
     }
 
     private void DenounceSelected()
@@ -381,7 +393,7 @@ public partial class DealOrForceGame
         _countryActionFeedback.Text = relation.Opinion < before
             ? $"Public denunciation issued: relations {relation.Opinion:+0;-0;0}."
             : "Diplomatic action is still on cooldown.";
-        ShowCountryInteraction(_selectedNation, "Diplomatic confrontation");
+        RefreshCountryViews("Diplomatic confrontation");
     }
 
     private void ConfirmOrDeclareWar()
@@ -390,14 +402,14 @@ public partial class DealOrForceGame
         if (!CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, _selectedNation.Id, out var reason))
         {
             _countryActionFeedback.Text = reason;
-            ShowCountryInteraction(_selectedNation, "Diplomatic crisis");
+            RefreshCountryViews("Diplomatic crisis");
             return;
         }
         if (_pendingWarTarget != _selectedNation.Id)
         {
             _pendingWarTarget = _selectedNation.Id;
             _countryActionFeedback.Text = Tr("This begins an immediate land war. Click the highlighted button again to confirm.");
-            ShowCountryInteraction(_selectedNation, "War declaration prepared");
+            RefreshCountryViews("War declaration prepared");
             return;
         }
         _campaign.Commands.Enqueue(new DeclareWarCampaignCommand
@@ -412,7 +424,7 @@ public partial class DealOrForceGame
         PlayStrategicCue("war_declared");
         _pendingWarTarget = -1;
         _countryActionFeedback.Text = Simulation.Loc.Format("War declared on {0}. Select your armies and assign Advance front.", _selectedNation.Name);
-        ShowCountryInteraction(_selectedNation, "WAR DECLARED");
+        RefreshCountryViews("WAR DECLARED");
     }
 
     private void FocusSelectedCapital()
