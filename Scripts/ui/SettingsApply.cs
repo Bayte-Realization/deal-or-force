@@ -30,6 +30,7 @@ public partial class DealOrForceGame
     /// <summary>Put every saved preference into effect. Called once, as the game comes up.</summary>
     private void ApplyAllSettings()
     {
+        FollowLanguageCulture();
         _applyingEverySetting = true;
         try
         {
@@ -42,6 +43,36 @@ public partial class DealOrForceGame
 
         CountryNames.Refresh();
         _settingsNeedRestart = false;
+    }
+
+    private static bool _followingLanguageCulture;
+
+    /// <summary>
+    /// Write numbers the way the language being read writes them (Loc.Culture), from now on
+    /// and whenever the language changes - from this screen, the console or a mod.
+    ///
+    /// The interface used the culture Windows runs in, so an English game on a Russian machine
+    /// read "136,0" and "12,5 %" beside "$1.43T". Applied to the interface's own thread and as
+    /// the default for any other, and to nothing the simulation parses: its data is read in the
+    /// invariant culture whatever this says.
+    /// </summary>
+    private static void FollowLanguageCulture()
+    {
+        if (!_followingLanguageCulture)
+        {
+            _followingLanguageCulture = true;
+            Loc.LanguageChanged += ApplyLanguageCulture;
+        }
+        ApplyLanguageCulture();
+    }
+
+    private static void ApplyLanguageCulture()
+    {
+        var culture = Loc.Culture;
+        CultureInfo.CurrentCulture = culture;
+        CultureInfo.CurrentUICulture = culture;
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
     }
 
     private void ApplySetting(string id)

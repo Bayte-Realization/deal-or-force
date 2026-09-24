@@ -316,7 +316,11 @@ public partial class DealOrForceGame
     /// <summary>Translation coverage, the way a translator wants to see it.</summary>
     private static string ConsoleLocalization(string argument)
     {
-        var language = string.IsNullOrWhiteSpace(argument) ? Simulation.Loc.Language : argument.Trim();
+        var words = (argument ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var template = words.Any(word => string.Equals(word, "template", StringComparison.OrdinalIgnoreCase));
+        var named = words.FirstOrDefault(word => !string.Equals(word, "template", StringComparison.OrdinalIgnoreCase));
+        if (template) return WriteTranslationTemplate((named ?? "").Trim().ToLowerInvariant());
+        var language = string.IsNullOrWhiteSpace(named) ? Simulation.Loc.Language : named.Trim();
         if (!Simulation.Loc.Languages.Any(item => string.Equals(item, language, StringComparison.OrdinalIgnoreCase)))
             return $"Unknown language '{language}'. Loaded: {string.Join(", ", Simulation.Loc.Languages)}";
 
@@ -327,6 +331,68 @@ public partial class DealOrForceGame
         return missing.Count == 0
             ? EscapeBb(header)
             : EscapeBb(header + $"\nUntranslated ({missing.Count}): " + string.Join(", ", missing.Take(12)));
+    }
+
+    /// <summary>
+    /// Start a translation: a mod in user://mods holding every string the game has, ready to be
+    /// written over. What the language already has is kept; the rest arrives in English.
+    ///
+    /// The whole of what makes a translation "like an official one" is in that folder - the
+    /// language's name for itself, its plural rule and its culture at the top, then every line -
+    /// and the game picks it up at the next start with nothing compiled: the language selector,
+    /// the fallback to English for a line not done yet, the bench check that no line breaks.
+    /// </summary>
+    private static string WriteTranslationTemplate(string language)
+    {
+        if (language.Length == 0 || language.Any(ch => !char.IsLetterOrDigit(ch) && ch != '_' && ch != '-'))
+            return "Usage: loc <language> template - one word for the language, as its folder is named: loc german template";
+        var root = System.IO.Path.Combine(ProjectSettings.GlobalizePath("user://mods"), "translation_" + language);
+        var folder = System.IO.Path.Combine(root, "localization", language);
+        var file = System.IO.Path.Combine(folder, "00_" + language + ".json");
+        if (System.IO.File.Exists(file))
+            return EscapeBb($"{file} already exists; it is not overwritten. Move it aside to start again.");
+        System.IO.Directory.CreateDirectory(folder);
+
+        var written = new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+        var manifest = System.IO.Path.Combine(root, "manifest.json");
+        if (!System.IO.File.Exists(manifest))
+            System.IO.File.WriteAllText(manifest, System.Text.Json.JsonSerializer.Serialize(
+                new System.Collections.Generic.Dictionary<string, object>
+                {
+                    ["id"] = "translation_" + language,
+                    ["name"] = System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(language) + " translation",
+                    ["version"] = "0.1.0",
+                    ["supported_game_version"] = "*",
+                    ["enabled"] = true,
+                    ["load_order"] = 100,
+                    ["dependencies"] = System.Array.Empty<string>()
+                }, written), new System.Text.UTF8Encoding(false));
+
+        // What the language says about itself first, then every line the English table holds.
+        var table = new System.Collections.Generic.Dictionary<string, string>
+        {
+            ["language.name"] = Simulation.Loc.TextIn(language, "language.name") ??
+                                System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(language),
+            ["language.plural"] = Simulation.Loc.TextIn(language, "language.plural") ?? "one-other",
+            ["language.culture"] = Simulation.Loc.TextIn(language, "language.culture") ?? ""
+        };
+        var untranslated = 0;
+        foreach (var key in Simulation.Loc.Keys(Simulation.Loc.DefaultLanguage))
+        {
+            if (key.StartsWith("language.", StringComparison.Ordinal)) continue;
+            var own = Simulation.Loc.TextIn(language, key);
+            if (own is null) untranslated++;
+            table[key] = own ?? Simulation.Loc.TextIn(Simulation.Loc.DefaultLanguage, key) ?? key;
+        }
+        System.IO.File.WriteAllText(file, System.Text.Json.JsonSerializer.Serialize(table, written),
+            new System.Text.UTF8Encoding(false));
+        return EscapeBb($"Wrote {table.Count:N0} line(s) to {file} - {untranslated:N0} of them still in English. " +
+                        "Set language.name, language.plural (one-other, slavic or single) and language.culture " +
+                        "(such as de-DE) at the top, translate the rest, and restart: the language is on the selector.");
     }
 
     private string ClearConsole()

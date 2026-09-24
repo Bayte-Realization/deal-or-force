@@ -79,6 +79,9 @@ public static class Program
             return Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
         if (Array.IndexOf(args, "--rows") >= 0)
             return Check("a save row carries every field", ASaveRowCarriesEveryField());
+        // `--loc` checks every translation alone: seconds, and the list of what is wrong.
+        if (Array.IndexOf(args, "--loc") >= 0)
+            return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
 
         var mapped = AttachMap(campaign);
 
@@ -292,6 +295,7 @@ public static class Program
         failures += Check("every explained number adds up to what the screen shows",
             BreakdownsAddUp(campaign));
         failures += Check("headline figures format the way a player reads them", FiguresReadWell());
+        failures += Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
 
         if (mapped)
             failures += Check("the Russo-Ukrainian front is still a stalemate",
@@ -779,6 +783,63 @@ public static class Program
     /// units are worth pinning down: a trillion-dollar economy printed as "$21433.20B" is
     /// the bug this format exists to prevent.
     /// </summary>
+    /// <summary>
+    /// Every loaded language names itself, names a plural rule and a culture that exist, and
+    /// never asks string.Format for an argument the English does not pass. Each of those reads
+    /// fine in a code review and wrong on the screen, where the player sees "{2}" or a raw
+    /// pattern, so the bench reads them all instead.
+    /// </summary>
+    private static string TranslationsAreSound()
+    {
+        var problems = Loc.Languages
+            .Where(language => !string.Equals(language, Loc.DefaultLanguage, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(Loc.Problems)
+            .ToList();
+        var checkedLanguages = Loc.Languages.Count - 1;
+
+        // And the check has to be able to fail: a probe language with every fault in it - no
+        // name, a plural rule that does not exist, an argument the English never passes and a
+        // brace that does not close.
+        Loc.Merge("probe_broken", "{ \"Population\": \"x\", \"{0} of {1}\": \"{0} {2}\", " +
+                                  "\"Wrote {0} line(s)\": \"{0 lines\", \"language.plural\": \"dual\" }", null);
+        var caught = Loc.Problems("probe_broken");
+        Loc.ResetCatalog();
+        if (caught.Count < 4)
+            return $"the translation check caught {caught.Count} of the probe's 4 faults: {string.Join(" / ", caught)}";
+
+        // And the worked examples in mods/_templates: a translation template that fails its own
+        // check teaches exactly the mistake the check exists to catch.
+        var templates = FindTemplates();
+        var exampleLanguages = 0;
+        if (templates is not null)
+        {
+            foreach (var folder in Directory.EnumerateDirectories(templates))
+            {
+                var localization = Path.Combine(folder, "localization");
+                if (!Directory.Exists(localization)) continue;
+                var before = Loc.Languages.ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var errors = new List<string>();
+                Loc.LoadDirectory(localization, errors);
+                var added = Loc.Languages.Where(language => !before.Contains(language)).ToList();
+                problems.AddRange(errors.Select(error => $"{Path.GetFileName(folder)}: {error}"));
+                foreach (var language in added)
+                    problems.AddRange(Loc.Problems(language).Select(problem => $"{Path.GetFileName(folder)}: {problem}"));
+                exampleLanguages += added.Count;
+                Loc.ResetCatalog();
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            foreach (var problem in problems.Take(40)) Console.WriteLine("    " + problem);
+            return $"{problems.Count} problem(s) in {checkedLanguages} translation(s); the first is: {problems[0]}";
+        }
+        Console.WriteLine($"  translations: {checkedLanguages} language(s) besides English and {exampleLanguages} in the templates, " +
+                          string.Join(", ", Loc.Languages.Select(language =>
+                              $"{Loc.DisplayName(language)} ({Loc.Keys(language).Count():N0} keys, {Loc.CultureOf(language).Name})")));
+        return "";
+    }
+
     private static string FiguresReadWell()
     {
         var cases = new (float Billions, string Expected)[]

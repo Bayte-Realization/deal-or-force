@@ -1,0 +1,22 @@
+// A translation is a folder named after the language, holding as many files as it wants to be
+// split into. The key is the English source text; the value is the translation. A line not
+// translated yet shows in English, so a translation is useful from its first line.
+//
+// The three language.* keys say what the language is: its name in itself (for the selector),
+// how it counts (one-other, slavic or single) and how it writes numbers (a culture: de-DE).
+//
+// To get every line the game has, run `loc german template` in the console: it writes a copy
+// of this file into user://mods with all of them in it.
+{
+  "language.name": "Deutsch",
+  "language.plural": "one-other",
+  "language.culture": "de-DE",
+
+  "Singleplayer": "Einzelspieler",
+  "Load latest campaign": "Letzte Kampagne laden",
+  "Settings": "Einstellungen",
+  "Quit to desktop": "Zum Desktop beenden",
+  "Details": "Details",
+  "Full diplomacy": "Gesamte Diplomatie",
+  "{0} of {1}": "{0} von {1}"
+}

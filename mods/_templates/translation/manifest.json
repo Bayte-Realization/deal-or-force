@@ -1,0 +1,11 @@
+{
+  "id": "example_translation_german",
+  "name": "Example: a German translation",
+  "version": "1.0.0",
+  "supported_game_version": "*",
+  "enabled": false,
+  "load_order": 100,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

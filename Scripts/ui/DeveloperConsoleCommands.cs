@@ -237,8 +237,8 @@ public partial class DealOrForceGame
         Add("effects", "CONTENT", "effects [filter]",
             "Every key content can write to, which is the vocabulary a modder has to guess at otherwise.",
             ConsoleEffectVocabulary);
-        Add("loc", "CONTENT", "loc [russian]",
-            "Switch language, and report what that language has not translated yet.",
+        Add("loc", "CONTENT", "loc [russian] [template]",
+            "Switch language, and report what that language has not translated yet. 'loc german template' starts a translation mod in user://mods with every line to translate.",
             ConsoleLocalization, "localization", "language");
         Add("skin", "CONTENT", "skin [filter]",
             "What the interface is painted with, and which tokens a mod has moved.",

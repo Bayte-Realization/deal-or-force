@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace DealOrForce.Simulation;
 
@@ -56,6 +57,122 @@ public static class Loc
         Tables.TryGetValue(language ?? "", out var table) && table.TryGetValue("language.name", out var name)
             ? name
             : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(language ?? "");
+
+    /// <summary>
+    /// The culture numbers are written in for a language: `language.culture` in its own table
+    /// (ru-RU, de-DE, ja-JP), or the invariant culture for a table that names none.
+    ///
+    /// Which language a player reads decides how a number looks - a decimal comma, a space
+    /// between thousands - and not which language Windows happens to run in. The game spoke
+    /// English and wrote "136,0" and "1 433" on a Russian machine, beside "$1.43T" on the same
+    /// panel. The compact headline figures ($1.43T, 1.4B) are written one way in every language
+    /// on purpose (Fmt); this is for everything else, and the game applies it as the language
+    /// changes (SettingsApply).
+    /// </summary>
+    public static CultureInfo Culture => CultureOf(_language);
+
+    public static CultureInfo CultureOf(string language)
+    {
+        if (Tables.TryGetValue(language ?? "", out var table) &&
+            table.TryGetValue("language.culture", out var name) && !string.IsNullOrWhiteSpace(name))
+        {
+            try { return CultureInfo.GetCultureInfo(name.Trim()); }
+            catch (CultureNotFoundException) { }
+        }
+        return CultureInfo.InvariantCulture;
+    }
+
+    /// <summary>One language's own text for a key, or null - no fallback, for a report or a validator.</summary>
+    public static string TextIn(string language, string key) =>
+        Tables.TryGetValue(language ?? "", out var table) && table.TryGetValue(key ?? "", out var text) ? text : null;
+
+    /// <summary>The plural rules <see cref="Plural"/> knows, by the name `language.plural` gives them.</summary>
+    public static readonly IReadOnlyList<string> PluralRules = new[] { "one-other", "slavic", "single" };
+
+    private static readonly Regex Placeholder = new(@"(?<!\{)\{(\d+)[^{}]*\}", RegexOptions.Compiled);
+
+    /// <summary>Which arguments a text passes to string.Format, by index.</summary>
+    public static IReadOnlySet<int> Placeholders(string text)
+    {
+        var found = new HashSet<int>();
+        if (string.IsNullOrEmpty(text)) return found;
+        foreach (Match match in Placeholder.Matches(text))
+            if (int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+                found.Add(index);
+        return found;
+    }
+
+    /// <summary>
+    /// What is wrong with a translation that nothing would say until a player met it.
+    ///
+    /// A text that asks for an argument the English never passes, or whose braces do not close,
+    /// is not a crash - <see cref="Format"/> catches it - but it is worse than one: the player
+    /// reads "{2}" or the raw pattern, and nobody finds out. The same goes for a language that
+    /// does not say what it is called, or names a plural rule or a culture that does not exist.
+    /// Checked for every language on every bench run, so a translation that ships is one that
+    /// cannot do this.
+    /// </summary>
+    public static IReadOnlyList<string> Problems(string language)
+    {
+        var problems = new List<string>();
+        if (!Tables.TryGetValue(language ?? "", out var table)) return new[] { $"{language}: nothing is loaded" };
+        if (!table.ContainsKey("language.name"))
+            problems.Add($"{language}: no language.name, so the selector calls it '{DisplayName(language)}'");
+        if (table.TryGetValue("language.plural", out var rule) &&
+            !PluralRules.Contains(rule.Trim().ToLowerInvariant()))
+            problems.Add($"{language}: language.plural '{rule}' is not one of {string.Join(", ", PluralRules)}");
+        if (table.TryGetValue("language.culture", out var culture) && !IsCultureName(culture))
+            problems.Add($"{language}: language.culture '{culture}' is not a culture");
+
+        Tables.TryGetValue(DefaultLanguage, out var english);
+        foreach (var (key, text) in table)
+        {
+            if (key.StartsWith("language.", StringComparison.Ordinal)) continue;
+            var source = english is not null && english.TryGetValue(key, out var englishText) ? englishText : key;
+            var wanted = Placeholders(source);
+            // A text that is never formatted may hold any brace it likes.
+            if (wanted.Count == 0) continue;
+            var extra = Placeholders(text).Where(index => !wanted.Contains(index)).OrderBy(index => index).ToList();
+            if (extra.Count > 0)
+                problems.Add($"{language}: \"{Shorten(key)}\" asks for {{{string.Join("}, {", extra)}}}, which the English never passes");
+            try
+            {
+                // As many arguments as the highest index asks for, so a text is reported for
+                // its extra placeholder once rather than a second time as unreadable.
+                var arguments = Enumerable.Repeat((object)1, Math.Max(wanted.Max(), extra.Count > 0 ? extra.Max() : 0) + 1).ToArray();
+                _ = string.Format(CultureInfo.InvariantCulture, text, arguments);
+            }
+            catch (FormatException)
+            {
+                problems.Add($"{language}: \"{Shorten(key)}\" is not a pattern string.Format can read (a brace that does not close?)");
+            }
+        }
+        return problems;
+    }
+
+    private static string Shorten(string text) => text.Length <= 60 ? text : text[..57] + "...";
+
+    private static readonly Regex CultureName = new(@"^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Whether a culture name names one. A build without culture data - the bench runs with
+    /// invariant globalization, and every culture but the invariant one is missing there - can
+    /// only check that the name has the shape of one; the game checks that it exists.
+    /// </summary>
+    private static bool IsCultureName(string name)
+    {
+        name = (name ?? "").Trim();
+        if (!CultureName.IsMatch(name)) return false;
+        if (!CulturesAvailable.Value) return true;
+        try { CultureInfo.GetCultureInfo(name); return true; }
+        catch (CultureNotFoundException) { return false; }
+    }
+
+    private static readonly Lazy<bool> CulturesAvailable = new(() =>
+    {
+        try { return CultureInfo.GetCultureInfo("en-US").Name == "en-US"; }
+        catch (CultureNotFoundException) { return false; }
+    });
 
     /// <summary>Reload base-game tables. Mods layer on top afterwards via <see cref="Merge"/>.</summary>
     public static void ResetCatalog()

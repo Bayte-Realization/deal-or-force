@@ -1185,6 +1185,41 @@ Available are `one-other` (English and most languages, the default), `slavic` (R
 Ukrainian, Polish, Czech) and `single` (Japanese, Chinese, Korean, Turkish — the word does not
 change). A mod adding a new language writes one line and touches no code.
 
+**Numbers.** How a number is written — a decimal comma, a space between thousands — belongs to
+the language, not to the Windows the game runs on. The language names its culture beside its name:
+
+```json
+{ "language.name": "Deutsch", "language.plural": "one-other", "language.culture": "de-DE" }
+```
+
+The game switches to it as the language is chosen (a table that names none is written in the
+invariant culture). The compact headline figures — `$1.43T`, `1.4B`, `73.5%` — are written one way
+in every language on purpose; the culture is for everything else: counts, exact figures,
+percentages in tooltips and every `{0:N0}` in a translated line.
+
+**Starting a translation in one command.** In the console (`` ` ``):
+
+```
+loc german template
+```
+
+writes `user://mods/translation_german/` — a `manifest.json` and
+`localization/german/00_german.json` holding every line the game has: what the language already
+translates is kept, the rest arrives in English, and `language.name`, `language.plural` and
+`language.culture` are at the top to be filled in. Translate the right half of each line, restart,
+and the language is on the selector. An existing file is never overwritten.
+
+**Letters the shipped face lacks.** Chinese, Japanese, Arabic and Hindi need a face that has them.
+The translation mod declares one as the `ui.default` role in its own `fonts/` folder (the format is
+in `game/fonts/00_fonts.json`) and ships the font file beside it.
+
+**What the bench checks.** Every loaded language, on every run — `SimBench --loc` runs the check
+alone in seconds: the language names itself (`language.name`); its plural rule and its culture
+exist; and no translated line asks `string.Format` for an argument its English line does not pass,
+or has a brace that does not close. None of those is a crash — `Loc.Format` catches them — which
+is exactly why they are checked: the player would read `{2}` or the raw pattern, and nobody would
+find out.
+
 ### Interface: colours as data
 
 Every interface colour used to be a literal in code — 155 of them, scattered across 21 files,
