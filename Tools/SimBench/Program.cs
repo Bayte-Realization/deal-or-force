@@ -334,6 +334,7 @@ public static class Program
                 failures += Check("a region put back together again is one region",
                     RegionsHealWhenTheBorderGoesAway(sandbox));
                 failures += Check("a redrawn border survives a save", BordersSurviveASave(sandbox));
+                failures += Check("a save's history comes back week for week", AHistoryComesBackWhole(sandbox));
                 // Deletes formations and puts others on trains, so it belongs on the copy.
                 failures += Check("a consolidation invents nobody and the railways are paid for",
                     ManoeuvresCostWhatTheySave(sandbox));
@@ -534,6 +535,20 @@ public static class Program
         var saveMs = watch.Elapsed.TotalMilliseconds;
         Console.WriteLine($"  on the frame: {prepareMs:N0} ms (snapshot and JSON); on a worker: {saveMs - prepareMs:N0} ms " +
                           "(compress, checksum, write).");
+        // The first save of a session also pays for the serializer learning the types; the
+        // month's autosave after it does not, and that is the one a player feels every month.
+        var warm = new List<double>();
+        for (var again = 0; again < 3; again++)
+        {
+            watch.Restart();
+            SaveSystem.Prepare(folder, "probe_warm", campaign, "", "probe", true);
+            warm.Add(watch.Elapsed.TotalMilliseconds);
+        }
+        watch.Restart();
+        var historyBytes = JsonSerializer.SerializeToUtf8Bytes(
+            Enumerable.Range(0, campaign.Nations.Count).ToDictionary(id => id, id => campaign.History.ForNation(id)));
+        Console.WriteLine($"  on the frame once warm: {string.Join(", ", warm.Select(ms => $"{ms:N0}"))} ms; " +
+                          $"the history alone {watch.Elapsed.TotalMilliseconds:N0} ms for {historyBytes.Length / 1048576.0:0.0} MB.");
         var compressed = File.ReadAllBytes(Path.Combine(folder, "probe.bdfsave"));
         byte[] json;
         using (var input = new MemoryStream(compressed))
@@ -2372,6 +2387,37 @@ public static class Program
     /// every conquest back and leaves the region list describing a map that no longer
     /// exists. Run after the partition test, on a campaign whose borders have moved.
     /// </summary>
+    /// <summary>
+    /// A save's history comes back week for week. The history is written by the save's worker
+    /// and spliced into the file the frame wrote, so a file can be valid JSON and load and
+    /// still have lost it - or have put it somewhere the reader never looks.
+    /// </summary>
+    private static string AHistoryComesBackWhole(Campaign campaign)
+    {
+        if (campaign.Player is null || campaign.ProvinceMap is null) return "";
+        var folder = Path.Combine(Path.GetTempPath(), "dof_history_check");
+        Directory.CreateDirectory(folder);
+        SaveSystem.Save(folder, "history", campaign, "", "history", true);
+        var loaded = SaveSystem.Load(folder, "history", "");
+        if (loaded.Campaign is null) return $"the save did not load back: {loaded.Warning}";
+        var weeks = 0;
+        foreach (var nation in campaign.Nations)
+        {
+            var saved = campaign.History.ForNation(nation.Id);
+            var back = loaded.Campaign.History.ForNation(nation.Id);
+            if (saved.Count != back.Count)
+                return $"{nation.Tag} saved {saved.Count} week(s) of history and {back.Count} came back";
+            for (var week = 0; week < saved.Count; week++)
+                if (!saved[week].Equals(back[week]))
+                    return $"{nation.Tag}'s week on day {saved[week].Day} came back different";
+            weeks += saved.Count;
+        }
+        if (weeks == 0) return "there was no history to write";
+        Console.WriteLine($"  history: {weeks:N0} week(s) of {campaign.Nations.Count} countries written by the save's " +
+                          "worker and read back unchanged.");
+        return "";
+    }
+
     private static string BordersSurviveASave(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;

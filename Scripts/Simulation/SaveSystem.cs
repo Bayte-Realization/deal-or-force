@@ -130,7 +130,22 @@ public static class SaveSystem
             throw new InvalidOperationException("The tactical map is still being prepared; try saving again in a moment.");
         slot = SafeSlot(slot);
         var payload = CampaignSave.Capture(campaign, modFingerprint);
+        // The history is written by the worker. It is half of every save, and it is the one
+        // part of the snapshot that already belongs to the save alone: Capture copies it,
+        // week by week, into lists nothing else holds, so nothing can change it while it is
+        // written. Its field comes last in the file, so here it is written as an empty table
+        // at the very end, and Commit writes the real one in its place.
+        var history = payload.History;
+        payload.History = new Dictionary<int, List<NationHistorySample>>();
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
+        if (!json.AsSpan().EndsWith(EmptyHistoryTail))
+        {
+            // Not where it should be - somebody has reordered the save. Write it here, as it
+            // always was, rather than splice it into the wrong place.
+            payload.History = history;
+            history = null;
+            json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
+        }
         var metadata = new SaveMetadata
         {
             Slot = slot,
@@ -145,8 +160,11 @@ public static class SaveSystem
             ModFingerprint = modFingerprint ?? "",
             IsAutosave = autosave
         };
-        return new PreparedSave(root, slot, json, metadata);
+        return new PreparedSave(root, slot, json, history, metadata);
     }
+
+    /// <summary>How the frame's half of a save ends: the history's field, empty, closing the file.</summary>
+    private static ReadOnlySpan<byte> EmptyHistoryTail => "\"History\":{}}"u8;
 
     /// <summary>A save that has been taken but not yet written. See <see cref="Prepare"/>.</summary>
     public sealed class PreparedSave
@@ -154,38 +172,60 @@ public static class SaveSystem
         private readonly string _root;
         private readonly string _slot;
         private readonly byte[] _json;
+        private readonly Dictionary<int, List<NationHistorySample>> _history;
 
-        internal PreparedSave(string root, string slot, byte[] json, SaveMetadata metadata)
+        internal PreparedSave(string root, string slot, byte[] json,
+            Dictionary<int, List<NationHistorySample>> history, SaveMetadata metadata)
         {
             _root = root;
             _slot = slot;
             _json = json;
+            _history = history;
             Metadata = metadata;
+        }
+
+        /// <summary>
+        /// The file whole: the frame's JSON with the history written into the empty table it
+        /// ends on. The same bytes the frame would have written had it written them all.
+        /// </summary>
+        private byte[] Whole()
+        {
+            if (_history is null) return _json;
+            var history = JsonSerializer.SerializeToUtf8Bytes(_history, JsonOptions);
+            // ...,"History":{}}  ->  ...,"History":<table>}
+            var head = _json.Length - 3;
+            var whole = new byte[head + history.Length + 1];
+            _json.AsSpan(0, head).CopyTo(whole);
+            history.CopyTo(whole.AsSpan(head));
+            whole[^1] = (byte)'}';
+            return whole;
         }
 
         public SaveMetadata Metadata { get; }
 
         /// <summary>
-        /// Compress, checksum and write. Safe on any thread: it reads nothing but its own bytes.
+        /// Write the history, compress, checksum and write. Safe on any thread: it reads
+        /// nothing but its own bytes and its own copy of the history.
         /// An autosave is compressed for speed rather than for size - a tenth larger, in less
         /// than half the time - because it is taken every month and read almost never.
         /// </summary>
         public SaveMetadata Commit()
         {
             Directory.CreateDirectory(_root);
+            var json = Whole();
             byte[] compressed;
             using (var memory = new MemoryStream())
             {
                 using (var gzip = new GZipStream(memory,
                            Metadata.IsAutosave ? CompressionLevel.Optimal : CompressionLevel.SmallestSize, true))
-                    gzip.Write(_json);
+                    gzip.Write(json);
                 compressed = memory.ToArray();
             }
             Metadata.Checksum = Convert.ToHexString(SHA256.HashData(compressed));
             Metadata.CompressedBytes = compressed.LongLength;
             AtomicWrite(DataPath(_root, _slot), compressed);
             AtomicWrite(MetaPath(_root, _slot), JsonSerializer.SerializeToUtf8Bytes(Metadata, MetadataOptions));
-            DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} bytes={compressed.LongLength} json_bytes={_json.LongLength} checksum={Metadata.Checksum} format={FormatVersion} map={MapDataVersion}");
+            DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} bytes={compressed.LongLength} json_bytes={json.LongLength} checksum={Metadata.Checksum} format={FormatVersion} map={MapDataVersion}");
             return Metadata;
         }
     }
@@ -398,6 +438,11 @@ public static class SaveSystem
         public List<ConstructionProject> Construction = new();
         public List<PendingCampaignEvent> PendingEvents = new();
         public Dictionary<long, DiplomaticRelation> Relations = new();
+        /// <summary>
+        /// Written last in the file, so that it can be written last in time: see
+        /// <see cref="SaveSystem.Prepare"/>. Reading does not care where it is.
+        /// </summary>
+        [JsonPropertyOrder(1)]
         public Dictionary<int, List<NationHistorySample>> History = new();
         public ushort[] ProvinceController = Array.Empty<ushort>();
         public float[] ProvinceOccupation = Array.Empty<float>();
