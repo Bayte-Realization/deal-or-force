@@ -16,6 +16,29 @@ public sealed partial class GlobePresentation
     /// <summary>A region nobody owns was clicked, and the province under the cursor.</summary>
     public event Action<Simulation.ScenarioState, int> UnclaimedPicked;
 
+    /// <summary>
+    /// The id "nobody" is drawn under, in the palette and the moved-owner overlay.
+    ///
+    /// Not 0: to the shader a country id of 0 is the sea. Close up the map is painted from the
+    /// id of whoever owns each province now, so land whose owner became nobody was painted with
+    /// the sea's palette entry - no colour and no land mask - and Antarctica vanished into the
+    /// ocean the moment the camera came near it, while from further out, where the map is read
+    /// from the authored picture, it was still there.
+    /// </summary>
+    private const ushort UnownedPaletteIndex = 65535;
+
+    /// <summary>The grey of land no flag flies over - the same one the far map already uses for it.</summary>
+    private const uint UnownedColour = 0x6E7B8BFFu;
+
+    private static void WriteUnownedPaletteEntry(byte[] palette)
+    {
+        var write = UnownedPaletteIndex * 4;
+        palette[write] = (byte)((UnownedColour >> 24) & 0xFF);
+        palette[write + 1] = (byte)((UnownedColour >> 16) & 0xFF);
+        palette[write + 2] = (byte)((UnownedColour >> 8) & 0xFF);
+        palette[write + 3] = 255;
+    }
+
     private bool TryPickUnclaimed(Vector2 pixel, out Simulation.ScenarioState state, out int provinceId,
         bool updateSelection = true)
     {

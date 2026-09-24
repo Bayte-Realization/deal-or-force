@@ -235,30 +235,35 @@ public partial class DealOrForceGame
 
     private void BuildFleetPanel(Control parent)
     {
-        var panel = new PanelContainer { Name = "FleetPanel", Visible = false, ClipContents = true };
-        panel.AddThemeStyleboxOverride("panel", PanelStyle(PanelSurface.Command));
+        // The army panel's frame, inset and header, so the two read as the siblings they are.
+        // This one was assembled by hand - the command artwork's raw nine-slice with sixteen
+        // pixels of margin - and the artwork draws its ornamental rail about thirty pixels in,
+        // so the name, the subtitle and the close button all sat on the frame.
+        var panel = TexturedPanel(parent, PanelSurface.Command);
+        panel.Name = "FleetPanel";
+        panel.Visible = false;
         Ui.Place(panel, "hud.fleet_panel");
-        parent.AddChild(panel);
         _fleetPanel = panel;
 
-        var margin = new MarginContainer();
-        foreach (var side in new[] { "left", "right", "top", "bottom" })
-            margin.AddThemeConstantOverride($"margin_{side}", 16);
-        panel.AddChild(margin);
+        var rows = PanelRows(panel, 22, 16, 6);
+        rows.ClipContents = true;
 
-        var rows = new VBoxContainer();
-        rows.AddThemeConstantOverride("separation", 6);
-        margin.AddChild(rows);
-
-        var head = new HBoxContainer();
+        var head = new HBoxContainer { ClipContents = true };
+        head.AddThemeConstantOverride("separation", 8);
         rows.AddChild(head);
-        var heading = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        head.AddChild(heading);
-        _fleetTitle = Title("Fleet", 18, Ui.Colour("text.accent"));
-        heading.AddChild(_fleetTitle);
+        _fleetTitle = Title("Fleet", 19, Ui.Colour("text.accent"));
+        _fleetTitle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _fleetTitle.AutowrapMode = TextServer.AutowrapMode.Off;
+        _fleetTitle.ClipText = true;
+        head.AddChild(_fleetTitle);
+        head.AddChild(ActionButton("×", CloseFleetPanel, 32, 28));
+
+        // The whole width for the line under the name, as the army panel gives its own.
+        // Wrapping, and not clipped: a clipped wrapping label asks for no height at all, and
+        // the layout audit caught it being given one pixel.
         _fleetSubtitle = Title("", 12, Ui.Colour("text.muted"));
-        heading.AddChild(_fleetSubtitle);
-        head.AddChild(ActionButton("×", CloseFleetPanel, 38, 34));
+        _fleetSubtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(_fleetSubtitle);
 
         _fleetCondition = Title("", 13, Ui.Colour("text.body_soft"));
         rows.AddChild(_fleetCondition);

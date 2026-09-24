@@ -969,6 +969,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
             SizeArmyCounter(marker);
         }
+        // Fleets grow with the camera as armies do. They were fixed at their far size, so
+        // up close a fleet was a speck beside the divisions in the port it was guarding.
+        foreach (var (_, count, plate) in _fleetNodes.Values)
+        {
+            if (!IsInstanceValid(plate) || !IsInstanceValid(count)) continue;
+            plate.PixelSize = FleetPlatePixelSize * _counterScale;
+            if (plate.GetChildOrNull<Sprite3D>(0) is { } glow) glow.PixelSize = plate.PixelSize;
+            count.PixelSize = FleetTextPixelSize * _counterScale;
+        }
     }
 
     private bool TryPickArmyStack(Vector2 pixel, out IReadOnlyList<Simulation.Army> armies, bool selectableOnly = true)
@@ -3004,7 +3013,7 @@ void fragment() {
             var plate = new Sprite3D
             {
                 Texture = _fleetTexture,
-                PixelSize = 0.00011f,
+                PixelSize = FleetPlatePixelSize * _counterScale,
                 FixedSize = true,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
@@ -3016,7 +3025,7 @@ void fragment() {
             fleetGlow.Visible = fleet.Id == _selectedFleetId;
             var strength = new Label3D
             {
-                Text = fleet.Hulls.ToString(), FontSize = 24, PixelSize = 0.00024f,
+                Text = fleet.Hulls.ToString(), FontSize = 24, PixelSize = FleetTextPixelSize * _counterScale,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FixedSize = true,
                 OutlineSize = 7, Modulate = Ui.Colour("globe.label_province"), OutlineModulate = Ui.Colour("globe.label_province_outline"),
                 Position = new Vector3(0f, 0f, 0.004f), NoDepthTest = true
@@ -3058,6 +3067,12 @@ void fragment() {
             {
                 var chosen = fleet.Id == _selectedFleetId;
                 if (fleetGlow.Visible != chosen) fleetGlow.Visible = chosen;
+                // And a size up, as well as a light round it. A fleet counter is small and
+                // usually sits on a coast, where a yellow glow against pale land is exactly
+                // the thing the eye misses; a counter that stands a fifth larger is not.
+                var lift = chosen ? Vector3.One * SelectedFleetScale : Vector3.One;
+                if (parts.Plate.Scale != lift) parts.Plate.Scale = lift;
+                if (IsInstanceValid(parts.Count) && parts.Count.Scale != lift) parts.Count.Scale = lift;
             }
             if (IsInstanceValid(parts.Count))
             {
@@ -3242,6 +3257,7 @@ void fragment() {
             pixels[write + 2] = (byte)((packed >> 8) & 0xFF);
             pixels[write + 3] = 255;
         }
+        WriteUnownedPaletteEntry(pixels);
         var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         _globeMaterial.SetShaderParameter("nation_palette", ImageTexture.CreateFromImage(image));
     }
@@ -3275,9 +3291,11 @@ void fragment() {
                 ownerPixels[ownerWrite + 2] = (byte)((ownerPacked >> 8) & 0xFF);
                 ownerPixels[ownerWrite + 3] = 255;
                 // And the id, for the border stroke - otherwise a country that has been
-                // annexed goes on being outlined inside the country that annexed it.
-                ownerIds[ownerWrite] = (byte)(owner & 0xFF);
-                ownerIds[ownerWrite + 1] = (byte)((owner >> 8) & 0xFF);
+                // annexed goes on being outlined inside the country that annexed it. Nobody
+                // is written as its own id rather than as 0, which the shader reads as sea.
+                var drawnOwner = owner == 0 ? UnownedPaletteIndex : owner;
+                ownerIds[ownerWrite] = (byte)(drawnOwner & 0xFF);
+                ownerIds[ownerWrite + 1] = (byte)((drawnOwner >> 8) & 0xFF);
                 ownerIds[ownerWrite + 2] = 255;
                 ownerIds[ownerWrite + 3] = 255;
                 ownersMoved = true;
