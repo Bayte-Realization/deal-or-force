@@ -418,7 +418,7 @@ public static partial class Warfare
                 // Progress belongs to the division, not a pooled province counter: a
                 // hundred divisions must not teleport one another across the border.
                 army.MoveProgress += campaign.Defines.UnopposedCapturePerDay * campaign.TickScale *
-                    UnitTypeCatalog.Get(army.TemplateId).Speed *
+                    UnitTypeCatalog.Get(army.TemplateId).Speed * Researched(campaign, army, "army_speed") *
                     MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
                     M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) *
                     topology.TerrainAt(target).MovementSpeed * riverAdvance * contested;
@@ -654,25 +654,25 @@ public static partial class Warfare
             // ----------------------------------------------------------------------
             var attackerOffence = attacking.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, defenderHardness) * DivisionRules.Attack(army) *
-                    MilitaryDoctrine.Attack(army.Stance)) *
+                    MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack")) *
                 attackerEngagement * attackerPierces * riverAttackMultiplier * terrain.Attack *
                 (1f + attackerPlanning * defines.MaxPlanningAttackBonus);
 
             var defenderOffence = defending.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, attackerHardness) * DivisionRules.Attack(army) *
-                    MilitaryDoctrine.Attack(army.Stance)) *
+                    MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack")) *
                 defenderEngagement * defenderPierces * defines.DefenderCounterFire;
 
             var dugIn = defending.Average(army => army.Entrenchment);
             var defenderProtection = defending.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance)) *
+                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
                 defenderEngagement * defines.DefenderAdvantage * terrain.Defense *
                 (1f + dugIn * defines.EntrenchmentBonus);
 
             var attackerProtection = attacking.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance)) *
+                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
                 attackerEngagement;
 
             var pressureOnDefender = M.Clamp(attackerOffence / M.Max(0.01f, defenderProtection), 0.05f, 14f);
@@ -1057,6 +1057,10 @@ public static partial class Warfare
     /// One division's fire against a target of the given hardness. Soft attack lands on
     /// infantry, hard attack on armour, and a mixed force gets a mixture of both.
     /// </summary>
+    /// <summary>One plus what a formation's country has researched for this (ResearchSystem).</summary>
+    private static float Researched(Campaign campaign, Army army, string effect) =>
+        1f + ResearchSystem.Bonus(campaign.NationById(army.NationId), effect);
+
     private static float Offence(Army army, float targetHardness)
     {
         var template = UnitTypeCatalog.Get(army.TemplateId);

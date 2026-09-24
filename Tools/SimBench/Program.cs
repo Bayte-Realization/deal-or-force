@@ -301,6 +301,8 @@ public static class Program
             failures += Check("the Russo-Ukrainian front is still a stalemate",
                 FrontIsAStalemate(campaign, frontBefore, ukraineTrace, days));
 
+        failures += Check("the world researches, and a technology is a thing somebody can finish",
+            TheWorldResearches(campaign, days));
         failures += Check("a war costs formations and an army replaces them",
             WarCostsFormations(campaign, days));
         failures += Check("the world governs itself", TheWorldGovernsItself(campaign, days));
@@ -837,6 +839,35 @@ public static class Program
         Console.WriteLine($"  translations: {checkedLanguages} language(s) besides English and {exampleLanguages} in the templates, " +
                           string.Join(", ", Loc.Languages.Select(language =>
                               $"{Loc.DisplayName(language)} ({Loc.Keys(language).Count():N0} keys, {Loc.CultureOf(language).Name})")));
+        return "";
+    }
+
+    /// <summary>
+    /// Research after the main run: the catalogue is sound, the world has learned something, the
+    /// largest economies more than the smallest, and nobody has run out of things to learn in
+    /// two years - which is what a tech tree tuned for decades has to look like early on.
+    /// </summary>
+    private static string TheWorldResearches(Campaign campaign, int days)
+    {
+        var problems = TechnologyCatalog.Problems();
+        if (problems.Count > 0) return string.Join("; ", problems.Take(6));
+        if (TechnologyCatalog.All.Count == 0) return "there are no technologies to research";
+        var researching = campaign.Nations.Where(nation => nation.Population > 0).ToList();
+        var total = researching.Sum(nation => nation.Technologies.Count);
+        if (total == 0) return $"after {days} day(s) no country in the world has finished a technology";
+        var largest = researching.OrderByDescending(nation => nation.Gdp).Take(10).Average(nation => nation.Technologies.Count);
+        var smallest = researching.OrderBy(nation => nation.Gdp).Take(50).Average(nation => nation.Technologies.Count);
+        if (largest <= smallest)
+            return $"the ten largest economies average {largest:0.0} technologies and the fifty smallest {smallest:0.0}";
+        var finished = researching.Where(nation => nation.Technologies.Count >= TechnologyCatalog.All.Count).Select(n => n.Tag).ToList();
+        if (finished.Count > 0)
+            return $"{string.Join(", ", finished.Take(5))} learned everything there is in {days} day(s)";
+        string Of(string tag) => campaign.NationByTag(tag) is { } nation
+            ? $"{tag} {nation.Technologies.Count} ({nation.ResearchPerWeek:0.0}/wk)"
+            : "";
+        Console.WriteLine($"  research: after {days} day(s) {total:N0} technologies across the world; " +
+                          $"the ten largest economies average {largest:0.0}, the fifty smallest {smallest:0.0}; " +
+                          string.Join(", ", new[] { "USA", "CHN", "DEU", "RUS", "UKR", "MNG" }.Select(Of).Where(t => t.Length > 0)));
         return "";
     }
 

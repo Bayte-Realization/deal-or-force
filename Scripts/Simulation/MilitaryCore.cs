@@ -566,7 +566,8 @@ public static class MilitaryOperations
                 MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
                 M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) * riverMovement *
                 topology.TerrainAt(nextProvince).MovementSpeed *
-                StrategicRedeployment.DayOf(campaign, army);
+                StrategicRedeployment.DayOf(campaign, army) *
+                (1f + ResearchSystem.Bonus(nation, "army_speed"));
             if (army.MoveProgress < 1f) continue;
             army.MoveProgress -= 1f;
             army.ProvinceId = army.Route[0];

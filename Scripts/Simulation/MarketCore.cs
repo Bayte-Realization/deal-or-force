@@ -457,7 +457,9 @@ public static class MarketSystem
         // Productivity is the other half: literacy, education policy and the government's
         // focus all reach production through this one multiplier rather than being applied
         // to GDP after the fact.
-        var outputFactor = nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f);
+        // And what its technologies add (ResearchSystem): a share on top, not a new input.
+        var outputFactor = nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
+                           (1f + ResearchSystem.Bonus(nation, "output"));
 
         foreach (var state in states)
             ProductionChains.RunRegion(nation, state, outputFactor);

@@ -1121,6 +1121,41 @@ visible to the player in the National Ledger on the "In effect" line.
 An event refers to them with a `modifiers` array: the short form `["war_economy"]` or the full
 `[{ "id": "war_economy", "days": 180 }]`.
 
+### Technologies
+
+`common/technologies/*.json` is the research tree. Each key is a technology:
+
+```json
+{
+  "drone_warfare": {
+    "name": "Drone warfare",
+    "description": "Cheap eyes and cheap strikes over the whole front, day and night.",
+    "category": "military",
+    "cost": 220,
+    "requires": ["network_centric_warfare"],
+    "effects": { "army_attack": 0.04 }
+  }
+}
+```
+
+`name` and `description` are localisation keys like everything's. `category` is `industry`,
+`society`, `military` or `logistics`. `effects` are shares added to something the simulation
+already works out, summed over what a country has: `output` (what the economy makes),
+`research_speed`, `army_attack`, `army_defense`, `army_speed` (marching and advancing) and
+`supply`. A mod adds a technology by adding a key and changes one by naming it again - the layers
+merge a key at a time, as everywhere.
+
+A country researches `ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) * literacy`
+points a week, bent by its education spending and multiplied by `1 + research_speed`; a technology
+costs its `cost` less `ResearchDiffusion` times the share of the world's GDP that already has it.
+The numbers are in `common/defines/11_research.json`. A country nobody plays chooses the cheapest
+thing it can start - from the military and logistics shelves while it is at war - and so does a
+player's ministry until the player chooses: a week of research is never thrown away, and
+switching keeps what was put into the last choice.
+
+The bench checks the tree: every prerequisite is a technology, every effect is one of the six,
+every category is one of the four, and nothing needs itself through its prerequisites.
+
 ### Localisation
 
 `localization/<language>.json` is a flat map of "string → translation". The folder is named the

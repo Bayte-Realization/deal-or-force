@@ -1,0 +1,130 @@
+// Deal or Force - what a country can research (ResearchSystem, TechnologyCore.cs).
+//
+// Every technology is a key: a name and a description (localisation keys, like everything's),
+// a category (industry, society, military or logistics), a cost in research points, the
+// technologies it requires, and its effects - each a share added to something the simulation
+// already works out, summed over what a country has:
+//
+//   output          what its economy makes              research_speed  what its research makes
+//   army_attack     its divisions' fire                 army_defense    their protection
+//   army_speed      how fast they march and advance     supply          how well they are fed
+//
+// A country researches ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) *
+// literacy a week, bent by education spending, times (1 + research_speed). A technology is
+// cheaper the more of the world's economy already has it (ResearchDiffusion), which is how a
+// small country catches up rather than falling a century behind. The numbers are in
+// common/defines/11_research.json.
+//
+// The scenario opens in 2024 with everything before it taken as known, so these are what
+// comes next. A mod adds one by adding a key, and changes one by naming it again.
+{
+  // ---------------------------------------------------------------- industry
+  "industrial_automation": {
+    "name": "Industrial automation",
+    "description": "Robots on the line and software in the office: the same workforce makes more.",
+    "category": "industry", "cost": 100,
+    "effects": { "output": 0.03 }
+  },
+  "advanced_semiconductors": {
+    "name": "Advanced semiconductors",
+    "description": "Chips of our own at the smallest scales, and everything that is built on them.",
+    "category": "industry", "cost": 200, "requires": ["industrial_automation"],
+    "effects": { "output": 0.02, "research_speed": 0.05 }
+  },
+  "energy_transition": {
+    "name": "Energy transition",
+    "description": "Cheap renewable power and the grid to carry it.",
+    "category": "industry", "cost": 200, "requires": ["industrial_automation"],
+    "effects": { "output": 0.03 }
+  },
+  "artificial_intelligence": {
+    "name": "Artificial intelligence",
+    "description": "Systems that design, plan and discover alongside the people who used to do it alone.",
+    "category": "industry", "cost": 360, "requires": ["advanced_semiconductors"],
+    "effects": { "output": 0.04, "research_speed": 0.1 }
+  },
+  "fusion_power": {
+    "name": "Fusion power",
+    "description": "Energy without fuel shortages. Everything that was expensive because power was expensive is not.",
+    "category": "industry", "cost": 600, "requires": ["energy_transition", "artificial_intelligence"],
+    "effects": { "output": 0.06 }
+  },
+
+  // ---------------------------------------------------------------- society
+  "digital_education": {
+    "name": "Digital education",
+    "description": "Schools and universities that reach everybody, and teach what the economy needs.",
+    "category": "society", "cost": 100,
+    "effects": { "research_speed": 0.08 }
+  },
+  "digital_government": {
+    "name": "Digital government",
+    "description": "A state that runs on data rather than on queues and paper.",
+    "category": "society", "cost": 200, "requires": ["digital_education"],
+    "effects": { "output": 0.01, "research_speed": 0.05 }
+  },
+  "genomic_medicine": {
+    "name": "Genomic medicine",
+    "description": "Medicine written for the patient: a healthier workforce that works longer.",
+    "category": "society", "cost": 360, "requires": ["digital_government"],
+    "effects": { "output": 0.03 }
+  },
+
+  // ---------------------------------------------------------------- military
+  "network_centric_warfare": {
+    "name": "Network-centric warfare",
+    "description": "Every sensor feeding every shooter: a division sees what it is firing at.",
+    "category": "military", "cost": 120,
+    "effects": { "army_attack": 0.03, "army_defense": 0.02 }
+  },
+  "drone_warfare": {
+    "name": "Drone warfare",
+    "description": "Cheap eyes and cheap strikes over the whole front, day and night.",
+    "category": "military", "cost": 220, "requires": ["network_centric_warfare"],
+    "effects": { "army_attack": 0.04 }
+  },
+  "active_protection": {
+    "name": "Active protection",
+    "description": "Vehicles and positions that shoot down what is shot at them.",
+    "category": "military", "cost": 220, "requires": ["network_centric_warfare"],
+    "effects": { "army_defense": 0.04 }
+  },
+  "autonomous_combat_systems": {
+    "name": "Autonomous combat systems",
+    "description": "Machines that fight where it would cost people to.",
+    "category": "military", "cost": 420, "requires": ["drone_warfare", "artificial_intelligence"],
+    "effects": { "army_attack": 0.04, "army_defense": 0.02 }
+  },
+  "hypersonic_weapons": {
+    "name": "Hypersonic weapons",
+    "description": "Strikes deep behind the line faster than anything can answer them.",
+    "category": "military", "cost": 400, "requires": ["drone_warfare"],
+    "effects": { "army_attack": 0.03 }
+  },
+
+  // ---------------------------------------------------------------- logistics
+  "predictive_logistics": {
+    "name": "Predictive logistics",
+    "description": "Supply that arrives before it is asked for.",
+    "category": "logistics", "cost": 100,
+    "effects": { "supply": 0.05 }
+  },
+  "electric_transport": {
+    "name": "Electric transport",
+    "description": "A vehicle fleet that needs no fuel convoy behind it.",
+    "category": "logistics", "cost": 200, "requires": ["predictive_logistics"],
+    "effects": { "army_speed": 0.06 }
+  },
+  "high_speed_rail": {
+    "name": "High-speed rail",
+    "description": "Moving a division across the country in a day rather than a week.",
+    "category": "logistics", "cost": 220, "requires": ["predictive_logistics"],
+    "effects": { "army_speed": 0.04, "output": 0.01 }
+  },
+  "autonomous_convoys": {
+    "name": "Autonomous convoys",
+    "description": "Driverless supply columns that run all night and do not tire.",
+    "category": "logistics", "cost": 360, "requires": ["electric_transport", "artificial_intelligence"],
+    "effects": { "supply": 0.05, "army_speed": 0.05 }
+  }
+}

@@ -153,6 +153,7 @@ public sealed class ModLoader
         MusicCatalog.Load();
         FontCatalog.Load();
         SubjectCatalog.ResetCatalog();
+        TechnologyCatalog.ResetCatalog();
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();

@@ -310,6 +310,7 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.0"));
             var wars = _campaign.Wars.Count(war => !war.Ended && war.Involves(nation.Id));
             if (wars > 0) CardRow(_countryCardRows, "Wars", wars.ToString("N0"), null, "state.negative");
+            AddResearchRows(_countryCardRows);
             _countryCardLinks.AddChild(ActionButton("Nation", () => OpenScreen("Nation"), 0, 28));
             _countryCardLinks.AddChild(ActionButton("Economy", () => OpenScreen("Economy"), 0, 28));
             _countryCardLinks.AddChild(ActionButton("Military", () => OpenScreen("Military"), 0, 28));
@@ -341,6 +342,11 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Population", Fmt.People(nation.Population));
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability));
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.0"));
+            if (TechnologyCatalog.All.Count > 0)
+                CardRow(_countryCardRows, "Technologies",
+                    Simulation.Loc.Format("{0} of {1} known", nation.Technologies.Count, TechnologyCatalog.All.Count),
+                    nation.Technologies.Count == 0 ? Tr("None yet.") :
+                        string.Join("\n", nation.Technologies.Select(id => Tr(TechnologyCatalog.Of(id)?.Name ?? id))));
         }
         else
             CardRow(_countryCardRows, "Intelligence", Tr("Unknown (fog of war)"),

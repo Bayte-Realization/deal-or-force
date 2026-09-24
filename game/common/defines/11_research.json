@@ -1,0 +1,17 @@
+// Deal or Force - research (ResearchSystem, TechnologyCore.cs). The technologies themselves are in
+// common/technologies.
+//
+// A week of research: ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) * literacy,
+// times (education spending / ResearchEducationBaseline) ^ ResearchEducationExponent (held between
+// a tenth and four times the baseline), times (1 + research_speed from technologies). The United
+// States makes about eight points a week and Mongolia about half of one.
+//
+// A technology costs its cost times (1 - ResearchDiffusion * the share of the world's GDP whose
+// countries already have it).
+{
+  "ResearchBasePerWeek": 0.5,
+  "ResearchGdpWeight": 0.05,
+  "ResearchEducationBaseline": 0.045,
+  "ResearchEducationExponent": 0.5,
+  "ResearchDiffusion": 0.5
+}
