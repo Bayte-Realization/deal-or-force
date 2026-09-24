@@ -74,9 +74,22 @@ public static partial class Warfare
     // hundred times over. They are all overwritten before they are read again, so they are
     // kept and emptied instead of rebuilt. The simulation is single-threaded by
     // construction, because it has to be to stay replayable, so one set is enough.
-    private static readonly Dictionary<int, List<Army>> ByProvince = new();
     private static readonly Dictionary<int, List<Army>> ByWar = new();
+
+    // Who stands in each province, as a slot per province rather than a dictionary: the
+    // index is rebuilt every step, and a dictionary rebuilt every step was a hash lookup per
+    // division plus an emptying of every list any division had ever stood in. Only the slots
+    // filled last time are emptied.
+    private static List<Army>[] _byProvince = Array.Empty<List<Army>>();
+    private static readonly List<int> ProvincesHeld = new();
+
+    // Divisions by id, for the battles - which resolve once a day, where the index is rebuilt
+    // every step. Built when a battle first asks, from the list as the index saw it, so it is
+    // the same table the index would have built and no longer built twenty-three times for
+    // nothing.
     private static readonly Dictionary<int, Army> ById = new();
+    private static readonly List<Army> IndexedArmies = new();
+    private static bool _byIdStale = true;
     private static readonly Dictionary<int, StrategicWar> WarById = new();
     private static readonly List<StrategicWar> Stale = new();
     private static readonly HashSet<int> Moved = new();
@@ -157,16 +170,21 @@ public static partial class Warfare
 
     private static void IndexArmies(Campaign campaign)
     {
-        foreach (var list in ByProvince.Values) list.Clear();
+        foreach (var province in ProvincesHeld) _byProvince[province].Clear();
+        ProvincesHeld.Clear();
         foreach (var list in ByWar.Values) list.Clear();
-        ById.Clear();
+        IndexedArmies.Clear();
+        _byIdStale = true;
         foreach (var army in campaign.Armies)
         {
-            ById[army.Id] = army;
-            if (army.ProvinceId > 0)
+            IndexedArmies.Add(army);
+            var province = army.ProvinceId;
+            if (province > 0)
             {
-                if (!ByProvince.TryGetValue(army.ProvinceId, out var here))
-                    ByProvince[army.ProvinceId] = here = new List<Army>();
+                if (province >= _byProvince.Length)
+                    Array.Resize(ref _byProvince, Math.Max(province + 1, (campaign.ProvinceMap?.ProvinceCount ?? 0) + 1));
+                var here = _byProvince[province] ??= new List<Army>();
+                if (here.Count == 0) ProvincesHeld.Add(province);
                 here.Add(army);
             }
             if (army.AssignedWarId < 0) continue;
@@ -250,6 +268,19 @@ public static partial class Warfare
     private static List<Army> In(Dictionary<int, List<Army>> index, int key) =>
         index.TryGetValue(key, out var list) ? list : NoArmies;
 
+    /// <summary>Everyone the index has standing in this province, in the order the world lists them.</summary>
+    private static List<Army> InProvince(int province) =>
+        province > 0 && province < _byProvince.Length && _byProvince[province] is { } here ? here : NoArmies;
+
+    private static Dictionary<int, Army> ArmiesById()
+    {
+        if (!_byIdStale) return ById;
+        ById.Clear();
+        foreach (var army in IndexedArmies) ById[army.Id] = army;
+        _byIdStale = false;
+        return ById;
+    }
+
     private static void ResolveAdvances(Campaign campaign, StrategicWar war)
     {
         var topology = campaign.ProvinceMap;
@@ -320,7 +351,7 @@ public static partial class Warfare
                 // Player battle plans and AI orders use the same reconnaissance. Deep
                 // hidden formations must not influence which sector the planner probes.
                 var observedResistance = 0f;
-                foreach (var defender in In(ByProvince, province))
+                foreach (var defender in InProvince(province))
                     if (defender.NationId == enemyId && CampaignIntel.CanSeeArmy(campaign, army.NationId, defender))
                         observedResistance += defender.Power;
                 // Weighted, not divided. Dividing the enemy's strength by your own makes
@@ -340,7 +371,7 @@ public static partial class Warfare
             // unopposed while the defenders were busy holding it. Ten province captures in
             // eleven came through that hole rather than through winning anything.
             Present.Clear();
-            foreach (var other in In(ByProvince, target))
+            foreach (var other in InProvince(target))
                 if (other.NationId == enemyId && other.Divisions >= 0.1f) Present.Add(other);
 
             if (Present.Count == 0)
@@ -481,8 +512,15 @@ public static partial class Warfare
         }
         if (army.PlannedRoute.Count == 0 || controllers[army.PlannedRoute[0]] != nation.MapIndex) return false;
 
+        // By hand. TakeWhile's predicate captured `controllers` and `nation`, and a closure
+        // over a parameter is allocated when the method is entered - so every advancing
+        // division paid for one every step, whether or not it ever got this far.
         army.Route.Clear();
-        army.Route.AddRange(army.PlannedRoute.TakeWhile(province => controllers[province] == nation.MapIndex));
+        foreach (var province in army.PlannedRoute)
+        {
+            if (controllers[province] != nation.MapIndex) break;
+            army.Route.Add(province);
+        }
         return army.Route.Count > 0;
     }
 
@@ -504,7 +542,7 @@ public static partial class Warfare
         var defenderId = war.EnemyLeaderOf(invaderId);
 
         DefendingSide.Clear();
-        foreach (var army in In(ByProvince, provinceId))
+        foreach (var army in InProvince(provinceId))
             if (army.NationId == defenderId && army.Divisions >= 0.1f) DefendingSide.Add(army);
 
         if (DefendingSide.Count == 0)
@@ -551,7 +589,7 @@ public static partial class Warfare
             // answers. The index is refreshed only after a capture has moved somebody, so
             // it says exactly what the walk said.
             EnsureIndexed(campaign);
-            foreach (var army in In(ByProvince, battle.ProvinceId))
+            foreach (var army in InProvince(battle.ProvinceId))
                 if (!army.InBattle && army.NationId == battle.DefenderId && army.Divisions >= 0.1f)
                     Join(battle, army, false);
 
@@ -707,10 +745,9 @@ public static partial class Warfare
     private static readonly List<Army> Reinforcements = new();
 
     /// <summary>Everyone standing in one province who could still join the fight next door.</summary>
-    private static void Consider(Campaign campaign, LandBattle battle,
-        Dictionary<int, List<Army>> byProvince, int provinceId)
+    private static void Consider(Campaign campaign, LandBattle battle, int provinceId)
     {
-        foreach (var army in In(byProvince, provinceId))
+        foreach (var army in InProvince(provinceId))
         {
             if (army.InBattle || army.AssignedWarId != battle.WarId ||
                 army.ReadyDay > campaign.ElapsedDays ||
@@ -734,8 +771,8 @@ public static partial class Warfare
         // live battle every day - a hundred thousand tests to find at most a dozen - and
         // then allocated a sorter, a key array and a buffer to put them in order.
         Reinforcements.Clear();
-        Consider(campaign, battle, ByProvince, battle.ProvinceId);
-        foreach (var neighbour in adjacent) Consider(campaign, battle, ByProvince, neighbour);
+        Consider(campaign, battle, battle.ProvinceId);
+        foreach (var neighbour in adjacent) Consider(campaign, battle, neighbour);
 
         // Strongest first, and by id where two are equally strong: a battle joined in a
         // different order on two machines is a battle that ends differently on them.
@@ -913,7 +950,7 @@ public static partial class Warfare
             var province = pair.Key;
             if (controllers[province] == pair.Value) { occupation[province] = 0f; continue; }
             var garrison = 0f;
-            foreach (var army in In(ByProvince, province))
+            foreach (var army in InProvince(province))
                 if (!army.InBattle) garrison += army.Power;
             // A rate, so it takes the step's share of a day. Without this a province was
             // occupied twenty-four times faster at an hourly step than at a daily one.
@@ -1126,7 +1163,7 @@ public static partial class Warfare
             {
                 if (!seen.Add(neighbour)) continue;
                 next.Add(neighbour);
-                foreach (var other in In(ByProvince, neighbour))
+                foreach (var other in InProvince(neighbour))
                 {
                     if (other.NationId != enemyId || other.Divisions < 0.1f) continue;
                     coveringPower += M.Max(other.Power,
@@ -1162,8 +1199,9 @@ public static partial class Warfare
     private static List<Army> Side(IEnumerable<int> ids, int nationId, List<Army> into)
     {
         into.Clear();
+        var byId = ArmiesById();
         foreach (var id in ids)
-            if (ById.TryGetValue(id, out var army) && army.NationId == nationId && army.Divisions >= 0.1f)
+            if (byId.TryGetValue(id, out var army) && army.NationId == nationId && army.Divisions >= 0.1f)
                 into.Add(army);
         return into;
     }

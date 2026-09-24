@@ -900,19 +900,24 @@ public static class EconomySystem
     public static float ForeignShare(ScenarioState state, string ownerTag)
     {
         if (state is null || string.IsNullOrEmpty(ownerTag) || state.PopulationGroups.Count == 0) return 0f;
+        // A minority is a people the state is not for. Which peoples those are is data:
+        // Belgium has two of its own and Switzerland four, and a rule that assumed one would
+        // make foreigners of half of both. Looked up once for the region, not per group.
+        var primary = DemographyCatalog.PrimarySet(ownerTag);
         long total = 0;
         long foreign = 0;
         foreach (var group in state.PopulationGroups)
         {
             if (group.Size <= 0) continue;
             total += group.Size;
-            // A minority is a people the state is not for. Which peoples those are is data:
-            // Belgium has two of its own and Switzerland four, and a rule that assumed one
-            // would make foreigners of half of both.
-            if (!DemographyCatalog.IsPrimary(ownerTag, group.Culture)) foreign += group.Size;
+            if (!IsOwn(primary, group)) foreign += group.Size;
         }
         return total <= 0 ? 0f : foreign / (float)total;
     }
+
+    /// <summary>What <see cref="DemographyCatalog.IsPrimary"/> answers, against a set already looked up.</summary>
+    private static bool IsOwn(IReadOnlySet<string> primary, PopulationGroup group) =>
+        primary is not null && group.Culture is not null && primary.Contains(group.Culture);
 
     /// <summary>Every people living in a region, largest first.</summary>
     public static IReadOnlyList<(string Culture, long Size)> Cultures(ScenarioState state) =>
@@ -974,10 +979,11 @@ public static class EconomySystem
         if (rate <= 0f) return;
 
         long moved = 0;
+        var primary = DemographyCatalog.PrimarySet(nation.Tag);
         foreach (var group in state.PopulationGroups)
         {
             if (group.Size <= 0) continue;
-            if (DemographyCatalog.IsPrimary(nation.Tag, group.Culture)) continue;
+            if (IsOwn(primary, group)) continue;
             var share = (long)MathF.Round(group.Size * rate);
             if (share <= 0) continue;
             group.Size -= share;
@@ -1017,7 +1023,17 @@ public static class EconomySystem
             state.PopulationGroups.Add(host);
         }
         host.Size += moved;
-        state.PopulationGroups.RemoveAll(group => group.Size <= 0 && group != host);
+        // Compacted by hand, in order, for the reason above: RemoveAll's predicate captured
+        // `host`, and that closure was all the garbage this weekly pass made.
+        var groups = state.PopulationGroups;
+        var kept = 0;
+        for (var index = 0; index < groups.Count; index++)
+        {
+            var group = groups[index];
+            if (group.Size <= 0 && group != host) continue;
+            groups[kept++] = group;
+        }
+        if (kept < groups.Count) groups.RemoveRange(kept, groups.Count - kept);
     }
 
     internal static void SeedState(Campaign campaign, ScenarioState state, Nation nation, long population) =>

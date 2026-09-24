@@ -174,6 +174,14 @@ public static class DemographyCatalog
 
     public static string ProfessionName(string id) => Profession(id)?.Name ?? Titled(id);
 
+    /// <summary>
+    /// The peoples a state is for, as a set - or null for a state that is for nobody. For a
+    /// caller asking about every group in a region: one lookup of the country instead of one
+    /// per group, which in the weekly pass over every region was most of what it cost.
+    /// </summary>
+    public static IReadOnlySet<string> PrimarySet(string countryTag) =>
+        countryTag is not null && PrimarySetByCountry.TryGetValue(countryTag, out var primary) ? primary : null;
+
     /// <summary>Whether a people is one of the state's own, which is what makes the rest minorities.</summary>
     public static bool IsPrimary(string countryTag, string culture) =>
         countryTag is not null && culture is not null &&

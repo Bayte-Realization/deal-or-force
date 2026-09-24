@@ -586,8 +586,10 @@ public sealed partial class Campaign
 
     public ScenarioState[] StatesOf(int nationMapIndex)
     {
-        if (DisableStateIndex)
-            return States.Where(state => state.NationMapIndex == nationMapIndex).ToArray();
+        // The scan is a method of its own because its lambda captures the parameter, and a
+        // closure over a parameter is allocated on entry - on every call, indexed or not,
+        // and this is asked for every country by nearly every pass.
+        if (DisableStateIndex) return StatesOfByScan(nationMapIndex);
 
         if (_statesByNation is null)
         {
@@ -597,6 +599,9 @@ public sealed partial class Campaign
         }
         return _statesByNation.TryGetValue(nationMapIndex, out var states) ? states : NoStates;
     }
+
+    private ScenarioState[] StatesOfByScan(int nationMapIndex) =>
+        States.Where(state => state.NationMapIndex == nationMapIndex).ToArray();
 
     /// <summary>Drop the ownership index. Call after replacing or re-owning states.</summary>
     public void InvalidateStateIndex() => _statesByNation = null;

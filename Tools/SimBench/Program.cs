@@ -335,6 +335,8 @@ public static class Program
                     RegionsHealWhenTheBorderGoesAway(sandbox));
                 failures += Check("a redrawn border survives a save", BordersSurviveASave(sandbox));
                 failures += Check("a save's history comes back week for week", AHistoryComesBackWhole(sandbox));
+                failures += Check("the world's count of who holds what is each country's own count",
+                    TheWorldTallyIsEachCountrysTally(sandbox));
                 // Deletes formations and puts others on trains, so it belongs on the copy.
                 failures += Check("a consolidation invents nobody and the railways are paid for",
                     ManoeuvresCostWhatTheySave(sandbox));
@@ -2415,6 +2417,48 @@ public static class Program
         if (weeks == 0) return "there was no history to write";
         Console.WriteLine($"  history: {weeks:N0} week(s) of {campaign.Nations.Count} countries written by the save's " +
                           "worker and read back unchanged.");
+        return "";
+    }
+
+    /// <summary>
+    /// The world tally - one walk of the map a day, read by militia and stability - agrees
+    /// with the per-country count it replaced, region by region, including the regions a
+    /// border has cut between two owners. After two hundred days of war there are some of
+    /// those, and they are where a tally kept by region alone would hand one owner the other's.
+    /// </summary>
+    private static string TheWorldTallyIsEachCountrysTally(Campaign campaign)
+    {
+        if (campaign.ProvinceMap is null) return "";
+        var own = new Dictionary<int, RegionControl>();
+        var enemies = new HashSet<ushort>();
+        var regions = 0;
+        var shared = new Dictionary<int, int>();
+        foreach (var nation in campaign.Nations)
+        {
+            // Hostile by side, the rule the world tally uses: an ally in the same war is not.
+            enemies.Clear();
+            foreach (var war in campaign.Wars)
+            {
+                if (war.Ended || !war.Involves(nation.Id)) continue;
+                foreach (var other in campaign.Nations)
+                    if (other.Id != nation.Id && war.Opposes(nation.Id, other.Id)) enemies.Add((ushort)other.MapIndex);
+            }
+            ControlTally.Of(campaign, nation, enemies, own);
+            foreach (var (region, expected) in own)
+            {
+                var world = ControlTally.World(campaign, nation.MapIndex, region);
+                if (world.Provinces != expected.Provinces || world.Held != expected.Held ||
+                    world.Bordered != expected.Bordered)
+                    return $"{nation.Tag} in region {region}: the world tally says {world.Provinces}/{world.Held}/" +
+                           $"{world.Bordered} (provinces/held/bordered), its own count {expected.Provinces}/" +
+                           $"{expected.Held}/{expected.Bordered}";
+                shared[region] = shared.GetValueOrDefault(region) + 1;
+                regions++;
+            }
+        }
+        if (regions == 0) return "nobody owns a region";
+        Console.WriteLine($"  control tally: {regions:N0} country-region count(s) agree, " +
+                          $"{shared.Count(entry => entry.Value > 1)} of them in a region two owners share.");
         return "";
     }
 
