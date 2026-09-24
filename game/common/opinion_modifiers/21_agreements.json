@@ -1,0 +1,32 @@
+// What two countries remember about the agreements short of an alliance being ended, and about
+// money sent between them (AgreementSystem). Signing is remembered in 00_diplomacy.json, as
+// "trade_agreement" and "non_aggression_pact"; these are the other half.
+{
+  // Walked out of a trade agreement. It hurts the trade, and it is noticed.
+  "cancelled_trade_agreement": {
+    "name": "Cancelled our trade agreement",
+    "opinion": -15,
+    "days": 730,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // Broke a promise not to attack. The one thing a pact is for, and it is gone.
+  "broke_non_aggression_pact": {
+    "name": "Broke our non-aggression pact",
+    "opinion": -35,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // A package of money, remembered for as long as it is spent. A package the giver could only
+  // half afford is half of this (scaled by what it was worth against a full one).
+  "economic_aid": {
+    "name": "Sent us economic aid",
+    "opinion": 16,
+    "days": 730,
+    "decays": true,
+    "max_stacks": 3
+  }
+}

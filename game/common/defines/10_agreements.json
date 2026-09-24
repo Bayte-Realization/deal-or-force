@@ -1,0 +1,30 @@
+// Deal or Force - trade agreements, non-aggression pacts and aid, asked for by a player.
+//
+// Every key here overrides the value compiled into Defines (AgreementsCore.cs). A key no file
+// mentions keeps its compiled value, so a balance mod only lists what it changes.
+//
+// The asked country decides, in the alliance's units: how it regards the asker (opinion / 100),
+// minus AgreementRivalPenalty for a rival and the asker's notoriety (AgreementNotorietyWeight a
+// point, at most AgreementNotorietyCap), plus, for a trade agreement, the share of its trade
+// already running through the asker times TradeAgreementTradeWeight, and for a pact
+// NonAggressionPactWarBonus when it is fighting somebody else. The bars are the ones the
+// computer signs its own at (AiTradeThreshold / 100 and AiPactThreshold / 100).
+{
+  "TradeAgreementWillingness": 0.18,
+  "TradeAgreementTradeWeight": 0.5,
+  "NonAggressionPactWillingness": 0.42,
+  "NonAggressionPactWarBonus": 0.1,
+  "AgreementRivalPenalty": 0.2,
+  "AgreementNotorietyWeight": 0.005,
+  "AgreementNotorietyCap": 0.3,
+  "AgreementRefusalDays": 180,
+
+  // Breaking a promise not to attack is never free.
+  "NonAggressionPactBreakNotoriety": 8,
+
+  // Aid: a hundredth of what the receiving country makes in a year, never more than a tenth of
+  // the giver's treasury, at most once a season between the same two.
+  "AidShareOfRecipientGdp": 0.01,
+  "AidMaxShareOfTreasury": 0.1,
+  "AidIntervalDays": 90
+}

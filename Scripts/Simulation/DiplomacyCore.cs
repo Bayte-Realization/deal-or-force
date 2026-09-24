@@ -60,6 +60,12 @@ public sealed class DiplomaticRelation
     /// <summary>When one of them last asked the other to answer to it and was told no (SubmissionSystem).</summary>
     public int SubmissionAskedDay = -9999;
 
+    /// <summary>When a trade agreement or a pact was last asked for and refused - see AgreementSystem.</summary>
+    public int AgreementRefusedDay = -9999;
+
+    /// <summary>When the last aid package went between the two.</summary>
+    public int AidSentDay = -9999;
+
     public bool EmbargoBy(int nationId) => nationId == A ? EmbargoByA : EmbargoByB;
     public bool GuaranteedBy(int nationId) => nationId == A ? GuaranteeByA : GuaranteeByB;
 
