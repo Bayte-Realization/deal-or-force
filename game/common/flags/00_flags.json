@@ -199,6 +199,9 @@
     // is not what the five stars are about. Requiring both put a communist presidential
     // China in the Republic's flag, which is the opposite mistake from the one this fixes.
     //
+    // One condition may accept several values, as a list: any of them will do. That is for a
+    // flag whose meaning two ideologies share - not a way to require two things at once.
+    //
     // `otherwise` is what it flies once its own flag is ruled out. Without it the search
     // runs out of candidates and falls all the way back to the flag it just ruled out.
     "chn": { "ideology": "communism",       "otherwise": "flag_chn_liberalism" },
@@ -210,12 +213,18 @@
     // what the state is for.
     "afg": { "ideology": "theocratic_rule", "otherwise": "flag_afg_liberalism" },
     "irn": { "ideology": "theocratic_rule", "otherwise": "flag_irn_liberalism" },
-    "sau": { "ideology": "theocratic_rule" },
+    // The kingdom's flag, whether its government is read as a theocracy or as the absolute
+    // monarchy it is in 2024 (traditionalism). Written as theocratic_rule alone, the
+    // scenario's own Saudi Arabia failed it on the first day and flew the generic
+    // traditionalist banner - the Carlist cross of Burgundy - over Riyadh.
+    "sau": { "ideology": ["theocratic_rule", "traditionalism"] },
     "vat": { "government": "theocracy" },
 
     // Adopted by a party in power and carrying its emblem.
     "eri": { "government": "one_party_state" },
-    "tkm": { "government": "one_party_state" },
+    // Turkmenistan is a presidential republic in the 2024 scenario and a one-party state in
+    // all but name; the flag is the same under either reading.
+    "tkm": { "government": ["one_party_state", "presidential_republic"] },
 
     // Spain's arms carry the crown. Most monarchies' flags do not - a Swedish cross and a
     // Union Flag are what the country looks like rather than what its government is - so

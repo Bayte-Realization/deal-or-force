@@ -114,6 +114,9 @@ public static class FlagCatalog
     private static readonly Dictionary<string, (string Source, string Value)[]> Native =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Between the values of one condition that accepts any of several. Never part of a slug.</summary>
+    private const char AnyOf = '|';
+
     /// <summary>
     /// And what such a country flies instead, once its own flag is disqualified.
     ///
@@ -257,10 +260,20 @@ public static class FlagCatalog
                 var conditions = new List<(string, string)>();
                 foreach (var field in entry.Value.EnumerateObject())
                 {
-                    if (field.Value.ValueKind != JsonValueKind.String) continue;
+                    // A list is "any of these": the Saudi flag is the flag of the kingdom
+                    // whether the game calls its government traditionalist or theocratic.
+                    var values = field.Value.ValueKind switch
+                    {
+                        JsonValueKind.String => new[] { field.Value.GetString() ?? "" },
+                        JsonValueKind.Array => field.Value.EnumerateArray()
+                            .Where(item => item.ValueKind == JsonValueKind.String)
+                            .Select(item => item.GetString() ?? "").ToArray(),
+                        _ => null
+                    };
+                    if (values is null) continue;
                     if (string.Equals(field.Name, "otherwise", StringComparison.OrdinalIgnoreCase))
                     {
-                        Otherwise[Slug(entry.Name)] = field.Value.GetString() ?? "";
+                        Otherwise[Slug(entry.Name)] = values.FirstOrDefault() ?? "";
                         continue;
                     }
                     if (!IsKnownSource(field.Name))
@@ -269,7 +282,8 @@ public static class FlagCatalog
                                     "is not something the game can answer.");
                         continue;
                     }
-                    conditions.Add((field.Name, Slug(field.Value.GetString())));
+                    var accepted = string.Join(AnyOf, values.Select(Slug).Where(value => value.Length > 0));
+                    if (accepted.Length > 0) conditions.Add((field.Name, accepted));
                 }
                 if (conditions.Count > 0) Native[Slug(entry.Name)] = conditions.ToArray();
             }
@@ -486,14 +500,21 @@ public static class FlagCatalog
     public static bool Fits(Campaign campaign, Nation nation, string tag)
     {
         if (!Native.TryGetValue(tag, out var conditions)) return true;
-        foreach (var (source, value) in conditions)
+        foreach (var (source, accepted) in conditions)
         {
             var now = ValueOf(source, campaign, nation);
-            // Held if it matches, or if what it is now is something that answers to it -
-            // a socialist China is near enough to the flag a communist one flies.
-            if (string.Equals(now, value, StringComparison.OrdinalIgnoreCase)) continue;
-            if (Chain(source, now).Contains(value, StringComparer.OrdinalIgnoreCase)) continue;
-            return false;
+            var chain = Chain(source, now);
+            // Held if it matches one of the values, or if what it is now is something that
+            // answers to one - a socialist China is near enough to the flag a communist one flies.
+            var held = false;
+            foreach (var value in accepted.Split(AnyOf))
+                if (string.Equals(now, value, StringComparison.OrdinalIgnoreCase) ||
+                    chain.Contains(value, StringComparer.OrdinalIgnoreCase))
+                {
+                    held = true;
+                    break;
+                }
+            if (!held) return false;
         }
         return true;
     }

@@ -74,6 +74,10 @@ public static class Program
         if (Array.IndexOf(args, "--borders") >= 0)
             return Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
 
+        // `--flags` checks only the flags every country opens under - seconds, not a bench run.
+        if (Array.IndexOf(args, "--flags") >= 0)
+            return Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
+
         var mapped = AttachMap(campaign);
         var frontBefore = new FrontSnapshot(campaign);
 
@@ -140,6 +144,7 @@ public static class Program
         failures += Check("the computer walks into empty ground", TheComputerWalksIntoEmptyGround());
         failures += Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
         failures += Check("a proclaimed state flies its own flag", AProclaimedStateFliesItsOwnFlag(campaign));
+        failures += Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
         failures += Check("every folder of data is read by something", EveryFolderOfDataIsRead());
         failures += Check("the interface composes its prose through the table",
             TheInterfaceComposesThroughTheTable());
@@ -8381,6 +8386,37 @@ public static class Program
         var common = Directory.GetDirectories(Path.Combine(game, "common")).Length;
         Console.WriteLine($"  data: {common:N0} category folder(s) under common/, every one of them " +
                           $"read by name, and {asked.Count:N0} categor(ies) asked for in total.");
+        return "";
+    }
+
+    /// <summary>
+    /// On the first day every country that has a flag of its own flies it, or a variant of it.
+    ///
+    /// A regime's flag is ruled out when the country stops being that regime (common/flags,
+    /// own_flag_is_for) - and a rule written against the wrong word rules it out on day one.
+    /// Saudi Arabia's shahada was declared the flag of a theocracy while the scenario calls the
+    /// kingdom traditionalist, so Riyadh opened under the generic traditionalist banner: the
+    /// Carlist cross of Burgundy. Nothing looked at the flags a world actually starts with.
+    /// </summary>
+    private static string EveryCountryOpensUnderItsOwnFlag()
+    {
+        if (SpriteCatalog.Count == 0) SpriteCatalog.Load();
+        var world = Campaign.CreateBootstrap(20240101);
+        var owned = 0;
+        var wrong = new List<string>();
+        foreach (var nation in world.Nations)
+        {
+            var own = "flag_" + FlagCatalog.Slug(nation.Tag);
+            if (!SpriteCatalog.Has(own)) continue;
+            owned++;
+            var flies = FlagCatalog.Resolve(world, nation);
+            if (flies.StartsWith(own, StringComparison.OrdinalIgnoreCase)) continue;
+            wrong.Add($"{nation.Tag} ({nation.Government}, {nation.Ideology}) flies {(flies.Length == 0 ? "nothing" : flies)}");
+        }
+        if (owned < 150) return $"only {owned} countries have a flag of their own drawn";
+        if (wrong.Count > 0)
+            return $"{wrong.Count} of {owned} countries open under somebody else's flag: " + string.Join("; ", wrong.Take(6));
+        Console.WriteLine($"  flags: all {owned} countries with a flag of their own open under it (or a variant of it).");
         return "";
     }
 
