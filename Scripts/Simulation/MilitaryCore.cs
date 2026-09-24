@@ -524,10 +524,14 @@ public static class MilitaryOperations
                 Reinforce(campaign, army, reinforcementWeights.GetValueOrDefault(army.NationId, 1f));
             }
 
+            // By the hour. These were written as a step's worth when a step was a day, and the
+            // pockets that surrender when they starve were built and measured once the step
+            // was an hour - so an hour's worth is what the game has been playing, and scaling
+            // by the step keeps that while a longer step no longer starves a pocket slower.
             if (army.CutOff && army.SupplyLevel < 0.16f)
             {
-                army.Organisation = M.Clamp01(army.Organisation - 0.012f);
-                army.Strength = M.Clamp01(army.Strength - 0.00045f);
+                army.Organisation = M.Clamp01(army.Organisation - 0.012f * campaign.TickHours);
+                army.Strength = M.Clamp01(army.Strength - 0.00045f * campaign.TickHours);
             }
 
             if (army.InBattle) continue;
@@ -553,30 +557,7 @@ public static class MilitaryOperations
             if (nation is null || nextProvince <= 0 || nextProvince > topology.ProvinceCount ||
                 controllers[nextProvince] != nation.MapIndex)
             {
-                // A friendly staging step can become hostile after the order was given.
-                // Keep the player's corridor and hand that step to combat, rather than
-                // silently throwing away the whole order or walking through the enemy.
-                var blockingNation = nextProvince > 0 && nextProvince <= topology.ProvinceCount
-                    ? campaign.Nations.Find(n => n.MapIndex == controllers[nextProvince]) : null;
-                var crossingWar = nation is null || blockingNation is null ? null : campaign.Wars.Find(w =>
-                    !w.Ended && w.Involves(nation.Id) && w.Involves(blockingNation.Id));
-                if (army.DirectOrder && army.OrderProvinceId > 0 && crossingWar is not null)
-                {
-                    army.Route.Clear();
-                    army.MoveProgress = 0f;
-                    army.OrderKind = ArmyOrder.Spearhead;
-                    army.AssignedWarId = crossingWar.Id;
-                    army.PlanActive = true;
-                    continue;
-                }
-                new HaltArmyCommand { IssuerId = army.NationId, ArmyId = army.Id }.Apply(campaign);
-                army.Route.Clear();
-                army.PlannedRoute.Clear();
-                army.OrderProvinceId = -1;
-                army.OrderStateMapIndex = -1;
-                army.MoveProgress = 0f;
-                army.LastMoveResult = ArmyMoveResult.RouteInterrupted;
-                army.LastMoveResultDay = campaign.ElapsedDays;
+                StepBlocked(campaign, topology, controllers, army, nation, nextProvince);
                 continue;
             }
             var crossingStrength = topology.RiverCrossingStrength(army.ProvinceId, nextProvince);
@@ -616,6 +597,43 @@ public static class MilitaryOperations
                 army.MoveProgress = 0f;
             }
         }
+    }
+
+    /// <summary>
+    /// A friendly staging step can become hostile after the order was given. Keep the
+    /// player's corridor and hand that step to combat, rather than silently throwing away the
+    /// whole order or walking through the enemy.
+    /// </summary>
+    /// <remarks>
+    /// A method of its own for the sake of the two lambdas. Written inline in the march loop,
+    /// they captured the loop's own locals, and the compiler allocates a closure for those at
+    /// the top of every iteration - one object per division per step, whether or not anybody's
+    /// route was blocked. That was 52 kB a step and nearly all the garbage the step made.
+    /// </remarks>
+    private static void StepBlocked(Campaign campaign, ProvinceTopology topology, ushort[] controllers,
+        Army army, Nation nation, int nextProvince)
+    {
+        var blockingNation = nextProvince > 0 && nextProvince <= topology.ProvinceCount
+            ? campaign.Nations.Find(n => n.MapIndex == controllers[nextProvince]) : null;
+        var crossingWar = nation is null || blockingNation is null ? null : campaign.Wars.Find(w =>
+            !w.Ended && w.Involves(nation.Id) && w.Involves(blockingNation.Id));
+        if (army.DirectOrder && army.OrderProvinceId > 0 && crossingWar is not null)
+        {
+            army.Route.Clear();
+            army.MoveProgress = 0f;
+            army.OrderKind = ArmyOrder.Spearhead;
+            army.AssignedWarId = crossingWar.Id;
+            army.PlanActive = true;
+            return;
+        }
+        new HaltArmyCommand { IssuerId = army.NationId, ArmyId = army.Id }.Apply(campaign);
+        army.Route.Clear();
+        army.PlannedRoute.Clear();
+        army.OrderProvinceId = -1;
+        army.OrderStateMapIndex = -1;
+        army.MoveProgress = 0f;
+        army.LastMoveResult = ArmyMoveResult.RouteInterrupted;
+        army.LastMoveResultDay = campaign.ElapsedDays;
     }
 
     /// <summary>

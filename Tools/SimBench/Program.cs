@@ -92,6 +92,18 @@ public static class Program
         if (saveCostAt >= 0) return SaveCost(campaign,
             saveCostAt + 1 < args.Length && int.TryParse(args[saveCostAt + 1], out var saveDays) ? saveDays : 365);
 
+        // `--alloc N` plays N days and then runs each per-step pass on its own, with the
+        // runtime's allocation sampling switched on: how much each pass leaves behind a run,
+        // and of which types. The profiler's counter says a pass allocates; this says what.
+        var allocAt = Array.IndexOf(args, "--alloc");
+        if (allocAt >= 0) return Allocations(campaign,
+            allocAt + 1 < args.Length && int.TryParse(args[allocAt + 1], out var allocDays) ? allocDays : 60);
+
+        // `--front` plays the main run alone and asks only about the war in it: whether the
+        // Russo-Ukrainian front is still a front, and whether an army replaces what it loses.
+        // Half an hour of bench for a question about manpower was too long a loop.
+        if (Array.IndexOf(args, "--front") >= 0) return Front(campaign, days);
+
         var profileAt = Array.IndexOf(args, "--profile");
         if (profileAt >= 0) return Profile(campaign,
             profileAt + 1 < args.Length && int.TryParse(args[profileAt + 1], out var profileDays) ? profileDays : 120);
@@ -413,6 +425,100 @@ public static class Program
         // fast the world runs and nothing else has to end in the same one.
         Console.WriteLine($"  world fingerprint after {campaign.ElapsedDays} day(s): {CampaignFingerprint.Of(campaign):X16}");
         return 0;
+    }
+
+    private static int Front(Campaign campaign, int days)
+    {
+        var before = new FrontSnapshot(campaign);
+        campaign.IsPaused = false;
+        var trace = new List<int>();
+        var ukraineIndex = campaign.NationByTag("UKR")?.MapIndex ?? -1;
+        for (var day = 0; day < days; day++)
+        {
+            campaign.TickDay();
+            if (day % 15 == 0 && ukraineIndex >= 0 && campaign.ProvinceController is not null)
+                trace.Add(HeldBy(campaign, ukraineIndex));
+        }
+        var failures = Check("the Russo-Ukrainian front is still a stalemate",
+            FrontIsAStalemate(campaign, before, trace, days));
+        failures += Check("a war costs formations and an army replaces them", WarCostsFormations(campaign, days));
+        return failures;
+    }
+
+    private static int Allocations(Campaign campaign, int days)
+    {
+        campaign.IsPaused = false;
+        for (var day = 0; day < days; day++) campaign.TickDay();
+        Console.WriteLine($"Allocations after {days} day(s), {campaign.Armies.Count:N0} division(s), " +
+                          $"{campaign.Wars.Count(war => !war.Ended)} war(s) open:");
+        // Each pass on its own, the order Campaign.Tick runs them in. Run alone a pass still
+        // does its real work on the real world - a march advances, a reserve refills - so
+        // the garbage is the garbage that work makes; the world is not used for anything after.
+        var passes = new (string Name, Action Run)[]
+        {
+            ("commands", () => campaign.Commands.ApplyAll(campaign)),
+            ("logistics", () => LogisticsSystem.Tick(campaign)),
+            ("military", () => MilitaryOperations.Tick(campaign)),
+            ("naval", () => { AiAdmiralty.Tick(campaign); NavalOperations.Tick(campaign); }),
+            ("warfare", () => Warfare.Tick(campaign)),
+            ("attrition", () => Attrition.Tick(campaign)),
+            ("construction", () => ConstructionSystem.Tick(campaign)),
+            ("whole step", campaign.Tick),
+        };
+        const int runs = 240;
+        using var listener = new AllocationListener();
+        foreach (var (name, run) in passes)
+        {
+            run();
+            listener.Reset();
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < runs; index++) run();
+            var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            // The runtime hands its events to a listener on a thread of its own.
+            System.Threading.Thread.Sleep(300);
+            Console.WriteLine($"  {name,-14} {bytes / (double)runs / 1024.0,9:N1} kB a run");
+            foreach (var (type, sampled) in listener.Largest(8))
+                Console.WriteLine($"      {sampled / (double)runs / 1024.0,9:N1} kB  {type}");
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// The runtime's allocation sample, by type. The runtime reports roughly every hundred
+    /// kilobytes allocated and names the type of the object that crossed the line, so a
+    /// type's share of the samples is its share of the garbage - an estimate, and a good one
+    /// over a few hundred runs.
+    /// </summary>
+    private sealed class AllocationListener : System.Diagnostics.Tracing.EventListener
+    {
+        private readonly Dictionary<string, long> _sampled = new();
+
+        protected override void OnEventSourceCreated(System.Diagnostics.Tracing.EventSource source)
+        {
+            if (source.Name == "Microsoft-Windows-DotNETRuntime")
+                EnableEvents(source, System.Diagnostics.Tracing.EventLevel.Verbose,
+                    (System.Diagnostics.Tracing.EventKeywords)0x1);
+        }
+
+        protected override void OnEventWritten(System.Diagnostics.Tracing.EventWrittenEventArgs data)
+        {
+            if (data.EventName is null || !data.EventName.Contains("AllocationTick") || data.PayloadNames is null) return;
+            var typeAt = data.PayloadNames.IndexOf("TypeName");
+            var amountAt = data.PayloadNames.IndexOf("AllocationAmount64");
+            if (typeAt < 0 || amountAt < 0) return;
+            var type = data.Payload[typeAt] as string ?? "?";
+            var amount = Convert.ToInt64(data.Payload[amountAt], CultureInfo.InvariantCulture);
+            lock (_sampled) _sampled[type] = _sampled.GetValueOrDefault(type) + amount;
+        }
+
+        public void Reset() { lock (_sampled) _sampled.Clear(); }
+
+        public List<(string Type, long Sampled)> Largest(int count)
+        {
+            lock (_sampled)
+                return _sampled.OrderByDescending(entry => entry.Value).Take(count)
+                    .Select(entry => (entry.Key, entry.Value)).ToList();
+        }
     }
 
     private static int SaveCost(Campaign campaign, int days)
@@ -7894,10 +8000,19 @@ public static class Program
 
         var organisationBefore = traveller.Organisation;
         campaign.IsPaused = false;
-        for (var day = 0; day < 6 && traveller.IsRedeploying; day++) campaign.TickDay();
+        var railDays = 0;
+        for (; railDays < 6 && traveller.IsRedeploying; railDays++) campaign.TickDay();
 
         if (traveller.Organisation >= organisationBefore)
             return "a week on the trains cost nothing in organisation, which makes it a better march";
+        // A day's price per day on the trains, at any step. Charged per step instead, the
+        // hourly step made this trip cost 93 % where a day and a bit of travel should cost a
+        // fifth, and nothing else here would have noticed.
+        var railCost = organisationBefore - traveller.Organisation;
+        var railBudget = campaign.Defines.RailRedeploymentOrganisationPerDay * railDays + 0.01f;
+        if (railCost > railBudget)
+            return $"{railDays} day(s) on the trains cost {railCost:P0} organisation, more than {railBudget:P0} - " +
+                   "the day's price is being charged per step";
         if (traveller.IsRedeploying && traveller.Route.Count > 0 && traveller.MoveProgress <= 0f)
             return "the formation was railed nowhere";
 

@@ -103,9 +103,9 @@ public sealed class StrategicRedeploymentCommand : ICampaignCommand
 /// <summary>
 /// A day of being railed somewhere: faster, and worse when it arrives.
 ///
-/// Called from the march tick, once per day per moving formation. It returns what to
-/// multiply the day's progress by and charges the day's organisation on the way through -
-/// the two belong together because the speed is what is being paid for.
+/// Called from the march tick, once per step per moving formation. It returns what to
+/// multiply the step's progress by and charges the step's share of a day's organisation on
+/// the way through - the two belong together because the speed is what is being paid for.
 /// </summary>
 public static class StrategicRedeployment
 {
@@ -121,12 +121,18 @@ public static class StrategicRedeployment
     {
         if (army is null || !army.IsRedeploying) return 1f;
         var defines = campaign?.Defines;
+        // The step's share of the day, not the day. This was written when a step was a day,
+        // and at the shipped hourly step it charged a whole day's price every hour: a trip of
+        // three provinces cost a division 93 % of its organisation, which made the railways
+        // the most exhausting way there was of getting anywhere.
+        var share = campaign?.TickScale ?? 1f;
         army.Organisation = M.Clamp01(army.Organisation -
-            (defines?.RailRedeploymentOrganisationPerDay ?? OrganisationPerDay));
+            (defines?.RailRedeploymentOrganisationPerDay ?? OrganisationPerDay) * share);
         // Nothing dug in survives being loaded onto a train, and a plan made for one part of
-        // the front is not a plan for the other end of it.
+        // the front is not a plan for the other end of it. Halved per day on the trains, the
+        // same at any step.
         army.Entrenchment = 0f;
-        army.Planning = M.Clamp01(army.Planning * 0.5f);
+        army.Planning = M.Clamp01(army.Planning * MathF.Pow(0.5f, share));
         return defines?.RailRedeploymentSpeed ?? SpeedMultiplier;
     }
 }
