@@ -246,26 +246,79 @@ public partial class DealOrForceGame
         SaveToSlot($"campaign_{DateTime.Now:yyyyMMdd_HHmmss}", displayName: name);
     }
 
-    private void SaveToSlot(string slot, bool autosave = false, string displayName = null)
+    /// <summary>The save still being written, if one is. Completed when there is none.</summary>
+    private System.Threading.Tasks.Task _pendingSave = System.Threading.Tasks.Task.CompletedTask;
+
+    /// <summary>
+    /// Take the save on this frame and write it on a worker.
+    ///
+    /// The snapshot has to be taken here, because it reads the live world; compressing,
+    /// checksumming and writing it do not, and they were most of the cost - the frame that
+    /// autosaved a five-year campaign froze for close to three seconds, and every month the
+    /// freeze was longer. Now the frame pays for the snapshot only.
+    ///
+    /// One write at a time. An autosave that falls due while the last save is still being
+    /// written is skipped - the next is a month away - and a save the player asked for waits
+    /// for it, so two writes never race for one file.
+    /// </summary>
+    private async void SaveToSlot(string slot, bool autosave = false, string displayName = null)
     {
         if (_campaign?.Player is null) return;
+        if (!_pendingSave.IsCompleted)
+        {
+            if (autosave) return;
+            WaitForPendingSave();
+        }
+
+        SaveSystem.PreparedSave prepared;
         try
         {
-            var metadata = SaveSystem.Save(SaveRoot, slot, _campaign, ModFingerprint,
+            prepared = SaveSystem.Prepare(SaveRoot, slot, _campaign, ModFingerprint,
                 string.IsNullOrWhiteSpace(displayName)
                     ? $"{_campaign.Player.DisplayName} · {_campaign.Date.Display()}"
                     : displayName,
                 autosave);
+        }
+        catch (Exception exception)
+        {
+            ReportSaveFailure(exception);
+            return;
+        }
+
+        if (IsInstanceValid(_saveStatus)) _saveStatus.Text = Tr("Saving…");
+        var write = System.Threading.Tasks.Task.Run(prepared.Commit);
+        _pendingSave = write;
+        try
+        {
+            var metadata = await write;
+            if (!IsInstanceValid(_saveStatus)) return;
             _saveStatus.Text = Simulation.Loc.Format("Saved {0} on {1}.", metadata.NationName, metadata.GameDate);
             if (!autosave) PlayStrategicCue("save_complete");
             if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
         }
         catch (Exception exception)
         {
-            DiagnosticLogs.Write("errors", $"SAVE_EXCEPTION {exception}");
-            _saveStatus.Text = Simulation.Loc.Format("Save failed: {0}", exception.Message);
-            GD.PushError(_saveStatus.Text);
+            ReportSaveFailure(exception);
         }
+    }
+
+    private void ReportSaveFailure(Exception exception)
+    {
+        DiagnosticLogs.Write("errors", $"SAVE_EXCEPTION {exception}");
+        var message = Simulation.Loc.Format("Save failed: {0}", exception.Message);
+        if (IsInstanceValid(_saveStatus)) _saveStatus.Text = message;
+        GD.PushError(message);
+    }
+
+    /// <summary>
+    /// Let a save that is still being written finish. Before a load, which may be reading the
+    /// file it is writing, and before the game closes, which would otherwise leave the player
+    /// with the save they asked for a moment ago never written.
+    /// </summary>
+    private void WaitForPendingSave()
+    {
+        try { _pendingSave.Wait(TimeSpan.FromSeconds(30)); }
+        catch (Exception) { /* SaveToSlot has already reported it */ }
     }
 
     private async void LoadFromSlot(string slot)
@@ -287,6 +340,7 @@ public partial class DealOrForceGame
 
     private async System.Threading.Tasks.Task RestoreCampaignFromSlot(string slot)
     {
+        WaitForPendingSave();
         var result = SaveSystem.Load(SaveRoot, slot, ModFingerprint);
         DiagnosticLogs.Write(result.Success ? "system" : "errors", $"LOAD_RESULT slot={slot} success={result.Success} detail={result.Warning}");
         if (!result.Success)

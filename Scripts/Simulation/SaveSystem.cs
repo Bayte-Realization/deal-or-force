@@ -107,25 +107,30 @@ public static class SaveSystem
     }
 
     public static SaveMetadata Save(string root, string slot, Campaign campaign, string modFingerprint,
+        string displayName = "", bool autosave = false) =>
+        Prepare(root, slot, campaign, modFingerprint, displayName, autosave).Commit();
+
+    /// <summary>
+    /// The half of saving that reads the campaign, and so has to happen where the campaign is
+    /// safe to read: the snapshot and its JSON. Everything after that - compressing it, its
+    /// checksum, the disk - touches only these bytes, and is <see cref="PreparedSave.Commit"/>,
+    /// which may run on any thread.
+    ///
+    /// Split because the second half was most of the cost. A five-year save was 2.9 seconds on
+    /// the frame that took it, 2.1 of them in the compressor, and that was the freeze that came
+    /// back every thirty days and grew with the campaign.
+    /// </summary>
+    public static PreparedSave Prepare(string root, string slot, Campaign campaign, string modFingerprint,
         string displayName = "", bool autosave = false)
     {
-        using var timing = SimProfiler.Measure("save.write");
+        using var timing = SimProfiler.Measure("save.prepare");
         DiagnosticLogs.Write("system", $"SAVE_BEGIN slot={SafeSlot(slot)} autosave={autosave} day={campaign?.ElapsedDays}");
         if (campaign?.Player is null) throw new InvalidOperationException("No active campaign to save.");
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null || campaign.ProvinceOccupation is null)
             throw new InvalidOperationException("The tactical map is still being prepared; try saving again in a moment.");
-        Directory.CreateDirectory(root);
         slot = SafeSlot(slot);
         var payload = CampaignSave.Capture(campaign, modFingerprint);
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
-        byte[] compressed;
-        using (var memory = new MemoryStream())
-        {
-            using (var gzip = new GZipStream(memory, CompressionLevel.SmallestSize, true))
-                gzip.Write(json);
-            compressed = memory.ToArray();
-        }
-
         var metadata = new SaveMetadata
         {
             Slot = slot,
@@ -138,15 +143,51 @@ public static class SaveSystem
             MapDataVersion = MapDataVersion,
             ProvinceCount = payload.ProvinceCount,
             ModFingerprint = modFingerprint ?? "",
-            Checksum = Convert.ToHexString(SHA256.HashData(compressed)),
-            CompressedBytes = compressed.LongLength,
             IsAutosave = autosave
         };
+        return new PreparedSave(root, slot, json, metadata);
+    }
 
-        AtomicWrite(DataPath(root, slot), compressed);
-        AtomicWrite(MetaPath(root, slot), JsonSerializer.SerializeToUtf8Bytes(metadata, MetadataOptions));
-        DiagnosticLogs.Write("system", $"SAVE_END slot={slot} bytes={compressed.LongLength} checksum={metadata.Checksum} format={FormatVersion} map={MapDataVersion}");
-        return metadata;
+    /// <summary>A save that has been taken but not yet written. See <see cref="Prepare"/>.</summary>
+    public sealed class PreparedSave
+    {
+        private readonly string _root;
+        private readonly string _slot;
+        private readonly byte[] _json;
+
+        internal PreparedSave(string root, string slot, byte[] json, SaveMetadata metadata)
+        {
+            _root = root;
+            _slot = slot;
+            _json = json;
+            Metadata = metadata;
+        }
+
+        public SaveMetadata Metadata { get; }
+
+        /// <summary>
+        /// Compress, checksum and write. Safe on any thread: it reads nothing but its own bytes.
+        /// An autosave is compressed for speed rather than for size - a tenth larger, in less
+        /// than half the time - because it is taken every month and read almost never.
+        /// </summary>
+        public SaveMetadata Commit()
+        {
+            Directory.CreateDirectory(_root);
+            byte[] compressed;
+            using (var memory = new MemoryStream())
+            {
+                using (var gzip = new GZipStream(memory,
+                           Metadata.IsAutosave ? CompressionLevel.Optimal : CompressionLevel.SmallestSize, true))
+                    gzip.Write(_json);
+                compressed = memory.ToArray();
+            }
+            Metadata.Checksum = Convert.ToHexString(SHA256.HashData(compressed));
+            Metadata.CompressedBytes = compressed.LongLength;
+            AtomicWrite(DataPath(_root, _slot), compressed);
+            AtomicWrite(MetaPath(_root, _slot), JsonSerializer.SerializeToUtf8Bytes(Metadata, MetadataOptions));
+            DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} bytes={compressed.LongLength} json_bytes={_json.LongLength} checksum={Metadata.Checksum} format={FormatVersion} map={MapDataVersion}");
+            return Metadata;
+        }
     }
 
     /// <summary>Compact authoritative snapshot used for joining and resynchronising LAN peers.</summary>

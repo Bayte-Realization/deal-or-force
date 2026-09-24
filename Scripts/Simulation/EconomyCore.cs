@@ -72,6 +72,8 @@ public enum BuildingKind
 /// and what they do for a living - are facts about the simulation rather than captions on
 /// a screen.
 /// </summary>
+/// <remarks>Saved as a row of values: see <see cref="PopulationGroupConverter"/>.</remarks>
+[System.Text.Json.Serialization.JsonConverter(typeof(PopulationGroupConverter))]
 public sealed class PopulationGroup
 {
     /// <summary>How well off they are. See <see cref="SocialClass"/>.</summary>

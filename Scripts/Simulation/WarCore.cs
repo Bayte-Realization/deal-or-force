@@ -385,11 +385,19 @@ public static partial class FrontPlanner
         foreach (var nationId in war.Side(false)) AssignSide(campaign, war, nationId, false);
     }
 
-    public static void UpdateAiExecution(Campaign campaign, StrategicWar war)
+    public static void UpdateAiExecution(Campaign campaign, StrategicWar war) =>
+        UpdateAiExecution(campaign, war, campaign.Armies);
+
+    /// <param name="assigned">
+    /// The divisions assigned to this war, in the order the world lists them - the advance
+    /// pass has them indexed already. Walking every division in the world for every war, every
+    /// hour, to find the same few hundred was a third of what the advance pass cost.
+    /// </param>
+    public static void UpdateAiExecution(Campaign campaign, StrategicWar war, List<Army> assigned)
     {
         // Filtered by hand: the lambda captured the war, so this was a fresh closure and a
         // fresh enumerator for every one of the world's wars, every day.
-        foreach (var army in campaign.Armies)
+        foreach (var army in assigned)
         {
             if (army.AssignedWarId != war.Id || army.PlanActive) continue;
             if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) continue;

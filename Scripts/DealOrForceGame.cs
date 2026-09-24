@@ -110,10 +110,11 @@ public partial class DealOrForceGame : Control
         // has to be written every frame rather than when something is pressed.
         if (_freeCameraMode) RefreshFreeCameraReadout();
         NetworkProcess(delta);
+        // Everything that happened since the interface last drew, drawn once - for a network
+        // client as well, whose world arrives by the host's steps rather than its own.
+        if (_campaign is not null) FlushInterfaceIfDue(delta);
         if (IsNetworkClient) { if (_campaign is not null) ReportFrameCost(delta); return; }
         if (_campaign is null) return;
-        // Everything that happened since the last frame, drawn once.
-        _campaign.FlushInterfaceChanges();
         // Reported whether or not time is running: a measurement that only arrives when
         // everything is already going well is no use for finding out why it is not.
         ReportFrameCost(delta);

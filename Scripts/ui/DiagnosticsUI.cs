@@ -26,6 +26,9 @@ public partial class DealOrForceGame
 
     public override void _ExitTree()
     {
+        // A save still being written finishes before the game goes: it is the one the player
+        // just asked for, or the month's autosave, and quitting is not a reason to lose it.
+        WaitForPendingSave();
         if (_engineLog is not null) { OS.RemoveLogger(_engineLog); _engineLog.Dispose(); _engineLog = null; }
         DiagnosticLogs.Stop();
     }

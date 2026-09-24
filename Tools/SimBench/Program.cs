@@ -77,8 +77,25 @@ public static class Program
         // `--flags` checks only the flags every country opens under - seconds, not a bench run.
         if (Array.IndexOf(args, "--flags") >= 0)
             return Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
+        if (Array.IndexOf(args, "--rows") >= 0)
+            return Check("a save row carries every field", ASaveRowCarriesEveryField());
 
         var mapped = AttachMap(campaign);
+
+        // `--profile N` plays N days of the world and prints where the time went, by total
+        // time rather than by garbage - which pass to make faster, not which one to make
+        // tidier. Minutes rather than the half hour a full run takes, and nothing else runs
+        // alongside it, so the numbers are the campaign's and not every sandbox's in the file.
+        // `--save-cost N` plays N days and then takes an autosave apart: what each stage of
+        // writing it costs, and which parts of the world make the file the size it is.
+        var saveCostAt = Array.IndexOf(args, "--save-cost");
+        if (saveCostAt >= 0) return SaveCost(campaign,
+            saveCostAt + 1 < args.Length && int.TryParse(args[saveCostAt + 1], out var saveDays) ? saveDays : 365);
+
+        var profileAt = Array.IndexOf(args, "--profile");
+        if (profileAt >= 0) return Profile(campaign,
+            profileAt + 1 < args.Length && int.TryParse(args[profileAt + 1], out var profileDays) ? profileDays : 120);
+
         var frontBefore = new FrontSnapshot(campaign);
 
         var failures = 0;
@@ -145,6 +162,7 @@ public static class Program
         failures += Check("a decade of wars does not shred the map", ADecadeOfWarsDoesNotShredTheMap());
         failures += Check("a proclaimed state flies its own flag", AProclaimedStateFliesItsOwnFlag(campaign));
         failures += Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
+        failures += Check("a save row carries every field", ASaveRowCarriesEveryField());
         failures += Check("every folder of data is read by something", EveryFolderOfDataIsRead());
         failures += Check("the interface composes its prose through the table",
             TheInterfaceComposesThroughTheTable());
@@ -362,6 +380,115 @@ public static class Program
             ? "All checks passed."
             : $"{failures} check(s) FAILED.");
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Days of the world with the profiler reset first, reported by total time. Each pass is
+    /// shown with its share of the whole, its mean cost and how often it ran - a cheap pass
+    /// run every hour and a dear one run every month look the same in a mean and nothing
+    /// alike in a total.
+    /// </summary>
+    private static int Profile(Campaign campaign, int days)
+    {
+        campaign.IsPaused = false;
+        for (var day = 0; day < 3; day++) campaign.TickDay();   // warm the JIT and the caches
+        SimProfiler.Reset();
+        GC.Collect();
+        var allocatedBefore = GC.GetTotalAllocatedBytes(true);
+        var run = Stopwatch.StartNew();
+        for (var day = 0; day < days; day++) campaign.TickDay();
+        run.Stop();
+        var allocated = GC.GetTotalAllocatedBytes(true) - allocatedBefore;
+        Console.WriteLine($"Profile: {days} day(s) in {run.ElapsedMilliseconds:N0} ms, " +
+                          $"{run.Elapsed.TotalMilliseconds / days:0.00} ms a day, " +
+                          $"{allocated / days / 1024.0:N0} kB a day; {campaign.Wars.Count(war => !war.Ended)} war(s) open, " +
+                          $"{campaign.Armies.Count:N0} division(s).");
+        var total = Math.Max(0.001, run.Elapsed.TotalMilliseconds);
+        foreach (var sample in SimProfiler.All.OrderByDescending(entry => entry.TotalMilliseconds))
+            Console.WriteLine($"  {sample.Name,-20} {sample.TotalMilliseconds,10:N0} ms  " +
+                              $"{sample.TotalMilliseconds / total,6:P1}  " +
+                              $"{sample.MeanMilliseconds,8:0.000} ms/run  ×{sample.Runs:N0}  " +
+                              $"{sample.AllocatedBytes / 1_048_576.0,8:0.0} MB");
+        // The world it ended in, as one number: an optimisation that is meant to change how
+        // fast the world runs and nothing else has to end in the same one.
+        Console.WriteLine($"  world fingerprint after {campaign.ElapsedDays} day(s): {CampaignFingerprint.Of(campaign):X16}");
+        return 0;
+    }
+
+    private static int SaveCost(Campaign campaign, int days)
+    {
+        campaign.IsPaused = false;
+        for (var day = 0; day < days; day++) campaign.TickDay();
+        var folder = Path.Combine(Path.GetTempPath(), "dof_save_cost");
+        Directory.CreateDirectory(folder);
+        var watch = Stopwatch.StartNew();
+        var prepared = SaveSystem.Prepare(folder, "probe", campaign, "", "probe", true);
+        var prepareMs = watch.Elapsed.TotalMilliseconds;
+        var metadata = prepared.Commit();
+        var saveMs = watch.Elapsed.TotalMilliseconds;
+        Console.WriteLine($"  on the frame: {prepareMs:N0} ms (snapshot and JSON); on a worker: {saveMs - prepareMs:N0} ms " +
+                          "(compress, checksum, write).");
+        var compressed = File.ReadAllBytes(Path.Combine(folder, "probe.bdfsave"));
+        byte[] json;
+        using (var input = new MemoryStream(compressed))
+        using (var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress))
+        using (var output = new MemoryStream())
+        {
+            gzip.CopyTo(output);
+            json = output.ToArray();
+        }
+        Console.WriteLine($"Save after {days} day(s): {saveMs:N0} ms in all, {compressed.Length / 1048576.0:0.0} MB written, " +
+                          $"{json.Length / 1048576.0:0.0} MB of JSON.");
+        foreach (var level in new[] { System.IO.Compression.CompressionLevel.SmallestSize,
+                     System.IO.Compression.CompressionLevel.Optimal, System.IO.Compression.CompressionLevel.Fastest })
+        {
+            watch.Restart();
+            using var memory = new MemoryStream();
+            using (var gzip = new System.IO.Compression.GZipStream(memory, level, true)) gzip.Write(json);
+            Console.WriteLine($"  gzip {level,-12} {watch.Elapsed.TotalMilliseconds,7:N0} ms  {memory.Length / 1048576.0,6:0.0} MB");
+        }
+        watch.Restart();
+        using (var document = System.Text.Json.JsonDocument.Parse(json))
+        {
+            Console.WriteLine($"  parse {watch.Elapsed.TotalMilliseconds:N0} ms. Largest parts:");
+            var parts = document.RootElement.EnumerateObject()
+                .Select(property => (property.Name, Bytes: property.Value.GetRawText().Length,
+                    Count: property.Value.ValueKind == System.Text.Json.JsonValueKind.Array ? property.Value.GetArrayLength() : -1))
+                .OrderByDescending(part => part.Bytes).Take(14);
+            foreach (var (name, bytes, count) in parts)
+                Console.WriteLine($"    {name,-28} {bytes / 1048576.0,7:0.00} MB{(count >= 0 ? $"  ({count:N0} items)" : "")}");
+            // Inside the two largest collections: which fields of an item are carrying it.
+            foreach (var collection in new[] { "States", "Nations" })
+            {
+                if (!document.RootElement.TryGetProperty(collection, out var items) ||
+                    items.ValueKind != System.Text.Json.JsonValueKind.Array) continue;
+                var fields = new Dictionary<string, long>();
+                foreach (var item in items.EnumerateArray())
+                    if (item.ValueKind == System.Text.Json.JsonValueKind.Object)
+                        foreach (var field in item.EnumerateObject())
+                            fields[field.Name] = fields.GetValueOrDefault(field.Name) + field.Value.GetRawText().Length + field.Name.Length + 3;
+                Console.WriteLine($"  in {collection}: " + string.Join(", ", fields.OrderByDescending(entry => entry.Value).Take(8)
+                    .Select(entry => $"{entry.Key} {entry.Value / 1048576.0:0.00} MB")));
+            }
+        }
+        // And back: the file just written, and - when one is named - a save written by an
+        // older build, which has to load exactly as it did.
+        foreach (var (label, root, slot) in new[] { ("this build's", folder, "probe") }
+                     .Concat(Environment.GetEnvironmentVariable("DOF_OLD_SAVE") is { Length: > 0 } old
+                         ? new[] { ("an older build's", Path.GetDirectoryName(old)!, Path.GetFileNameWithoutExtension(old)) }
+                         : Array.Empty<(string, string, string)>()))
+        {
+            watch.Restart();
+            var loaded = SaveSystem.Load(root, slot, "");
+            var samples = loaded.Campaign?.Nations.Sum(nation => loaded.Campaign.History.ForNation(nation.Id).Count) ?? 0;
+            var russia = loaded.Campaign?.NationByTag("RUS");
+            var last = russia is null ? default : loaded.Campaign.History.ForNation(russia.Id).LastOrDefault();
+            Console.WriteLine($"  load {label} save: {(loaded.Success ? "ok" : "FAILED " + loaded.Warning)} in " +
+                              $"{watch.Elapsed.TotalMilliseconds:N0} ms; {samples:N0} history sample(s), RUS last week " +
+                              $"day {last.Day} GDP {last.Gdp:0.00} treasury {last.Treasury:0.00} arms index {last.ArmsPriceIndex:0.00}");
+        }
+        _ = metadata;
+        return 0;
     }
 
     private static int Check(string description, string failure)
@@ -8418,6 +8545,50 @@ public static class Program
             return $"{wrong.Count} of {owned} countries open under somebody else's flag: " + string.Join("; ", wrong.Take(6));
         Console.WriteLine($"  flags: all {owned} countries with a flag of their own open under it (or a variant of it).");
         return "";
+    }
+
+    /// <summary>
+    /// The records a save writes as rows (Simulation/SaveRows.cs) come back whole.
+    ///
+    /// A row is written field by field, by hand, so a field added to the type and not to its
+    /// row would be saved as nothing at all - and nothing would say so until a loaded campaign
+    /// had quietly lost it. Every public field gets a value of its own here, goes through the
+    /// converter and back, and has to come back as it went.
+    /// </summary>
+    private static string ASaveRowCarriesEveryField()
+    {
+        var wrong = new List<string>();
+
+        var group = new PopulationGroup();
+        var fields = typeof(PopulationGroup).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+        for (var index = 0; index < fields.Length; index++) fields[index].SetValue(group, Distinct(fields[index].FieldType, index));
+        var groupBack = JsonSerializer.Deserialize<PopulationGroup>(JsonSerializer.Serialize(group));
+        foreach (var field in fields)
+            if (!Equals(field.GetValue(group), field.GetValue(groupBack)))
+                wrong.Add($"PopulationGroup.{field.Name}");
+
+        var constructor = typeof(NationHistorySample).GetConstructors().OrderByDescending(c => c.GetParameters().Length).First();
+        var arguments = constructor.GetParameters().Select((parameter, index) => Distinct(parameter.ParameterType, index)).ToArray();
+        var sample = (NationHistorySample)constructor.Invoke(arguments);
+        var sampleBack = JsonSerializer.Deserialize<NationHistorySample>(JsonSerializer.Serialize(sample));
+        foreach (var property in typeof(NationHistorySample).GetProperties())
+            if (property.GetIndexParameters().Length == 0 && !Equals(property.GetValue(sample), property.GetValue(sampleBack)))
+                wrong.Add($"NationHistorySample.{property.Name}");
+
+        if (wrong.Count > 0)
+            return $"{wrong.Count} field(s) do not survive their save row: {string.Join(", ", wrong)} - add them to Simulation/SaveRows.cs";
+        Console.WriteLine($"  save rows: all {fields.Length} fields of a people and {arguments.Length} of a history week come back as they went.");
+        return "";
+
+        static object Distinct(Type type, int index) =>
+            type == typeof(string) ? $"value{index}" :
+            type == typeof(int) ? 1000 + index :
+            type == typeof(long) ? 1_000_000L + index :
+            type == typeof(float) ? 0.125f + index :
+            type == typeof(double) ? 0.25 + index :
+            type == typeof(bool) ? true :
+            type.IsEnum ? Enum.GetValues(type).GetValue(Math.Min(1, Enum.GetValues(type).Length - 1))! :
+            throw new InvalidOperationException($"no distinct value for {type.Name}");
     }
 
     private static string AProclaimedStateFliesItsOwnFlag(Campaign campaign)

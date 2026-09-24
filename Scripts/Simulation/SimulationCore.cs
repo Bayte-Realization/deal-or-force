@@ -727,7 +727,30 @@ public sealed partial class Campaign
         if (DiagnosticLogs.Enabled)
             DiagnosticLogs.Write("simulation", $"DAY_END date={Date} player={Player?.Tag} divisions={Armies.Count} fleets={Fleets.Count} wars={Wars.Count(w => !w.Ended)} battles={Battles.Count(b => !b.Ended)} training={Recruitment.Count} construction={Construction.Count} treasury={DiagnosticLogs.N(Player?.Treasury ?? 0)} gdp={DiagnosticLogs.N(Player?.Gdp ?? 0)} map_revision={MapRevision}");
 
-        Changed?.Invoke();
+        // The interface redraws what changed when it next draws (FlushInterfaceChanges), not
+        // once a step. At the hourly step a frame at top speed runs several steps, and every
+        // one of them redrew the whole interface - the top bar, the side panel, two hundred
+        // and sixty names on the map - to show a state the player saw for no frame at all.
+        //
+        // What cannot wait for the frame is whatever stops the clock: an event or an offer
+        // put to a player is answered by the interface pausing, and the step after it would
+        // be a step too many.
+        if (SomethingAwaitsAPlayer()) Changed?.Invoke();
+        else InterfaceDirty = true;
+    }
+
+    private bool SomethingAwaitsAPlayer()
+    {
+        if (HumanSeats.Count == 0) return false;
+        foreach (var pending in PendingEvents)
+            if (HumanSeats.Contains(pending.NationId)) return true;
+        foreach (var war in Wars)
+        {
+            if (war.Ended || war.PendingOfferFromId < 0) continue;
+            foreach (var seat in HumanSeats)
+                if (PeaceOffers.AwaitingAnswer(war, seat)) return true;
+        }
+        return false;
     }
 
     public void SetPlayer(int nationId)

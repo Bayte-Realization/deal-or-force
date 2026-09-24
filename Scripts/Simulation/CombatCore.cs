@@ -228,7 +228,7 @@ public static partial class Warfare
             foreach (var war in campaign.Wars)
             {
                 if (war.Ended) continue;
-                FrontPlanner.UpdateAiExecution(campaign, war);
+                FrontPlanner.UpdateAiExecution(campaign, war, In(ByWar, war.Id));
                 ResolveAdvances(campaign, war);
             }
 

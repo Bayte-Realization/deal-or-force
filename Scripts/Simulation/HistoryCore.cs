@@ -8,7 +8,10 @@ namespace DealOrForce.Simulation;
 /// Compact weekly telemetry used by the ledger, tooltips, AI diagnostics and saves.
 /// It deliberately stores values instead of presentation-ready strings so mods and
 /// alternative frontends can reuse the same deterministic history.
+///
+/// Saved as a row of numbers rather than an object: see <see cref="NationHistorySampleConverter"/>.
 /// </summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(NationHistorySampleConverter))]
 public readonly record struct NationHistorySample(
     int Day,
     float Gdp,

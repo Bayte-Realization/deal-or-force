@@ -11,6 +11,15 @@ public sealed class ProvinceVision
     internal readonly Queue<int> Frontier = new();
     internal readonly HashSet<int> CombatContacts = new();
     internal int Stamp;
+
+    // What the country's own ground reveals, kept between rebuilds. It is most of a rebuild
+    // - every province the country holds, flooded outwards - and it only changes when who
+    // holds what changes, while everything else here (armies, battles, landings) moves by
+    // the hour. Kept with the exact controller map it was built from, compared whole.
+    internal byte[] TerritoryReach = Array.Empty<byte>();
+    internal ushort[] TerritoryControllers = Array.Empty<ushort>();
+    internal int TerritoryMapIndex = -1;
+    internal int TerritoryDepth = -1;
     public int Revision { get; internal set; }
     public bool Sees(int province) => province > 0 && province < Reach.Length && Reach[province] > 0;
 }
@@ -57,8 +66,39 @@ public static partial class CampaignIntel
             view.Reach[province] = (byte)(depth + 1);
             view.Frontier.Enqueue(province);
         }
-        for (var p = 1; p < controllers.Length; p++)
-            if (controllers[p] == nation.MapIndex) Reveal(p, borderDepth);
+        void Flood()
+        {
+            while (view.Frontier.Count > 0)
+            {
+                var p = view.Frontier.Dequeue();
+                var nextDepth = view.Reach[p] - 2;
+                if (nextDepth < 0) continue;
+                foreach (var next in map.Neighbors[p]) Reveal(next, nextDepth);
+            }
+        }
+
+        // The ground first, from the copy when nobody's ground has changed hands since. The
+        // flood is a maximum - each province keeps the deepest reach anything gives it - so
+        // flooding the armies over a finished territory arrives exactly where flooding
+        // everything at once did.
+        if (view.TerritoryMapIndex == nation.MapIndex && view.TerritoryDepth == borderDepth &&
+            view.TerritoryReach.Length == view.Reach.Length &&
+            controllers.AsSpan().SequenceEqual(view.TerritoryControllers))
+        {
+            Array.Copy(view.TerritoryReach, view.Reach, view.Reach.Length);
+        }
+        else
+        {
+            for (var p = 1; p < controllers.Length; p++)
+                if (controllers[p] == nation.MapIndex) Reveal(p, borderDepth);
+            Flood();
+            if (view.TerritoryReach.Length != view.Reach.Length) view.TerritoryReach = new byte[view.Reach.Length];
+            Array.Copy(view.Reach, view.TerritoryReach, view.Reach.Length);
+            if (view.TerritoryControllers.Length != controllers.Length) view.TerritoryControllers = new ushort[controllers.Length];
+            Array.Copy(controllers, view.TerritoryControllers, controllers.Length);
+            view.TerritoryMapIndex = nation.MapIndex;
+            view.TerritoryDepth = borderDepth;
+        }
         foreach (var army in c.Armies)
             if (army.NationId == viewerId) Reveal(army.ProvinceId, armyDepth);
         foreach (var battle in c.Battles)
@@ -81,13 +121,7 @@ public static partial class CampaignIntel
                 Math.Clamp(c.Defines.LandingVisionRangeDegrees, .1f, 3f))
                 Reveal(fleet.TargetProvinceId, armyDepth);
         }
-        while (view.Frontier.Count > 0)
-        {
-            var p = view.Frontier.Dequeue();
-            var nextDepth = view.Reach[p] - 2;
-            if (nextDepth < 0) continue;
-            foreach (var next in map.Neighbors[p]) Reveal(next, nextDepth);
-        }
+        Flood();
         return view;
     }
 
