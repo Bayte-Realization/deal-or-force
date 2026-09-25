@@ -1,0 +1,70 @@
+// Kyrgyzstan (KGZ) on 1 January 2024: 7 regions, 6,456,900 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Batken
+  "kg_b": {
+    "population": 527029,
+    "urbanization": 0.05,
+    "cultures": { "kyrgyz": 0.734, "uzbek": 0.1478, "russian": 0.0562, "hui": 0.011, "tajik": 0.009, "uyghur": 0.009, "turkish": 0.007, "kazakh": 0.006, "tatar": 0.005, "azerbaijani": 0.003, "german": 0.003, "korean": 0.003, "kurdish": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.121, "Coal": 0.347, "Oil": 0.597, "IronOre": 0.26, "RareEarths": 0.045, "NaturalGas": 0.438, "Timber": 1.153, "Bauxite": 0.048, "Uranium": 0.006 }
+  },
+  // Chuy
+  "kg_c": {
+    "population": 1816671,
+    "urbanization": 0.69,
+    "cultures": { "kyrgyz": 0.734, "uzbek": 0.1478, "russian": 0.0562, "hui": 0.011, "tajik": 0.009, "uyghur": 0.009, "turkish": 0.007, "kazakh": 0.006, "tatar": 0.005, "azerbaijani": 0.003, "german": 0.003, "korean": 0.003, "kurdish": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.758, "Coal": 0.533, "Oil": 0.77, "IronOre": 0.418, "RareEarths": 0.081, "NaturalGas": 0.726, "Timber": 1.919, "Bauxite": 0.187, "Uranium": 0.015 }
+  },
+  // Issyk-Kul
+  "kg_y": {
+    "population": 678266,
+    "urbanization": 0.23,
+    "cultures": { "kyrgyz": 0.734, "uzbek": 0.1478, "russian": 0.0562, "hui": 0.011, "tajik": 0.009, "uyghur": 0.009, "turkish": 0.007, "kazakh": 0.006, "tatar": 0.005, "azerbaijani": 0.003, "german": 0.003, "korean": 0.003, "kurdish": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.754, "Coal": 0.59, "Oil": 0.348, "IronOre": 0.161, "RareEarths": 0.059, "NaturalGas": 0.838, "Timber": 1.035, "Bauxite": 0.124, "Uranium": 0.01 }
+  },
+  // Jalal-Abad
+  "kg_j": {
+    "population": 1284741,
+    "urbanization": 0.3,
+    "cultures": { "kyrgyz": 0.734, "uzbek": 0.1478, "russian": 0.0562, "hui": 0.011, "tajik": 0.009, "uyghur": 0.009, "turkish": 0.007, "kazakh": 0.006, "tatar": 0.005, "azerbaijani": 0.003, "german": 0.003, "korean": 0.003, "kurdish": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.484, "Coal": 0.323, "Oil": 0.515, "IronOre": 0.259, "RareEarths": 0.057, "NaturalGas": 0.427, "Timber": 2.956, "Bauxite": 0.054, "Uranium": 0.009 }
+  },
+  // Naryn
+  "kg_n": {
+    "population": 751584,
+    "urbanization": 0.11,
+    "cultures": { "kyrgyz": 0.734, "uzbek": 0.1478, "russian": 0.0562, "hui": 0.011, "tajik": 0.009, "uyghur": 0.009, "turkish": 0.007, "kazakh": 0.006, "tatar": 0.005, "azerbaijani": 0.003, "german": 0.003, "korean": 0.003, "kurdish": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.343, "Coal": 0.208, "Oil": 0.441, "IronOre": 0.165, "RareEarths": 0.068, "NaturalGas": 0.298, "Timber": 0.921, "Bauxite": 0.06, "Uranium": 0.006 }
+  },
+  // Osh
+  "kg_o": {
+    "population": 1149523,
+    "urbanization": 0.41,
+    "cultures": { "kyrgyz": 0.734, "uzbek": 0.1478, "russian": 0.0562, "hui": 0.011, "tajik": 0.009, "uyghur": 0.009, "turkish": 0.007, "kazakh": 0.006, "tatar": 0.005, "azerbaijani": 0.003, "german": 0.003, "korean": 0.003, "kurdish": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.079, "Coal": 0.534, "Oil": 0.402, "IronOre": 0.359, "RareEarths": 0.059, "NaturalGas": 0.547, "Timber": 0.877, "Bauxite": 0.156, "Uranium": 0.016 }
+  },
+  // Talas
+  "kg_t": {
+    "population": 249086,
+    "urbanization": 0.17,
+    "cultures": { "kyrgyz": 0.734, "uzbek": 0.1478, "russian": 0.0562, "hui": 0.011, "tajik": 0.009, "uyghur": 0.009, "turkish": 0.007, "kazakh": 0.006, "tatar": 0.005, "azerbaijani": 0.003, "german": 0.003, "korean": 0.003, "kurdish": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.917, "Coal": 0.448, "Oil": 0.751, "IronOre": 0.239, "RareEarths": 0.087, "NaturalGas": 0.586, "Timber": 0.868, "Bauxite": 0.118, "Uranium": 0.012 }
+  }
+}

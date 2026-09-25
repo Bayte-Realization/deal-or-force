@@ -443,9 +443,10 @@ public static class EconomySystem
         // a catalogue that loads lazily loads after the first thing that needed it.
         var restingInflation = InflationCore.Weights.Base;
 
-        // How many people history/states says live in a region. The map's own figures are one
-        // number a country, and dealing that out almost evenly put as many people in Magadan
-        // as in Moscow; the regions' figures are in history/states/2024/20_population.json.
+        // What history/states says each region has: its people, how many of them live in towns,
+        // who they are, what is built there and what lies under the ground. The map's own figure
+        // is one number a country, and dealing that out almost evenly put as many people in
+        // Magadan as in Moscow; the regions are written down in history/states/2024/<TAG>.json.
         var written = HistoryDataLoader.StatedRegions(campaign);
 
         foreach (var nation in campaign.Nations)
@@ -544,12 +545,36 @@ public static class EconomySystem
                     ? share
                     : StateUrbanisation(nation, states[index].MapIndex);
 
-            var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts);
+            // Who lives there, as history writes it where it does: a region's own list is its
+            // people, and only the rest are worked out from the country.
+            var peoples = new IReadOnlyList<(string Culture, float Share)>[states.Length];
+            for (var index = 0; index < states.Length; index++)
+                peoples[index] = written.TryGetValue(states[index].MapIndex, out var figures) ? figures.Cultures : null;
+            var composition = DemographyCatalog.AllocateCultures(nation.Tag, states, counts, peoples);
             var farming = StatedAgricultureScale(nation, states, counts, urban);
             var buildings = SeedBuildings(campaign, nation, states, counts, urban);
             for (var index = 0; index < states.Length; index++)
-                SeedState(campaign, states[index], nation, counts[index], composition[index], farming, buildings[index],
+            {
+                var state = states[index];
+                SeedState(campaign, state, nation, counts[index], composition[index], farming, buildings[index],
                     urban[index]);
+                if (!written.TryGetValue(state.MapIndex, out var figures)) continue;
+                state.DealtCultures = figures.Cultures is { Count: > 0 } ? HistoryDataLoader.MixSignature(figures.Cultures) : null;
+                // What is built and what lies under the ground, as written: the file is the
+                // region, and a building or a deposit it leaves out is not there.
+                if (figures.Buildings is not null)
+                {
+                    state.Buildings.Clear();
+                    foreach (var (kind, level) in figures.Buildings)
+                        if (level > 0) state.Buildings[kind] = level;
+                }
+                if (figures.Resources is not null)
+                {
+                    state.ResourceDeposits.Clear();
+                    foreach (var (commodity, amount) in figures.Resources)
+                        if (amount > 0f) state.ResourceDeposits[commodity] = amount;
+                }
+            }
         }
     }
 

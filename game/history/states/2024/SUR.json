@@ -1,0 +1,30 @@
+// Suriname (SUR) on 1 January 2024: 2 regions, 581,363 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Para
+  "sr_pr": {
+    "population": 388727,
+    "urbanization": 0.81,
+    "cultures": { "surinamese": 0.4, "indian_diaspora": 0.27, "javanese": 0.14, "african_american": 0.11, "native_american": 0.04, "chinese_diaspora": 0.02, "dutch": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.878, "Coal": 0.317, "Oil": 0.462, "IronOre": 0.501, "RareEarths": 0.109, "NaturalGas": 0.432, "Timber": 3.316, "Bauxite": 0.073, "Uranium": 0.016 }
+  },
+  // Sipaliwini
+  "sr_si": {
+    "population": 192636,
+    "urbanization": 0.36,
+    "cultures": { "surinamese": 0.4, "indian_diaspora": 0.27, "javanese": 0.14, "african_american": 0.11, "native_american": 0.04, "chinese_diaspora": 0.02, "dutch": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.124, "Coal": 0.631, "Oil": 0.451, "IronOre": 0.409, "RareEarths": 0.11, "NaturalGas": 0.518, "Timber": 1.61, "Bauxite": 0.09, "Uranium": 0.008 }
+  }
+}

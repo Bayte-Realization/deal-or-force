@@ -1,0 +1,38 @@
+// Netherlands (NLD) on 1 January 2024: 3 regions, 17,332,850 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Drenthe
+  "nl_dr": {
+    "population": 1182459,
+    "urbanization": 0.95,
+    "cultures": { "dutch": 0.8196, "frisian": 0.0304, "turkish": 0.0271, "arab_maghrebi": 0.0261, "surinamese": 0.0228, "german": 0.0152, "javanese": 0.0152, "ukrainian": 0.0132, "polish": 0.013, "flemish": 0.0065, "chinese_diaspora": 0.0054, "english": 0.0054 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.568, "Coal": 0.543, "Oil": 0.638, "IronOre": 0.342, "RareEarths": 0.092, "NaturalGas": 0.66, "Timber": 0.689, "Bauxite": 0.136, "Uranium": 0.015 }
+  },
+  // Gelderland
+  "nl_ge": {
+    "population": 13244989,
+    "urbanization": 0.97,
+    "cultures": { "dutch": 0.8196, "frisian": 0.0304, "turkish": 0.0271, "arab_maghrebi": 0.0261, "surinamese": 0.0228, "german": 0.0152, "javanese": 0.0152, "ukrainian": 0.0132, "polish": 0.013, "flemish": 0.0065, "chinese_diaspora": 0.0054, "english": 0.0054 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.545, "Coal": 0.451, "Oil": 0.32, "IronOre": 0.342, "RareEarths": 0.047, "NaturalGas": 0.412, "Timber": 2.966, "Bauxite": 0.148, "Uranium": 0.017 }
+  },
+  // North Brabant
+  "nl_nb": {
+    "population": 2905402,
+    "urbanization": 0.67,
+    "cultures": { "dutch": 0.8196, "frisian": 0.0304, "turkish": 0.0271, "arab_maghrebi": 0.0261, "surinamese": 0.0228, "german": 0.0152, "javanese": 0.0152, "ukrainian": 0.0132, "polish": 0.013, "flemish": 0.0065, "chinese_diaspora": 0.0054, "english": 0.0054 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 2 },
+    "resources": { "Food": 1.966, "Coal": 0.338, "Oil": 0.32, "IronOre": 0.247, "RareEarths": 0.074, "NaturalGas": 0.451, "Timber": 1.589, "Bauxite": 0.055, "Uranium": 0.007 }
+  }
+}

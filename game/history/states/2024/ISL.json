@@ -1,0 +1,62 @@
+// Iceland (ISL) on 1 January 2024: 6 regions, 361,313 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Austurland
+  "is_7": {
+    "population": 7847,
+    "urbanization": 0.82,
+    "cultures": { "icelandic": 0.81, "polish": 0.06, "lithuanian": 0.012, "danish": 0.01, "english": 0.01, "romanian": 0.01, "tagalog": 0.01, "ukrainian": 0.01, "german": 0.008, "latvian": 0.008, "portuguese": 0.008, "thai": 0.008, "vietnamese": 0.006, "croatian": 0.005, "czech": 0.005, "norwegian": 0.005, "slovak": 0.005, "spanish": 0.005, "swedish": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.843, "Coal": 0.102, "Oil": 0.117, "IronOre": 0.058, "RareEarths": 0.026, "NaturalGas": 0.275, "Timber": 1.136, "Bauxite": 0.032, "Uranium": 0.004 }
+  },
+  // Northeastern
+  "is_6": {
+    "population": 29590,
+    "urbanization": 0.91,
+    "cultures": { "icelandic": 0.81, "polish": 0.06, "lithuanian": 0.012, "danish": 0.01, "english": 0.01, "romanian": 0.01, "tagalog": 0.01, "ukrainian": 0.01, "german": 0.008, "latvian": 0.008, "portuguese": 0.008, "thai": 0.008, "vietnamese": 0.006, "croatian": 0.005, "czech": 0.005, "norwegian": 0.005, "slovak": 0.005, "spanish": 0.005, "swedish": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.695, "Coal": 0.182, "Oil": 0.315, "IronOre": 0.208, "RareEarths": 0.054, "NaturalGas": 0.258, "Timber": 0.958, "Bauxite": 0.065, "Uranium": 0.013 }
+  },
+  // Westfjords
+  "is_5": {
+    "population": 7120,
+    "urbanization": 0.62,
+    "cultures": { "icelandic": 0.81, "polish": 0.06, "lithuanian": 0.012, "danish": 0.01, "english": 0.01, "romanian": 0.01, "tagalog": 0.01, "ukrainian": 0.01, "german": 0.008, "latvian": 0.008, "portuguese": 0.008, "thai": 0.008, "vietnamese": 0.006, "croatian": 0.005, "czech": 0.005, "norwegian": 0.005, "slovak": 0.005, "spanish": 0.005, "swedish": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.112, "Coal": 0.521, "Oil": 0.515, "IronOre": 0.442, "RareEarths": 0.11, "NaturalGas": 0.399, "Timber": 0.712, "Bauxite": 0.109, "Uranium": 0.007 }
+  },
+  // Southern Region
+  "is_8": {
+    "population": 303434,
+    "urbanization": 0.97,
+    "cultures": { "icelandic": 0.81, "polish": 0.06, "lithuanian": 0.012, "danish": 0.01, "english": 0.01, "romanian": 0.01, "tagalog": 0.01, "ukrainian": 0.01, "german": 0.008, "latvian": 0.008, "portuguese": 0.008, "thai": 0.008, "vietnamese": 0.006, "croatian": 0.005, "czech": 0.005, "norwegian": 0.005, "slovak": 0.005, "spanish": 0.005, "swedish": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.48, "Coal": 0.235, "Oil": 0.247, "IronOre": 0.13, "RareEarths": 0.022, "NaturalGas": 0.18, "Timber": 3.222, "Bauxite": 0.059, "Uranium": 0.006 }
+  },
+  // Western Region
+  "is_3": {
+    "population": 8216,
+    "urbanization": 0.35,
+    "cultures": { "icelandic": 0.81, "polish": 0.06, "lithuanian": 0.012, "danish": 0.01, "english": 0.01, "romanian": 0.01, "tagalog": 0.01, "ukrainian": 0.01, "german": 0.008, "latvian": 0.008, "portuguese": 0.008, "thai": 0.008, "vietnamese": 0.006, "croatian": 0.005, "czech": 0.005, "norwegian": 0.005, "slovak": 0.005, "spanish": 0.005, "swedish": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.396, "Coal": 0.361, "Oil": 0.897, "IronOre": 0.299, "RareEarths": 0.059, "NaturalGas": 0.516, "Timber": 2.214, "Bauxite": 0.124, "Uranium": 0.008 }
+  },
+  // Westfjords
+  "is_4": {
+    "population": 5106,
+    "urbanization": 0.81,
+    "cultures": { "icelandic": 0.81, "polish": 0.06, "lithuanian": 0.012, "danish": 0.01, "english": 0.01, "romanian": 0.01, "tagalog": 0.01, "ukrainian": 0.01, "german": 0.008, "latvian": 0.008, "portuguese": 0.008, "thai": 0.008, "vietnamese": 0.006, "croatian": 0.005, "czech": 0.005, "norwegian": 0.005, "slovak": 0.005, "spanish": 0.005, "swedish": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.475, "Coal": 0.166, "Oil": 0.243, "IronOre": 0.101, "RareEarths": 0.035, "NaturalGas": 0.237, "Timber": 0.806, "Bauxite": 0.038, "Uranium": 0.004 }
+  }
+}

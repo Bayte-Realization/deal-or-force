@@ -1,0 +1,30 @@
+// North Macedonia (MKD) on 1 January 2024: 2 regions, 2,083,459 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Drugovo
+  "mk_28": {
+    "population": 809300,
+    "urbanization": 0.45,
+    "cultures": { "macedonian": 0.6361, "albanian": 0.2667, "turkish": 0.0426, "romani": 0.0262, "serbian": 0.0142, "bosniak": 0.0098, "aromanian": 0.0044 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.191, "Coal": 0.139, "Oil": 0.172, "IronOre": 0.109, "RareEarths": 0.024, "NaturalGas": 0.276, "Timber": 0.844, "Bauxite": 0.032, "Uranium": 0.003 }
+  },
+  // Vasilevo
+  "mk_11": {
+    "population": 1274159,
+    "urbanization": 0.68,
+    "cultures": { "macedonian": 0.6361, "albanian": 0.2667, "turkish": 0.0426, "romani": 0.0262, "serbian": 0.0142, "bosniak": 0.0098, "aromanian": 0.0044 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.329, "Coal": 0.539, "Oil": 1.022, "IronOre": 0.471, "RareEarths": 0.123, "NaturalGas": 0.869, "Timber": 2.077, "Bauxite": 0.138, "Uranium": 0.021 }
+  }
+}

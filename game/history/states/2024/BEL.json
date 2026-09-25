@@ -1,0 +1,30 @@
+// Belgium (BEL) on 1 January 2024: 2 regions, 11,484,055 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Flemish Brabant
+  "be_vbr": {
+    "population": 9380396,
+    "urbanization": 0.97,
+    "cultures": { "flemish": 0.554, "walloon": 0.3067, "arab_maghrebi": 0.0376, "italian": 0.0198, "french": 0.0148, "turkish": 0.0139, "dutch": 0.0099, "german": 0.0099, "polish": 0.0099, "romanian": 0.0099, "spanish": 0.0069, "ukrainian": 0.0067 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.802, "Coal": 0.294, "Oil": 0.231, "IronOre": 0.201, "RareEarths": 0.04, "NaturalGas": 0.35, "Timber": 0.714, "Bauxite": 0.063, "Uranium": 0.007 }
+  },
+  // Luxembourg
+  "be_wlx": {
+    "population": 2103659,
+    "urbanization": 0.97,
+    "cultures": { "flemish": 0.554, "walloon": 0.3067, "arab_maghrebi": 0.0376, "italian": 0.0198, "french": 0.0148, "turkish": 0.0139, "dutch": 0.0099, "german": 0.0099, "polish": 0.0099, "romanian": 0.0099, "spanish": 0.0069, "ukrainian": 0.0067 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.199, "Coal": 0.55, "Oil": 0.486, "IronOre": 0.231, "RareEarths": 0.119, "NaturalGas": 0.391, "Timber": 1.796, "Bauxite": 0.135, "Uranium": 0.016 }
+  }
+}

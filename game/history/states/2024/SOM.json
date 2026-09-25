@@ -1,0 +1,110 @@
+// Somalia (SOM) on 1 January 2024: 12 regions, 10,192,317 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bakool
+  "so_bk": {
+    "population": 88885,
+    "urbanization": 0.05,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.165, "Coal": 0.164, "Oil": 0.456, "IronOre": 0.177, "RareEarths": 0.07, "NaturalGas": 0.495, "Timber": 2.932, "Bauxite": 0.081, "Uranium": 0.011 }
+  },
+  // Bari
+  "so_br": {
+    "population": 301571,
+    "urbanization": 0.48,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.105, "Coal": 0.243, "Oil": 0.233, "IronOre": 0.091, "RareEarths": 0.035, "NaturalGas": 0.375, "Timber": 0.898, "Bauxite": 0.046, "Uranium": 0.003 }
+  },
+  // Bay
+  "so_by": {
+    "population": 1420383,
+    "urbanization": 0.26,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.766, "Coal": 0.063, "Oil": 0.103, "IronOre": 0.093, "RareEarths": 0.033, "NaturalGas": 0.234, "Timber": 2.059, "Bauxite": 0.046, "Uranium": 0.003 }
+  },
+  // Galguduud
+  "so_ga": {
+    "population": 78952,
+    "urbanization": 0.05,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.658, "Coal": 0.463, "Oil": 0.644, "IronOre": 0.217, "RareEarths": 0.106, "NaturalGas": 0.512, "Timber": 1.468, "Bauxite": 0.109, "Uranium": 0.017 }
+  },
+  // Gedo
+  "so_ge": {
+    "population": 326756,
+    "urbanization": 0.41,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.061, "Coal": 0.348, "Oil": 0.37, "IronOre": 0.308, "RareEarths": 0.036, "NaturalGas": 0.455, "Timber": 2.899, "Bauxite": 0.122, "Uranium": 0.007 }
+  },
+  // Hiran
+  "so_hi": {
+    "population": 484984,
+    "urbanization": 0.33,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.47, "Coal": 0.208, "Oil": 0.276, "IronOre": 0.134, "RareEarths": 0.057, "NaturalGas": 0.349, "Timber": 1.732, "Bauxite": 0.06, "Uranium": 0.004 }
+  },
+  // Lower Juba
+  "so_jh": {
+    "population": 1959701,
+    "urbanization": 0.5,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.085, "Coal": 0.199, "Oil": 0.4, "IronOre": 0.338, "RareEarths": 0.091, "NaturalGas": 0.651, "Timber": 0.73, "Bauxite": 0.1, "Uranium": 0.014 }
+  },
+  // Lower Shebelle
+  "so_sh": {
+    "population": 2758845,
+    "urbanization": 0.61,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.125, "Coal": 0.2, "Oil": 0.223, "IronOre": 0.1, "RareEarths": 0.048, "NaturalGas": 0.39, "Timber": 1.496, "Bauxite": 0.052, "Uranium": 0.006 }
+  },
+  // Middle Juba
+  "so_jd": {
+    "population": 320657,
+    "urbanization": 0.05,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.351, "Coal": 0.402, "Oil": 0.45, "IronOre": 0.439, "RareEarths": 0.114, "NaturalGas": 0.83, "Timber": 3.353, "Bauxite": 0.131, "Uranium": 0.011 }
+  },
+  // Middle Shebelle
+  "so_sd": {
+    "population": 2090496,
+    "urbanization": 0.53,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.277, "Coal": 0.202, "Oil": 0.383, "IronOre": 0.23, "RareEarths": 0.065, "NaturalGas": 0.498, "Timber": 1.967, "Bauxite": 0.059, "Uranium": 0.008 }
+  },
+  // Mudug
+  "so_mu": {
+    "population": 260102,
+    "urbanization": 0.54,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.417, "Coal": 0.113, "Oil": 0.261, "IronOre": 0.125, "RareEarths": 0.041, "NaturalGas": 0.361, "Timber": 0.751, "Bauxite": 0.032, "Uranium": 0.006 }
+  },
+  // Nugal
+  "so_nu": {
+    "population": 100985,
+    "urbanization": 0.49,
+    "cultures": { "somali": 0.85, "bedouin": 0.03, "oromo": 0.03, "swahili": 0.03, "afar": 0.02, "arab_yemeni": 0.02, "beja": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.923, "Coal": 0.438, "Oil": 0.31, "IronOre": 0.138, "RareEarths": 0.063, "NaturalGas": 0.613, "Timber": 2.978, "Bauxite": 0.118, "Uranium": 0.009 }
+  }
+}

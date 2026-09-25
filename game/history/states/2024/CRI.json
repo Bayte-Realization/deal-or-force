@@ -1,0 +1,38 @@
+// Costa Rica (CRI) on 1 January 2024: 3 regions, 5,047,561 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Alajuela
+  "cr_a": {
+    "population": 2067561,
+    "urbanization": 0.76,
+    "cultures": { "costa_rican": 0.82, "nicaraguan": 0.09, "creole_african": 0.04, "native_american": 0.025, "colombian": 0.01, "venezuelan": 0.01, "american": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.802, "Coal": 0.1, "Oil": 0.142, "IronOre": 0.079, "RareEarths": 0.044, "NaturalGas": 0.123, "Timber": 1.655, "Bauxite": 0.023, "Uranium": 0.003 }
+  },
+  // Limón
+  "cr_l": {
+    "population": 1065062,
+    "urbanization": 0.82,
+    "cultures": { "costa_rican": 0.82, "nicaraguan": 0.09, "creole_african": 0.04, "native_american": 0.025, "colombian": 0.01, "venezuelan": 0.01, "american": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.04, "Coal": 0.197, "Oil": 0.273, "IronOre": 0.163, "RareEarths": 0.044, "NaturalGas": 0.477, "Timber": 3.214, "Bauxite": 0.037, "Uranium": 0.005 }
+  },
+  // Puntarenas
+  "cr_p": {
+    "population": 1914938,
+    "urbanization": 0.88,
+    "cultures": { "costa_rican": 0.82, "nicaraguan": 0.09, "creole_african": 0.04, "native_american": 0.025, "colombian": 0.01, "venezuelan": 0.01, "american": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.973, "Coal": 0.172, "Oil": 0.363, "IronOre": 0.117, "RareEarths": 0.067, "NaturalGas": 0.318, "Timber": 1.248, "Bauxite": 0.053, "Uranium": 0.005 }
+  }
+}

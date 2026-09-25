@@ -1,0 +1,142 @@
+// Angola (AGO) on 1 January 2024: 16 regions, 31,825,295 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bengo
+  "ao_bgo": {
+    "population": 14990972,
+    "urbanization": 0.95,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.891, "Coal": 0.205, "Oil": 0.393, "IronOre": 0.177, "RareEarths": 0.064, "NaturalGas": 0.326, "Timber": 1.033, "Bauxite": 0.043, "Uranium": 0.004 }
+  },
+  // Benguela
+  "ao_bgu": {
+    "population": 2138325,
+    "urbanization": 0.47,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.158, "Coal": 0.223, "Oil": 0.291, "IronOre": 0.159, "RareEarths": 0.035, "NaturalGas": 0.279, "Timber": 2.839, "Bauxite": 0.092, "Uranium": 0.009 }
+  },
+  // Bié
+  "ao_bie": {
+    "population": 990119,
+    "urbanization": 0.37,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.978, "Coal": 0.145, "Oil": 0.307, "IronOre": 0.089, "RareEarths": 0.025, "NaturalGas": 0.293, "Timber": 1.365, "Bauxite": 0.035, "Uranium": 0.004 }
+  },
+  // Cuando Cubango
+  "ao_ccu": {
+    "population": 936159,
+    "urbanization": 0.4,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.593, "Coal": 0.113, "Oil": 0.166, "IronOre": 0.066, "RareEarths": 0.016, "NaturalGas": 0.094, "Timber": 1.384, "Bauxite": 0.044, "Uranium": 0.004 }
+  },
+  // Cuanza Norte
+  "ao_cno": {
+    "population": 471369,
+    "urbanization": 0.12,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.778, "Coal": 0.153, "Oil": 0.215, "IronOre": 0.16, "RareEarths": 0.031, "NaturalGas": 0.177, "Timber": 0.846, "Bauxite": 0.027, "Uranium": 0.004 }
+  },
+  // Cuanza Sul
+  "ao_cus": {
+    "population": 754465,
+    "urbanization": 0.2,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.98, "Coal": 0.206, "Oil": 0.291, "IronOre": 0.127, "RareEarths": 0.022, "NaturalGas": 0.25, "Timber": 3.003, "Bauxite": 0.057, "Uranium": 0.005 }
+  },
+  // Cunene
+  "ao_cnn": {
+    "population": 219584,
+    "urbanization": 0.14,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.007, "Coal": 0.554, "Oil": 0.807, "IronOre": 0.394, "RareEarths": 0.132, "NaturalGas": 0.487, "Timber": 1.764, "Bauxite": 0.096, "Uranium": 0.008 }
+  },
+  // Huambo
+  "ao_hua": {
+    "population": 4381145,
+    "urbanization": 0.69,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.891, "Coal": 0.587, "Oil": 1.017, "IronOre": 0.236, "RareEarths": 0.141, "NaturalGas": 0.783, "Timber": 2.108, "Bauxite": 0.135, "Uranium": 0.014 }
+  },
+  // Huíla
+  "ao_hui": {
+    "population": 958719,
+    "urbanization": 0.37,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.144, "Coal": 0.221, "Oil": 0.135, "IronOre": 0.144, "RareEarths": 0.039, "NaturalGas": 0.259, "Timber": 1.335, "Bauxite": 0.041, "Uranium": 0.003 }
+  },
+  // Lunda Norte
+  "ao_lno": {
+    "population": 1054467,
+    "urbanization": 0.32,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.297, "Coal": 0.182, "Oil": 0.369, "IronOre": 0.284, "RareEarths": 0.048, "NaturalGas": 0.536, "Timber": 2.022, "Bauxite": 0.07, "Uranium": 0.006 }
+  },
+  // Lunda Sul
+  "ao_lsu": {
+    "population": 488889,
+    "urbanization": 0.25,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.069, "Coal": 0.178, "Oil": 0.527, "IronOre": 0.246, "RareEarths": 0.038, "NaturalGas": 0.563, "Timber": 2.576, "Bauxite": 0.068, "Uranium": 0.005 }
+  },
+  // Malanje
+  "ao_mal": {
+    "population": 991382,
+    "urbanization": 0.35,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.856, "Coal": 0.091, "Oil": 0.086, "IronOre": 0.058, "RareEarths": 0.018, "NaturalGas": 0.137, "Timber": 1.821, "Bauxite": 0.035, "Uranium": 0.004 }
+  },
+  // Moxico
+  "ao_mox": {
+    "population": 613777,
+    "urbanization": 0.18,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.938, "Coal": 0.569, "Oil": 0.789, "IronOre": 0.448, "RareEarths": 0.132, "NaturalGas": 0.528, "Timber": 2.781, "Bauxite": 0.175, "Uranium": 0.02 }
+  },
+  // Namibe
+  "ao_nam": {
+    "population": 1265150,
+    "urbanization": 0.37,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.228, "Coal": 0.329, "Oil": 0.488, "IronOre": 0.159, "RareEarths": 0.088, "NaturalGas": 0.309, "Timber": 1.784, "Bauxite": 0.117, "Uranium": 0.01 }
+  },
+  // Uíge
+  "ao_uig": {
+    "population": 634118,
+    "urbanization": 0.31,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.898, "Coal": 0.542, "Oil": 0.506, "IronOre": 0.168, "RareEarths": 0.111, "NaturalGas": 0.834, "Timber": 2.869, "Bauxite": 0.112, "Uranium": 0.019 }
+  },
+  // Zaire
+  "ao_zai": {
+    "population": 936655,
+    "urbanization": 0.44,
+    "cultures": { "ovimbundu": 0.37, "mbundu": 0.25, "bakongo": 0.13, "luba": 0.06, "mongo": 0.06, "swahili": 0.05, "ovambo": 0.03, "herero": 0.02, "portuguese": 0.02, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.848, "Coal": 0.42, "Oil": 0.456, "IronOre": 0.215, "RareEarths": 0.073, "NaturalGas": 0.829, "Timber": 2, "Bauxite": 0.124, "Uranium": 0.016 }
+  }
+}

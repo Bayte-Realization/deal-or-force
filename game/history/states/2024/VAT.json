@@ -1,0 +1,22 @@
+// Vatican (VAT) on 1 January 2024: 1 region, 825 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Vatican City
+  "va_x01": {
+    "population": 825,
+    "urbanization": 0.931,
+    "cultures": { "italian": 0.52, "swiss_german": 0.18, "polish": 0.08, "spanish": 0.07, "french": 0.06, "german": 0.05, "english": 0.04 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.366, "Coal": 0.158, "Oil": 0.218, "IronOre": 0.215, "RareEarths": 0.033, "NaturalGas": 0.19, "Timber": 1.783, "Bauxite": 0.041, "Uranium": 0.007 }
+  }
+}

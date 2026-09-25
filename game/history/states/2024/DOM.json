@@ -1,0 +1,30 @@
+// Dominican Republic (DOM) on 1 January 2024: 2 regions, 10,738,958 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Monte Plata
+  "do_29": {
+    "population": 7342894,
+    "urbanization": 0.86,
+    "cultures": { "dominican": 0.86, "haitian": 0.09, "venezuelan": 0.02, "american": 0.01, "puerto_rican": 0.01, "spanish": 0.01 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.481, "Coal": 0.25, "Oil": 0.642, "IronOre": 0.28, "RareEarths": 0.068, "NaturalGas": 0.388, "Timber": 2.269, "Bauxite": 0.127, "Uranium": 0.01 }
+  },
+  // Santiago
+  "do_25": {
+    "population": 3396064,
+    "urbanization": 0.83,
+    "cultures": { "dominican": 0.86, "haitian": 0.09, "venezuelan": 0.02, "american": 0.01, "puerto_rican": 0.01, "spanish": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.285, "Coal": 0.114, "Oil": 0.136, "IronOre": 0.122, "RareEarths": 0.022, "NaturalGas": 0.143, "Timber": 1.359, "Bauxite": 0.034, "Uranium": 0.003 }
+  }
+}

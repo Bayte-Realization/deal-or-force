@@ -1,0 +1,94 @@
+// Democratic Republic of the Congo (COD) on 1 January 2024: 10 regions, 86,790,567 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bandundu
+  "cd_bn": {
+    "population": 6233158,
+    "urbanization": 0.34,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.018, "Coal": 0.499, "Oil": 0.787, "IronOre": 0.421, "RareEarths": 0.147, "NaturalGas": 0.84, "Timber": 3.393, "Bauxite": 0.168, "Uranium": 0.008 }
+  },
+  // Kasaï-Occidental
+  "cd_kw": {
+    "population": 7532804,
+    "urbanization": 0.34,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 0.867, "Coal": 0.233, "Oil": 0.701, "IronOre": 0.282, "RareEarths": 0.092, "NaturalGas": 0.533, "Timber": 2.051, "Bauxite": 0.083, "Uranium": 0.014 }
+  },
+  // Kasaï-Oriental
+  "cd_ke": {
+    "population": 7119152,
+    "urbanization": 0.54,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.55, "Coal": 0.095, "Oil": 0.32, "IronOre": 0.125, "RareEarths": 0.033, "NaturalGas": 0.222, "Timber": 2.852, "Bauxite": 0.059, "Uranium": 0.007 }
+  },
+  // Katanga
+  "cd_ka": {
+    "population": 15934982,
+    "urbanization": 0.39,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 6, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.08, "Coal": 0.228, "Oil": 0.2, "IronOre": 0.121, "RareEarths": 0.036, "NaturalGas": 0.184, "Timber": 2.114, "Bauxite": 0.031, "Uranium": 0.007 }
+  },
+  // Kongo Central
+  "cd_bc": {
+    "population": 20373641,
+    "urbanization": 0.88,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 2.407, "Coal": 0.459, "Oil": 0.732, "IronOre": 0.507, "RareEarths": 0.124, "NaturalGas": 0.62, "Timber": 0.968, "Bauxite": 0.102, "Uranium": 0.013 }
+  },
+  // Maniema
+  "cd_ma": {
+    "population": 3062311,
+    "urbanization": 0.25,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.943, "Coal": 0.251, "Oil": 0.414, "IronOre": 0.165, "RareEarths": 0.066, "NaturalGas": 0.527, "Timber": 3.115, "Bauxite": 0.069, "Uranium": 0.005 }
+  },
+  // North Kivu
+  "cd_nk": {
+    "population": 4115153,
+    "urbanization": 0.38,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.627, "Coal": 0.096, "Oil": 0.139, "IronOre": 0.046, "RareEarths": 0.032, "NaturalGas": 0.145, "Timber": 1.997, "Bauxite": 0.036, "Uranium": 0.002 }
+  },
+  // Orientale
+  "cd_or": {
+    "population": 12471936,
+    "urbanization": 0.2,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 6, "Infrastructure": 1 },
+    "resources": { "Food": 1.879, "Coal": 0.326, "Oil": 0.422, "IronOre": 0.298, "RareEarths": 0.064, "NaturalGas": 0.93, "Timber": 0.703, "Bauxite": 0.168, "Uranium": 0.017 }
+  },
+  // South Kivu
+  "cd_sk": {
+    "population": 3150571,
+    "urbanization": 0.4,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.587, "Coal": 0.13, "Oil": 0.255, "IronOre": 0.235, "RareEarths": 0.073, "NaturalGas": 0.452, "Timber": 2.034, "Bauxite": 0.047, "Uranium": 0.008 }
+  },
+  // Équateur
+  "cd_eq": {
+    "population": 6796859,
+    "urbanization": 0.29,
+    "cultures": { "luba": 0.18, "bakongo": 0.16, "mongo": 0.15, "swahili": 0.1, "bemba": 0.06, "tonga": 0.05, "chewa": 0.04, "fang": 0.04, "hutu": 0.04, "acholi": 0.03, "ovimbundu": 0.03, "sara": 0.03, "fulani": 0.02, "mbundu": 0.02, "nuer": 0.02, "tutsi": 0.02, "kanuri": 0.01 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.048, "Coal": 0.23, "Oil": 0.643, "IronOre": 0.175, "RareEarths": 0.077, "NaturalGas": 0.555, "Timber": 1.219, "Bauxite": 0.082, "Uranium": 0.009 }
+  }
+}

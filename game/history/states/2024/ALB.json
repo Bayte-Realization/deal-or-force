@@ -1,0 +1,30 @@
+// Albania (ALB) on 1 January 2024: 2 regions, 2,854,191 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Gjirokastër
+  "al_05": {
+    "population": 882653,
+    "urbanization": 0.47,
+    "cultures": { "albanian": 0.9461, "romani": 0.0207, "greek": 0.0114, "aromanian": 0.0083, "italian": 0.0052, "macedonian": 0.0052, "montenegrin": 0.0031 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.579, "Coal": 0.183, "Oil": 0.252, "IronOre": 0.129, "RareEarths": 0.026, "NaturalGas": 0.168, "Timber": 2.083, "Bauxite": 0.027, "Uranium": 0.005 }
+  },
+  // Shkodër
+  "al_10": {
+    "population": 1971538,
+    "urbanization": 0.71,
+    "cultures": { "albanian": 0.9461, "romani": 0.0207, "greek": 0.0114, "aromanian": 0.0083, "italian": 0.0052, "macedonian": 0.0052, "montenegrin": 0.0031 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.946, "Coal": 0.425, "Oil": 0.415, "IronOre": 0.229, "RareEarths": 0.087, "NaturalGas": 0.608, "Timber": 2.252, "Bauxite": 0.092, "Uranium": 0.01 }
+  }
+}

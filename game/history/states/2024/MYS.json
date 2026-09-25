@@ -1,0 +1,70 @@
+// Malaysia (MYS) on 1 January 2024: 7 regions, 31,949,777 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Johor
+  "my_01": {
+    "population": 3696305,
+    "urbanization": 0.73,
+    "cultures": { "malay": 0.575, "chinese_diaspora": 0.226, "dayak": 0.06, "indian_diaspora": 0.045, "tamil": 0.025, "javanese": 0.02, "bengali_muslim": 0.015, "nepali": 0.015, "burmese": 0.01, "acehnese": 0.009 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.276, "Coal": 0.207, "Oil": 0.501, "IronOre": 0.18, "RareEarths": 0.05, "NaturalGas": 0.406, "Timber": 1.324, "Bauxite": 0.103, "Uranium": 0.01 }
+  },
+  // Kelantan
+  "my_03": {
+    "population": 1144014,
+    "urbanization": 0.84,
+    "cultures": { "malay": 0.575, "chinese_diaspora": 0.226, "dayak": 0.06, "indian_diaspora": 0.045, "tamil": 0.025, "javanese": 0.02, "bengali_muslim": 0.015, "nepali": 0.015, "burmese": 0.01, "acehnese": 0.009 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.172, "Coal": 0.4, "Oil": 0.532, "IronOre": 0.155, "RareEarths": 0.078, "NaturalGas": 0.641, "Timber": 1.658, "Bauxite": 0.158, "Uranium": 0.009 }
+  },
+  // Pahang
+  "my_06": {
+    "population": 3780482,
+    "urbanization": 0.8,
+    "cultures": { "malay": 0.575, "chinese_diaspora": 0.226, "dayak": 0.06, "indian_diaspora": 0.045, "tamil": 0.025, "javanese": 0.02, "bengali_muslim": 0.015, "nepali": 0.015, "burmese": 0.01, "acehnese": 0.009 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.378, "Coal": 0.335, "Oil": 0.317, "IronOre": 0.17, "RareEarths": 0.063, "NaturalGas": 0.561, "Timber": 2.527, "Bauxite": 0.061, "Uranium": 0.012 }
+  },
+  // Perak
+  "my_08": {
+    "population": 14869659,
+    "urbanization": 0.85,
+    "cultures": { "malay": 0.575, "chinese_diaspora": 0.226, "dayak": 0.06, "indian_diaspora": 0.045, "tamil": 0.025, "javanese": 0.02, "bengali_muslim": 0.015, "nepali": 0.015, "burmese": 0.01, "acehnese": 0.009 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.35, "Coal": 0.126, "Oil": 0.12, "IronOre": 0.072, "RareEarths": 0.022, "NaturalGas": 0.223, "Timber": 1.881, "Bauxite": 0.032, "Uranium": 0.002 }
+  },
+  // Sabah
+  "my_12": {
+    "population": 3594820,
+    "urbanization": 0.7,
+    "cultures": { "malay": 0.575, "chinese_diaspora": 0.226, "dayak": 0.06, "indian_diaspora": 0.045, "tamil": 0.025, "javanese": 0.02, "bengali_muslim": 0.015, "nepali": 0.015, "burmese": 0.01, "acehnese": 0.009 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.36, "Coal": 0.318, "Oil": 0.231, "IronOre": 0.099, "RareEarths": 0.065, "NaturalGas": 0.531, "Timber": 3.356, "Bauxite": 0.091, "Uranium": 0.01 }
+  },
+  // Sarawak
+  "my_13": {
+    "population": 3797836,
+    "urbanization": 0.57,
+    "cultures": { "malay": 0.575, "chinese_diaspora": 0.226, "dayak": 0.06, "indian_diaspora": 0.045, "tamil": 0.025, "javanese": 0.02, "bengali_muslim": 0.015, "nepali": 0.015, "burmese": 0.01, "acehnese": 0.009 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.379, "Coal": 0.101, "Oil": 0.314, "IronOre": 0.162, "RareEarths": 0.025, "NaturalGas": 0.383, "Timber": 1.884, "Bauxite": 0.072, "Uranium": 0.006 }
+  },
+  // Terengganu
+  "my_11": {
+    "population": 1066661,
+    "urbanization": 0.82,
+    "cultures": { "malay": 0.575, "chinese_diaspora": 0.226, "dayak": 0.06, "indian_diaspora": 0.045, "tamil": 0.025, "javanese": 0.02, "bengali_muslim": 0.015, "nepali": 0.015, "burmese": 0.01, "acehnese": 0.009 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.679, "Coal": 0.243, "Oil": 0.63, "IronOre": 0.32, "RareEarths": 0.045, "NaturalGas": 0.561, "Timber": 1.409, "Bauxite": 0.064, "Uranium": 0.013 }
+  }
+}

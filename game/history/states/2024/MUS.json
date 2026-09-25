@@ -1,0 +1,22 @@
+// Mauritius (MUS) on 1 January 2024: 1 region, 1,265,711 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Savanne
+  "mu_sa": {
+    "population": 1265711,
+    "urbanization": 0.465,
+    "cultures": { "indian_diaspora": 0.52, "creole_african": 0.27, "tamil": 0.07, "chinese_diaspora": 0.03, "makua": 0.03, "malagasy": 0.03, "french": 0.02, "swahili": 0.02, "english": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.984, "Coal": 0.137, "Oil": 0.204, "IronOre": 0.108, "RareEarths": 0.021, "NaturalGas": 0.146, "Timber": 1.925, "Bauxite": 0.025, "Uranium": 0.002 }
+  }
+}

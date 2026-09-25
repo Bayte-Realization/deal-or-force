@@ -1,0 +1,38 @@
+// Bosnia and Herzegovina (BIH) on 1 January 2024: 3 regions, 3,301,000 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Banja Luka
+  "ba_x02": {
+    "population": 1032920,
+    "urbanization": 0.36,
+    "cultures": { "bosniak": 0.5111, "serbian": 0.3128, "croatian": 0.1549, "romani": 0.0081, "montenegrin": 0.0051, "albanian": 0.003, "turkish": 0.003, "ukrainian": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.172, "Coal": 0.395, "Oil": 0.326, "IronOre": 0.323, "RareEarths": 0.062, "NaturalGas": 0.674, "Timber": 1.72, "Bauxite": 0.084, "Uranium": 0.013 }
+  },
+  // Herzegovina-Neretva Canton
+  "ba_bih": {
+    "population": 467340,
+    "urbanization": 0.39,
+    "cultures": { "bosniak": 0.5111, "serbian": 0.3128, "croatian": 0.1549, "romani": 0.0081, "montenegrin": 0.0051, "albanian": 0.003, "turkish": 0.003, "ukrainian": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.646, "Coal": 0.281, "Oil": 0.353, "IronOre": 0.268, "RareEarths": 0.064, "NaturalGas": 0.555, "Timber": 1.681, "Bauxite": 0.051, "Uranium": 0.01 }
+  },
+  // Tuzla Canton
+  "ba_bih_889": {
+    "population": 1800740,
+    "urbanization": 0.61,
+    "cultures": { "bosniak": 0.5111, "serbian": 0.3128, "croatian": 0.1549, "romani": 0.0081, "montenegrin": 0.0051, "albanian": 0.003, "turkish": 0.003, "ukrainian": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.009, "Coal": 0.633, "Oil": 0.631, "IronOre": 0.487, "RareEarths": 0.133, "NaturalGas": 0.57, "Timber": 0.757, "Bauxite": 0.145, "Uranium": 0.02 }
+  }
+}

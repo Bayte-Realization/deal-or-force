@@ -1,0 +1,78 @@
+// Cambodia (KHM) on 1 January 2024: 8 regions, 16,486,542 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Battambang
+  "kh_2": {
+    "population": 1476143,
+    "urbanization": 0.18,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.208, "Coal": 0.245, "Oil": 0.95, "IronOre": 0.331, "RareEarths": 0.093, "NaturalGas": 0.426, "Timber": 3.101, "Bauxite": 0.166, "Uranium": 0.008 }
+  },
+  // Kampong Thom
+  "kh_6": {
+    "population": 8968966,
+    "urbanization": 0.33,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.017, "Coal": 0.299, "Oil": 0.875, "IronOre": 0.445, "RareEarths": 0.054, "NaturalGas": 0.394, "Timber": 3.359, "Bauxite": 0.159, "Uranium": 0.013 }
+  },
+  // Koh Kong
+  "kh_9": {
+    "population": 2805840,
+    "urbanization": 0.13,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.192, "Coal": 0.585, "Oil": 1.023, "IronOre": 0.481, "RareEarths": 0.059, "NaturalGas": 0.918, "Timber": 2.357, "Bauxite": 0.141, "Uranium": 0.009 }
+  },
+  // Mondulkiri
+  "kh_11": {
+    "population": 97455,
+    "urbanization": 0.5,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.208, "Coal": 0.591, "Oil": 0.607, "IronOre": 0.194, "RareEarths": 0.145, "NaturalGas": 0.51, "Timber": 2.672, "Bauxite": 0.192, "Uranium": 0.009 }
+  },
+  // Preah Vihear
+  "kh_13": {
+    "population": 114571,
+    "urbanization": 0.37,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.428, "Coal": 0.181, "Oil": 0.243, "IronOre": 0.195, "RareEarths": 0.046, "NaturalGas": 0.224, "Timber": 1.597, "Bauxite": 0.038, "Uranium": 0.005 }
+  },
+  // Pursat
+  "kh_15": {
+    "population": 790115,
+    "urbanization": 0.12,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.004, "Coal": 0.137, "Oil": 0.187, "IronOre": 0.119, "RareEarths": 0.031, "NaturalGas": 0.309, "Timber": 2.286, "Bauxite": 0.079, "Uranium": 0.008 }
+  },
+  // Ratanakiri
+  "kh_16": {
+    "population": 278441,
+    "urbanization": 0.31,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.222, "Coal": 0.162, "Oil": 0.302, "IronOre": 0.112, "RareEarths": 0.016, "NaturalGas": 0.144, "Timber": 1.475, "Bauxite": 0.058, "Uranium": 0.006 }
+  },
+  // Siem Reap
+  "kh_17": {
+    "population": 1955011,
+    "urbanization": 0.14,
+    "cultures": { "khmer": 0.9, "vietnamese": 0.04, "han": 0.03, "malay": 0.02, "lao": 0.005, "thai": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.169, "Coal": 0.131, "Oil": 0.245, "IronOre": 0.085, "RareEarths": 0.022, "NaturalGas": 0.261, "Timber": 1.735, "Bauxite": 0.056, "Uranium": 0.003 }
+  }
+}

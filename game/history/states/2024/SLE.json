@@ -1,0 +1,38 @@
+// Sierra Leone (SLE) on 1 January 2024: 3 regions, 7,813,215 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Eastern
+  "sl_e": {
+    "population": 1347831,
+    "urbanization": 0.45,
+    "cultures": { "temne": 0.355, "mende": 0.335, "fulani": 0.08, "mandinka": 0.07, "creole_african": 0.06, "kru": 0.06, "soninke": 0.04 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.725, "Coal": 0.605, "Oil": 0.479, "IronOre": 0.459, "RareEarths": 0.107, "NaturalGas": 0.475, "Timber": 1.519, "Bauxite": 0.195, "Uranium": 0.017 }
+  },
+  // Northern
+  "sl_n": {
+    "population": 5043878,
+    "urbanization": 0.47,
+    "cultures": { "temne": 0.355, "mende": 0.335, "fulani": 0.08, "mandinka": 0.07, "creole_african": 0.06, "kru": 0.06, "soninke": 0.04 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.805, "Coal": 0.275, "Oil": 0.284, "IronOre": 0.165, "RareEarths": 0.034, "NaturalGas": 0.408, "Timber": 3.121, "Bauxite": 0.087, "Uranium": 0.011 }
+  },
+  // Southern
+  "sl_s": {
+    "population": 1421506,
+    "urbanization": 0.32,
+    "cultures": { "temne": 0.355, "mende": 0.335, "fulani": 0.08, "mandinka": 0.07, "creole_african": 0.06, "kru": 0.06, "soninke": 0.04 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2, "Coal": 0.473, "Oil": 0.539, "IronOre": 0.206, "RareEarths": 0.095, "NaturalGas": 0.542, "Timber": 0.754, "Bauxite": 0.076, "Uranium": 0.016 }
+  }
+}

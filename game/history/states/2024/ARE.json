@@ -1,0 +1,22 @@
+// United Arab Emirates (ARE) on 1 January 2024: 1 region, 9,770,529 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Emirate of Abu Dhabi
+  "ae_az": {
+    "population": 9770529,
+    "urbanization": 0.858,
+    "cultures": { "indian_diaspora": 0.2474, "punjabi": 0.1187, "arab_gulf": 0.1138, "malayali": 0.099, "bengali_muslim": 0.0742, "tagalog": 0.0544, "persian": 0.0495, "arab_egyptian": 0.0445, "tamil": 0.0396, "sindhi": 0.0346, "arab_levantine": 0.0297, "baloch": 0.0198, "nepali": 0.0198, "sinhalese": 0.0198, "arab_sudanese": 0.0148, "russian": 0.0105, "arab_yemeni": 0.0099 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.177, "Coal": 0.369, "Oil": 5.426, "IronOre": 0.168, "RareEarths": 0.065, "NaturalGas": 0.434, "Timber": 2.985, "Bauxite": 0.109, "Uranium": 0.016 }
+  }
+}

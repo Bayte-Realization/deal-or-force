@@ -1,0 +1,22 @@
+// New Caledonia (NCL) on 1 January 2024: 1 region, 287,800 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // North
+  "nc_x03": {
+    "population": 287800,
+    "urbanization": 0.605,
+    "cultures": { "kanak": 0.41, "french": 0.29, "polynesian": 0.12, "ni_vanuatu": 0.06, "javanese": 0.04, "melanesian": 0.03, "vietnamese": 0.03, "chinese_diaspora": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.399, "Coal": 0.247, "Oil": 0.639, "IronOre": 0.254, "RareEarths": 0.055, "NaturalGas": 0.735, "Timber": 3.061, "Bauxite": 0.118, "Uranium": 0.01 }
+  }
+}

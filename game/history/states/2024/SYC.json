@@ -1,0 +1,22 @@
+// Seychelles (SYC) on 1 January 2024: 1 region, 97,625 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Coralline Seychelles
+  "sc_x02": {
+    "population": 97625,
+    "urbanization": 0.558,
+    "cultures": { "creole_african": 0.86, "indian_diaspora": 0.04, "french": 0.03, "malagasy": 0.03, "chinese_diaspora": 0.02, "english": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.615, "Coal": 0.356, "Oil": 0.503, "IronOre": 0.248, "RareEarths": 0.041, "NaturalGas": 0.22, "Timber": 0.781, "Bauxite": 0.06, "Uranium": 0.006 }
+  }
+}

@@ -1,0 +1,142 @@
+// United Kingdom (GBR) on 1 January 2024: 16 regions, 66,834,405 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Aberdeenshire
+  "gb_abd": {
+    "population": 489652,
+    "urbanization": 0.81,
+    "cultures": { "scottish": 0.79, "english": 0.11, "polish": 0.03, "indian_diaspora": 0.023, "welsh": 0.02, "romanian": 0.015, "irish": 0.012 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.808, "Coal": 0.615, "Oil": 0.742, "IronOre": 0.207, "RareEarths": 0.082, "NaturalGas": 0.794, "Timber": 1.988, "Bauxite": 0.181, "Uranium": 0.017 }
+  },
+  // Argyll and Bute
+  "gb_agb": {
+    "population": 109626,
+    "urbanization": 0.06,
+    "cultures": { "scottish": 0.97, "indian_diaspora": 0.0073, "punjabi": 0.0038, "polish": 0.0033, "bengali_muslim": 0.0026, "romanian": 0.0019, "chinese_diaspora": 0.0017, "akan": 0.0014, "igbo": 0.0014, "jamaican": 0.0014, "arab_levantine": 0.0012, "african_american": 0.0009, "tamil": 0.0009, "ukrainian": 0.0009, "somali": 0.0007, "kurdish": 0.0005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.256, "Coal": 0.149, "Oil": 0.261, "IronOre": 0.159, "RareEarths": 0.056, "NaturalGas": 0.37, "Timber": 0.999, "Bauxite": 0.082, "Uranium": 0.009 }
+  },
+  // Derbyshire
+  "gb_dby": {
+    "population": 8595172,
+    "urbanization": 0.87,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.001, "Coal": 0.174, "Oil": 0.134, "IronOre": 0.081, "RareEarths": 0.026, "NaturalGas": 0.14, "Timber": 2.53, "Bauxite": 0.051, "Uranium": 0.005 }
+  },
+  // Devon
+  "gb_dev": {
+    "population": 835908,
+    "urbanization": 0.85,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.513, "Coal": 0.183, "Oil": 0.347, "IronOre": 0.138, "RareEarths": 0.052, "NaturalGas": 0.392, "Timber": 3.132, "Bauxite": 0.086, "Uranium": 0.012 }
+  },
+  // Dumfries and Galloway
+  "gb_dgy": {
+    "population": 895893,
+    "urbanization": 0.85,
+    "cultures": { "scottish": 0.97, "indian_diaspora": 0.0073, "punjabi": 0.0038, "polish": 0.0033, "bengali_muslim": 0.0026, "romanian": 0.0019, "chinese_diaspora": 0.0017, "akan": 0.0014, "igbo": 0.0014, "jamaican": 0.0014, "arab_levantine": 0.0012, "african_american": 0.0009, "tamil": 0.0009, "ukrainian": 0.0009, "somali": 0.0007, "kurdish": 0.0005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.241, "Coal": 0.219, "Oil": 0.307, "IronOre": 0.223, "RareEarths": 0.038, "NaturalGas": 0.275, "Timber": 1.461, "Bauxite": 0.068, "Uranium": 0.006 }
+  },
+  // Highland
+  "gb_hld": {
+    "population": 258965,
+    "urbanization": 0.56,
+    "cultures": { "scottish": 0.86, "english": 0.085, "polish": 0.02, "irish": 0.01, "romanian": 0.009, "latvian": 0.008, "welsh": 0.008 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.781, "Coal": 0.405, "Oil": 0.673, "IronOre": 0.156, "RareEarths": 0.077, "NaturalGas": 0.679, "Timber": 0.827, "Bauxite": 0.119, "Uranium": 0.007 }
+  },
+  // Lancashire
+  "gb_lan": {
+    "population": 6740028,
+    "urbanization": 0.96,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.162, "Coal": 0.26, "Oil": 0.306, "IronOre": 0.137, "RareEarths": 0.045, "NaturalGas": 0.279, "Timber": 2.54, "Bauxite": 0.078, "Uranium": 0.005 }
+  },
+  // Leicestershire
+  "gb_lec": {
+    "population": 3839084,
+    "urbanization": 0.74,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 0.946, "Coal": 0.244, "Oil": 0.163, "IronOre": 0.11, "RareEarths": 0.054, "NaturalGas": 0.416, "Timber": 3.124, "Bauxite": 0.063, "Uranium": 0.005 }
+  },
+  // Norfolk
+  "gb_nfk": {
+    "population": 1429606,
+    "urbanization": 0.44,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.515, "Coal": 0.222, "Oil": 0.284, "IronOre": 0.15, "RareEarths": 0.063, "NaturalGas": 0.416, "Timber": 1.84, "Bauxite": 0.081, "Uranium": 0.009 }
+  },
+  // North Yorkshire
+  "gb_nyk": {
+    "population": 7098397,
+    "urbanization": 0.86,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.122, "Coal": 0.386, "Oil": 0.565, "IronOre": 0.336, "RareEarths": 0.132, "NaturalGas": 1.037, "Timber": 2.637, "Bauxite": 0.122, "Uranium": 0.01 }
+  },
+  // Perth and Kinross
+  "gb_pkn": {
+    "population": 2497043,
+    "urbanization": 0.88,
+    "cultures": { "scottish": 0.97, "indian_diaspora": 0.0073, "punjabi": 0.0038, "polish": 0.0033, "bengali_muslim": 0.0026, "romanian": 0.0019, "chinese_diaspora": 0.0017, "akan": 0.0014, "igbo": 0.0014, "jamaican": 0.0014, "arab_levantine": 0.0012, "african_american": 0.0009, "tamil": 0.0009, "ukrainian": 0.0009, "somali": 0.0007, "kurdish": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.407, "Coal": 0.109, "Oil": 0.324, "IronOre": 0.088, "RareEarths": 0.049, "NaturalGas": 0.33, "Timber": 3.357, "Bauxite": 0.038, "Uranium": 0.005 }
+  },
+  // Powys
+  "gb_pow": {
+    "population": 3611986,
+    "urbanization": 0.85,
+    "cultures": { "welsh": 0.605, "english": 0.365, "scottish": 0.01, "irish": 0.008, "indian_diaspora": 0.006, "polish": 0.006 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.081, "Coal": 0.218, "Oil": 0.335, "IronOre": 0.088, "RareEarths": 0.051, "NaturalGas": 0.408, "Timber": 2.245, "Bauxite": 0.062, "Uranium": 0.005 }
+  },
+  // Scottish Borders
+  "gb_scb": {
+    "population": 1649695,
+    "urbanization": 0.91,
+    "cultures": { "scottish": 0.97, "indian_diaspora": 0.0073, "punjabi": 0.0038, "polish": 0.0033, "bengali_muslim": 0.0026, "romanian": 0.0019, "chinese_diaspora": 0.0017, "akan": 0.0014, "igbo": 0.0014, "jamaican": 0.0014, "arab_levantine": 0.0012, "african_american": 0.0009, "tamil": 0.0009, "ukrainian": 0.0009, "somali": 0.0007, "kurdish": 0.0005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.166, "Coal": 0.392, "Oil": 0.294, "IronOre": 0.152, "RareEarths": 0.05, "NaturalGas": 0.344, "Timber": 2.888, "Bauxite": 0.082, "Uranium": 0.008 }
+  },
+  // Somerset
+  "gb_som": {
+    "population": 4948092,
+    "urbanization": 0.74,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 2 },
+    "resources": { "Food": 1.754, "Coal": 0.265, "Oil": 0.585, "IronOre": 0.215, "RareEarths": 0.05, "NaturalGas": 0.624, "Timber": 2.757, "Bauxite": 0.055, "Uranium": 0.006 }
+  },
+  // Strabane
+  "gb_stb": {
+    "population": 1149893,
+    "urbanization": 0.92,
+    "cultures": { "irish": 0.655, "english": 0.3, "scottish": 0.02, "polish": 0.01, "lithuanian": 0.008, "indian_diaspora": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.978, "Coal": 0.545, "Oil": 0.667, "IronOre": 0.449, "RareEarths": 0.078, "NaturalGas": 0.565, "Timber": 2.76, "Bauxite": 0.107, "Uranium": 0.009 }
+  },
+  // Surrey
+  "gb_sry": {
+    "population": 22685365,
+    "urbanization": 0.87,
+    "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
+    "buildings": { "Agriculture": 6, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 0.8, "Coal": 0.496, "Oil": 0.474, "IronOre": 0.215, "RareEarths": 0.101, "NaturalGas": 0.347, "Timber": 1.177, "Bauxite": 0.093, "Uranium": 0.009 }
+  }
+}

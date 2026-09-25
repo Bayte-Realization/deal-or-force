@@ -1,0 +1,22 @@
+// Andorra (AND) on 1 January 2024: 1 region, 77,142 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Escaldes-Engordany
+  "ad_08": {
+    "population": 77142,
+    "urbanization": 0.855,
+    "cultures": { "catalan": 0.48, "spanish": 0.25, "portuguese": 0.11, "french": 0.045, "galician": 0.025, "argentine": 0.02, "brazilian": 0.02, "italian": 0.02, "arab_maghrebi": 0.01, "english": 0.01, "romanian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.047, "Coal": 0.07, "Oil": 0.218, "IronOre": 0.076, "RareEarths": 0.018, "NaturalGas": 0.195, "Timber": 2.569, "Bauxite": 0.04, "Uranium": 0.004 }
+  }
+}

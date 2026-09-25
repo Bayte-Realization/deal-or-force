@@ -1,0 +1,22 @@
+// Transnistria (PMR) on 1 January 2024: 1 region, 367,776 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Transnistria
+  "pmr_x01": {
+    "population": 367776,
+    "urbanization": 0.37,
+    "cultures": { "russian": 0.34, "moldovan": 0.33, "ukrainian": 0.27, "bulgarian": 0.03, "gagauz": 0.02, "belarusian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.941, "Coal": 0.134, "Oil": 0.406, "IronOre": 0.235, "RareEarths": 0.051, "NaturalGas": 0.321, "Timber": 1.573, "Bauxite": 0.064, "Uranium": 0.009 }
+  }
+}

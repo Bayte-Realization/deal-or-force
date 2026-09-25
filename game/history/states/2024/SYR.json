@@ -1,0 +1,78 @@
+// Syria (SYR) on 1 January 2024: 8 regions, 17,070,135 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Al-Hasakah
+  "sy_ha": {
+    "population": 1530761,
+    "urbanization": 0.09,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.327, "Coal": 0.112, "Oil": 0.308, "IronOre": 0.097, "RareEarths": 0.042, "NaturalGas": 0.265, "Timber": 2.277, "Bauxite": 0.067, "Uranium": 0.007 }
+  },
+  // Al-Raqqah
+  "sy_ra": {
+    "population": 293504,
+    "urbanization": 0.97,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.807, "Coal": 0.441, "Oil": 0.763, "IronOre": 0.416, "RareEarths": 0.081, "NaturalGas": 0.797, "Timber": 1.496, "Bauxite": 0.162, "Uranium": 0.018 }
+  },
+  // Aleppo
+  "sy_hl": {
+    "population": 5111439,
+    "urbanization": 0.61,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.271, "Coal": 0.478, "Oil": 0.73, "IronOre": 0.285, "RareEarths": 0.104, "NaturalGas": 0.63, "Timber": 3.112, "Bauxite": 0.139, "Uranium": 0.009 }
+  },
+  // As-Suwayda
+  "sy_su": {
+    "population": 1328455,
+    "urbanization": 0.22,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.229, "Coal": 0.245, "Oil": 0.545, "IronOre": 0.151, "RareEarths": 0.03, "NaturalGas": 0.289, "Timber": 1.379, "Bauxite": 0.04, "Uranium": 0.005 }
+  },
+  // Deir ez-Zor
+  "sy_dy": {
+    "population": 429521,
+    "urbanization": 0.97,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.641, "Coal": 0.214, "Oil": 0.665, "IronOre": 0.145, "RareEarths": 0.055, "NaturalGas": 0.576, "Timber": 0.865, "Bauxite": 0.14, "Uranium": 0.008 }
+  },
+  // Hama
+  "sy_hm": {
+    "population": 2701276,
+    "urbanization": 0.54,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.374, "Coal": 0.276, "Oil": 0.425, "IronOre": 0.145, "RareEarths": 0.078, "NaturalGas": 0.775, "Timber": 1.502, "Bauxite": 0.057, "Uranium": 0.015 }
+  },
+  // Homs
+  "sy_hi": {
+    "population": 2378198,
+    "urbanization": 0.49,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.141, "Coal": 0.262, "Oil": 0.777, "IronOre": 0.341, "RareEarths": 0.064, "NaturalGas": 0.462, "Timber": 0.946, "Bauxite": 0.068, "Uranium": 0.011 }
+  },
+  // Rif Dimashq
+  "sy_rd": {
+    "population": 3296981,
+    "urbanization": 0.82,
+    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.369, "Coal": 0.136, "Oil": 0.291, "IronOre": 0.117, "RareEarths": 0.053, "NaturalGas": 0.201, "Timber": 1.176, "Bauxite": 0.071, "Uranium": 0.008 }
+  }
+}

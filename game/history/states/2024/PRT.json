@@ -1,0 +1,54 @@
+// Portugal (PRT) on 1 January 2024: 5 regions, 10,269,417 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Beja
+  "pt_02": {
+    "population": 2884826,
+    "urbanization": 0.66,
+    "cultures": { "portuguese": 0.9246, "brazilian": 0.0298, "ukrainian": 0.0117, "creole_african": 0.006, "english": 0.004, "indian_diaspora": 0.004, "romanian": 0.004, "spanish": 0.004, "bakongo": 0.003, "chinese_diaspora": 0.003, "french": 0.003, "italian": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.173, "Coal": 0.642, "Oil": 0.549, "IronOre": 0.196, "RareEarths": 0.081, "NaturalGas": 0.793, "Timber": 1.866, "Bauxite": 0.133, "Uranium": 0.014 }
+  },
+  // Braga
+  "pt_03": {
+    "population": 3136194,
+    "urbanization": 0.77,
+    "cultures": { "portuguese": 0.9246, "brazilian": 0.0298, "ukrainian": 0.0117, "creole_african": 0.006, "english": 0.004, "indian_diaspora": 0.004, "romanian": 0.004, "spanish": 0.004, "bakongo": 0.003, "chinese_diaspora": 0.003, "french": 0.003, "italian": 0.003 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.143, "Coal": 0.378, "Oil": 0.712, "IronOre": 0.139, "RareEarths": 0.063, "NaturalGas": 0.736, "Timber": 1.251, "Bauxite": 0.124, "Uranium": 0.014 }
+  },
+  // Santarém
+  "pt_14": {
+    "population": 2774995,
+    "urbanization": 0.73,
+    "cultures": { "portuguese": 0.9246, "brazilian": 0.0298, "ukrainian": 0.0117, "creole_african": 0.006, "english": 0.004, "indian_diaspora": 0.004, "romanian": 0.004, "spanish": 0.004, "bakongo": 0.003, "chinese_diaspora": 0.003, "french": 0.003, "italian": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.476, "Coal": 0.066, "Oil": 0.161, "IronOre": 0.109, "RareEarths": 0.03, "NaturalGas": 0.135, "Timber": 1.432, "Bauxite": 0.023, "Uranium": 0.003 }
+  },
+  // Viseu
+  "pt_18": {
+    "population": 972639,
+    "urbanization": 0.47,
+    "cultures": { "portuguese": 0.9246, "brazilian": 0.0298, "ukrainian": 0.0117, "creole_african": 0.006, "english": 0.004, "indian_diaspora": 0.004, "romanian": 0.004, "spanish": 0.004, "bakongo": 0.003, "chinese_diaspora": 0.003, "french": 0.003, "italian": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.573, "Coal": 0.227, "Oil": 0.235, "IronOre": 0.096, "RareEarths": 0.031, "NaturalGas": 0.426, "Timber": 1.313, "Bauxite": 0.044, "Uranium": 0.005 }
+  },
+  // Évora
+  "pt_07": {
+    "population": 500763,
+    "urbanization": 0.16,
+    "cultures": { "portuguese": 0.9246, "brazilian": 0.0298, "ukrainian": 0.0117, "creole_african": 0.006, "english": 0.004, "indian_diaspora": 0.004, "romanian": 0.004, "spanish": 0.004, "bakongo": 0.003, "chinese_diaspora": 0.003, "french": 0.003, "italian": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.379, "Coal": 0.306, "Oil": 0.291, "IronOre": 0.213, "RareEarths": 0.07, "NaturalGas": 0.252, "Timber": 2.496, "Bauxite": 0.049, "Uranium": 0.005 }
+  }
+}

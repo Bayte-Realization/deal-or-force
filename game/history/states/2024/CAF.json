@@ -1,0 +1,142 @@
+// Central African Republic (CAF) on 1 January 2024: 16 regions, 4,745,185 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bamingui-Bangoran Prefecture
+  "cf_bb": {
+    "population": 152760,
+    "urbanization": 0.11,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.825, "Coal": 0.201, "Oil": 0.281, "IronOre": 0.089, "RareEarths": 0.022, "NaturalGas": 0.268, "Timber": 1.953, "Bauxite": 0.041, "Uranium": 0.003 }
+  },
+  // Basse-Kotto Prefecture
+  "cf_bk": {
+    "population": 116800,
+    "urbanization": 0.23,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.371, "Coal": 0.112, "Oil": 0.218, "IronOre": 0.086, "RareEarths": 0.016, "NaturalGas": 0.227, "Timber": 3.342, "Bauxite": 0.043, "Uranium": 0.002 }
+  },
+  // Haut-Mbomou Prefecture
+  "cf_hm": {
+    "population": 145084,
+    "urbanization": 0.31,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.775, "Coal": 0.319, "Oil": 0.3, "IronOre": 0.16, "RareEarths": 0.092, "NaturalGas": 0.835, "Timber": 1.318, "Bauxite": 0.076, "Uranium": 0.009 }
+  },
+  // Haute-Kotto Prefecture
+  "cf_hk": {
+    "population": 195281,
+    "urbanization": 0.24,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.091, "Coal": 0.651, "Oil": 1.073, "IronOre": 0.386, "RareEarths": 0.115, "NaturalGas": 0.85, "Timber": 2.684, "Bauxite": 0.171, "Uranium": 0.02 }
+  },
+  // Kémo Prefecture
+  "cf_kg": {
+    "population": 144419,
+    "urbanization": 0.32,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.548, "Coal": 0.298, "Oil": 0.311, "IronOre": 0.198, "RareEarths": 0.054, "NaturalGas": 0.345, "Timber": 2.981, "Bauxite": 0.054, "Uranium": 0.008 }
+  },
+  // Lobaye Prefecture
+  "cf_lb": {
+    "population": 440050,
+    "urbanization": 0.29,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.012, "Coal": 0.219, "Oil": 0.498, "IronOre": 0.385, "RareEarths": 0.119, "NaturalGas": 0.552, "Timber": 0.892, "Bauxite": 0.155, "Uranium": 0.013 }
+  },
+  // Mambéré-Kadéï
+  "cf_hs": {
+    "population": 355659,
+    "urbanization": 0.38,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.1, "Coal": 0.224, "Oil": 0.47, "IronOre": 0.19, "RareEarths": 0.055, "NaturalGas": 0.221, "Timber": 2.449, "Bauxite": 0.072, "Uranium": 0.005 }
+  },
+  // Mbomou Prefecture
+  "cf_mb": {
+    "population": 199029,
+    "urbanization": 0.23,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.345, "Coal": 0.366, "Oil": 0.289, "IronOre": 0.136, "RareEarths": 0.063, "NaturalGas": 0.282, "Timber": 2.994, "Bauxite": 0.084, "Uranium": 0.008 }
+  },
+  // Nana-Grébizi Economic Prefecture
+  "cf_kb": {
+    "population": 177052,
+    "urbanization": 0.44,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.198, "Coal": 0.333, "Oil": 0.606, "IronOre": 0.275, "RareEarths": 0.054, "NaturalGas": 0.456, "Timber": 0.708, "Bauxite": 0.075, "Uranium": 0.006 }
+  },
+  // Nana-Mambéré Prefecture
+  "cf_nm": {
+    "population": 199256,
+    "urbanization": 0.24,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.259, "Coal": 0.172, "Oil": 0.32, "IronOre": 0.153, "RareEarths": 0.024, "NaturalGas": 0.135, "Timber": 2.033, "Bauxite": 0.062, "Uranium": 0.006 }
+  },
+  // Ombella-M'Poko Prefecture
+  "cf_mp": {
+    "population": 1482501,
+    "urbanization": 0.77,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.124, "Coal": 0.091, "Oil": 0.166, "IronOre": 0.054, "RareEarths": 0.028, "NaturalGas": 0.194, "Timber": 0.9, "Bauxite": 0.024, "Uranium": 0.003 }
+  },
+  // Ouaka Prefecture
+  "cf_uk": {
+    "population": 315177,
+    "urbanization": 0.27,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.053, "Coal": 0.488, "Oil": 0.572, "IronOre": 0.205, "RareEarths": 0.111, "NaturalGas": 0.705, "Timber": 2.889, "Bauxite": 0.092, "Uranium": 0.011 }
+  },
+  // Ouham Prefecture
+  "cf_ac": {
+    "population": 300162,
+    "urbanization": 0.29,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.297, "Coal": 0.143, "Oil": 0.258, "IronOre": 0.084, "RareEarths": 0.026, "NaturalGas": 0.108, "Timber": 2.085, "Bauxite": 0.038, "Uranium": 0.005 }
+  },
+  // Ouham-Pendé Prefecture
+  "cf_op": {
+    "population": 204231,
+    "urbanization": 0.27,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.882, "Coal": 0.511, "Oil": 0.341, "IronOre": 0.247, "RareEarths": 0.104, "NaturalGas": 0.425, "Timber": 3.215, "Bauxite": 0.117, "Uranium": 0.014 }
+  },
+  // Sangha-Mbaéré
+  "cf_se": {
+    "population": 171663,
+    "urbanization": 0.21,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.985, "Coal": 0.6, "Oil": 0.607, "IronOre": 0.37, "RareEarths": 0.131, "NaturalGas": 0.391, "Timber": 2.972, "Bauxite": 0.107, "Uranium": 0.014 }
+  },
+  // Vakaga Prefecture
+  "cf_vk": {
+    "population": 146061,
+    "urbanization": 0.1,
+    "cultures": { "sara": 0.3, "bakongo": 0.15, "mongo": 0.15, "fulani": 0.1, "luba": 0.08, "hausa": 0.05, "zaghawa": 0.05, "arab_sudanese": 0.04, "fur": 0.03, "kanuri": 0.03, "swahili": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.484, "Coal": 0.397, "Oil": 0.395, "IronOre": 0.165, "RareEarths": 0.058, "NaturalGas": 0.325, "Timber": 3.059, "Bauxite": 0.104, "Uranium": 0.013 }
+  }
+}

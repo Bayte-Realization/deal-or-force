@@ -1,0 +1,206 @@
+// Ukraine (UKR) on 1 January 2024: 24 regions, 25,000,000 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Autonomous Republic of Crimea
+  "ua_43": {
+    "population": 1268345,
+    "urbanization": 0.82,
+    "cultures": { "russian": 0.652, "ukrainian": 0.158, "crimean_tatar": 0.123, "belarusian": 0.008, "polish": 0.008, "tatar": 0.007, "armenian": 0.006, "azerbaijani": 0.006, "korean": 0.006, "moldovan": 0.006, "bulgarian": 0.005, "german": 0.005, "greek": 0.005, "jewish": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.437, "Coal": 2.161, "Oil": 0.532, "IronOre": 4.253, "RareEarths": 0.096, "NaturalGas": 0.6, "Timber": 1.985, "Bauxite": 0.11, "Uranium": 0.635 }
+  },
+  // Cherkasy
+  "ua_71": {
+    "population": 596723,
+    "urbanization": 0.6,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.216, "Coal": 2.807, "Oil": 0.492, "IronOre": 2.18, "RareEarths": 0.07, "NaturalGas": 0.588, "Timber": 2.214, "Bauxite": 0.081, "Uranium": 0.952 }
+  },
+  // Chernihiv
+  "ua_74": {
+    "population": 794949,
+    "urbanization": 0.49,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.464, "Coal": 2.014, "Oil": 0.77, "IronOre": 1.257, "RareEarths": 0.074, "NaturalGas": 0.602, "Timber": 2.123, "Bauxite": 0.074, "Uranium": 0.894 }
+  },
+  // Dnipropetrovsk - arms: Pivdenmash, the Pavlohrad chemical plant
+  "ua_12": {
+    "population": 2296524,
+    "urbanization": 0.74,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2, "ArmsIndustry": 1 },
+    "resources": { "Food": 2.026, "Coal": 4.388, "Oil": 0.807, "IronOre": 3.739, "RareEarths": 0.067, "NaturalGas": 0.747, "Timber": 2.039, "Bauxite": 0.188, "Uranium": 0.342 }
+  },
+  // Donetsk
+  "ua_14": {
+    "population": 2411208,
+    "urbanization": 0.79,
+    "cultures": { "ukrainian": 0.568, "russian": 0.383, "greek": 0.015, "belarusian": 0.009, "armenian": 0.004, "azerbaijani": 0.004, "jewish": 0.004, "tatar": 0.004, "bulgarian": 0.003, "georgian": 0.003, "moldovan": 0.003 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.879, "Coal": 1.825, "Oil": 0.371, "IronOre": 1.333, "RareEarths": 0.065, "NaturalGas": 0.299, "Timber": 2.987, "Bauxite": 0.079, "Uranium": 0.922 }
+  },
+  // Ivano-Frankivsk
+  "ua_26": {
+    "population": 675826,
+    "urbanization": 0.74,
+    "cultures": { "ukrainian": 0.7402, "russian": 0.1662, "romanian": 0.0831, "belarusian": 0.0057, "greek": 0.0019, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.696, "Coal": 2.568, "Oil": 0.177, "IronOre": 4.111, "RareEarths": 0.033, "NaturalGas": 0.196, "Timber": 2.96, "Bauxite": 0.027, "Uranium": 0.311 }
+  },
+  // Kharkiv
+  "ua_63": {
+    "population": 1964792,
+    "urbanization": 0.73,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.913, "Coal": 3.535, "Oil": 0.411, "IronOre": 1.278, "RareEarths": 0.034, "NaturalGas": 0.452, "Timber": 1.734, "Bauxite": 0.086, "Uranium": 0.802 }
+  },
+  // Kherson
+  "ua_65": {
+    "population": 584564,
+    "urbanization": 0.51,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.809, "Coal": 1.347, "Oil": 0.39, "IronOre": 3.758, "RareEarths": 0.05, "NaturalGas": 0.338, "Timber": 2.5, "Bauxite": 0.078, "Uranium": 1 }
+  },
+  // Khmelnytskyi
+  "ua_68": {
+    "population": 739577,
+    "urbanization": 0.64,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.899, "Coal": 1.324, "Oil": 0.274, "IronOre": 1.505, "RareEarths": 0.052, "NaturalGas": 0.431, "Timber": 1.768, "Bauxite": 0.101, "Uranium": 0.725 }
+  },
+  // Kirovohrad
+  "ua_35": {
+    "population": 516399,
+    "urbanization": 0.45,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.692, "Coal": 4.17, "Oil": 0.464, "IronOre": 3.734, "RareEarths": 0.087, "NaturalGas": 0.76, "Timber": 1.68, "Bauxite": 0.11, "Uranium": 0.537 }
+  },
+  // Kyiv - arms: Artem, Antonov, Kuznya na Rybalskomu
+  "ua_32": {
+    "population": 3365443,
+    "urbanization": 0.82,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3, "ArmsIndustry": 1 },
+    "resources": { "Food": 0.847, "Coal": 1.512, "Oil": 0.823, "IronOre": 4.499, "RareEarths": 0.064, "NaturalGas": 0.824, "Timber": 2.37, "Bauxite": 0.173, "Uranium": 0.736 }
+  },
+  // Luhansk
+  "ua_09": {
+    "population": 896292,
+    "urbanization": 0.6,
+    "cultures": { "ukrainian": 0.58, "russian": 0.39, "belarusian": 0.008, "armenian": 0.004, "tatar": 0.004, "azerbaijani": 0.003, "jewish": 0.003, "moldovan": 0.003, "romani": 0.003, "german": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.885, "Coal": 3.953, "Oil": 0.852, "IronOre": 3.85, "RareEarths": 0.065, "NaturalGas": 0.648, "Timber": 1.068, "Bauxite": 0.161, "Uranium": 0.503 }
+  },
+  // Lviv
+  "ua_46": {
+    "population": 1115787,
+    "urbanization": 0.77,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.251, "Coal": 2.426, "Oil": 0.789, "IronOre": 4.316, "RareEarths": 0.093, "NaturalGas": 0.664, "Timber": 2.317, "Bauxite": 0.098, "Uranium": 0.538 }
+  },
+  // Mykolaiv
+  "ua_48": {
+    "population": 832450,
+    "urbanization": 0.62,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.36, "Coal": 3.148, "Oil": 0.295, "IronOre": 3.859, "RareEarths": 0.031, "NaturalGas": 0.304, "Timber": 1.114, "Bauxite": 0.051, "Uranium": 0.69 }
+  },
+  // Odessa
+  "ua_51": {
+    "population": 1489994,
+    "urbanization": 0.7,
+    "cultures": { "ukrainian": 0.628, "russian": 0.208, "bulgarian": 0.061, "moldovan": 0.05, "gagauz": 0.011, "belarusian": 0.008, "armenian": 0.006, "jewish": 0.006, "polish": 0.006, "romani": 0.006, "german": 0.005, "greek": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.214, "Coal": 2.194, "Oil": 0.658, "IronOre": 3.745, "RareEarths": 0.045, "NaturalGas": 0.831, "Timber": 3.274, "Bauxite": 0.114, "Uranium": 0.738 }
+  },
+  // Poltava
+  "ua_53": {
+    "population": 841870,
+    "urbanization": 0.6,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.959, "Coal": 1.701, "Oil": 0.279, "IronOre": 3.273, "RareEarths": 0.069, "NaturalGas": 0.53, "Timber": 2.502, "Bauxite": 0.063, "Uranium": 0.992 }
+  },
+  // Rivne
+  "ua_56": {
+    "population": 348019,
+    "urbanization": 0.71,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.11, "Coal": 4.111, "Oil": 0.288, "IronOre": 3.123, "RareEarths": 0.015, "NaturalGas": 0.231, "Timber": 0.697, "Bauxite": 0.054, "Uranium": 0.91 }
+  },
+  // Sumy
+  "ua_59": {
+    "population": 695475,
+    "urbanization": 0.66,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.887, "Coal": 2.257, "Oil": 0.878, "IronOre": 4.214, "RareEarths": 0.067, "NaturalGas": 0.896, "Timber": 2.867, "Bauxite": 0.088, "Uranium": 0.784 }
+  },
+  // Ternopil
+  "ua_61": {
+    "population": 419064,
+    "urbanization": 0.54,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.161, "Coal": 4.459, "Oil": 0.4, "IronOre": 2.243, "RareEarths": 0.13, "NaturalGas": 0.727, "Timber": 3.167, "Bauxite": 0.134, "Uranium": 0.637 }
+  },
+  // Vinnytsia
+  "ua_05": {
+    "population": 609511,
+    "urbanization": 0.53,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.211, "Coal": 2.93, "Oil": 0.491, "IronOre": 3.847, "RareEarths": 0.083, "NaturalGas": 0.403, "Timber": 3.102, "Bauxite": 0.111, "Uranium": 0.532 }
+  },
+  // Volyn
+  "ua_07": {
+    "population": 365664,
+    "urbanization": 0.69,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.294, "Coal": 1.583, "Oil": 0.747, "IronOre": 3.718, "RareEarths": 0.062, "NaturalGas": 0.452, "Timber": 2.097, "Bauxite": 0.172, "Uranium": 0.476 }
+  },
+  // Zakarpattia
+  "ua_21": {
+    "population": 205864,
+    "urbanization": 0.68,
+    "cultures": { "ukrainian": 0.7845, "hungarian": 0.1175, "rusyn": 0.0291, "romanian": 0.0243, "russian": 0.0243, "romani": 0.0107, "german": 0.0049, "slovak": 0.0049 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.002, "Coal": 2.829, "Oil": 0.679, "IronOre": 2.198, "RareEarths": 0.096, "NaturalGas": 0.303, "Timber": 3.19, "Bauxite": 0.132, "Uranium": 0.558 }
+  },
+  // Zaporizhzhia
+  "ua_23": {
+    "population": 1375809,
+    "urbanization": 0.72,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.026, "Coal": 3.855, "Oil": 0.926, "IronOre": 1.75, "RareEarths": 0.068, "NaturalGas": 0.474, "Timber": 1.434, "Bauxite": 0.151, "Uranium": 0.487 }
+  },
+  // Zhytomyr
+  "ua_18": {
+    "population": 589851,
+    "urbanization": 0.56,
+    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.877, "Coal": 3.658, "Oil": 0.451, "IronOre": 1.56, "RareEarths": 0.047, "NaturalGas": 0.41, "Timber": 2.618, "Bauxite": 0.105, "Uranium": 0.717 }
+  }
+}

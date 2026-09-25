@@ -1,0 +1,94 @@
+// Uruguay (URY) on 1 January 2024: 10 regions, 3,461,734 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Artigas
+  "uy_ar": {
+    "population": 92772,
+    "urbanization": 0.95,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.192, "Coal": 0.223, "Oil": 0.407, "IronOre": 0.14, "RareEarths": 0.055, "NaturalGas": 0.319, "Timber": 1.702, "Bauxite": 0.043, "Uranium": 0.009 }
+  },
+  // Cerro Largo
+  "uy_cl": {
+    "population": 132545,
+    "urbanization": 0.87,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.422, "Coal": 0.362, "Oil": 0.696, "IronOre": 0.23, "RareEarths": 0.062, "NaturalGas": 0.724, "Timber": 3.355, "Bauxite": 0.119, "Uranium": 0.012 }
+  },
+  // Durazno
+  "uy_du": {
+    "population": 45124,
+    "urbanization": 0.94,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.228, "Coal": 0.363, "Oil": 0.309, "IronOre": 0.243, "RareEarths": 0.055, "NaturalGas": 0.31, "Timber": 0.702, "Bauxite": 0.123, "Uranium": 0.006 }
+  },
+  // Florida
+  "uy_fd": {
+    "population": 2062566,
+    "urbanization": 0.97,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.086, "Coal": 0.328, "Oil": 0.38, "IronOre": 0.218, "RareEarths": 0.059, "NaturalGas": 0.992, "Timber": 0.697, "Bauxite": 0.075, "Uranium": 0.016 }
+  },
+  // Lavalleja
+  "uy_la": {
+    "population": 301949,
+    "urbanization": 0.9,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.076, "Coal": 0.446, "Oil": 0.543, "IronOre": 0.235, "RareEarths": 0.068, "NaturalGas": 0.588, "Timber": 2.022, "Bauxite": 0.076, "Uranium": 0.011 }
+  },
+  // Paysandú
+  "uy_pa": {
+    "population": 143169,
+    "urbanization": 0.94,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.396, "Coal": 0.384, "Oil": 0.513, "IronOre": 0.281, "RareEarths": 0.087, "NaturalGas": 0.478, "Timber": 3.186, "Bauxite": 0.061, "Uranium": 0.006 }
+  },
+  // Rocha
+  "uy_ro": {
+    "population": 78859,
+    "urbanization": 0.75,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.431, "Coal": 0.375, "Oil": 0.813, "IronOre": 0.349, "RareEarths": 0.075, "NaturalGas": 0.876, "Timber": 0.975, "Bauxite": 0.15, "Uranium": 0.016 }
+  },
+  // Salto
+  "uy_sa": {
+    "population": 4591,
+    "urbanization": 0.05,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.347, "Coal": 0.372, "Oil": 0.675, "IronOre": 0.163, "RareEarths": 0.074, "NaturalGas": 0.652, "Timber": 2.061, "Bauxite": 0.092, "Uranium": 0.01 }
+  },
+  // Soriano
+  "uy_so": {
+    "population": 228899,
+    "urbanization": 0.87,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.707, "Coal": 0.143, "Oil": 0.202, "IronOre": 0.122, "RareEarths": 0.039, "NaturalGas": 0.21, "Timber": 0.998, "Bauxite": 0.043, "Uranium": 0.005 }
+  },
+  // Tacuarembó
+  "uy_ta": {
+    "population": 371260,
+    "urbanization": 0.97,
+    "cultures": { "uruguayan": 0.9, "african_american": 0.045, "argentine": 0.02, "brazilian": 0.015, "italian": 0.01, "spanish": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.428, "Coal": 0.115, "Oil": 0.282, "IronOre": 0.083, "RareEarths": 0.033, "NaturalGas": 0.323, "Timber": 2.759, "Bauxite": 0.064, "Uranium": 0.006 }
+  }
+}

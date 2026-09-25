@@ -1,0 +1,22 @@
+// Qatar (QAT) on 1 January 2024: 1 region, 2,832,067 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Al Rayyan
+  "qa_ra": {
+    "population": 2832067,
+    "urbanization": 0.95,
+    "cultures": { "indian_diaspora": 0.2245, "bengali_muslim": 0.1327, "nepali": 0.1327, "arab_gulf": 0.1224, "punjabi": 0.0918, "tagalog": 0.0714, "malayali": 0.0612, "arab_egyptian": 0.0408, "sinhalese": 0.0357, "arab_levantine": 0.0255, "arab_sudanese": 0.0204, "persian": 0.0204, "sindhi": 0.0204 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.077, "Coal": 0.673, "Oil": 5.282, "IronOre": 0.348, "RareEarths": 0.079, "NaturalGas": 9.545, "Timber": 1.671, "Bauxite": 0.12, "Uranium": 0.016 }
+  }
+}

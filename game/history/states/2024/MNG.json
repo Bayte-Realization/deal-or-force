@@ -1,0 +1,158 @@
+// Mongolia (MNG) on 1 January 2024: 18 regions, 3,225,167 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Arkhangai
+  "mn_073": {
+    "population": 70542,
+    "urbanization": 0.43,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.834, "Coal": 0.378, "Oil": 0.586, "IronOre": 0.357, "RareEarths": 0.06, "NaturalGas": 0.834, "Timber": 1.633, "Bauxite": 0.133, "Uranium": 0.018 }
+  },
+  // Bayan-Ölgii
+  "mn_071": {
+    "population": 125049,
+    "urbanization": 0.43,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.29, "Coal": 0.49, "Oil": 0.574, "IronOre": 0.318, "RareEarths": 0.086, "NaturalGas": 0.717, "Timber": 3.113, "Bauxite": 0.135, "Uranium": 0.006 }
+  },
+  // Bayankhongor
+  "mn_069": {
+    "population": 99330,
+    "urbanization": 0.4,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.018, "Coal": 0.602, "Oil": 0.379, "IronOre": 0.309, "RareEarths": 0.1, "NaturalGas": 0.567, "Timber": 0.962, "Bauxite": 0.181, "Uranium": 0.015 }
+  },
+  // Bulgan
+  "mn_067": {
+    "population": 225548,
+    "urbanization": 0.66,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.383, "Coal": 0.211, "Oil": 0.381, "IronOre": 0.236, "RareEarths": 0.066, "NaturalGas": 0.771, "Timber": 1.049, "Bauxite": 0.072, "Uranium": 0.012 }
+  },
+  // Dornod
+  "mn_061": {
+    "population": 104454,
+    "urbanization": 0.49,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.929, "Coal": 0.246, "Oil": 0.354, "IronOre": 0.286, "RareEarths": 0.04, "NaturalGas": 0.554, "Timber": 3.281, "Bauxite": 0.064, "Uranium": 0.011 }
+  },
+  // Dornogovi
+  "mn_063": {
+    "population": 19448,
+    "urbanization": 0.97,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.397, "Coal": 0.262, "Oil": 0.683, "IronOre": 0.214, "RareEarths": 0.042, "NaturalGas": 0.786, "Timber": 0.927, "Bauxite": 0.08, "Uranium": 0.015 }
+  },
+  // Dundgovi
+  "mn_059": {
+    "population": 4723,
+    "urbanization": 0.97,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.447, "Coal": 0.093, "Oil": 0.172, "IronOre": 0.116, "RareEarths": 0.025, "NaturalGas": 0.217, "Timber": 2.16, "Bauxite": 0.06, "Uranium": 0.004 }
+  },
+  // Govi-Altai
+  "mn_065": {
+    "population": 110625,
+    "urbanization": 0.45,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.4, "Coal": 0.454, "Oil": 1.028, "IronOre": 0.41, "RareEarths": 0.082, "NaturalGas": 0.766, "Timber": 2.096, "Bauxite": 0.121, "Uranium": 0.009 }
+  },
+  // Khentii
+  "mn_039": {
+    "population": 61367,
+    "urbanization": 0.37,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.923, "Coal": 0.306, "Oil": 0.647, "IronOre": 0.301, "RareEarths": 0.072, "NaturalGas": 0.659, "Timber": 1.497, "Bauxite": 0.05, "Uranium": 0.013 }
+  },
+  // Khovd
+  "mn_043": {
+    "population": 86213,
+    "urbanization": 0.54,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.047, "Coal": 0.191, "Oil": 0.466, "IronOre": 0.294, "RareEarths": 0.092, "NaturalGas": 0.453, "Timber": 2.38, "Bauxite": 0.123, "Uranium": 0.006 }
+  },
+  // Khövsgöl
+  "mn_041": {
+    "population": 108529,
+    "urbanization": 0.39,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.441, "Coal": 0.316, "Oil": 0.408, "IronOre": 0.12, "RareEarths": 0.052, "NaturalGas": 0.237, "Timber": 2.011, "Bauxite": 0.047, "Uranium": 0.009 }
+  },
+  // Selenge
+  "mn_049": {
+    "population": 301337,
+    "urbanization": 0.6,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.804, "Coal": 0.328, "Oil": 0.833, "IronOre": 0.232, "RareEarths": 0.085, "NaturalGas": 0.805, "Timber": 1.63, "Bauxite": 0.168, "Uranium": 0.019 }
+  },
+  // Sükhbaatar
+  "mn_051": {
+    "population": 29753,
+    "urbanization": 0.81,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.891, "Coal": 0.174, "Oil": 0.306, "IronOre": 0.174, "RareEarths": 0.04, "NaturalGas": 0.146, "Timber": 3.189, "Bauxite": 0.026, "Uranium": 0.007 }
+  },
+  // Töv
+  "mn_047": {
+    "population": 1589084,
+    "urbanization": 0.87,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.441, "Coal": 0.404, "Oil": 0.981, "IronOre": 0.278, "RareEarths": 0.11, "NaturalGas": 0.362, "Timber": 1.489, "Bauxite": 0.104, "Uranium": 0.009 }
+  },
+  // Uvs
+  "mn_046": {
+    "population": 97809,
+    "urbanization": 0.56,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.14, "Coal": 0.347, "Oil": 0.301, "IronOre": 0.253, "RareEarths": 0.049, "NaturalGas": 0.534, "Timber": 2.46, "Bauxite": 0.065, "Uranium": 0.012 }
+  },
+  // Zavkhan
+  "mn_057": {
+    "population": 53451,
+    "urbanization": 0.23,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.292, "Coal": 0.234, "Oil": 0.684, "IronOre": 0.203, "RareEarths": 0.103, "NaturalGas": 0.567, "Timber": 3.346, "Bauxite": 0.086, "Uranium": 0.01 }
+  },
+  // Ömnögovi
+  "mn_053": {
+    "population": 57496,
+    "urbanization": 0.4,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.2, "Coal": 0.206, "Oil": 0.534, "IronOre": 0.219, "RareEarths": 0.071, "NaturalGas": 0.372, "Timber": 1.761, "Bauxite": 0.054, "Uranium": 0.009 }
+  },
+  // Övörkhangai
+  "mn_055": {
+    "population": 80409,
+    "urbanization": 0.53,
+    "cultures": { "mongol": 0.8711, "kazakh": 0.0402, "buryat": 0.0309, "tuvan": 0.0155, "han": 0.0103, "russian": 0.0103, "evenk": 0.0062, "korean": 0.0052, "uyghur": 0.0052, "yakut": 0.0052 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.778, "Coal": 0.137, "Oil": 0.416, "IronOre": 0.187, "RareEarths": 0.022, "NaturalGas": 0.316, "Timber": 1.773, "Bauxite": 0.041, "Uranium": 0.004 }
+  }
+}

@@ -1,0 +1,70 @@
+// Pakistan (PAK) on 1 January 2024: 7 regions, 216,565,318 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Azad Kashmir
+  "pk_jk": {
+    "population": 1331079,
+    "urbanization": 0.05,
+    "cultures": { "kashmiri": 0.97, "hindustani": 0.0131, "bengali_muslim": 0.0035, "gujarati": 0.0035, "rajasthani": 0.0035, "hazara": 0.0017, "persian": 0.0017, "tajik": 0.001, "nepali": 0.0009, "hui": 0.0005, "tibetan": 0.0003, "parsi": 0.0002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.075, "Coal": 0.253, "Oil": 0.376, "IronOre": 0.298, "RareEarths": 0.073, "NaturalGas": 0.391, "Timber": 1.527, "Bauxite": 0.088, "Uranium": 0.012 }
+  },
+  // Balochistan
+  "pk_ba": {
+    "population": 19010651,
+    "urbanization": 0.44,
+    "cultures": { "baloch": 0.55, "pashtun": 0.3, "sindhi": 0.06, "punjabi": 0.045, "hazara": 0.025, "hindustani": 0.01, "persian": 0.01 },
+    "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.075, "Coal": 0.438, "Oil": 0.494, "IronOre": 0.239, "RareEarths": 0.039, "NaturalGas": 0.477, "Timber": 2.584, "Bauxite": 0.13, "Uranium": 0.012 }
+  },
+  // Federally Administered Tribal Areas
+  "pk_ta": {
+    "population": 3755753,
+    "urbanization": 0.21,
+    "cultures": { "pashtun": 0.97, "hindustani": 0.0131, "bengali_muslim": 0.0035, "gujarati": 0.0035, "rajasthani": 0.0035, "hazara": 0.0017, "persian": 0.0017, "tajik": 0.001, "nepali": 0.0009, "hui": 0.0005, "tibetan": 0.0003, "parsi": 0.0002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.011, "Coal": 0.392, "Oil": 0.528, "IronOre": 0.212, "RareEarths": 0.055, "NaturalGas": 0.712, "Timber": 3.217, "Bauxite": 0.085, "Uranium": 0.011 }
+  },
+  // Gilgit-Baltistan
+  "pk_gb": {
+    "population": 1595846,
+    "urbanization": 0.27,
+    "cultures": { "kashmiri": 0.48, "ladakhi": 0.15, "punjabi": 0.13, "pashtun": 0.11, "tibetan": 0.06, "tajik": 0.04, "persian": 0.03 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.26, "Coal": 0.622, "Oil": 0.754, "IronOre": 0.332, "RareEarths": 0.109, "NaturalGas": 0.742, "Timber": 0.773, "Bauxite": 0.085, "Uranium": 0.018 }
+  },
+  // Khyber Pakhtunkhwa
+  "pk_kp": {
+    "population": 20709432,
+    "urbanization": 0.54,
+    "cultures": { "pashtun": 0.82, "hindustani": 0.075, "punjabi": 0.045, "kashmiri": 0.025, "baloch": 0.015, "persian": 0.01, "tajik": 0.01 },
+    "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.16, "Coal": 0.249, "Oil": 0.473, "IronOre": 0.262, "RareEarths": 0.042, "NaturalGas": 0.269, "Timber": 3.182, "Bauxite": 0.044, "Uranium": 0.008 }
+  },
+  // Punjab
+  "pk_pb": {
+    "population": 123868145,
+    "urbanization": 0.31,
+    "cultures": { "punjabi": 0.4633, "hindustani": 0.234, "bengali_muslim": 0.0624, "gujarati": 0.0624, "rajasthani": 0.0624, "hazara": 0.0312, "persian": 0.0312, "tajik": 0.0187, "nepali": 0.0156, "hui": 0.0094, "tibetan": 0.0062, "parsi": 0.0031 },
+    "buildings": { "Agriculture": 43, "CivilianIndustry": 4, "Infrastructure": 1 },
+    "resources": { "Food": 1.71, "Coal": 0.249, "Oil": 0.283, "IronOre": 0.146, "RareEarths": 0.055, "NaturalGas": 0.389, "Timber": 2.476, "Bauxite": 0.143, "Uranium": 0.013 }
+  },
+  // Sindh
+  "pk_sd": {
+    "population": 46294412,
+    "urbanization": 0.51,
+    "cultures": { "sindhi": 0.61, "hindustani": 0.22, "punjabi": 0.08, "baloch": 0.05, "pashtun": 0.03, "gujarati": 0.01 },
+    "buildings": { "Agriculture": 12, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.591, "Coal": 0.286, "Oil": 0.246, "IronOre": 0.109, "RareEarths": 0.06, "NaturalGas": 0.36, "Timber": 3.342, "Bauxite": 0.082, "Uranium": 0.007 }
+  }
+}

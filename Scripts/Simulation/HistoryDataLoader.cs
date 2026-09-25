@@ -178,6 +178,11 @@ public static class HistoryDataLoader
                 if (IdeologyCatalog.Knows(id)) nation.Ideology = id;
                 else errors?.Add($"{entry.Name}: no ideology called '{id}'.");
             }
+            // Whose state it is. The base game's are read with the catalogue of peoples, which
+            // has to know them before any campaign exists; this is for a mod that says it again.
+            if (value.TryGetProperty("primary_cultures", out var primary) && primary.ValueKind == JsonValueKind.Array)
+                DemographyCatalog.Declare(nation.Tag, primary.EnumerateArray()
+                    .Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()));
         }
     }
 
@@ -194,15 +199,31 @@ public static class HistoryDataLoader
         StatedRegions(campaign).Where(pair => pair.Value.Population.HasValue)
             .ToDictionary(pair => pair.Key, pair => pair.Value.Population.Value);
 
-    /// <summary>What history/states writes down about a region that the deal needs before it starts.</summary>
-    public readonly record struct RegionFigures(long? Population, float? Urbanisation);
+    /// <summary>
+    /// What history/states writes down about a region that the deal needs before it starts: the
+    /// head-count and how much of it lives in towns, who they are, what is built there and what
+    /// lies under the ground. A field left null was not written, and the deal works it out from
+    /// the country; one that was written is what the region has.
+    /// </summary>
+    public sealed class RegionFigures
+    {
+        public long? Population;
+        public float? Urbanisation;
+        /// <summary>The peoples as written, normalised later; a later file's list replaces an earlier one.</summary>
+        public List<(string Culture, float Share)> Cultures;
+        /// <summary>Building counts, merged key by key across files; a zero removes one.</summary>
+        public Dictionary<BuildingKind, int> Buildings;
+        /// <summary>Deposits, merged key by key across files; a zero removes one.</summary>
+        public Dictionary<Commodity, float> Resources;
+    }
 
     /// <summary>
-    /// Head-count and how much of it lives in towns, for every region history/states gives
-    /// either for, the later file winning field by field. How urban a region is decides which
-    /// trades its people follow and whether its share of the country's buildings is farms or
-    /// factories, so it has to be known at the deal too - otherwise Moscow was dealt as a
-    /// region of the national average, three quarters urban, with farms to match.
+    /// Everything history/states says about a region that the deal has to know before it deals
+    /// it, the later file winning field by field. How urban a region is decides which trades its
+    /// people follow and whether its share of the country's buildings is farms or factories -
+    /// otherwise Moscow was dealt as a region of the national average, three quarters urban,
+    /// with farms to match. Who lives there has to be known before the trades are crossed with
+    /// the peoples; what is built and dug there before the region's books are first drawn up.
     /// </summary>
     public static Dictionary<int, RegionFigures> StatedRegions(Campaign campaign)
     {
@@ -218,14 +239,41 @@ public static class HistoryDataLoader
                 {
                     if (entry.Value.ValueKind != JsonValueKind.Object || !regions.TryGetValue(entry.Name, out var state))
                         continue;
-                    stated.TryGetValue(state.MapIndex, out var figures);
-                    if (entry.Value.TryGetProperty("population", out var population) &&
+                    if (!stated.TryGetValue(state.MapIndex, out var figures)) figures = new RegionFigures();
+                    var value = entry.Value;
+                    if (value.TryGetProperty("population", out var population) &&
                         population.ValueKind == JsonValueKind.Number && population.TryGetInt64(out var people))
-                        figures = figures with { Population = Math.Max(0, people) };
-                    if (entry.Value.TryGetProperty("urbanization", out var urbanisation) &&
+                        figures.Population = Math.Max(0, people);
+                    if (value.TryGetProperty("urbanization", out var urbanisation) &&
                         urbanisation.ValueKind == JsonValueKind.Number && urbanisation.TryGetSingle(out var share))
-                        figures = figures with { Urbanisation = M.Clamp01(share) };
-                    if (figures.Population.HasValue || figures.Urbanisation.HasValue) stated[state.MapIndex] = figures;
+                        figures.Urbanisation = M.Clamp01(share);
+                    if (value.TryGetProperty("cultures", out var cultures) && cultures.ValueKind == JsonValueKind.Object)
+                    {
+                        var mix = new List<(string Culture, float Share)>();
+                        foreach (var culture in cultures.EnumerateObject())
+                            if (!culture.Name.StartsWith("//", StringComparison.Ordinal) &&
+                                culture.Value.ValueKind == JsonValueKind.Number &&
+                                culture.Value.TryGetSingle(out var part) && part > 0f)
+                                mix.Add((CultureId(culture.Name), part));
+                        if (mix.Count > 0) figures.Cultures = mix;
+                    }
+                    if (value.TryGetProperty("buildings", out var buildings) && buildings.ValueKind == JsonValueKind.Object)
+                    {
+                        figures.Buildings ??= new Dictionary<BuildingKind, int>();
+                        foreach (var building in buildings.EnumerateObject())
+                            if (BuildingCatalog.TryParse(building.Name, out var kind) &&
+                                building.Value.ValueKind == JsonValueKind.Number && building.Value.TryGetInt32(out var level))
+                                figures.Buildings[kind] = Math.Max(0, level);
+                    }
+                    if (value.TryGetProperty("resources", out var resources) && resources.ValueKind == JsonValueKind.Object)
+                    {
+                        figures.Resources ??= new Dictionary<Commodity, float>();
+                        foreach (var resource in resources.EnumerateObject())
+                            if (CommodityCatalog.TryParse(resource.Name, out var commodity) &&
+                                resource.Value.ValueKind == JsonValueKind.Number && resource.Value.TryGetSingle(out var amount))
+                                figures.Resources[commodity] = Math.Max(0f, amount);
+                    }
+                    stated[state.MapIndex] = figures;
                 }
             }
             catch (Exception exception) when (exception is IOException or JsonException)
@@ -305,8 +353,13 @@ public static class HistoryDataLoader
                     if (CommodityCatalog.TryParse(resource.Name, out var commodity) && resource.Value.TryGetSingle(out var potential))
                         state.ResourceDeposits[commodity] = Math.Max(0f, potential);
                     else errors?.Add($"Invalid resource '{resource.Name}' in state '{entry.Name}'.");
+            // The deal already crossed this very list with the region's trades; doing it again
+            // would only spread every people over every trade evenly and undo the farm towns.
             if (value.TryGetProperty("cultures", out var cultures) && cultures.ValueKind == JsonValueKind.Object)
-                ApplyCultureMix(state, cultures, errors);
+            {
+                if (state.DealtCultures is null || state.DealtCultures != MixSignature(cultures))
+                    ApplyCultureMix(state, cultures, errors);
+            }
             else if (value.TryGetProperty("nationalities", out var nationalities) && nationalities.ValueKind == JsonValueKind.Object)
                 ApplyCultureMix(state, nationalities, errors);
         }
@@ -318,6 +371,36 @@ public static class HistoryDataLoader
             if (nation is not null)
                 nation.Population = campaign.States.Where(state => state.NationMapIndex == mapIndex).Sum(state => state.Population);
         }
+    }
+
+    /// <summary>
+    /// A culture id as a file may write it: the id, or - because scenarios written before there
+    /// were cultures said "IND" - a country's tag for that country's own people.
+    /// </summary>
+    private static string CultureId(string key) =>
+        DemographyCatalog.Culture(key) is not null
+            ? key
+            : DemographyCatalog.PrimaryCultures(key).FirstOrDefault() ?? key.ToLowerInvariant();
+
+    /// <summary>A mix of peoples, written the same way whichever order a file listed it in.</summary>
+    internal static string MixSignature(IEnumerable<(string Culture, float Share)> mix)
+    {
+        var list = mix.Where(entry => entry.Share > 0f).ToList();
+        var total = list.Sum(entry => entry.Share);
+        if (total <= 0f) return "";
+        return string.Join(";", list.OrderBy(entry => entry.Culture, StringComparer.Ordinal)
+            .Select(entry => entry.Culture + "=" + Math.Round(entry.Share / total, 4)
+                .ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    private static string MixSignature(JsonElement cultures)
+    {
+        var mix = new List<(string, float)>();
+        foreach (var entry in cultures.EnumerateObject())
+            if (!entry.Name.StartsWith("//", StringComparison.Ordinal) && entry.Value.ValueKind == JsonValueKind.Number &&
+                entry.Value.TryGetSingle(out var share) && share > 0f)
+                mix.Add((CultureId(entry.Name), share));
+        return MixSignature(mix);
     }
 
     /// <summary>
@@ -343,10 +426,7 @@ public static class HistoryDataLoader
                 errors?.Add($"Invalid culture share '{entry.Name}' in state '{state.Id}'.");
                 continue;
             }
-            var id = DemographyCatalog.Culture(entry.Name) is not null
-                ? entry.Name
-                : DemographyCatalog.PrimaryCultures(entry.Name).FirstOrDefault() ?? entry.Name.ToLowerInvariant();
-            shares.Add((id, share));
+            shares.Add((CultureId(entry.Name), share));
         }
         var total = shares.Sum(item => item.Share);
         if (total <= 0f) return;
@@ -419,4 +499,14 @@ public static class HistoryDataLoader
     {
         if (value.TryGetProperty(name, out var element) && element.TryGetInt64(out var number)) assign(number);
     }
+}
+
+public sealed partial class ScenarioState
+{
+    /// <summary>
+    /// The mix of peoples the start-of-game deal took from history/states for this region, as
+    /// <see cref="HistoryDataLoader.MixSignature"/> writes it - so the corrections that follow
+    /// the deal do not rebuild a region from the list it was just built from. Not saved.
+    /// </summary>
+    internal string DealtCultures;
 }

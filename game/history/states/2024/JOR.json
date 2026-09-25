@@ -1,0 +1,30 @@
+// Jordan (JOR) on 1 January 2024: 2 regions, 10,101,694 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Ma'an
+  "jo_mn": {
+    "population": 1057217,
+    "urbanization": 0.72,
+    "cultures": { "arab_levantine": 0.5, "palestinian": 0.32, "bedouin": 0.06, "arab_iraqi": 0.04, "arab_egyptian": 0.035, "adyghe": 0.015, "chechen": 0.01, "kurdish": 0.01, "armenian": 0.005, "assyrian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.023, "Coal": 0.094, "Oil": 0.255, "IronOre": 0.081, "RareEarths": 0.036, "NaturalGas": 0.224, "Timber": 0.87, "Bauxite": 0.066, "Uranium": 0.008 }
+  },
+  // Mafraq
+  "jo_ma": {
+    "population": 9044477,
+    "urbanization": 0.94,
+    "cultures": { "arab_levantine": 0.5, "palestinian": 0.32, "bedouin": 0.06, "arab_iraqi": 0.04, "arab_egyptian": 0.035, "adyghe": 0.015, "chechen": 0.01, "kurdish": 0.01, "armenian": 0.005, "assyrian": 0.005 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.451, "Coal": 0.174, "Oil": 0.277, "IronOre": 0.122, "RareEarths": 0.028, "NaturalGas": 0.395, "Timber": 1.96, "Bauxite": 0.058, "Uranium": 0.008 }
+  }
+}

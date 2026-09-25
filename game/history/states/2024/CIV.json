@@ -1,0 +1,118 @@
+// Ivory Coast (CIV) on 1 January 2024: 13 regions, 25,716,544 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Agnéby
+  "ci_16": {
+    "population": 1650228,
+    "urbanization": 0.46,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.564, "Coal": 0.358, "Oil": 0.364, "IronOre": 0.391, "RareEarths": 0.067, "NaturalGas": 0.814, "Timber": 0.969, "Bauxite": 0.176, "Uranium": 0.008 }
+  },
+  // Bas-Sassandra
+  "ci_09": {
+    "population": 1462268,
+    "urbanization": 0.51,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.827, "Coal": 0.525, "Oil": 0.661, "IronOre": 0.204, "RareEarths": 0.094, "NaturalGas": 0.757, "Timber": 1.942, "Bauxite": 0.13, "Uranium": 0.014 }
+  },
+  // Denguélé
+  "ci_10": {
+    "population": 442419,
+    "urbanization": 0.23,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.04, "Coal": 0.172, "Oil": 0.3, "IronOre": 0.282, "RareEarths": 0.102, "NaturalGas": 0.697, "Timber": 2.366, "Bauxite": 0.078, "Uranium": 0.008 }
+  },
+  // Dix-Huit Montagnes
+  "ci_06": {
+    "population": 1386467,
+    "urbanization": 0.26,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.461, "Coal": 0.164, "Oil": 0.278, "IronOre": 0.064, "RareEarths": 0.027, "NaturalGas": 0.153, "Timber": 2.152, "Bauxite": 0.038, "Uranium": 0.003 }
+  },
+  // Haut-Sassandra
+  "ci_02": {
+    "population": 1503609,
+    "urbanization": 0.43,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.59, "Coal": 0.314, "Oil": 0.34, "IronOre": 0.22, "RareEarths": 0.066, "NaturalGas": 0.549, "Timber": 2.061, "Bauxite": 0.087, "Uranium": 0.01 }
+  },
+  // Lagunes
+  "ci_01": {
+    "population": 9432722,
+    "urbanization": 0.84,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.377, "Coal": 0.136, "Oil": 0.403, "IronOre": 0.25, "RareEarths": 0.03, "NaturalGas": 0.357, "Timber": 2.407, "Bauxite": 0.075, "Uranium": 0.005 }
+  },
+  // Moyen-Cavally
+  "ci_19": {
+    "population": 486088,
+    "urbanization": 0.17,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.95, "Coal": 0.287, "Oil": 0.339, "IronOre": 0.103, "RareEarths": 0.072, "NaturalGas": 0.424, "Timber": 1.587, "Bauxite": 0.06, "Uranium": 0.009 }
+  },
+  // N'zi-Comoé
+  "ci_11": {
+    "population": 1851394,
+    "urbanization": 0.35,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.983, "Coal": 0.392, "Oil": 0.656, "IronOre": 0.314, "RareEarths": 0.1, "NaturalGas": 0.448, "Timber": 3.344, "Bauxite": 0.094, "Uranium": 0.009 }
+  },
+  // Savanes
+  "ci_03": {
+    "population": 3011517,
+    "urbanization": 0.16,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.999, "Coal": 0.57, "Oil": 0.55, "IronOre": 0.345, "RareEarths": 0.121, "NaturalGas": 0.69, "Timber": 1.084, "Bauxite": 0.128, "Uranium": 0.02 }
+  },
+  // Sud-Bandama
+  "ci_15": {
+    "population": 1174827,
+    "urbanization": 0.44,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.461, "Coal": 0.23, "Oil": 0.409, "IronOre": 0.197, "RareEarths": 0.03, "NaturalGas": 0.306, "Timber": 1.134, "Bauxite": 0.05, "Uranium": 0.012 }
+  },
+  // Vallée du Bandama
+  "ci_04": {
+    "population": 1997843,
+    "urbanization": 0.59,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.189, "Coal": 0.165, "Oil": 0.251, "IronOre": 0.159, "RareEarths": 0.048, "NaturalGas": 0.193, "Timber": 1.067, "Bauxite": 0.051, "Uranium": 0.005 }
+  },
+  // Worodougou
+  "ci_14": {
+    "population": 689999,
+    "urbanization": 0.15,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.936, "Coal": 0.133, "Oil": 0.234, "IronOre": 0.127, "RareEarths": 0.02, "NaturalGas": 0.122, "Timber": 2.79, "Bauxite": 0.028, "Uranium": 0.004 }
+  },
+  // Zanzan
+  "ci_08": {
+    "population": 627163,
+    "urbanization": 0.19,
+    "cultures": { "baoule": 0.23, "senufo": 0.18, "mandinka": 0.15, "kru": 0.11, "mossi": 0.09, "fulani": 0.08, "akan": 0.07, "bambara": 0.05, "songhai": 0.02, "wolof": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.498, "Coal": 0.078, "Oil": 0.296, "IronOre": 0.087, "RareEarths": 0.043, "NaturalGas": 0.161, "Timber": 1.281, "Bauxite": 0.042, "Uranium": 0.004 }
+  }
+}

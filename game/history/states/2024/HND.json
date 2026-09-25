@@ -1,0 +1,46 @@
+// Honduras (HND) on 1 January 2024: 4 regions, 9,746,117 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // El Paraíso
+  "hn_ep": {
+    "population": 4547553,
+    "urbanization": 0.65,
+    "cultures": { "honduran": 0.85, "maya": 0.06, "native_american": 0.05, "creole_african": 0.02, "guatemalan": 0.01, "salvadoran": 0.01 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.677, "Coal": 0.288, "Oil": 0.487, "IronOre": 0.123, "RareEarths": 0.075, "NaturalGas": 0.361, "Timber": 3.165, "Bauxite": 0.077, "Uranium": 0.007 }
+  },
+  // Gracias a Dios
+  "hn_gd": {
+    "population": 113188,
+    "urbanization": 0.21,
+    "cultures": { "honduran": 0.85, "maya": 0.06, "native_american": 0.05, "creole_african": 0.02, "guatemalan": 0.01, "salvadoran": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.342, "Coal": 0.41, "Oil": 0.597, "IronOre": 0.173, "RareEarths": 0.078, "NaturalGas": 0.639, "Timber": 1.057, "Bauxite": 0.054, "Uranium": 0.007 }
+  },
+  // Olancho
+  "hn_ol": {
+    "population": 869264,
+    "urbanization": 0.17,
+    "cultures": { "honduran": 0.85, "maya": 0.06, "native_american": 0.05, "creole_african": 0.02, "guatemalan": 0.01, "salvadoran": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.767, "Coal": 0.256, "Oil": 0.473, "IronOre": 0.441, "RareEarths": 0.053, "NaturalGas": 0.595, "Timber": 3.14, "Bauxite": 0.188, "Uranium": 0.018 }
+  },
+  // Yoro
+  "hn_yo": {
+    "population": 4216112,
+    "urbanization": 0.64,
+    "cultures": { "honduran": 0.85, "maya": 0.06, "native_american": 0.05, "creole_african": 0.02, "guatemalan": 0.01, "salvadoran": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.947, "Coal": 0.211, "Oil": 0.168, "IronOre": 0.173, "RareEarths": 0.041, "NaturalGas": 0.278, "Timber": 3.267, "Bauxite": 0.039, "Uranium": 0.007 }
+  }
+}

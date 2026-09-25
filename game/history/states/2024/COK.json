@@ -1,0 +1,22 @@
+// Cook Islands (COK) on 1 January 2024: 1 region, 17,459 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Mitiaro
+  "ck_x05": {
+    "population": 17459,
+    "urbanization": 0.648,
+    "cultures": { "polynesian": 0.87, "new_zealander": 0.07, "english": 0.03, "fijian": 0.03 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.428, "Coal": 0.275, "Oil": 0.589, "IronOre": 0.171, "RareEarths": 0.05, "NaturalGas": 0.406, "Timber": 2.124, "Bauxite": 0.092, "Uranium": 0.011 }
+  }
+}

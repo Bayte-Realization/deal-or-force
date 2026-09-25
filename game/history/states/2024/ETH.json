@@ -1,0 +1,78 @@
+// Ethiopia (ETH) on 1 January 2024: 8 regions, 112,078,730 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Afar
+  "et_af": {
+    "population": 5824388,
+    "urbanization": 0.05,
+    "cultures": { "afar": 0.9, "amhara": 0.045, "tigrayan": 0.025, "oromo": 0.02, "somali": 0.01 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.3, "Coal": 0.223, "Oil": 0.486, "IronOre": 0.246, "RareEarths": 0.082, "NaturalGas": 0.455, "Timber": 1.492, "Bauxite": 0.126, "Uranium": 0.009 }
+  },
+  // Amhara
+  "et_am": {
+    "population": 18434343,
+    "urbanization": 0.16,
+    "cultures": { "amhara": 0.97, "acholi": 0.006, "kalenjin": 0.006, "luo": 0.006, "maasai": 0.004, "swahili": 0.004, "arab_sudanese": 0.002, "beja": 0.002 },
+    "buildings": { "Agriculture": 6, "Infrastructure": 1 },
+    "resources": { "Food": 1.784, "Coal": 0.444, "Oil": 0.748, "IronOre": 0.388, "RareEarths": 0.148, "NaturalGas": 1.099, "Timber": 1.094, "Bauxite": 0.177, "Uranium": 0.011 }
+  },
+  // Benishangul-Gumuz
+  "et_be": {
+    "population": 2924512,
+    "urbanization": 0.05,
+    "cultures": { "dinka": 0.3067, "acholi": 0.1387, "kalenjin": 0.1387, "luo": 0.1387, "maasai": 0.0924, "swahili": 0.0924, "arab_sudanese": 0.0462, "beja": 0.0462 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.287, "Coal": 0.362, "Oil": 0.659, "IronOre": 0.291, "RareEarths": 0.111, "NaturalGas": 0.501, "Timber": 3.101, "Bauxite": 0.143, "Uranium": 0.01 }
+  },
+  // Gambela
+  "et_ga": {
+    "population": 470343,
+    "urbanization": 0.05,
+    "cultures": { "nuer": 0.97, "acholi": 0.006, "kalenjin": 0.006, "luo": 0.006, "maasai": 0.004, "swahili": 0.004, "arab_sudanese": 0.002, "beja": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.511, "Coal": 0.13, "Oil": 0.129, "IronOre": 0.089, "RareEarths": 0.022, "NaturalGas": 0.249, "Timber": 1.737, "Bauxite": 0.026, "Uranium": 0.006 }
+  },
+  // Oromia
+  "et_or": {
+    "population": 59340953,
+    "urbanization": 0.31,
+    "cultures": { "oromo": 0.5366, "acholi": 0.0927, "kalenjin": 0.0927, "luo": 0.0927, "maasai": 0.0618, "swahili": 0.0618, "arab_sudanese": 0.0309, "beja": 0.0309 },
+    "buildings": { "Agriculture": 17, "CivilianIndustry": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.342, "Coal": 0.176, "Oil": 0.249, "IronOre": 0.211, "RareEarths": 0.069, "NaturalGas": 0.39, "Timber": 2.088, "Bauxite": 0.077, "Uranium": 0.011 }
+  },
+  // Somali
+  "et_so": {
+    "population": 9771224,
+    "urbanization": 0.16,
+    "cultures": { "somali": 0.96, "oromo": 0.02, "afar": 0.01, "amhara": 0.01 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 2.349, "Coal": 0.415, "Oil": 0.463, "IronOre": 0.362, "RareEarths": 0.079, "NaturalGas": 0.677, "Timber": 2.748, "Bauxite": 0.104, "Uranium": 0.009 }
+  },
+  // Southern Nations
+  "et_sn": {
+    "population": 8521741,
+    "urbanization": 0.19,
+    "cultures": { "sidama": 0.421, "acholi": 0.1158, "kalenjin": 0.1158, "luo": 0.1158, "maasai": 0.0772, "swahili": 0.0772, "arab_sudanese": 0.0386, "beja": 0.0386 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.158, "Coal": 0.239, "Oil": 0.262, "IronOre": 0.187, "RareEarths": 0.05, "NaturalGas": 0.628, "Timber": 1.518, "Bauxite": 0.065, "Uranium": 0.009 }
+  },
+  // Tigray
+  "et_ti": {
+    "population": 6791226,
+    "urbanization": 0.15,
+    "cultures": { "tigrayan": 0.95, "amhara": 0.03, "afar": 0.01, "arab_sudanese": 0.005, "oromo": 0.005 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.897, "Coal": 0.444, "Oil": 0.491, "IronOre": 0.363, "RareEarths": 0.065, "NaturalGas": 0.632, "Timber": 2.068, "Bauxite": 0.094, "Uranium": 0.013 }
+  }
+}

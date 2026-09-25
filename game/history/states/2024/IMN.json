@@ -1,0 +1,22 @@
+// Isle of Man (IMN) on 1 January 2024: 1 region, 84,584 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Isle of Man
+  "im_x01": {
+    "population": 84584,
+    "urbanization": 0.761,
+    "cultures": { "manx": 0.48, "english": 0.41, "scottish": 0.04, "irish": 0.03, "polish": 0.02, "welsh": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.608, "Coal": 0.326, "Oil": 0.446, "IronOre": 0.208, "RareEarths": 0.112, "NaturalGas": 0.799, "Timber": 1.084, "Bauxite": 0.145, "Uranium": 0.01 }
+  }
+}

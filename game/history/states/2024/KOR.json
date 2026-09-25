@@ -1,0 +1,55 @@
+// South Korea (KOR) on 1 January 2024: 5 regions, 51,709,098 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Gangwon
+  "kr_42": {
+    "population": 3187089,
+    "urbanization": 0.47,
+    "cultures": { "korean": 0.955, "han": 0.02, "vietnamese": 0.008, "thai": 0.005, "american": 0.004, "japanese": 0.003, "tagalog": 0.003, "uzbek": 0.002 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.455, "Coal": 0.328, "Oil": 0.878, "IronOre": 0.396, "RareEarths": 0.054, "NaturalGas": 0.886, "Timber": 1.744, "Bauxite": 0.073, "Uranium": 0.011 }
+  },
+  // Gyeonggi
+  "kr_41": {
+    "population": 22280116,
+    "urbanization": 0.91,
+    "literacy": 0.99,
+    "cultures": { "korean": 0.955, "han": 0.02, "vietnamese": 0.008, "thai": 0.005, "american": 0.004, "japanese": 0.003, "tagalog": 0.003, "uzbek": 0.002 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 8, "Infrastructure": 5, "University": 3, "PowerPlant": 3, "ArmsIndustry": 1 },
+    "resources": { "Food": 1.928, "Coal": 0.18, "Oil": 0.349, "IronOre": 0.25, "RareEarths": 0.12, "NaturalGas": 0.296, "Timber": 2.873, "Bauxite": 0.027, "Uranium": 0.004 }
+  },
+  // North Gyeongsang
+  "kr_47": {
+    "population": 13124290,
+    "urbanization": 0.72,
+    "cultures": { "korean": 0.955, "han": 0.02, "vietnamese": 0.008, "thai": 0.005, "american": 0.004, "japanese": 0.003, "tagalog": 0.003, "uzbek": 0.002 },
+    "buildings": { "Agriculture": 6, "CivilianIndustry": 4, "Infrastructure": 4, "ExtractionIndustry": 1, "PowerPlant": 2 },
+    "resources": { "Food": 1.916, "Coal": 0.48, "Oil": 0.53, "IronOre": 0.65, "RareEarths": 0.07, "NaturalGas": 1.001, "Timber": 3.325, "Bauxite": 0.184, "Uranium": 0.018 }
+  },
+  // South Gyeongsang
+  "kr_48": {
+    "population": 7291173,
+    "urbanization": 0.78,
+    "cultures": { "korean": 0.955, "han": 0.02, "vietnamese": 0.008, "thai": 0.005, "american": 0.004, "japanese": 0.003, "tagalog": 0.003, "uzbek": 0.002 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 5, "Infrastructure": 4, "PowerPlant": 2, "ArmsIndustry": 1 },
+    "resources": { "Food": 1.589, "Coal": 0.218, "Oil": 0.08, "IronOre": 0.35, "RareEarths": 0.06, "NaturalGas": 0.391, "Timber": 3.385, "Bauxite": 0.087, "Uranium": 0.007 }
+  },
+  // South Jeolla
+  "kr_46": {
+    "population": 5826430,
+    "urbanization": 0.75,
+    "cultures": { "korean": 0.955, "han": 0.02, "vietnamese": 0.008, "thai": 0.005, "american": 0.004, "japanese": 0.003, "tagalog": 0.003, "uzbek": 0.002 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 3 },
+    "resources": { "Food": 2.194, "Coal": 0.138, "Oil": 0.214, "IronOre": 0.065, "RareEarths": 0.034, "NaturalGas": 0.212, "Timber": 0.728, "Bauxite": 0.021, "Uranium": 0.003 }
+  }
+}

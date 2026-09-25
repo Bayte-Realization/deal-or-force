@@ -1,0 +1,22 @@
+// Somaliland (SOL) on 1 January 2024: 1 region, 5,096,159 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Somaliland
+  "99_x11": {
+    "population": 5096159,
+    "urbanization": 0.381,
+    "cultures": { "somali": 0.94, "afar": 0.02, "arab_yemeni": 0.015, "oromo": 0.015, "beja": 0.01 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.546, "Coal": 0.215, "Oil": 0.43, "IronOre": 0.191, "RareEarths": 0.053, "NaturalGas": 0.282, "Timber": 0.76, "Bauxite": 0.039, "Uranium": 0.008 }
+  }
+}

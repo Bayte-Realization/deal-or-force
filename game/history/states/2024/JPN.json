@@ -1,0 +1,166 @@
+// Japan (JPN) on 1 January 2024: 19 regions, 126,264,931 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Akita Prefecture
+  "jp_05": {
+    "population": 585016,
+    "urbanization": 0.72,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.109, "Coal": 0.394, "Oil": 0.249, "IronOre": 0.195, "RareEarths": 0.085, "NaturalGas": 0.651, "Timber": 2.752, "Bauxite": 0.097, "Uranium": 0.011 }
+  },
+  // Aomori Prefecture
+  "jp_02": {
+    "population": 1069349,
+    "urbanization": 0.88,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.089, "Coal": 0.195, "Oil": 0.392, "IronOre": 0.185, "RareEarths": 0.071, "NaturalGas": 0.479, "Timber": 3.404, "Bauxite": 0.054, "Uranium": 0.011 }
+  },
+  // Fukuoka Prefecture
+  "jp_40": {
+    "population": 6262219,
+    "urbanization": 0.95,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.519, "Coal": 0.191, "Oil": 0.154, "IronOre": 0.079, "RareEarths": 0.017, "NaturalGas": 0.13, "Timber": 1.503, "Bauxite": 0.055, "Uranium": 0.004 }
+  },
+  // Fukushima Prefecture
+  "jp_07": {
+    "population": 1586020,
+    "urbanization": 0.83,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.028, "Coal": 0.213, "Oil": 0.63, "IronOre": 0.146, "RareEarths": 0.116, "NaturalGas": 0.609, "Timber": 1.647, "Bauxite": 0.083, "Uranium": 0.012 }
+  },
+  // Gifu Prefecture
+  "jp_21": {
+    "population": 8955861,
+    "urbanization": 0.9,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.963, "Coal": 0.356, "Oil": 0.402, "IronOre": 0.386, "RareEarths": 0.051, "NaturalGas": 0.758, "Timber": 3.384, "Bauxite": 0.107, "Uranium": 0.013 }
+  },
+  // Gunma Prefecture
+  "jp_10": {
+    "population": 33946906,
+    "urbanization": 0.97,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 3, "Infrastructure": 3 },
+    "resources": { "Food": 1.126, "Coal": 0.256, "Oil": 0.915, "IronOre": 0.358, "RareEarths": 0.114, "NaturalGas": 0.757, "Timber": 3.2, "Bauxite": 0.123, "Uranium": 0.013 }
+  },
+  // Hokkaidō
+  "jp_01": {
+    "population": 7729109,
+    "urbanization": 0.87,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.063, "Coal": 0.635, "Oil": 0.958, "IronOre": 0.478, "RareEarths": 0.107, "NaturalGas": 0.671, "Timber": 2.796, "Bauxite": 0.133, "Uranium": 0.014 }
+  },
+  // Hyōgo Prefecture
+  "jp_28": {
+    "population": 12289305,
+    "urbanization": 0.95,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.776, "Coal": 0.095, "Oil": 0.239, "IronOre": 0.113, "RareEarths": 0.021, "NaturalGas": 0.276, "Timber": 1.732, "Bauxite": 0.05, "Uranium": 0.002 }
+  },
+  // Ibaraki Prefecture
+  "jp_08": {
+    "population": 23011192,
+    "urbanization": 0.89,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 10, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.781, "Coal": 0.212, "Oil": 0.692, "IronOre": 0.271, "RareEarths": 0.051, "NaturalGas": 0.689, "Timber": 2.553, "Bauxite": 0.057, "Uranium": 0.012 }
+  },
+  // Iwate Prefecture
+  "jp_03": {
+    "population": 590423,
+    "urbanization": 0.66,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.832, "Coal": 0.311, "Oil": 0.263, "IronOre": 0.247, "RareEarths": 0.078, "NaturalGas": 0.548, "Timber": 0.691, "Bauxite": 0.066, "Uranium": 0.011 }
+  },
+  // Kumamoto Prefecture
+  "jp_43": {
+    "population": 3335960,
+    "urbanization": 0.85,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.299, "Coal": 0.152, "Oil": 0.288, "IronOre": 0.198, "RareEarths": 0.039, "NaturalGas": 0.315, "Timber": 2.395, "Bauxite": 0.044, "Uranium": 0.007 }
+  },
+  // Kōchi Prefecture
+  "jp_39": {
+    "population": 2552511,
+    "urbanization": 0.85,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.861, "Coal": 0.451, "Oil": 0.68, "IronOre": 0.281, "RareEarths": 0.131, "NaturalGas": 0.671, "Timber": 1.839, "Bauxite": 0.171, "Uranium": 0.019 }
+  },
+  // Nagano Prefecture
+  "jp_20": {
+    "population": 1207769,
+    "urbanization": 0.9,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.763, "Coal": 0.186, "Oil": 0.644, "IronOre": 0.136, "RareEarths": 0.036, "NaturalGas": 0.402, "Timber": 0.829, "Bauxite": 0.102, "Uranium": 0.015 }
+  },
+  // Niigata Prefecture
+  "jp_15": {
+    "population": 1172133,
+    "urbanization": 0.86,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.564, "Coal": 0.243, "Oil": 0.351, "IronOre": 0.138, "RareEarths": 0.044, "NaturalGas": 0.453, "Timber": 1.418, "Bauxite": 0.1, "Uranium": 0.01 }
+  },
+  // Okayama Prefecture
+  "jp_33": {
+    "population": 1585375,
+    "urbanization": 0.85,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.901, "Coal": 0.483, "Oil": 0.731, "IronOre": 0.233, "RareEarths": 0.091, "NaturalGas": 0.368, "Timber": 2.473, "Bauxite": 0.159, "Uranium": 0.013 }
+  },
+  // Shimane Prefecture
+  "jp_32": {
+    "population": 3939172,
+    "urbanization": 0.88,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.043, "Coal": 0.211, "Oil": 0.376, "IronOre": 0.142, "RareEarths": 0.039, "NaturalGas": 0.249, "Timber": 1.025, "Bauxite": 0.067, "Uranium": 0.008 }
+  },
+  // Shizuoka Prefecture
+  "jp_22": {
+    "population": 4217561,
+    "urbanization": 0.93,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.276, "Coal": 0.594, "Oil": 0.942, "IronOre": 0.169, "RareEarths": 0.061, "NaturalGas": 1.002, "Timber": 3.054, "Bauxite": 0.151, "Uranium": 0.01 }
+  },
+  // Wakayama Prefecture
+  "jp_30": {
+    "population": 8263128,
+    "urbanization": 0.92,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.949, "Coal": 0.295, "Oil": 0.554, "IronOre": 0.271, "RareEarths": 0.087, "NaturalGas": 0.376, "Timber": 2.568, "Bauxite": 0.131, "Uranium": 0.013 }
+  },
+  // Yamagata Prefecture
+  "jp_06": {
+    "population": 3965922,
+    "urbanization": 0.91,
+    "cultures": { "japanese": 0.966, "ryukyuan": 0.01, "han": 0.008, "korean": 0.007, "vietnamese": 0.004, "brazilian": 0.002, "tagalog": 0.002, "ainu": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.419, "Coal": 0.41, "Oil": 0.334, "IronOre": 0.222, "RareEarths": 0.071, "NaturalGas": 0.449, "Timber": 2.768, "Bauxite": 0.082, "Uranium": 0.017 }
+  }
+}

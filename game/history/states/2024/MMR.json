@@ -1,0 +1,102 @@
+// Myanmar (MMR) on 1 January 2024: 11 regions, 54,045,420 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Ayeyarwady
+  "mm_07": {
+    "population": 7202906,
+    "urbanization": 0.18,
+    "cultures": { "burmese": 0.9444, "han": 0.0278, "bengali_muslim": 0.0139, "hindustani": 0.0139 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.581, "Coal": 0.179, "Oil": 0.296, "IronOre": 0.171, "RareEarths": 1.743, "NaturalGas": 0.395, "Timber": 2.952, "Bauxite": 0.105, "Uranium": 0.009 }
+  },
+  // Bago
+  "mm_02": {
+    "population": 16820362,
+    "urbanization": 0.46,
+    "cultures": { "burmese": 0.8913, "mon": 0.0563, "han": 0.0262, "bengali_muslim": 0.0131, "hindustani": 0.0131 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.517, "Coal": 0.498, "Oil": 0.538, "IronOre": 0.362, "RareEarths": 3.164, "NaturalGas": 0.476, "Timber": 1.118, "Bauxite": 0.082, "Uranium": 0.008 }
+  },
+  // Chin State
+  "mm_14": {
+    "population": 631055,
+    "urbanization": 0.05,
+    "cultures": { "chin": 0.78, "burmese": 0.15, "kachin": 0.04, "rakhine": 0.03 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.912, "Coal": 0.164, "Oil": 0.238, "IronOre": 0.085, "RareEarths": 3.721, "NaturalGas": 0.226, "Timber": 1.715, "Bauxite": 0.065, "Uranium": 0.008 }
+  },
+  // Kachin State
+  "mm_11": {
+    "population": 1034133,
+    "urbanization": 0.22,
+    "cultures": { "kachin": 0.63, "burmese": 0.22, "shan": 0.08, "han": 0.045, "chin": 0.025 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.959, "Coal": 0.377, "Oil": 0.638, "IronOre": 0.266, "RareEarths": 4.17, "NaturalGas": 0.67, "Timber": 2.077, "Bauxite": 0.085, "Uranium": 0.006 }
+  },
+  // Kayin State
+  "mm_13": {
+    "population": 3214780,
+    "urbanization": 0.36,
+    "cultures": { "karen": 0.97, "burmese": 0.0283, "han": 0.0008, "bengali_muslim": 0.0004, "hindustani": 0.0004 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.148, "Coal": 0.373, "Oil": 0.509, "IronOre": 0.328, "RareEarths": 2.507, "NaturalGas": 0.7, "Timber": 2.63, "Bauxite": 0.092, "Uranium": 0.015 }
+  },
+  // Magway
+  "mm_03": {
+    "population": 5681535,
+    "urbanization": 0.15,
+    "cultures": { "burmese": 0.9444, "han": 0.0278, "bengali_muslim": 0.0139, "hindustani": 0.0139 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 0.854, "Coal": 0.478, "Oil": 0.508, "IronOre": 0.404, "RareEarths": 2.436, "NaturalGas": 0.654, "Timber": 0.856, "Bauxite": 0.162, "Uranium": 0.009 }
+  },
+  // Mandalay
+  "mm_04": {
+    "population": 8004690,
+    "urbanization": 0.44,
+    "cultures": { "burmese": 0.9444, "han": 0.0278, "bengali_muslim": 0.0139, "hindustani": 0.0139 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.477, "Coal": 0.157, "Oil": 0.305, "IronOre": 0.292, "RareEarths": 2.66, "NaturalGas": 0.435, "Timber": 0.757, "Bauxite": 0.086, "Uranium": 0.007 }
+  },
+  // Rakhine State
+  "mm_16": {
+    "population": 1570071,
+    "urbanization": 0.19,
+    "cultures": { "rakhine": 0.6, "rohingya": 0.3, "burmese": 0.065, "chin": 0.02, "bengali_muslim": 0.015 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.67, "Coal": 0.212, "Oil": 0.88, "IronOre": 0.369, "RareEarths": 2.101, "NaturalGas": 0.952, "Timber": 2.173, "Bauxite": 0.131, "Uranium": 0.009 }
+  },
+  // Sagaing
+  "mm_01": {
+    "population": 4652041,
+    "urbanization": 0.25,
+    "cultures": { "burmese": 0.9444, "han": 0.0278, "bengali_muslim": 0.0139, "hindustani": 0.0139 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.053, "Coal": 0.146, "Oil": 0.131, "IronOre": 0.071, "RareEarths": 1.712, "NaturalGas": 0.246, "Timber": 2.201, "Bauxite": 0.041, "Uranium": 0.002 }
+  },
+  // Shan State
+  "mm_17": {
+    "population": 3496590,
+    "urbanization": 0.11,
+    "cultures": { "shan": 0.62, "burmese": 0.18, "han": 0.06, "karen": 0.05, "kachin": 0.045, "lao": 0.025, "thai": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.688, "Coal": 0.137, "Oil": 0.208, "IronOre": 0.117, "RareEarths": 3.57, "NaturalGas": 0.149, "Timber": 1.794, "Bauxite": 0.043, "Uranium": 0.003 }
+  },
+  // Tanintharyi
+  "mm_05": {
+    "population": 1737257,
+    "urbanization": 0.39,
+    "cultures": { "burmese": 0.9444, "han": 0.0278, "bengali_muslim": 0.0139, "hindustani": 0.0139 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.46, "Coal": 0.383, "Oil": 0.572, "IronOre": 0.435, "RareEarths": 2.784, "NaturalGas": 0.54, "Timber": 1.66, "Bauxite": 0.085, "Uranium": 0.019 }
+  }
+}

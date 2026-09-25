@@ -1,0 +1,22 @@
+// Aland (ALA) on 1 January 2024: 1 region, 29,884 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Jomala
+  "ax_x02": {
+    "population": 29884,
+    "urbanization": 0.837,
+    "cultures": { "swedish": 0.86, "finnish": 0.05, "estonian": 0.02, "german": 0.02, "latvian": 0.02, "romanian": 0.02, "english": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.97, "Coal": 0.287, "Oil": 0.819, "IronOre": 0.393, "RareEarths": 0.063, "NaturalGas": 0.756, "Timber": 2.958, "Bauxite": 0.104, "Uranium": 0.009 }
+  }
+}

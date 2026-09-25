@@ -664,7 +664,7 @@ public static class SecessionEvents
     /// Belgium is a country for two peoples, and calling the second group foreigners in a
     /// state they make up half of would be a lie the whole simulation then acts on.
     ///
-    /// Without this a new tag is for nobody: `history/pops` has never heard of it, so every
+    /// Without this a new tag is for nobody: history/countries has never heard of it, so every
     /// person in it counts as a minority of it, and it dissolves into its own provinces
     /// within a few years of being founded.
     /// </summary>

@@ -1,0 +1,54 @@
+// Austria (AUT) on 1 January 2024: 5 regions, 8,877,067 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Carinthia
+  "at_2": {
+    "population": 297213,
+    "urbanization": 0.45,
+    "cultures": { "austrian": 0.7435, "german": 0.0545, "serbian": 0.0297, "turkish": 0.0248, "bosniak": 0.0198, "romanian": 0.0198, "ukrainian": 0.0186, "croatian": 0.0149, "hungarian": 0.0149, "arab_levantine": 0.0119, "pashtun": 0.0099, "polish": 0.0099, "russian": 0.0079, "czech": 0.005, "italian": 0.005, "slovak": 0.005, "slovene": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.142, "Coal": 0.219, "Oil": 0.26, "IronOre": 0.197, "RareEarths": 0.063, "NaturalGas": 0.429, "Timber": 3.053, "Bauxite": 0.077, "Uranium": 0.008 }
+  },
+  // Lower Austria
+  "at_3": {
+    "population": 5921766,
+    "urbanization": 0.62,
+    "cultures": { "austrian": 0.7435, "german": 0.0545, "serbian": 0.0297, "turkish": 0.0248, "bosniak": 0.0198, "romanian": 0.0198, "ukrainian": 0.0186, "croatian": 0.0149, "hungarian": 0.0149, "arab_levantine": 0.0119, "pashtun": 0.0099, "polish": 0.0099, "russian": 0.0079, "czech": 0.005, "italian": 0.005, "slovak": 0.005, "slovene": 0.005 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.144, "Coal": 0.105, "Oil": 0.197, "IronOre": 0.12, "RareEarths": 0.042, "NaturalGas": 0.224, "Timber": 2.691, "Bauxite": 0.037, "Uranium": 0.004 }
+  },
+  // Styria
+  "at_6": {
+    "population": 885989,
+    "urbanization": 0.43,
+    "cultures": { "austrian": 0.7435, "german": 0.0545, "serbian": 0.0297, "turkish": 0.0248, "bosniak": 0.0198, "romanian": 0.0198, "ukrainian": 0.0186, "croatian": 0.0149, "hungarian": 0.0149, "arab_levantine": 0.0119, "pashtun": 0.0099, "polish": 0.0099, "russian": 0.0079, "czech": 0.005, "italian": 0.005, "slovak": 0.005, "slovene": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.315, "Coal": 0.106, "Oil": 0.187, "IronOre": 0.104, "RareEarths": 0.012, "NaturalGas": 0.143, "Timber": 1.282, "Bauxite": 0.019, "Uranium": 0.003 }
+  },
+  // Tyrol
+  "at_7": {
+    "population": 919430,
+    "urbanization": 0.62,
+    "cultures": { "austrian": 0.7435, "german": 0.0545, "serbian": 0.0297, "turkish": 0.0248, "bosniak": 0.0198, "romanian": 0.0198, "ukrainian": 0.0186, "croatian": 0.0149, "hungarian": 0.0149, "arab_levantine": 0.0119, "pashtun": 0.0099, "polish": 0.0099, "russian": 0.0079, "czech": 0.005, "italian": 0.005, "slovak": 0.005, "slovene": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.028, "Coal": 0.518, "Oil": 0.46, "IronOre": 0.391, "RareEarths": 0.049, "NaturalGas": 0.725, "Timber": 3.264, "Bauxite": 0.095, "Uranium": 0.017 }
+  },
+  // Upper Austria
+  "at_4": {
+    "population": 852669,
+    "urbanization": 0.6,
+    "cultures": { "austrian": 0.7435, "german": 0.0545, "serbian": 0.0297, "turkish": 0.0248, "bosniak": 0.0198, "romanian": 0.0198, "ukrainian": 0.0186, "croatian": 0.0149, "hungarian": 0.0149, "arab_levantine": 0.0119, "pashtun": 0.0099, "polish": 0.0099, "russian": 0.0079, "czech": 0.005, "italian": 0.005, "slovak": 0.005, "slovene": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.858, "Coal": 0.446, "Oil": 0.547, "IronOre": 0.411, "RareEarths": 0.135, "NaturalGas": 0.974, "Timber": 2.142, "Bauxite": 0.07, "Uranium": 0.008 }
+  }
+}

@@ -1,0 +1,22 @@
+// Israel (ISR) on 1 January 2024: 1 region, 9,053,300 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Southern District
+  "il_d": {
+    "population": 9053300,
+    "urbanization": 0.95,
+    "cultures": { "israeli_jew": 0.7276, "palestinian": 0.1782, "bedouin": 0.0297, "russian": 0.0279, "druze_people": 0.0158, "arab_levantine": 0.0099, "maronite": 0.0049, "armenian": 0.004, "ukrainian": 0.002 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.917, "Coal": 0.598, "Oil": 0.539, "IronOre": 0.232, "RareEarths": 0.08, "NaturalGas": 1.118, "Timber": 1.127, "Bauxite": 0.16, "Uranium": 0.009 }
+  }
+}

@@ -1,0 +1,142 @@
+// Libya (LBY) on 1 January 2024: 16 regions, 6,777,452 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Ajdabiya
+  "ly_aj": {
+    "population": 154174,
+    "urbanization": 0.94,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.159, "Coal": 0.499, "Oil": 0.711, "IronOre": 0.303, "RareEarths": 0.061, "NaturalGas": 0.858, "Timber": 2.14, "Bauxite": 0.143, "Uranium": 0.014 }
+  },
+  // Al Qubbah
+  "ly_qb": {
+    "population": 124196,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.946, "Coal": 0.233, "Oil": 0.771, "IronOre": 0.173, "RareEarths": 0.096, "NaturalGas": 0.4, "Timber": 1.371, "Bauxite": 0.129, "Uranium": 0.007 }
+  },
+  // Ash Shati
+  "ly_ws": {
+    "population": 48325,
+    "urbanization": 0.89,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.99, "Coal": 0.475, "Oil": 0.279, "IronOre": 0.23, "RareEarths": 0.104, "NaturalGas": 0.754, "Timber": 1.534, "Bauxite": 0.079, "Uranium": 0.008 }
+  },
+  // Butnan
+  "ly_bu": {
+    "population": 257265,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.43, "Coal": 0.331, "Oil": 0.298, "IronOre": 0.287, "RareEarths": 0.091, "NaturalGas": 0.295, "Timber": 2.688, "Bauxite": 0.072, "Uranium": 0.013 }
+  },
+  // Ghadames
+  "ly_gd": {
+    "population": 74676,
+    "urbanization": 0.94,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.492, "Coal": 0.303, "Oil": 0.83, "IronOre": 0.201, "RareEarths": 0.118, "NaturalGas": 0.686, "Timber": 2.324, "Bauxite": 0.138, "Uranium": 0.018 }
+  },
+  // Ghat
+  "ly_gt": {
+    "population": 25247,
+    "urbanization": 0.91,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.296, "Coal": 0.136, "Oil": 0.282, "IronOre": 0.158, "RareEarths": 0.062, "NaturalGas": 0.349, "Timber": 3.282, "Bauxite": 0.05, "Uranium": 0.005 }
+  },
+  // Jufra
+  "ly_ju": {
+    "population": 21880,
+    "urbanization": 0.81,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.851, "Coal": 0.135, "Oil": 0.162, "IronOre": 0.119, "RareEarths": 0.023, "NaturalGas": 0.377, "Timber": 2.119, "Bauxite": 0.071, "Uranium": 0.005 }
+  },
+  // Kufra
+  "ly_kf": {
+    "population": 34129,
+    "urbanization": 0.67,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.676, "Coal": 0.308, "Oil": 0.567, "IronOre": 0.201, "RareEarths": 0.076, "NaturalGas": 0.834, "Timber": 3.324, "Bauxite": 0.145, "Uranium": 0.016 }
+  },
+  // Marj
+  "ly_mj": {
+    "population": 2470128,
+    "urbanization": 0.54,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 2.028, "Coal": 0.495, "Oil": 0.91, "IronOre": 0.284, "RareEarths": 0.063, "NaturalGas": 0.369, "Timber": 1.48, "Bauxite": 0.105, "Uranium": 0.007 }
+  },
+  // Misrata
+  "ly_mi": {
+    "population": 434641,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.751, "Coal": 0.371, "Oil": 0.773, "IronOre": 0.32, "RareEarths": 0.096, "NaturalGas": 0.428, "Timber": 0.831, "Bauxite": 0.113, "Uranium": 0.013 }
+  },
+  // Mizdah
+  "ly_mz": {
+    "population": 1195955,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.885, "Coal": 0.063, "Oil": 0.149, "IronOre": 0.074, "RareEarths": 0.019, "NaturalGas": 0.13, "Timber": 1.546, "Bauxite": 0.04, "Uranium": 0.002 }
+  },
+  // Murqub
+  "ly_mb": {
+    "population": 1607148,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.813, "Coal": 0.213, "Oil": 0.238, "IronOre": 0.149, "RareEarths": 0.035, "NaturalGas": 0.426, "Timber": 0.912, "Bauxite": 0.075, "Uranium": 0.006 }
+  },
+  // Murzuq
+  "ly_mq": {
+    "population": 97871,
+    "urbanization": 0.55,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.058, "Coal": 0.261, "Oil": 0.391, "IronOre": 0.17, "RareEarths": 0.045, "NaturalGas": 0.226, "Timber": 2.424, "Bauxite": 0.07, "Uranium": 0.008 }
+  },
+  // Sabha
+  "ly_sb": {
+    "population": 97563,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.162, "Coal": 0.17, "Oil": 0.274, "IronOre": 0.083, "RareEarths": 0.034, "NaturalGas": 0.223, "Timber": 2.865, "Bauxite": 0.084, "Uranium": 0.008 }
+  },
+  // Sirte
+  "ly_sr": {
+    "population": 124440,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.676, "Coal": 0.591, "Oil": 0.772, "IronOre": 0.351, "RareEarths": 0.071, "NaturalGas": 0.805, "Timber": 1.831, "Bauxite": 0.07, "Uranium": 0.008 }
+  },
+  // Wadi al Hayaa
+  "ly_wd": {
+    "population": 9814,
+    "urbanization": 0.05,
+    "cultures": { "arab_maghrebi": 0.87, "berber": 0.07, "arab_egyptian": 0.02, "tuareg": 0.015, "arab_sudanese": 0.01, "hausa": 0.008, "bedouin": 0.007 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.578, "Coal": 0.354, "Oil": 0.449, "IronOre": 0.213, "RareEarths": 0.063, "NaturalGas": 0.558, "Timber": 2.592, "Bauxite": 0.108, "Uranium": 0.011 }
+  }
+}

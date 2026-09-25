@@ -1,0 +1,54 @@
+// Nicaragua (NIC) on 1 January 2024: 5 regions, 6,545,502 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Jinotega
+  "ni_ji": {
+    "population": 787772,
+    "urbanization": 0.51,
+    "cultures": { "nicaraguan": 0.86, "creole_african": 0.05, "native_american": 0.05, "maya": 0.02, "costa_rican": 0.01, "honduran": 0.01 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.756, "Coal": 0.162, "Oil": 0.484, "IronOre": 0.26, "RareEarths": 0.089, "NaturalGas": 0.252, "Timber": 1.842, "Bauxite": 0.089, "Uranium": 0.006 }
+  },
+  // Matagalpa
+  "ni_mt": {
+    "population": 4318813,
+    "urbanization": 0.71,
+    "cultures": { "nicaraguan": 0.86, "creole_african": 0.05, "native_american": 0.05, "maya": 0.02, "costa_rican": 0.01, "honduran": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.282, "Coal": 0.363, "Oil": 0.312, "IronOre": 0.279, "RareEarths": 0.041, "NaturalGas": 0.666, "Timber": 2.397, "Bauxite": 0.066, "Uranium": 0.005 }
+  },
+  // North Caribbean Coast
+  "ni_an": {
+    "population": 249745,
+    "urbanization": 0.33,
+    "cultures": { "nicaraguan": 0.86, "creole_african": 0.05, "native_american": 0.05, "maya": 0.02, "costa_rican": 0.01, "honduran": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.527, "Coal": 0.291, "Oil": 0.564, "IronOre": 0.215, "RareEarths": 0.047, "NaturalGas": 0.369, "Timber": 0.82, "Bauxite": 0.052, "Uranium": 0.008 }
+  },
+  // Río San Juan
+  "ni_sj": {
+    "population": 931988,
+    "urbanization": 0.22,
+    "cultures": { "nicaraguan": 0.86, "creole_african": 0.05, "native_american": 0.05, "maya": 0.02, "costa_rican": 0.01, "honduran": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.231, "Coal": 0.206, "Oil": 0.413, "IronOre": 0.23, "RareEarths": 0.048, "NaturalGas": 0.483, "Timber": 2.975, "Bauxite": 0.105, "Uranium": 0.005 }
+  },
+  // South Caribbean Coast
+  "ni_as": {
+    "population": 257184,
+    "urbanization": 0.33,
+    "cultures": { "nicaraguan": 0.86, "creole_african": 0.05, "native_american": 0.05, "maya": 0.02, "costa_rican": 0.01, "honduran": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.96, "Coal": 0.237, "Oil": 0.376, "IronOre": 0.191, "RareEarths": 0.074, "NaturalGas": 0.273, "Timber": 2.961, "Bauxite": 0.104, "Uranium": 0.01 }
+  }
+}

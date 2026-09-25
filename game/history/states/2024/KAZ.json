@@ -1,0 +1,126 @@
+// Kazakhstan (KAZ) on 1 January 2024: 14 regions, 18,513,930 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Akmola
+  "kz_akm": {
+    "population": 2293696,
+    "urbanization": 0.37,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.475, "Coal": 0.253, "Oil": 8.412, "IronOre": 1.843, "RareEarths": 0.082, "NaturalGas": 0.456, "Timber": 0.934, "Bauxite": 3.966, "Uranium": 0.78 }
+  },
+  // Aktobe
+  "kz_akt": {
+    "population": 621535,
+    "urbanization": 0.89,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.793, "Coal": 0.481, "Oil": 4.654, "IronOre": 1.268, "RareEarths": 0.094, "NaturalGas": 0.464, "Timber": 3.038, "Bauxite": 4.367, "Uranium": 0.825 }
+  },
+  // Almaty
+  "kz_ala": {
+    "population": 2622100,
+    "urbanization": 0.8,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.017, "Coal": 0.667, "Oil": 10.233, "IronOre": 4.494, "RareEarths": 0.131, "NaturalGas": 1.06, "Timber": 1.453, "Bauxite": 4.097, "Uranium": 0.515 }
+  },
+  // Atyrau
+  "kz_aty": {
+    "population": 361215,
+    "urbanization": 0.93,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.162, "Coal": 0.202, "Oil": 11.549, "IronOre": 1.727, "RareEarths": 0.061, "NaturalGas": 0.267, "Timber": 2.776, "Bauxite": 2.923, "Uranium": 0.972 }
+  },
+  // East Kazakhstan
+  "kz_vos": {
+    "population": 2230981,
+    "urbanization": 0.53,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.32, "Coal": 0.471, "Oil": 11.23, "IronOre": 2.529, "RareEarths": 0.085, "NaturalGas": 0.512, "Timber": 3.065, "Bauxite": 1.761, "Uranium": 0.887 }
+  },
+  // Jambyl
+  "kz_zha": {
+    "population": 1261179,
+    "urbanization": 0.53,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.143, "Coal": 0.538, "Oil": 10.277, "IronOre": 2.726, "RareEarths": 0.1, "NaturalGas": 0.982, "Timber": 1.313, "Bauxite": 1.6, "Uranium": 0.527 }
+  },
+  // Karaganda
+  "kz_kar": {
+    "population": 1449603,
+    "urbanization": 0.84,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.531, "Coal": 0.218, "Oil": 4.228, "IronOre": 1.958, "RareEarths": 0.07, "NaturalGas": 0.331, "Timber": 1.447, "Bauxite": 1.423, "Uranium": 0.723 }
+  },
+  // Kostanay
+  "kz_kus": {
+    "population": 1837504,
+    "urbanization": 0.37,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.83, "Coal": 0.256, "Oil": 12.817, "IronOre": 1.744, "RareEarths": 0.073, "NaturalGas": 0.501, "Timber": 2.464, "Bauxite": 3.893, "Uranium": 0.861 }
+  },
+  // Kyzylorda
+  "kz_kzy": {
+    "population": 560301,
+    "urbanization": 0.97,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.998, "Coal": 0.479, "Oil": 7.279, "IronOre": 2.503, "RareEarths": 0.076, "NaturalGas": 0.986, "Timber": 1.782, "Bauxite": 2.201, "Uranium": 0.497 }
+  },
+  // Mangystau
+  "kz_man": {
+    "population": 271190,
+    "urbanization": 0.97,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.803, "Coal": 0.235, "Oil": 7.395, "IronOre": 1.303, "RareEarths": 0.06, "NaturalGas": 0.255, "Timber": 2.87, "Bauxite": 2.926, "Uranium": 0.465 }
+  },
+  // North Kazakhstan
+  "kz_sev": {
+    "population": 1275888,
+    "urbanization": 0.28,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.354, "Coal": 0.259, "Oil": 4.232, "IronOre": 1.301, "RareEarths": 0.093, "NaturalGas": 0.607, "Timber": 2.753, "Bauxite": 4.262, "Uranium": 0.368 }
+  },
+  // Pavlodar
+  "kz_pav": {
+    "population": 1523070,
+    "urbanization": 0.43,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.925, "Coal": 0.524, "Oil": 7.028, "IronOre": 2.984, "RareEarths": 0.064, "NaturalGas": 0.607, "Timber": 3.125, "Bauxite": 3.721, "Uranium": 0.953 }
+  },
+  // Turkistan
+  "kz_yuz": {
+    "population": 1567182,
+    "urbanization": 0.61,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.499, "Coal": 0.608, "Oil": 9.536, "IronOre": 1.42, "RareEarths": 0.062, "NaturalGas": 0.579, "Timber": 1.088, "Bauxite": 4.228, "Uranium": 0.507 }
+  },
+  // West Kazakhstan
+  "kz_zap": {
+    "population": 638486,
+    "urbanization": 0.56,
+    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.433, "Coal": 0.239, "Oil": 11.362, "IronOre": 1.6, "RareEarths": 0.041, "NaturalGas": 0.537, "Timber": 2.155, "Bauxite": 3.52, "Uranium": 0.415 }
+  }
+}

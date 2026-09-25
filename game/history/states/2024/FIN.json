@@ -1,0 +1,134 @@
+// Finland (FIN) on 1 January 2024: 15 regions, 5,520,314 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central Finland
+  "fi_08": {
+    "population": 240905,
+    "urbanization": 0.77,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.993, "Coal": 0.089, "Oil": 0.233, "IronOre": 0.092, "RareEarths": 0.029, "NaturalGas": 0.254, "Timber": 2.13, "Bauxite": 0.057, "Uranium": 0.004 }
+  },
+  // Finland Proper
+  "fi_19": {
+    "population": 403995,
+    "urbanization": 0.82,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.635, "Coal": 0.436, "Oil": 0.748, "IronOre": 0.209, "RareEarths": 0.115, "NaturalGas": 0.881, "Timber": 1.308, "Bauxite": 0.165, "Uranium": 0.012 }
+  },
+  // Kainuu
+  "fi_05": {
+    "population": 12295,
+    "urbanization": 0.05,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.086, "Coal": 0.334, "Oil": 0.479, "IronOre": 0.117, "RareEarths": 0.09, "NaturalGas": 0.584, "Timber": 2.241, "Bauxite": 0.098, "Uranium": 0.006 }
+  },
+  // Lapland
+  "fi_10": {
+    "population": 162952,
+    "urbanization": 0.87,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.411, "Coal": 0.435, "Oil": 0.789, "IronOre": 0.348, "RareEarths": 0.116, "NaturalGas": 0.563, "Timber": 2.042, "Bauxite": 0.071, "Uranium": 0.019 }
+  },
+  // North Karelia
+  "fi_13": {
+    "population": 138360,
+    "urbanization": 0.73,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.988, "Coal": 0.27, "Oil": 0.538, "IronOre": 0.306, "RareEarths": 0.066, "NaturalGas": 0.417, "Timber": 1.225, "Bauxite": 0.09, "Uranium": 0.016 }
+  },
+  // Northern Ostrobothnia
+  "fi_14": {
+    "population": 396757,
+    "urbanization": 0.88,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.138, "Coal": 0.268, "Oil": 0.512, "IronOre": 0.209, "RareEarths": 0.103, "NaturalGas": 0.613, "Timber": 1.715, "Bauxite": 0.059, "Uranium": 0.007 }
+  },
+  // Northern Savonia
+  "fi_15": {
+    "population": 214398,
+    "urbanization": 0.81,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.23, "Coal": 0.094, "Oil": 0.288, "IronOre": 0.07, "RareEarths": 0.048, "NaturalGas": 0.194, "Timber": 0.682, "Bauxite": 0.035, "Uranium": 0.007 }
+  },
+  // Ostrobothnia
+  "fi_12": {
+    "population": 123952,
+    "urbanization": 0.87,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.962, "Coal": 0.419, "Oil": 0.33, "IronOre": 0.213, "RareEarths": 0.057, "NaturalGas": 0.684, "Timber": 2.751, "Bauxite": 0.068, "Uranium": 0.005 }
+  },
+  // Pirkanmaa
+  "fi_11": {
+    "population": 718457,
+    "urbanization": 0.81,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.02, "Coal": 0.172, "Oil": 0.358, "IronOre": 0.129, "RareEarths": 0.059, "NaturalGas": 0.356, "Timber": 2.818, "Bauxite": 0.046, "Uranium": 0.004 }
+  },
+  // Päijänne Tavastia
+  "fi_16": {
+    "population": 224069,
+    "urbanization": 0.83,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.768, "Coal": 0.621, "Oil": 0.937, "IronOre": 0.399, "RareEarths": 0.112, "NaturalGas": 0.674, "Timber": 0.779, "Bauxite": 0.183, "Uranium": 0.014 }
+  },
+  // Satakunta
+  "fi_17": {
+    "population": 184841,
+    "urbanization": 0.79,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.026, "Coal": 0.173, "Oil": 0.36, "IronOre": 0.095, "RareEarths": 0.029, "NaturalGas": 0.401, "Timber": 2.987, "Bauxite": 0.071, "Uranium": 0.005 }
+  },
+  // South Karelia
+  "fi_02": {
+    "population": 232578,
+    "urbanization": 0.74,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.492, "Coal": 0.274, "Oil": 0.815, "IronOre": 0.259, "RareEarths": 0.07, "NaturalGas": 0.386, "Timber": 2.517, "Bauxite": 0.085, "Uranium": 0.013 }
+  },
+  // Southern Ostrobothnia
+  "fi_03": {
+    "population": 30282,
+    "urbanization": 0.05,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.181, "Coal": 0.207, "Oil": 0.54, "IronOre": 0.182, "RareEarths": 0.043, "NaturalGas": 0.391, "Timber": 3.251, "Bauxite": 0.131, "Uranium": 0.01 }
+  },
+  // Southern Savonia
+  "fi_04": {
+    "population": 190248,
+    "urbanization": 0.74,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.62, "Coal": 0.422, "Oil": 0.623, "IronOre": 0.338, "RareEarths": 0.048, "NaturalGas": 0.664, "Timber": 1.997, "Bauxite": 0.15, "Uranium": 0.008 }
+  },
+  // Uusimaa
+  "fi_18": {
+    "population": 2246225,
+    "urbanization": 0.95,
+    "cultures": { "finnish": 0.8469, "swedish": 0.0512, "ukrainian": 0.0202, "russian": 0.0167, "estonian": 0.0098, "arab_iraqi": 0.0059, "somali": 0.0049, "arab_levantine": 0.0039, "chinese_diaspora": 0.0039, "english": 0.0039, "kurdish": 0.0039, "persian": 0.0039, "german": 0.003, "indian_diaspora": 0.003, "polish": 0.003, "romanian": 0.003, "thai": 0.003, "turkish": 0.003, "vietnamese": 0.003, "karelian": 0.002, "sami": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.01, "Coal": 0.076, "Oil": 0.147, "IronOre": 0.157, "RareEarths": 0.021, "NaturalGas": 0.313, "Timber": 2.391, "Bauxite": 0.058, "Uranium": 0.005 }
+  }
+}

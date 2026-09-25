@@ -1,0 +1,26 @@
+// Land nobody owns on 1 January 2024.
+//
+// "owner": "none" makes a region belong to nobody: its provinces stay unowned whatever the
+// map painted there, it is drawn in the grey of land no flag flies over, and any country that
+// can reach it - over a border of its own or, when it is coastal, by sea from a coast of its
+// own - may settle it (ColonisationCore). "none" is the only owner a region takes; who owns
+// a province is otherwise history/provinces/ownership.csv. A colonial-era scenario would list
+// its unclaimed regions here the same way.
+{
+  // Antarctica - held by no state under the 1959 Antarctic Treaty; nobody lives there for good
+  "aq_x01": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.93,
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.082, "Coal": 0.163, "Oil": 0.275, "IronOre": 0.119, "RareEarths": 0.028, "NaturalGas": 0.256, "Timber": 3.389, "Bauxite": 0.029, "Uranium": 0.003 }
+  },
+  // Region 2549 - held by no state under the 1959 Antarctic Treaty; nobody lives there for good
+  "aq_x02": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.54,
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.089, "Coal": 0.344, "Oil": 0.712, "IronOre": 0.22, "RareEarths": 0.114, "NaturalGas": 0.708, "Timber": 0.885, "Bauxite": 0.115, "Uranium": 0.015 }
+  }
+}

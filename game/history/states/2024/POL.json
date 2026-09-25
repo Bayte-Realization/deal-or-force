@@ -1,0 +1,142 @@
+// Poland (POL) on 1 January 2024: 16 regions, 37,970,874 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Greater Poland Voivodeship
+  "pl_wp": {
+    "population": 2844567,
+    "urbanization": 0.43,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.23, "Coal": 3.071, "Oil": 0.445, "IronOre": 0.316, "RareEarths": 0.105, "NaturalGas": 0.537, "Timber": 2.958, "Bauxite": 0.162, "Uranium": 0.009 }
+  },
+  // Kuyavian-Pomeranian Voivodeship
+  "pl_kp": {
+    "population": 1994797,
+    "urbanization": 0.54,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.548, "Coal": 1.52, "Oil": 0.585, "IronOre": 0.29, "RareEarths": 0.101, "NaturalGas": 0.519, "Timber": 2.469, "Bauxite": 0.073, "Uranium": 0.009 }
+  },
+  // Lesser Poland Voivodeship
+  "pl_ma": {
+    "population": 2721151,
+    "urbanization": 0.65,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.001, "Coal": 2.465, "Oil": 0.438, "IronOre": 0.292, "RareEarths": 0.091, "NaturalGas": 0.754, "Timber": 1.333, "Bauxite": 0.195, "Uranium": 0.017 }
+  },
+  // Lower Silesian Voivodeship
+  "pl_ds": {
+    "population": 2294368,
+    "urbanization": 0.54,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.868, "Coal": 3.606, "Oil": 0.594, "IronOre": 0.311, "RareEarths": 0.122, "NaturalGas": 0.693, "Timber": 2.026, "Bauxite": 0.098, "Uranium": 0.01 }
+  },
+  // Lublin Voivodeship
+  "pl_lu": {
+    "population": 1946896,
+    "urbanization": 0.36,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.014, "Coal": 4.39, "Oil": 0.363, "IronOre": 0.205, "RareEarths": 0.023, "NaturalGas": 0.176, "Timber": 1.555, "Bauxite": 0.052, "Uranium": 0.009 }
+  },
+  // Lubusz Voivodeship
+  "pl_lb": {
+    "population": 384511,
+    "urbanization": 0.61,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.264, "Coal": 3.544, "Oil": 0.794, "IronOre": 0.176, "RareEarths": 0.143, "NaturalGas": 0.778, "Timber": 1.646, "Bauxite": 0.076, "Uranium": 0.02 }
+  },
+  // Masovian Voivodeship
+  "pl_mz": {
+    "population": 5782947,
+    "urbanization": 0.58,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.797, "Coal": 1.757, "Oil": 0.181, "IronOre": 0.113, "RareEarths": 0.023, "NaturalGas": 0.276, "Timber": 2.482, "Bauxite": 0.05, "Uranium": 0.006 }
+  },
+  // Opole Voivodeship
+  "pl_op": {
+    "population": 1182765,
+    "urbanization": 0.22,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.401, "Coal": 4.092, "Oil": 0.194, "IronOre": 0.115, "RareEarths": 0.031, "NaturalGas": 0.115, "Timber": 2.333, "Bauxite": 0.042, "Uranium": 0.003 }
+  },
+  // Podkarpackie Voivodeship
+  "pl_pk": {
+    "population": 1302942,
+    "urbanization": 0.37,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.418, "Coal": 1.369, "Oil": 0.086, "IronOre": 0.051, "RareEarths": 0.029, "NaturalGas": 0.224, "Timber": 2.223, "Bauxite": 0.023, "Uranium": 0.002 }
+  },
+  // Podlaskie Voivodeship
+  "pl_pd": {
+    "population": 1366665,
+    "urbanization": 0.42,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.826, "Coal": 2.629, "Oil": 0.424, "IronOre": 0.318, "RareEarths": 0.073, "NaturalGas": 0.373, "Timber": 1.575, "Bauxite": 0.147, "Uranium": 0.006 }
+  },
+  // Pomeranian Voivodeship
+  "pl_pm": {
+    "population": 2638977,
+    "urbanization": 0.79,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.135, "Coal": 1.736, "Oil": 0.211, "IronOre": 0.096, "RareEarths": 0.022, "NaturalGas": 0.152, "Timber": 2.831, "Bauxite": 0.045, "Uranium": 0.005 }
+  },
+  // Silesian Voivodeship
+  "pl_sl": {
+    "population": 6891565,
+    "urbanization": 0.89,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.37, "Coal": 3.571, "Oil": 0.358, "IronOre": 0.409, "RareEarths": 0.13, "NaturalGas": 0.46, "Timber": 2.118, "Bauxite": 0.121, "Uranium": 0.015 }
+  },
+  // Warmian-Masurian Voivodeship
+  "pl_wn": {
+    "population": 1483058,
+    "urbanization": 0.48,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.913, "Coal": 4.349, "Oil": 0.287, "IronOre": 0.183, "RareEarths": 0.06, "NaturalGas": 0.355, "Timber": 3.177, "Bauxite": 0.059, "Uranium": 0.01 }
+  },
+  // West Pomeranian Voivodeship
+  "pl_zp": {
+    "population": 1515453,
+    "urbanization": 0.67,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.424, "Coal": 3.362, "Oil": 0.347, "IronOre": 0.178, "RareEarths": 0.077, "NaturalGas": 0.548, "Timber": 1.39, "Bauxite": 0.118, "Uranium": 0.009 }
+  },
+  // Łódź Voivodeship
+  "pl_ld": {
+    "population": 2796072,
+    "urbanization": 0.53,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.301, "Coal": 3.483, "Oil": 0.59, "IronOre": 0.166, "RareEarths": 0.06, "NaturalGas": 0.891, "Timber": 2.271, "Bauxite": 0.085, "Uranium": 0.007 }
+  },
+  // Świętokrzyskie Voivodeship
+  "pl_sk": {
+    "population": 824140,
+    "urbanization": 0.51,
+    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.388, "Coal": 2.069, "Oil": 0.381, "IronOre": 0.173, "RareEarths": 0.112, "NaturalGas": 0.633, "Timber": 1.636, "Bauxite": 0.118, "Uranium": 0.009 }
+  }
+}

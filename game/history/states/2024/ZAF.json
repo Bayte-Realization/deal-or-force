@@ -1,0 +1,86 @@
+// South Africa (ZAF) on 1 January 2024: 9 regions, 58,558,270 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Eastern Cape
+  "za_ec": {
+    "population": 7697946,
+    "urbanization": 0.52,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 2 },
+    "resources": { "Food": 1.751, "Coal": 2.878, "Oil": 0.133, "IronOre": 2.639, "RareEarths": 0.022, "NaturalGas": 0.277, "Timber": 1.419, "Bauxite": 0.025, "Uranium": 0.879 }
+  },
+  // Free State
+  "za_fs": {
+    "population": 4051463,
+    "urbanization": 0.59,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.417, "Coal": 1.653, "Oil": 0.189, "IronOre": 1.712, "RareEarths": 0.042, "NaturalGas": 0.346, "Timber": 3.19, "Bauxite": 0.029, "Uranium": 0.704 }
+  },
+  // Gauteng
+  "za_gt": {
+    "population": 16069557,
+    "urbanization": 0.94,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.693, "Coal": 4.006, "Oil": 0.417, "IronOre": 2.217, "RareEarths": 0.083, "NaturalGas": 0.644, "Timber": 1.666, "Bauxite": 0.153, "Uranium": 0.416 }
+  },
+  // KwaZulu-Natal
+  "za_nl": {
+    "population": 9932603,
+    "urbanization": 0.66,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.146, "Coal": 4.327, "Oil": 0.285, "IronOre": 4.17, "RareEarths": 0.047, "NaturalGas": 0.321, "Timber": 2.356, "Bauxite": 0.028, "Uranium": 0.671 }
+  },
+  // Limpopo
+  "za_lp": {
+    "population": 3218666,
+    "urbanization": 0.35,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 0.972, "Coal": 3.38, "Oil": 0.637, "IronOre": 3.57, "RareEarths": 0.053, "NaturalGas": 0.321, "Timber": 0.791, "Bauxite": 0.073, "Uranium": 0.594 }
+  },
+  // Mpumalanga
+  "za_mp": {
+    "population": 3743698,
+    "urbanization": 0.45,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 2.219, "Coal": 3.621, "Oil": 0.305, "IronOre": 4.312, "RareEarths": 0.024, "NaturalGas": 0.328, "Timber": 2.115, "Bauxite": 0.026, "Uranium": 0.586 }
+  },
+  // North West
+  "za_nw": {
+    "population": 2547332,
+    "urbanization": 0.53,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.224, "Coal": 2.248, "Oil": 0.948, "IronOre": 2.252, "RareEarths": 0.118, "NaturalGas": 0.694, "Timber": 2.514, "Bauxite": 0.156, "Uranium": 0.853 }
+  },
+  // Northern Cape
+  "za_nc": {
+    "population": 1522831,
+    "urbanization": 0.34,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.909, "Coal": 2.456, "Oil": 0.436, "IronOre": 2.649, "RareEarths": 0.117, "NaturalGas": 0.711, "Timber": 2.559, "Bauxite": 0.063, "Uranium": 0.351 }
+  },
+  // Western Cape
+  "za_wc": {
+    "population": 9774174,
+    "urbanization": 0.72,
+    "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.371, "Coal": 2.305, "Oil": 0.437, "IronOre": 3.333, "RareEarths": 0.056, "NaturalGas": 0.335, "Timber": 3.201, "Bauxite": 0.128, "Uranium": 0.93 }
+  }
+}

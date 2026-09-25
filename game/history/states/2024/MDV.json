@@ -1,0 +1,30 @@
+// Maldives (MDV) on 1 January 2024: 2 regions, 530,953 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Haa Alif Atoll
+  "mv_07": {
+    "population": 1000,
+    "urbanization": 0.314,
+    "cultures": { "maldivian": 0.85, "bengali_muslim": 0.07, "indian_diaspora": 0.03, "sinhalese": 0.02, "nepali": 0.01, "tagalog": 0.01, "tamil": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.315, "Coal": 0.184, "Oil": 0.525, "IronOre": 0.169, "RareEarths": 0.041, "NaturalGas": 0.439, "Timber": 2.52, "Bauxite": 0.075, "Uranium": 0.009 }
+  },
+  // Maldives
+  "mv_x01": {
+    "population": 529953,
+    "urbanization": 0.444,
+    "cultures": { "maldivian": 0.85, "bengali_muslim": 0.07, "indian_diaspora": 0.03, "sinhalese": 0.02, "nepali": 0.01, "tagalog": 0.01, "tamil": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.298, "Coal": 0.292, "Oil": 0.714, "IronOre": 0.369, "RareEarths": 0.094, "NaturalGas": 0.483, "Timber": 2.803, "Bauxite": 0.123, "Uranium": 0.019 }
+  }
+}

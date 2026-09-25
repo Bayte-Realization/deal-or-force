@@ -1,0 +1,22 @@
+// Luxembourg (LUX) on 1 January 2024: 1 region, 619,896 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Luxembourg
+  "lu_l": {
+    "population": 619896,
+    "urbanization": 0.95,
+    "cultures": { "luxembourgish": 0.5807, "portuguese": 0.1742, "french": 0.0871, "italian": 0.0418, "german": 0.0232, "english": 0.0174, "flemish": 0.0174, "romanian": 0.0174, "walloon": 0.0174, "polish": 0.0116, "spanish": 0.0116 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.354, "Coal": 0.204, "Oil": 0.283, "IronOre": 0.118, "RareEarths": 0.049, "NaturalGas": 0.206, "Timber": 3.283, "Bauxite": 0.037, "Uranium": 0.003 }
+  }
+}

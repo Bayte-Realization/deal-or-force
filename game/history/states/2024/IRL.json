@@ -1,0 +1,54 @@
+// Ireland (IRL) on 1 January 2024: 5 regions, 4,941,444 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Cavan
+  "ie_cn": {
+    "population": 1632902,
+    "urbanization": 0.76,
+    "cultures": { "irish": 0.8342, "english": 0.0442, "ukrainian": 0.0334, "polish": 0.0196, "indian_diaspora": 0.0118, "brazilian": 0.0098, "romanian": 0.0098, "igbo": 0.0059, "lithuanian": 0.0059, "romani": 0.0059, "chinese_diaspora": 0.0039, "french": 0.0039, "italian": 0.0039, "latvian": 0.0039, "spanish": 0.0039 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.088, "Coal": 0.271, "Oil": 0.792, "IronOre": 0.212, "RareEarths": 0.079, "NaturalGas": 0.587, "Timber": 2.743, "Bauxite": 0.162, "Uranium": 0.007 }
+  },
+  // Cork
+  "ie_co": {
+    "population": 811086,
+    "urbanization": 0.59,
+    "cultures": { "irish": 0.8342, "english": 0.0442, "ukrainian": 0.0334, "polish": 0.0196, "indian_diaspora": 0.0118, "brazilian": 0.0098, "romanian": 0.0098, "igbo": 0.0059, "lithuanian": 0.0059, "romani": 0.0059, "chinese_diaspora": 0.0039, "french": 0.0039, "italian": 0.0039, "latvian": 0.0039, "spanish": 0.0039 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.242, "Coal": 0.438, "Oil": 0.457, "IronOre": 0.29, "RareEarths": 0.047, "NaturalGas": 0.353, "Timber": 1.43, "Bauxite": 0.114, "Uranium": 0.013 }
+  },
+  // Galway
+  "ie_g": {
+    "population": 544595,
+    "urbanization": 0.56,
+    "cultures": { "irish": 0.8342, "english": 0.0442, "ukrainian": 0.0334, "polish": 0.0196, "indian_diaspora": 0.0118, "brazilian": 0.0098, "romanian": 0.0098, "igbo": 0.0059, "lithuanian": 0.0059, "romani": 0.0059, "chinese_diaspora": 0.0039, "french": 0.0039, "italian": 0.0039, "latvian": 0.0039, "spanish": 0.0039 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.715, "Coal": 0.308, "Oil": 0.637, "IronOre": 0.153, "RareEarths": 0.061, "NaturalGas": 0.409, "Timber": 0.734, "Bauxite": 0.118, "Uranium": 0.007 }
+  },
+  // Mayo
+  "ie_mo": {
+    "population": 131174,
+    "urbanization": 0.3,
+    "cultures": { "irish": 0.8342, "english": 0.0442, "ukrainian": 0.0334, "polish": 0.0196, "indian_diaspora": 0.0118, "brazilian": 0.0098, "romanian": 0.0098, "igbo": 0.0059, "lithuanian": 0.0059, "romani": 0.0059, "chinese_diaspora": 0.0039, "french": 0.0039, "italian": 0.0039, "latvian": 0.0039, "spanish": 0.0039 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.297, "Coal": 0.27, "Oil": 0.623, "IronOre": 0.201, "RareEarths": 0.053, "NaturalGas": 0.372, "Timber": 2.555, "Bauxite": 0.128, "Uranium": 0.012 }
+  },
+  // Offaly
+  "ie_oy": {
+    "population": 1821687,
+    "urbanization": 0.6,
+    "cultures": { "irish": 0.8342, "english": 0.0442, "ukrainian": 0.0334, "polish": 0.0196, "indian_diaspora": 0.0118, "brazilian": 0.0098, "romanian": 0.0098, "igbo": 0.0059, "lithuanian": 0.0059, "romani": 0.0059, "chinese_diaspora": 0.0039, "french": 0.0039, "italian": 0.0039, "latvian": 0.0039, "spanish": 0.0039 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.89, "Coal": 0.561, "Oil": 0.483, "IronOre": 0.322, "RareEarths": 0.109, "NaturalGas": 0.764, "Timber": 1.581, "Bauxite": 0.138, "Uranium": 0.011 }
+  }
+}

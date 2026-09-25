@@ -1,0 +1,70 @@
+// Greece (GRC) on 1 January 2024: 7 regions, 10,716,322 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central Greece
+  "gr_h": {
+    "population": 5642166,
+    "urbanization": 0.91,
+    "cultures": { "greek": 0.9038, "albanian": 0.0446, "turkish": 0.0099, "romani": 0.0079, "bulgarian": 0.0069, "aromanian": 0.006, "romanian": 0.006, "russian": 0.005, "macedonian": 0.004, "georgian": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.099, "Coal": 0.101, "Oil": 0.213, "IronOre": 0.093, "RareEarths": 0.044, "NaturalGas": 0.125, "Timber": 2.577, "Bauxite": 0.024, "Uranium": 0.006 }
+  },
+  // Centre Macedonia
+  "gr_b": {
+    "population": 2536343,
+    "urbanization": 0.79,
+    "cultures": { "greek": 0.9038, "albanian": 0.0446, "turkish": 0.0099, "romani": 0.0079, "bulgarian": 0.0069, "aromanian": 0.006, "romanian": 0.006, "russian": 0.005, "macedonian": 0.004, "georgian": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.605, "Coal": 0.166, "Oil": 0.159, "IronOre": 0.13, "RareEarths": 0.043, "NaturalGas": 0.422, "Timber": 1.472, "Bauxite": 0.042, "Uranium": 0.005 }
+  },
+  // East Macedonia and Thrace
+  "gr_a": {
+    "population": 482126,
+    "urbanization": 0.66,
+    "cultures": { "greek": 0.9038, "albanian": 0.0446, "turkish": 0.0099, "romani": 0.0079, "bulgarian": 0.0069, "aromanian": 0.006, "romanian": 0.006, "russian": 0.005, "macedonian": 0.004, "georgian": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.413, "Coal": 0.099, "Oil": 0.207, "IronOre": 0.063, "RareEarths": 0.038, "NaturalGas": 0.12, "Timber": 1.256, "Bauxite": 0.054, "Uranium": 0.005 }
+  },
+  // Peloponnese
+  "gr_j": {
+    "population": 485678,
+    "urbanization": 0.37,
+    "cultures": { "greek": 0.9038, "albanian": 0.0446, "turkish": 0.0099, "romani": 0.0079, "bulgarian": 0.0069, "aromanian": 0.006, "romanian": 0.006, "russian": 0.005, "macedonian": 0.004, "georgian": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.423, "Coal": 0.381, "Oil": 0.54, "IronOre": 0.245, "RareEarths": 0.098, "NaturalGas": 0.592, "Timber": 1.119, "Bauxite": 0.15, "Uranium": 0.013 }
+  },
+  // Thessalia
+  "gr_e": {
+    "population": 546564,
+    "urbanization": 0.67,
+    "cultures": { "greek": 0.9038, "albanian": 0.0446, "turkish": 0.0099, "romani": 0.0079, "bulgarian": 0.0069, "aromanian": 0.006, "romanian": 0.006, "russian": 0.005, "macedonian": 0.004, "georgian": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.474, "Coal": 0.416, "Oil": 0.36, "IronOre": 0.176, "RareEarths": 0.098, "NaturalGas": 0.889, "Timber": 3.179, "Bauxite": 0.088, "Uranium": 0.016 }
+  },
+  // West Greece
+  "gr_g": {
+    "population": 616940,
+    "urbanization": 0.74,
+    "cultures": { "greek": 0.9038, "albanian": 0.0446, "turkish": 0.0099, "romani": 0.0079, "bulgarian": 0.0069, "aromanian": 0.006, "romanian": 0.006, "russian": 0.005, "macedonian": 0.004, "georgian": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.816, "Coal": 0.303, "Oil": 0.474, "IronOre": 0.216, "RareEarths": 0.126, "NaturalGas": 0.869, "Timber": 0.789, "Bauxite": 0.107, "Uranium": 0.009 }
+  },
+  // West Macedonia
+  "gr_c": {
+    "population": 406505,
+    "urbanization": 0.32,
+    "cultures": { "greek": 0.9038, "albanian": 0.0446, "turkish": 0.0099, "romani": 0.0079, "bulgarian": 0.0069, "aromanian": 0.006, "romanian": 0.006, "russian": 0.005, "macedonian": 0.004, "georgian": 0.003, "ukrainian": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.286, "Coal": 0.214, "Oil": 0.428, "IronOre": 0.16, "RareEarths": 0.074, "NaturalGas": 0.606, "Timber": 0.771, "Bauxite": 0.07, "Uranium": 0.005 }
+  }
+}

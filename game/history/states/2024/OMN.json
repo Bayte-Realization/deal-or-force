@@ -1,0 +1,62 @@
+// Oman (OMN) on 1 January 2024: 6 regions, 4,974,986 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Ad Dakhiliyah
+  "om_da": {
+    "population": 3128269,
+    "urbanization": 0.94,
+    "cultures": { "omani_arab": 0.6, "indian_diaspora": 0.12, "bengali_muslim": 0.07, "malayali": 0.06, "punjabi": 0.05, "baloch": 0.045, "arab_gulf": 0.02, "swahili": 0.02, "tagalog": 0.015 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.257, "Coal": 0.172, "Oil": 0.441, "IronOre": 0.205, "RareEarths": 0.088, "NaturalGas": 0.475, "Timber": 2.229, "Bauxite": 0.076, "Uranium": 0.01 }
+  },
+  // Ad Dhahirah
+  "om_za": {
+    "population": 966901,
+    "urbanization": 0.7,
+    "cultures": { "omani_arab": 0.6, "indian_diaspora": 0.12, "bengali_muslim": 0.07, "malayali": 0.06, "punjabi": 0.05, "baloch": 0.045, "arab_gulf": 0.02, "swahili": 0.02, "tagalog": 0.015 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.351, "Coal": 0.226, "Oil": 0.158, "IronOre": 0.187, "RareEarths": 0.04, "NaturalGas": 0.281, "Timber": 0.762, "Bauxite": 0.061, "Uranium": 0.007 }
+  },
+  // Al Wusta
+  "om_wu": {
+    "population": 1000,
+    "urbanization": 0.05,
+    "cultures": { "omani_arab": 0.6, "indian_diaspora": 0.12, "bengali_muslim": 0.07, "malayali": 0.06, "punjabi": 0.05, "baloch": 0.045, "arab_gulf": 0.02, "swahili": 0.02, "tagalog": 0.015 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.431, "Coal": 0.556, "Oil": 0.622, "IronOre": 0.404, "RareEarths": 0.14, "NaturalGas": 0.665, "Timber": 2.899, "Bauxite": 0.185, "Uranium": 0.01 }
+  },
+  // Ash Sharqiyah
+  "om_sh": {
+    "population": 214127,
+    "urbanization": 0.97,
+    "cultures": { "omani_arab": 0.6, "indian_diaspora": 0.12, "bengali_muslim": 0.07, "malayali": 0.06, "punjabi": 0.05, "baloch": 0.045, "arab_gulf": 0.02, "swahili": 0.02, "tagalog": 0.015 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.925, "Coal": 0.307, "Oil": 0.39, "IronOre": 0.394, "RareEarths": 0.054, "NaturalGas": 0.754, "Timber": 0.911, "Bauxite": 0.162, "Uranium": 0.015 }
+  },
+  // Ash Sharqiyah North
+  "om_ss": {
+    "population": 41132,
+    "urbanization": 0.05,
+    "cultures": { "omani_arab": 0.6, "indian_diaspora": 0.12, "bengali_muslim": 0.07, "malayali": 0.06, "punjabi": 0.05, "baloch": 0.045, "arab_gulf": 0.02, "swahili": 0.02, "tagalog": 0.015 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.153, "Coal": 0.407, "Oil": 0.552, "IronOre": 0.31, "RareEarths": 0.059, "NaturalGas": 0.332, "Timber": 0.814, "Bauxite": 0.085, "Uranium": 0.008 }
+  },
+  // Dhofar
+  "om_zu": {
+    "population": 623557,
+    "urbanization": 0.88,
+    "cultures": { "omani_arab": 0.6, "indian_diaspora": 0.12, "bengali_muslim": 0.07, "malayali": 0.06, "punjabi": 0.05, "baloch": 0.045, "arab_gulf": 0.02, "swahili": 0.02, "tagalog": 0.015 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.474, "Coal": 0.173, "Oil": 0.469, "IronOre": 0.17, "RareEarths": 0.086, "NaturalGas": 0.237, "Timber": 1.161, "Bauxite": 0.111, "Uranium": 0.006 }
+  }
+}

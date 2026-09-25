@@ -1,0 +1,46 @@
+// Cuba (CUB) on 1 January 2024: 4 regions, 11,333,483 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Camagüey
+  "cu_09": {
+    "population": 1416117,
+    "urbanization": 0.65,
+    "cultures": { "cuban": 0.9, "african_american": 0.07, "chinese_diaspora": 0.01, "haitian": 0.01, "spanish": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.448, "Coal": 0.491, "Oil": 0.789, "IronOre": 0.278, "RareEarths": 0.049, "NaturalGas": 0.685, "Timber": 3.39, "Bauxite": 0.15, "Uranium": 0.016 }
+  },
+  // Holguín
+  "cu_11": {
+    "population": 3433334,
+    "urbanization": 0.7,
+    "cultures": { "cuban": 0.9, "african_american": 0.07, "chinese_diaspora": 0.01, "haitian": 0.01, "spanish": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.465, "Coal": 0.31, "Oil": 0.53, "IronOre": 0.151, "RareEarths": 0.045, "NaturalGas": 0.288, "Timber": 2.928, "Bauxite": 0.091, "Uranium": 0.01 }
+  },
+  // Matanzas
+  "cu_04": {
+    "population": 4659294,
+    "urbanization": 0.87,
+    "cultures": { "cuban": 0.9, "african_american": 0.07, "chinese_diaspora": 0.01, "haitian": 0.01, "spanish": 0.01 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.393, "Coal": 0.342, "Oil": 0.477, "IronOre": 0.168, "RareEarths": 0.093, "NaturalGas": 0.289, "Timber": 1.026, "Bauxite": 0.092, "Uranium": 0.01 }
+  },
+  // Villa Clara
+  "cu_05": {
+    "population": 1824738,
+    "urbanization": 0.75,
+    "cultures": { "cuban": 0.9, "african_american": 0.07, "chinese_diaspora": 0.01, "haitian": 0.01, "spanish": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.261, "Coal": 0.41, "Oil": 0.298, "IronOre": 0.195, "RareEarths": 0.035, "NaturalGas": 0.252, "Timber": 1.485, "Bauxite": 0.117, "Uranium": 0.007 }
+  }
+}

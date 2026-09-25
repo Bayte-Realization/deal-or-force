@@ -1,0 +1,30 @@
+// Moldova (MDA) on 1 January 2024: 2 regions, 2,657,637 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Orhei
+  "md_or": {
+    "population": 2006590,
+    "urbanization": 0.47,
+    "cultures": { "moldovan": 0.717, "ukrainian": 0.1109, "romanian": 0.0669, "gagauz": 0.043, "russian": 0.0402, "bulgarian": 0.0153, "romani": 0.0048, "belarusian": 0.0019 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.168, "Coal": 0.295, "Oil": 0.781, "IronOre": 0.393, "RareEarths": 0.08, "NaturalGas": 0.598, "Timber": 3.381, "Bauxite": 0.099, "Uranium": 0.016 }
+  },
+  // Sîngerei
+  "md_si": {
+    "population": 651047,
+    "urbanization": 0.29,
+    "cultures": { "moldovan": 0.717, "ukrainian": 0.1109, "romanian": 0.0669, "gagauz": 0.043, "russian": 0.0402, "bulgarian": 0.0153, "romani": 0.0048, "belarusian": 0.0019 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.344, "Coal": 0.238, "Oil": 0.642, "IronOre": 0.394, "RareEarths": 0.086, "NaturalGas": 0.567, "Timber": 1.362, "Bauxite": 0.102, "Uranium": 0.018 }
+  }
+}

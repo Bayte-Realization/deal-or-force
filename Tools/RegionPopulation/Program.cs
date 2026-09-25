@@ -8,8 +8,14 @@ using System.Text.Json;
 using DealOrForce.Simulation;
 
 /// <summary>
-/// Works out how many people live in each region of the 2024 map, and writes it to
-/// game/history/states/2024/20_population.json.
+/// Works out how many people live in each region of the 2024 map that no history file gives a
+/// figure for, and writes them to game/history/states/2024/zz_population.json - last in name
+/// order, so its figures win over the country files' where both give one.
+///
+/// It produced the head-counts the country files in that folder now carry for every region, so
+/// on the shipped world it has nothing left to place. It is for a scenario that redraws the map
+/// or strips a country's figures: take `population` out of the regions to be dealt again, run
+/// this, and fold the result back into the country's file.
 ///
 /// Most regions on this map are several real provinces merged into one, so no official table
 /// fits them; the only way to a figure is from the map. A country keeps its national total,
@@ -66,7 +72,7 @@ public static class Program
             return 1;
         }
         var write = args.Contains("--write");
-        var output = Path.Combine("game", "history", "states", "2024", "20_population.json");
+        var output = Path.Combine("game", "history", "states", "2024", "zz_population.json");
 
         // The countries' own totals, not the ones this file produced last time: the deal
         // reads the file, so with it in place a country is already the sum of what was

@@ -1,0 +1,126 @@
+// Philippines (PHL) on 1 January 2024: 14 regions, 108,116,615 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Abra
+  "ph_abr": {
+    "population": 3146371,
+    "urbanization": 0.49,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.696, "Coal": 0.259, "Oil": 0.316, "IronOre": 0.133, "RareEarths": 0.051, "NaturalGas": 0.414, "Timber": 3.224, "Bauxite": 0.037, "Uranium": 0.004 }
+  },
+  // Agusan del Sur
+  "ph_ags": {
+    "population": 2748354,
+    "urbanization": 0.22,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.234, "Coal": 0.333, "Oil": 0.408, "IronOre": 0.445, "RareEarths": 0.107, "NaturalGas": 0.857, "Timber": 1.968, "Bauxite": 0.093, "Uranium": 0.013 }
+  },
+  // Aurora
+  "ph_aur": {
+    "population": 4126711,
+    "urbanization": 0.19,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 0.952, "Coal": 0.214, "Oil": 0.339, "IronOre": 0.095, "RareEarths": 0.036, "NaturalGas": 0.259, "Timber": 0.987, "Bauxite": 0.062, "Uranium": 0.004 }
+  },
+  // Bukidnon
+  "ph_buk": {
+    "population": 5558266,
+    "urbanization": 0.63,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.739, "Coal": 0.149, "Oil": 0.18, "IronOre": 0.19, "RareEarths": 0.025, "NaturalGas": 0.165, "Timber": 3.38, "Bauxite": 0.037, "Uranium": 0.007 }
+  },
+  // Cagayan
+  "ph_cag": {
+    "population": 1240200,
+    "urbanization": 0.2,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.051, "Coal": 0.258, "Oil": 0.436, "IronOre": 0.179, "RareEarths": 0.11, "NaturalGas": 0.661, "Timber": 0.993, "Bauxite": 0.068, "Uranium": 0.007 }
+  },
+  // Davao Oriental
+  "ph_dao": {
+    "population": 5322361,
+    "urbanization": 0.57,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.474, "Coal": 0.254, "Oil": 0.237, "IronOre": 0.19, "RareEarths": 0.046, "NaturalGas": 0.385, "Timber": 2.948, "Bauxite": 0.085, "Uranium": 0.01 }
+  },
+  // Iloilo
+  "ph_ili": {
+    "population": 7039195,
+    "urbanization": 0.15,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 4, "Infrastructure": 1 },
+    "resources": { "Food": 0.971, "Coal": 0.163, "Oil": 0.144, "IronOre": 0.05, "RareEarths": 0.034, "NaturalGas": 0.238, "Timber": 3.132, "Bauxite": 0.021, "Uranium": 0.004 }
+  },
+  // Negros Occidental
+  "ph_nec": {
+    "population": 5119123,
+    "urbanization": 0.53,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.181, "Coal": 0.285, "Oil": 0.466, "IronOre": 0.152, "RareEarths": 0.076, "NaturalGas": 0.585, "Timber": 1.699, "Bauxite": 0.069, "Uranium": 0.01 }
+  },
+  // Palawan
+  "ph_plw": {
+    "population": 6985184,
+    "urbanization": 0.31,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.412, "Coal": 0.411, "Oil": 0.374, "IronOre": 0.245, "RareEarths": 0.053, "NaturalGas": 0.472, "Timber": 3.174, "Bauxite": 0.084, "Uranium": 0.013 }
+  },
+  // Quezon
+  "ph_que": {
+    "population": 29352597,
+    "urbanization": 0.62,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 7, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 2.108, "Coal": 0.446, "Oil": 0.662, "IronOre": 0.313, "RareEarths": 0.05, "NaturalGas": 0.716, "Timber": 1.615, "Bauxite": 0.071, "Uranium": 0.01 }
+  },
+  // Samar
+  "ph_wsa": {
+    "population": 4229825,
+    "urbanization": 0.27,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.855, "Coal": 0.44, "Oil": 0.611, "IronOre": 0.3, "RareEarths": 0.076, "NaturalGas": 0.899, "Timber": 2.18, "Bauxite": 0.07, "Uranium": 0.02 }
+  },
+  // South Cotabato
+  "ph_sco": {
+    "population": 6916096,
+    "urbanization": 0.4,
+    "cultures": { "moro": 0.5705, "tagalog": 0.1279, "cebuano": 0.1119, "malay": 0.0594, "ilocano": 0.0411, "javanese": 0.0274, "melanesian": 0.0206, "papuan": 0.0137, "polynesian": 0.0137, "chinese_diaspora": 0.0069, "american": 0.0023, "indian_diaspora": 0.0023, "spanish": 0.0023 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 2.319, "Coal": 0.305, "Oil": 0.428, "IronOre": 0.148, "RareEarths": 0.087, "NaturalGas": 0.286, "Timber": 1.894, "Bauxite": 0.124, "Uranium": 0.009 }
+  },
+  // Zambales
+  "ph_zmb": {
+    "population": 21877851,
+    "urbanization": 0.54,
+    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "buildings": { "Agriculture": 6, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.987, "Coal": 0.148, "Oil": 0.359, "IronOre": 0.108, "RareEarths": 0.06, "NaturalGas": 0.214, "Timber": 1.389, "Bauxite": 0.066, "Uranium": 0.006 }
+  },
+  // Zamboanga del Norte
+  "ph_zan": {
+    "population": 4454481,
+    "urbanization": 0.5,
+    "cultures": { "moro": 0.5705, "tagalog": 0.1279, "cebuano": 0.1119, "malay": 0.0594, "ilocano": 0.0411, "javanese": 0.0274, "melanesian": 0.0206, "papuan": 0.0137, "polynesian": 0.0137, "chinese_diaspora": 0.0069, "american": 0.0023, "indian_diaspora": 0.0023, "spanish": 0.0023 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.243, "Coal": 0.445, "Oil": 0.596, "IronOre": 0.226, "RareEarths": 0.065, "NaturalGas": 0.459, "Timber": 2.157, "Bauxite": 0.079, "Uranium": 0.011 }
+  }
+}

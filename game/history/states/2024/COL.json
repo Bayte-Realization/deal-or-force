@@ -1,0 +1,222 @@
+// Colombia (COL) on 1 January 2024: 26 regions, 50,339,443 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Amazonas
+  "co_ama": {
+    "population": 328018,
+    "urbanization": 0.59,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.453, "Coal": 0.162, "Oil": 0.285, "IronOre": 0.084, "RareEarths": 0.042, "NaturalGas": 0.435, "Timber": 2.148, "Bauxite": 0.041, "Uranium": 0.004 }
+  },
+  // Antioquia
+  "co_ant": {
+    "population": 8864063,
+    "urbanization": 0.8,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.473, "Coal": 0.213, "Oil": 0.546, "IronOre": 0.297, "RareEarths": 0.087, "NaturalGas": 0.335, "Timber": 3.377, "Bauxite": 0.062, "Uranium": 0.008 }
+  },
+  // Arauca
+  "co_ara": {
+    "population": 136047,
+    "urbanization": 0.35,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.902, "Coal": 0.333, "Oil": 0.31, "IronOre": 0.319, "RareEarths": 0.067, "NaturalGas": 0.667, "Timber": 3.261, "Bauxite": 0.121, "Uranium": 0.013 }
+  },
+  // Bolívar
+  "co_bol": {
+    "population": 2728593,
+    "urbanization": 0.82,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.139, "Coal": 0.242, "Oil": 0.361, "IronOre": 0.174, "RareEarths": 0.03, "NaturalGas": 0.282, "Timber": 0.949, "Bauxite": 0.05, "Uranium": 0.007 }
+  },
+  // Boyacá
+  "co_boy": {
+    "population": 1015842,
+    "urbanization": 0.71,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.647, "Coal": 0.115, "Oil": 0.26, "IronOre": 0.105, "RareEarths": 0.039, "NaturalGas": 0.267, "Timber": 3.142, "Bauxite": 0.044, "Uranium": 0.007 }
+  },
+  // Caquetá
+  "co_caq": {
+    "population": 468837,
+    "urbanization": 0.46,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.271, "Coal": 0.254, "Oil": 0.325, "IronOre": 0.17, "RareEarths": 0.045, "NaturalGas": 0.259, "Timber": 1.981, "Bauxite": 0.053, "Uranium": 0.008 }
+  },
+  // Casanare
+  "co_cas": {
+    "population": 257319,
+    "urbanization": 0.41,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.642, "Coal": 0.201, "Oil": 0.427, "IronOre": 0.208, "RareEarths": 0.069, "NaturalGas": 0.251, "Timber": 2.851, "Bauxite": 0.085, "Uranium": 0.009 }
+  },
+  // Cauca
+  "co_cau": {
+    "population": 1104902,
+    "urbanization": 0.63,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.746, "Coal": 0.17, "Oil": 0.243, "IronOre": 0.068, "RareEarths": 0.031, "NaturalGas": 0.144, "Timber": 1.755, "Bauxite": 0.041, "Uranium": 0.006 }
+  },
+  // Cesar
+  "co_ces": {
+    "population": 656741,
+    "urbanization": 0.76,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.691, "Coal": 0.137, "Oil": 0.45, "IronOre": 0.155, "RareEarths": 0.046, "NaturalGas": 0.187, "Timber": 2.657, "Bauxite": 0.064, "Uranium": 0.009 }
+  },
+  // Chocó
+  "co_cho": {
+    "population": 676181,
+    "urbanization": 0.24,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.853, "Coal": 0.404, "Oil": 0.496, "IronOre": 0.226, "RareEarths": 0.062, "NaturalGas": 0.267, "Timber": 2.086, "Bauxite": 0.072, "Uranium": 0.012 }
+  },
+  // Cundinamarca
+  "co_cun": {
+    "population": 13167064,
+    "urbanization": 0.94,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.04, "Coal": 0.446, "Oil": 0.792, "IronOre": 0.208, "RareEarths": 0.05, "NaturalGas": 0.626, "Timber": 2.232, "Bauxite": 0.119, "Uranium": 0.014 }
+  },
+  // Córdoba
+  "co_cor": {
+    "population": 900433,
+    "urbanization": 0.66,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.421, "Coal": 0.223, "Oil": 0.242, "IronOre": 0.218, "RareEarths": 0.083, "NaturalGas": 0.246, "Timber": 0.904, "Bauxite": 0.078, "Uranium": 0.009 }
+  },
+  // Guainía
+  "co_gua": {
+    "population": 109082,
+    "urbanization": 0.14,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.363, "Coal": 0.475, "Oil": 0.438, "IronOre": 0.386, "RareEarths": 0.124, "NaturalGas": 0.707, "Timber": 2.959, "Bauxite": 0.164, "Uranium": 0.01 }
+  },
+  // Guaviare
+  "co_guv": {
+    "population": 145042,
+    "urbanization": 0.25,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.43, "Coal": 0.086, "Oil": 0.272, "IronOre": 0.058, "RareEarths": 0.035, "NaturalGas": 0.343, "Timber": 1.672, "Bauxite": 0.042, "Uranium": 0.007 }
+  },
+  // Huila
+  "co_hui": {
+    "population": 894090,
+    "urbanization": 0.79,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.979, "Coal": 0.417, "Oil": 0.288, "IronOre": 0.126, "RareEarths": 0.055, "NaturalGas": 0.295, "Timber": 2.458, "Bauxite": 0.139, "Uranium": 0.006 }
+  },
+  // La Guajira
+  "co_lag": {
+    "population": 380298,
+    "urbanization": 0.59,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.399, "Coal": 0.226, "Oil": 0.576, "IronOre": 0.141, "RareEarths": 0.082, "NaturalGas": 0.276, "Timber": 3.314, "Bauxite": 0.103, "Uranium": 0.013 }
+  },
+  // Magdalena
+  "co_mag": {
+    "population": 4428103,
+    "urbanization": 0.92,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.902, "Coal": 0.252, "Oil": 0.514, "IronOre": 0.233, "RareEarths": 0.068, "NaturalGas": 0.269, "Timber": 1.841, "Bauxite": 0.104, "Uranium": 0.006 }
+  },
+  // Meta
+  "co_met": {
+    "population": 1749088,
+    "urbanization": 0.68,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.599, "Coal": 0.145, "Oil": 0.509, "IronOre": 0.143, "RareEarths": 0.069, "NaturalGas": 0.318, "Timber": 1.709, "Bauxite": 0.044, "Uranium": 0.006 }
+  },
+  // Nariño
+  "co_nar": {
+    "population": 1261142,
+    "urbanization": 0.79,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.412, "Coal": 0.304, "Oil": 0.755, "IronOre": 0.392, "RareEarths": 0.107, "NaturalGas": 0.828, "Timber": 2.632, "Bauxite": 0.137, "Uranium": 0.017 }
+  },
+  // Norte de Santander
+  "co_nsa": {
+    "population": 1753727,
+    "urbanization": 0.8,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.667, "Coal": 0.357, "Oil": 0.847, "IronOre": 0.191, "RareEarths": 0.096, "NaturalGas": 0.539, "Timber": 3.016, "Bauxite": 0.127, "Uranium": 0.009 }
+  },
+  // Putumayo
+  "co_put": {
+    "population": 166703,
+    "urbanization": 0.22,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.305, "Coal": 0.133, "Oil": 0.129, "IronOre": 0.07, "RareEarths": 0.019, "NaturalGas": 0.208, "Timber": 3.302, "Bauxite": 0.029, "Uranium": 0.005 }
+  },
+  // Santander
+  "co_san": {
+    "population": 2360217,
+    "urbanization": 0.84,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.999, "Coal": 0.423, "Oil": 0.664, "IronOre": 0.346, "RareEarths": 0.061, "NaturalGas": 0.462, "Timber": 3.094, "Bauxite": 0.082, "Uranium": 0.017 }
+  },
+  // Tolima
+  "co_tol": {
+    "population": 1854865,
+    "urbanization": 0.73,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.488, "Coal": 0.192, "Oil": 0.398, "IronOre": 0.195, "RareEarths": 0.031, "NaturalGas": 0.311, "Timber": 2.472, "Bauxite": 0.051, "Uranium": 0.004 }
+  },
+  // Valle del Cauca
+  "co_vac": {
+    "population": 4719471,
+    "urbanization": 0.92,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.381, "Coal": 0.302, "Oil": 0.519, "IronOre": 0.181, "RareEarths": 0.064, "NaturalGas": 0.593, "Timber": 1.761, "Bauxite": 0.05, "Uranium": 0.006 }
+  },
+  // Vaupés
+  "co_vau": {
+    "population": 85847,
+    "urbanization": 0.11,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.281, "Coal": 0.293, "Oil": 0.545, "IronOre": 0.234, "RareEarths": 0.072, "NaturalGas": 0.752, "Timber": 0.797, "Bauxite": 0.164, "Uranium": 0.008 }
+  },
+  // Vichada
+  "co_vid": {
+    "population": 127728,
+    "urbanization": 0.05,
+    "cultures": { "colombian": 0.85, "african_american": 0.07, "native_american": 0.045, "venezuelan": 0.025, "american": 0.005, "quechua": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.726, "Coal": 0.163, "Oil": 0.165, "IronOre": 0.056, "RareEarths": 0.015, "NaturalGas": 0.28, "Timber": 0.961, "Bauxite": 0.049, "Uranium": 0.006 }
+  }
+}

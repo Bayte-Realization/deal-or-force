@@ -1,0 +1,527 @@
+// The lakes the map draws as regions of their own.
+//
+// Nobody lives on them and nobody owns them; they are regions so that the map can draw them
+// and armies can be kept off them. Their record is here so that every region of the map is
+// written down somewhere, and a mod that wants to give a lake something finds it here.
+{
+  // Taymyr (water)
+  "lake_2000": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Pyasino (water)
+  "lake_2001": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Inari (water)
+  "lake_2002": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Great Bear (water)
+  "lake_2003": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Nettilling (water)
+  "lake_2004": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Topozero (water)
+  "lake_2005": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Amadjuak (water)
+  "lake_2006": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Hottah (water)
+  "lake_2007": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Oulujärvi (water)
+  "lake_2008": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Aylmer (water)
+  "lake_2009": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Vygozero (water)
+  "lake_2010": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Vilyuy (water)
+  "lake_2011": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Martre (water)
+  "lake_2012": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Dubawnt (water)
+  "lake_2013": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Segozero (water)
+  "lake_2014": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Vilyuy (water)
+  "lake_2015": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Saimaa (water)
+  "lake_2016": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Great Slave (water)
+  "lake_2017": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Yathkyed (water)
+  "lake_2018": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Onega (water)
+  "lake_2019": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake (water)
+  "lake_2020": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Ladoga (water)
+  "lake_2021": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Kasba (water)
+  "lake_2022": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Iliamna (water)
+  "lake_2023": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Athabasca (water)
+  "lake_2024": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Mälaren (water)
+  "lake_2025": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Vänern (water)
+  "lake_2026": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Rybinsk (water)
+  "lake_2027": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Peipus (water)
+  "lake_2028": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Claire (water)
+  "lake_2029": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Vättern (water)
+  "lake_2030": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Wollaston (water)
+  "lake_2031": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Reindeer (water)
+  "lake_2032": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Cree (water)
+  "lake_2033": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Southern Indian (water)
+  "lake_2034": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Churchill (water)
+  "lake_2035": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Bratsk (water)
+  "lake_2036": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Baikal (water)
+  "lake_2037": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Kuybyshev (water)
+  "lake_2038": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Ronge (water)
+  "lake_2039": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Chany (water)
+  "lake_2040": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Smallwood (water)
+  "lake_2041": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Cedar (water)
+  "lake_2042": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Robert-Bourassa (water)
+  "lake_2043": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Winnipeg (water)
+  "lake_2044": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Winnipegosis (water)
+  "lake_2045": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // IJsselmeer (water)
+  "lake_2046": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Manicouagan (water)
+  "lake_2047": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Manitoba (water)
+  "lake_2048": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Khövsgöl Nuur (water)
+  "lake_2049": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Mistassini (water)
+  "lake_2050": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Uvs (water)
+  "lake_2051": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Nipigon (water)
+  "lake_2052": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Woods (water)
+  "lake_2053": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Kremenchuk (water)
+  "lake_2054": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Hulun (water)
+  "lake_2055": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Superior (water)
+  "lake_2056": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Zaysan (water)
+  "lake_2057": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Gouin (water)
+  "lake_2058": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Khar-Us (water)
+  "lake_2059": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Balkhash (water)
+  "lake_2060": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // North Aral Sea (water)
+  "lake_2061": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake (water)
+  "lake_2062": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Alakol (water)
+  "lake_2063": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // South Aral Sea (water)
+  "lake_2064": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Khanka (water)
+  "lake_2065": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Ontario (water)
+  "lake_2066": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Erie (water)
+  "lake_2067": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Issyk-Kul (water)
+  "lake_2068": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Sarygamysh (water)
+  "lake_2069": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Great Salt (water)
+  "lake_2070": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Van (water)
+  "lake_2071": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Urmia (water)
+  "lake_2072": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Qinghai (water)
+  "lake_2073": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Hongze Lake (water)
+  "lake_2074": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Tai (water)
+  "lake_2075": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Namtso (water)
+  "lake_2076": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Poyang (water)
+  "lake_2077": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Tonlé Sap (water)
+  "lake_2078": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Tana (water)
+  "lake_2079": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Nicaragua (water)
+  "lake_2080": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Volta (water)
+  "lake_2081": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Brokopondo (water)
+  "lake_2082": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Turkana (water)
+  "lake_2083": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Albert (water)
+  "lake_2084": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lake Nyanza (water)
+  "lake_2085": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Edward (water)
+  "lake_2086": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Kivu (water)
+  "lake_2087": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Tanganyika (water)
+  "lake_2088": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Tucuruí Dam (water)
+  "lake_2089": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Mweru (water)
+  "lake_2090": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Sobradinho (water)
+  "lake_2091": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Malawi (water)
+  "lake_2092": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Bangweulu (water)
+  "lake_2093": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Titicaca (water)
+  "lake_2094": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Argyle (water)
+  "lake_2095": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Mackay (water)
+  "lake_2096": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Eyre North (water)
+  "lake_2097": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Barlee (water)
+  "lake_2098": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Torrens (water)
+  "lake_2099": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Frome (water)
+  "lake_2100": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Mar Chiquita (water)
+  "lake_2101": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Gairdner (water)
+  "lake_2102": {
+    "population": 0,
+    "urbanization": 0
+  },
+  // Lagoa Mirim (water)
+  "lake_2103": {
+    "population": 0,
+    "urbanization": 0
+  }
+}

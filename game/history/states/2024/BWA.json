@@ -1,0 +1,62 @@
+// Botswana (BWA) on 1 January 2024: 6 regions, 2,303,697 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central District
+  "bw_ce": {
+    "population": 868826,
+    "urbanization": 0.7,
+    "cultures": { "tswana": 0.79, "shona": 0.04, "ndebele": 0.03, "san": 0.03, "sotho": 0.03, "afrikaner": 0.02, "herero": 0.02, "zulu": 0.02, "english": 0.01, "ovambo": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.219, "Coal": 0.214, "Oil": 0.329, "IronOre": 0.115, "RareEarths": 0.039, "NaturalGas": 0.295, "Timber": 2.053, "Bauxite": 0.059, "Uranium": 0.01 }
+  },
+  // Ghanzi
+  "bw_gh": {
+    "population": 67438,
+    "urbanization": 0.21,
+    "cultures": { "tswana": 0.79, "shona": 0.04, "ndebele": 0.03, "san": 0.03, "sotho": 0.03, "afrikaner": 0.02, "herero": 0.02, "zulu": 0.02, "english": 0.01, "ovambo": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.819, "Coal": 0.375, "Oil": 0.492, "IronOre": 0.171, "RareEarths": 0.054, "NaturalGas": 0.514, "Timber": 2.644, "Bauxite": 0.113, "Uranium": 0.019 }
+  },
+  // Kgalagadi
+  "bw_kg": {
+    "population": 84225,
+    "urbanization": 0.35,
+    "cultures": { "tswana": 0.79, "shona": 0.04, "ndebele": 0.03, "san": 0.03, "sotho": 0.03, "afrikaner": 0.02, "herero": 0.02, "zulu": 0.02, "english": 0.01, "ovambo": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.202, "Coal": 0.399, "Oil": 0.842, "IronOre": 0.266, "RareEarths": 0.117, "NaturalGas": 0.857, "Timber": 0.754, "Bauxite": 0.168, "Uranium": 0.015 }
+  },
+  // Kweneng
+  "bw_kw": {
+    "population": 598529,
+    "urbanization": 0.88,
+    "cultures": { "tswana": 0.79, "shona": 0.04, "ndebele": 0.03, "san": 0.03, "sotho": 0.03, "afrikaner": 0.02, "herero": 0.02, "zulu": 0.02, "english": 0.01, "ovambo": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.337, "Coal": 0.283, "Oil": 0.452, "IronOre": 0.245, "RareEarths": 0.035, "NaturalGas": 0.279, "Timber": 1.272, "Bauxite": 0.088, "Uranium": 0.012 }
+  },
+  // North-West
+  "bw_nw": {
+    "population": 248427,
+    "urbanization": 0.49,
+    "cultures": { "tswana": 0.79, "shona": 0.04, "ndebele": 0.03, "san": 0.03, "sotho": 0.03, "afrikaner": 0.02, "herero": 0.02, "zulu": 0.02, "english": 0.01, "ovambo": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.674, "Coal": 0.378, "Oil": 0.371, "IronOre": 0.243, "RareEarths": 0.081, "NaturalGas": 0.59, "Timber": 1.511, "Bauxite": 0.118, "Uranium": 0.013 }
+  },
+  // Southern District
+  "bw_so": {
+    "population": 436252,
+    "urbanization": 0.82,
+    "cultures": { "tswana": 0.79, "shona": 0.04, "ndebele": 0.03, "san": 0.03, "sotho": 0.03, "afrikaner": 0.02, "herero": 0.02, "zulu": 0.02, "english": 0.01, "ovambo": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.811, "Coal": 0.322, "Oil": 0.755, "IronOre": 0.417, "RareEarths": 0.084, "NaturalGas": 0.657, "Timber": 2.906, "Bauxite": 0.102, "Uranium": 0.014 }
+  }
+}

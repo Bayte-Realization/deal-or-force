@@ -1,0 +1,46 @@
+// Eritrea (ERI) on 1 January 2024: 4 regions, 6,081,196 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Debub
+  "er_du": {
+    "population": 3179879,
+    "urbanization": 0.59,
+    "cultures": { "tigrayan": 0.55, "beja": 0.1, "amhara": 0.07, "sidama": 0.07, "arab_sudanese": 0.06, "nubian": 0.06, "afar": 0.05, "oromo": 0.02, "somali": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.372, "Coal": 0.161, "Oil": 0.406, "IronOre": 0.111, "RareEarths": 0.05, "NaturalGas": 0.472, "Timber": 1.199, "Bauxite": 0.041, "Uranium": 0.007 }
+  },
+  // Gash-Barka
+  "er_gb": {
+    "population": 1533909,
+    "urbanization": 0.13,
+    "cultures": { "tigrayan": 0.55, "beja": 0.1, "amhara": 0.07, "sidama": 0.07, "arab_sudanese": 0.06, "nubian": 0.06, "afar": 0.05, "oromo": 0.02, "somali": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.675, "Coal": 0.183, "Oil": 0.635, "IronOre": 0.351, "RareEarths": 0.052, "NaturalGas": 0.594, "Timber": 2.289, "Bauxite": 0.12, "Uranium": 0.011 }
+  },
+  // Northern Red Sea
+  "er_sk": {
+    "population": 776243,
+    "urbanization": 0.36,
+    "cultures": { "tigrayan": 0.55, "beja": 0.1, "amhara": 0.07, "sidama": 0.07, "arab_sudanese": 0.06, "nubian": 0.06, "afar": 0.05, "oromo": 0.02, "somali": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.476, "Coal": 0.503, "Oil": 0.77, "IronOre": 0.192, "RareEarths": 0.115, "NaturalGas": 0.695, "Timber": 2.677, "Bauxite": 0.074, "Uranium": 0.015 }
+  },
+  // Southern Red Sea
+  "er_dk": {
+    "population": 591165,
+    "urbanization": 0.35,
+    "cultures": { "tigrayan": 0.55, "beja": 0.1, "amhara": 0.07, "sidama": 0.07, "arab_sudanese": 0.06, "nubian": 0.06, "afar": 0.05, "oromo": 0.02, "somali": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.677, "Coal": 0.217, "Oil": 0.42, "IronOre": 0.184, "RareEarths": 0.027, "NaturalGas": 0.535, "Timber": 0.921, "Bauxite": 0.042, "Uranium": 0.008 }
+  }
+}

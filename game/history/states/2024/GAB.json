@@ -1,0 +1,86 @@
+// Gabon (GAB) on 1 January 2024: 9 regions, 2,172,579 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Estuaire
+  "ga_1": {
+    "population": 1175435,
+    "urbanization": 0.96,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.94, "Coal": 0.354, "Oil": 0.242, "IronOre": 0.109, "RareEarths": 0.071, "NaturalGas": 0.606, "Timber": 2.712, "Bauxite": 0.108, "Uranium": 0.009 }
+  },
+  // Haut-Ogooué
+  "ga_2": {
+    "population": 181312,
+    "urbanization": 0.86,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.234, "Coal": 0.314, "Oil": 0.406, "IronOre": 0.127, "RareEarths": 0.07, "NaturalGas": 0.521, "Timber": 2.176, "Bauxite": 0.049, "Uranium": 0.011 }
+  },
+  // Moyen-Ogooué
+  "ga_3": {
+    "population": 64153,
+    "urbanization": 0.77,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.926, "Coal": 0.24, "Oil": 0.282, "IronOre": 0.204, "RareEarths": 0.066, "NaturalGas": 0.236, "Timber": 2.088, "Bauxite": 0.035, "Uranium": 0.008 }
+  },
+  // Ngounié
+  "ga_4": {
+    "population": 92833,
+    "urbanization": 0.72,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.158, "Coal": 0.183, "Oil": 0.194, "IronOre": 0.165, "RareEarths": 0.046, "NaturalGas": 0.317, "Timber": 2.719, "Bauxite": 0.047, "Uranium": 0.003 }
+  },
+  // Nyanga
+  "ga_5": {
+    "population": 59962,
+    "urbanization": 0.76,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.073, "Coal": 0.536, "Oil": 0.601, "IronOre": 0.438, "RareEarths": 0.136, "NaturalGas": 0.593, "Timber": 1.832, "Bauxite": 0.103, "Uranium": 0.016 }
+  },
+  // Ogooué-Ivindo
+  "ga_6": {
+    "population": 59223,
+    "urbanization": 0.67,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.082, "Coal": 0.24, "Oil": 0.5, "IronOre": 0.222, "RareEarths": 0.057, "NaturalGas": 0.617, "Timber": 1.926, "Bauxite": 0.094, "Uranium": 0.012 }
+  },
+  // Ogooué-Lolo
+  "ga_7": {
+    "population": 50973,
+    "urbanization": 0.62,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.975, "Coal": 0.304, "Oil": 0.467, "IronOre": 0.354, "RareEarths": 0.063, "NaturalGas": 0.984, "Timber": 0.976, "Bauxite": 0.116, "Uranium": 0.019 }
+  },
+  // Ogooué-Maritime
+  "ga_8": {
+    "population": 270461,
+    "urbanization": 0.93,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.487, "Coal": 0.652, "Oil": 0.942, "IronOre": 0.453, "RareEarths": 0.061, "NaturalGas": 0.477, "Timber": 2.983, "Bauxite": 0.166, "Uranium": 0.01 }
+  },
+  // Woleu-Ntem
+  "ga_9": {
+    "population": 218227,
+    "urbanization": 0.86,
+    "cultures": { "fang": 0.32, "bakongo": 0.18, "mongo": 0.12, "luba": 0.08, "ovimbundu": 0.06, "bemba": 0.05, "sara": 0.05, "fulani": 0.03, "hausa": 0.03, "swahili": 0.03, "wolof": 0.03, "french": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.381, "Coal": 0.192, "Oil": 0.256, "IronOre": 0.115, "RareEarths": 0.048, "NaturalGas": 0.362, "Timber": 2.234, "Bauxite": 0.051, "Uranium": 0.007 }
+  }
+}

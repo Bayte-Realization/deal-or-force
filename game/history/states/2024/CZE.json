@@ -1,0 +1,54 @@
+// Czechia (CZE) on 1 January 2024: 5 regions, 10,669,709 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central Bohemian
+  "cz_st": {
+    "population": 4446650,
+    "urbanization": 0.81,
+    "cultures": { "czech": 0.8736, "ukrainian": 0.0598, "slovak": 0.029, "vietnamese": 0.0077, "romani": 0.0068, "polish": 0.0058, "russian": 0.0058, "german": 0.0048, "romanian": 0.0029, "bulgarian": 0.0019, "hungarian": 0.0019 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.959, "Coal": 0.148, "Oil": 0.314, "IronOre": 0.067, "RareEarths": 0.025, "NaturalGas": 0.186, "Timber": 2.41, "Bauxite": 0.041, "Uranium": 0.005 }
+  },
+  // Hradec Králové
+  "cz_kr": {
+    "population": 758521,
+    "urbanization": 0.71,
+    "cultures": { "czech": 0.8736, "ukrainian": 0.0598, "slovak": 0.029, "vietnamese": 0.0077, "romani": 0.0068, "polish": 0.0058, "russian": 0.0058, "german": 0.0048, "romanian": 0.0029, "bulgarian": 0.0019, "hungarian": 0.0019 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.777, "Coal": 0.341, "Oil": 0.607, "IronOre": 0.192, "RareEarths": 0.068, "NaturalGas": 0.431, "Timber": 0.886, "Bauxite": 0.095, "Uranium": 0.01 }
+  },
+  // Plzeň-
+  "cz_pl": {
+    "population": 731950,
+    "urbanization": 0.6,
+    "cultures": { "czech": 0.8736, "ukrainian": 0.0598, "slovak": 0.029, "vietnamese": 0.0077, "romani": 0.0068, "polish": 0.0058, "russian": 0.0058, "german": 0.0048, "romanian": 0.0029, "bulgarian": 0.0019, "hungarian": 0.0019 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.391, "Coal": 0.398, "Oil": 0.325, "IronOre": 0.224, "RareEarths": 0.077, "NaturalGas": 0.691, "Timber": 2.328, "Bauxite": 0.109, "Uranium": 0.013 }
+  },
+  // South Bohemian
+  "cz_jc": {
+    "population": 1010999,
+    "urbanization": 0.4,
+    "cultures": { "czech": 0.8736, "ukrainian": 0.0598, "slovak": 0.029, "vietnamese": 0.0077, "romani": 0.0068, "polish": 0.0058, "russian": 0.0058, "german": 0.0048, "romanian": 0.0029, "bulgarian": 0.0019, "hungarian": 0.0019 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.079, "Coal": 0.162, "Oil": 0.283, "IronOre": 0.067, "RareEarths": 0.034, "NaturalGas": 0.128, "Timber": 2.381, "Bauxite": 0.04, "Uranium": 0.004 }
+  },
+  // South Moravian
+  "cz_jm": {
+    "population": 3721589,
+    "urbanization": 0.78,
+    "cultures": { "czech": 0.8736, "ukrainian": 0.0598, "slovak": 0.029, "vietnamese": 0.0077, "romani": 0.0068, "polish": 0.0058, "russian": 0.0058, "german": 0.0048, "romanian": 0.0029, "bulgarian": 0.0019, "hungarian": 0.0019 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.121, "Coal": 0.364, "Oil": 0.273, "IronOre": 0.248, "RareEarths": 0.048, "NaturalGas": 0.33, "Timber": 2.206, "Bauxite": 0.067, "Uranium": 0.006 }
+  }
+}

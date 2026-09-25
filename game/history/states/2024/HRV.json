@@ -1,0 +1,46 @@
+// Croatia (HRV) on 1 January 2024: 4 regions, 4,067,500 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Lika-Senj
+  "hr_09": {
+    "population": 766063,
+    "urbanization": 0.57,
+    "cultures": { "croatian": 0.9282, "serbian": 0.0325, "bosniak": 0.0102, "ukrainian": 0.0078, "albanian": 0.0041, "italian": 0.0041, "romani": 0.0041, "hungarian": 0.003, "slovene": 0.003, "czech": 0.002, "slovak": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.071, "Coal": 0.2, "Oil": 0.219, "IronOre": 0.138, "RareEarths": 0.026, "NaturalGas": 0.34, "Timber": 2.746, "Bauxite": 0.031, "Uranium": 0.005 }
+  },
+  // Požega-Slavonia
+  "hr_12": {
+    "population": 1044587,
+    "urbanization": 0.28,
+    "cultures": { "croatian": 0.9282, "serbian": 0.0325, "bosniak": 0.0102, "ukrainian": 0.0078, "albanian": 0.0041, "italian": 0.0041, "romani": 0.0041, "hungarian": 0.003, "slovene": 0.003, "czech": 0.002, "slovak": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.187, "Coal": 0.179, "Oil": 0.31, "IronOre": 0.277, "RareEarths": 0.086, "NaturalGas": 0.265, "Timber": 2.118, "Bauxite": 0.06, "Uranium": 0.011 }
+  },
+  // Zadar
+  "hr_13": {
+    "population": 861352,
+    "urbanization": 0.63,
+    "cultures": { "croatian": 0.9282, "serbian": 0.0325, "bosniak": 0.0102, "ukrainian": 0.0078, "albanian": 0.0041, "italian": 0.0041, "romani": 0.0041, "hungarian": 0.003, "slovene": 0.003, "czech": 0.002, "slovak": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.291, "Coal": 0.186, "Oil": 0.452, "IronOre": 0.219, "RareEarths": 0.028, "NaturalGas": 0.283, "Timber": 2.562, "Bauxite": 0.1, "Uranium": 0.01 }
+  },
+  // Zagreb
+  "hr_01": {
+    "population": 1395498,
+    "urbanization": 0.78,
+    "cultures": { "croatian": 0.9282, "serbian": 0.0325, "bosniak": 0.0102, "ukrainian": 0.0078, "albanian": 0.0041, "italian": 0.0041, "romani": 0.0041, "hungarian": 0.003, "slovene": 0.003, "czech": 0.002, "slovak": 0.001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.106, "Coal": 0.168, "Oil": 0.283, "IronOre": 0.176, "RareEarths": 0.049, "NaturalGas": 0.311, "Timber": 1.439, "Bauxite": 0.111, "Uranium": 0.011 }
+  }
+}

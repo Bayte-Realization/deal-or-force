@@ -1,0 +1,80 @@
+// North Korea (PRK) on 1 January 2024: 8 regions, 25,666,161 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Chagang
+  "kp_04": {
+    "population": 1967141,
+    "urbanization": 0.45,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.175, "Coal": 0.429, "Oil": 0.75, "IronOre": 0.176, "RareEarths": 0.093, "NaturalGas": 0.485, "Timber": 2.019, "Bauxite": 0.119, "Uranium": 0.014 }
+  },
+  // Kangwon
+  "kp_07": {
+    "population": 2192581,
+    "urbanization": 0.36,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.823, "Coal": 0.216, "Oil": 0.213, "IronOre": 0.213, "RareEarths": 0.047, "NaturalGas": 0.397, "Timber": 3.14, "Bauxite": 0.066, "Uranium": 0.007 }
+  },
+  // North Hamgyong
+  "kp_09": {
+    "population": 3175657,
+    "urbanization": 0.28,
+    "standard_of_living": 0.27,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1, "ExtractionIndustry": 2 },
+    "resources": { "Food": 1.892, "Coal": 3.4, "Oil": 0.497, "IronOre": 2.2, "RareEarths": 0.72, "NaturalGas": 0.597, "Timber": 2.24, "Bauxite": 0.09, "Uranium": 0.008 }
+  },
+  // North Hwanghae
+  "kp_06": {
+    "population": 4034439,
+    "urbanization": 0.6,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.483, "Coal": 0.245, "Oil": 0.48, "IronOre": 0.196, "RareEarths": 0.07, "NaturalGas": 0.443, "Timber": 1.504, "Bauxite": 0.063, "Uranium": 0.009 }
+  },
+  // North Pyongan
+  "kp_03": {
+    "population": 1222176,
+    "urbanization": 0.21,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.74, "Coal": 0.219, "Oil": 0.225, "IronOre": 0.158, "RareEarths": 0.04, "NaturalGas": 0.171, "Timber": 2.925, "Bauxite": 0.04, "Uranium": 0.005 }
+  },
+  // Ryanggang
+  "kp_10": {
+    "population": 1231687,
+    "urbanization": 0.34,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.673, "Coal": 0.182, "Oil": 0.434, "IronOre": 0.238, "RareEarths": 0.091, "NaturalGas": 0.691, "Timber": 0.879, "Bauxite": 0.144, "Uranium": 0.014 }
+  },
+  // South Hamgyong
+  "kp_08": {
+    "population": 2711251,
+    "urbanization": 0.52,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.464, "Coal": 0.098, "Oil": 0.252, "IronOre": 0.179, "RareEarths": 0.054, "NaturalGas": 0.215, "Timber": 1.985, "Bauxite": 0.062, "Uranium": 0.007 }
+  },
+  // South Pyongan
+  "kp_02": {
+    "population": 9131229,
+    "urbanization": 0.52,
+    "standard_of_living": 0.32,
+    "cultures": { "korean": 0.995, "han": 0.003, "japanese": 0.002 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 2, "Infrastructure": 2, "PowerPlant": 1, "ArmsIndustry": 2 },
+    "resources": { "Food": 1.197, "Coal": 2.8, "Oil": 0.217, "IronOre": 1.7, "RareEarths": 0.45, "NaturalGas": 0.213, "Timber": 1.047, "Bauxite": 0.053, "Uranium": 0.003 }
+  }
+}

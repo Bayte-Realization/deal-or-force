@@ -1,0 +1,54 @@
+// Benin (BEN) on 1 January 2024: 5 regions, 11,801,151 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Alibori
+  "bj_al": {
+    "population": 4127882,
+    "urbanization": 0.1,
+    "cultures": { "ewe": 0.38, "yoruba": 0.18, "akan": 0.1, "fulani": 0.09, "mossi": 0.06, "bambara": 0.05, "bassa": 0.05, "hausa": 0.04, "songhai": 0.03, "kanuri": 0.02 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.631, "Coal": 0.211, "Oil": 0.394, "IronOre": 0.144, "RareEarths": 0.101, "NaturalGas": 0.45, "Timber": 1.643, "Bauxite": 0.13, "Uranium": 0.005 }
+  },
+  // Atakora
+  "bj_ak": {
+    "population": 402426,
+    "urbanization": 0.74,
+    "cultures": { "ewe": 0.38, "yoruba": 0.18, "akan": 0.1, "fulani": 0.09, "mossi": 0.06, "bambara": 0.05, "bassa": 0.05, "hausa": 0.04, "songhai": 0.03, "kanuri": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.466, "Coal": 0.227, "Oil": 0.232, "IronOre": 0.208, "RareEarths": 0.062, "NaturalGas": 0.361, "Timber": 2.214, "Bauxite": 0.089, "Uranium": 0.007 }
+  },
+  // Borgou
+  "bj_bo": {
+    "population": 1811490,
+    "urbanization": 0.8,
+    "cultures": { "ewe": 0.38, "yoruba": 0.18, "akan": 0.1, "fulani": 0.09, "mossi": 0.06, "bambara": 0.05, "bassa": 0.05, "hausa": 0.04, "songhai": 0.03, "kanuri": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.283, "Coal": 0.295, "Oil": 0.517, "IronOre": 0.227, "RareEarths": 0.065, "NaturalGas": 0.326, "Timber": 1.254, "Bauxite": 0.1, "Uranium": 0.005 }
+  },
+  // Collines
+  "bj_co": {
+    "population": 64781,
+    "urbanization": 0.05,
+    "cultures": { "ewe": 0.38, "yoruba": 0.18, "akan": 0.1, "fulani": 0.09, "mossi": 0.06, "bambara": 0.05, "bassa": 0.05, "hausa": 0.04, "songhai": 0.03, "kanuri": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.283, "Coal": 0.225, "Oil": 0.694, "IronOre": 0.409, "RareEarths": 0.111, "NaturalGas": 0.496, "Timber": 1.007, "Bauxite": 0.084, "Uranium": 0.013 }
+  },
+  // Zou
+  "bj_zo": {
+    "population": 5394572,
+    "urbanization": 0.69,
+    "cultures": { "ewe": 0.38, "yoruba": 0.18, "akan": 0.1, "fulani": 0.09, "mossi": 0.06, "bambara": 0.05, "bassa": 0.05, "hausa": 0.04, "songhai": 0.03, "kanuri": 0.02 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.893, "Coal": 0.235, "Oil": 0.34, "IronOre": 0.157, "RareEarths": 0.042, "NaturalGas": 0.205, "Timber": 0.84, "Bauxite": 0.027, "Uranium": 0.008 }
+  }
+}

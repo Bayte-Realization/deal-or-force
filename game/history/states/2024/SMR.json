@@ -1,0 +1,22 @@
+// San Marino (SMR) on 1 January 2024: 1 region, 33,860 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Montegiardino
+  "sm_08": {
+    "population": 33860,
+    "urbanization": 0.95,
+    "cultures": { "italian": 0.98, "romanian": 0.008, "ukrainian": 0.005, "russian": 0.004, "chinese_diaspora": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.44, "Coal": 0.484, "Oil": 0.59, "IronOre": 0.197, "RareEarths": 0.093, "NaturalGas": 0.741, "Timber": 2.762, "Bauxite": 0.105, "Uranium": 0.013 }
+  }
+}

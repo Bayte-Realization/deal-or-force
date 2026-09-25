@@ -1,0 +1,46 @@
+// Tajikistan (TJK) on 1 January 2024: 4 regions, 9,321,018 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // districts of Republican Subordination
+  "tj_x01": {
+    "population": 2231497,
+    "urbanization": 0.52,
+    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.143, "Coal": 0.538, "Oil": 0.421, "IronOre": 0.241, "RareEarths": 0.09, "NaturalGas": 0.787, "Timber": 1.346, "Bauxite": 0.114, "Uranium": 0.01 }
+  },
+  // Gorno-Badakhshan
+  "tj_gb": {
+    "population": 441765,
+    "urbanization": 0.07,
+    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.448, "Coal": 0.222, "Oil": 0.887, "IronOre": 0.203, "RareEarths": 0.113, "NaturalGas": 0.553, "Timber": 1.251, "Bauxite": 0.142, "Uranium": 0.011 }
+  },
+  // Khatlon
+  "tj_kt": {
+    "population": 3602362,
+    "urbanization": 0.14,
+    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.809, "Coal": 0.103, "Oil": 0.109, "IronOre": 0.097, "RareEarths": 0.018, "NaturalGas": 0.194, "Timber": 0.93, "Bauxite": 0.052, "Uranium": 0.006 }
+  },
+  // Khujand
+  "tj_su": {
+    "population": 3045394,
+    "urbanization": 0.31,
+    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.801, "Coal": 0.237, "Oil": 0.393, "IronOre": 0.21, "RareEarths": 0.044, "NaturalGas": 0.214, "Timber": 1.888, "Bauxite": 0.042, "Uranium": 0.006 }
+  }
+}

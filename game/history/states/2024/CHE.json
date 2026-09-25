@@ -1,0 +1,30 @@
+// Switzerland (CHE) on 1 January 2024: 2 regions, 8,574,832 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bern
+  "ch_be": {
+    "population": 5436503,
+    "urbanization": 0.75,
+    "cultures": { "swiss_german": 0.6151, "french": 0.1786, "italian": 0.0942, "portuguese": 0.0298, "german": 0.0248, "albanian": 0.0149, "serbian": 0.0099, "spanish": 0.0099, "ukrainian": 0.0079, "croatian": 0.005, "romansh": 0.005, "turkish": 0.005 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.018, "Coal": 0.33, "Oil": 0.542, "IronOre": 0.256, "RareEarths": 0.041, "NaturalGas": 0.333, "Timber": 3.16, "Bauxite": 0.079, "Uranium": 0.01 }
+  },
+  // Grisons
+  "ch_gr": {
+    "population": 3138329,
+    "urbanization": 0.72,
+    "cultures": { "swiss_german": 0.6151, "french": 0.1786, "italian": 0.0942, "portuguese": 0.0298, "german": 0.0248, "albanian": 0.0149, "serbian": 0.0099, "spanish": 0.0099, "ukrainian": 0.0079, "croatian": 0.005, "romansh": 0.005, "turkish": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.075, "Coal": 0.4, "Oil": 0.884, "IronOre": 0.18, "RareEarths": 0.105, "NaturalGas": 0.702, "Timber": 2.867, "Bauxite": 0.13, "Uranium": 0.015 }
+  }
+}

@@ -1,0 +1,94 @@
+// Zambia (ZMB) on 1 January 2024: 10 regions, 17,861,030 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central
+  "zm_02": {
+    "population": 2063111,
+    "urbanization": 0.53,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.077, "Coal": 0.424, "Oil": 0.457, "IronOre": 0.416, "RareEarths": 0.1, "NaturalGas": 0.842, "Timber": 1.876, "Bauxite": 0.123, "Uranium": 0.008 }
+  },
+  // Copperbelt
+  "zm_08": {
+    "population": 3990159,
+    "urbanization": 0.72,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.443, "Coal": 0.42, "Oil": 0.628, "IronOre": 0.364, "RareEarths": 0.089, "NaturalGas": 0.477, "Timber": 2.677, "Bauxite": 0.113, "Uranium": 0.016 }
+  },
+  // Eastern
+  "zm_03": {
+    "population": 709215,
+    "urbanization": 0.29,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.287, "Coal": 0.095, "Oil": 0.262, "IronOre": 0.056, "RareEarths": 0.044, "NaturalGas": 0.309, "Timber": 2.55, "Bauxite": 0.037, "Uranium": 0.006 }
+  },
+  // Luapula
+  "zm_04": {
+    "population": 649747,
+    "urbanization": 0.28,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.849, "Coal": 0.293, "Oil": 0.496, "IronOre": 0.105, "RareEarths": 0.062, "NaturalGas": 0.512, "Timber": 2.548, "Bauxite": 0.082, "Uranium": 0.008 }
+  },
+  // Lusaka
+  "zm_09": {
+    "population": 3379047,
+    "urbanization": 0.65,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.956, "Coal": 0.251, "Oil": 1.013, "IronOre": 0.206, "RareEarths": 0.092, "NaturalGas": 0.964, "Timber": 2.582, "Bauxite": 0.187, "Uranium": 0.016 }
+  },
+  // Muchinga
+  "zm_10": {
+    "population": 1373048,
+    "urbanization": 0.06,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.152, "Coal": 0.34, "Oil": 0.411, "IronOre": 0.325, "RareEarths": 0.042, "NaturalGas": 0.774, "Timber": 2.389, "Bauxite": 0.082, "Uranium": 0.009 }
+  },
+  // Northern
+  "zm_05": {
+    "population": 1224381,
+    "urbanization": 0.38,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.784, "Coal": 0.194, "Oil": 0.265, "IronOre": 0.151, "RareEarths": 0.034, "NaturalGas": 0.597, "Timber": 0.68, "Bauxite": 0.09, "Uranium": 0.011 }
+  },
+  // Northwestern
+  "zm_06": {
+    "population": 1166855,
+    "urbanization": 0.16,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.256, "Coal": 0.241, "Oil": 0.595, "IronOre": 0.381, "RareEarths": 0.094, "NaturalGas": 0.68, "Timber": 1.13, "Bauxite": 0.082, "Uranium": 0.013 }
+  },
+  // Southern
+  "zm_07": {
+    "population": 2412519,
+    "urbanization": 0.28,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.91, "Coal": 0.212, "Oil": 0.428, "IronOre": 0.241, "RareEarths": 0.055, "NaturalGas": 0.222, "Timber": 2.239, "Bauxite": 0.065, "Uranium": 0.006 }
+  },
+  // Western
+  "zm_01": {
+    "population": 892948,
+    "urbanization": 0.26,
+    "cultures": { "bemba": 0.33, "tonga": 0.155, "chewa": 0.145, "luba": 0.07, "ndebele": 0.05, "shona": 0.05, "makua": 0.04, "sotho": 0.04, "swahili": 0.04, "tswana": 0.04, "ovimbundu": 0.02, "bakongo": 0.01, "san": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.2, "Coal": 0.539, "Oil": 0.997, "IronOre": 0.308, "RareEarths": 0.115, "NaturalGas": 1.018, "Timber": 2.182, "Bauxite": 0.169, "Uranium": 0.012 }
+  }
+}

@@ -1,0 +1,326 @@
+// Turkey (TUR) on 1 January 2024: 39 regions, 83,429,615 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Adana
+  "tr_01": {
+    "population": 4690434,
+    "urbanization": 0.7,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.451, "Coal": 0.253, "Oil": 0.73, "IronOre": 0.293, "RareEarths": 0.077, "NaturalGas": 0.416, "Timber": 2.222, "Bauxite": 0.096, "Uranium": 0.008 }
+  },
+  // Afyonkarahisar
+  "tr_03": {
+    "population": 546105,
+    "urbanization": 0.5,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.176, "Coal": 0.276, "Oil": 0.333, "IronOre": 0.296, "RareEarths": 0.073, "NaturalGas": 0.318, "Timber": 1.334, "Bauxite": 0.143, "Uranium": 0.011 }
+  },
+  // Ankara
+  "tr_06": {
+    "population": 8874595,
+    "urbanization": 0.8,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.223, "Coal": 0.487, "Oil": 0.62, "IronOre": 0.21, "RareEarths": 0.069, "NaturalGas": 0.986, "Timber": 2.304, "Bauxite": 0.159, "Uranium": 0.014 }
+  },
+  // Antalya
+  "tr_07": {
+    "population": 2275576,
+    "urbanization": 0.78,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.361, "Coal": 0.577, "Oil": 0.868, "IronOre": 0.312, "RareEarths": 0.1, "NaturalGas": 0.439, "Timber": 1.961, "Bauxite": 0.089, "Uranium": 0.01 }
+  },
+  // Artvin
+  "tr_08": {
+    "population": 620325,
+    "urbanization": 0.87,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.317, "Coal": 0.486, "Oil": 0.875, "IronOre": 0.233, "RareEarths": 0.124, "NaturalGas": 0.413, "Timber": 3.028, "Bauxite": 0.12, "Uranium": 0.018 }
+  },
+  // Ağrı
+  "tr_04": {
+    "population": 301911,
+    "urbanization": 0.5,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.344, "Coal": 0.49, "Oil": 0.803, "IronOre": 0.3, "RareEarths": 0.075, "NaturalGas": 0.336, "Timber": 3.043, "Bauxite": 0.086, "Uranium": 0.017 }
+  },
+  // Balıkesir
+  "tr_10": {
+    "population": 1134173,
+    "urbanization": 0.53,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.235, "Coal": 0.204, "Oil": 0.274, "IronOre": 0.256, "RareEarths": 0.046, "NaturalGas": 0.33, "Timber": 2.775, "Bauxite": 0.109, "Uranium": 0.009 }
+  },
+  // Bolu
+  "tr_14": {
+    "population": 463119,
+    "urbanization": 0.36,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.933, "Coal": 0.19, "Oil": 0.687, "IronOre": 0.313, "RareEarths": 0.092, "NaturalGas": 0.373, "Timber": 3.036, "Bauxite": 0.145, "Uranium": 0.013 }
+  },
+  // Bursa
+  "tr_16": {
+    "population": 4662273,
+    "urbanization": 0.81,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.296, "Coal": 0.217, "Oil": 0.471, "IronOre": 0.199, "RareEarths": 0.038, "NaturalGas": 0.393, "Timber": 1.507, "Bauxite": 0.133, "Uranium": 0.006 }
+  },
+  // Denizli
+  "tr_20": {
+    "population": 1228573,
+    "urbanization": 0.74,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.073, "Coal": 0.24, "Oil": 0.48, "IronOre": 0.367, "RareEarths": 0.06, "NaturalGas": 0.339, "Timber": 2.697, "Bauxite": 0.136, "Uranium": 0.01 }
+  },
+  // Diyarbakır
+  "tr_21": {
+    "population": 2133453,
+    "urbanization": 0.77,
+    "cultures": { "kurdish": 0.85, "turkish": 0.13, "arab_levantine": 0.01, "armenian": 0.005, "assyrian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.802, "Coal": 0.468, "Oil": 0.662, "IronOre": 0.337, "RareEarths": 0.098, "NaturalGas": 0.916, "Timber": 2.596, "Bauxite": 0.167, "Uranium": 0.019 }
+  },
+  // Erzincan
+  "tr_24": {
+    "population": 1141771,
+    "urbanization": 0.65,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.239, "Coal": 0.627, "Oil": 0.576, "IronOre": 0.227, "RareEarths": 0.078, "NaturalGas": 0.751, "Timber": 2.435, "Bauxite": 0.188, "Uranium": 0.015 }
+  },
+  // Erzurum
+  "tr_25": {
+    "population": 1812793,
+    "urbanization": 0.56,
+    "cultures": { "kurdish": 0.97, "turkish": 0.0274, "arab_levantine": 0.0008, "azerbaijani": 0.0004, "bosniak": 0.0004, "albanian": 0.0003, "adyghe": 0.0003, "georgian": 0.0002, "romani": 0.0002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.45, "Coal": 0.358, "Oil": 0.442, "IronOre": 0.253, "RareEarths": 0.053, "NaturalGas": 0.579, "Timber": 3.29, "Bauxite": 0.104, "Uranium": 0.012 }
+  },
+  // Eskişehir
+  "tr_26": {
+    "population": 1269289,
+    "urbanization": 0.7,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.1, "Coal": 0.35, "Oil": 0.42, "IronOre": 0.188, "RareEarths": 0.115, "NaturalGas": 0.886, "Timber": 3.096, "Bauxite": 0.183, "Uranium": 0.012 }
+  },
+  // Gümüşhane
+  "tr_29": {
+    "population": 1750578,
+    "urbanization": 0.89,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.256, "Coal": 0.414, "Oil": 0.47, "IronOre": 0.195, "RareEarths": 0.11, "NaturalGas": 0.764, "Timber": 1.339, "Bauxite": 0.06, "Uranium": 0.015 }
+  },
+  // Kahramanmaraş
+  "tr_46": {
+    "population": 3258436,
+    "urbanization": 0.8,
+    "cultures": { "kurdish": 0.97, "turkish": 0.0274, "arab_levantine": 0.0008, "azerbaijani": 0.0004, "bosniak": 0.0004, "albanian": 0.0003, "adyghe": 0.0003, "georgian": 0.0002, "romani": 0.0002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.917, "Coal": 0.659, "Oil": 0.43, "IronOre": 0.202, "RareEarths": 0.119, "NaturalGas": 0.909, "Timber": 1.421, "Bauxite": 0.198, "Uranium": 0.015 }
+  },
+  // Karabük
+  "tr_78": {
+    "population": 667284,
+    "urbanization": 0.74,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.589, "Coal": 0.133, "Oil": 0.31, "IronOre": 0.183, "RareEarths": 0.026, "NaturalGas": 0.326, "Timber": 1.098, "Bauxite": 0.069, "Uranium": 0.005 }
+  },
+  // Kars
+  "tr_36": {
+    "population": 379416,
+    "urbanization": 0.35,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.425, "Coal": 0.381, "Oil": 0.504, "IronOre": 0.289, "RareEarths": 0.071, "NaturalGas": 0.836, "Timber": 2.952, "Bauxite": 0.068, "Uranium": 0.011 }
+  },
+  // Kastamonu
+  "tr_37": {
+    "population": 413849,
+    "urbanization": 0.44,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.515, "Coal": 0.202, "Oil": 0.275, "IronOre": 0.154, "RareEarths": 0.042, "NaturalGas": 0.583, "Timber": 2.38, "Bauxite": 0.05, "Uranium": 0.005 }
+  },
+  // Kayseri
+  "tr_38": {
+    "population": 1404723,
+    "urbanization": 0.73,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.77, "Coal": 0.392, "Oil": 0.334, "IronOre": 0.168, "RareEarths": 0.093, "NaturalGas": 0.827, "Timber": 1.861, "Bauxite": 0.078, "Uranium": 0.017 }
+  },
+  // Konya
+  "tr_42": {
+    "population": 3330057,
+    "urbanization": 0.64,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 0.773, "Coal": 0.169, "Oil": 0.143, "IronOre": 0.05, "RareEarths": 0.031, "NaturalGas": 0.18, "Timber": 1.67, "Bauxite": 0.026, "Uranium": 0.005 }
+  },
+  // Kütahya
+  "tr_43": {
+    "population": 633237,
+    "urbanization": 0.51,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.08, "Coal": 0.504, "Oil": 0.383, "IronOre": 0.374, "RareEarths": 0.083, "NaturalGas": 0.372, "Timber": 2.679, "Bauxite": 0.104, "Uranium": 0.011 }
+  },
+  // Kırşehir
+  "tr_40": {
+    "population": 574083,
+    "urbanization": 0.51,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.233, "Coal": 0.355, "Oil": 0.663, "IronOre": 0.171, "RareEarths": 0.112, "NaturalGas": 0.665, "Timber": 3.081, "Bauxite": 0.151, "Uranium": 0.018 }
+  },
+  // Malatya
+  "tr_44": {
+    "population": 1516677,
+    "urbanization": 0.78,
+    "cultures": { "kurdish": 0.97, "turkish": 0.0274, "arab_levantine": 0.0008, "azerbaijani": 0.0004, "bosniak": 0.0004, "albanian": 0.0003, "adyghe": 0.0003, "georgian": 0.0002, "romani": 0.0002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.339, "Coal": 0.219, "Oil": 0.249, "IronOre": 0.157, "RareEarths": 0.04, "NaturalGas": 0.283, "Timber": 2.279, "Bauxite": 0.061, "Uranium": 0.011 }
+  },
+  // Manisa
+  "tr_45": {
+    "population": 1028207,
+    "urbanization": 0.62,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.612, "Coal": 0.379, "Oil": 0.616, "IronOre": 0.122, "RareEarths": 0.034, "NaturalGas": 0.371, "Timber": 3.193, "Bauxite": 0.123, "Uranium": 0.009 }
+  },
+  // Mardin
+  "tr_47": {
+    "population": 636164,
+    "urbanization": 0.61,
+    "cultures": { "kurdish": 0.7, "arab_levantine": 0.18, "turkish": 0.09, "assyrian": 0.02, "armenian": 0.01 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.292, "Coal": 0.398, "Oil": 0.364, "IronOre": 0.217, "RareEarths": 0.082, "NaturalGas": 0.711, "Timber": 1.804, "Bauxite": 0.132, "Uranium": 0.009 }
+  },
+  // Mersin
+  "tr_33": {
+    "population": 2692597,
+    "urbanization": 0.93,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.285, "Coal": 0.347, "Oil": 0.389, "IronOre": 0.25, "RareEarths": 0.034, "NaturalGas": 0.342, "Timber": 3.001, "Bauxite": 0.092, "Uranium": 0.01 }
+  },
+  // Muğla
+  "tr_48": {
+    "population": 839649,
+    "urbanization": 0.67,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.977, "Coal": 0.359, "Oil": 0.519, "IronOre": 0.293, "RareEarths": 0.088, "NaturalGas": 0.479, "Timber": 2.77, "Bauxite": 0.132, "Uranium": 0.01 }
+  },
+  // Sakarya
+  "tr_54": {
+    "population": 18173009,
+    "urbanization": 0.97,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.34, "Coal": 0.315, "Oil": 0.885, "IronOre": 0.359, "RareEarths": 0.052, "NaturalGas": 0.484, "Timber": 0.881, "Bauxite": 0.063, "Uranium": 0.007 }
+  },
+  // Samsun
+  "tr_55": {
+    "population": 1436038,
+    "urbanization": 0.85,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.778, "Coal": 0.58, "Oil": 0.633, "IronOre": 0.204, "RareEarths": 0.071, "NaturalGas": 0.968, "Timber": 0.772, "Bauxite": 0.075, "Uranium": 0.015 }
+  },
+  // Siirt
+  "tr_56": {
+    "population": 812211,
+    "urbanization": 0.53,
+    "cultures": { "kurdish": 0.97, "turkish": 0.0274, "arab_levantine": 0.0008, "azerbaijani": 0.0004, "bosniak": 0.0004, "albanian": 0.0003, "adyghe": 0.0003, "georgian": 0.0002, "romani": 0.0002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.475, "Coal": 0.508, "Oil": 0.863, "IronOre": 0.165, "RareEarths": 0.057, "NaturalGas": 0.592, "Timber": 2.441, "Bauxite": 0.142, "Uranium": 0.01 }
+  },
+  // Sivas
+  "tr_58": {
+    "population": 888052,
+    "urbanization": 0.52,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.079, "Coal": 0.121, "Oil": 0.264, "IronOre": 0.119, "RareEarths": 0.036, "NaturalGas": 0.221, "Timber": 2.669, "Bauxite": 0.068, "Uranium": 0.003 }
+  },
+  // Tekirdağ
+  "tr_59": {
+    "population": 1989309,
+    "urbanization": 0.38,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 2.455, "Coal": 0.512, "Oil": 0.836, "IronOre": 0.304, "RareEarths": 0.076, "NaturalGas": 0.696, "Timber": 2.227, "Bauxite": 0.111, "Uranium": 0.015 }
+  },
+  // Tokat
+  "tr_60": {
+    "population": 1031502,
+    "urbanization": 0.62,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.317, "Coal": 0.459, "Oil": 0.887, "IronOre": 0.195, "RareEarths": 0.13, "NaturalGas": 0.92, "Timber": 3.075, "Bauxite": 0.12, "Uranium": 0.012 }
+  },
+  // Van
+  "tr_65": {
+    "population": 1198415,
+    "urbanization": 0.65,
+    "cultures": { "kurdish": 0.845, "turkish": 0.135, "azerbaijani": 0.01, "arab_levantine": 0.005, "armenian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.074, "Coal": 0.2, "Oil": 0.628, "IronOre": 0.238, "RareEarths": 0.042, "NaturalGas": 0.392, "Timber": 1.68, "Bauxite": 0.102, "Uranium": 0.008 }
+  },
+  // Yozgat
+  "tr_66": {
+    "population": 411327,
+    "urbanization": 0.37,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.115, "Coal": 0.518, "Oil": 0.685, "IronOre": 0.18, "RareEarths": 0.064, "NaturalGas": 0.488, "Timber": 2.776, "Bauxite": 0.147, "Uranium": 0.012 }
+  },
+  // Çorum
+  "tr_19": {
+    "population": 549047,
+    "urbanization": 0.58,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.941, "Coal": 0.253, "Oil": 0.416, "IronOre": 0.138, "RareEarths": 0.041, "NaturalGas": 0.354, "Timber": 1.218, "Bauxite": 0.076, "Uranium": 0.009 }
+  },
+  // İzmir
+  "tr_35": {
+    "population": 4846973,
+    "urbanization": 0.88,
+    "cultures": { "turkish": 0.9119, "arab_levantine": 0.0253, "azerbaijani": 0.0127, "bosniak": 0.0127, "albanian": 0.0101, "adyghe": 0.0089, "georgian": 0.0063, "romani": 0.0063, "russian": 0.0015, "armenian": 0.0013, "assyrian": 0.0013, "greek": 0.0013, "ukrainian": 0.0005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.131, "Coal": 0.535, "Oil": 0.872, "IronOre": 0.223, "RareEarths": 0.1, "NaturalGas": 0.726, "Timber": 1.453, "Bauxite": 0.117, "Uranium": 0.013 }
+  },
+  // Şanlıurfa
+  "tr_63": {
+    "population": 1814385,
+    "urbanization": 0.43,
+    "cultures": { "kurdish": 0.5, "turkish": 0.4, "arab_levantine": 0.09, "armenian": 0.005, "assyrian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.086, "Coal": 0.224, "Oil": 0.217, "IronOre": 0.18, "RareEarths": 0.039, "NaturalGas": 0.218, "Timber": 1.169, "Bauxite": 0.05, "Uranium": 0.01 }
+  }
+}

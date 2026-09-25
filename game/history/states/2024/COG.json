@@ -1,0 +1,86 @@
+// Republic of the Congo (COG) on 1 January 2024: 9 regions, 5,380,508 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Cuvette
+  "cg_8": {
+    "population": 290162,
+    "urbanization": 0.53,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.971, "Coal": 0.366, "Oil": 0.939, "IronOre": 0.336, "RareEarths": 0.114, "NaturalGas": 0.773, "Timber": 0.77, "Bauxite": 0.1, "Uranium": 0.018 }
+  },
+  // Cuvette-Ouest
+  "cg_15": {
+    "population": 126284,
+    "urbanization": 0.29,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.058, "Coal": 0.137, "Oil": 0.162, "IronOre": 0.142, "RareEarths": 0.036, "NaturalGas": 0.143, "Timber": 1.078, "Bauxite": 0.04, "Uranium": 0.007 }
+  },
+  // Kouilou
+  "cg_5": {
+    "population": 2486369,
+    "urbanization": 0.9,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.043, "Coal": 0.102, "Oil": 0.117, "IronOre": 0.111, "RareEarths": 0.035, "NaturalGas": 0.137, "Timber": 2.292, "Bauxite": 0.019, "Uranium": 0.006 }
+  },
+  // Likouala
+  "cg_7": {
+    "population": 301268,
+    "urbanization": 0.24,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.495, "Coal": 0.119, "Oil": 0.279, "IronOre": 0.122, "RareEarths": 0.061, "NaturalGas": 0.215, "Timber": 2.857, "Bauxite": 0.059, "Uranium": 0.005 }
+  },
+  // Lékoumou
+  "cg_2": {
+    "population": 654501,
+    "urbanization": 0.56,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.444, "Coal": 0.125, "Oil": 0.317, "IronOre": 0.16, "RareEarths": 0.03, "NaturalGas": 0.233, "Timber": 2.853, "Bauxite": 0.047, "Uranium": 0.003 }
+  },
+  // Niari
+  "cg_9": {
+    "population": 603720,
+    "urbanization": 0.76,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.754, "Coal": 0.443, "Oil": 0.563, "IronOre": 0.362, "RareEarths": 0.102, "NaturalGas": 0.715, "Timber": 2.114, "Bauxite": 0.151, "Uranium": 0.017 }
+  },
+  // Plateaux
+  "cg_14": {
+    "population": 210181,
+    "urbanization": 0.49,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.725, "Coal": 0.092, "Oil": 0.134, "IronOre": 0.1, "RareEarths": 0.039, "NaturalGas": 0.304, "Timber": 0.797, "Bauxite": 0.039, "Uranium": 0.006 }
+  },
+  // Pool
+  "cg_12": {
+    "population": 282034,
+    "urbanization": 0.17,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.838, "Coal": 0.328, "Oil": 0.363, "IronOre": 0.289, "RareEarths": 0.056, "NaturalGas": 0.273, "Timber": 3.246, "Bauxite": 0.125, "Uranium": 0.008 }
+  },
+  // Sangha
+  "cg_13": {
+    "population": 425989,
+    "urbanization": 0.4,
+    "cultures": { "bakongo": 0.48, "mongo": 0.2, "fang": 0.1, "luba": 0.09, "bemba": 0.04, "ovimbundu": 0.03, "sara": 0.03, "swahili": 0.03 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.522, "Coal": 0.155, "Oil": 0.286, "IronOre": 0.107, "RareEarths": 0.017, "NaturalGas": 0.193, "Timber": 0.666, "Bauxite": 0.031, "Uranium": 0.005 }
+  }
+}

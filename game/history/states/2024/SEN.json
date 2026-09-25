@@ -1,0 +1,70 @@
+// Senegal (SEN) on 1 January 2024: 7 regions, 16,296,364 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Fatick
+  "sn_fk": {
+    "population": 11989085,
+    "urbanization": 0.58,
+    "cultures": { "wolof": 0.41, "fulani": 0.24, "mandinka": 0.1, "soninke": 0.075, "bambara": 0.06, "temne": 0.04, "kru": 0.03, "mende": 0.02, "arab_maghrebi": 0.015, "berber": 0.01 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.197, "Coal": 0.123, "Oil": 0.272, "IronOre": 0.08, "RareEarths": 0.022, "NaturalGas": 0.272, "Timber": 1.428, "Bauxite": 0.039, "Uranium": 0.006 }
+  },
+  // Kolda
+  "sn_kd": {
+    "population": 1415921,
+    "urbanization": 0.39,
+    "cultures": { "wolof": 0.41, "fulani": 0.24, "mandinka": 0.1, "soninke": 0.075, "bambara": 0.06, "temne": 0.04, "kru": 0.03, "mende": 0.02, "arab_maghrebi": 0.015, "berber": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.852, "Coal": 0.221, "Oil": 0.274, "IronOre": 0.079, "RareEarths": 0.029, "NaturalGas": 0.22, "Timber": 0.917, "Bauxite": 0.042, "Uranium": 0.005 }
+  },
+  // Kédougou
+  "sn_ke": {
+    "population": 55968,
+    "urbanization": 0.68,
+    "cultures": { "wolof": 0.41, "fulani": 0.24, "mandinka": 0.1, "soninke": 0.075, "bambara": 0.06, "temne": 0.04, "kru": 0.03, "mende": 0.02, "arab_maghrebi": 0.015, "berber": 0.01 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.789, "Coal": 0.221, "Oil": 0.243, "IronOre": 0.19, "RareEarths": 0.049, "NaturalGas": 0.221, "Timber": 3.03, "Bauxite": 0.103, "Uranium": 0.012 }
+  },
+  // Louga
+  "sn_lg": {
+    "population": 1323202,
+    "urbanization": 0.13,
+    "cultures": { "wolof": 0.41, "fulani": 0.24, "mandinka": 0.1, "soninke": 0.075, "bambara": 0.06, "temne": 0.04, "kru": 0.03, "mende": 0.02, "arab_maghrebi": 0.015, "berber": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.871, "Coal": 0.174, "Oil": 0.456, "IronOre": 0.18, "RareEarths": 0.06, "NaturalGas": 0.35, "Timber": 2.016, "Bauxite": 0.105, "Uranium": 0.011 }
+  },
+  // Matam
+  "sn_mt": {
+    "population": 394161,
+    "urbanization": 0.11,
+    "cultures": { "wolof": 0.41, "fulani": 0.24, "mandinka": 0.1, "soninke": 0.075, "bambara": 0.06, "temne": 0.04, "kru": 0.03, "mende": 0.02, "arab_maghrebi": 0.015, "berber": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.016, "Coal": 0.283, "Oil": 0.576, "IronOre": 0.39, "RareEarths": 0.071, "NaturalGas": 0.494, "Timber": 2.33, "Bauxite": 0.083, "Uranium": 0.013 }
+  },
+  // Saint-Louis
+  "sn_sl": {
+    "population": 131581,
+    "urbanization": 0.05,
+    "cultures": { "wolof": 0.41, "fulani": 0.24, "mandinka": 0.1, "soninke": 0.075, "bambara": 0.06, "temne": 0.04, "kru": 0.03, "mende": 0.02, "arab_maghrebi": 0.015, "berber": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.141, "Coal": 0.208, "Oil": 0.571, "IronOre": 0.179, "RareEarths": 0.066, "NaturalGas": 0.594, "Timber": 2.11, "Bauxite": 0.084, "Uranium": 0.008 }
+  },
+  // Tambacounda
+  "sn_tc": {
+    "population": 986446,
+    "urbanization": 0.19,
+    "cultures": { "wolof": 0.41, "fulani": 0.24, "mandinka": 0.1, "soninke": 0.075, "bambara": 0.06, "temne": 0.04, "kru": 0.03, "mende": 0.02, "arab_maghrebi": 0.015, "berber": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.111, "Coal": 0.576, "Oil": 0.706, "IronOre": 0.287, "RareEarths": 0.051, "NaturalGas": 0.647, "Timber": 1.277, "Bauxite": 0.183, "Uranium": 0.019 }
+  }
+}

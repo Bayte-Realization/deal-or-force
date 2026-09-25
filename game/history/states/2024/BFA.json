@@ -1,0 +1,102 @@
+// Burkina Faso (BFA) on 1 January 2024: 11 regions, 20,321,378 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Boulgou
+  "bf_blg": {
+    "population": 1609718,
+    "urbanization": 0.12,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.894, "Coal": 0.255, "Oil": 0.393, "IronOre": 0.441, "RareEarths": 0.139, "NaturalGas": 0.931, "Timber": 1.53, "Bauxite": 0.13, "Uranium": 0.011 }
+  },
+  // Comoé
+  "bf_com": {
+    "population": 1112437,
+    "urbanization": 0.22,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.29, "Coal": 0.375, "Oil": 0.766, "IronOre": 0.224, "RareEarths": 0.113, "NaturalGas": 0.55, "Timber": 2.135, "Bauxite": 0.183, "Uranium": 0.013 }
+  },
+  // Gnagna
+  "bf_gna": {
+    "population": 1070565,
+    "urbanization": 0.37,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.36, "Coal": 0.281, "Oil": 0.438, "IronOre": 0.212, "RareEarths": 0.074, "NaturalGas": 0.501, "Timber": 0.967, "Bauxite": 0.105, "Uranium": 0.011 }
+  },
+  // Gourma
+  "bf_gou": {
+    "population": 910726,
+    "urbanization": 0.1,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.173, "Coal": 0.162, "Oil": 0.16, "IronOre": 0.106, "RareEarths": 0.028, "NaturalGas": 0.316, "Timber": 1.304, "Bauxite": 0.067, "Uranium": 0.008 }
+  },
+  // Houet
+  "bf_hou": {
+    "population": 3571993,
+    "urbanization": 0.33,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.263, "Coal": 0.305, "Oil": 0.576, "IronOre": 0.337, "RareEarths": 0.077, "NaturalGas": 0.541, "Timber": 1.417, "Bauxite": 0.136, "Uranium": 0.011 }
+  },
+  // Kadiogo
+  "bf_kad": {
+    "population": 5405506,
+    "urbanization": 0.62,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.293, "Coal": 0.195, "Oil": 0.468, "IronOre": 0.146, "RareEarths": 0.097, "NaturalGas": 0.748, "Timber": 3.391, "Bauxite": 0.093, "Uranium": 0.011 }
+  },
+  // Mouhoun
+  "bf_mou": {
+    "population": 2951071,
+    "urbanization": 0.15,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.566, "Coal": 0.107, "Oil": 0.175, "IronOre": 0.074, "RareEarths": 0.02, "NaturalGas": 0.217, "Timber": 1.994, "Bauxite": 0.021, "Uranium": 0.003 }
+  },
+  // Sissili
+  "bf_sis": {
+    "population": 1064584,
+    "urbanization": 0.08,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.34, "Coal": 0.15, "Oil": 0.408, "IronOre": 0.214, "RareEarths": 0.063, "NaturalGas": 0.488, "Timber": 1.126, "Bauxite": 0.071, "Uranium": 0.006 }
+  },
+  // Soum
+  "bf_som": {
+    "population": 176158,
+    "urbanization": 0.46,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.427, "Coal": 0.223, "Oil": 0.418, "IronOre": 0.303, "RareEarths": 0.1, "NaturalGas": 0.453, "Timber": 1.408, "Bauxite": 0.115, "Uranium": 0.012 }
+  },
+  // Tapoa
+  "bf_tap": {
+    "population": 616352,
+    "urbanization": 0.12,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.395, "Coal": 0.236, "Oil": 0.68, "IronOre": 0.281, "RareEarths": 0.045, "NaturalGas": 0.822, "Timber": 2.944, "Bauxite": 0.147, "Uranium": 0.008 }
+  },
+  // Yatenga
+  "bf_yat": {
+    "population": 1832268,
+    "urbanization": 0.18,
+    "cultures": { "mossi": 0.52, "senufo": 0.11, "fulani": 0.09, "bambara": 0.08, "mandinka": 0.07, "bassa": 0.04, "songhai": 0.04, "kru": 0.03, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.914, "Coal": 0.658, "Oil": 0.965, "IronOre": 0.202, "RareEarths": 0.12, "NaturalGas": 1.088, "Timber": 1.992, "Bauxite": 0.086, "Uranium": 0.008 }
+  }
+}

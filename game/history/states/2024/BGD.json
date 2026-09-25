@@ -1,0 +1,62 @@
+// Bangladesh (BGD) on 1 January 2024: 6 regions, 163,046,161 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Chattogram
+  "bd_b": {
+    "population": 32529197,
+    "urbanization": 0.61,
+    "cultures": { "bengali_muslim": 0.885, "bengali": 0.085, "hindustani": 0.01, "rohingya": 0.008, "assamese": 0.004, "burmese": 0.003, "nepali": 0.003, "odia": 0.002 },
+    "buildings": { "Agriculture": 7, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.676, "Coal": 0.414, "Oil": 0.473, "IronOre": 0.195, "RareEarths": 0.094, "NaturalGas": 0.65, "Timber": 2.461, "Bauxite": 0.086, "Uranium": 0.012 }
+  },
+  // Dhaka
+  "bd_c": {
+    "population": 77670653,
+    "urbanization": 0.45,
+    "cultures": { "bengali_muslim": 0.885, "bengali": 0.085, "hindustani": 0.01, "rohingya": 0.008, "assamese": 0.004, "burmese": 0.003, "nepali": 0.003, "odia": 0.002 },
+    "buildings": { "Agriculture": 22, "CivilianIndustry": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.844, "Coal": 0.183, "Oil": 0.174, "IronOre": 0.176, "RareEarths": 0.032, "NaturalGas": 0.246, "Timber": 1.526, "Bauxite": 0.032, "Uranium": 0.006 }
+  },
+  // Khulna
+  "bd_d": {
+    "population": 24877603,
+    "urbanization": 0.21,
+    "cultures": { "bengali_muslim": 0.885, "bengali": 0.085, "hindustani": 0.01, "rohingya": 0.008, "assamese": 0.004, "burmese": 0.003, "nepali": 0.003, "odia": 0.002 },
+    "buildings": { "Agriculture": 10, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.447, "Coal": 0.561, "Oil": 0.928, "IronOre": 0.264, "RareEarths": 0.111, "NaturalGas": 0.935, "Timber": 2.315, "Bauxite": 0.121, "Uranium": 0.016 }
+  },
+  // Rajshahi
+  "bd_e": {
+    "population": 14404572,
+    "urbanization": 0.23,
+    "cultures": { "bengali_muslim": 0.885, "bengali": 0.085, "hindustani": 0.01, "rohingya": 0.008, "assamese": 0.004, "burmese": 0.003, "nepali": 0.003, "odia": 0.002 },
+    "buildings": { "Agriculture": 6, "Infrastructure": 1 },
+    "resources": { "Food": 1.3, "Coal": 0.166, "Oil": 0.164, "IronOre": 0.084, "RareEarths": 0.021, "NaturalGas": 0.211, "Timber": 2.742, "Bauxite": 0.047, "Uranium": 0.004 }
+  },
+  // Rangpur
+  "bd_f": {
+    "population": 7441032,
+    "urbanization": 0.2,
+    "cultures": { "bengali_muslim": 0.885, "bengali": 0.085, "hindustani": 0.01, "rohingya": 0.008, "assamese": 0.004, "burmese": 0.003, "nepali": 0.003, "odia": 0.002 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 0.77, "Coal": 0.263, "Oil": 0.388, "IronOre": 0.175, "RareEarths": 0.044, "NaturalGas": 0.435, "Timber": 2.406, "Bauxite": 0.08, "Uranium": 0.004 }
+  },
+  // Sylhet
+  "bd_g": {
+    "population": 6123104,
+    "urbanization": 0.11,
+    "cultures": { "bengali_muslim": 0.885, "bengali": 0.085, "hindustani": 0.01, "rohingya": 0.008, "assamese": 0.004, "burmese": 0.003, "nepali": 0.003, "odia": 0.002 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 2.257, "Coal": 0.273, "Oil": 0.369, "IronOre": 0.096, "RareEarths": 0.07, "NaturalGas": 0.288, "Timber": 0.899, "Bauxite": 0.047, "Uranium": 0.01 }
+  }
+}

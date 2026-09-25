@@ -1,0 +1,110 @@
+// Yemen (YEM) on 1 January 2024: 12 regions, 29,161,922 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Abyan
+  "ye_ab": {
+    "population": 572414,
+    "urbanization": 0.05,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.448, "Coal": 0.09, "Oil": 0.185, "IronOre": 0.07, "RareEarths": 0.034, "NaturalGas": 0.267, "Timber": 1.234, "Bauxite": 0.031, "Uranium": 0.002 }
+  },
+  // Al Hudaydah
+  "ye_hu": {
+    "population": 1763957,
+    "urbanization": 0.97,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.461, "Coal": 0.36, "Oil": 0.537, "IronOre": 0.176, "RareEarths": 0.08, "NaturalGas": 0.442, "Timber": 2.918, "Bauxite": 0.053, "Uranium": 0.009 }
+  },
+  // Al Jawf
+  "ye_ja": {
+    "population": 733444,
+    "urbanization": 0.05,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.568, "Coal": 0.175, "Oil": 0.123, "IronOre": 0.117, "RareEarths": 0.032, "NaturalGas": 0.239, "Timber": 1.352, "Bauxite": 0.045, "Uranium": 0.004 }
+  },
+  // Al Mahrah
+  "ye_mr": {
+    "population": 664803,
+    "urbanization": 0.08,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.452, "Coal": 0.392, "Oil": 0.258, "IronOre": 0.268, "RareEarths": 0.047, "NaturalGas": 0.459, "Timber": 3.233, "Bauxite": 0.099, "Uranium": 0.01 }
+  },
+  // Dhamar
+  "ye_dh": {
+    "population": 3102400,
+    "urbanization": 0.26,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.198, "Coal": 0.139, "Oil": 0.142, "IronOre": 0.102, "RareEarths": 0.037, "NaturalGas": 0.13, "Timber": 1.433, "Bauxite": 0.026, "Uranium": 0.005 }
+  },
+  // Hadhramaut
+  "ye_hd": {
+    "population": 2568024,
+    "urbanization": 0.29,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.297, "Coal": 0.178, "Oil": 0.283, "IronOre": 0.074, "RareEarths": 0.037, "NaturalGas": 0.402, "Timber": 1.049, "Bauxite": 0.062, "Uranium": 0.007 }
+  },
+  // Hajjah
+  "ye_hj": {
+    "population": 1907450,
+    "urbanization": 0.22,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.216, "Coal": 0.366, "Oil": 0.768, "IronOre": 0.306, "RareEarths": 0.085, "NaturalGas": 0.427, "Timber": 2.933, "Bauxite": 0.155, "Uranium": 0.014 }
+  },
+  // Lahij
+  "ye_la": {
+    "population": 8540872,
+    "urbanization": 0.42,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 2.221, "Coal": 0.371, "Oil": 0.504, "IronOre": 0.247, "RareEarths": 0.044, "NaturalGas": 0.361, "Timber": 1.013, "Bauxite": 0.094, "Uranium": 0.006 }
+  },
+  // Ma'rib
+  "ye_ma": {
+    "population": 1166664,
+    "urbanization": 0.05,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.218, "Coal": 0.217, "Oil": 0.329, "IronOre": 0.128, "RareEarths": 0.027, "NaturalGas": 0.219, "Timber": 2.298, "Bauxite": 0.048, "Uranium": 0.007 }
+  },
+  // Sa'dah
+  "ye_sd": {
+    "population": 1455596,
+    "urbanization": 0.14,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.654, "Coal": 0.26, "Oil": 0.369, "IronOre": 0.455, "RareEarths": 0.118, "NaturalGas": 1.032, "Timber": 3.216, "Bauxite": 0.082, "Uranium": 0.018 }
+  },
+  // Sanaa
+  "ye_sn": {
+    "population": 5795337,
+    "urbanization": 0.65,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.371, "Coal": 0.146, "Oil": 0.232, "IronOre": 0.085, "RareEarths": 0.023, "NaturalGas": 0.357, "Timber": 1.587, "Bauxite": 0.081, "Uranium": 0.008 }
+  },
+  // Shabwah
+  "ye_sh": {
+    "population": 890961,
+    "urbanization": 0.08,
+    "cultures": { "arab_yemeni": 0.9328, "bedouin": 0.0301, "somali": 0.015, "arab_saudi": 0.01, "arab_sudanese": 0.005, "indian_diaspora": 0.005, "swahili": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.825, "Coal": 0.24, "Oil": 0.485, "IronOre": 0.107, "RareEarths": 0.067, "NaturalGas": 0.381, "Timber": 1.311, "Bauxite": 0.044, "Uranium": 0.006 }
+  }
+}

@@ -1,0 +1,102 @@
+// New Zealand (NZL) on 1 January 2024: 11 regions, 4,917,000 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bay of Plenty
+  "nz_bop": {
+    "population": 274990,
+    "urbanization": 0.87,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.073, "Coal": 0.247, "Oil": 0.26, "IronOre": 0.116, "RareEarths": 0.048, "NaturalGas": 0.332, "Timber": 3.185, "Bauxite": 0.06, "Uranium": 0.006 }
+  },
+  // Canterbury
+  "nz_can": {
+    "population": 511421,
+    "urbanization": 0.86,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.584, "Coal": 0.146, "Oil": 0.308, "IronOre": 0.156, "RareEarths": 0.059, "NaturalGas": 0.427, "Timber": 0.933, "Bauxite": 0.054, "Uranium": 0.011 }
+  },
+  // Hawke's Bay
+  "nz_hkb": {
+    "population": 172134,
+    "urbanization": 0.75,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.039, "Coal": 0.466, "Oil": 0.499, "IronOre": 0.404, "RareEarths": 0.124, "NaturalGas": 0.634, "Timber": 2.98, "Bauxite": 0.143, "Uranium": 0.011 }
+  },
+  // Manawatū-Whanganui
+  "nz_mwt": {
+    "population": 859685,
+    "urbanization": 0.91,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.271, "Coal": 0.403, "Oil": 0.522, "IronOre": 0.194, "RareEarths": 0.08, "NaturalGas": 0.597, "Timber": 2.093, "Bauxite": 0.126, "Uranium": 0.011 }
+  },
+  // Marlborough
+  "nz_mbh": {
+    "population": 123123,
+    "urbanization": 0.79,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.208, "Coal": 0.309, "Oil": 0.911, "IronOre": 0.184, "RareEarths": 0.071, "NaturalGas": 0.924, "Timber": 1.955, "Bauxite": 0.076, "Uranium": 0.014 }
+  },
+  // Northland
+  "nz_ntl": {
+    "population": 114829,
+    "urbanization": 0.57,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.679, "Coal": 0.507, "Oil": 0.673, "IronOre": 0.315, "RareEarths": 0.114, "NaturalGas": 0.386, "Timber": 1.973, "Bauxite": 0.115, "Uranium": 0.016 }
+  },
+  // Otago
+  "nz_ota": {
+    "population": 196449,
+    "urbanization": 0.81,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.777, "Coal": 0.315, "Oil": 0.463, "IronOre": 0.148, "RareEarths": 0.059, "NaturalGas": 0.427, "Timber": 1.586, "Bauxite": 0.063, "Uranium": 0.008 }
+  },
+  // Southland
+  "nz_stl": {
+    "population": 93319,
+    "urbanization": 0.68,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.815, "Coal": 0.408, "Oil": 0.387, "IronOre": 0.183, "RareEarths": 0.06, "NaturalGas": 0.537, "Timber": 2.278, "Bauxite": 0.11, "Uranium": 0.015 }
+  },
+  // Tasman
+  "nz_tas": {
+    "population": 11055,
+    "urbanization": 0.05,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.404, "Coal": 0.297, "Oil": 0.539, "IronOre": 0.203, "RareEarths": 0.066, "NaturalGas": 0.258, "Timber": 0.864, "Bauxite": 0.103, "Uranium": 0.011 }
+  },
+  // Waikato
+  "nz_wko": {
+    "population": 2528008,
+    "urbanization": 0.9,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.477, "Coal": 0.382, "Oil": 0.898, "IronOre": 0.45, "RareEarths": 0.13, "NaturalGas": 0.52, "Timber": 2.796, "Bauxite": 0.196, "Uranium": 0.015 }
+  },
+  // West Coast
+  "nz_wtc": {
+    "population": 31987,
+    "urbanization": 0.56,
+    "cultures": { "new_zealander": 0.64, "maori": 0.17, "chinese_diaspora": 0.045, "indian_diaspora": 0.045, "samoan": 0.035, "english": 0.02, "tongan": 0.02, "polynesian": 0.015, "tagalog": 0.01 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.789, "Coal": 0.579, "Oil": 0.712, "IronOre": 0.339, "RareEarths": 0.081, "NaturalGas": 0.743, "Timber": 3.115, "Bauxite": 0.14, "Uranium": 0.013 }
+  }
+}

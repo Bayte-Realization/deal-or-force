@@ -288,7 +288,7 @@ public sealed partial class Nation
     /// Who this country is for, when the scenario never said - which is every country the
     /// campaign founds rather than loads.
     ///
-    /// `history/pops` answers this for the 261 the world ships with, and a tag it has never
+    /// history/countries answers this for the 261 the world ships with, and a tag it has never
     /// heard of is a state that is for nobody: every person inside it is a minority of it.
     /// Held here as well as in the catalogue because the catalogue is a file and this is a
     /// fact about a particular country in a particular save - and a country that forgot who

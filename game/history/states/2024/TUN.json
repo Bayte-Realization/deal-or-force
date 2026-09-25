@@ -1,0 +1,54 @@
+// Tunisia (TUN) on 1 January 2024: 5 regions, 11,694,719 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Beja
+  "tn_31": {
+    "population": 4566330,
+    "urbanization": 0.68,
+    "cultures": { "arab_maghrebi": 0.955, "berber": 0.02, "arab_levantine": 0.01, "bedouin": 0.007, "french": 0.005, "italian": 0.003 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.275, "Coal": 0.643, "Oil": 0.813, "IronOre": 0.501, "RareEarths": 0.068, "NaturalGas": 1.069, "Timber": 1.482, "Bauxite": 0.109, "Uranium": 0.01 }
+  },
+  // Kairouan
+  "tn_41": {
+    "population": 4901092,
+    "urbanization": 0.73,
+    "cultures": { "arab_maghrebi": 0.955, "berber": 0.02, "arab_levantine": 0.01, "bedouin": 0.007, "french": 0.005, "italian": 0.003 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.104, "Coal": 0.197, "Oil": 0.328, "IronOre": 0.203, "RareEarths": 0.058, "NaturalGas": 0.59, "Timber": 3.056, "Bauxite": 0.102, "Uranium": 0.005 }
+  },
+  // Kebili
+  "tn_73": {
+    "population": 870254,
+    "urbanization": 0.8,
+    "cultures": { "arab_maghrebi": 0.955, "berber": 0.02, "arab_levantine": 0.01, "bedouin": 0.007, "french": 0.005, "italian": 0.003 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.778, "Coal": 0.275, "Oil": 0.327, "IronOre": 0.27, "RareEarths": 0.03, "NaturalGas": 0.375, "Timber": 1.412, "Bauxite": 0.049, "Uranium": 0.006 }
+  },
+  // Kef
+  "tn_33": {
+    "population": 825279,
+    "urbanization": 0.33,
+    "cultures": { "arab_maghrebi": 0.955, "berber": 0.02, "arab_levantine": 0.01, "bedouin": 0.007, "french": 0.005, "italian": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.759, "Coal": 0.17, "Oil": 0.249, "IronOre": 0.112, "RareEarths": 0.027, "NaturalGas": 0.161, "Timber": 2.973, "Bauxite": 0.038, "Uranium": 0.007 }
+  },
+  // Tataouine
+  "tn_83": {
+    "population": 531764,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.955, "berber": 0.02, "arab_levantine": 0.01, "bedouin": 0.007, "french": 0.005, "italian": 0.003 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.023, "Coal": 0.262, "Oil": 0.578, "IronOre": 0.201, "RareEarths": 0.047, "NaturalGas": 0.544, "Timber": 3.013, "Bauxite": 0.051, "Uranium": 0.006 }
+  }
+}

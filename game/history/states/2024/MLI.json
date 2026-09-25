@@ -1,0 +1,78 @@
+// Mali (MLI) on 1 January 2024: 8 regions, 19,658,031 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Gao
+  "ml_7": {
+    "population": 643306,
+    "urbanization": 0.78,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.425, "Coal": 0.428, "Oil": 0.38, "IronOre": 0.247, "RareEarths": 0.082, "NaturalGas": 0.802, "Timber": 2.414, "Bauxite": 0.105, "Uranium": 0.007 }
+  },
+  // Kayes
+  "ml_1": {
+    "population": 2390210,
+    "urbanization": 0.23,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.019, "Coal": 0.128, "Oil": 0.357, "IronOre": 0.073, "RareEarths": 0.043, "NaturalGas": 0.231, "Timber": 2.563, "Bauxite": 0.067, "Uranium": 0.007 }
+  },
+  // Kidal
+  "ml_8": {
+    "population": 50348,
+    "urbanization": 0.96,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.936, "Coal": 0.323, "Oil": 0.473, "IronOre": 0.356, "RareEarths": 0.139, "NaturalGas": 0.867, "Timber": 2.461, "Bauxite": 0.14, "Uranium": 0.011 }
+  },
+  // Koulikoro
+  "ml_2": {
+    "population": 9778871,
+    "urbanization": 0.52,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.346, "Coal": 0.331, "Oil": 0.739, "IronOre": 0.197, "RareEarths": 0.069, "NaturalGas": 0.453, "Timber": 3.104, "Bauxite": 0.151, "Uranium": 0.016 }
+  },
+  // Mopti
+  "ml_5": {
+    "population": 842120,
+    "urbanization": 0.54,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.386, "Coal": 0.102, "Oil": 0.137, "IronOre": 0.099, "RareEarths": 0.034, "NaturalGas": 0.146, "Timber": 2.948, "Bauxite": 0.033, "Uranium": 0.005 }
+  },
+  // Ségou
+  "ml_4": {
+    "population": 2176342,
+    "urbanization": 0.33,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.576, "Coal": 0.485, "Oil": 0.845, "IronOre": 0.311, "RareEarths": 0.081, "NaturalGas": 0.741, "Timber": 0.962, "Bauxite": 0.128, "Uranium": 0.018 }
+  },
+  // Tombouctou
+  "ml_6": {
+    "population": 414454,
+    "urbanization": 0.66,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.834, "Coal": 0.328, "Oil": 0.376, "IronOre": 0.206, "RareEarths": 0.063, "NaturalGas": 0.537, "Timber": 3.045, "Bauxite": 0.143, "Uranium": 0.013 }
+  },
+  // Wassoulou
+  "ml_3": {
+    "population": 3362380,
+    "urbanization": 0.35,
+    "cultures": { "bambara": 0.335, "fulani": 0.146, "soninke": 0.108, "senufo": 0.1, "mandinka": 0.085, "songhai": 0.07, "tuareg": 0.055, "mossi": 0.03, "kru": 0.026, "arab_maghrebi": 0.025, "berber": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.423, "Coal": 0.224, "Oil": 0.602, "IronOre": 0.175, "RareEarths": 0.069, "NaturalGas": 0.344, "Timber": 1.462, "Bauxite": 0.128, "Uranium": 0.011 }
+  }
+}

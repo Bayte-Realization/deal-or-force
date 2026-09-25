@@ -1,0 +1,30 @@
+// Estonia (EST) on 1 January 2024: 2 regions, 1,326,590 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Harju
+  "ee_37": {
+    "population": 1006746,
+    "urbanization": 0.74,
+    "cultures": { "estonian": 0.6699, "russian": 0.233, "ukrainian": 0.0641, "belarusian": 0.0097, "finnish": 0.0058, "latvian": 0.0029, "lithuanian": 0.0029, "german": 0.0019, "polish": 0.0019, "armenian": 0.001, "azerbaijani": 0.001, "chuvash": 0.001, "georgian": 0.001, "jewish": 0.001, "moldovan": 0.001, "romani": 0.001, "tatar": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.821, "Coal": 0.349, "Oil": 0.349, "IronOre": 0.308, "RareEarths": 0.076, "NaturalGas": 0.497, "Timber": 1.34, "Bauxite": 0.102, "Uranium": 0.009 }
+  },
+  // Tartu
+  "ee_78": {
+    "population": 319844,
+    "urbanization": 0.57,
+    "cultures": { "estonian": 0.6699, "russian": 0.233, "ukrainian": 0.0641, "belarusian": 0.0097, "finnish": 0.0058, "latvian": 0.0029, "lithuanian": 0.0029, "german": 0.0019, "polish": 0.0019, "armenian": 0.001, "azerbaijani": 0.001, "chuvash": 0.001, "georgian": 0.001, "jewish": 0.001, "moldovan": 0.001, "romani": 0.001, "tatar": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.763, "Coal": 0.151, "Oil": 0.296, "IronOre": 0.174, "RareEarths": 0.035, "NaturalGas": 0.238, "Timber": 2.553, "Bauxite": 0.051, "Uranium": 0.007 }
+  }
+}

@@ -1,0 +1,70 @@
+// Niger (NER) on 1 January 2024: 7 regions, 23,310,715 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Agadez
+  "ne_1": {
+    "population": 1110660,
+    "urbanization": 0.39,
+    "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.779, "Coal": 0.327, "Oil": 0.24, "IronOre": 0.147, "RareEarths": 0.076, "NaturalGas": 0.519, "Timber": 3.015, "Bauxite": 0.05, "Uranium": 0.692 }
+  },
+  // Diffa
+  "ne_2": {
+    "population": 935056,
+    "urbanization": 0.1,
+    "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.063, "Coal": 0.619, "Oil": 0.663, "IronOre": 0.338, "RareEarths": 0.055, "NaturalGas": 0.734, "Timber": 3.31, "Bauxite": 0.168, "Uranium": 0.673 }
+  },
+  // Dosso
+  "ne_3": {
+    "population": 2953977,
+    "urbanization": 0.06,
+    "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.258, "Coal": 0.261, "Oil": 0.625, "IronOre": 0.24, "RareEarths": 0.045, "NaturalGas": 0.524, "Timber": 2.171, "Bauxite": 0.112, "Uranium": 0.683 }
+  },
+  // Maradi
+  "ne_4": {
+    "population": 2505525,
+    "urbanization": 0.18,
+    "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.648, "Coal": 0.211, "Oil": 0.496, "IronOre": 0.236, "RareEarths": 0.032, "NaturalGas": 0.491, "Timber": 2.259, "Bauxite": 0.039, "Uranium": 0.922 }
+  },
+  // Tahoua
+  "ne_5": {
+    "population": 2811413,
+    "urbanization": 0.15,
+    "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.315, "Coal": 0.397, "Oil": 0.411, "IronOre": 0.163, "RareEarths": 0.081, "NaturalGas": 0.321, "Timber": 3.041, "Bauxite": 0.056, "Uranium": 0.637 }
+  },
+  // Tillabéri
+  "ne_6": {
+    "population": 10154007,
+    "urbanization": 0.19,
+    "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 2.149, "Coal": 0.452, "Oil": 0.657, "IronOre": 0.274, "RareEarths": 0.119, "NaturalGas": 0.749, "Timber": 2.61, "Bauxite": 0.153, "Uranium": 0.63 }
+  },
+  // Zinder
+  "ne_7": {
+    "population": 2840077,
+    "urbanization": 0.17,
+    "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.7, "Coal": 0.393, "Oil": 0.488, "IronOre": 0.372, "RareEarths": 0.072, "NaturalGas": 0.597, "Timber": 2.767, "Bauxite": 0.108, "Uranium": 0.727 }
+  }
+}

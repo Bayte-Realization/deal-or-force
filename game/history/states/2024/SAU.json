@@ -1,0 +1,110 @@
+// Saudi Arabia (SAU) on 1 January 2024: 12 regions, 34,268,528 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // 'Asir
+  "sa_14": {
+    "population": 885864,
+    "urbanization": 0.56,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.35, "Coal": 0.189, "Oil": 5.633, "IronOre": 0.104, "RareEarths": 0.048, "NaturalGas": 11.757, "Timber": 1.398, "Bauxite": 0.078, "Uranium": 0.007 }
+  },
+  // Al Madinah
+  "sa_03": {
+    "population": 3429200,
+    "urbanization": 0.62,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 2 },
+    "resources": { "Food": 2.094, "Coal": 0.634, "Oil": 11.639, "IronOre": 0.221, "RareEarths": 0.068, "NaturalGas": 5.928, "Timber": 2.695, "Bauxite": 0.099, "Uranium": 0.02 }
+  },
+  // Al-Jowf
+  "sa_12": {
+    "population": 319460,
+    "urbanization": 0.83,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.596, "Coal": 0.167, "Oil": 7.208, "IronOre": 0.093, "RareEarths": 0.048, "NaturalGas": 6.989, "Timber": 2.247, "Bauxite": 0.049, "Uranium": 0.007 }
+  },
+  // Al-Qassim
+  "sa_05": {
+    "population": 663122,
+    "urbanization": 0.97,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.261, "Coal": 0.599, "Oil": 4.688, "IronOre": 0.469, "RareEarths": 0.132, "NaturalGas": 4.009, "Timber": 1.752, "Bauxite": 0.114, "Uranium": 0.019 }
+  },
+  // Eastern
+  "sa_04": {
+    "population": 5442569,
+    "urbanization": 0.97,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.292, "Coal": 0.272, "Oil": 8.304, "IronOre": 0.175, "RareEarths": 0.081, "NaturalGas": 10.672, "Timber": 2.47, "Bauxite": 0.074, "Uranium": 0.012 }
+  },
+  // Ha'il
+  "sa_06": {
+    "population": 682074,
+    "urbanization": 0.94,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.999, "Coal": 0.398, "Oil": 8.009, "IronOre": 0.29, "RareEarths": 0.071, "NaturalGas": 11.178, "Timber": 2.372, "Bauxite": 0.063, "Uranium": 0.015 }
+  },
+  // Jazan
+  "sa_09": {
+    "population": 300878,
+    "urbanization": 0.58,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.303, "Coal": 0.163, "Oil": 12.357, "IronOre": 0.203, "RareEarths": 0.041, "NaturalGas": 4.31, "Timber": 3.005, "Bauxite": 0.083, "Uranium": 0.01 }
+  },
+  // Makkah
+  "sa_02": {
+    "population": 10160603,
+    "urbanization": 0.82,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.046, "Coal": 0.431, "Oil": 9.91, "IronOre": 0.375, "RareEarths": 0.076, "NaturalGas": 11.529, "Timber": 1.463, "Bauxite": 0.059, "Uranium": 0.007 }
+  },
+  // Najran
+  "sa_10": {
+    "population": 857231,
+    "urbanization": 0.71,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.956, "Coal": 0.305, "Oil": 9.862, "IronOre": 0.27, "RareEarths": 0.074, "NaturalGas": 6.37, "Timber": 3.248, "Bauxite": 0.137, "Uranium": 0.009 }
+  },
+  // Northern Borders
+  "sa_08": {
+    "population": 479437,
+    "urbanization": 0.97,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.894, "Coal": 0.358, "Oil": 11.021, "IronOre": 0.279, "RareEarths": 0.044, "NaturalGas": 10.683, "Timber": 2.233, "Bauxite": 0.059, "Uranium": 0.006 }
+  },
+  // Riyadh
+  "sa_01": {
+    "population": 9417540,
+    "urbanization": 0.95,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.254, "Coal": 0.276, "Oil": 8.925, "IronOre": 0.125, "RareEarths": 0.062, "NaturalGas": 7.482, "Timber": 1.447, "Bauxite": 0.107, "Uranium": 0.007 }
+  },
+  // Tabuk
+  "sa_07": {
+    "population": 1630550,
+    "urbanization": 0.6,
+    "cultures": { "arab_saudi": 0.585, "arab_yemeni": 0.07, "bedouin": 0.06, "arab_egyptian": 0.045, "indian_diaspora": 0.045, "punjabi": 0.04, "bengali_muslim": 0.035, "tagalog": 0.025, "arab_levantine": 0.02, "malayali": 0.02, "sindhi": 0.02, "arab_sudanese": 0.015, "javanese": 0.01, "persian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.207, "Coal": 0.427, "Oil": 9.022, "IronOre": 0.311, "RareEarths": 0.1, "NaturalGas": 6.888, "Timber": 2.453, "Bauxite": 0.08, "Uranium": 0.012 }
+  }
+}

@@ -1,0 +1,46 @@
+// Denmark (DNK) on 1 January 2024: 4 regions, 5,818,553 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central Denmark
+  "dk_82": {
+    "population": 909272,
+    "urbanization": 0.81,
+    "cultures": { "danish": 0.8461, "ukrainian": 0.0169, "arab_levantine": 0.0141, "german": 0.0101, "turkish": 0.0101, "polish": 0.0081, "romanian": 0.0081, "english": 0.006, "indian_diaspora": 0.006, "lithuanian": 0.006, "swedish": 0.006, "arab_iraqi": 0.005, "kurdish": 0.005, "norwegian": 0.005, "pashtun": 0.005, "bosniak": 0.004, "chinese_diaspora": 0.004, "faroese": 0.004, "persian": 0.004, "somali": 0.004, "tagalog": 0.004, "greenlander": 0.003, "icelandic": 0.003, "italian": 0.003, "thai": 0.003, "tigrayan": 0.003, "vietnamese": 0.003 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.626, "Coal": 0.354, "Oil": 0.466, "IronOre": 0.199, "RareEarths": 0.043, "NaturalGas": 0.595, "Timber": 2.26, "Bauxite": 0.057, "Uranium": 0.009 }
+  },
+  // North Denmark
+  "dk_81": {
+    "population": 480759,
+    "urbanization": 0.82,
+    "cultures": { "danish": 0.8461, "ukrainian": 0.0169, "arab_levantine": 0.0141, "german": 0.0101, "turkish": 0.0101, "polish": 0.0081, "romanian": 0.0081, "english": 0.006, "indian_diaspora": 0.006, "lithuanian": 0.006, "swedish": 0.006, "arab_iraqi": 0.005, "kurdish": 0.005, "norwegian": 0.005, "pashtun": 0.005, "bosniak": 0.004, "chinese_diaspora": 0.004, "faroese": 0.004, "persian": 0.004, "somali": 0.004, "tagalog": 0.004, "greenlander": 0.003, "icelandic": 0.003, "italian": 0.003, "thai": 0.003, "tigrayan": 0.003, "vietnamese": 0.003 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.015, "Coal": 0.307, "Oil": 0.224, "IronOre": 0.212, "RareEarths": 0.058, "NaturalGas": 0.491, "Timber": 1, "Bauxite": 0.07, "Uranium": 0.009 }
+  },
+  // Southern Denmark
+  "dk_83": {
+    "population": 1028402,
+    "urbanization": 0.82,
+    "cultures": { "danish": 0.8461, "ukrainian": 0.0169, "arab_levantine": 0.0141, "german": 0.0101, "turkish": 0.0101, "polish": 0.0081, "romanian": 0.0081, "english": 0.006, "indian_diaspora": 0.006, "lithuanian": 0.006, "swedish": 0.006, "arab_iraqi": 0.005, "kurdish": 0.005, "norwegian": 0.005, "pashtun": 0.005, "bosniak": 0.004, "chinese_diaspora": 0.004, "faroese": 0.004, "persian": 0.004, "somali": 0.004, "tagalog": 0.004, "greenlander": 0.003, "icelandic": 0.003, "italian": 0.003, "thai": 0.003, "tigrayan": 0.003, "vietnamese": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.718, "Coal": 0.501, "Oil": 0.683, "IronOre": 0.468, "RareEarths": 0.078, "NaturalGas": 1.016, "Timber": 1.662, "Bauxite": 0.079, "Uranium": 0.02 }
+  },
+  // Zealand
+  "dk_85": {
+    "population": 3400120,
+    "urbanization": 0.93,
+    "cultures": { "danish": 0.8461, "ukrainian": 0.0169, "arab_levantine": 0.0141, "german": 0.0101, "turkish": 0.0101, "polish": 0.0081, "romanian": 0.0081, "english": 0.006, "indian_diaspora": 0.006, "lithuanian": 0.006, "swedish": 0.006, "arab_iraqi": 0.005, "kurdish": 0.005, "norwegian": 0.005, "pashtun": 0.005, "bosniak": 0.004, "chinese_diaspora": 0.004, "faroese": 0.004, "persian": 0.004, "somali": 0.004, "tagalog": 0.004, "greenlander": 0.003, "icelandic": 0.003, "italian": 0.003, "thai": 0.003, "tigrayan": 0.003, "vietnamese": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.366, "Coal": 0.399, "Oil": 0.588, "IronOre": 0.171, "RareEarths": 0.079, "NaturalGas": 0.356, "Timber": 3.195, "Bauxite": 0.072, "Uranium": 0.006 }
+  }
+}

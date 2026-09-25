@@ -1,0 +1,102 @@
+// Mauritania (MRT) on 1 January 2024: 11 regions, 4,525,696 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Adrar
+  "mr_07": {
+    "population": 83533,
+    "urbanization": 0.89,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.405, "Coal": 0.455, "Oil": 0.393, "IronOre": 0.315, "RareEarths": 0.138, "NaturalGas": 0.557, "Timber": 2.888, "Bauxite": 0.153, "Uranium": 0.009 }
+  },
+  // Assaba
+  "mr_03": {
+    "population": 435717,
+    "urbanization": 0.29,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.222, "Coal": 0.275, "Oil": 0.259, "IronOre": 0.164, "RareEarths": 0.056, "NaturalGas": 0.558, "Timber": 1.495, "Bauxite": 0.104, "Uranium": 0.006 }
+  },
+  // Brakna
+  "mr_05": {
+    "population": 200905,
+    "urbanization": 0.16,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.777, "Coal": 0.088, "Oil": 0.12, "IronOre": 0.1, "RareEarths": 0.029, "NaturalGas": 0.291, "Timber": 3.375, "Bauxite": 0.053, "Uranium": 0.003 }
+  },
+  // Dakhlet Nouadhibou
+  "mr_08": {
+    "population": 147641,
+    "urbanization": 0.97,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.498, "Coal": 0.382, "Oil": 0.273, "IronOre": 0.17, "RareEarths": 0.07, "NaturalGas": 0.32, "Timber": 1.556, "Bauxite": 0.069, "Uranium": 0.006 }
+  },
+  // Gorgol
+  "mr_04": {
+    "population": 296803,
+    "urbanization": 0.05,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.412, "Coal": 0.237, "Oil": 0.405, "IronOre": 0.142, "RareEarths": 0.041, "NaturalGas": 0.348, "Timber": 1.731, "Bauxite": 0.084, "Uranium": 0.004 }
+  },
+  // Hodh Ech Chargui
+  "mr_01": {
+    "population": 920945,
+    "urbanization": 0.37,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.683, "Coal": 0.14, "Oil": 0.369, "IronOre": 0.263, "RareEarths": 0.042, "NaturalGas": 0.289, "Timber": 3.185, "Bauxite": 0.047, "Uranium": 0.01 }
+  },
+  // Hodh El Gharbi
+  "mr_02": {
+    "population": 152808,
+    "urbanization": 0.05,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.861, "Coal": 0.088, "Oil": 0.237, "IronOre": 0.043, "RareEarths": 0.021, "NaturalGas": 0.243, "Timber": 1.255, "Bauxite": 0.022, "Uranium": 0.003 }
+  },
+  // Inchiri
+  "mr_12": {
+    "population": 2811,
+    "urbanization": 0.22,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.791, "Coal": 0.526, "Oil": 0.653, "IronOre": 0.306, "RareEarths": 0.086, "NaturalGas": 0.55, "Timber": 2.7, "Bauxite": 0.142, "Uranium": 0.014 }
+  },
+  // Tagant
+  "mr_09": {
+    "population": 38174,
+    "urbanization": 0.88,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.73, "Coal": 0.265, "Oil": 0.254, "IronOre": 0.203, "RareEarths": 0.042, "NaturalGas": 0.251, "Timber": 1.976, "Bauxite": 0.081, "Uranium": 0.011 }
+  },
+  // Tiris Zemmour
+  "mr_11": {
+    "population": 114678,
+    "urbanization": 0.91,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.751, "Coal": 0.322, "Oil": 0.384, "IronOre": 0.276, "RareEarths": 0.07, "NaturalGas": 0.379, "Timber": 2.404, "Bauxite": 0.063, "Uranium": 0.014 }
+  },
+  // Trarza
+  "mr_06": {
+    "population": 2131681,
+    "urbanization": 0.81,
+    "cultures": { "arab_maghrebi": 0.3, "bedouin": 0.23, "fulani": 0.18, "soninke": 0.15, "wolof": 0.08, "mandinka": 0.04, "berber": 0.02 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.221, "Coal": 0.169, "Oil": 0.404, "IronOre": 0.162, "RareEarths": 0.034, "NaturalGas": 0.272, "Timber": 3.334, "Bauxite": 0.05, "Uranium": 0.008 }
+  }
+}

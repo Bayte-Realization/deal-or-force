@@ -1,0 +1,54 @@
+// Lithuania (LTU) on 1 January 2024: 5 regions, 2,786,844 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Kaunas
+  "lt_ku": {
+    "population": 871228,
+    "urbanization": 0.58,
+    "cultures": { "lithuanian": 0.8292, "polish": 0.0608, "russian": 0.0491, "ukrainian": 0.0393, "belarusian": 0.0108, "latvian": 0.002, "armenian": 0.001, "azerbaijani": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "moldovan": 0.001, "romani": 0.001, "tatar": 0.001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.887, "Coal": 0.105, "Oil": 0.22, "IronOre": 0.052, "RareEarths": 0.028, "NaturalGas": 0.137, "Timber": 2.208, "Bauxite": 0.036, "Uranium": 0.003 }
+  },
+  // Klaipėda
+  "lt_kl": {
+    "population": 368751,
+    "urbanization": 0.86,
+    "cultures": { "lithuanian": 0.8292, "polish": 0.0608, "russian": 0.0491, "ukrainian": 0.0393, "belarusian": 0.0108, "latvian": 0.002, "armenian": 0.001, "azerbaijani": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "moldovan": 0.001, "romani": 0.001, "tatar": 0.001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.008, "Coal": 0.232, "Oil": 0.334, "IronOre": 0.102, "RareEarths": 0.029, "NaturalGas": 0.418, "Timber": 2.692, "Bauxite": 0.047, "Uranium": 0.004 }
+  },
+  // Panevėžys
+  "lt_pn": {
+    "population": 342278,
+    "urbanization": 0.5,
+    "cultures": { "lithuanian": 0.8292, "polish": 0.0608, "russian": 0.0491, "ukrainian": 0.0393, "belarusian": 0.0108, "latvian": 0.002, "armenian": 0.001, "azerbaijani": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "moldovan": 0.001, "romani": 0.001, "tatar": 0.001 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.821, "Coal": 0.192, "Oil": 0.21, "IronOre": 0.143, "RareEarths": 0.051, "NaturalGas": 0.238, "Timber": 0.739, "Bauxite": 0.044, "Uranium": 0.006 }
+  },
+  // Vilnius
+  "lt_vl": {
+    "population": 831101,
+    "urbanization": 0.87,
+    "cultures": { "lithuanian": 0.8292, "polish": 0.0608, "russian": 0.0491, "ukrainian": 0.0393, "belarusian": 0.0108, "latvian": 0.002, "armenian": 0.001, "azerbaijani": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "moldovan": 0.001, "romani": 0.001, "tatar": 0.001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.599, "Coal": 0.34, "Oil": 0.644, "IronOre": 0.22, "RareEarths": 0.068, "NaturalGas": 0.346, "Timber": 1.598, "Bauxite": 0.086, "Uranium": 0.011 }
+  },
+  // Šiauliai
+  "lt_sa": {
+    "population": 373486,
+    "urbanization": 0.48,
+    "cultures": { "lithuanian": 0.8292, "polish": 0.0608, "russian": 0.0491, "ukrainian": 0.0393, "belarusian": 0.0108, "latvian": 0.002, "armenian": 0.001, "azerbaijani": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "moldovan": 0.001, "romani": 0.001, "tatar": 0.001 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.801, "Coal": 0.243, "Oil": 0.321, "IronOre": 0.237, "RareEarths": 0.036, "NaturalGas": 0.539, "Timber": 2.037, "Bauxite": 0.101, "Uranium": 0.005 }
+  }
+}

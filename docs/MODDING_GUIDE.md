@@ -959,7 +959,7 @@ Its provinces are then unowned whatever the map painted there, it is drawn in th
 flag flies over, and it opens with nobody's name on it. `"none"` is the only owner this key takes -
 who owns a province is otherwise `history/provinces/ownership.csv`, and two answers to one
 question would disagree sooner or later. The base game uses it for Antarctica
-(`history/states/2024/30_unclaimed.json`), which no state holds under the 1959 treaty; a
+(`history/states/2024/unclaimed.json`), which no state holds under the 1959 treaty; a
 colonial-era scenario would list its unclaimed regions the same way.
 
 Any country that can reach such a region may settle it - across a land border from a province of
@@ -1417,35 +1417,71 @@ prints them with their current rectangles.
 screen the base game builds, but it cannot invent a new one or add an element to an existing one.
 That needs a C# mod.
 
-### Authoritative population and military entities
+### A region's first day
 
-Demographic quantities belong to `history/states` and are not duplicated as independent country
-state. A national population is computed on tick as the sum of the administrative regions it
-owns. A mod that changes a border or a region's owner thereby changes the national aggregate
-with no separate country patch.
+`history/states/2024/` holds every region of the 2024 world as the bookmark opens it: one file per
+country (`RUS.json`, `USA.json`, ...) and `unclaimed.json` for land nobody owns. A region is one
+entry, keyed by its id - the one `common/states` declares; its ISO code works too where the code
+names exactly one region:
 
-Where the 2024 start's people live is `history/states/2024/20_population.json`: a `population`
-and an `urbanization` for each of about sixteen hundred regions. They are read when the world is
-first populated, not applied afterwards, so a region's peoples, trades, farms and factories are
-dealt from its own figure. A region listed there has exactly the people written, and a country
-whose regions are listed is their sum - raising one region raises the country. A region left out
-shares whatever of the country's figure the listed ones leave. To change a region, list it again
-in a later file of your own:
+```jsonc
+// Tatarstan
+"ru_ta": {
+  "population": 4004809,
+  "urbanization": 0.77,
+  "cultures": { "tatar": 0.53, "russian": 0.40, "chuvash": 0.03, "udmurt": 0.01 },
+  "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 2, "ArmsIndustry": 1 },
+  "resources": { "Oil": 3.1, "NaturalGas": 0.4, "Timber": 1.2 }
+}
+```
+
+| Field | What it is |
+|---|---|
+| `population` | People on 1 January 2024. A country is the sum of its regions: raise one and the country rises. |
+| `urbanization` | The share living in towns, 0 to 1. It decides which trades the region's people follow. |
+| `cultures` | Peoples by id from `common/cultures`, as shares (normalised). Each people's faith comes from its entry there. A later file's list replaces the whole mix. |
+| `buildings` | Counts by id from `common/buildings`. Merged key by key; `0` removes a building. |
+| `resources` | Deposits by good id from `common/goods`. Merged key by key; `0` removes a deposit. |
+| `literacy`, `standard_of_living`, `radicalism` | Optional, 0 to 1. Left out, the region takes its country's figure with a spread of its own. |
+| `owner` | Only `"none"` - see *Land that belongs to nobody*. |
+
+**What is written is what the region has.** A building or a deposit left out of a region's record
+is not there. A field left out altogether is worked out from the country: the peoples as its
+primary culture, the farms and factories from its people (`SeedPeoplePerFarm`,
+`SeedUrbanPeoplePerIndustry` in `common/defines`), the deposits from its geology - which is what
+happens to a region a mod adds to the map. The regions are read when the world is first
+populated, not applied afterwards, so a region's peoples, trades, farms and factories are dealt
+from its own record.
+
+**A later file wins, key by key.** Files are read in name order, and a mod's `history/states`
+files after the base game's. To change one number, write that one number:
 
 ```json
-{ "ru_mow": { "population": 21500000, "urbanization": 0.96 } }
+{ "ru_mow": { "population": 21500000 } }
 ```
 
-The shipped figures are estimates worked out from the map by `Tools/RegionPopulation` (Natural
-Earth populated places, public domain, spread over the land around each town; the countryside
-weighted by ground and by how settled the country around it is). Most regions on this map merge
-several real provinces, so no official table fits them; against regions whose population is
-known, the typical figure is within a quarter of the truth. To regenerate them after the map
-changes, from the project root:
+**The file is where to find a region, not who owns it.** Who owns a province is
+`history/provinces/ownership.csv`. When the map is attached, a region a border runs through is cut
+into pieces - occupied Donetsk, northern Cyprus - and each piece takes its share of the region's
+people, buildings and deposits; the pieces need no record of their own.
 
-```
-dotnet run --project Tools/RegionPopulation -c Release -- path/to/ne_10m_populated_places_simple.dbf --write
-```
+**Whose state it is** is `history/countries/2024/30_peoples.json`:
+`"RUS": { "primary_cultures": ["russian"] }`. Everyone else living in a country is a minority of
+it, which is what assimilation works on and what radicalises a region governed by somebody its
+people are not.
+
+**A whole country at once.** A mod may still describe a country's peoples in `history/pops/` - a
+composition per country, with `"where"` naming the regions a people lives in - for the regions
+whose own record lists no cultures.
+
+The head-counts are estimates worked out from the map by `Tools/RegionPopulation` (Natural Earth
+populated places, public domain, spread over the land around each town; the countryside weighted
+by ground and by how settled the country around it is). Most regions on this map merge several
+real provinces, so no official table fits them; against regions whose population is known, the
+typical figure is within a quarter of the truth. The tool now fills only regions no file gives a
+figure for, into `zz_population.json`. `SimBench --write-regions <folder>` writes the regions of
+the world as it stands in this shape, and `--dump-regions <file>` writes the dealt world as a
+table, to compare two versions of the data line by line.
 
 Farms and factories are counted for the whole country (`SeedPeoplePerFarm`,
 `SeedUrbanPeoplePerIndustry` in `common/defines`) and dealt to its regions - farms by where its

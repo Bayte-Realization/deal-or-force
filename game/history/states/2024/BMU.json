@@ -1,0 +1,22 @@
+// Bermuda (BMU) on 1 January 2024: 1 region, 63,918 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Sandys Parish
+  "bm_san": {
+    "population": 63918,
+    "urbanization": 0.726,
+    "cultures": { "jamaican": 0.52, "english": 0.31, "portuguese": 0.1, "american": 0.07 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.372, "Coal": 0.361, "Oil": 0.588, "IronOre": 0.299, "RareEarths": 0.069, "NaturalGas": 0.506, "Timber": 2.07, "Bauxite": 0.1, "Uranium": 0.01 }
+  }
+}

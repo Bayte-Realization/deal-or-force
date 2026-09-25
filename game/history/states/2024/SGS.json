@@ -1,0 +1,22 @@
+// South Georgia and the Islands (SGS) on 1 January 2024: 1 region, 30 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // South Georgia and the South Sandwich Islands
+  "gs_x01": {
+    "population": 30,
+    "urbanization": 0.932,
+    "cultures": { "english": 1 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.111, "Coal": 0.192, "Oil": 0.257, "IronOre": 0.119, "RareEarths": 0.028, "NaturalGas": 0.148, "Timber": 2.85, "Bauxite": 0.039, "Uranium": 0.004 }
+  }
+}

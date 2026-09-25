@@ -1,0 +1,174 @@
+// Chad (TCD) on 1 January 2024: 20 regions, 15,946,876 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bahr el Gazel
+  "td_bg": {
+    "population": 62418,
+    "urbanization": 0.05,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.114, "Coal": 0.416, "Oil": 0.399, "IronOre": 0.31, "RareEarths": 0.094, "NaturalGas": 0.288, "Timber": 3.407, "Bauxite": 0.109, "Uranium": 0.012 }
+  },
+  // Batha
+  "td_ba": {
+    "population": 522108,
+    "urbanization": 0.32,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.601, "Coal": 0.171, "Oil": 0.303, "IronOre": 0.194, "RareEarths": 0.068, "NaturalGas": 0.268, "Timber": 2.747, "Bauxite": 0.095, "Uranium": 0.009 }
+  },
+  // Borkou
+  "td_bo": {
+    "population": 143739,
+    "urbanization": 0.35,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.234, "Coal": 0.101, "Oil": 0.138, "IronOre": 0.116, "RareEarths": 0.028, "NaturalGas": 0.193, "Timber": 2.536, "Bauxite": 0.031, "Uranium": 0.005 }
+  },
+  // Chari-Baguirmi
+  "td_cb": {
+    "population": 3349067,
+    "urbanization": 0.05,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.524, "Coal": 0.325, "Oil": 0.552, "IronOre": 0.344, "RareEarths": 0.102, "NaturalGas": 0.547, "Timber": 2.019, "Bauxite": 0.07, "Uranium": 0.007 }
+  },
+  // Ennedi
+  "td_x01": {
+    "population": 5224,
+    "urbanization": 0.33,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.652, "Coal": 0.215, "Oil": 0.714, "IronOre": 0.197, "RareEarths": 0.116, "NaturalGas": 0.922, "Timber": 3.028, "Bauxite": 0.156, "Uranium": 0.011 }
+  },
+  // Guéra
+  "td_gr": {
+    "population": 418157,
+    "urbanization": 0.25,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.926, "Coal": 0.233, "Oil": 0.317, "IronOre": 0.356, "RareEarths": 0.088, "NaturalGas": 0.358, "Timber": 3.177, "Bauxite": 0.065, "Uranium": 0.007 }
+  },
+  // Hadjer-Lamis
+  "td_hl": {
+    "population": 446821,
+    "urbanization": 0.05,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.129, "Coal": 0.153, "Oil": 0.157, "IronOre": 0.085, "RareEarths": 0.047, "NaturalGas": 0.166, "Timber": 0.864, "Bauxite": 0.057, "Uranium": 0.004 }
+  },
+  // Kanem
+  "td_ka": {
+    "population": 151197,
+    "urbanization": 0.45,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.012, "Coal": 0.541, "Oil": 0.415, "IronOre": 0.399, "RareEarths": 0.07, "NaturalGas": 0.355, "Timber": 1.803, "Bauxite": 0.168, "Uranium": 0.016 }
+  },
+  // Lac
+  "td_lc": {
+    "population": 135878,
+    "urbanization": 0.09,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.322, "Coal": 0.226, "Oil": 0.271, "IronOre": 0.31, "RareEarths": 0.055, "NaturalGas": 0.654, "Timber": 1.427, "Bauxite": 0.045, "Uranium": 0.008 }
+  },
+  // Logone Oriental
+  "td_lr": {
+    "population": 1896360,
+    "urbanization": 0.37,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.808, "Coal": 0.06, "Oil": 0.23, "IronOre": 0.067, "RareEarths": 0.028, "NaturalGas": 0.188, "Timber": 2.724, "Bauxite": 0.042, "Uranium": 0.002 }
+  },
+  // Mandoul
+  "td_ma": {
+    "population": 113638,
+    "urbanization": 0.05,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.389, "Coal": 0.553, "Oil": 0.572, "IronOre": 0.41, "RareEarths": 0.12, "NaturalGas": 0.405, "Timber": 3.002, "Bauxite": 0.148, "Uranium": 0.007 }
+  },
+  // Mayo-Kebbi Est
+  "td_me": {
+    "population": 2966775,
+    "urbanization": 0.25,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.33, "Coal": 0.305, "Oil": 0.309, "IronOre": 0.243, "RareEarths": 0.051, "NaturalGas": 0.3, "Timber": 1.48, "Bauxite": 0.105, "Uranium": 0.005 }
+  },
+  // Mayo-Kebbi Ouest
+  "td_mo": {
+    "population": 999268,
+    "urbanization": 0.13,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.267, "Coal": 0.301, "Oil": 0.728, "IronOre": 0.214, "RareEarths": 0.082, "NaturalGas": 0.726, "Timber": 3.418, "Bauxite": 0.113, "Uranium": 0.011 }
+  },
+  // Moyen-Chari
+  "td_mc": {
+    "population": 1210604,
+    "urbanization": 0.53,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.78, "Coal": 0.584, "Oil": 0.529, "IronOre": 0.387, "RareEarths": 0.091, "NaturalGas": 0.433, "Timber": 2.123, "Bauxite": 0.155, "Uranium": 0.016 }
+  },
+  // Ouaddaï
+  "td_od": {
+    "population": 1013620,
+    "urbanization": 0.59,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.259, "Coal": 0.183, "Oil": 0.566, "IronOre": 0.252, "RareEarths": 0.075, "NaturalGas": 0.635, "Timber": 0.764, "Bauxite": 0.095, "Uranium": 0.007 }
+  },
+  // Salamat
+  "td_sa": {
+    "population": 493377,
+    "urbanization": 0.23,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.222, "Coal": 0.487, "Oil": 0.729, "IronOre": 0.311, "RareEarths": 0.069, "NaturalGas": 0.321, "Timber": 1.536, "Bauxite": 0.092, "Uranium": 0.009 }
+  },
+  // Sila
+  "td_si": {
+    "population": 683710,
+    "urbanization": 0.05,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.429, "Coal": 0.167, "Oil": 0.386, "IronOre": 0.118, "RareEarths": 0.042, "NaturalGas": 0.375, "Timber": 2.972, "Bauxite": 0.035, "Uranium": 0.007 }
+  },
+  // Tandjilé
+  "td_ta": {
+    "population": 921746,
+    "urbanization": 0.48,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.768, "Coal": 0.251, "Oil": 0.265, "IronOre": 0.108, "RareEarths": 0.04, "NaturalGas": 0.475, "Timber": 2.814, "Bauxite": 0.049, "Uranium": 0.008 }
+  },
+  // Tibesti
+  "td_ti": {
+    "population": 126711,
+    "urbanization": 0.05,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.37, "Coal": 0.188, "Oil": 0.554, "IronOre": 0.178, "RareEarths": 0.047, "NaturalGas": 0.34, "Timber": 1.707, "Bauxite": 0.145, "Uranium": 0.012 }
+  },
+  // Wadi Fira
+  "td_wf": {
+    "population": 286458,
+    "urbanization": 0.15,
+    "cultures": { "sara": 0.3, "arab_sudanese": 0.18, "kanuri": 0.09, "fulani": 0.07, "hausa": 0.06, "bedouin": 0.05, "mandinka": 0.045, "zaghawa": 0.045, "fur": 0.04, "nuer": 0.04, "songhai": 0.04, "beja": 0.02, "tuareg": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.706, "Coal": 0.307, "Oil": 0.356, "IronOre": 0.219, "RareEarths": 0.096, "NaturalGas": 0.668, "Timber": 1.491, "Bauxite": 0.123, "Uranium": 0.014 }
+  }
+}

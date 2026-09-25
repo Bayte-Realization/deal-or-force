@@ -1,0 +1,118 @@
+// Paraguay (PRY) on 1 January 2024: 13 regions, 7,044,636 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Alto Paraguay
+  "py_16": {
+    "population": 62778,
+    "urbanization": 0.22,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.867, "Coal": 0.459, "Oil": 0.525, "IronOre": 0.204, "RareEarths": 0.088, "NaturalGas": 0.711, "Timber": 1.604, "Bauxite": 0.129, "Uranium": 0.014 }
+  },
+  // Alto Paraná
+  "py_10": {
+    "population": 344301,
+    "urbanization": 0.05,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.39, "Coal": 0.409, "Oil": 0.563, "IronOre": 0.171, "RareEarths": 0.094, "NaturalGas": 0.697, "Timber": 1.724, "Bauxite": 0.063, "Uranium": 0.01 }
+  },
+  // Amambay
+  "py_13": {
+    "population": 281786,
+    "urbanization": 0.68,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.797, "Coal": 0.15, "Oil": 0.403, "IronOre": 0.215, "RareEarths": 0.085, "NaturalGas": 0.609, "Timber": 0.753, "Bauxite": 0.073, "Uranium": 0.007 }
+  },
+  // Boquerón
+  "py_19": {
+    "population": 86213,
+    "urbanization": 0.37,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.353, "Coal": 0.308, "Oil": 0.881, "IronOre": 0.403, "RareEarths": 0.055, "NaturalGas": 1.122, "Timber": 3.24, "Bauxite": 0.132, "Uranium": 0.009 }
+  },
+  // Caaguazú
+  "py_5": {
+    "population": 387299,
+    "urbanization": 0.36,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.117, "Coal": 0.268, "Oil": 0.954, "IronOre": 0.439, "RareEarths": 0.055, "NaturalGas": 0.683, "Timber": 1.179, "Bauxite": 0.172, "Uranium": 0.012 }
+  },
+  // Caazapá
+  "py_6": {
+    "population": 324721,
+    "urbanization": 0.24,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.732, "Coal": 0.359, "Oil": 0.58, "IronOre": 0.231, "RareEarths": 0.111, "NaturalGas": 0.629, "Timber": 2.085, "Bauxite": 0.134, "Uranium": 0.013 }
+  },
+  // Canindeyú
+  "py_14": {
+    "population": 122646,
+    "urbanization": 0.05,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.037, "Coal": 0.109, "Oil": 0.174, "IronOre": 0.117, "RareEarths": 0.039, "NaturalGas": 0.125, "Timber": 2.325, "Bauxite": 0.039, "Uranium": 0.005 }
+  },
+  // Concepción
+  "py_1": {
+    "population": 202378,
+    "urbanization": 0.68,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.449, "Coal": 0.317, "Oil": 0.307, "IronOre": 0.149, "RareEarths": 0.081, "NaturalGas": 0.37, "Timber": 1.13, "Bauxite": 0.139, "Uranium": 0.012 }
+  },
+  // Itapúa
+  "py_7": {
+    "population": 950452,
+    "urbanization": 0.63,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.446, "Coal": 0.284, "Oil": 0.331, "IronOre": 0.326, "RareEarths": 0.057, "NaturalGas": 0.65, "Timber": 2.554, "Bauxite": 0.139, "Uranium": 0.01 }
+  },
+  // Paraguarí
+  "py_9": {
+    "population": 2369270,
+    "urbanization": 0.75,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.578, "Coal": 0.173, "Oil": 0.276, "IronOre": 0.154, "RareEarths": 0.033, "NaturalGas": 0.253, "Timber": 2.308, "Bauxite": 0.038, "Uranium": 0.008 }
+  },
+  // Presidente Hayes
+  "py_15": {
+    "population": 1491362,
+    "urbanization": 0.92,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.659, "Coal": 0.201, "Oil": 0.255, "IronOre": 0.08, "RareEarths": 0.025, "NaturalGas": 0.273, "Timber": 1.965, "Bauxite": 0.036, "Uranium": 0.006 }
+  },
+  // San Pedro
+  "py_2": {
+    "population": 349177,
+    "urbanization": 0.08,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.229, "Coal": 0.224, "Oil": 0.21, "IronOre": 0.17, "RareEarths": 0.044, "NaturalGas": 0.47, "Timber": 2.8, "Bauxite": 0.052, "Uranium": 0.005 }
+  },
+  // Ñeembucú
+  "py_12": {
+    "population": 72253,
+    "urbanization": 0.8,
+    "cultures": { "paraguayan": 0.6, "guarani": 0.33, "brazilian": 0.03, "argentine": 0.015, "german": 0.015, "chinese_diaspora": 0.005, "korean": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.88, "Coal": 0.414, "Oil": 0.273, "IronOre": 0.275, "RareEarths": 0.066, "NaturalGas": 0.3, "Timber": 0.964, "Bauxite": 0.098, "Uranium": 0.008 }
+  }
+}

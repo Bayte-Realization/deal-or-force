@@ -1,0 +1,22 @@
+// Jersey (JEY) on 1 January 2024: 1 region, 107,800 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Jersey
+  "je_x01": {
+    "population": 107800,
+    "urbanization": 0.822,
+    "cultures": { "english": 0.56, "portuguese": 0.1, "french": 0.07, "polish": 0.07, "romanian": 0.06, "indian_diaspora": 0.05, "irish": 0.04, "scottish": 0.03, "welsh": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.166, "Coal": 0.502, "Oil": 0.933, "IronOre": 0.448, "RareEarths": 0.09, "NaturalGas": 0.566, "Timber": 0.973, "Bauxite": 0.116, "Uranium": 0.015 }
+  }
+}

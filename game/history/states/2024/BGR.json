@@ -1,0 +1,46 @@
+// Bulgaria (BGR) on 1 January 2024: 4 regions, 6,975,761 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Pleven
+  "bg_15": {
+    "population": 1103210,
+    "urbanization": 0.5,
+    "cultures": { "bulgarian": 0.8368, "turkish": 0.088, "romani": 0.0465, "ukrainian": 0.0129, "russian": 0.0049, "romanian": 0.003, "armenian": 0.002, "aromanian": 0.002, "greek": 0.002, "macedonian": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.469, "Coal": 0.202, "Oil": 0.665, "IronOre": 0.262, "RareEarths": 0.047, "NaturalGas": 0.518, "Timber": 2.46, "Bauxite": 0.085, "Uranium": 0.007 }
+  },
+  // Sofia
+  "bg_23": {
+    "population": 2376295,
+    "urbanization": 0.91,
+    "cultures": { "bulgarian": 0.8368, "turkish": 0.088, "romani": 0.0465, "ukrainian": 0.0129, "russian": 0.0049, "romanian": 0.003, "armenian": 0.002, "aromanian": 0.002, "greek": 0.002, "macedonian": 0.002 },
+    "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.075, "Coal": 0.415, "Oil": 0.453, "IronOre": 0.35, "RareEarths": 0.111, "NaturalGas": 0.959, "Timber": 2.867, "Bauxite": 0.132, "Uranium": 0.019 }
+  },
+  // Stara Zagora
+  "bg_24": {
+    "population": 1339801,
+    "urbanization": 0.81,
+    "cultures": { "bulgarian": 0.8368, "turkish": 0.088, "romani": 0.0465, "ukrainian": 0.0129, "russian": 0.0049, "romanian": 0.003, "armenian": 0.002, "aromanian": 0.002, "greek": 0.002, "macedonian": 0.002 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.637, "Coal": 0.366, "Oil": 0.681, "IronOre": 0.227, "RareEarths": 0.091, "NaturalGas": 0.559, "Timber": 2.446, "Bauxite": 0.101, "Uranium": 0.01 }
+  },
+  // Targovishte
+  "bg_25": {
+    "population": 2156455,
+    "urbanization": 0.7,
+    "cultures": { "bulgarian": 0.8368, "turkish": 0.088, "romani": 0.0465, "ukrainian": 0.0129, "russian": 0.0049, "romanian": 0.003, "armenian": 0.002, "aromanian": 0.002, "greek": 0.002, "macedonian": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.943, "Coal": 0.119, "Oil": 0.211, "IronOre": 0.07, "RareEarths": 0.029, "NaturalGas": 0.229, "Timber": 2.198, "Bauxite": 0.042, "Uranium": 0.002 }
+  }
+}

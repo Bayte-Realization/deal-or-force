@@ -1,0 +1,118 @@
+// Laos (LAO) on 1 January 2024: 13 regions, 7,169,455 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bolikhamsai
+  "la_bl": {
+    "population": 295719,
+    "urbanization": 0.05,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.759, "Coal": 0.563, "Oil": 0.721, "IronOre": 0.429, "RareEarths": 0.104, "NaturalGas": 0.498, "Timber": 1.169, "Bauxite": 0.103, "Uranium": 0.019 }
+  },
+  // Champasak
+  "la_ch": {
+    "population": 553297,
+    "urbanization": 0.47,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.831, "Coal": 0.255, "Oil": 0.386, "IronOre": 0.148, "RareEarths": 0.028, "NaturalGas": 0.237, "Timber": 2.884, "Bauxite": 0.049, "Uranium": 0.006 }
+  },
+  // Houaphanh
+  "la_ho": {
+    "population": 321086,
+    "urbanization": 0.26,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.695, "Coal": 0.225, "Oil": 0.46, "IronOre": 0.227, "RareEarths": 0.043, "NaturalGas": 0.521, "Timber": 3.419, "Bauxite": 0.042, "Uranium": 0.009 }
+  },
+  // Khammouane
+  "la_kh": {
+    "population": 474668,
+    "urbanization": 0.35,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.531, "Coal": 0.254, "Oil": 0.987, "IronOre": 0.238, "RareEarths": 0.068, "NaturalGas": 0.799, "Timber": 1.702, "Bauxite": 0.199, "Uranium": 0.016 }
+  },
+  // Luang Namtha
+  "la_lm": {
+    "population": 149022,
+    "urbanization": 0.05,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.993, "Coal": 0.277, "Oil": 0.356, "IronOre": 0.201, "RareEarths": 0.054, "NaturalGas": 0.553, "Timber": 2.645, "Bauxite": 0.039, "Uranium": 0.011 }
+  },
+  // Luang Prabang
+  "la_lp": {
+    "population": 502564,
+    "urbanization": 0.46,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.492, "Coal": 0.065, "Oil": 0.157, "IronOre": 0.081, "RareEarths": 0.026, "NaturalGas": 0.247, "Timber": 1.263, "Bauxite": 0.034, "Uranium": 0.004 }
+  },
+  // Oudomxay
+  "la_ou": {
+    "population": 145794,
+    "urbanization": 0.05,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.441, "Coal": 0.24, "Oil": 0.396, "IronOre": 0.131, "RareEarths": 0.054, "NaturalGas": 0.417, "Timber": 2.455, "Bauxite": 0.073, "Uranium": 0.013 }
+  },
+  // Phongsaly
+  "la_ph": {
+    "population": 116242,
+    "urbanization": 0.11,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.05, "Coal": 0.483, "Oil": 0.54, "IronOre": 0.171, "RareEarths": 0.041, "NaturalGas": 0.449, "Timber": 2.609, "Bauxite": 0.093, "Uranium": 0.007 }
+  },
+  // Sainyabuli
+  "la_xa": {
+    "population": 305662,
+    "urbanization": 0.12,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.395, "Coal": 0.155, "Oil": 0.303, "IronOre": 0.186, "RareEarths": 0.064, "NaturalGas": 0.371, "Timber": 1.368, "Bauxite": 0.056, "Uranium": 0.006 }
+  },
+  // Salavan
+  "la_sl": {
+    "population": 517096,
+    "urbanization": 0.05,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.15, "Coal": 0.196, "Oil": 0.322, "IronOre": 0.223, "RareEarths": 0.106, "NaturalGas": 0.821, "Timber": 2.061, "Bauxite": 0.122, "Uranium": 0.016 }
+  },
+  // Savannakhet
+  "la_sv": {
+    "population": 873887,
+    "urbanization": 0.21,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.765, "Coal": 0.486, "Oil": 0.503, "IronOre": 0.28, "RareEarths": 0.056, "NaturalGas": 0.729, "Timber": 1.644, "Bauxite": 0.108, "Uranium": 0.009 }
+  },
+  // Vientiane
+  "la_vi": {
+    "population": 2692564,
+    "urbanization": 0.61,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.212, "Coal": 0.516, "Oil": 0.781, "IronOre": 0.388, "RareEarths": 0.081, "NaturalGas": 0.913, "Timber": 1.36, "Bauxite": 0.088, "Uranium": 0.016 }
+  },
+  // Xiangkhouang
+  "la_xi": {
+    "population": 221854,
+    "urbanization": 0.37,
+    "cultures": { "lao": 0.535, "khmer": 0.11, "shan": 0.1, "miao": 0.095, "thai": 0.08, "vietnamese": 0.03, "yi": 0.03, "han": 0.02 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.137, "Coal": 0.399, "Oil": 0.534, "IronOre": 0.149, "RareEarths": 0.07, "NaturalGas": 0.293, "Timber": 1.966, "Bauxite": 0.112, "Uranium": 0.009 }
+  }
+}

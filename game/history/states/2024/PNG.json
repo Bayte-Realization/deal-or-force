@@ -1,0 +1,126 @@
+// Papua New Guinea (PNG) on 1 January 2024: 14 regions, 8,776,109 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central
+  "pg_cpm": {
+    "population": 1236685,
+    "urbanization": 0.32,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.138, "Coal": 0.614, "Oil": 0.77, "IronOre": 0.458, "RareEarths": 0.109, "NaturalGas": 0.643, "Timber": 1.385, "Bauxite": 0.203, "Uranium": 0.018 }
+  },
+  // East New Britain
+  "pg_ebr": {
+    "population": 97723,
+    "urbanization": 0.12,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.361, "Coal": 0.369, "Oil": 0.475, "IronOre": 0.341, "RareEarths": 0.105, "NaturalGas": 0.76, "Timber": 2.128, "Bauxite": 0.08, "Uranium": 0.017 }
+  },
+  // East Sepik
+  "pg_esw": {
+    "population": 1026968,
+    "urbanization": 0.05,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.1, "Coal": 0.49, "Oil": 0.516, "IronOre": 0.297, "RareEarths": 0.11, "NaturalGas": 0.86, "Timber": 1.508, "Bauxite": 0.061, "Uranium": 0.009 }
+  },
+  // Eastern Highlands
+  "pg_ehg": {
+    "population": 344007,
+    "urbanization": 0.2,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.038, "Coal": 0.135, "Oil": 0.198, "IronOre": 0.132, "RareEarths": 0.037, "NaturalGas": 0.278, "Timber": 0.747, "Bauxite": 0.042, "Uranium": 0.008 }
+  },
+  // Enga
+  "pg_epw": {
+    "population": 168979,
+    "urbanization": 0.05,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.278, "Coal": 0.412, "Oil": 0.501, "IronOre": 0.338, "RareEarths": 0.1, "NaturalGas": 0.443, "Timber": 3.1, "Bauxite": 0.126, "Uranium": 0.014 }
+  },
+  // Gulf
+  "pg_gpk": {
+    "population": 337219,
+    "urbanization": 0.05,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.091, "Coal": 0.335, "Oil": 0.382, "IronOre": 0.299, "RareEarths": 0.1, "NaturalGas": 0.736, "Timber": 1.053, "Bauxite": 0.189, "Uranium": 0.008 }
+  },
+  // Madang
+  "pg_mpm": {
+    "population": 1350266,
+    "urbanization": 0.13,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.736, "Coal": 0.598, "Oil": 0.875, "IronOre": 0.243, "RareEarths": 0.097, "NaturalGas": 0.529, "Timber": 3.018, "Bauxite": 0.07, "Uranium": 0.012 }
+  },
+  // Milne Bay
+  "pg_mba": {
+    "population": 218703,
+    "urbanization": 0.08,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.292, "Coal": 0.211, "Oil": 0.259, "IronOre": 0.11, "RareEarths": 0.033, "NaturalGas": 0.211, "Timber": 3.381, "Bauxite": 0.054, "Uranium": 0.003 }
+  },
+  // Morobe
+  "pg_mpl": {
+    "population": 791186,
+    "urbanization": 0.23,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.697, "Coal": 0.232, "Oil": 0.38, "IronOre": 0.155, "RareEarths": 0.036, "NaturalGas": 0.26, "Timber": 2.414, "Bauxite": 0.043, "Uranium": 0.005 }
+  },
+  // Oro
+  "pg_npp": {
+    "population": 352742,
+    "urbanization": 0.11,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.318, "Coal": 0.164, "Oil": 0.381, "IronOre": 0.108, "RareEarths": 0.053, "NaturalGas": 0.323, "Timber": 3.106, "Bauxite": 0.042, "Uranium": 0.009 }
+  },
+  // Sandaun
+  "pg_san": {
+    "population": 616233,
+    "urbanization": 0.05,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.391, "Coal": 0.274, "Oil": 0.202, "IronOre": 0.111, "RareEarths": 0.058, "NaturalGas": 0.4, "Timber": 3.091, "Bauxite": 0.033, "Uranium": 0.003 }
+  },
+  // Southern Highlands
+  "pg_shm": {
+    "population": 314154,
+    "urbanization": 0.12,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.203, "Coal": 0.342, "Oil": 0.525, "IronOre": 0.309, "RareEarths": 0.042, "NaturalGas": 0.698, "Timber": 1.689, "Bauxite": 0.118, "Uranium": 0.009 }
+  },
+  // West New Britain
+  "pg_wbk": {
+    "population": 415149,
+    "urbanization": 0.07,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.577, "Coal": 0.442, "Oil": 0.265, "IronOre": 0.17, "RareEarths": 0.053, "NaturalGas": 0.504, "Timber": 2.686, "Bauxite": 0.115, "Uranium": 0.007 }
+  },
+  // Western
+  "pg_wpd": {
+    "population": 1506095,
+    "urbanization": 0.08,
+    "cultures": { "papuan": 0.76, "melanesian": 0.19, "polynesian": 0.02, "australian": 0.01, "chinese_diaspora": 0.01, "micronesian": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.467, "Coal": 0.235, "Oil": 0.34, "IronOre": 0.238, "RareEarths": 0.031, "NaturalGas": 0.457, "Timber": 2.78, "Bauxite": 0.091, "Uranium": 0.009 }
+  }
+}

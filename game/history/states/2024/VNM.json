@@ -1,0 +1,134 @@
+// Vietnam (VNM) on 1 January 2024: 15 regions, 96,462,106 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Bắc Giang
+  "vn_54": {
+    "population": 10881213,
+    "urbanization": 0.46,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.849, "Coal": 0.465, "Oil": 0.498, "IronOre": 0.204, "RareEarths": 2.14, "NaturalGas": 0.31, "Timber": 0.744, "Bauxite": 1.614, "Uranium": 0.013 }
+  },
+  // Cần Thơ
+  "vn_ct": {
+    "population": 13787247,
+    "urbanization": 0.28,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 5, "Infrastructure": 1 },
+    "resources": { "Food": 0.978, "Coal": 0.215, "Oil": 0.622, "IronOre": 0.287, "RareEarths": 3.073, "NaturalGas": 0.704, "Timber": 3.112, "Bauxite": 1.745, "Uranium": 0.008 }
+  },
+  // Gia Lai
+  "vn_30": {
+    "population": 3885733,
+    "urbanization": 0.4,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.601, "Coal": 0.55, "Oil": 0.83, "IronOre": 0.377, "RareEarths": 2.757, "NaturalGas": 0.761, "Timber": 0.699, "Bauxite": 2.959, "Uranium": 0.013 }
+  },
+  // Hanoi
+  "vn_hn": {
+    "population": 15921357,
+    "urbanization": 0.45,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.267, "Coal": 0.153, "Oil": 0.202, "IronOre": 0.103, "RareEarths": 1.778, "NaturalGas": 0.123, "Timber": 0.974, "Bauxite": 3.397, "Uranium": 0.003 }
+  },
+  // Long An
+  "vn_41": {
+    "population": 14837173,
+    "urbanization": 0.44,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.101, "Coal": 0.082, "Oil": 0.22, "IronOre": 0.116, "RareEarths": 2.042, "NaturalGas": 0.319, "Timber": 1.428, "Bauxite": 2.97, "Uranium": 0.003 }
+  },
+  // Lào Cai
+  "vn_02": {
+    "population": 793872,
+    "urbanization": 0.18,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.804, "Coal": 0.309, "Oil": 0.263, "IronOre": 0.193, "RareEarths": 3.205, "NaturalGas": 0.616, "Timber": 0.881, "Bauxite": 1.251, "Uranium": 0.008 }
+  },
+  // Lâm Đồng
+  "vn_35": {
+    "population": 4968416,
+    "urbanization": 0.4,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 1.496, "Coal": 0.51, "Oil": 0.838, "IronOre": 0.392, "RareEarths": 3.788, "NaturalGas": 0.6, "Timber": 2.014, "Bauxite": 1.732, "Uranium": 0.014 }
+  },
+  // Nghệ An
+  "vn_22": {
+    "population": 2350365,
+    "urbanization": 0.35,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.444, "Coal": 0.394, "Oil": 0.564, "IronOre": 0.314, "RareEarths": 2.34, "NaturalGas": 0.813, "Timber": 1.177, "Bauxite": 2.092, "Uranium": 0.015 }
+  },
+  // Northeast Vietnam
+  "vn_53": {
+    "population": 3708057,
+    "urbanization": 0.3,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.282, "Coal": 0.147, "Oil": 0.418, "IronOre": 0.172, "RareEarths": 2.761, "NaturalGas": 0.318, "Timber": 1.06, "Bauxite": 3.138, "Uranium": 0.004 }
+  },
+  // Quảng Bình
+  "vn_24": {
+    "population": 2268554,
+    "urbanization": 0.27,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.904, "Coal": 0.138, "Oil": 0.386, "IronOre": 0.117, "RareEarths": 1.287, "NaturalGas": 0.195, "Timber": 2.265, "Bauxite": 1.408, "Uranium": 0.008 }
+  },
+  // Quảng Nam
+  "vn_27": {
+    "population": 7027379,
+    "urbanization": 0.51,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 0.952, "Coal": 0.196, "Oil": 0.418, "IronOre": 0.127, "RareEarths": 2.272, "NaturalGas": 0.339, "Timber": 3.128, "Bauxite": 3.261, "Uranium": 0.006 }
+  },
+  // Sơn La
+  "vn_05": {
+    "population": 840734,
+    "urbanization": 0.05,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.963, "Coal": 0.146, "Oil": 0.413, "IronOre": 0.139, "RareEarths": 4.05, "NaturalGas": 0.286, "Timber": 2.307, "Bauxite": 2.847, "Uranium": 0.006 }
+  },
+  // Điện Biên
+  "vn_71": {
+    "population": 271517,
+    "urbanization": 0.05,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.795, "Coal": 0.155, "Oil": 0.286, "IronOre": 0.127, "RareEarths": 1.354, "NaturalGas": 0.452, "Timber": 1.077, "Bauxite": 2.734, "Uranium": 0.007 }
+  },
+  // Đông Nam Bộ
+  "vn_39": {
+    "population": 13334219,
+    "urbanization": 0.36,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.004, "Coal": 0.542, "Oil": 0.554, "IronOre": 0.201, "RareEarths": 1.428, "NaturalGas": 0.39, "Timber": 3.361, "Bauxite": 1.426, "Uranium": 0.01 }
+  },
+  // Đắk Lắk
+  "vn_33": {
+    "population": 1586270,
+    "urbanization": 0.33,
+    "cultures": { "vietnamese": 0.855, "miao": 0.03, "yi": 0.03, "shan": 0.02, "thai": 0.02, "khmer": 0.015, "cantonese": 0.01, "han": 0.01, "lao": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.107, "Coal": 0.346, "Oil": 0.452, "IronOre": 0.147, "RareEarths": 3.026, "NaturalGas": 0.316, "Timber": 1.726, "Bauxite": 1.608, "Uranium": 0.008 }
+  }
+}

@@ -1,0 +1,46 @@
+// Guatemala (GTM) on 1 January 2024: 4 regions, 16,604,026 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Alta Verapaz
+  "gt_av": {
+    "population": 2502133,
+    "urbanization": 0.2,
+    "cultures": { "guatemalan": 0.56, "maya": 0.4, "native_american": 0.02, "african_american": 0.01, "mexican": 0.005, "salvadoran": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.203, "Coal": 0.153, "Oil": 0.486, "IronOre": 0.286, "RareEarths": 0.04, "NaturalGas": 0.335, "Timber": 0.877, "Bauxite": 0.076, "Uranium": 0.005 }
+  },
+  // Baja Verapaz
+  "gt_bv": {
+    "population": 7478882,
+    "urbanization": 0.66,
+    "cultures": { "guatemalan": 0.56, "maya": 0.4, "native_american": 0.02, "african_american": 0.01, "mexican": 0.005, "salvadoran": 0.005 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.174, "Coal": 0.273, "Oil": 0.498, "IronOre": 0.174, "RareEarths": 0.053, "NaturalGas": 0.63, "Timber": 1.095, "Bauxite": 0.121, "Uranium": 0.01 }
+  },
+  // Petén
+  "gt_pe": {
+    "population": 2380284,
+    "urbanization": 0.23,
+    "cultures": { "guatemalan": 0.56, "maya": 0.4, "native_american": 0.02, "african_american": 0.01, "mexican": 0.005, "salvadoran": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.006, "Coal": 0.226, "Oil": 0.425, "IronOre": 0.157, "RareEarths": 0.027, "NaturalGas": 0.433, "Timber": 2.675, "Bauxite": 0.042, "Uranium": 0.009 }
+  },
+  // Quetzaltenango
+  "gt_qz": {
+    "population": 4242727,
+    "urbanization": 0.66,
+    "cultures": { "guatemalan": 0.56, "maya": 0.4, "native_american": 0.02, "african_american": 0.01, "mexican": 0.005, "salvadoran": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.296, "Coal": 0.312, "Oil": 0.408, "IronOre": 0.319, "RareEarths": 0.072, "NaturalGas": 0.506, "Timber": 1.1, "Bauxite": 0.104, "Uranium": 0.01 }
+  }
+}

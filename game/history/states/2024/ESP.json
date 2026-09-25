@@ -1,0 +1,254 @@
+// Spain (ESP) on 1 January 2024: 30 regions, 47,076,781 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // A Coruña
+  "es_c": {
+    "population": 1576984,
+    "urbanization": 0.89,
+    "cultures": { "galician": 0.76, "spanish": 0.2, "portuguese": 0.012, "arab_maghrebi": 0.008, "romanian": 0.008, "colombian": 0.006, "venezuelan": 0.006 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.207, "Coal": 0.364, "Oil": 0.331, "IronOre": 0.176, "RareEarths": 0.094, "NaturalGas": 0.693, "Timber": 1.395, "Bauxite": 0.155, "Uranium": 0.013 }
+  },
+  // Albacete
+  "es_ab": {
+    "population": 489769,
+    "urbanization": 0.54,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.158, "Coal": 0.232, "Oil": 0.323, "IronOre": 0.162, "RareEarths": 0.033, "NaturalGas": 0.328, "Timber": 1.921, "Bauxite": 0.072, "Uranium": 0.007 }
+  },
+  // Asturias
+  "es_o": {
+    "population": 1054045,
+    "urbanization": 0.9,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.678, "Coal": 0.181, "Oil": 0.332, "IronOre": 0.147, "RareEarths": 0.082, "NaturalGas": 0.539, "Timber": 2.022, "Bauxite": 0.045, "Uranium": 0.009 }
+  },
+  // Badajoz
+  "es_ba": {
+    "population": 2773872,
+    "urbanization": 0.85,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.613, "Coal": 0.218, "Oil": 0.666, "IronOre": 0.131, "RareEarths": 0.058, "NaturalGas": 0.492, "Timber": 3.336, "Bauxite": 0.119, "Uranium": 0.014 }
+  },
+  // Barcelona
+  "es_b": {
+    "population": 8850302,
+    "urbanization": 0.95,
+    "cultures": { "catalan": 0.615, "spanish": 0.295, "arab_maghrebi": 0.026, "romanian": 0.012, "berber": 0.01, "chinese_diaspora": 0.01, "colombian": 0.008, "ecuadorian": 0.008, "italian": 0.008, "peruvian": 0.008 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.115, "Coal": 0.138, "Oil": 0.261, "IronOre": 0.112, "RareEarths": 0.033, "NaturalGas": 0.314, "Timber": 1.502, "Bauxite": 0.029, "Uranium": 0.005 }
+  },
+  // Burgos
+  "es_bu": {
+    "population": 4188192,
+    "urbanization": 0.77,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.873, "Coal": 0.303, "Oil": 0.466, "IronOre": 0.306, "RareEarths": 0.046, "NaturalGas": 0.72, "Timber": 1.507, "Bauxite": 0.127, "Uranium": 0.006 }
+  },
+  // Ciudad Real
+  "es_cr": {
+    "population": 387570,
+    "urbanization": 0.05,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.39, "Coal": 0.341, "Oil": 1.068, "IronOre": 0.328, "RareEarths": 0.103, "NaturalGas": 1.057, "Timber": 2.689, "Bauxite": 0.111, "Uranium": 0.008 }
+  },
+  // Community of Madrid
+  "es_m": {
+    "population": 8860138,
+    "urbanization": 0.9,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.898, "Coal": 0.194, "Oil": 0.334, "IronOre": 0.159, "RareEarths": 0.044, "NaturalGas": 0.317, "Timber": 2.076, "Bauxite": 0.064, "Uranium": 0.006 }
+  },
+  // Cuenca
+  "es_cu": {
+    "population": 379910,
+    "urbanization": 0.05,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.075, "Coal": 0.09, "Oil": 0.25, "IronOre": 0.091, "RareEarths": 0.028, "NaturalGas": 0.209, "Timber": 1.669, "Bauxite": 0.046, "Uranium": 0.004 }
+  },
+  // Cáceres
+  "es_cc": {
+    "population": 116124,
+    "urbanization": 0.05,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.477, "Coal": 0.224, "Oil": 0.326, "IronOre": 0.291, "RareEarths": 0.07, "NaturalGas": 0.559, "Timber": 1.099, "Bauxite": 0.095, "Uranium": 0.013 }
+  },
+  // Cádiz
+  "es_ca": {
+    "population": 2275722,
+    "urbanization": 0.88,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.955, "Coal": 0.565, "Oil": 0.628, "IronOre": 0.242, "RareEarths": 0.078, "NaturalGas": 0.401, "Timber": 2.999, "Bauxite": 0.099, "Uranium": 0.019 }
+  },
+  // Córdoba
+  "es_co": {
+    "population": 744317,
+    "urbanization": 0.72,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.139, "Coal": 0.427, "Oil": 0.468, "IronOre": 0.304, "RareEarths": 0.075, "NaturalGas": 0.257, "Timber": 2.218, "Bauxite": 0.09, "Uranium": 0.011 }
+  },
+  // Granada
+  "es_gr": {
+    "population": 1175316,
+    "urbanization": 0.8,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.861, "Coal": 0.167, "Oil": 0.493, "IronOre": 0.218, "RareEarths": 0.054, "NaturalGas": 0.506, "Timber": 3.175, "Bauxite": 0.104, "Uranium": 0.01 }
+  },
+  // Guadalajara
+  "es_gu": {
+    "population": 954387,
+    "urbanization": 0.69,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.413, "Coal": 0.181, "Oil": 0.197, "IronOre": 0.131, "RareEarths": 0.042, "NaturalGas": 0.214, "Timber": 2.552, "Bauxite": 0.03, "Uranium": 0.005 }
+  },
+  // Huelva
+  "es_h": {
+    "population": 480286,
+    "urbanization": 0.5,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.868, "Coal": 0.089, "Oil": 0.114, "IronOre": 0.13, "RareEarths": 0.017, "NaturalGas": 0.187, "Timber": 1.87, "Bauxite": 0.041, "Uranium": 0.003 }
+  },
+  // Huesca
+  "es_hu": {
+    "population": 197857,
+    "urbanization": 0.05,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.77, "Coal": 0.564, "Oil": 0.643, "IronOre": 0.295, "RareEarths": 0.054, "NaturalGas": 0.456, "Timber": 1.157, "Bauxite": 0.068, "Uranium": 0.018 }
+  },
+  // Jaén
+  "es_j": {
+    "population": 431286,
+    "urbanization": 0.68,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.293, "Coal": 0.646, "Oil": 0.777, "IronOre": 0.436, "RareEarths": 0.14, "NaturalGas": 0.885, "Timber": 3.127, "Bauxite": 0.204, "Uranium": 0.016 }
+  },
+  // León
+  "es_le": {
+    "population": 382413,
+    "urbanization": 0.59,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.902, "Coal": 0.163, "Oil": 0.318, "IronOre": 0.173, "RareEarths": 0.057, "NaturalGas": 0.475, "Timber": 1.463, "Bauxite": 0.065, "Uranium": 0.007 }
+  },
+  // Lleida
+  "es_l": {
+    "population": 522227,
+    "urbanization": 0.5,
+    "cultures": { "catalan": 0.66, "spanish": 0.25, "arab_maghrebi": 0.038, "romanian": 0.017, "berber": 0.012, "bulgarian": 0.008, "ukrainian": 0.008, "colombian": 0.007 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.833, "Coal": 0.454, "Oil": 0.407, "IronOre": 0.162, "RareEarths": 0.054, "NaturalGas": 0.644, "Timber": 1.464, "Bauxite": 0.051, "Uranium": 0.006 }
+  },
+  // Lugo
+  "es_lu": {
+    "population": 394169,
+    "urbanization": 0.5,
+    "cultures": { "galician": 0.8, "spanish": 0.165, "portuguese": 0.01, "romanian": 0.008, "arab_maghrebi": 0.006, "colombian": 0.006, "venezuelan": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.997, "Coal": 0.096, "Oil": 0.102, "IronOre": 0.058, "RareEarths": 0.031, "NaturalGas": 0.135, "Timber": 1.796, "Bauxite": 0.034, "Uranium": 0.002 }
+  },
+  // Murcia
+  "es_mu": {
+    "population": 1929988,
+    "urbanization": 0.87,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.245, "Coal": 0.161, "Oil": 0.34, "IronOre": 0.214, "RareEarths": 0.075, "NaturalGas": 0.55, "Timber": 1.699, "Bauxite": 0.074, "Uranium": 0.007 }
+  },
+  // Navarre
+  "es_na": {
+    "population": 1265351,
+    "urbanization": 0.84,
+    "cultures": { "spanish": 0.62, "basque": 0.28, "arab_maghrebi": 0.03, "romanian": 0.02, "colombian": 0.015, "ecuadorian": 0.015, "berber": 0.01, "portuguese": 0.01 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.233, "Coal": 0.096, "Oil": 0.201, "IronOre": 0.087, "RareEarths": 0.034, "NaturalGas": 0.159, "Timber": 3.038, "Bauxite": 0.062, "Uranium": 0.005 }
+  },
+  // Salamanca
+  "es_sa": {
+    "population": 400698,
+    "urbanization": 0.67,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.372, "Coal": 0.368, "Oil": 0.888, "IronOre": 0.42, "RareEarths": 0.062, "NaturalGas": 0.962, "Timber": 3.199, "Bauxite": 0.1, "Uranium": 0.009 }
+  },
+  // Seville
+  "es_se": {
+    "population": 2519080,
+    "urbanization": 0.8,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.3, "Coal": 0.225, "Oil": 0.4, "IronOre": 0.236, "RareEarths": 0.06, "NaturalGas": 0.432, "Timber": 2.567, "Bauxite": 0.116, "Uranium": 0.01 }
+  },
+  // Soria
+  "es_so": {
+    "population": 118856,
+    "urbanization": 0.05,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.64, "Coal": 0.203, "Oil": 0.313, "IronOre": 0.179, "RareEarths": 0.029, "NaturalGas": 0.294, "Timber": 2.623, "Bauxite": 0.042, "Uranium": 0.007 }
+  },
+  // Teruel
+  "es_te": {
+    "population": 514529,
+    "urbanization": 0.58,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.225, "Coal": 0.121, "Oil": 0.232, "IronOre": 0.125, "RareEarths": 0.024, "NaturalGas": 0.392, "Timber": 2.995, "Bauxite": 0.055, "Uranium": 0.008 }
+  },
+  // Toledo
+  "es_to": {
+    "population": 1070095,
+    "urbanization": 0.81,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.55, "Coal": 0.447, "Oil": 0.374, "IronOre": 0.272, "RareEarths": 0.077, "NaturalGas": 0.752, "Timber": 2.154, "Bauxite": 0.107, "Uranium": 0.008 }
+  },
+  // Valencia
+  "es_v": {
+    "population": 1510938,
+    "urbanization": 0.89,
+    "cultures": { "catalan": 0.97, "spanish": 0.0256, "arab_maghrebi": 0.0007, "romanian": 0.0005, "berber": 0.0004, "romani": 0.0004, "ukrainian": 0.0003, "colombian": 0.0003, "ecuadorian": 0.0002, "italian": 0.0002, "venezuelan": 0.0002, "argentine": 0.0002, "chinese_diaspora": 0.0002, "bulgarian": 0.0001, "dominican": 0.0001, "peruvian": 0.0001, "portuguese": 0.0001, "wolof": 0.0001 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.285, "Coal": 0.13, "Oil": 0.343, "IronOre": 0.198, "RareEarths": 0.038, "NaturalGas": 0.202, "Timber": 1.016, "Bauxite": 0.032, "Uranium": 0.004 }
+  },
+  // Zamora
+  "es_za": {
+    "population": 219082,
+    "urbanization": 0.05,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.722, "Coal": 0.342, "Oil": 0.723, "IronOre": 0.263, "RareEarths": 0.072, "NaturalGas": 0.542, "Timber": 3.348, "Bauxite": 0.141, "Uranium": 0.013 }
+  },
+  // Zaragoza
+  "es_z": {
+    "population": 1293278,
+    "urbanization": 0.84,
+    "cultures": { "spanish": 0.8547, "arab_maghrebi": 0.0244, "romanian": 0.0171, "berber": 0.0122, "romani": 0.0122, "ukrainian": 0.011, "colombian": 0.0098, "ecuadorian": 0.0073, "italian": 0.0073, "venezuelan": 0.0073, "argentine": 0.0061, "chinese_diaspora": 0.0061, "bulgarian": 0.0049, "dominican": 0.0049, "peruvian": 0.0049, "portuguese": 0.0049, "wolof": 0.0049 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.846, "Coal": 0.191, "Oil": 0.491, "IronOre": 0.211, "RareEarths": 0.045, "NaturalGas": 0.659, "Timber": 1.533, "Bauxite": 0.134, "Uranium": 0.014 }
+  }
+}

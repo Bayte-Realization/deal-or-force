@@ -1,0 +1,230 @@
+// Mexico (MEX) on 1 January 2024: 27 regions, 127,575,529 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Baja California
+  "mx_bcn": {
+    "population": 5048313,
+    "urbanization": 0.85,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.8, "Coal": 0.307, "Oil": 0.489, "IronOre": 0.185, "RareEarths": 0.059, "NaturalGas": 0.516, "Timber": 1.983, "Bauxite": 0.072, "Uranium": 0.004 }
+  },
+  // Baja California Sur
+  "mx_bcs": {
+    "population": 734078,
+    "urbanization": 0.66,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 1.807, "Coal": 0.285, "Oil": 0.499, "IronOre": 0.193, "RareEarths": 0.044, "NaturalGas": 0.479, "Timber": 1.674, "Bauxite": 0.044, "Uranium": 0.006 }
+  },
+  // Campeche
+  "mx_cam": {
+    "population": 931844,
+    "urbanization": 0.66,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.715, "Coal": 0.242, "Oil": 0.43, "IronOre": 0.273, "RareEarths": 0.052, "NaturalGas": 0.268, "Timber": 2.921, "Bauxite": 0.095, "Uranium": 0.006 }
+  },
+  // Chiapas
+  "mx_chp": {
+    "population": 2344680,
+    "urbanization": 0.69,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.04, "Coal": 0.25, "Oil": 0.459, "IronOre": 0.127, "RareEarths": 0.034, "NaturalGas": 0.375, "Timber": 2.237, "Bauxite": 0.092, "Uranium": 0.009 }
+  },
+  // Chihuahua
+  "mx_chh": {
+    "population": 5577410,
+    "urbanization": 0.73,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.089, "Coal": 0.187, "Oil": 0.313, "IronOre": 0.125, "RareEarths": 0.051, "NaturalGas": 0.183, "Timber": 3.383, "Bauxite": 0.06, "Uranium": 0.009 }
+  },
+  // Coahuila
+  "mx_coa": {
+    "population": 4874223,
+    "urbanization": 0.68,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 2 },
+    "resources": { "Food": 2.149, "Coal": 0.507, "Oil": 0.379, "IronOre": 0.208, "RareEarths": 0.099, "NaturalGas": 0.374, "Timber": 2.661, "Bauxite": 0.056, "Uranium": 0.015 }
+  },
+  // Durango
+  "mx_dur": {
+    "population": 2714912,
+    "urbanization": 0.59,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 0.895, "Coal": 0.138, "Oil": 0.143, "IronOre": 0.115, "RareEarths": 0.028, "NaturalGas": 0.22, "Timber": 2.176, "Bauxite": 0.042, "Uranium": 0.006 }
+  },
+  // Guanajuato
+  "mx_gua": {
+    "population": 4499442,
+    "urbanization": 0.77,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 3 },
+    "resources": { "Food": 0.831, "Coal": 0.287, "Oil": 0.331, "IronOre": 0.314, "RareEarths": 0.077, "NaturalGas": 0.356, "Timber": 2.129, "Bauxite": 0.087, "Uranium": 0.011 }
+  },
+  // Guerrero
+  "mx_gro": {
+    "population": 2452505,
+    "urbanization": 0.75,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.215, "Coal": 0.373, "Oil": 0.444, "IronOre": 0.199, "RareEarths": 0.055, "NaturalGas": 0.501, "Timber": 1.81, "Bauxite": 0.107, "Uranium": 0.014 }
+  },
+  // Hidalgo
+  "mx_hid": {
+    "population": 4272864,
+    "urbanization": 0.78,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.053, "Coal": 0.52, "Oil": 0.854, "IronOre": 0.367, "RareEarths": 0.106, "NaturalGas": 0.821, "Timber": 1.095, "Bauxite": 0.129, "Uranium": 0.014 }
+  },
+  // Jalisco
+  "mx_jal": {
+    "population": 10437888,
+    "urbanization": 0.82,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.302, "Coal": 0.128, "Oil": 0.187, "IronOre": 0.147, "RareEarths": 0.047, "NaturalGas": 0.378, "Timber": 2.282, "Bauxite": 0.052, "Uranium": 0.005 }
+  },
+  // Michoacán
+  "mx_mic": {
+    "population": 3211391,
+    "urbanization": 0.74,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.412, "Coal": 0.237, "Oil": 0.467, "IronOre": 0.215, "RareEarths": 0.066, "NaturalGas": 0.369, "Timber": 1.978, "Bauxite": 0.069, "Uranium": 0.007 }
+  },
+  // Nayarit
+  "mx_nay": {
+    "population": 761935,
+    "urbanization": 0.79,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.668, "Coal": 0.241, "Oil": 0.306, "IronOre": 0.165, "RareEarths": 0.058, "NaturalGas": 0.438, "Timber": 2.415, "Bauxite": 0.092, "Uranium": 0.008 }
+  },
+  // Nuevo León
+  "mx_nle": {
+    "population": 6978629,
+    "urbanization": 0.82,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.754, "Coal": 0.35, "Oil": 0.402, "IronOre": 0.161, "RareEarths": 0.071, "NaturalGas": 0.247, "Timber": 2.177, "Bauxite": 0.097, "Uranium": 0.009 }
+  },
+  // Oaxaca
+  "mx_oax": {
+    "population": 2073843,
+    "urbanization": 0.65,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.719, "Coal": 0.215, "Oil": 0.313, "IronOre": 0.165, "RareEarths": 0.039, "NaturalGas": 0.321, "Timber": 3.059, "Bauxite": 0.052, "Uranium": 0.007 }
+  },
+  // Puebla
+  "mx_pue": {
+    "population": 7857998,
+    "urbanization": 0.81,
+    "cultures": { "nahua": 0.97, "mexican": 0.0261, "native_american": 0.0029, "american": 0.0003, "guatemalan": 0.0003, "honduran": 0.0001, "spanish": 0.0001, "chinese_diaspora": 0.0001, "salvadoran": 0.0001 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.876, "Coal": 0.502, "Oil": 0.887, "IronOre": 0.359, "RareEarths": 0.071, "NaturalGas": 0.458, "Timber": 1.557, "Bauxite": 0.16, "Uranium": 0.019 }
+  },
+  // Querétaro
+  "mx_que": {
+    "population": 1898841,
+    "urbanization": 0.86,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.29, "Coal": 0.212, "Oil": 0.304, "IronOre": 0.103, "RareEarths": 0.027, "NaturalGas": 0.447, "Timber": 1.511, "Bauxite": 0.054, "Uranium": 0.007 }
+  },
+  // Quintana Roo
+  "mx_roo": {
+    "population": 1575580,
+    "urbanization": 0.79,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.627, "Coal": 0.257, "Oil": 0.693, "IronOre": 0.218, "RareEarths": 0.093, "NaturalGas": 0.574, "Timber": 1.989, "Bauxite": 0.118, "Uranium": 0.009 }
+  },
+  // San Luis Potosí
+  "mx_slp": {
+    "population": 3015378,
+    "urbanization": 0.7,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.023, "Coal": 0.271, "Oil": 0.199, "IronOre": 0.185, "RareEarths": 0.027, "NaturalGas": 0.478, "Timber": 3.339, "Bauxite": 0.066, "Uranium": 0.005 }
+  },
+  // Sinaloa
+  "mx_sin": {
+    "population": 3551961,
+    "urbanization": 0.74,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.195, "Coal": 0.307, "Oil": 0.354, "IronOre": 0.205, "RareEarths": 0.087, "NaturalGas": 0.427, "Timber": 2.452, "Bauxite": 0.122, "Uranium": 0.007 }
+  },
+  // Sonora
+  "mx_son": {
+    "population": 4899428,
+    "urbanization": 0.62,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 2 },
+    "resources": { "Food": 1.315, "Coal": 0.416, "Oil": 0.353, "IronOre": 0.423, "RareEarths": 0.069, "NaturalGas": 0.845, "Timber": 1.41, "Bauxite": 0.166, "Uranium": 0.008 }
+  },
+  // State of Mexico
+  "mx_mex": {
+    "population": 31658781,
+    "urbanization": 0.95,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 3, "CivilianIndustry": 3, "Infrastructure": 3 },
+    "resources": { "Food": 0.944, "Coal": 0.113, "Oil": 0.135, "IronOre": 0.113, "RareEarths": 0.019, "NaturalGas": 0.214, "Timber": 2.537, "Bauxite": 0.045, "Uranium": 0.003 }
+  },
+  // Tabasco
+  "mx_tab": {
+    "population": 937480,
+    "urbanization": 0.86,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.225, "Coal": 0.399, "Oil": 0.701, "IronOre": 0.207, "RareEarths": 0.09, "NaturalGas": 0.63, "Timber": 2.34, "Bauxite": 0.097, "Uranium": 0.018 }
+  },
+  // Tamaulipas
+  "mx_tam": {
+    "population": 4304676,
+    "urbanization": 0.84,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.099, "Coal": 0.149, "Oil": 0.397, "IronOre": 0.096, "RareEarths": 0.059, "NaturalGas": 0.313, "Timber": 2.26, "Bauxite": 0.041, "Uranium": 0.004 }
+  },
+  // Veracruz
+  "mx_ver": {
+    "population": 5531816,
+    "urbanization": 0.87,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.858, "Coal": 0.316, "Oil": 1.01, "IronOre": 0.427, "RareEarths": 0.124, "NaturalGas": 0.476, "Timber": 2.301, "Bauxite": 0.114, "Uranium": 0.021 }
+  },
+  // Yucatán
+  "mx_yuc": {
+    "population": 2413492,
+    "urbanization": 0.79,
+    "cultures": { "maya": 0.97, "mexican": 0.0261, "native_american": 0.0029, "american": 0.0003, "guatemalan": 0.0003, "honduran": 0.0001, "spanish": 0.0001, "chinese_diaspora": 0.0001, "salvadoran": 0.0001 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.235, "Coal": 0.468, "Oil": 0.592, "IronOre": 0.222, "RareEarths": 0.096, "NaturalGas": 0.474, "Timber": 3.27, "Bauxite": 0.083, "Uranium": 0.009 }
+  },
+  // Zacatecas
+  "mx_zac": {
+    "population": 3016141,
+    "urbanization": 0.65,
+    "cultures": { "mexican": 0.8686, "native_american": 0.0971, "american": 0.0114, "guatemalan": 0.0091, "honduran": 0.0046, "spanish": 0.0046, "chinese_diaspora": 0.0023, "salvadoran": 0.0023 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.952, "Coal": 0.102, "Oil": 0.271, "IronOre": 0.122, "RareEarths": 0.041, "NaturalGas": 0.146, "Timber": 1.079, "Bauxite": 0.06, "Uranium": 0.007 }
+  }
+}

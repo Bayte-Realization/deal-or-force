@@ -124,10 +124,12 @@ public sealed class CultureShare
 /// <summary>
 /// Who lives where, and what they do.
 ///
-/// The three catalogues - peoples, faiths, trades - say what may exist. `history/pops` says
-/// what was true in 2024: a composition per country, and an override per region for the
-/// places where the country's own average is a lie. Everything here is data; the simulation
-/// reads it and has no opinion of its own about who anybody is.
+/// The three catalogues - peoples, faiths, trades - say what may exist. What was true in 2024
+/// is written region by region in history/states/2024/, and whose state each country is in
+/// history/countries/2024/30_peoples.json. A mod may still give a whole country's mix in
+/// history/pops/ - a composition per country, placed by size and by the regions a people names -
+/// for the regions it does not write one by one. Everything here is data; the simulation reads
+/// it and has no opinion of its own about who anybody is.
 /// </summary>
 public static class DemographyCatalog
 {
@@ -206,7 +208,7 @@ public static class DemographyCatalog
     /// <summary>
     /// Say who a country is for, for a country the scenario never declared.
     ///
-    /// `history/pops` answers this for every country the world shipped with, and nothing
+    /// history/countries answers this for every country the world shipped with, and nothing
     /// else ever needed to ask - until a country could be founded in the middle of a
     /// campaign. A tag the file has never heard of is a state that is for nobody, which
     /// makes every person inside it a minority of it: maximally restive the day it is born,
@@ -257,6 +259,24 @@ public static class DemographyCatalog
             using (document) MergeProfessions(document.RootElement, null);
         foreach (var document in GameDataLoader.DataDocuments("history", "pops"))
             using (document) MergePops(document.RootElement, null);
+        // Whose state each country is: history/countries says it now, beside the rest of what a
+        // country is on the day the bookmark opens. history/pops still may, for a mod written
+        // before it moved; the later file wins either way.
+        foreach (var document in GameDataLoader.DataDocuments("history", "countries", "2024"))
+            using (document) MergePrimaries(document.RootElement);
+    }
+
+    private static void MergePrimaries(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+        foreach (var entry in root.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.Object ||
+                !entry.Value.TryGetProperty("primary_cultures", out var listed) ||
+                listed.ValueKind != JsonValueKind.Array) continue;
+            Declare(entry.Name, listed.EnumerateArray()
+                .Where(value => value.ValueKind == JsonValueKind.String).Select(value => value.GetString()));
+        }
     }
 
     // ------------------------------------------------------------------ reading the data
@@ -425,17 +445,28 @@ public static class DemographyCatalog
     /// is left. A country with no entry at all gets its own name as its one people, which is
     /// wrong in detail and right in shape, and says so plainly in the population screen.
     /// </summary>
+    /// <param name="stated">
+    /// What history/states writes for each region, in the same order as <paramref name="states"/>,
+    /// or null where it writes nothing. A region's own list is taken at its word ahead of
+    /// anything a country-wide table would work out for it.
+    /// </param>
     public static IReadOnlyList<(string Culture, float Share)>[] AllocateCultures(
-        string countryTag, IReadOnlyList<ScenarioState> states, IReadOnlyList<long> populations)
+        string countryTag, IReadOnlyList<ScenarioState> states, IReadOnlyList<long> populations,
+        IReadOnlyList<IReadOnlyList<(string Culture, float Share)>> stated = null)
     {
         var result = new IReadOnlyList<(string, float)>[states.Count];
+        IReadOnlyList<(string Culture, float Share)> Written(int index) =>
+            stated is not null && index < stated.Count && stated[index] is { Count: > 0 } mix ? Normalise(mix)
+            : ByRegion.TryGetValue(states[index].Iso ?? "", out var authored)
+                ? Normalise(authored.Select(share => (share.Culture, share.Share)))
+                : null;
         if (!ByCountry.TryGetValue(countryTag ?? "", out var country) || country.Count == 0)
         {
-            var fallback = new[] { (countryTag?.ToLowerInvariant() ?? "unknown", 1f) };
+            // Nothing for the country as a whole: a region that says nothing is the state's own
+            // people - its primary culture, or its tag's when it has not even that.
+            var fallback = new[] { (PrimaryCulture(countryTag) is { Length: > 0 } own ? own : "unknown", 1f) };
             for (var index = 0; index < states.Count; index++)
-                result[index] = ByRegion.TryGetValue(states[index].Iso ?? "", out var authored)
-                    ? Normalise(authored.Select(share => (share.Culture, share.Share)))
-                    : fallback;
+                result[index] = Written(index) ?? fallback;
             return result;
         }
 
@@ -443,8 +474,7 @@ public static class DemographyCatalog
         var open = new List<int>();
         for (var index = 0; index < states.Count; index++)
         {
-            if (ByRegion.TryGetValue(states[index].Iso ?? "", out var authored))
-                result[index] = Normalise(authored.Select(share => (share.Culture, share.Share)));
+            if (Written(index) is { } written) result[index] = written;
             else open.Add(index);
         }
         if (open.Count == 0) return result;

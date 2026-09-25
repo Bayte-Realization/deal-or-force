@@ -1,0 +1,46 @@
+// Georgia (GEO) on 1 January 2024: 4 regions, 3,720,382 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Imereti
+  "ge_im": {
+    "population": 674122,
+    "urbanization": 0.7,
+    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.089, "Coal": 0.082, "Oil": 0.255, "IronOre": 0.102, "RareEarths": 0.019, "NaturalGas": 0.219, "Timber": 3.408, "Bauxite": 0.039, "Uranium": 0.004 }
+  },
+  // Kakheti
+  "ge_ka": {
+    "population": 333116,
+    "urbanization": 0.05,
+    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.13, "Coal": 0.285, "Oil": 0.691, "IronOre": 0.17, "RareEarths": 0.102, "NaturalGas": 0.563, "Timber": 1.391, "Bauxite": 0.068, "Uranium": 0.01 }
+  },
+  // Mtskheta-Mtianeti
+  "ge_mm": {
+    "population": 2383688,
+    "urbanization": 0.73,
+    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.316, "Coal": 0.226, "Oil": 0.502, "IronOre": 0.293, "RareEarths": 0.054, "NaturalGas": 0.35, "Timber": 2.154, "Bauxite": 0.097, "Uranium": 0.006 }
+  },
+  // Samegrelo-Zemo Svaneti
+  "ge_sz": {
+    "population": 329456,
+    "urbanization": 0.2,
+    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.638, "Coal": 0.247, "Oil": 0.277, "IronOre": 0.187, "RareEarths": 0.04, "NaturalGas": 0.234, "Timber": 1.146, "Bauxite": 0.072, "Uranium": 0.004 }
+  }
+}

@@ -1,0 +1,54 @@
+// Greenland (GRL) on 1 January 2024: 5 regions, 56,225 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Kujalleq
+  "gl_ku": {
+    "population": 6007,
+    "urbanization": 0.72,
+    "cultures": { "greenlander": 0.88, "danish": 0.1, "inuit": 0.01, "icelandic": 0.005, "norwegian": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.979, "Coal": 0.217, "Oil": 0.325, "IronOre": 0.308, "RareEarths": 0.085, "NaturalGas": 0.516, "Timber": 2.532, "Bauxite": 0.059, "Uranium": 0.006 }
+  },
+  // Northeast Greenland National Park
+  "gl_uo": {
+    "population": 1000,
+    "urbanization": 0.05,
+    "cultures": { "greenlander": 0.88, "danish": 0.1, "inuit": 0.01, "icelandic": 0.005, "norwegian": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.372, "Coal": 0.157, "Oil": 0.252, "IronOre": 0.23, "RareEarths": 0.083, "NaturalGas": 0.571, "Timber": 1.946, "Bauxite": 0.102, "Uranium": 0.011 }
+  },
+  // Qaasuitsup
+  "gl_qa": {
+    "population": 13039,
+    "urbanization": 0.97,
+    "cultures": { "greenlander": 0.88, "danish": 0.1, "inuit": 0.01, "icelandic": 0.005, "norwegian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.446, "Coal": 0.163, "Oil": 0.234, "IronOre": 0.181, "RareEarths": 0.02, "NaturalGas": 0.201, "Timber": 2.606, "Bauxite": 0.066, "Uranium": 0.007 }
+  },
+  // Qeqqata
+  "gl_qe": {
+    "population": 9152,
+    "urbanization": 0.81,
+    "cultures": { "greenlander": 0.88, "danish": 0.1, "inuit": 0.01, "icelandic": 0.005, "norwegian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.071, "Coal": 0.37, "Oil": 0.552, "IronOre": 0.359, "RareEarths": 0.086, "NaturalGas": 0.956, "Timber": 1.357, "Bauxite": 0.131, "Uranium": 0.01 }
+  },
+  // Sermersooq
+  "gl_sm": {
+    "population": 27027,
+    "urbanization": 0.91,
+    "cultures": { "greenlander": 0.88, "danish": 0.1, "inuit": 0.01, "icelandic": 0.005, "norwegian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.781, "Coal": 0.269, "Oil": 0.789, "IronOre": 0.392, "RareEarths": 0.123, "NaturalGas": 0.708, "Timber": 1.987, "Bauxite": 0.099, "Uranium": 0.015 }
+  }
+}

@@ -1,0 +1,270 @@
+// China (CHN) on 1 January 2024: 32 regions, 1,397,715,000 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Anhui
+  "cn_ah": {
+    "population": 64801825,
+    "urbanization": 0.55,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 26, "CivilianIndustry": 3, "Infrastructure": 2 },
+    "resources": { "Food": 0.881, "Coal": 3.827, "Oil": 0.371, "IronOre": 3.184, "RareEarths": 1.505, "NaturalGas": 4.35, "Timber": 1.265, "Bauxite": 2.865, "Uranium": 0.004 }
+  },
+  // Beijing
+  "cn_bj": {
+    "population": 29378694,
+    "urbanization": 0.85,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 4, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 1.672, "Coal": 2.223, "Oil": 0.23, "IronOre": 3.898, "RareEarths": 3.669, "NaturalGas": 6.14, "Timber": 0.89, "Bauxite": 2.595, "Uranium": 0.004 }
+  },
+  // Chengde
+  "cn_he_cde": {
+    "population": 3350000,
+    "urbanization": 0.524,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.131, "Coal": 3.766, "Oil": 0.124, "IronOre": 3.384, "RareEarths": 2.089, "NaturalGas": 9.337, "Timber": 1.88, "Bauxite": 2.822, "Uranium": 0.003 }
+  },
+  // Chongqing
+  "cn_cq": {
+    "population": 30593831,
+    "urbanization": 0.69,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 9, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.431, "Coal": 4.18, "Oil": 0.249, "IronOre": 2.871, "RareEarths": 1.998, "NaturalGas": 8.119, "Timber": 2.37, "Bauxite": 1.857, "Uranium": 0.01 }
+  },
+  // Fujian
+  "cn_fj": {
+    "population": 39225511,
+    "urbanization": 0.78,
+    "cultures": { "han": 0.6242, "hakka": 0.3758 },
+    "buildings": { "Agriculture": 8, "CivilianIndustry": 3, "Infrastructure": 3 },
+    "resources": { "Food": 1.427, "Coal": 2.824, "Oil": 0.203, "IronOre": 2.808, "RareEarths": 3.005, "NaturalGas": 11.128, "Timber": 2.848, "Bauxite": 2.877, "Uranium": 0.006 }
+  },
+  // Gansu
+  "cn_gs": {
+    "population": 26196367,
+    "urbanization": 0.64,
+    "cultures": { "han": 0.6923, "hui": 0.3077 },
+    "buildings": { "Agriculture": 9, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 2.429, "Coal": 2.521, "Oil": 0.592, "IronOre": 3.408, "RareEarths": 3.211, "NaturalGas": 7.443, "Timber": 1.672, "Bauxite": 3.924, "Uranium": 0.01 }
+  },
+  // Guangdong
+  "cn_gd": {
+    "population": 90227320,
+    "urbanization": 0.71,
+    "cultures": { "cantonese": 0.62, "han": 0.24, "hakka": 0.11, "zhuang": 0.015, "miao": 0.008, "hui": 0.007 },
+    "buildings": { "Agriculture": 24, "CivilianIndustry": 6, "Infrastructure": 2 },
+    "resources": { "Food": 1.652, "Coal": 1.911, "Oil": 0.744, "IronOre": 1.666, "RareEarths": 1.835, "NaturalGas": 5.753, "Timber": 1.494, "Bauxite": 2.571, "Uranium": 0.011 }
+  },
+  // Guangxi
+  "cn_gx": {
+    "population": 46318081,
+    "urbanization": 0.63,
+    "cultures": { "han": 0.62, "zhuang": 0.32, "miao": 0.021, "cantonese": 0.015, "yi": 0.014, "hakka": 0.01 },
+    "buildings": { "Agriculture": 15, "CivilianIndustry": 3, "Infrastructure": 2 },
+    "resources": { "Food": 0.806, "Coal": 2.321, "Oil": 0.392, "IronOre": 3.605, "RareEarths": 3.709, "NaturalGas": 9.266, "Timber": 1.457, "Bauxite": 3.101, "Uranium": 0.006 }
+  },
+  // Guizhou
+  "cn_gz": {
+    "population": 29251773,
+    "urbanization": 0.67,
+    "cultures": { "han": 0.64, "miao": 0.18, "yi": 0.1, "zhuang": 0.045, "hui": 0.02, "hakka": 0.015 },
+    "buildings": { "Agriculture": 9, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 2.411, "Coal": 2.341, "Oil": 0.925, "IronOre": 3.077, "RareEarths": 2.907, "NaturalGas": 5.917, "Timber": 2.403, "Bauxite": 2.925, "Uranium": 0.009 }
+  },
+  // Hainan
+  "cn_hi": {
+    "population": 8569836,
+    "urbanization": 0.7,
+    "cultures": { "cantonese": 0.97, "han": 0.03 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.471, "Coal": 4.41, "Oil": 0.154, "IronOre": 4.253, "RareEarths": 4.307, "NaturalGas": 3.515, "Timber": 2.586, "Bauxite": 3.859, "Uranium": 0.005 }
+  },
+  // Hebei
+  "cn_he": {
+    "population": 46030000,
+    "urbanization": 0.656,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 14, "CivilianIndustry": 3, "Infrastructure": 2 },
+    "resources": { "Food": 1.092, "Coal": 2.671, "Oil": 0.461, "IronOre": 2.556, "RareEarths": 2.857, "NaturalGas": 3.903, "Timber": 2.483, "Bauxite": 3.358, "Uranium": 0.008 }
+  },
+  // Heilongjiang
+  "cn_hl": {
+    "population": 65137046,
+    "urbanization": 0.62,
+    "cultures": { "han": 0.93, "manchu": 0.03, "mongol": 0.012, "hui": 0.01, "korean": 0.01, "evenk": 0.008 },
+    "buildings": { "Agriculture": 22, "CivilianIndustry": 4, "Infrastructure": 2 },
+    "resources": { "Food": 1.077, "Coal": 3.284, "Oil": 0.812, "IronOre": 1.364, "RareEarths": 4.124, "NaturalGas": 4.943, "Timber": 3.302, "Bauxite": 3.208, "Uranium": 0.019 }
+  },
+  // Henan
+  "cn_ha": {
+    "population": 71269701,
+    "urbanization": 0.58,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 27, "CivilianIndustry": 4, "Infrastructure": 2 },
+    "resources": { "Food": 2.357, "Coal": 2.469, "Oil": 0.288, "IronOre": 4.454, "RareEarths": 1.902, "NaturalGas": 11.885, "Timber": 2.066, "Bauxite": 3.737, "Uranium": 0.005 }
+  },
+  // Hubei
+  "cn_hb": {
+    "population": 72773443,
+    "urbanization": 0.59,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 27, "CivilianIndustry": 4, "Infrastructure": 2 },
+    "resources": { "Food": 2.206, "Coal": 4.16, "Oil": 0.237, "IronOre": 4.047, "RareEarths": 1.961, "NaturalGas": 3.514, "Timber": 1.168, "Bauxite": 2.142, "Uranium": 0.004 }
+  },
+  // Hunan
+  "cn_hn": {
+    "population": 55211229,
+    "urbanization": 0.59,
+    "cultures": { "han": 0.8723, "miao": 0.1277 },
+    "buildings": { "Agriculture": 20, "CivilianIndustry": 3, "Infrastructure": 2 },
+    "resources": { "Food": 0.984, "Coal": 3.377, "Oil": 0.531, "IronOre": 2.448, "RareEarths": 4.242, "NaturalGas": 9.612, "Timber": 2.371, "Bauxite": 3.188, "Uranium": 0.009 }
+  },
+  // Inner Mongolia
+  "cn_nm": {
+    "population": 35580515,
+    "urbanization": 0.58,
+    "cultures": { "han": 0.79, "mongol": 0.172, "manchu": 0.02, "hui": 0.009, "yi": 0.005, "korean": 0.004 },
+    "buildings": { "Agriculture": 14, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.003, "Coal": 4.41, "Oil": 0.214, "IronOre": 3.68, "RareEarths": 3.606, "NaturalGas": 7.359, "Timber": 0.961, "Bauxite": 2.967, "Uranium": 0.004 }
+  },
+  // Jiangsu
+  "cn_js": {
+    "population": 117701331,
+    "urbanization": 0.71,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 31, "CivilianIndustry": 8, "Infrastructure": 2 },
+    "resources": { "Food": 1.883, "Coal": 3.477, "Oil": 0.375, "IronOre": 2.893, "RareEarths": 4.27, "NaturalGas": 8.543, "Timber": 1.173, "Bauxite": 1.684, "Uranium": 0.004 }
+  },
+  // Jiangxi
+  "cn_jx": {
+    "population": 41197828,
+    "urbanization": 0.6,
+    "cultures": { "han": 0.6242, "hakka": 0.3758 },
+    "buildings": { "Agriculture": 15, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.016, "Coal": 2.311, "Oil": 0.445, "IronOre": 1.347, "RareEarths": 3.615, "NaturalGas": 8.813, "Timber": 0.729, "Bauxite": 2.305, "Uranium": 0.006 }
+  },
+  // Jilin
+  "cn_jl": {
+    "population": 41269503,
+    "urbanization": 0.61,
+    "cultures": { "han": 0.9, "korean": 0.041, "manchu": 0.038, "mongol": 0.012, "hui": 0.009 },
+    "buildings": { "Agriculture": 15, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.06, "Coal": 4.179, "Oil": 0.334, "IronOre": 1.972, "RareEarths": 2.421, "NaturalGas": 5.947, "Timber": 1.923, "Bauxite": 1.287, "Uranium": 0.003 }
+  },
+  // Liaoning
+  "cn_ln": {
+    "population": 76425329,
+    "urbanization": 0.73,
+    "cultures": { "han": 0.8945, "manchu": 0.1055 },
+    "buildings": { "Agriculture": 19, "CivilianIndustry": 5, "Infrastructure": 2 },
+    "resources": { "Food": 1.208, "Coal": 4.074, "Oil": 0.302, "IronOre": 2.403, "RareEarths": 2.149, "NaturalGas": 6.967, "Timber": 1.379, "Bauxite": 1.977, "Uranium": 0.015 }
+  },
+  // Ningxia
+  "cn_nx": {
+    "population": 3890170,
+    "urbanization": 0.73,
+    "cultures": { "han": 0.635, "hui": 0.352, "manchu": 0.006, "mongol": 0.004, "tibetan": 0.003 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.906, "Coal": 3.635, "Oil": 0.134, "IronOre": 4.071, "RareEarths": 1.455, "NaturalGas": 6.058, "Timber": 2.54, "Bauxite": 3.293, "Uranium": 0.004 }
+  },
+  // Qinghai
+  "cn_qh": {
+    "population": 6163104,
+    "urbanization": 0.5,
+    "cultures": { "han": 0.532, "tibetan": 0.243, "hui": 0.16, "manchu": 0.022, "mongol": 0.022, "yi": 0.021 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 2 },
+    "resources": { "Food": 0.946, "Coal": 2.85, "Oil": 0.475, "IronOre": 4.123, "RareEarths": 2.318, "NaturalGas": 5.866, "Timber": 1.634, "Bauxite": 1.359, "Uranium": 0.008 }
+  },
+  // Shaanxi
+  "cn_sn": {
+    "population": 30936013,
+    "urbanization": 0.68,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 9, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 1.767, "Coal": 2.976, "Oil": 0.913, "IronOre": 4.193, "RareEarths": 1.807, "NaturalGas": 6.562, "Timber": 3.102, "Bauxite": 3.468, "Uranium": 0.021 }
+  },
+  // Shandong
+  "cn_sd": {
+    "population": 105116602,
+    "urbanization": 0.62,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 36, "CivilianIndustry": 6, "Infrastructure": 2 },
+    "resources": { "Food": 0.884, "Coal": 1.941, "Oil": 0.324, "IronOre": 1.439, "RareEarths": 1.507, "NaturalGas": 7.089, "Timber": 1.9, "Bauxite": 2.295, "Uranium": 0.007 }
+  },
+  // Shanxi
+  "cn_sx": {
+    "population": 36852685,
+    "urbanization": 0.7,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 10, "CivilianIndustry": 3, "Infrastructure": 2 },
+    "resources": { "Food": 1.01, "Coal": 3.938, "Oil": 0.547, "IronOre": 2.458, "RareEarths": 4.092, "NaturalGas": 6.838, "Timber": 1.735, "Bauxite": 2.072, "Uranium": 0.007 }
+  },
+  // Sichuan
+  "cn_sc": {
+    "population": 69770715,
+    "urbanization": 0.64,
+    "cultures": { "han": 0.9134, "yi": 0.0866 },
+    "buildings": { "Agriculture": 23, "CivilianIndustry": 4, "Infrastructure": 2 },
+    "resources": { "Food": 1.666, "Coal": 3.171, "Oil": 0.178, "IronOre": 4.201, "RareEarths": 3.555, "NaturalGas": 6.572, "Timber": 2.482, "Bauxite": 3.769, "Uranium": 0.002 }
+  },
+  // Tianjin
+  "cn_tj": {
+    "population": 26570756,
+    "urbanization": 0.77,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 6, "CivilianIndustry": 2, "Infrastructure": 3 },
+    "resources": { "Food": 2.367, "Coal": 2.667, "Oil": 0.159, "IronOre": 3.847, "RareEarths": 2.526, "NaturalGas": 4.161, "Timber": 0.777, "Bauxite": 3.753, "Uranium": 0.004 }
+  },
+  // Tibet
+  "cn_xz": {
+    "population": 4826211,
+    "urbanization": 0.23,
+    "cultures": { "tibetan": 0.862, "han": 0.121, "hui": 0.006, "mongol": 0.004, "yi": 0.004, "miao": 0.003 },
+    "buildings": { "Agriculture": 3, "Infrastructure": 1 },
+    "resources": { "Food": 1.976, "Coal": 4.054, "Oil": 0.141, "IronOre": 3.239, "RareEarths": 4.158, "NaturalGas": 8.884, "Timber": 2.387, "Bauxite": 4.092, "Uranium": 0.003 }
+  },
+  // Xinjiang
+  "cn_xj": {
+    "population": 38834644,
+    "urbanization": 0.67,
+    "cultures": { "uyghur": 0.45, "han": 0.42, "kazakh": 0.062, "hui": 0.045, "kyrgyz": 0.008, "mongol": 0.006, "tajik": 0.005, "manchu": 0.004 },
+    "buildings": { "Agriculture": 12, "CivilianIndustry": 3, "Infrastructure": 2 },
+    "resources": { "Food": 1.718, "Coal": 3.767, "Oil": 0.2, "IronOre": 2.768, "RareEarths": 3.443, "NaturalGas": 6.251, "Timber": 1.504, "Bauxite": 3.154, "Uranium": 0.008 }
+  },
+  // Yunnan
+  "cn_yn": {
+    "population": 28721382,
+    "urbanization": 0.64,
+    "cultures": { "han": 0.665, "yi": 0.115, "miao": 0.06, "zhuang": 0.06, "shan": 0.04, "hui": 0.03, "tibetan": 0.02, "mongol": 0.01 },
+    "buildings": { "Agriculture": 9, "CivilianIndustry": 2, "Infrastructure": 2 },
+    "resources": { "Food": 2.192, "Coal": 3.614, "Oil": 0.388, "IronOre": 1.392, "RareEarths": 4.02, "NaturalGas": 11.851, "Timber": 2.372, "Bauxite": 3.139, "Uranium": 0.007 }
+  },
+  // Zhangjiakou
+  "cn_he_zjk": {
+    "population": 4120000,
+    "urbanization": 0.655,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.069, "Coal": 1.468, "Oil": 0.638, "IronOre": 2.045, "RareEarths": 1.971, "NaturalGas": 6.903, "Timber": 1.381, "Bauxite": 1.269, "Uranium": 0.007 }
+  },
+  // Zhejiang
+  "cn_zj": {
+    "population": 51403555,
+    "urbanization": 0.72,
+    "cultures": { "han": 1 },
+    "buildings": { "Agriculture": 13, "CivilianIndustry": 4, "Infrastructure": 2 },
+    "resources": { "Food": 1.619, "Coal": 4.084, "Oil": 0.38, "IronOre": 1.732, "RareEarths": 2.196, "NaturalGas": 4.706, "Timber": 2.128, "Bauxite": 3.985, "Uranium": 0.015 }
+  }
+}

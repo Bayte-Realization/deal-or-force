@@ -1,0 +1,38 @@
+// Liberia (LBR) on 1 January 2024: 3 regions, 4,937,374 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Gbarpolu
+  "lr_x1": {
+    "population": 1139247,
+    "urbanization": 0.07,
+    "cultures": { "kru": 0.26, "bassa": 0.2, "mende": 0.13, "mandinka": 0.1, "temne": 0.09, "fulani": 0.07, "creole_african": 0.06, "akan": 0.05, "soninke": 0.04 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.404, "Coal": 0.251, "Oil": 0.502, "IronOre": 0.127, "RareEarths": 0.05, "NaturalGas": 0.412, "Timber": 2.769, "Bauxite": 0.09, "Uranium": 0.006 }
+  },
+  // Grand Bassa
+  "lr_gb": {
+    "population": 3263238,
+    "urbanization": 0.73,
+    "cultures": { "kru": 0.26, "bassa": 0.2, "mende": 0.13, "mandinka": 0.1, "temne": 0.09, "fulani": 0.07, "creole_african": 0.06, "akan": 0.05, "soninke": 0.04 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.266, "Coal": 0.449, "Oil": 0.574, "IronOre": 0.219, "RareEarths": 0.059, "NaturalGas": 0.358, "Timber": 2.585, "Bauxite": 0.078, "Uranium": 0.015 }
+  },
+  // Grand Gedeh
+  "lr_gg": {
+    "population": 534889,
+    "urbanization": 0.27,
+    "cultures": { "kru": 0.26, "bassa": 0.2, "mende": 0.13, "mandinka": 0.1, "temne": 0.09, "fulani": 0.07, "creole_african": 0.06, "akan": 0.05, "soninke": 0.04 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.94, "Coal": 0.176, "Oil": 0.229, "IronOre": 0.185, "RareEarths": 0.029, "NaturalGas": 0.494, "Timber": 1.069, "Bauxite": 0.064, "Uranium": 0.01 }
+  }
+}

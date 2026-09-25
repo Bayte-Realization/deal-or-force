@@ -1,0 +1,54 @@
+// Turkmenistan (TKM) on 1 January 2024: 5 regions, 5,942,089 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Ahal
+  "tm_a": {
+    "population": 1923853,
+    "urbanization": 0.8,
+    "cultures": { "turkmen": 0.85, "uzbek": 0.05, "russian": 0.04, "kazakh": 0.02, "baloch": 0.01, "tatar": 0.008, "armenian": 0.006, "azerbaijani": 0.006, "kurdish": 0.005, "ukrainian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.31, "Coal": 0.307, "Oil": 0.621, "IronOre": 0.283, "RareEarths": 0.132, "NaturalGas": 7.517, "Timber": 3.135, "Bauxite": 0.144, "Uranium": 0.009 }
+  },
+  // Balkan
+  "tm_b": {
+    "population": 494212,
+    "urbanization": 0.82,
+    "cultures": { "turkmen": 0.85, "uzbek": 0.05, "russian": 0.04, "kazakh": 0.02, "baloch": 0.01, "tatar": 0.008, "armenian": 0.006, "azerbaijani": 0.006, "kurdish": 0.005, "ukrainian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 2.074, "Coal": 0.258, "Oil": 0.795, "IronOre": 0.244, "RareEarths": 0.084, "NaturalGas": 5.611, "Timber": 3.117, "Bauxite": 0.08, "Uranium": 0.015 }
+  },
+  // Daşoguz
+  "tm_d": {
+    "population": 1480506,
+    "urbanization": 0.28,
+    "cultures": { "turkmen": 0.85, "uzbek": 0.05, "russian": 0.04, "kazakh": 0.02, "baloch": 0.01, "tatar": 0.008, "armenian": 0.006, "azerbaijani": 0.006, "kurdish": 0.005, "ukrainian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.505, "Coal": 0.249, "Oil": 0.698, "IronOre": 0.28, "RareEarths": 0.056, "NaturalGas": 5.131, "Timber": 1.487, "Bauxite": 0.052, "Uranium": 0.008 }
+  },
+  // Lebap
+  "tm_l": {
+    "population": 605341,
+    "urbanization": 0.78,
+    "cultures": { "turkmen": 0.85, "uzbek": 0.05, "russian": 0.04, "kazakh": 0.02, "baloch": 0.01, "tatar": 0.008, "armenian": 0.006, "azerbaijani": 0.006, "kurdish": 0.005, "ukrainian": 0.005 },
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 0.817, "Coal": 0.091, "Oil": 0.21, "IronOre": 0.098, "RareEarths": 0.034, "NaturalGas": 9.639, "Timber": 1.507, "Bauxite": 0.026, "Uranium": 0.004 }
+  },
+  // Mary
+  "tm_m": {
+    "population": 1438177,
+    "urbanization": 0.22,
+    "cultures": { "turkmen": 0.85, "uzbek": 0.05, "russian": 0.04, "kazakh": 0.02, "baloch": 0.01, "tatar": 0.008, "armenian": 0.006, "azerbaijani": 0.006, "kurdish": 0.005, "ukrainian": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.797, "Coal": 0.22, "Oil": 0.53, "IronOre": 0.221, "RareEarths": 0.087, "NaturalGas": 6.769, "Timber": 3.211, "Bauxite": 0.096, "Uranium": 0.009 }
+  }
+}

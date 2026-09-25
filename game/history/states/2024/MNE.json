@@ -1,0 +1,22 @@
+// Montenegro (MNE) on 1 January 2024: 1 region, 622,137 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Podgorica
+  "me_16": {
+    "population": 622137,
+    "urbanization": 0.787,
+    "cultures": { "montenegrin": 0.4765, "serbian": 0.305, "bosniak": 0.0911, "russian": 0.0512, "albanian": 0.0498, "croatian": 0.0106, "romani": 0.0106, "macedonian": 0.0053 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.76, "Coal": 0.192, "Oil": 0.562, "IronOre": 0.148, "RareEarths": 0.077, "NaturalGas": 0.371, "Timber": 2.669, "Bauxite": 0.099, "Uranium": 0.007 }
+  }
+}

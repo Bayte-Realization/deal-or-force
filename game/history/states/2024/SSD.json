@@ -1,0 +1,94 @@
+// South Sudan (SSD) on 1 January 2024: 10 regions, 11,062,113 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Central Equatoria
+  "ss_ec": {
+    "population": 2247147,
+    "urbanization": 0.38,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.851, "Coal": 0.13, "Oil": 0.489, "IronOre": 0.253, "RareEarths": 0.036, "NaturalGas": 0.376, "Timber": 1.655, "Bauxite": 0.078, "Uranium": 0.008 }
+  },
+  // Eastern Equatoria
+  "ss_ee": {
+    "population": 1325512,
+    "urbanization": 0.05,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.601, "Coal": 0.382, "Oil": 0.44, "IronOre": 0.376, "RareEarths": 0.063, "NaturalGas": 0.691, "Timber": 2.12, "Bauxite": 0.114, "Uranium": 0.011 }
+  },
+  // Jonglei
+  "ss_jg": {
+    "population": 669687,
+    "urbanization": 0.11,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.088, "Coal": 0.197, "Oil": 0.457, "IronOre": 0.173, "RareEarths": 0.087, "NaturalGas": 0.39, "Timber": 3.183, "Bauxite": 0.12, "Uranium": 0.008 }
+  },
+  // Lakes
+  "ss_lk": {
+    "population": 299376,
+    "urbanization": 0.3,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.268, "Coal": 0.338, "Oil": 0.493, "IronOre": 0.184, "RareEarths": 0.123, "NaturalGas": 0.743, "Timber": 2.006, "Bauxite": 0.16, "Uranium": 0.009 }
+  },
+  // Northern Bahr el Ghazal
+  "ss_bn": {
+    "population": 660436,
+    "urbanization": 0.2,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.262, "Coal": 0.216, "Oil": 0.568, "IronOre": 0.243, "RareEarths": 0.108, "NaturalGas": 0.463, "Timber": 1.654, "Bauxite": 0.138, "Uranium": 0.012 }
+  },
+  // Unity
+  "ss_uy": {
+    "population": 235251,
+    "urbanization": 0.09,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.12, "Coal": 0.252, "Oil": 0.334, "IronOre": 0.157, "RareEarths": 0.025, "NaturalGas": 0.368, "Timber": 1.872, "Bauxite": 0.036, "Uranium": 0.006 }
+  },
+  // Upper Nile
+  "ss_nu": {
+    "population": 1519608,
+    "urbanization": 0.32,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.818, "Coal": 0.495, "Oil": 0.862, "IronOre": 0.433, "RareEarths": 0.119, "NaturalGas": 0.382, "Timber": 0.99, "Bauxite": 0.121, "Uranium": 0.014 }
+  },
+  // Warrap
+  "ss_wr": {
+    "population": 2210579,
+    "urbanization": 0.06,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.179, "Coal": 0.3, "Oil": 0.335, "IronOre": 0.124, "RareEarths": 0.08, "NaturalGas": 0.26, "Timber": 2.313, "Bauxite": 0.065, "Uranium": 0.006 }
+  },
+  // Western Bahr el Ghazal
+  "ss_bw": {
+    "population": 936052,
+    "urbanization": 0.39,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.019, "Coal": 0.254, "Oil": 0.722, "IronOre": 0.157, "RareEarths": 0.103, "NaturalGas": 0.358, "Timber": 3.155, "Bauxite": 0.153, "Uranium": 0.016 }
+  },
+  // Western Equatoria
+  "ss_ew": {
+    "population": 958465,
+    "urbanization": 0.16,
+    "cultures": { "dinka": 0.36, "nuer": 0.16, "luo": 0.09, "acholi": 0.07, "sara": 0.06, "luba": 0.04, "kalenjin": 0.03, "maasai": 0.03, "mongo": 0.03, "arab_sudanese": 0.02, "bakongo": 0.02, "fur": 0.02, "nubian": 0.02, "swahili": 0.02, "zaghawa": 0.02, "beja": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.28, "Coal": 0.547, "Oil": 0.779, "IronOre": 0.221, "RareEarths": 0.085, "NaturalGas": 0.346, "Timber": 1.48, "Bauxite": 0.078, "Uranium": 0.009 }
+  }
+}

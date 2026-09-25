@@ -1,0 +1,94 @@
+// Mozambique (MOZ) on 1 January 2024: 10 regions, 30,366,036 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Cabo Delgado
+  "mz_p": {
+    "population": 1908219,
+    "urbanization": 0.3,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.913, "Coal": 0.119, "Oil": 0.352, "IronOre": 0.08, "RareEarths": 0.027, "NaturalGas": 0.323, "Timber": 3.114, "Bauxite": 0.027, "Uranium": 0.003 }
+  },
+  // Gaza
+  "mz_g": {
+    "population": 1154598,
+    "urbanization": 0.36,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.887, "Coal": 0.289, "Oil": 0.392, "IronOre": 0.138, "RareEarths": 0.07, "NaturalGas": 0.33, "Timber": 0.788, "Bauxite": 0.083, "Uranium": 0.006 }
+  },
+  // Inhambane
+  "mz_i": {
+    "population": 942916,
+    "urbanization": 0.36,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.445, "Coal": 0.501, "Oil": 0.647, "IronOre": 0.218, "RareEarths": 0.045, "NaturalGas": 0.316, "Timber": 1.507, "Bauxite": 0.102, "Uranium": 0.01 }
+  },
+  // Manica
+  "mz_b": {
+    "population": 2661463,
+    "urbanization": 0.27,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.058, "Coal": 0.307, "Oil": 0.85, "IronOre": 0.375, "RareEarths": 0.106, "NaturalGas": 0.715, "Timber": 3.344, "Bauxite": 0.155, "Uranium": 0.007 }
+  },
+  // Maputo
+  "mz_l": {
+    "population": 5392834,
+    "urbanization": 0.74,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.389, "Coal": 0.226, "Oil": 0.326, "IronOre": 0.175, "RareEarths": 0.047, "NaturalGas": 0.293, "Timber": 3.278, "Bauxite": 0.081, "Uranium": 0.004 }
+  },
+  // Nampula
+  "mz_n": {
+    "population": 4449142,
+    "urbanization": 0.45,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.239, "Coal": 0.576, "Oil": 0.658, "IronOre": 0.502, "RareEarths": 0.13, "NaturalGas": 1.067, "Timber": 1.467, "Bauxite": 0.086, "Uranium": 0.01 }
+  },
+  // Niassa
+  "mz_a": {
+    "population": 2779220,
+    "urbanization": 0.19,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.42, "Coal": 0.627, "Oil": 0.989, "IronOre": 0.346, "RareEarths": 0.085, "NaturalGas": 0.946, "Timber": 2.348, "Bauxite": 0.13, "Uranium": 0.019 }
+  },
+  // Sofala
+  "mz_s": {
+    "population": 3625612,
+    "urbanization": 0.46,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.827, "Coal": 0.121, "Oil": 0.294, "IronOre": 0.168, "RareEarths": 0.036, "NaturalGas": 0.259, "Timber": 1.768, "Bauxite": 0.05, "Uranium": 0.006 }
+  },
+  // Tete
+  "mz_t": {
+    "population": 4324599,
+    "urbanization": 0.11,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 2, "Infrastructure": 1 },
+    "resources": { "Food": 2.142, "Coal": 0.479, "Oil": 0.67, "IronOre": 0.221, "RareEarths": 0.123, "NaturalGas": 0.741, "Timber": 0.918, "Bauxite": 0.136, "Uranium": 0.013 }
+  },
+  // Zambezia
+  "mz_q": {
+    "population": 3127433,
+    "urbanization": 0.26,
+    "cultures": { "makua": 0.26, "shona": 0.12, "tsonga": 0.115, "chewa": 0.1, "tonga": 0.09, "swahili": 0.08, "bemba": 0.06, "ndebele": 0.06, "zulu": 0.045, "sotho": 0.04, "comorian": 0.01, "indian_diaspora": 0.01, "portuguese": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.587, "Coal": 0.182, "Oil": 0.24, "IronOre": 0.128, "RareEarths": 0.029, "NaturalGas": 0.18, "Timber": 1.231, "Bauxite": 0.053, "Uranium": 0.004 }
+  }
+}

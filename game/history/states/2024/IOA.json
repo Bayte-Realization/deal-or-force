@@ -1,0 +1,22 @@
+// Indian Ocean Territories (IOA) on 1 January 2024: 1 region, 2,387 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Christmas Island
+  "99_x14": {
+    "population": 2387,
+    "urbanization": 0.494,
+    "cultures": { "australian": 0.6, "malay": 0.25, "chinese_diaspora": 0.15 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.994, "Coal": 0.111, "Oil": 0.222, "IronOre": 0.158, "RareEarths": 0.041, "NaturalGas": 0.327, "Timber": 2.571, "Bauxite": 0.035, "Uranium": 0.002 }
+  }
+}

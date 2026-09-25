@@ -1,0 +1,22 @@
+// Malta (MLT) on 1 January 2024: 1 region, 502,653 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Gżira
+  "mt_12": {
+    "population": 502653,
+    "urbanization": 0.95,
+    "cultures": { "maltese": 0.78, "english": 0.06, "indian_diaspora": 0.03, "italian": 0.03, "tagalog": 0.02, "arab_levantine": 0.015, "hungarian": 0.015, "bulgarian": 0.01, "polish": 0.01, "serbian": 0.01, "somali": 0.01, "tigrayan": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 2.306, "Coal": 0.183, "Oil": 0.314, "IronOre": 0.182, "RareEarths": 0.028, "NaturalGas": 0.361, "Timber": 3.243, "Bauxite": 0.066, "Uranium": 0.007 }
+  }
+}

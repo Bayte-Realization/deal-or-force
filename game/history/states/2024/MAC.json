@@ -1,0 +1,22 @@
+// Macao S.A.R (MAC) on 1 January 2024: 1 region, 640,445 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Macau
+  "mo_m": {
+    "population": 640445,
+    "urbanization": 0.891,
+    "cultures": { "cantonese": 0.86, "han": 0.05, "hakka": 0.02, "tagalog": 0.02, "portuguese": 0.015, "vietnamese": 0.015, "thai": 0.01, "english": 0.005, "javanese": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.205, "Coal": 0.335, "Oil": 0.315, "IronOre": 0.286, "RareEarths": 0.044, "NaturalGas": 0.533, "Timber": 2.396, "Bauxite": 0.159, "Uranium": 0.009 }
+  }
+}

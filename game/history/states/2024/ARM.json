@@ -1,0 +1,30 @@
+// Armenia (ARM) on 1 January 2024: 2 regions, 2,957,731 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Aragatsotn
+  "am_ag": {
+    "population": 997851,
+    "urbanization": 0.58,
+    "cultures": { "armenian": 0.9462, "russian": 0.0393, "kurdish": 0.0058, "assyrian": 0.0029, "georgian": 0.0019, "greek": 0.0019, "ukrainian": 0.0019 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 0.806, "Coal": 0.184, "Oil": 0.309, "IronOre": 0.217, "RareEarths": 0.062, "NaturalGas": 0.535, "Timber": 2.696, "Bauxite": 0.071, "Uranium": 0.006 }
+  },
+  // Gegharkunik
+  "am_gr": {
+    "population": 1959880,
+    "urbanization": 0.67,
+    "cultures": { "armenian": 0.9462, "russian": 0.0393, "kurdish": 0.0058, "assyrian": 0.0029, "georgian": 0.0019, "greek": 0.0019, "ukrainian": 0.0019 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.324, "Coal": 0.48, "Oil": 0.622, "IronOre": 0.379, "RareEarths": 0.059, "NaturalGas": 0.581, "Timber": 1.519, "Bauxite": 0.153, "Uranium": 0.015 }
+  }
+}

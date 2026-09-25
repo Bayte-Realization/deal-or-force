@@ -1,0 +1,182 @@
+// Madagascar (MDG) on 1 January 2024: 21 regions, 26,969,307 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Amoron'i Mania
+  "mg_f_1427": {
+    "population": 835367,
+    "urbanization": 0.05,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.612, "Coal": 0.455, "Oil": 0.746, "IronOre": 0.342, "RareEarths": 0.061, "NaturalGas": 0.737, "Timber": 2.622, "Bauxite": 0.061, "Uranium": 0.006 }
+  },
+  // Androy
+  "mg_u_920": {
+    "population": 62341,
+    "urbanization": 0.23,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.047, "Coal": 0.45, "Oil": 0.797, "IronOre": 0.399, "RareEarths": 0.1, "NaturalGas": 0.582, "Timber": 1.672, "Bauxite": 0.074, "Uranium": 0.01 }
+  },
+  // Anosy
+  "mg_u": {
+    "population": 317384,
+    "urbanization": 0.18,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.257, "Coal": 0.324, "Oil": 0.821, "IronOre": 0.366, "RareEarths": 0.062, "NaturalGas": 0.628, "Timber": 1.769, "Bauxite": 0.151, "Uranium": 0.007 }
+  },
+  // Antananarivo
+  "mg_t": {
+    "population": 6967195,
+    "urbanization": 0.72,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.958, "Coal": 0.136, "Oil": 0.326, "IronOre": 0.136, "RareEarths": 0.067, "NaturalGas": 0.192, "Timber": 1.559, "Bauxite": 0.081, "Uranium": 0.005 }
+  },
+  // Antananarivo
+  "mg_t_1425": {
+    "population": 570942,
+    "urbanization": 0.05,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.214, "Coal": 0.179, "Oil": 0.512, "IronOre": 0.331, "RareEarths": 0.081, "NaturalGas": 0.698, "Timber": 1.421, "Bauxite": 0.078, "Uranium": 0.007 }
+  },
+  // Antananarivo
+  "mg_t_1426": {
+    "population": 4162978,
+    "urbanization": 0.41,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.468, "Coal": 0.111, "Oil": 0.162, "IronOre": 0.111, "RareEarths": 0.028, "NaturalGas": 0.205, "Timber": 2.034, "Bauxite": 0.022, "Uranium": 0.004 }
+  },
+  // Atsimo-Andrefana
+  "mg_u_921": {
+    "population": 1315125,
+    "urbanization": 0.34,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.272, "Coal": 0.204, "Oil": 0.234, "IronOre": 0.166, "RareEarths": 0.029, "NaturalGas": 0.357, "Timber": 2.84, "Bauxite": 0.07, "Uranium": 0.004 }
+  },
+  // Atsimo-Atsinanana
+  "mg_f_918": {
+    "population": 342901,
+    "urbanization": 0.24,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.052, "Coal": 0.08, "Oil": 0.229, "IronOre": 0.073, "RareEarths": 0.026, "NaturalGas": 0.241, "Timber": 1.305, "Bauxite": 0.035, "Uranium": 0.002 }
+  },
+  // Betsiboka
+  "mg_m_1424": {
+    "population": 496045,
+    "urbanization": 0.05,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.237, "Coal": 0.202, "Oil": 0.418, "IronOre": 0.15, "RareEarths": 0.066, "NaturalGas": 0.54, "Timber": 2.773, "Bauxite": 0.071, "Uranium": 0.004 }
+  },
+  // Boeny
+  "mg_m": {
+    "population": 994365,
+    "urbanization": 0.63,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 2 },
+    "resources": { "Food": 2.126, "Coal": 0.434, "Oil": 0.516, "IronOre": 0.231, "RareEarths": 0.069, "NaturalGas": 0.625, "Timber": 1.895, "Bauxite": 0.114, "Uranium": 0.014 }
+  },
+  // Diana
+  "mg_d": {
+    "population": 931345,
+    "urbanization": 0.49,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.291, "Coal": 0.071, "Oil": 0.264, "IronOre": 0.057, "RareEarths": 0.025, "NaturalGas": 0.242, "Timber": 3.048, "Bauxite": 0.029, "Uranium": 0.004 }
+  },
+  // Haute Matsiatra
+  "mg_f_1708": {
+    "population": 1440445,
+    "urbanization": 0.43,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.893, "Coal": 0.321, "Oil": 0.349, "IronOre": 0.127, "RareEarths": 0.028, "NaturalGas": 0.393, "Timber": 2.451, "Bauxite": 0.053, "Uranium": 0.009 }
+  },
+  // Ihorombe
+  "mg_f_1707": {
+    "population": 484170,
+    "urbanization": 0.12,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.745, "Coal": 0.535, "Oil": 0.614, "IronOre": 0.331, "RareEarths": 0.113, "NaturalGas": 0.724, "Timber": 2.202, "Bauxite": 0.119, "Uranium": 0.013 }
+  },
+  // Melaky
+  "mg_m_923": {
+    "population": 226467,
+    "urbanization": 0.1,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.438, "Coal": 0.566, "Oil": 0.804, "IronOre": 0.308, "RareEarths": 0.112, "NaturalGas": 0.673, "Timber": 2.63, "Bauxite": 0.081, "Uranium": 0.018 }
+  },
+  // Menabe
+  "mg_u_922": {
+    "population": 707454,
+    "urbanization": 0.28,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.031, "Coal": 0.455, "Oil": 0.819, "IronOre": 0.307, "RareEarths": 0.08, "NaturalGas": 0.603, "Timber": 0.738, "Bauxite": 0.071, "Uranium": 0.014 }
+  },
+  // Sava
+  "mg_d_914": {
+    "population": 927913,
+    "urbanization": 0.33,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.094, "Coal": 0.318, "Oil": 0.372, "IronOre": 0.251, "RareEarths": 0.098, "NaturalGas": 0.513, "Timber": 1.503, "Bauxite": 0.118, "Uranium": 0.012 }
+  },
+  // Sofia
+  "mg_m_912": {
+    "population": 985409,
+    "urbanization": 0.11,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.348, "Coal": 0.268, "Oil": 0.171, "IronOre": 0.126, "RareEarths": 0.059, "NaturalGas": 0.362, "Timber": 1.42, "Bauxite": 0.078, "Uranium": 0.004 }
+  },
+  // Toamasina
+  "mg_a": {
+    "population": 692533,
+    "urbanization": 0.18,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 2.307, "Coal": 0.456, "Oil": 0.392, "IronOre": 0.373, "RareEarths": 0.118, "NaturalGas": 0.701, "Timber": 1.605, "Bauxite": 0.108, "Uranium": 0.013 }
+  },
+  // Toamasina
+  "mg_a_1428": {
+    "population": 1839712,
+    "urbanization": 0.08,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.125, "Coal": 0.17, "Oil": 0.132, "IronOre": 0.114, "RareEarths": 0.023, "NaturalGas": 0.141, "Timber": 1.343, "Bauxite": 0.035, "Uranium": 0.004 }
+  },
+  // Toamasina
+  "mg_a_916": {
+    "population": 1803997,
+    "urbanization": 0.39,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 2.151, "Coal": 0.122, "Oil": 0.206, "IronOre": 0.111, "RareEarths": 0.03, "NaturalGas": 0.252, "Timber": 2.839, "Bauxite": 0.046, "Uranium": 0.008 }
+  },
+  // Vatovavy-Fitovinany
+  "mg_f": {
+    "population": 865219,
+    "urbanization": 0.11,
+    "cultures": { "malagasy": 0.965, "comorian": 0.01, "french": 0.008, "indian_diaspora": 0.007, "chinese_diaspora": 0.005, "swahili": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 1.46, "Coal": 0.192, "Oil": 0.456, "IronOre": 0.127, "RareEarths": 0.037, "NaturalGas": 0.477, "Timber": 1.051, "Bauxite": 0.053, "Uranium": 0.005 }
+  }
+}

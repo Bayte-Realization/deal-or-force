@@ -1,0 +1,22 @@
+// Hong Kong S.A.R. (HKG) on 1 January 2024: 1 region, 7,507,400 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Tai Po
+  "hk_x17": {
+    "population": 7507400,
+    "urbanization": 0.95,
+    "cultures": { "cantonese": 0.85, "han": 0.07, "hakka": 0.02, "tagalog": 0.02, "javanese": 0.015, "indian_diaspora": 0.008, "english": 0.007, "nepali": 0.005, "thai": 0.005 },
+    "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.753, "Coal": 0.217, "Oil": 0.345, "IronOre": 0.144, "RareEarths": 0.083, "NaturalGas": 0.542, "Timber": 3.26, "Bauxite": 0.132, "Uranium": 0.007 }
+  }
+}

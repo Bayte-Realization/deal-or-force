@@ -1,0 +1,22 @@
+// East Timor (TLS) on 1 January 2024: 1 region, 1,293,119 people.
+//
+// Every region the country holds when the bookmark opens, and what it has: how many people
+// live there and how many of them in towns, who they are, what is built there and what lies
+// under the ground. "A region's first day" in docs/MODDING_GUIDE.md lists every field.
+//
+// What is written is what the region has - a building or a deposit left out is not there.
+// A field left out altogether is worked out from the country, the way it is for a region a
+// mod adds. Files are read in name order and a later one naming the same region wins key by
+// key, so a mod that changes one number writes that one number and inherits the rest.
+// Who owns a province is history/provinces/ownership.csv; the file a region is in is only
+// where to find it.
+{
+  // Manufahi
+  "tl_mf": {
+    "population": 1293119,
+    "urbanization": 0.27,
+    "cultures": { "timorese": 0.93, "javanese": 0.02, "malay": 0.015, "portuguese": 0.015, "chinese_diaspora": 0.01, "papuan": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.278, "Coal": 0.326, "Oil": 0.626, "IronOre": 0.281, "RareEarths": 0.055, "NaturalGas": 0.55, "Timber": 2.468, "Bauxite": 0.078, "Uranium": 0.009 }
+  }
+}

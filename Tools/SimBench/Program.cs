@@ -62,6 +62,15 @@ public static class Program
             Console.WriteLine($"  define {pair[0]} = {value}");
         }
 
+        // `--write-regions <folder>` writes every region of the bookmark as history/states reads it;
+        // `--dump-regions <file>` writes the dealt world as a table, to compare two builds by.
+        // Both before the map: attaching it cuts the regions a border runs through (occupied
+        // Donetsk, northern Cyprus) into pieces, and those pieces are the map's doing, not history's.
+        var writeAt = Array.IndexOf(args, "--write-regions");
+        if (writeAt >= 0 && writeAt + 1 < args.Length) return RegionWriter.Write(campaign, args[writeAt + 1]);
+        var dumpAt = Array.IndexOf(args, "--dump-regions");
+        if (dumpAt >= 0 && dumpAt + 1 < args.Length) return RegionWriter.Dump(campaign, args[dumpAt + 1]);
+
         // `--regions` prints the region table and stops. Region localisation is keyed by
         // id, and an id is derived rather than authored - the ISO code where a region has
         // one, the owner's tag and a slug of the name where it has not, a map index
@@ -172,6 +181,8 @@ public static class Program
                 TheCompiledMapMatchesTheCodeThatDrewIt());
         failures += Check("every region knows who lives in it",
             EveryRegionKnowsWhoLivesInIt(campaign));
+        failures += Check("every region of 2024 is written down, once",
+            EveryRegionIsWrittenDown(campaign));
         failures += Check("a content pack is locked until it is owned",
             ContentPacksAreLockedUntilOwned());
         failures += Check("every order a player can give crosses the wire",
@@ -5461,7 +5472,7 @@ public static class Program
     /// as Moscow, Iowa as Florida - and each region rounded its own farms and factories down,
     /// so a country cut into many small regions opened with a farm apiece and no industry at
     /// all: Russia, France, Britain, Turkey and Poland among them. The people are now where
-    /// history/states/2024/20_population.json says, and the buildings are counted for the
+    /// history/states/2024/ writes for each region, and the buildings are counted for the
     /// country and dealt to its regions.
     /// </summary>
     private static string RegionsHoldTheirPeople()
@@ -7671,6 +7682,59 @@ public static class Program
     /// Chechens in Kaliningrad, which is worse than no census at all, and it is the failure
     /// that no total will ever catch.
     /// </summary>
+    /// <summary>
+    /// The bookmark's regions are written down, each in one place. A region with people in it
+    /// and no record is one the game deals out from its country, which is how Magadan came to
+    /// hold as many people as Moscow; a region written in two base files is one a modder edits
+    /// in the first and sees the second overrule. Pieces cut off a region when the map is
+    /// attached - occupied Donetsk, northern Cyprus - are the map's doing and need no record.
+    /// </summary>
+    private static string EveryRegionIsWrittenDown(Campaign campaign)
+    {
+        var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var twice = new List<string>();
+        var badNames = new List<string>();
+        foreach (var file in GameDataLoader.DataFiles("history", "states", "2024"))
+        {
+            var name = Path.GetFileNameWithoutExtension(file);
+            if (!string.Equals(name, "unclaimed", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(name, "lakes", StringComparison.OrdinalIgnoreCase) && campaign.NationByTag(name) is null)
+                badNames.Add(name);
+            using var document = JsonDocument.Parse(File.ReadAllText(file),
+                new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            foreach (var entry in document.RootElement.EnumerateObject())
+                if (!seen.TryAdd(entry.Name, name)) twice.Add($"{entry.Name} in {seen[entry.Name]} and {name}");
+        }
+        if (badNames.Count > 0) return "file(s) named for no country: " + string.Join(", ", badNames.Take(5));
+        if (twice.Count > 0) return $"{twice.Count} region(s) written twice, starting with " + string.Join("; ", twice.Take(3));
+
+        var stated = HistoryDataLoader.StatedRegions(campaign);
+        var missing = new List<string>();
+        var partial = new List<string>();
+        foreach (var state in campaign.States)
+        {
+            if (state.MapIndex >= StatePartition.FirstDynamicMapIndex) continue;
+            if (!stated.TryGetValue(state.MapIndex, out var figures))
+            {
+                missing.Add(state.Id);
+                continue;
+            }
+            if (state.Population <= 0 || LakeRegions.IsWaterState(state)) continue;
+            var lacks = new List<string>();
+            if (figures.Population is null) lacks.Add("population");
+            if (figures.Urbanisation is null) lacks.Add("urbanization");
+            if (figures.Cultures is not { Count: > 0 }) lacks.Add("cultures");
+            if (figures.Buildings is null) lacks.Add("buildings");
+            if (figures.Resources is null) lacks.Add("resources");
+            if (lacks.Count > 0) partial.Add($"{state.Id} ({string.Join(", ", lacks)})");
+        }
+        if (missing.Count > 0) return $"{missing.Count} region(s) have no record, starting with " + string.Join(", ", missing.Take(5));
+        if (partial.Count > 0) return $"{partial.Count} inhabited region(s) leave out a field, starting with " + string.Join("; ", partial.Take(4));
+        Console.WriteLine($"  regions: {seen.Count:N0} written in {GameDataLoader.DataFiles("history", "states", "2024").Count} file(s), " +
+                          "every inhabited one in full.");
+        return "";
+    }
+
     private static string EveryRegionKnowsWhoLivesInIt(Campaign campaign)
     {
         if (DemographyCatalog.Cultures.Count == 0) return "no peoples are defined at all";
@@ -7734,9 +7798,10 @@ public static class Program
                      ?? campaign.States.OrderByDescending(state => state.Population).First();
         var trades = EconomySystem.Professions(sample).Take(3)
             .Select(entry => $"{DemographyCatalog.ProfessionName(entry.Profession)} {entry.Size / (double)Math.Max(1, sample.Population):P0}");
+        var written = HistoryDataLoader.StatedRegions(campaign).Count(pair => pair.Value.Cultures is { Count: > 0 });
         Console.WriteLine($"  people: {DemographyCatalog.Cultures.Count:N0} peoples, {DemographyCatalog.Religions.Count} faiths, " +
-                          $"{DemographyCatalog.Professions.Count} trades over {DemographyCatalog.CountryCount} countries and " +
-                          $"{DemographyCatalog.RegionOverrideCount} region correction(s); {counted:N0} of {stated:N0} placed.");
+                          $"{DemographyCatalog.Professions.Count} trades; {written:N0} region(s) write who lives in them; " +
+                          $"{counted:N0} of {stated:N0} placed.");
         Console.WriteLine($"    minorities where they live: {string.Join(", ", reported)}.");
         Console.WriteLine($"    {sample.Name} works as: {string.Join(", ", trades)}.");
         return "";
