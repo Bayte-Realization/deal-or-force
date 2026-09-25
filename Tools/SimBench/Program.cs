@@ -203,6 +203,8 @@ public static class Program
             BattlesLeaveRuins());
         failures += Check("what the enemy stands on makes nothing for its owner",
             OccupationCostsOutput());
+        failures += Check("a country short of a good builds what makes it",
+            ShortagesAreBuiltFor());
         failures += Check("the classes and the sectors count the same people",
             TwoAxesOverOnePopulation(campaign));
         failures += Check("a country can answer to another one, and stop",
@@ -9036,6 +9038,54 @@ public static class Program
         if (MathF.Abs(after - 1f) > 0.001f) return $"{region.Id}, given back, still makes only {after:P0} of its output";
         Console.WriteLine($"  occupation: Russia holding {taken.Count} of {region.Id}'s {provinces.Count} provinces " +
                           $"({occupied:P0}) leaves Ukraine {during:P0} of its output, and giving them back restores it.");
+        return "";
+    }
+
+    /// <summary>
+    /// A country short of a good builds what makes it (AiBuilder). Short of electronics, Germany
+    /// builds an electronics plant - the specialist, not the civilian industry that makes a little
+    /// of it; short of oil, Russia opens a mine where the oil lies richest for the mines already
+    /// there; short of nothing, nobody builds for a shortage.
+    /// </summary>
+    private static string ShortagesAreBuiltFor()
+    {
+        var campaign = Campaign.CreateBootstrap(20240903);
+        if (!AttachMap(campaign)) return "no province map to build on";
+        static void Short(Nation nation, Commodity good)
+        {
+            foreach (var quote in nation.Market.Values) quote.Satisfaction = 1f;
+            var wanting = nation.Market[good];
+            wanting.Satisfaction = 0.3f;
+            wanting.Demand = MathF.Max(wanting.Demand, 5f);
+        }
+
+        var germany = campaign.NationByTag("DEU");
+        var russia = campaign.NationByTag("RUS");
+        if (germany is null || russia is null) return "there is no Germany or no Russia";
+
+        foreach (var quote in germany.Market.Values) quote.Satisfaction = 1f;
+        if (AiBuilder.Choose(campaign, germany, campaign.StatesOf(germany), out var idle, out _))
+            return $"Germany, short of nothing, chose to build {idle} for a shortage";
+
+        Short(germany, Commodity.Electronics);
+        if (!AiBuilder.Choose(campaign, germany, campaign.StatesOf(germany), out var electronics, out var plantAt))
+            return "Germany, short of electronics, found nothing to build for it";
+        if (electronics != BuildingKind.ElectronicsPlant)
+            return $"Germany, short of electronics, chose {electronics} over an electronics plant";
+
+        Short(russia, Commodity.Oil);
+        var states = campaign.StatesOf(russia);
+        if (!AiBuilder.Choose(campaign, russia, states, out var oil, out var mineAt))
+            return "Russia, short of oil, found nothing to build for it";
+        if (oil != BuildingKind.ExtractionIndustry) return $"Russia, short of oil, chose {oil} over a mine";
+        static float Score(ScenarioState state) =>
+            state.ResourceDeposits.GetValueOrDefault(Commodity.Oil) / (1f + state.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry));
+        var richest = states.OrderByDescending(Score).First();
+        if (mineAt != richest)
+            return $"Russia opened its oil mine in {mineAt.Id} ({Score(mineAt):0.0}) and not {richest.Id} ({Score(richest):0.0})";
+
+        Console.WriteLine($"  building for shortages: Germany short of electronics builds {electronics} in {plantAt.Id}; " +
+                          $"Russia short of oil opens a mine in {mineAt.Id} ({mineAt.ResourceDeposits.GetValueOrDefault(Commodity.Oil):0} of oil).");
         return "";
     }
 

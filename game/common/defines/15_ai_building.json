@@ -1,0 +1,17 @@
+// Deal or Force - what a country nobody plays builds at peace (AiBuilder.cs).
+//
+// With nothing more pressing - no congested supply lines, a literate people, a decent standard
+// of living - a country looks at its market's worst shortages: goods it has less than
+// AiBuildShortage of what it wants, the AiBuildShortagesConsidered worst by what the unmet part
+// is worth. For each, it finds the buildings whose recipes in common/production make that good,
+// the specialist first (the building that makes the fewest different goods), and builds the
+// first that can go somewhere: a mine where the deposit of that good is richest for the mines
+// already there - and at least AiMineDeposit - and anything else in the biggest region with
+// fewest of it. With no shortage worth building for, it builds civilian industry.
+//
+// Every file in this folder is read in name order and later files win.
+{
+  "AiBuildShortage": 0.9,
+  "AiBuildShortagesConsidered": 3,
+  "AiMineDeposit": 0.5
+}

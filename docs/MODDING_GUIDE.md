@@ -452,6 +452,14 @@ of its own shortfall a country is physically able to bring in, regardless of how
 it has. Cheap docks mean a world that trades freely; expensive ones mean geography starts to
 dictate foreign policy.
 
+**What a country nobody plays builds.** At war it builds arms, with congested supply lines
+infrastructure, with an unschooled people universities and with a poor one farms. Otherwise it
+builds for its market's worst shortage: the buildings whose recipes make that good, the
+specialist first (the one that makes the fewest different goods), a mine where that good's
+deposit is richest and anything else in its biggest region. So a chain a mod adds is built by
+the AI as soon as some country is short of what it makes. The thresholds are in
+`common/defines/15_ai_building.json`.
+
 ## Money: inflation and the central bank
 
 The whole monetary model is `common/inflation`, about two dozen numbers, and not one of them

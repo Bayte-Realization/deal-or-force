@@ -566,6 +566,15 @@ public static partial class AiStatecraft
             nation.StandardOfLiving < 0.55f ? BuildingKind.Agriculture :
             BuildingKind.CivilianIndustry;
 
+        // At peace with nothing more pressing: whatever its market is shortest of (AiBuilder).
+        if (wanted == BuildingKind.CivilianIndustry && !atWar && !congested &&
+            AiBuilder.Choose(campaign, nation, states, out var shortOf, out var where))
+        {
+            new QueueConstructionCommand { IssuerId = nation.Id, StateMapIndex = where.MapIndex, Building = shortOf }
+                .Apply(campaign);
+            return;
+        }
+
         // Put it where there is most to gain: the biggest region that has fewest of these.
         ScenarioState target = null;
         var bestScore = float.MinValue;
