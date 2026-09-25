@@ -232,6 +232,17 @@ public static partial class Warfare
                     if (Moved.Contains(war.Id)) FrontPlanner.ReassignAi(campaign, war);
         }
 
+        // The staff keeps each front covered: every post held before any post is held twice.
+        // Once a day for every front, and at once for a front that has just moved, because a
+        // line that changed this hour has holes in it this hour.
+        using (SimProfiler.Measure("  war:staff"))
+        {
+            if (campaign.StepOpensNewDay) FrontManager.Tick(campaign);
+            else
+                foreach (var war in Stale)
+                    if (Moved.Contains(war.Id)) FrontManager.Balance(campaign, war);
+        }
+
         // Two indexes, built once. ResolveAdvances used to walk every division in the world
         // for every war - seventy wars against fourteen hundred divisions - and then walk
         // them again for each province it was weighing up. Both questions are lookups now.
@@ -415,12 +426,24 @@ public static partial class Warfare
                 // alone turns a week into four months, which the player cannot tell apart from
                 // the refusal this replaces.
                 if (ordered) contested = M.Max(contested, campaign.Defines.OrderedAdvanceFloor);
+                // Ground nobody is within reach to cover is not a gap in a line - it is the
+                // country behind one. It is taken at the pace of a march, on the stores and
+                // roads it is taken with, rather than at the crawl a covered gap costs: an
+                // army through the line used to spend three weeks on each empty district
+                // behind it, which read as the whole army stuck.
+                var open = covering <= 0f;
+                var pace = open
+                    ? MathF.Max(campaign.Defines.UnopposedCapturePerDay, campaign.Defines.OpenCountryCapturePerDay)
+                    : campaign.Defines.UnopposedCapturePerDay;
+                var supplyFloor = open
+                    ? MathF.Max(campaign.Defines.MarchSupplyFloor, campaign.Defines.OpenCountrySupplyFloor)
+                    : campaign.Defines.MarchSupplyFloor;
                 // Progress belongs to the division, not a pooled province counter: a
                 // hundred divisions must not teleport one another across the border.
-                army.MoveProgress += campaign.Defines.UnopposedCapturePerDay * campaign.TickScale *
+                army.MoveProgress += pace * campaign.TickScale *
                     UnitTypeCatalog.Get(army.TemplateId).Speed * Researched(campaign, army, "army_speed") *
                     MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
-                    M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) *
+                    M.Clamp(army.SupplyLevel, supplyFloor, 1f) *
                     topology.TerrainAt(target).MovementSpeed * riverAdvance * contested;
                 war.UnopposedProgress[target] = MathF.Max(war.UnopposedProgress.GetValueOrDefault(target), army.MoveProgress);
                 if (army.MoveProgress >= 1f)

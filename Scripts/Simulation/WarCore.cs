@@ -345,6 +345,7 @@ public static partial class FrontPlanner
             {
                 IssuerId = army.NationId,
                 ArmyId = army.Id,
+                WarId = war.Id,
                 Order = army.OrderKind,
                 ObjectiveStateMapIndex = army.ObjectiveStateMapIndex
             }.Apply(campaign);
@@ -415,6 +416,183 @@ public static partial class FrontPlanner
         index < advance ? ArmyOrder.AdvanceFront :
         index < advance + defend ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
 
+    /// <summary>
+    /// Which of a country's divisions serve which of its wars.
+    ///
+    /// Every war took the whole army. Each war's pass sorted all of the country's divisions and
+    /// handed them roles, and the order carrying them out sent every one to the first war in the
+    /// list - so a country fighting two wars fought one. Over two years, on four worlds, seven in
+    /// ten of the second fronts had none of the country's own army on them: South Korea's
+    /// thirty-seven divisions sat on an ally's front while the North Korean one was held by
+    /// nobody, and Nepal fought China with everything and India with nothing.
+    ///
+    /// Each war now gets a share of the army in proportion to what it needs - the country's own
+    /// stretch of that front and the enemy divisions put into it; a war where it holds no ground
+    /// of its own, an ally's, asks for little. A division stays with the war it serves while that
+    /// war is not over its share, so divisions change fronts when the need moves and not when the
+    /// list is rebuilt, and the war that is short takes the divisions nearest to its front.
+    /// </summary>
+    private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId)
+    {
+        var armies = campaign.Armies.FindAll(army =>
+            army.NationId == nationId && army.TemplateId != MilitiaCore.TemplateId);
+        SplitWars.Clear();
+        var stamp = armies.Count;
+        foreach (var candidate in campaign.Wars)
+            if (!candidate.Ended && candidate.Involves(nationId))
+            {
+                SplitWars.Add(candidate);
+                stamp = HashCode.Combine(stamp, candidate.Id);
+            }
+        if (SplitWars.Count < 2) return armies;
+
+        // Once a day: the passes for each war, and every redraw of a front in between, read the
+        // same split, so what one war's pass decides is not undone by the next war's.
+        if (!Splits.TryGetValue(nationId, out var split)) Splits[nationId] = split = new ArmySplit();
+        if (!ReferenceEquals(split.Campaign, campaign) || split.Day != campaign.ElapsedDays || split.Stamp != stamp)
+        {
+            split.Campaign = campaign;
+            split.Day = campaign.ElapsedDays;
+            split.Stamp = stamp;
+            Split(campaign, nationId, SplitWars, armies, split.ByWar);
+        }
+        return split.ByWar.TryGetValue(war.Id, out var share) ? share : new List<Army>();
+    }
+
+    private sealed class ArmySplit
+    {
+        public Campaign Campaign;
+        public int Day = -1;
+        public int Stamp;
+        public readonly Dictionary<int, List<Army>> ByWar = new();
+    }
+
+    private static readonly Dictionary<int, ArmySplit> Splits = new();
+    private static readonly List<StrategicWar> SplitWars = new();
+
+    private static void Split(Campaign campaign, int nationId, List<StrategicWar> wars, List<Army> armies,
+        Dictionary<int, List<Army>> byWar)
+    {
+        byWar.Clear();
+        var nation = campaign.NationById(nationId);
+        var controllers = campaign.ProvinceController ?? campaign.ProvinceMap?.ProvinceToNation;
+        var map = campaign.ProvinceMap;
+        var count = wars.Count;
+        var weight = new float[count];
+        var fronts = new List<int>[count];
+        for (var w = 0; w < count; w++)
+        {
+            var war = wars[w];
+            byWar[war.Id] = new List<Army>();
+            var front = war.FriendlyFront(nationId);
+            var own = new List<int>();
+            if (controllers is not null && nation is not null)
+                foreach (var province in front)
+                    if (controllers[province] == (ushort)nation.MapIndex) own.Add(province);
+            var threat = 0;
+            foreach (var enemy in campaign.Armies)
+                if (enemy.AssignedWarId == war.Id && enemy.TemplateId != MilitiaCore.TemplateId &&
+                    war.Opposes(nationId, enemy.NationId)) threat++;
+            weight[w] = own.Count > 0 ? own.Count + 0.5f * threat : 0.1f * Math.Min(front.Count, threat);
+            fronts[w] = own.Count > 0 ? own : new List<int>(front);
+        }
+
+        var total = 0f;
+        foreach (var value in weight) total += value;
+        if (total <= 0f || map is null || armies.Count == 0)
+        {
+            byWar[wars[0].Id].AddRange(armies);
+            return;
+        }
+
+        // Whole divisions, largest remainders first, adding up to the army.
+        var quota = new int[count];
+        var given = 0;
+        for (var w = 0; w < count; w++) given += quota[w] = (int)(armies.Count * weight[w] / total);
+        while (given < armies.Count)
+        {
+            var most = 0;
+            var remainder = float.MinValue;
+            for (var w = 0; w < count; w++)
+            {
+                var left = armies.Count * weight[w] / total - quota[w];
+                if (left > remainder) { remainder = left; most = w; }
+            }
+            quota[most]++;
+            given++;
+        }
+        // A front of its own is never left to nobody while the army has a division to spare.
+        for (var w = 0; w < count; w++)
+        {
+            if (quota[w] > 0 || fronts[w].Count == 0 || weight[w] < 1f) continue;
+            var largest = 0;
+            for (var v = 1; v < count; v++) if (quota[v] > quota[largest]) largest = v;
+            if (quota[largest] <= 1) break;
+            quota[largest]--;
+            quota[w]++;
+        }
+
+        var distance = new float[armies.Count * count];
+        for (var i = 0; i < armies.Count; i++)
+        {
+            var (latitude, longitude) = map.CenterOf(armies[i].ProvinceId);
+            for (var w = 0; w < count; w++)
+                distance[i * count + w] = SetArmyOrderCommand.FrontDistance(map, fronts[w], latitude, longitude);
+        }
+
+        var serving = new int[armies.Count];
+        var taken = new int[count];
+        var order = new List<int>(armies.Count);
+        for (var i = 0; i < armies.Count; i++)
+        {
+            serving[i] = wars.FindIndex(candidate => candidate.Id == armies[i].AssignedWarId);
+            order.Add(i);
+        }
+        // Those already serving a war stay with it, nearest to its front first, up to one over
+        // its share - one either way is not worth a march across the country.
+        order.Sort((a, b) => (serving[a] < 0 ? float.MaxValue : distance[a * count + serving[a]])
+            .CompareTo(serving[b] < 0 ? float.MaxValue : distance[b * count + serving[b]]));
+        var free = new List<int>();
+        foreach (var i in order)
+        {
+            var w = serving[i];
+            if (w >= 0 && quota[w] > 0 && taken[w] < quota[w] + 1) taken[w]++;
+            else
+            {
+                serving[i] = -1;
+                free.Add(i);
+            }
+        }
+        // The rest go where divisions are short, the nearest first.
+        while (free.Count > 0)
+        {
+            var shortest = -1;
+            var need = 0;
+            for (var w = 0; w < count; w++)
+                if (quota[w] - taken[w] > need) { need = quota[w] - taken[w]; shortest = w; }
+            var pick = 0;
+            if (shortest < 0)
+            {
+                // Nobody is short: the nearest front.
+                var i = free[0];
+                var nearest = 0;
+                for (var w = 1; w < count; w++)
+                    if (distance[i * count + w] < distance[i * count + nearest]) nearest = w;
+                serving[i] = nearest;
+                taken[nearest]++;
+                free.RemoveAt(0);
+                continue;
+            }
+            for (var f = 1; f < free.Count; f++)
+                if (distance[free[f] * count + shortest] < distance[free[pick] * count + shortest]) pick = f;
+            serving[free[pick]] = shortest;
+            taken[shortest]++;
+            free.RemoveAt(pick);
+        }
+
+        for (var i = 0; i < armies.Count; i++) byWar[wars[serving[i]].Id].Add(armies[i]);
+    }
+
     private static void AssignSide(Campaign campaign, StrategicWar war, int nationId, bool attacking)
     {
         var nation = campaign.NationById(nationId);
@@ -425,8 +603,7 @@ public static partial class FrontPlanner
         // the counts here are shares of how many formations there are, so twenty-seven
         // militia pushed real divisions out of defending and into attacking, and Ukraine lost
         // two thirds of its ground to a mechanic written to help it hold.
-        var armies = campaign.Armies.FindAll(army =>
-            army.NationId == nationId && army.TemplateId != MilitiaCore.TemplateId);
+        var armies = ArmiesFor(campaign, war, nationId);
         // Strongest first.
         //
         // Worth recording what does NOT work here, because it looks obviously right: Power
@@ -473,12 +650,16 @@ public static partial class FrontPlanner
             // planning. Doing that to the whole army every time the line moved meant an AI
             // that spent its war walking up and down its own front and never attacked.
             // A division is only re-tasked when what is being asked of it actually changed.
+            //
+            // Or when it is being handed to this war from another one the country is fighting.
             if (army.OrderKind != order || (order == ArmyOrder.Spearhead &&
-                    army.ObjectiveStateMapIndex != war.ClaimedStateMapIndex))
+                    army.ObjectiveStateMapIndex != war.ClaimedStateMapIndex) ||
+                (army.AssignedWarId >= 0 && army.AssignedWarId != war.Id))
                 new SetArmyOrderCommand
                 {
                     IssuerId = nationId,
                     ArmyId = army.Id,
+                    WarId = war.Id,
                     ObjectiveStateMapIndex = war.ClaimedStateMapIndex,
                     Order = order
                 }.Apply(campaign);

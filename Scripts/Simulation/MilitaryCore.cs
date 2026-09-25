@@ -567,7 +567,10 @@ public static class MilitaryOperations
                 M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) * riverMovement *
                 topology.TerrainAt(nextProvince).MovementSpeed *
                 StrategicRedeployment.DayOf(campaign, army) *
-                (1f + ResearchSystem.Bonus(nation, "army_speed"));
+                (1f + ResearchSystem.Bonus(nation, "army_speed")) *
+                // And on roads: the march is always through the country's own ground, and a
+                // region with a network of them is crossed faster than one without.
+                MovementPace.Roads(campaign, nextProvince);
             if (army.MoveProgress < 1f) continue;
             army.MoveProgress -= 1f;
             army.ProvinceId = army.Route[0];
@@ -696,6 +699,74 @@ public static class MilitaryOperations
 public sealed class SetArmyOrderCommand : ICampaignCommand
 {
     /// <summary>
+    /// The war this order is for. Left at -1 the order works it out: the war the division
+    /// already served if its front is about as near, otherwise the war whose front is nearest.
+    /// </summary>
+    public int WarId { get; init; } = -1;
+
+    /// <summary>
+    /// Which of the issuer's wars an order belongs to.
+    ///
+    /// It was the first war in the list, whatever the order and wherever the division was. For
+    /// a country in one war that is the same thing. For one in two it sent every division told
+    /// to hold a line - by the player, or by the AI planning its second war - to the front of
+    /// the first; the planner then found it off the second war's posts and ordered it again,
+    /// every few days, for the whole war, while the second front was held by nobody.
+    /// </summary>
+    private static StrategicWar WarFor(Campaign campaign, int issuerId, int named, int previous, int province)
+    {
+        StrategicWar first = null, kept = null;
+        var count = 0;
+        foreach (var candidate in campaign.Wars)
+        {
+            if (candidate.Ended || !candidate.Involves(issuerId)) continue;
+            if (candidate.Id == named) return candidate;
+            if (candidate.Id == previous) kept = candidate;
+            first ??= candidate;
+            count++;
+        }
+        if (count <= 1 || campaign.ProvinceMap is null || province <= 0) return kept ?? first;
+
+        var map = campaign.ProvinceMap;
+        var (latitude, longitude) = map.CenterOf(province);
+        StrategicWar nearest = null;
+        var best = float.MaxValue;
+        var keptDistance = float.MaxValue;
+        foreach (var candidate in campaign.Wars)
+        {
+            if (candidate.Ended || !candidate.Involves(issuerId)) continue;
+            var distance = FrontDistance(map, candidate.FriendlyFront(issuerId), latitude, longitude);
+            if (candidate == kept) keptDistance = distance;
+            if (distance < best) { best = distance; nearest = candidate; }
+        }
+        // Half as far again is still "about as near": a division between two fronts is not
+        // handed back and forth as the lines move a province either way.
+        return kept is not null && keptDistance <= best * 2.25f ? kept : nearest ?? kept ?? first;
+    }
+
+    /// <summary>Squared distance, in degrees at the equator, to the nearest of a sample of a front.</summary>
+    internal static float FrontDistance(ProvinceTopology map, IReadOnlyCollection<int> front, float latitude, float longitude)
+    {
+        if (front.Count == 0) return float.MaxValue;
+        var stride = Math.Max(1, front.Count / 48);
+        var scale = MathF.Cos(latitude * MathF.PI / 180f);
+        var best = float.MaxValue;
+        var index = 0;
+        foreach (var province in front)
+        {
+            if (index++ % stride != 0) continue;
+            var (lat, lon) = map.CenterOf(province);
+            var east = MathF.Abs(lon - longitude);
+            if (east > 180f) east = 360f - east;
+            east *= scale;
+            var north = lat - latitude;
+            var distance = east * east + north * north;
+            if (distance < best) best = distance;
+        }
+        return best;
+    }
+
+    /// <summary>
     /// Whether a post already holds more than its share of the country's line.
     ///
     /// The bar is deliberately slack - half again over an even spread, and never fewer than
@@ -791,6 +862,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         // post, a division that is perfectly well placed is handed a new one for no reason
         // at all, several times a week, for the whole war.
         var heldPost = army.OrderProvinceId;
+        var servedWar = army.AssignedWarId;
 
         army.OrderKind = Order;
         army.DirectOrder = false;
@@ -807,7 +879,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         army.PlannedRoute.Clear();
 
         if (Order == ArmyOrder.Manual || campaign.ProvinceMap is null) return;
-        var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(IssuerId));
+        var war = WarFor(campaign, IssuerId, WarId, servedWar, army.ProvinceId);
         var nation = campaign.NationById(IssuerId);
         var peacefulLine = BattlePlanning.LineFor(campaign, army);
         if (peacefulLine is { Kind: FrontLineKind.Offensive } && peacefulLine.Objectives.Count > 0 &&

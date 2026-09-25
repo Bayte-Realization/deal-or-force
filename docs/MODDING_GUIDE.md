@@ -1176,6 +1176,38 @@ with the AI's thresholds for sending a fleet home and out again.
 `SimBench --sea sea.png` draws the water, the straits, every harbour and a dozen voyages, and
 prints how long each is: the quickest way to see what a mod's map or passages did to the sea.
 
+### Fronts and the pace of an army
+
+**The front staff.** Once a day, and at once for a front that has just moved, every country's
+sector of every front is looked at as a whole: every post held before any post is held twice,
+the posts facing the enemy first, and a pile given up to the holes nearest it. A post's share of
+the divisions is its share of the pressure on the line - one for being on the front, and one more
+for every division's worth of the enemy standing next to it. The same staff keeps the posts of a
+player's divisions ordered to defend a front and the lines a player draws. Spearheads, divisions
+in a battle and divisions on a direct order are never moved, and by default neither are
+divisions ordered to advance (`FrontStaffMovesAdvances`). A division still marching to its post
+is diverted only to a post well nearer than the one it is walking to, so a column is not turned
+round halfway. A division of a country at war that serves none of its wars - raised during it,
+or released when another war ended - is told to hold the nearest front at once
+(`FrontStaffCallsUpIdle`). The numbers are in `common/defines/13_front_staff.json`.
+
+**More than one war.** A country fighting several wars splits its army between them in
+proportion to what each needs: its own stretch of that front, and half a division for every
+enemy division put into it. A war where it holds no ground of its own - an ally's - asks for
+little. A division stays with the war it serves while that war is not over its share, and the
+war that is short takes the divisions nearest its front. An order given without naming a war
+goes to the war whose front is nearest the division, or the one it already served when that is
+about as near.
+
+**Roads and open country.** A march runs `1 + RoadSpeedPerInfrastructure` faster for every level
+of infrastructure in the region it enters, up to `RoadSpeedCap`. Enemy ground that nobody is near
+enough to cover - the country behind a broken line - is taken at `OpenCountryCapturePerDay`, with
+supply counted at no less than `OpenCountrySupplyFloor`; a gap in a line the enemy still holds
+stays at the slower `UnopposedCapturePerDay`. Both are in `common/defines/07_movement.json`.
+
+`SimBench --fronts 180` plays half a year and prints every front: its posts, the ones nobody
+holds, and the largest pile. `--define Key=Value` changes one define for one run.
+
 ### Technologies
 
 `common/technologies/*.json` is the research tree. Each key is a technology:

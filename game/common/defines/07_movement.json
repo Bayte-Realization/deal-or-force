@@ -18,6 +18,8 @@
 //     x river crossing             00_combat.json, RiverMovementMultiplier
 //     x terrain                    common/terrain
 //     x rail redeployment          this file, when being railed
+//     x roads                      this file: 1 + RoadSpeedPerInfrastructure per level of
+//                                  infrastructure in the region entered, up to RoadSpeedCap
 //
 // Progress accumulates until it reaches 1, and then the formation is in the next province.
 // So 0.22 a day is four and a half days to cross one - and a province here is a district,
@@ -54,5 +56,20 @@
   // travel, and entrenchment is lost outright - a formation that has been railed somewhere
   // arrives quickly and in no condition to attack on the day it gets there.
   "RailRedeploymentSpeed": 3.2,
-  "RailRedeploymentOrganisationPerDay": 0.16
+  "RailRedeploymentOrganisationPerDay": 0.16,
+
+  // Roads. Infrastructure was counted for supply, trade and production and not for the one
+  // thing everybody means by roads: a division crossing the Ruhr and one crossing the Gobi
+  // marched at the same pace. A region seeds with one to four levels, so a march there runs
+  // ten to forty per cent faster; building more is how a player makes an army quicker at home.
+  "RoadSpeedPerInfrastructure": 0.1,
+  "RoadSpeedCap": 0.6,
+
+  // Open country. Ground nobody is within FrontCoverageRadius of - the country behind a
+  // broken line, a province the enemy never garrisoned - is taken at this pace instead of
+  // UnopposedCapturePerDay, with supply counted at no less than OpenCountrySupplyFloor. A
+  // gap in a line the enemy is still holding stays slow; what lies behind it no longer takes
+  // three weeks a district.
+  "OpenCountryCapturePerDay": 0.22,
+  "OpenCountrySupplyFloor": 0.7
 }

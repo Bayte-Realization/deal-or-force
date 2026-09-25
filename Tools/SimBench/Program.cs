@@ -131,6 +131,17 @@ public static class Program
         // `--sea <png>` draws the sea lanes - water, basins, straits, ports and a handful of
         // voyages - and prints how long each voyage is and how long it took to plot. "The
         // fleet goes round Africa" is a claim about a picture, and this is the picture.
+        // `--fronts N` plays N days and then reads every front in the world: how many posts
+        // each country at war has on its own sector, how many of them nobody holds or is on
+        // the way to, and the biggest pile. "The front has holes" and "they crowd" as numbers.
+        // `--orders` runs the one check that measures whether divisions get where they are sent.
+        if (Array.IndexOf(args, "--orders") >= 0)
+            return Check("an army sent somewhere gets there more often than it is sent elsewhere", OrdersHoldLongEnoughToBeObeyed());
+
+        var frontsAt = Array.IndexOf(args, "--fronts");
+        if (frontsAt >= 0) return FrontsReport(campaign,
+            frontsAt + 1 < args.Length && int.TryParse(args[frontsAt + 1], out var frontDays) ? frontDays : 180);
+
         var seaAt = Array.IndexOf(args, "--sea");
         if (seaAt >= 0) return SeaReport(campaign, seaAt + 1 < args.Length ? args[seaAt + 1] : "sea_lanes.png");
 
@@ -469,6 +480,121 @@ public static class Program
         return 0;
     }
 
+    private static int FrontsReport(Campaign campaign, int days)
+    {
+        campaign.IsPaused = false;
+        var samples = new List<(int Day, int Posts, int Holes, int Piled, int Held)>();
+        var bare = new List<(int Day, int Pairs, int Bare)>();
+        var idle = 0;
+        for (var day = 1; day <= days; day++)
+        {
+            campaign.TickDay();
+            if (day % 30 != 0 && day != days) continue;
+            var (posts, holes, piled, held) = FrontCensus(campaign, day == days);
+            samples.Add((day, posts, holes, piled, held));
+            var (pairs, empty) = SecondFrontCensus(campaign, day == days);
+            bare.Add((day, pairs, empty));
+            idle += campaign.Armies.Count(army => army.OrderKind == ArmyOrder.Manual && army.AssignedWarId < 0 &&
+                !army.DirectOrder && !army.InBattle && army.EmbarkedFleetId < 0 && army.TemplateId != MilitiaCore.TemplateId &&
+                campaign.NationById(army.NationId) is { IsHuman: false } &&
+                campaign.Wars.Any(war => !war.Ended && war.Involves(army.NationId)));
+        }
+        foreach (var (day, posts, holes, piled, held) in samples)
+            Console.WriteLine($"  day {day,4}: {posts,5:N0} front posts, {holes,4:N0} held by nobody ({holes / (float)Math.Max(1, posts):P0}), " +
+                              $"{piled,4:N0} holding three or more above their share; {held:N0} divisions holding them");
+        Console.WriteLine($"  countries in more than one war: {bare.Sum(sample => sample.Pairs):N0} country-war pair(s) sampled, " +
+                          $"{bare.Sum(sample => sample.Bare):N0} with a front of their own and nobody of theirs on it.");
+        Console.WriteLine($"  divisions of countries at war serving no war, summed over {bare.Count} samples: {idle:N0}.");
+        Console.WriteLine($"  the staff re-posted {FrontManager.Reposts:N0} division(s) in {days} day(s).");
+        return 0;
+    }
+
+    /// <summary>
+    /// Countries fighting more than one war, and how many of those wars have a front of the
+    /// country's own with none of its army assigned to it - the second front an army that
+    /// served only the first war in the list left to whoever walked in.
+    /// </summary>
+    private static (int Pairs, int Bare) SecondFrontCensus(Campaign campaign, bool print)
+    {
+        var controllers = campaign.ProvinceController;
+        var pairs = 0;
+        var bare = 0;
+        foreach (var nation in campaign.Nations)
+        {
+            var wars = campaign.Wars.Where(war => !war.Ended && war.Involves(nation.Id)).ToList();
+            if (wars.Count < 2) continue;
+            var army = campaign.Armies.Where(unit => unit.NationId == nation.Id && unit.TemplateId != MilitiaCore.TemplateId).ToList();
+            if (army.Count < 6) continue;
+            var line = new List<string>();
+            foreach (var war in wars)
+            {
+                var posts = war.FriendlyFront(nation.Id).Count(province => controllers[province] == (ushort)nation.MapIndex);
+                if (posts == 0) continue;
+                var holders = army.Count(unit => unit.AssignedWarId == war.Id);
+                pairs++;
+                if (holders == 0) bare++;
+                line.Add($"{war.Name}: {posts} posts, {holders} divisions");
+            }
+            if (print && line.Count > 0)
+            {
+                var elsewhere = army.Count(unit => wars.All(war => war.Id != unit.AssignedWarId));
+                var kinds = string.Join(" ", army.GroupBy(unit => unit.OrderKind).Select(group => $"{group.Key}x{group.Count()}"));
+                Console.WriteLine($"  {nation.Tag} ({army.Count} divisions, {elsewhere} serving none of its {wars.Count} wars; {kinds}) - " +
+                                  string.Join("; ", line));
+            }
+        }
+        return (pairs, bare);
+    }
+
+    /// <summary>Every country at war with a field army, on its own sector of its side's front.</summary>
+    private static (int Posts, int Holes, int Piled, int Held) FrontCensus(Campaign campaign, bool print)
+    {
+        var controllers = campaign.ProvinceController;
+        var totalPosts = 0;
+        var totalHoles = 0;
+        var totalPiled = 0;
+        var totalHeld = 0;
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended) continue;
+            foreach (var attacking in new[] { true, false })
+            foreach (var nationId in war.Side(attacking))
+            {
+                var nation = campaign.NationById(nationId);
+                if (nation is null) continue;
+                var posts = new HashSet<int>();
+                foreach (var province in war.FriendlyFront(nationId))
+                    if (controllers[province] == (ushort)nation.MapIndex) posts.Add(province);
+                var holders = campaign.Armies.Where(army => army.NationId == nationId && army.AssignedWarId == war.Id &&
+                    army.TemplateId != MilitiaCore.TemplateId && army.EmbarkedFleetId < 0 && army.ProvinceId > 0).ToList();
+                if (posts.Count == 0 || holders.Count < 6) continue;
+                var byPost = new Dictionary<int, int>();
+                foreach (var army in holders)
+                {
+                    var post = posts.Contains(army.OrderProvinceId) ? army.OrderProvinceId
+                        : posts.Contains(army.ProvinceId) ? army.ProvinceId : -1;
+                    if (post > 0) byPost[post] = byPost.GetValueOrDefault(post) + 1;
+                }
+                var holes = posts.Count(post => !byPost.ContainsKey(post));
+                var share = (int)Math.Ceiling(holders.Count / (double)posts.Count);
+                var piled = byPost.Count(pair => pair.Value >= share + 3);
+                totalPosts += posts.Count;
+                totalHoles += Math.Min(holes, Math.Max(0, posts.Count - holders.Count) > 0 ? holes - Math.Max(0, posts.Count - holders.Count) : holes);
+                totalPiled += piled;
+                totalHeld += holders.Count;
+                if (print)
+                {
+                    var largest = byPost.Count == 0 ? -1 : byPost.OrderByDescending(pair => pair.Value).First().Key;
+                    var kinds = string.Join(" ", holders.Where(army => army.ProvinceId == largest || army.OrderProvinceId == largest)
+                        .GroupBy(army => army.OrderKind).Select(group => $"{group.Key}x{group.Count()}"));
+                    Console.WriteLine($"  {nation.Tag} in {war.Name}: {posts.Count} posts, {holders.Count} divisions, {holes} unheld, " +
+                                      $"largest post {(byPost.Count == 0 ? 0 : byPost.Values.Max())} ({kinds}), {piled} piled");
+                }
+            }
+        }
+        return (totalPosts, totalHoles, totalPiled, totalHeld);
+    }
+
     /// <summary>
     /// The voyages the sea lanes are judged by: each one only makes sense if a ship goes
     /// round something - a continent, a peninsula, a strait somebody holds.
@@ -716,11 +842,33 @@ public static class Program
             campaign.TickDay();
             if (day % 15 == 0 && ukraineIndex >= 0 && campaign.ProvinceController is not null)
                 trace.Add(HeldBy(campaign, ukraineIndex));
+            if (day % 60 == 59) WarsOf(campaign, "UKR", day + 1);
+        }
+        foreach (var tag in new[] { "RUS", "UKR" })
+        {
+            var nation = campaign.NationByTag(tag);
+            var idleNow = campaign.Armies.Count(army => army.NationId == nation.Id && army.OrderKind == ArmyOrder.Manual &&
+                                                        army.AssignedWarId < 0 && army.TemplateId != MilitiaCore.TemplateId);
+            Console.WriteLine($"  {tag}: {FrontManager.CalledUpBy.GetValueOrDefault(nation.Id):N0} division(s) called up from idleness, " +
+                              $"{idleNow} idle now, {campaign.Armies.Count(army => army.NationId == nation.Id):N0} divisions in all");
         }
         var failures = Check("the Russo-Ukrainian front is still a stalemate",
             FrontIsAStalemate(campaign, before, trace, days));
         failures += Check("a war costs formations and an army replaces them", WarCostsFormations(campaign, days));
         return failures;
+    }
+
+    /// <summary>Which wars a country is fighting and how its army is split between them.</summary>
+    private static void WarsOf(Campaign campaign, string tag, int day)
+    {
+        var nation = campaign.NationByTag(tag);
+        if (nation is null) return;
+        var wars = campaign.Wars.Where(war => !war.Ended && war.Involves(nation.Id)).ToList();
+        if (wars.Count < 2) return;
+        var army = campaign.Armies.Where(unit => unit.NationId == nation.Id && unit.TemplateId != MilitiaCore.TemplateId).ToList();
+        Console.WriteLine($"  day {day}: {tag} fights {wars.Count} wars with {army.Count} divisions - " + string.Join("; ", wars.Select(war =>
+            $"{war.Name} ({war.FriendlyFront(nation.Id).Count(province => campaign.ProvinceController[province] == (ushort)nation.MapIndex)} own posts, " +
+            $"{army.Count(unit => unit.AssignedWarId == war.Id)} divisions)")));
     }
 
     private static int Allocations(Campaign campaign, int days)
