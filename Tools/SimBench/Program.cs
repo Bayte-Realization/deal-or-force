@@ -201,6 +201,8 @@ public static class Program
             StatedLiteracyStands(campaign));
         failures += Check("a battle leaves ruins, and ruins are rebuilt",
             BattlesLeaveRuins());
+        failures += Check("what the enemy stands on makes nothing for its owner",
+            OccupationCostsOutput());
         failures += Check("the classes and the sectors count the same people",
             TwoAxesOverOnePopulation(campaign));
         failures += Check("a country can answer to another one, and stop",
@@ -8988,6 +8990,52 @@ public static class Program
                           $"rebuilt {weekly:P1} a week, {faster:P1} under a programme, {paid:P1} paid for ({cost:0.00} bn); " +
                           $"{region.WarDamage:P0} after two years, {peak - waiting:N0} of {peak:N0} displaced home again; " +
                           $"{arrivedAbroad:N0} to {string.Join(", ", neighbours.Select(other => other.Tag))}.");
+        return "";
+    }
+
+    /// <summary>
+    /// What the enemy stands on makes nothing for its owner. Half of a Ukrainian region handed
+    /// to Russian control makes the region deliver half its output to Ukraine, and handing it
+    /// back restores it. On its own world, so the war around it moves nothing.
+    /// </summary>
+    private static string OccupationCostsOutput()
+    {
+        var campaign = Campaign.CreateBootstrap(20240902);
+        if (!AttachMap(campaign)) return "no province map to occupy";
+        var ukraine = campaign.NationByTag("UKR");
+        var russia = campaign.NationByTag("RUS");
+        if (ukraine is null || russia is null) return "there is no Ukraine or no Russia";
+        var topology = campaign.ProvinceMap;
+        ScenarioState region = null;
+        List<int> provinces = null;
+        foreach (var state in campaign.StatesOf(ukraine).OrderBy(state => state.Id, StringComparer.Ordinal))
+        {
+            var own = Enumerable.Range(1, topology.ProvinceCount)
+                .Where(province => topology.ProvinceToState[province] == state.MapIndex &&
+                                   campaign.ProvinceController[province] == ukraine.MapIndex).ToList();
+            if (own.Count < 4) continue;
+            region = state;
+            provinces = own;
+            break;
+        }
+        if (region is null) return "no Ukrainian region of four provinces it holds";
+        var before = WarDamage.OutputFactor(campaign, ukraine, region);
+        if (MathF.Abs(before - 1f) > 0.001f) return $"{region.Id}, whole and unoccupied, makes {before:P0} of its output";
+
+        var taken = provinces.Take(provinces.Count / 2).ToList();
+        foreach (var province in taken) campaign.SetProvinceController(province, (ushort)russia.MapIndex);
+        var occupied = StabilityCore.OccupiedShare(campaign, region, ukraine);
+        var during = WarDamage.OutputFactor(campaign, ukraine, region);
+        var expected = 1f - occupied * campaign.Defines.OccupationOutputLoss;
+        if (occupied < 0.2f) return $"Russia holds {taken.Count} of {region.Id}'s {provinces.Count} provinces and it counts {occupied:P0} occupied";
+        if (MathF.Abs(during - expected) > 0.001f)
+            return $"{region.Id}, {occupied:P0} occupied, makes {during:P0} of its output for Ukraine, not {expected:P0}";
+
+        foreach (var province in taken) campaign.SetProvinceController(province, (ushort)ukraine.MapIndex);
+        var after = WarDamage.OutputFactor(campaign, ukraine, region);
+        if (MathF.Abs(after - 1f) > 0.001f) return $"{region.Id}, given back, still makes only {after:P0} of its output";
+        Console.WriteLine($"  occupation: Russia holding {taken.Count} of {region.Id}'s {provinces.Count} provinces " +
+                          $"({occupied:P0}) leaves Ukraine {during:P0} of its output, and giving them back restores it.");
         return "";
     }
 

@@ -1605,6 +1605,11 @@ three times as fast. That holds only while no battle is fought in it (nobody reb
 fire) and only as far as the country's market has the industrial materials it wants. The price is
 a quarter of the region's share of GDP (by its people) times the damage.
 
+**Occupation** costs a region too. The part of it the enemy holds makes nothing for its owner, so
+its output is multiplied by `1 - OccupationOutputLoss x the occupied share`. A factory behind the
+enemy's line does not deliver to its owner's market. Until then occupation had moved only
+stability and war support, and Ukraine went on producing in the provinces Russia held.
+
 The numbers are in `common/defines/14_war_damage.json`. The region card shows the damage, and its
 tooltip says what the damage costs and how fast it comes back.
 

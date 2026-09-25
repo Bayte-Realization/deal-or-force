@@ -70,6 +70,11 @@ public static class ControlTally
     /// </summary>
     public static RegionControl World(Campaign campaign, int ownerMapIndex, int region)
     {
+        // A world with no map yet - one being dealt, before its provinces are attached - has
+        // nothing to count. Refresh leaves the tally alone for it, and the tally it leaves is the
+        // last campaign's: the second campaign of a session would have been dealt the first
+        // one's occupations.
+        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null) return default;
         Refresh(campaign);
         if (region < 0 || region >= _regionOwner.Length) return default;
         var owner = (ushort)ownerMapIndex;

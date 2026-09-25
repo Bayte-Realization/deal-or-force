@@ -104,6 +104,12 @@ public sealed partial class Defines
     public float WarDamageAiRebuildAbove { get; set; } = 0.20f;
 
     public float WarDamageAiRebuildReserve { get; set; } = 4f;
+
+    /// <summary>
+    /// The share of what the occupied part of a region makes that its owner loses: 1 is all of
+    /// it. A factory behind the enemy's line does not deliver to the owner's market.
+    /// </summary>
+    public float OccupationOutputLoss { get; set; } = 1f;
 }
 
 /// <summary>
@@ -156,10 +162,23 @@ public static class WarDamage
 
     private static readonly ConditionalWeakTable<Campaign, Ledger> Ledgers = new();
 
-    /// <summary>The share of its usual output a region still makes: one for an untouched region.</summary>
+    /// <summary>The share of its usual output a region still makes for all its ruins: one for an untouched region.</summary>
     public static float OutputFactor(Campaign campaign, ScenarioState state) =>
         state is null || state.WarDamage <= 0f ? 1f :
             MathF.Max(0f, 1f - M.Clamp01(state.WarDamage) * campaign.Defines.WarDamageOutputLoss);
+
+    /// <summary>
+    /// The share of its usual output a region makes for its owner: less for its ruins, and less
+    /// for the part of it the enemy stands on - whatever is made behind the enemy's line does
+    /// not reach the owner's market (<c>OccupationOutputLoss</c>).
+    /// </summary>
+    public static float OutputFactor(Campaign campaign, Nation owner, ScenarioState state)
+    {
+        var ruins = OutputFactor(campaign, state);
+        if (state is null || owner is null) return ruins;
+        var occupied = StabilityCore.OccupiedShare(campaign, state, owner);
+        return occupied <= 0f ? ruins : ruins * MathF.Max(0f, 1f - occupied * M.Clamp01(campaign.Defines.OccupationOutputLoss));
+    }
 
     /// <summary>
     /// A day of battle in this province: the region it is in takes its share of the damage.

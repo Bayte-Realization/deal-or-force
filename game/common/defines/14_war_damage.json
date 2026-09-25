@@ -27,6 +27,9 @@
 // A country nobody plays orders it for a region at least WarDamageAiRebuildAbove in ruins when
 // the treasury holds WarDamageAiRebuildReserve times the cost.
 //
+// Occupation: the part of a region the enemy holds makes nothing for its owner. Its output is
+// multiplied by 1 - OccupationOutputLoss x the occupied share (1: all of it is lost).
+//
 // Events and decisions can set the damage with "state.war_damage", and triggers can ask about
 // the worst-hit region with "min_worst_war_damage" / "max_worst_war_damage".
 //
@@ -49,5 +52,7 @@
   "WarDamageSafeDays": 14,
   "WarDamageRebuildMinimum": 0.05,
   "WarDamageAiRebuildAbove": 0.20,
-  "WarDamageAiRebuildReserve": 4
+  "WarDamageAiRebuildReserve": 4,
+
+  "OccupationOutputLoss": 1
 }

@@ -1,0 +1,77 @@
+// Deal or Force - what the ruins of a war ask of a government (WarDamage.cs).
+//
+// Both happen only where the fighting has really wrecked something: the trigger asks about the
+// worst-hit region's war damage, which only battles raise. The same grammar as every other
+// event file - see 10_world_events.json.
+{
+  "city_in_ruins": {
+    "title": "A city in ruins",
+    "description": "The shelling has left a regional capital without water, power or a street with its windows whole. Its people are asking what the government is for.",
+    "weight": 1.0,
+    "trigger": {
+      "at_war": true,
+      "min_worst_war_damage": 0.45
+    },
+    "options": [
+      {
+        "title": "Evacuate everyone who can be moved",
+        "consequence": "Fewer to shelter, and fewer to work.",
+        "effects": {
+          "stability": 0.004,
+          "gdp_percent": -0.002
+        }
+      },
+      {
+        "title": "Make it a symbol",
+        "consequence": "A hero city holds, and the whole country is asked to hold with it.",
+        "effects": {
+          "war_support": 0.02,
+          "stability": -0.004,
+          "add_modifier": {
+            "rally_round_the_flag": 120
+          }
+        }
+      },
+      {
+        "title": "Appeal to the world for help",
+        "consequence": "Help comes, and so do the people who count it.",
+        "effects": {
+          "treasury_percent": 0.02,
+          "war_support": -0.006,
+          "state.war_damage": -0.02
+        }
+      }
+    ]
+  },
+
+  "refugees_come_home": {
+    "title": "The trains run home again",
+    "description": "With the guns quiet, the displaced are coming back to what is left of their homes. They want roofs, schools and their jobs, and they want them before winter.",
+    "weight": 1.0,
+    "trigger": {
+      "at_war": false,
+      "min_worst_war_damage": 0.05
+    },
+    "options": [
+      {
+        "title": "Housing first, whatever it costs",
+        "consequence": "The state builds, and the state pays.",
+        "effects": {
+          "treasury_percent": -0.03,
+          "stability": 0.006,
+          "add_modifier": {
+            "reconstruction_programme": 365
+          }
+        }
+      },
+      {
+        "title": "Leave it to the market",
+        "consequence": "The market rebuilds what pays, and the rest waits.",
+        "effects": {
+          "state.standard_of_living": -0.004,
+          "state.radicalism": 0.004
+        }
+      }
+    ]
+  }
+}

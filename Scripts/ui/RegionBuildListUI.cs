@@ -29,10 +29,20 @@ public partial class DealOrForceGame
     /// </summary>
     private void ShowWarDamage(ScenarioState state)
     {
-        if (state is null || (state.WarDamage < 0.005f && state.Displaced.Count == 0) ||
-            !IsInstanceValid(_regionCardRegionRows)) return;
+        if (state is null || !IsInstanceValid(_regionCardRegionRows)) return;
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
         if (owner is not null && !CanInspectNation(owner.Id) && !PlayerHoldsMostOf(state)) return;
+
+        // What the enemy stands on makes nothing for the owner - whoever the owner is.
+        var occupied = owner is null ? 0f : StabilityCore.OccupiedShare(_campaign, state, owner);
+        if (occupied > 0.001f)
+            CardRow(_regionCardRegionRows, "Under occupation", Fmt.Percent(occupied),
+                Simulation.Loc.Format("{0} of the region is held by the enemy. What is made there does not reach {1}'s market.",
+                    Fmt.Percent(occupied), owner.DisplayName) + "\n" +
+                Simulation.Loc.Format("Output for its owner: -{0}", Fmt.Percent(1f - WarDamage.OutputFactor(_campaign, owner, state))),
+                occupied > 0.5f ? "state.negative" : "state.warning");
+
+        if (state.WarDamage < 0.005f && state.Displaced.Count == 0) return;
         var tip = string.Join("\n",
             Simulation.Loc.Format("{0} of the region lies in ruins.", Fmt.Percent(state.WarDamage)),
             Simulation.Loc.Format("Output: -{0}", Fmt.Percent(1f - WarDamage.OutputFactor(_campaign, state))),
