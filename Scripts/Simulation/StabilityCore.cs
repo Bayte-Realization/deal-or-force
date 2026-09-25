@@ -142,7 +142,7 @@ public static class StabilityCore
                     + (state.StandardOfLiving - weights.LivingTolerance) * weights.Living
                     - state.Radicalism * weights.Radicalism
                     - EconomySystem.ForeignShare(state, owner.Tag) * weights.Minority
-                    + (state.Literacy - 0.5f) * weights.Literacy
+                    + (state.Literacy + owner.LiteracyOffset - 0.5f) * weights.Literacy
                     - control.OccupiedShare * weights.Occupation;
         return M.Clamp(value, 0f, 1f);
     }

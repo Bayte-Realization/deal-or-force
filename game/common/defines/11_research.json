@@ -1,7 +1,8 @@
 // Deal or Force - research (ResearchSystem, TechnologyCore.cs). The technologies themselves are in
 // common/technologies.
 //
-// A week of research: ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) * literacy,
+// A week of research: ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) * human capital
+// (Nation.HumanCapital: how developed the economy is, moved by literacy as literacy moves),
 // times (education spending / ResearchEducationBaseline) ^ ResearchEducationExponent (held between
 // a tenth and four times the baseline), times (1 + research_speed from technologies). The United
 // States makes about eight points a week and Mongolia about half of one.

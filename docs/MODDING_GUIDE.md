@@ -1297,7 +1297,7 @@ already works out, summed over what a country has: `output` (what the economy ma
 `supply`. A mod adds a technology by adding a key and changes one by naming it again - the layers
 merge a key at a time, as everywhere.
 
-A country researches `ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) * literacy`
+A country researches `ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) * human capital`
 points a week, bent by its education spending and multiplied by `1 + research_speed`; a technology
 costs its `cost` less `ResearchDiffusion` times the share of the world's GDP that already has it.
 The numbers are in `common/defines/11_research.json`. A country nobody plays chooses the cheapest
@@ -1559,6 +1559,29 @@ of a standard size. At runtime each division holds `personnel`, `max_personnel`,
 is not a saved entity: it groups a country's divisions in one tactical province afresh each time.
 `ArmyGroup` is a separate headquarters level for a name, a commander and the assignment of a
 shared plan.
+
+### Literacy and human capital
+
+`history/countries/2024/10_statistics.json` gives a country its `literacy`, the share of its people
+who can read, and that is the literacy the game starts with and shows: 99 % for Russia, 37 % for
+Niger. The `standard_of_living` and `stability` written in `history/countries` stand as well. A
+country that states none of them has them worked out from its GDP.
+
+What productivity, research and a region's stability read is the country's **human capital**
+(`Nation.HumanCapital`). On the first day it is the literacy the economy's development implies,
+`0.42 + 0.10 x log10(GDP in billions)` held between 0.32 and 0.98. From then on it moves by exactly
+as much as literacy moves: schools, a university, an education reform or an event that adds
+literacy still pay, and a country that is literate and poor does not produce like a rich one. The
+gap between the two is `LiteracyOffset`, saved with the country.
+
+The reason is the balance. A literacy rate is near its ceiling in most of the world, and how fast
+countries research, how productive their plants are and how settled their regions are was tuned
+against the development figure when it was the only literacy the game had. Over 24 seeds of the
+Russo-Ukrainian war, reading the literacy rate straight cost Ukraine 18 of its 161 provinces; read
+as human capital, nothing (75.4 held on average before, 74.8 after).
+
+Literacy itself is what triggers read (`min_literacy`, the `poorly_schooled` trigger), and so do the
+AI's choice of a university and the governments that ask for a literate country.
 
 ### The console and mod diagnostics
 

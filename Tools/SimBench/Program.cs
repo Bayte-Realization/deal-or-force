@@ -197,6 +197,8 @@ public static class Program
             ASnapshotCarriesTheWholeWorld());
         failures += Check("a country that states a figure about itself gets that figure",
             TheStatedStatisticsCameTrue(campaign));
+        failures += Check("the literacy history writes is the literacy a country starts with",
+            StatedLiteracyStands(campaign));
         failures += Check("the classes and the sectors count the same people",
             TwoAxesOverOnePopulation(campaign));
         failures += Check("a country can answer to another one, and stop",
@@ -1929,7 +1931,9 @@ public static class Program
             var found = SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude, course, out var shut);
             campaign.Wars.Remove(war);
             if (mustFail && found) return $"at war with {holder.Tag}, {italy.Tag} still sailed into {to}";
-            if (!mustFail && found && shut < open * 3f)
+            // Round Africa is some hundred degrees more than through Suez from anywhere in the
+            // Mediterranean or the Atlantic, but not three times as much from Brest as from Taranto.
+            if (!mustFail && found && shut < open + 60f)
                 return $"at war with {holder.Tag}, {italy.Tag} reached {to} in {shut:0} degrees against {open:0} at peace: the canal was not shut";
             Console.WriteLine($"  straits: {italy.Tag} to {to} is {open:0}° at peace and " +
                               (found ? $"{shut:0}° round Africa" : "shut") + $" at war with {holder.Tag}.");
@@ -8833,6 +8837,34 @@ public static class Program
                           $"them farms, and get it back within {worst:P1} at worst " +
                           $"({worstTag} {worstPair.Stated:P0} -> {worstPair.Actual:P0}).");
         Console.WriteLine($"    on the land: {string.Join(", ", sample)}.");
+        return "";
+    }
+
+    /// <summary>
+    /// The literacy history/countries writes is the literacy a country starts with, and what
+    /// productivity reads is the human capital beside it. The deal used to work literacy out of
+    /// GDP after history had set it, so Russia's 0.99 started the game as 0.74 - and the
+    /// balance of the world was set against the 0.74, which is why the economy keeps it as
+    /// the country's human capital rather than reading the literacy rate.
+    /// </summary>
+    private static string StatedLiteracyStands(Campaign campaign)
+    {
+        var stated = campaign.Nations.Count(nation => nation.StatedFigures.Contains("literacy"));
+        if (stated < 150) return $"only {stated} countries state their literacy";
+        var russia = campaign.NationByTag("RUS");
+        if (russia is null) return "there is no Russia to read";
+        if (russia.Literacy < 0.95f) return $"Russia starts at {russia.Literacy:P0} literate, and history says 99 %";
+        if (russia.HumanCapital > 0.85f)
+            return $"Russia's human capital is {russia.HumanCapital:0.00}: the economy is reading the literacy rate";
+        var literate = campaign.Nations.Count(nation => nation.Literacy >= 0.95f);
+        foreach (var nation in campaign.Nations)
+        {
+            var expected = 0.72f + nation.HumanCapital * 0.50f;
+            if (MathF.Abs(nation.Productivity - expected) > 0.001f)
+                return $"{nation.Tag} starts at productivity {nation.Productivity:0.000}, and its human capital puts it at {expected:0.000}";
+        }
+        Console.WriteLine($"  literacy: {stated:N0} countries state theirs and {literate:N0} are at 95 % or more; " +
+                          $"Russia {russia.Literacy:P0} literate on human capital {russia.HumanCapital:0.00}.");
         return "";
     }
 

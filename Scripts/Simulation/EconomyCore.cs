@@ -454,11 +454,19 @@ public static class EconomySystem
         foreach (var nation in campaign.Nations)
         {
             nation.Inflation = restingInflation;
-            nation.Literacy = M.Clamp(0.42f + MathF.Log10(Math.Max(1f, nation.Gdp)) * 0.10f, 0.32f, 0.98f);
-            nation.StandardOfLiving = M.Clamp(0.34f + MathF.Log10(Math.Max(0.1f,
-                nation.Gdp * 1_000_000_000f / Math.Max(1, nation.Population))) * 0.07f, 0.28f, 0.90f);
-            nation.Productivity = 0.72f + nation.Literacy * 0.50f;
-            nation.Stability = 0.58f + nation.StandardOfLiving * 0.25f;
+            // What history/countries wrote stands, and the rest is worked out from the economy.
+            // The formula used to run over everything, so the literacy written for 197 countries
+            // never reached the game - Russia's 0.99 was 0.74. What it worked out is kept as the
+            // country's human capital, which productivity, research and stability read.
+            var developed = M.Clamp(0.42f + MathF.Log10(Math.Max(1f, nation.Gdp)) * 0.10f, 0.32f, 0.98f);
+            if (!nation.StatedFigures.Contains("literacy")) nation.Literacy = developed;
+            nation.LiteracyOffset = developed - nation.Literacy;
+            if (!nation.StatedFigures.Contains("standard_of_living"))
+                nation.StandardOfLiving = M.Clamp(0.34f + MathF.Log10(Math.Max(0.1f,
+                    nation.Gdp * 1_000_000_000f / Math.Max(1, nation.Population))) * 0.07f, 0.28f, 0.90f);
+            nation.Productivity = 0.72f + nation.HumanCapital * 0.50f;
+            if (!nation.StatedFigures.Contains("stability"))
+                nation.Stability = 0.58f + nation.StandardOfLiving * 0.25f;
 
             var states = campaign.StatesOf(nation);
             if (states.Length == 0) continue;
@@ -886,7 +894,7 @@ public static class EconomySystem
             var focusLiteracy = cabinet.Literacy + government.Literacy + ideology.Literacy;
             nation.Literacy = M.Clamp(nation.Literacy + budget.Literacy + focusLiteracy,
                 0.05f, 0.999f);
-            var productivityTarget = 0.72f + nation.Literacy * 0.50f + cabinet.ProductivityTarget;
+            var productivityTarget = 0.72f + nation.HumanCapital * 0.50f + cabinet.ProductivityTarget;
             nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
             // How a country is governed does not settle it this week; it builds up, slowly
             // and only so far. Government, ideology, cabinet and budget keep the accumulating

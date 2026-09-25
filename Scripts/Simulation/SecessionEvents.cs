@@ -629,6 +629,7 @@ public static class SecessionEvents
             OutputScale = parent.OutputScale,
             StandardOfLiving = parent.StandardOfLiving,
             Literacy = parent.Literacy,
+            LiteracyOffset = parent.LiteracyOffset,
             Productivity = parent.Productivity,
             Urbanisation = seatState?.Urbanization ?? parent.Urbanisation,
             AgricultureShare = parent.AgricultureShare,

@@ -231,7 +231,7 @@ public static class ResearchSystem
     public static float WeeklyPoints(Campaign campaign, Nation nation)
     {
         var defines = campaign.Defines;
-        var economy = defines.ResearchGdpWeight * MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * M.Clamp01(nation.Literacy);
+        var economy = defines.ResearchGdpWeight * MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * M.Clamp01(nation.HumanCapital);
         var schools = MathF.Pow(M.Clamp(nation.EducationSpending / MathF.Max(0.0001f, defines.ResearchEducationBaseline),
             0.1f, 4f), defines.ResearchEducationExponent);
         return (defines.ResearchBasePerWeek + economy * schools) * NationalModifiers.Factor(nation, "research_speed");

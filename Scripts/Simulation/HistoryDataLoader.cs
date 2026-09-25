@@ -154,11 +154,11 @@ public static class HistoryDataLoader
             SetLong(value, "population", number => nation.Population = Math.Max(0, number));
             SetFloat(value, "tax_rate", number => nation.TaxRate = M.Clamp(number, 0.05f, 0.55f));
             SetFloat(value, "military_spending", number => nation.MilitarySpending = M.Clamp01(number));
-            SetFloat(value, "literacy", number => nation.Literacy = M.Clamp01(number));
+            SetFloat(value, "literacy", number => { nation.Literacy = M.Clamp01(number); nation.StatedFigures.Add("literacy"); });
             SetFloat(value, "urbanisation", number => nation.Urbanisation = M.Clamp01(number));
             SetFloat(value, "agriculture", number => nation.AgricultureShare = M.Clamp01(number));
-            SetFloat(value, "standard_of_living", number => nation.StandardOfLiving = M.Clamp01(number));
-            SetFloat(value, "stability", number => nation.Stability = M.Clamp01(number));
+            SetFloat(value, "standard_of_living", number => { nation.StandardOfLiving = M.Clamp01(number); nation.StatedFigures.Add("standard_of_living"); });
+            SetFloat(value, "stability", number => { nation.Stability = M.Clamp01(number); nation.StatedFigures.Add("stability"); });
             SetFloat(value, "war_support", number => nation.WarSupport = M.Clamp01(number));
             SetFloat(value, "manpower", number => nation.ManpowerReserve = Math.Max(0f, number));
             if (value.TryGetProperty("trade_policy", out var policy) && policy.ValueKind == JsonValueKind.String &&
@@ -509,4 +509,31 @@ public sealed partial class ScenarioState
     /// the deal do not rebuild a region from the list it was just built from. Not saved.
     /// </summary>
     internal string DealtCultures;
+}
+
+public sealed partial class Nation
+{
+    /// <summary>
+    /// Which of the country's own figures history/countries wrote, so the start-of-game deal
+    /// works out only the ones it did not. Not saved: it matters on the day the world is dealt.
+    /// </summary>
+    internal readonly HashSet<string> StatedFigures = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// How far the country's human capital sits from its literacy: the literacy its economy's
+    /// development implies on the first day, less the literacy history wrote. Negative for
+    /// nearly everybody - the world is more literate than it is developed. Zero for a save
+    /// from before literacy was read from history, whose literacy was that figure already.
+    /// </summary>
+    public float LiteracyOffset;
+
+    /// <summary>
+    /// What productivity, research and a region's stability answer to: how developed the
+    /// economy is, moved by literacy as literacy moves. Literacy itself is the share of people
+    /// who can read, and 99 % of Russians and Ukrainians can - which is not what makes one
+    /// country's factories and laboratories out-produce another's. The balance of the world
+    /// was set against this figure when it was the only literacy the game had.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public float HumanCapital => Literacy + LiteracyOffset;
 }
