@@ -516,6 +516,10 @@ public partial class MainMenuScene : Control
                 Engine.MaxFps = Math.Max(0, (int)MathF.Round(SettingsCatalog.Number("max_fps")));
                 break;
 
+            case "renderer":
+                GraphicsRenderer.Choose(this, SettingsCatalog.Chosen("renderer"));
+                break;
+
             case "interface_scale":
                 if (GetWindow() is { } window)
                     window.ContentScaleFactor =

@@ -166,6 +166,12 @@ public partial class DealOrForceGame
                     : DisplayServer.VSyncMode.Disabled);
                 break;
 
+            // Only when the player changes it: the start-up sweep would put "automatic" back
+            // over a renderer the start-up guard stepped down to on its own.
+            case "renderer":
+                if (!_applyingEverySetting) GraphicsRenderer.Choose(this, SettingsCatalog.Chosen("renderer"));
+                break;
+
             case "max_fps":
                 Engine.MaxFps = Math.Max(0, Whole("max_fps"));
                 break;

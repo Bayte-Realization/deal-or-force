@@ -14,9 +14,11 @@ config/name="Deal or Force"
 run/main_scene="res://Scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon_small.png"
+config/project_settings_override="user://graphics_override.cfg"
 
 [autoload]
 
+BootGuard="*res://Scripts/Boot/boot_guard.gd"
 _fennara_game_capture="*res://addons/fennara/runtime/game_capture_helper.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 

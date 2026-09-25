@@ -97,6 +97,24 @@ installed, see [docs/BUILDING.md](docs/BUILDING.md):
 powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 ```
 
+## If it will not start
+
+The game watches its own start (`Scripts/Boot/boot_guard.gd`, which runs even when the C#
+half does not). If a start never reaches the menu, or the menu comes up black, it moves to a
+simpler renderer by itself and starts again: Direct3D 12, then Vulkan, then OpenGL, then OpenGL
+through Direct3D 11 (ANGLE), which draws on nearly any graphics card of the last fifteen years.
+If the game's code does not load - a build copied without its `data_DealOrForce_windows_x86_64`
+folder, or one an antivirus has quarantined part of - it says so on screen rather than staying
+black.
+
+- The choice is kept in `%APPDATA%\Godot\app_userdata\Deal or Force\graphics_override.cfg`.
+  Delete it to go back to automatic, or pick a renderer in *Settings → Display → Graphics
+  renderer*.
+- To start on one directly: `"Deal or Force.exe" --rendering-method gl_compatibility`.
+- The log is `%APPDATA%\Godot\app_userdata\Deal or Force\logs\godot.log`.
+- `"Deal or Force.exe" -- --boot-guard-pretend-black` walks the whole chain on a machine whose
+  drivers all work, for testing.
+
 ## Documentation
 
 Everything below exists in English and in Russian; a `_RU` suffix is the Russian one, and

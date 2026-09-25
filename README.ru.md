@@ -96,6 +96,24 @@ Godot, см. [docs/BUILDING_RU.md](docs/BUILDING_RU.md):
 powershell -ExecutionPolicy Bypass -File Tools\build.ps1
 ```
 
+## Если игра не запускается
+
+Игра следит за собственным запуском (`Scripts/Boot/boot_guard.gd`, он работает, даже когда
+C#-часть не загрузилась). Если запуск так и не дошёл до меню или меню осталось чёрным, игра сама
+переходит на более простой способ отрисовки и перезапускается: Direct3D 12, затем Vulkan, затем
+OpenGL, затем OpenGL через Direct3D 11 (ANGLE), который рисует почти на любой видеокарте
+последних пятнадцати лет. Если не загрузился код игры (сборку скопировали без папки
+`data_DealOrForce_windows_x86_64` или антивирус поместил её часть в карантин), игра пишет об
+этом на экране, а не остаётся чёрной.
+
+- Выбор хранится в `%APPDATA%\Godot\app_userdata\Deal or Force\graphics_override.cfg`.
+  Удалите его, чтобы вернуться к автоматическому выбору, или выберите способ в *Настройки →
+  Экран → Графический движок*.
+- Запустить сразу на нужном: `"Deal or Force.exe" --rendering-method gl_compatibility`.
+- Лог лежит в `%APPDATA%\Godot\app_userdata\Deal or Force\logs\godot.log`.
+- `"Deal or Force.exe" -- --boot-guard-pretend-black` проходит всю цепочку на компьютере, где
+  все драйверы работают, — для проверки.
+
 ## Документация
 
 | | |
