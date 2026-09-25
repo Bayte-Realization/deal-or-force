@@ -57,8 +57,15 @@ public static class NavalInvasion
 
         var topology = campaign.ProvinceMap;
         if (topology is null) { reason = Loc.Get("No map."); return false; }
-        var centre = topology.CenterOf(army.ProvinceId);
-        if (NavalOperations.Distance(fleet.Latitude, fleet.Longitude, centre.Latitude, centre.Longitude) >
+        // Up a gangway, which means from a quay: the formation has to be standing on a coast,
+        // and the fleet lying off that coast rather than off the nearest province centre to
+        // it - a division in Birmingham is not in a port because Birmingham is near Bristol.
+        if (!SeaLanes.TryHarbourPoint(topology, army.ProvinceId, out var quayLatitude, out var quayLongitude))
+        {
+            reason = Loc.Format("{0} is not on a coast. March it to a port first.", army.Name);
+            return false;
+        }
+        if (NavalOperations.Distance(fleet.Latitude, fleet.Longitude, quayLatitude, quayLongitude) >
             campaign.Defines.FleetEmbarkRangeDegrees)
         {
             reason = Loc.Format("{0} is too far from the fleet to embark.", army.Name);
@@ -117,6 +124,51 @@ public static class NavalInvasion
     }
 
     /// <summary>
+    /// The friendly coast nearest a fleet that it could put its passengers ashore on: one of
+    /// its own country's provinces, or an ally's, lying within gangway reach. -1 when there
+    /// is none.
+    /// </summary>
+    public static int NearestFriendlyShore(Campaign campaign, Fleet fleet)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return fleet.HomeProvinceId;
+        var range = campaign.Defines.FleetEmbarkRangeDegrees;
+        var best = -1;
+        var bestDistance = range;
+        foreach (var province in SeaLanes.CoastalProvinces(topology))
+        {
+            if (!SeaLanes.TryHarbourPoint(topology, province, out var latitude, out var longitude)) continue;
+            if (MathF.Abs(latitude - fleet.Latitude) > range) continue;
+            var distance = NavalOperations.Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (distance > bestDistance) continue;
+            if (!NavalOperations.FriendlyPort(campaign, fleet.NationId, province)) continue;
+            bestDistance = distance;
+            best = province;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Land what the fleet carries on the nearest friendly coast - where the fleet actually is,
+    /// not in whichever port it calls home three thousand miles away.
+    /// </summary>
+    public static int PutAshore(Campaign campaign, Fleet fleet, out string reason)
+    {
+        reason = "";
+        if (fleet is null || fleet.Carried.Count == 0) { reason = Loc.Get("Nobody is aboard."); return 0; }
+        if (fleet.HasOrder) { reason = Loc.Get("The fleet is under way. Let it arrive first."); return 0; }
+        var shore = fleet.InPort ? fleet.BerthProvinceId : NearestFriendlyShore(campaign, fleet);
+        if (shore <= 0)
+        {
+            reason = Loc.Get("No friendly coast within reach. Sail to one of your ports, or an ally's, first.");
+            return 0;
+        }
+        if (fleet.Mission == FleetMission.Invasion) fleet.Mission = FleetMission.Patrol;
+        fleet.TargetProvinceId = -1;
+        return Disembark(campaign, fleet, shore);
+    }
+
+    /// <summary>
     /// The landing itself. Everyone aboard comes ashore in the target province, out of
     /// order and out of breath, and then one of two ordinary things happens: an undefended
     /// coast changes hands, or a battle starts.
@@ -131,15 +183,23 @@ public static class NavalInvasion
 
         var invader = campaign.NationById(fleet.NationId);
         if (invader is null) return "the fleet has no country";
-        var holderIndex = controllers[provinceId];
-        var holder = campaign.Nations.Find(nation => nation.MapIndex == holderIndex);
+        var holder = NavalOperations.HolderOf(campaign, provinceId);
 
+        // Against the side it is fighting, which is not the same as against anybody in the
+        // same war: an ally is in the war too, and a landing on an ally's beach is an
+        // arrival rather than an assault.
         var war = holder is null || holder.Id == invader.Id
             ? null
-            : campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(invader.Id) &&
-                                              candidate.Involves(holder.Id));
-        if (holder is not null && holder.Id != invader.Id && war is null)
+            : CampaignDiplomacy.WarBetween(campaign, invader.Id, holder.Id);
+        if (holder is not null && holder.Id != invader.Id && war is null &&
+            !NavalOperations.Friendly(campaign, invader.Id, holder.Id))
+        {
+            // A neutral shore. The troops stay aboard and the fleet stops trying, rather than
+            // asking again every hour for the rest of the campaign.
+            fleet.Mission = FleetMission.Patrol;
+            fleet.TargetProvinceId = -1;
             return $"not at war with {holder.Name}";
+        }
 
         var landed = new List<Army>();
         foreach (var id in fleet.Carried)
@@ -199,19 +259,30 @@ public sealed class LaunchInvasionCommand : ICampaignCommand
     public int FleetId { get; init; }
     public int ProvinceId { get; init; }
 
+    /// <summary>Why the landing was not ordered, or empty when it was.</summary>
+    public string Refusal { get; private set; } = "";
+
     public void Apply(Campaign campaign)
     {
         var fleet = campaign.Fleets.Find(candidate => candidate.Id == FleetId);
         var topology = campaign.ProvinceMap;
-        if (fleet is null || fleet.NationId != IssuerId || topology is null) return;
-        if (ProvinceId <= 0 || ProvinceId > topology.ProvinceCount) return;
-        if (fleet.Carried.Count == 0) return;
+        if (fleet is null || fleet.NationId != IssuerId || topology is null) { Refusal = Loc.Get("No fleet to send."); return; }
+        if (ProvinceId <= 0 || ProvinceId > topology.ProvinceCount) { Refusal = Loc.Get("Nowhere to land."); return; }
+        if (fleet.Carried.Count == 0) { Refusal = Loc.Get("Nobody is aboard."); return; }
 
-        var centre = topology.CenterOf(ProvinceId);
+        // A landing is made from the sea, so the beach has to have some: the fleet sails for
+        // the water off the province, not for the middle of it.
+        if (!SeaLanes.TryHarbourPoint(topology, ProvinceId, out var latitude, out var longitude))
+        {
+            Refusal = Loc.Get("That province has no coast to land on.");
+            return;
+        }
+        if (!NavalOperations.SendTo(campaign, fleet, latitude, longitude))
+        {
+            Refusal = Loc.Get("The fleet cannot reach that coast by sea.");
+            return;
+        }
         fleet.Mission = FleetMission.Invasion;
         fleet.TargetProvinceId = ProvinceId;
-        fleet.HasOrder = true;
-        fleet.OrderLatitude = centre.Latitude;
-        fleet.OrderLongitude = centre.Longitude;
     }
 }

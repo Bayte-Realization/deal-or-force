@@ -1121,6 +1121,61 @@ visible to the player in the National Ledger on the "In effect" line.
 An event refers to them with a `modifiers` array: the short form `["war_economy"]` or the full
 `[{ "id": "war_economy", "days": 180 }]`.
 
+### The navy and the sea lanes
+
+**Fleets** are data: `history/units/2024/*.json` lists each country's fleets under
+`"fleets": { "TAG": [ { "name", "hulls", "latitude", "longitude" } ] }`. Listing a country
+replaces its fleets whole; every other country is left alone. The coordinates are where the
+fleet lies at home; its home port is worked out from them - the nearest coastal province the
+owner holds on the same sea - so a mod never writes a province id.
+
+**The sea** is worked out from the province raster: every cell that belongs to no province is
+water. The world is cut into one-degree squares and the water in each square into the pieces
+of it that touch; those pieces are the nodes a course is plotted through, so an island or an
+isthmus narrower than a square still stands in the way. A course is the shortest way through
+them, pulled straight wherever a line stays on water.
+
+**Straits and canals** the raster is too narrow to draw are in `common/sea_lanes/*.json`:
+
+```json
+{
+  "suez_canal": {
+    "name": "Suez Canal",
+    "closes_to_enemies": true,
+    "points": [[31.35, 32.32], [30.60, 32.29], [29.93, 32.55], [28.30, 33.30]]
+  }
+}
+```
+
+The points are a line of `[latitude, longitude]` cut into the water `SeaLanePassageWidth`
+raster cells either side; begin and end it in open water. `closes_to_enemies` shuts it to
+every country at war with whoever holds the ground at its middle (or at `"holder"`), which is
+how the Bosporus, the Kerch Strait and the canals behave. `"open": false` shuts a passage
+outright - a mod closes Suez by naming it again with that one field, or cuts a new canal by
+adding a key.
+
+**Ports and harbours.** A province has a harbour when its coast touches the open sea; that is
+where a fleet lies in its port, blockades it or lands on it. A fleet repairs and refills only
+lying in a friendly port - its own, an ally's or a co-belligerent's - and when its home port is
+taken it moves to the nearest one its country still holds on the same sea.
+
+**What a navy does.** A blockade hurts the country whose coast it sits on; a raider takes most
+near its victim's ports and little in another ocean (`FleetRaidRangeDegrees`,
+`FleetRaidFloor`); a country with no coast has no shipping to lose. A fleet that breaks sinks
+`FleetHullsSunkOnBreak` of the damage it carries. Actions take a share of a day's losses each
+step, so a fight lasts as many days at any clock.
+
+**Shipyards.** A country has `SlipwaysPerEstablishedHull` slipways for every hull of the navy
+it began with and `SlipwaysPerShipyard` for every shipyard (a yard on a lake or a river adds
+its share). A hull costs `HullCost` (billions, like every sum), paid over `HullBuildDays`; an
+empty treasury idles the yards. A country nobody plays builds toward what it began with scaled
+by its military budget (`NavalResponse`, `NavalTargetFloor`, `NavalTargetCeiling`); a player
+lays hulls down from the fleet panel. All of these are in `common/defines/12_navy_logistics.json`,
+with the AI's thresholds for sending a fleet home and out again.
+
+`SimBench --sea sea.png` draws the water, the straits, every harbour and a dozen voyages, and
+prints how long each is: the quickest way to see what a mod's map or passages did to the sea.
+
 ### Technologies
 
 `common/technologies/*.json` is the research tree. Each key is a technology:

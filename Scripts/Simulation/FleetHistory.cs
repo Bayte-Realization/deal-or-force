@@ -112,6 +112,7 @@ public static class FleetHistory
             NationId = nation.Id,
             Name = name,
             Hulls = Math.Max(0, hulls),
+            Establishment = Math.Max(0, hulls),
             Latitude = M.Clamp(latitude, -85f, 85f),
             Longitude = longitude,
             HomeLatitude = M.Clamp(latitude, -85f, 85f),
@@ -124,20 +125,30 @@ public static class FleetHistory
     /// Find each fleet the province it belongs to. A fleet with no home has nowhere to be
     /// repaired and nowhere to be driven back to, so it is worth getting right even though
     /// nothing in the data says it.
+    ///
+    /// A home is a port: a province of the owner's with a harbour, on the same water the
+    /// fleet is lying on. The nearest province of any kind was the rule until the sea lanes
+    /// could say which provinces have a coast, and it gave Britain's fleet a home port in
+    /// Devon's interior and sent a beaten squadron to repair itself in a field.
     /// </summary>
     public static void AssignHomePorts(Campaign campaign)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
+        var coastal = SeaLanes.CoastalProvinces(topology);
         foreach (var fleet in campaign.Fleets)
         {
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
+            if (fleet.Establishment <= 0) fleet.Establishment = fleet.Hulls;
+            var basin = SeaLanes.BasinAt(topology, fleet.HomeLatitude, fleet.HomeLongitude);
+
             var best = -1;
             var bestDistance = float.MaxValue;
-            for (var province = 1; province <= topology.ProvinceCount; province++)
+            foreach (var province in coastal)
             {
                 if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+                if (basin >= 0 && SeaLanes.HarbourBasin(topology, province) != basin) continue;
                 var centre = topology.CenterOf(province);
                 var distance = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude,
                     centre.Latitude, centre.Longitude);
@@ -145,7 +156,40 @@ public static class FleetHistory
                 bestDistance = distance;
                 best = province;
             }
+
+            // A country with no coast of its own on that water - a mod that parks a navy on a
+            // lake, a map that has moved - keeps the old answer rather than none.
+            if (best < 0)
+            {
+                for (var province = 1; province <= topology.ProvinceCount; province++)
+                {
+                    if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+                    var centre = topology.CenterOf(province);
+                    var distance = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude,
+                        centre.Latitude, centre.Longitude);
+                    if (distance >= bestDistance) continue;
+                    bestDistance = distance;
+                    best = province;
+                }
+            }
             fleet.HomeProvinceId = best;
+
+            // Where it lies at home: the written anchorage when that is water, the harbour off
+            // the home province when it is not.
+            if (!SeaLanes.IsWaterAt(topology, fleet.HomeLatitude, fleet.HomeLongitude) &&
+                SeaLanes.TryHarbourPoint(topology, best, out var latitude, out var longitude) &&
+                NavalOperations.Distance(latitude, longitude, fleet.HomeLatitude, fleet.HomeLongitude) > 1.5f)
+            {
+                var wasHome = NavalOperations.Distance(fleet.Latitude, fleet.Longitude,
+                    fleet.HomeLatitude, fleet.HomeLongitude) < 0.01f;
+                fleet.HomeLatitude = latitude;
+                fleet.HomeLongitude = longitude;
+                if (wasHome && !fleet.HasOrder) { fleet.Latitude = latitude; fleet.Longitude = longitude; }
+            }
+            if (fleet.Mission == FleetMission.Anchored && !fleet.HasOrder && fleet.BerthProvinceId <= 0 &&
+                NavalOperations.Distance(fleet.Latitude, fleet.Longitude, fleet.HomeLatitude, fleet.HomeLongitude) <=
+                campaign.Defines.FleetBerthRangeDegrees + 1.5f)
+                fleet.BerthProvinceId = best;
         }
     }
 

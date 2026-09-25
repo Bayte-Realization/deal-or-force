@@ -44,6 +44,24 @@ public static class Program
         Console.WriteLine($"Campaign created in {setup.ElapsedMilliseconds} ms: " +
                           $"{campaign.Nations.Count} nations, {campaign.States.Count} states.");
 
+        // `--define Key=Value` sets one of the defines on this run's campaign, as many times
+        // as it is given. Tuning used to mean editing a shipped file while other runs were
+        // reading it; this changes the one run and nothing else.
+        for (var index = 0; index + 1 < args.Length; index++)
+        {
+            if (args[index] != "--define") continue;
+            var pair = args[index + 1].Split('=', 2);
+            var property = pair.Length == 2 ? typeof(Defines).GetProperty(pair[0]) : null;
+            if (property is null || !property.CanWrite)
+            {
+                Console.WriteLine($"  --define {args[index + 1]}: no such define");
+                return 2;
+            }
+            var value = Convert.ChangeType(pair[1], property.PropertyType, CultureInfo.InvariantCulture);
+            property.SetValue(campaign.Defines, value);
+            Console.WriteLine($"  define {pair[0]} = {value}");
+        }
+
         // `--regions` prints the region table and stops. Region localisation is keyed by
         // id, and an id is derived rather than authored - the ISO code where a region has
         // one, the owner's tag and a slug of the name where it has not, a map index
@@ -77,6 +95,9 @@ public static class Program
         // `--flags` checks only the flags every country opens under - seconds, not a bench run.
         if (Array.IndexOf(args, "--flags") >= 0)
             return Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
+        // `--skin` checks the shipped layout and colours against the compiled defaults, alone.
+        if (Array.IndexOf(args, "--skin") >= 0)
+            return Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
         if (Array.IndexOf(args, "--rows") >= 0)
             return Check("a save row carries every field", ASaveRowCarriesEveryField());
         // `--loc` checks every translation alone: seconds, and the list of what is wrong.
@@ -106,6 +127,12 @@ public static class Program
         // Russo-Ukrainian front is still a front, and whether an army replaces what it loses.
         // Half an hour of bench for a question about manpower was too long a loop.
         if (Array.IndexOf(args, "--front") >= 0) return Front(campaign, days);
+
+        // `--sea <png>` draws the sea lanes - water, basins, straits, ports and a handful of
+        // voyages - and prints how long each voyage is and how long it took to plot. "The
+        // fleet goes round Africa" is a claim about a picture, and this is the picture.
+        var seaAt = Array.IndexOf(args, "--sea");
+        if (seaAt >= 0) return SeaReport(campaign, seaAt + 1 < args.Length ? args[seaAt + 1] : "sea_lanes.png");
 
         var profileAt = Array.IndexOf(args, "--profile");
         if (profileAt >= 0) return Profile(campaign,
@@ -363,6 +390,12 @@ public static class Program
                     ByTheDay(sandbox, () => AConvoyCaughtAtSeaPaysForIt(sandbox)));
                 failures += Check("troops trained for a landing land better",
                     MarinesLandBetter(sandbox));
+                failures += Check("a fleet sails round a continent, not across it",
+                    AFleetSailsRoundTheLand(sandbox));
+                failures += Check("a port that falls sends its fleet to one that has not",
+                    ByTheDay(sandbox, () => AFallenPortMovesItsFleet(sandbox)));
+                failures += Check("a navy rebuilds what it loses, and the yards are paid for",
+                    ByTheDay(sandbox, () => ANavyRebuildsWhatItLoses(sandbox)));
                 failures += Check("a drawn line moves the formations put on it",
                     ADrawnLineCommandsTheFormationsOnIt(sandbox));
                 failures += Check("a mod can rewrite a country's army, navy and typeface",
@@ -434,6 +467,242 @@ public static class Program
         // fast the world runs and nothing else has to end in the same one.
         Console.WriteLine($"  world fingerprint after {campaign.ElapsedDays} day(s): {CampaignFingerprint.Of(campaign):X16}");
         return 0;
+    }
+
+    /// <summary>
+    /// The voyages the sea lanes are judged by: each one only makes sense if a ship goes
+    /// round something - a continent, a peninsula, a strait somebody holds.
+    /// </summary>
+    private static readonly (string Tag, string To, float Latitude, float Longitude)[] Voyages =
+    {
+        ("RUS", "Baltiysk", 54.65f, 19.90f),
+        ("USA", "San Diego", 32.70f, -117.25f),
+        ("TUR", "Sevastopol", 44.60f, 33.45f),
+        ("TUR", "Toulon", 43.05f, 5.95f),
+        ("IND", "Toulon", 43.05f, 5.95f),
+        ("GBR", "Saint Petersburg", 59.95f, 29.60f),
+        ("CHN", "Singapore", 1.20f, 103.85f),
+        ("JPN", "Persian Gulf", 26.60f, 51.00f),
+        ("AUS", "Cape Town", -34.00f, 18.30f),
+        ("BRA", "New York", 40.45f, -73.90f)
+    };
+
+    private static int SeaReport(Campaign campaign, string path)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null) { Console.WriteLine("no province map; no sea to draw"); return 1; }
+        SeaLanes.Invalidate();
+        var built = Stopwatch.StartNew();
+        SeaLanes.IsWater(map, 0);
+        built.Stop();
+        Console.WriteLine($"sea lanes: built in {built.ElapsedMilliseconds} ms, {SeaLanes.BasinCount:N0} bodies of water, " +
+                          $"{SeaLanes.CoastalProvinces(map).Count:N0} provinces with a harbour.");
+        foreach (var passage in SeaPassageCatalog.All)
+        {
+            var holder = NavalOperations.HolderOf(campaign, SeaLanes.HolderOf(map, SeaPassageCatalog.All.ToList().IndexOf(passage)));
+            Console.WriteLine($"  passage {passage.Id,-22} held by {holder?.Tag ?? "-",-4} " +
+                              $"{(passage.ClosesToEnemies ? "shut to its holder's enemies" : "open to all")}");
+        }
+
+        Console.WriteLine("fleets:");
+        foreach (var fleet in campaign.Fleets)
+        {
+            var nation = campaign.NationById(fleet.NationId);
+            var home = fleet.HomeProvinceId;
+            var harbour = SeaLanes.HarbourOf(map, home);
+            var holder = NavalOperations.HolderOf(campaign, home);
+            Console.WriteLine($"  {nation?.Tag,-4} {fleet.Name,-28} {fleet.Hulls,4} hulls  home {home,6} " +
+                              $"({(harbour >= 0 ? "harbour" : "NO HARBOUR")}, held by {holder?.Tag ?? "-"}) " +
+                              $"{(fleet.InPort ? "in port" : "at sea")}  basin {SeaLanes.BasinAt(map, fleet.Latitude, fleet.Longitude)}");
+        }
+
+        var routes = new List<List<(float, float)>>();
+        Console.WriteLine("voyages:");
+        foreach (var (tag, to, latitude, longitude) in Voyages)
+        {
+            var nation = campaign.NationByTag(tag);
+            var fleet = nation is null ? null : campaign.Fleets.Find(candidate => candidate.NationId == nation.Id);
+            if (fleet is null) { Console.WriteLine($"  {tag}: no fleet"); continue; }
+            var course = new List<float>();
+            var clock = Stopwatch.StartNew();
+            var found = SeaLanes.Plan(campaign, fleet.NationId, fleet.Latitude, fleet.Longitude, latitude, longitude,
+                course, out var length);
+            clock.Stop();
+            var straight = NavalOperations.Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            Console.WriteLine(found
+                ? $"  {tag} {fleet.Name} to {to}: {length:0}° of sea ({straight:0}° as the crow flies), " +
+                  $"{course.Count / 2} leg(s), about {length / campaign.Defines.FleetDegreesPerDay:0} days, plotted in {clock.Elapsed.TotalMilliseconds:0.0} ms"
+                : $"  {tag} {fleet.Name} to {to}: NO COURSE ({clock.Elapsed.TotalMilliseconds:0.0} ms)");
+            if (!found) continue;
+            var line = new List<(float, float)> { (fleet.Latitude, fleet.Longitude) };
+            for (var index = 0; index + 1 < course.Count; index += 2) line.Add((course[index], course[index + 1]));
+            routes.Add(line);
+        }
+
+        // A strait somebody holds is shut to the holder's enemies: at war with Turkey, Italy's
+        // fleet has no way into the Black Sea; at war with Egypt, none through Suez.
+        var italy = campaign.NationByTag("ITA");
+        var italian = italy is null ? null : campaign.Fleets.Find(candidate => candidate.NationId == italy.Id);
+        foreach (var (holderTag, to, latitude, longitude) in new[]
+                 { ("TUR", "Sevastopol", 44.60f, 33.45f), ("EGY", "the Red Sea", 20.0f, 38.5f) })
+        {
+            var holder = campaign.NationByTag(holderTag);
+            if (italian is null || holder is null) continue;
+            var war = new StrategicWar
+            {
+                Id = 91_000, Name = "Bench strait war", AttackerId = italy.Id, DefenderId = holder.Id,
+                StartedDay = campaign.ElapsedDays, AiNegotiationUnlockDay = int.MaxValue
+            };
+            campaign.Wars.Add(war);
+            var course = new List<float>();
+            var found = SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude,
+                course, out var length);
+            campaign.Wars.Remove(war);
+            var open = SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude,
+                course, out var peaceful);
+            Console.WriteLine($"  ITA at war with {holderTag}, to {to}: " +
+                              (found ? $"{length:0}° of sea" : "no course") +
+                              $"; at peace: {(open ? $"{peaceful:0}°" : "no course")}");
+        }
+
+        const int scale = 4;
+        var width = SeaLanes.Columns * scale;
+        var height = SeaLanes.Rows * scale;
+        var pixels = new byte[width * height * 3];
+        void Paint(int x, int y, byte r, byte g, byte b)
+        {
+            x = ((x % width) + width) % width;
+            if (y < 0 || y >= height) return;
+            var at = (y * width + x) * 3;
+            pixels[at] = r; pixels[at + 1] = g; pixels[at + 2] = b;
+        }
+        // The raster itself for land and sea, then the sea's pieces on top: each one a dot,
+        // joined to the pieces it touches, in the colour of its body of water.
+        var raster = map.CellToProvince;
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var sourceX = x * map.Width / width;
+            var sourceY = y * map.Height / height;
+            var sea = raster[sourceY * map.Width + sourceX] == 0;
+            Paint(x, y, sea ? (byte)30 : (byte)96, sea ? (byte)52 : (byte)92, sea ? (byte)88 : (byte)84);
+        }
+        var nodeCount = SeaLanes.NodeCount(map);
+        var basinSize = new Dictionary<int, int>();
+        for (var node = 0; node < nodeCount; node++)
+        {
+            var basin = SeaLanes.Node(map, node).Basin;
+            basinSize[basin] = basinSize.GetValueOrDefault(basin) + 1;
+        }
+        var ocean = basinSize.OrderByDescending(pair => pair.Value).First().Key;
+        Console.WriteLine($"  {nodeCount:N0} pieces of sea, {basinSize.Count:N0} bodies of water, the ocean {basinSize[ocean]:N0} pieces");
+        for (var node = 0; node < nodeCount; node++)
+        {
+            var (latitude, longitude, basin, passage) = SeaLanes.Node(map, node);
+            var from = ((int)((longitude + 180f) * scale), (int)((90f - latitude) * scale));
+            foreach (var next in SeaLanes.Links(map, node))
+            {
+                if (next < node) continue;
+                var there = SeaLanes.Node(map, next);
+                var to = ((int)((there.Longitude + 180f) * scale), (int)((90f - there.Latitude) * scale));
+                if (Math.Abs(to.Item1 - from.Item1) > width / 2) continue;
+                var steps = Math.Max(Math.Abs(to.Item1 - from.Item1), Math.Abs(to.Item2 - from.Item2)) + 1;
+                for (var step = 0; step <= steps; step++)
+                    Paint(from.Item1 + (to.Item1 - from.Item1) * step / steps,
+                        from.Item2 + (to.Item2 - from.Item2) * step / steps, 52, 88, 138);
+            }
+            if (passage) Paint(from.Item1, from.Item2, 230, 60, 50);
+            else if (basin == ocean) Paint(from.Item1, from.Item2, 120, 170, 220);
+            else Paint(from.Item1, from.Item2, 240, 150, 60);
+        }
+        foreach (var province in SeaLanes.CoastalProvinces(map))
+        {
+            if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
+            Paint((int)((longitude + 180f) * scale), (int)((90f - latitude) * scale), 150, 210, 150);
+        }
+        (int X, int Y) At(float latitude, float longitude) =>
+            ((int)((longitude + 180f) * scale), (int)((90f - latitude) * scale));
+        foreach (var passage in SeaPassageCatalog.All)
+        foreach (var (latitude, longitude) in passage.Points)
+        {
+            var (x, y) = At(latitude, longitude);
+            for (var d = -1; d <= 1; d++) { Paint(x + d, y, 230, 60, 50); Paint(x, y + d, 230, 60, 50); }
+        }
+        foreach (var line in routes)
+        {
+            for (var index = 1; index < line.Count; index++)
+            {
+                var (fromLatitude, fromLongitude) = line[index - 1];
+                var (toLatitude, toLongitude) = line[index];
+                var deltaLongitude = toLongitude - fromLongitude;
+                while (deltaLongitude > 180f) deltaLongitude -= 360f;
+                while (deltaLongitude < -180f) deltaLongitude += 360f;
+                var samples = (int)(MathF.Max(MathF.Abs(toLatitude - fromLatitude), MathF.Abs(deltaLongitude)) * scale * 2) + 1;
+                for (var sample = 0; sample <= samples; sample++)
+                {
+                    var t = sample / (float)samples;
+                    var (x, y) = At(fromLatitude + (toLatitude - fromLatitude) * t, fromLongitude + deltaLongitude * t);
+                    Paint(x, y, 250, 245, 225);
+                }
+            }
+        }
+        foreach (var fleet in campaign.Fleets)
+        {
+            var (x, y) = At(fleet.Latitude, fleet.Longitude);
+            for (var dy = -2; dy <= 2; dy++)
+            for (var dx = -2; dx <= 2; dx++)
+                Paint(x + dx, y + dy, 250, 205, 60);
+        }
+        WritePng(path, width, height, pixels);
+        Console.WriteLine($"sea lanes drawn to {Path.GetFullPath(path)}");
+        return 0;
+    }
+
+    /// <summary>A PNG with nothing but what a viewer needs: one chunk of RGB, filtered by nothing.</summary>
+    private static void WritePng(string path, int width, int height, byte[] rgb)
+    {
+        using var stream = File.Create(path);
+        stream.Write(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 });
+        void Chunk(string type, byte[] data)
+        {
+            var length = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(length, data.Length);
+            stream.Write(length);
+            var typed = new byte[4 + data.Length];
+            System.Text.Encoding.ASCII.GetBytes(type).CopyTo(typed, 0);
+            data.CopyTo(typed, 4);
+            stream.Write(typed);
+            var crc = new byte[4];
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(crc, Crc32(typed));
+            stream.Write(crc);
+        }
+        var header = new byte[13];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(0), width);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(4), height);
+        header[8] = 8; header[9] = 2;
+        Chunk("IHDR", header);
+        using var packed = new MemoryStream();
+        using (var zlib = new System.IO.Compression.ZLibStream(packed, System.IO.Compression.CompressionLevel.Optimal, true))
+        {
+            for (var y = 0; y < height; y++)
+            {
+                zlib.WriteByte(0);
+                zlib.Write(rgb, y * width * 3, width * 3);
+            }
+        }
+        Chunk("IDAT", packed.ToArray());
+        Chunk("IEND", Array.Empty<byte>());
+    }
+
+    private static uint Crc32(byte[] data)
+    {
+        var crc = 0xFFFFFFFFu;
+        foreach (var value in data)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++) crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
+        }
+        return ~crc;
     }
 
     private static int Front(Campaign campaign, int days)
@@ -1391,6 +1660,215 @@ public static class Program
     /// trait is on the template, but whether the landing consults it is the part that
     /// silently stops being true.
     /// </summary>
+    /// <summary>
+    /// The sea lanes have to be sea. Every course is sampled along its whole length and has to
+    /// stay on water; the famous short cuts have to be taken and the long ways round have to be
+    /// the only way when a short cut is shut. Six voyages, each of which only means anything
+    /// if a ship goes round something.
+    /// </summary>
+    private static string AFleetSailsRoundTheLand(Campaign campaign)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null) return "";
+        string Voyage(string tag, float latitude, float longitude, out float length)
+        {
+            length = 0f;
+            var nation = campaign.NationByTag(tag);
+            var fleet = nation is null ? null : campaign.Fleets.Find(candidate => candidate.NationId == nation.Id);
+            if (fleet is null) return $"{tag} has no fleet";
+            var course = new List<float>();
+            if (!SeaLanes.Plan(campaign, fleet.NationId, fleet.Latitude, fleet.Longitude, latitude, longitude, course, out length))
+                return $"{tag} found no course";
+            var fromLatitude = fleet.Latitude;
+            var fromLongitude = fleet.Longitude;
+            for (var index = 0; index + 1 < course.Count; index += 2)
+            {
+                var toLatitude = course[index];
+                var toLongitude = course[index + 1];
+                var deltaLongitude = toLongitude - fromLongitude;
+                while (deltaLongitude > 180f) deltaLongitude -= 360f;
+                while (deltaLongitude < -180f) deltaLongitude += 360f;
+                var samples = (int)(MathF.Max(MathF.Abs(toLatitude - fromLatitude), MathF.Abs(deltaLongitude)) * 16f) + 1;
+                var ashore = 0;
+                var lastLeg = index + 2 >= course.Count;
+                for (var sample = 0; sample <= samples; sample++)
+                {
+                    var t = sample / (float)samples;
+                    var latitudeAt = fromLatitude + (toLatitude - fromLatitude) * t;
+                    var longitudeAt = fromLongitude + deltaLongitude * t;
+                    if (longitudeAt > 180f) longitudeAt -= 360f;
+                    if (longitudeAt < -180f) longitudeAt += 360f;
+                    if (SeaLanes.IsWaterAt(map, latitudeAt, longitudeAt)) { ashore = 0; continue; }
+                    // Leaving a port drawn a pixel inland is allowed, and so is the last few
+                    // miles to a destination a player clicked on the shore; crossing land -
+                    // two pixels of it in a row, not a corner - is not.
+                    if (index == 0 && sample < 8) continue;
+                    if (lastLeg && sample > samples - 8) continue;
+                    if (++ashore > 2)
+                        return $"{tag}'s course crosses land at {latitudeAt:0.0}, {longitudeAt:0.0}";
+                }
+                fromLatitude = toLatitude;
+                fromLongitude = toLongitude;
+            }
+            return "";
+        }
+
+        var failures = new List<string>();
+        var lengths = new Dictionary<string, float>();
+        foreach (var (name, tag, latitude, longitude) in new[]
+                 {
+                     ("Bombay to Toulon", "IND", 43.05f, 5.95f),
+                     ("Norfolk to San Diego", "USA", 32.70f, -117.25f),
+                     ("Vladivostok to Baltiysk", "RUS", 54.65f, 19.90f),
+                     ("the Marmara to Sevastopol", "TUR", 44.60f, 33.45f),
+                     ("Plymouth to Saint Petersburg", "GBR", 59.95f, 29.60f),
+                     ("Qingdao to Singapore", "CHN", 1.20f, 103.85f)
+                 })
+        {
+            var problem = Voyage(tag, latitude, longitude, out var length);
+            if (problem.Length > 0) failures.Add($"{name}: {problem}");
+            lengths[name] = length;
+        }
+        if (failures.Count > 0) return string.Join("; ", failures);
+
+        // Suez and Panama are there to be used.
+        if (lengths["Bombay to Toulon"] > 100f)
+            return $"Bombay to Toulon is {lengths["Bombay to Toulon"]:0} degrees: the fleet went round Africa instead of through Suez";
+        if (lengths["Norfolk to San Diego"] > 110f)
+            return $"Norfolk to San Diego is {lengths["Norfolk to San Diego"]:0} degrees: the fleet went round the Horn instead of through Panama";
+
+        // And a strait somebody holds is shut to the holder's enemies.
+        var italy = campaign.NationByTag("ITA");
+        var italian = italy is null ? null : campaign.Fleets.Find(candidate => candidate.NationId == italy.Id);
+        var turkey = campaign.NationByTag("TUR");
+        var egypt = campaign.NationByTag("EGY");
+        if (italian is null || turkey is null || egypt is null) return "no Italian fleet, or no Turkey or Egypt, to shut a strait on";
+        var course = new List<float>();
+        foreach (var (holder, to, latitude, longitude, mustFail) in new[]
+                 { (turkey, "the Black Sea", 44.6f, 33.45f, true), (egypt, "the Red Sea", 20f, 38.5f, false) })
+        {
+            if (!SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude, course, out var open))
+                return $"Italy cannot reach {to} even at peace";
+            var war = new StrategicWar
+            {
+                Id = 91_001, Name = "Bench strait war", AttackerId = italy.Id, DefenderId = holder.Id,
+                StartedDay = campaign.ElapsedDays, AiNegotiationUnlockDay = int.MaxValue
+            };
+            campaign.Wars.Add(war);
+            var found = SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude, course, out var shut);
+            campaign.Wars.Remove(war);
+            if (mustFail && found) return $"at war with {holder.Tag}, Italy still sailed into {to}";
+            if (!mustFail && found && shut < open * 3f)
+                return $"at war with {holder.Tag}, Italy reached {to} in {shut:0} degrees against {open:0} at peace: the canal was not shut";
+            Console.WriteLine($"  straits: Italy to {to} is {open:0}° at peace and " +
+                              (found ? $"{shut:0}° round Africa" : "shut") + $" at war with {holder.Tag}.");
+        }
+        Console.WriteLine($"  sea lanes: Bombay to Toulon {lengths["Bombay to Toulon"]:0}°, Norfolk to San Diego " +
+                          $"{lengths["Norfolk to San Diego"]:0}°, Vladivostok to Baltiysk {lengths["Vladivostok to Baltiysk"]:0}°, " +
+                          $"every course on water the whole way.");
+        return "";
+    }
+
+    /// <summary>
+    /// A home port is somewhere somebody holds. When the enemy takes it the fleet moves to the
+    /// nearest port its country still has on the same sea, and a fleet lying in the lost one
+    /// sails there - rather than going on repairing itself on an enemy quay.
+    /// </summary>
+    private static string AFallenPortMovesItsFleet(Campaign campaign)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null) return "";
+        var britain = campaign.NationByTag("GBR");
+        var france = campaign.NationByTag("FRA");
+        var fleet = britain is null ? null : campaign.Fleets.Find(candidate => candidate.NationId == britain.Id);
+        if (fleet is null || france is null) return "no British fleet to test with";
+        var home = fleet.HomeProvinceId;
+        if (home <= 0 || SeaLanes.HarbourOf(map, home) < 0) return $"the Home Fleet's home port {home} is not a port";
+        var was = campaign.ProvinceController[home];
+        var war = new StrategicWar
+        {
+            Id = 91_002, Name = "Bench port war", AttackerId = france.Id, DefenderId = britain.Id,
+            StartedDay = campaign.ElapsedDays, AiNegotiationUnlockDay = int.MaxValue
+        };
+        campaign.Wars.Add(war);
+        var (latitude, longitude, mission, berth) = (fleet.Latitude, fleet.Longitude, fleet.Mission, fleet.BerthProvinceId);
+        try
+        {
+            fleet.Latitude = fleet.HomeLatitude;
+            fleet.Longitude = fleet.HomeLongitude;
+            fleet.Mission = FleetMission.Anchored;
+            fleet.HasOrder = false;
+            fleet.BerthProvinceId = home;
+            campaign.SetProvinceController(home, (ushort)france.MapIndex);
+            SailADay(campaign);
+            if (fleet.HomeProvinceId == home) return "the fleet kept a home port the enemy holds";
+            var holder = NavalOperations.HolderOf(campaign, fleet.HomeProvinceId);
+            if (holder?.Id != britain.Id) return $"the new home port is held by {holder?.Tag ?? "nobody"}";
+            if (!fleet.HasOrder && fleet.BerthProvinceId == home) return "the fleet stayed lying in the fallen port";
+            for (var day = 0; day < 20 && fleet.HasOrder; day++) SailADay(campaign);
+            if (!fleet.InPort) return "the fleet never reached its new home port";
+            Console.WriteLine($"  ports: the Home Fleet lost its port to France and moved to province " +
+                              $"{fleet.HomeProvinceId}, in port again the same week.");
+            return "";
+        }
+        finally
+        {
+            campaign.SetProvinceController(home, was);
+            campaign.Wars.Remove(war);
+            FleetHistory.AssignHomePorts(campaign);
+            (fleet.Latitude, fleet.Longitude, fleet.Mission, fleet.BerthProvinceId) = (latitude, longitude, mission, berth);
+            fleet.HasOrder = false;
+        }
+    }
+
+    /// <summary>
+    /// Ships sunk are not ships gone forever. A country nobody plays orders what its navy is
+    /// short of, its yards build it at the pace their slipways allow, the treasury pays for it
+    /// while it is built, and the hulls join the fleet new and green.
+    /// </summary>
+    private static string ANavyRebuildsWhatItLoses(Campaign campaign)
+    {
+        var japan = campaign.NationByTag("JPN");
+        var fleet = japan is null ? null : campaign.Fleets.Find(candidate => candidate.NationId == japan.Id);
+        if (fleet is null) return "no Japanese fleet to sink";
+        var wasHuman = japan.IsHuman;
+        var (hulls, ordered, progress, experience, treasury) =
+            (fleet.Hulls, fleet.HullsOrdered, fleet.HullProgress, fleet.Experience, japan.Treasury);
+        try
+        {
+            japan.IsHuman = false;
+            fleet.Hulls = Math.Max(1, fleet.Establishment / 2);
+            fleet.HullsOrdered = 0;
+            fleet.HullProgress = 0f;
+            fleet.Experience = 0.5f;
+            japan.Treasury = MathF.Max(japan.Treasury, 10_000f);
+            var target = Shipbuilding.TargetHulls(campaign, japan, fleet);
+            var slipways = Shipbuilding.Slipways(campaign, japan);
+            if (slipways <= 0f) return "Japan has no slipways at all";
+
+            // The review comes round within a month; the first hull comes within a build.
+            var before = japan.Treasury;
+            var day = 0;
+            for (; day < campaign.Defines.AiNavalReviewDays + 1 && fleet.HullsOrdered == 0; day++) campaign.TickDay();
+            if (fleet.HullsOrdered <= 0) return $"Japan at {fleet.Hulls:N0} of {target:N0} hulls ordered nothing in {day:N0} days";
+            var start = fleet.Hulls;
+            for (var more = 0; more < 400 && fleet.Hulls == start; more++) campaign.TickDay();
+            if (fleet.Hulls <= start) return "the yards never delivered a hull";
+            if (japan.Treasury >= before) return "a navy was rebuilt for nothing";
+            if (fleet.Experience >= 0.5f) return "new hulls joined the fleet already seasoned";
+            Console.WriteLine($"  yards: Japan, sunk to {start:N0} of {fleet.Establishment:N0}, ordered " +
+                              $"{fleet.HullsOrdered + fleet.Hulls - start:N0} and had hull {fleet.Hulls:N0} on " +
+                              $"{slipways:0.#} slipways, paying {Fmt.Money(Shipbuilding.DailyCost(campaign, japan))} a day.");
+            return "";
+        }
+        finally
+        {
+            japan.IsHuman = wasHuman;
+            (fleet.Hulls, fleet.HullsOrdered, fleet.HullProgress, fleet.Experience, japan.Treasury) =
+                (hulls, ordered, progress, experience, treasury);
+        }
+    }
+
     private static string MarinesLandBetter(Campaign campaign)
     {
         var marine = UnitTypeCatalog.Get("marine_brigade");
@@ -1493,10 +1971,27 @@ public static class Program
         var fleet = campaign.Fleets.Find(candidate => candidate.NationId == invader.Id);
         if (fleet is null) return "GBR has no fleet";
 
-        // Somebody across water that GBR shares no land border with.
-        var target = campaign.Nations.Find(nation => nation.Id != invader.Id && nation.Population > 0 &&
-            !CampaignDiplomacy.SharesLandBorder(campaign, invader.MapIndex, nation.MapIndex) &&
-            CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, nation.Id, out _));
+        // Somebody across water that GBR shares no land border with - and who has a coast on
+        // the same sea, since a landing is made from a ship. The first country in the list
+        // used to do, which was as likely to be Mongolia as France.
+        var basin = SeaLanes.BasinAt(topology, fleet.Latitude, fleet.Longitude);
+        Nation target = null;
+        var beach = -1;
+        var nearestBeach = float.MaxValue;
+        foreach (var province in SeaLanes.CoastalProvinces(topology))
+        {
+            if (SeaLanes.HarbourBasin(topology, province) != basin) continue;
+            var holder = NavalOperations.HolderOf(campaign, province);
+            if (holder is null || holder.Id == invader.Id || holder.Population <= 0) continue;
+            if (!SeaLanes.TryHarbourPoint(topology, province, out var latitude, out var longitude)) continue;
+            var distance = NavalOperations.Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (distance >= nearestBeach) continue;
+            if (CampaignDiplomacy.SharesLandBorder(campaign, invader.MapIndex, holder.MapIndex)) continue;
+            if (!CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, holder.Id, out _)) continue;
+            nearestBeach = distance;
+            target = holder;
+            beach = province;
+        }
         if (target is null) return "no overseas country to invade";
         if (!CampaignDiplomacy.CanDeclareWar(campaign, invader.Id, target.Id, out var refusal))
             return $"a country with {fleet.Hulls:N0} hulls was refused a war across water: {refusal}";
@@ -1543,17 +2038,21 @@ public static class Program
             if (aboard is null || aboard.ProvinceId > 0)
                 return "a formation aboard a ship was still holding ground ashore";
 
-            // A coastal province the target holds.
-            var beach = -1;
-            for (var province = 1; province <= topology.ProvinceCount && beach < 0; province++)
-                if (campaign.ProvinceController[province] == (ushort)target.MapIndex) beach = province;
-            if (beach < 0) return $"{target.Tag} holds no province to land on";
-
-            new LaunchInvasionCommand
+            // An inland province is refused: a landing is made on a coast.
+            var inland = -1;
+            for (var province = 1; province <= topology.ProvinceCount && inland < 0; province++)
+                if (campaign.ProvinceController[province] == (ushort)target.MapIndex &&
+                    SeaLanes.HarbourOf(topology, province) < 0) inland = province;
+            if (inland > 0)
             {
-                IssuerId = invader.Id, FleetId = fleet.Id, ProvinceId = beach
-            }.Apply(campaign);
-            if (fleet.Mission != FleetMission.Invasion) return "the fleet refused the invasion order";
+                var refused = new LaunchInvasionCommand { IssuerId = invader.Id, FleetId = fleet.Id, ProvinceId = inland };
+                refused.Apply(campaign);
+                if (refused.Refusal.Length == 0) return "a landing was ordered on a province with no coast";
+            }
+
+            var launch = new LaunchInvasionCommand { IssuerId = invader.Id, FleetId = fleet.Id, ProvinceId = beach };
+            launch.Apply(campaign);
+            if (fleet.Mission != FleetMission.Invasion) return $"the fleet refused the invasion order: {launch.Refusal}";
 
             var before = aboard.Organisation;
             var sailed = 0;
@@ -1639,6 +2138,9 @@ public static class Program
                 SailADay(campaign);
             if (mine.Mission == FleetMission.Patrol && theirs.Mission == FleetMission.Patrol)
                 return $"neither fleet broke off after {fought:N0} days of action";
+            var broken = mine.Mission == FleetMission.Patrol ? theirs : mine;
+            if (broken.HullsLost <= 0) return "a fleet broke off an action without losing a ship";
+            if (!broken.HasOrder) return "a beaten fleet did not turn for home";
 
             // And a navy on an enemy's trade has to be felt in the enemy's budget.
             theirs.Mission = FleetMission.Raid;
@@ -1649,9 +2151,23 @@ public static class Program
                 return "an enemy fleet raiding trade cost the victim nothing at all";
             var raided = before - left.WeeklyTradeBalance;
 
+            // And only near the victim's own sea lanes: the same raider in the South Pacific
+            // takes a fraction of it.
+            var (wasLatitude, wasLongitude) = (theirs.Latitude, theirs.Longitude);
+            theirs.Latitude = -45f;
+            theirs.Longitude = -130f;
+            var afar = left.WeeklyTradeBalance;
+            NavalOperations.ApplyCommerceEffects(campaign, left, null);
+            var farRaid = afar - left.WeeklyTradeBalance;
+            theirs.Latitude = wasLatitude;
+            theirs.Longitude = wasLongitude;
+            if (farRaid >= raided * 0.5f)
+                return $"a raider on the far side of the world took {Fmt.Money(farRaid)} a week, against {Fmt.Money(raided)} off the victim's coast";
+
             Console.WriteLine($"  navy: two fleets met and fought for {fought:N0} day(s) - " +
                               $"{mine.Hulls:N0} hulls at {mine.Strength:P0} strength against {theirs.Hulls:N0} at " +
-                              $"{theirs.Strength:P0} - and raiding cost the loser {Fmt.Money(raided)} a week.");
+                              $"{theirs.Strength:P0}, {broken.HullsLost:N0} sunk under the one that broke - and raiding " +
+                              $"cost the loser {Fmt.Money(raided)} a week off its coast, {Fmt.Money(farRaid)} from the far Pacific.");
             return "";
         }
         finally

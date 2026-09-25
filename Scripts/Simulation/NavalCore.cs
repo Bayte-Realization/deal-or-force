@@ -99,7 +99,41 @@ public sealed class Fleet
     public readonly List<int> Carried = new();
     public int TargetProvinceId = -1;
 
+    /// <summary>
+    /// The course still to sail, as latitude and longitude pairs; the last pair is where it
+    /// stops. Plotted through the sea lanes, so a voyage round a continent goes round it.
+    /// </summary>
+    public readonly List<float> Waypoints = new();
+
+    /// <summary>
+    /// The order the course was plotted for. Anything that writes an order - a command, a
+    /// beaten fleet turning for home - only has to write the order: a course that no longer
+    /// matches it is plotted again before the fleet moves.
+    /// </summary>
+    public bool Routed;
+    public float RoutedLatitude;
+    public float RoutedLongitude;
+
+    /// <summary>The friendly port it is lying in, or -1 when it is at sea.</summary>
+    public int BerthProvinceId = -1;
+
+    /// <summary>The hulls it was commissioned with, which the country's yards are sized to keep.</summary>
+    public int Establishment;
+
+    /// <summary>Hulls laid down for it and not yet delivered, and how far along the next one is.</summary>
+    public int HullsOrdered;
+    public float HullProgress;
+
+    /// <summary>Hulls sunk under it, over the whole campaign.</summary>
+    public int HullsLost;
+
+    /// <summary>The last day it was in action, or -1.</summary>
+    public int LastActionDay = -1;
+
     public bool IsMoving => HasOrder;
+
+    /// <summary>Lying in a friendly port: repairing, refilling, and out of the fighting.</summary>
+    public bool InPort => Mission == FleetMission.Anchored && !HasOrder && BerthProvinceId > 0;
 
     /// <summary>
     /// What the fleet is worth in a fight, on the same shape as a division's Power: the
@@ -115,44 +149,67 @@ public sealed class Fleet
     /// <summary>
     /// What it is worth for simply being somewhere - blockading, escorting, being a threat.
     /// A battered fleet still closes a sea lane, the way a battered division still holds
-    /// the province it stands in.
+    /// the province it stands in - but a wrecked one closes less of it than a whole one.
     /// </summary>
-    public float Presence => Hulls * (0.80f + Experience * 0.30f) * (0.60f + Readiness * 0.40f);
+    public float Presence => Hulls * (0.40f + Strength * 0.60f) *
+                             (0.80f + Experience * 0.30f) * (0.60f + Readiness * 0.40f);
+}
+
+public sealed partial class Defines
+{
+    /// <summary>How close a fleet has to lie to a friendly harbour to be in its port.</summary>
+    public float FleetBerthRangeDegrees { get; set; } = 1.6f;
+
+    /// <summary>
+    /// How much of the damage a fleet carries when it breaks goes to the bottom. The rest is
+    /// ships that limp home to be repaired; this share is ships that do not come back.
+    /// </summary>
+    public float FleetHullsSunkOnBreak { get; set; } = 0.3f;
+
+    /// <summary>How far from a country's coast its merchant shipping can be found in full.</summary>
+    public float FleetRaidRangeDegrees { get; set; } = 18f;
+
+    /// <summary>What a raider far out at sea still takes, against one on the enemy's sea lanes.</summary>
+    public float FleetRaidFloor { get; set; } = 0.2f;
+
+    /// <summary>
+    /// How many provinces of a supply trace a sea crossing counts for: an island or a
+    /// beachhead no road reaches is supplied through the nearest port that one does, this
+    /// much further from the depot.
+    /// </summary>
+    public int SeaSupplyHops { get; set; } = 3;
 }
 
 public static class NavalOperations
 {
-    private static readonly List<Fleet> Engaged = new();
-
     public static void Tick(Campaign campaign)
     {
         var defines = campaign.Defines;
         foreach (var fleet in campaign.Fleets) fleet.InAction = false;
 
+        // Everything below is a rate per day and this runs per step, so each takes the
+        // step's share. Without it a fleet at an hourly step resupplied, repaired and
+        // recovered its order twenty-four times faster than the number beside it says.
+        var share = campaign.TickScale;
         foreach (var fleet in campaign.Fleets)
         {
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null || fleet.Hulls <= 0) continue;
 
             // Readiness is what the treasury reaches the fleet with, and it moves slowly:
-            // a navy is not re-crewed by a budget line in a fortnight.
+            // a navy is not re-crewed by a budget line in a fortnight. The drift is a day's, and
+            // this is a step, so it takes the step's share of it - the whole of it every hour
+            // closed the gap to the budget twenty-four times as fast as the define says.
             var funded = M.Clamp(nation.MilitarySpending /
                 MathF.Max(0.01f, defines.BaselineMilitarySpending), 0.35f, 1f);
-            fleet.Readiness = M.Lerp(fleet.Readiness, funded, defines.FleetReadinessDrift);
+            fleet.Readiness = M.Lerp(fleet.Readiness, funded,
+                1f - MathF.Pow(1f - M.Clamp01(defines.FleetReadinessDrift), share));
 
-            var inPort = fleet.Mission == FleetMission.Anchored && !fleet.HasOrder;
-            if (fleet.Hulls > 0 && fleet.Carried.Count > 0 && fleet.Mission != FleetMission.Invasion &&
-                !fleet.HasOrder)
-            {
-                // A fleet ordered home while loaded lands its passengers where it stops.
-                var port = fleet.HomeProvinceId;
-                if (fleet.Mission == FleetMission.Anchored && port > 0) NavalInvasion.Disembark(campaign, fleet, port);
-            }
-            // Everything below is a rate per day and this runs per step, so each takes the
-            // step's share. Without it a fleet at an hourly step resupplied, repaired and
-            // recovered its order twenty-four times faster than the number beside it says.
-            var share = campaign.TickScale;
-            if (inPort)
+            // A port is a place somebody holds, and the holder changes. Asked once a day: a
+            // port does not fall between two hours of the same afternoon.
+            if (campaign.StepOpensNewDay) KeepPort(campaign, fleet, nation);
+
+            if (fleet.InPort)
             {
                 fleet.Supply = M.Clamp01(fleet.Supply + defines.FleetSupplyInPortPerDay * share);
                 fleet.Organisation = M.Clamp01(fleet.Organisation + defines.FleetOrganisationInPortPerDay * share);
@@ -163,7 +220,8 @@ public static class NavalOperations
             {
                 // At sea a fleet burns stores, and how fast depends on how far from home it
                 // is - the one bit of naval logistics this game keeps, because it is the one
-                // a player can act on by taking a port.
+                // a player can act on by taking a port. At anchor off a coast that is not a
+                // friendly port it burns them just the same: there is nobody there to refill it.
                 var reach = MathF.Max(1f, defines.FleetSupplyRangeDegrees);
                 var fromHome = M.Clamp01(Distance(fleet.Latitude, fleet.Longitude,
                     fleet.HomeLatitude, fleet.HomeLongitude) / reach);
@@ -182,39 +240,309 @@ public static class NavalOperations
                 NavalInvasion.Land(campaign, fleet, fleet.TargetProvinceId);
         }
 
-        ResolveActions(campaign);
+        using (SimProfiler.Measure("    sea:actions")) ResolveActions(campaign);
+
+        // A fleet with nothing left afloat is not a fleet. Whoever was aboard went down
+        // with it.
+        for (var index = campaign.Fleets.Count - 1; index >= 0; index--)
+        {
+            var fleet = campaign.Fleets[index];
+            if (fleet.Hulls > 0) continue;
+            foreach (var id in fleet.Carried)
+            {
+                var army = campaign.Armies.Find(candidate => candidate.Id == id);
+                if (army is not null) Attrition.Destroy(campaign, army, "lost at sea");
+            }
+            fleet.Carried.Clear();
+            campaign.Fleets.RemoveAt(index);
+        }
+    }
+
+    // --- ports ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Whether a country's ships may use a port held by another: its own, an ally's, a
+    /// co-belligerent's, and those of the country it answers to or that answers to it.
+    /// </summary>
+    public static bool Friendly(Campaign campaign, int nationId, int holderId)
+    {
+        if (nationId == holderId) return true;
+        var relation = CampaignDiplomacy.Peek(campaign, nationId, holderId);
+        if (relation is not null && relation.Stance == DiplomaticStance.Allied) return true;
+        var nation = campaign.NationById(nationId);
+        var holder = campaign.NationById(holderId);
+        if (nation is not null && nation.IsSubject && nation.OverlordId == holderId) return true;
+        if (holder is not null && holder.IsSubject && holder.OverlordId == nationId) return true;
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended || !war.Involves(nationId) || !war.Involves(holderId)) continue;
+            if (!war.Opposes(nationId, holderId)) return true;
+        }
+        return false;
+    }
+
+    public static bool FriendlyPort(Campaign campaign, int nationId, int province)
+    {
+        var holder = HolderOf(campaign, province);
+        return holder is not null && Friendly(campaign, nationId, holder.Id);
+    }
+
+    /// <summary>Who holds a province's ground now, rather than who it belonged to in 2024.</summary>
+    public static Nation HolderOf(Campaign campaign, int province)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null || province <= 0 || province > map.ProvinceCount) return null;
+        var controllers = campaign.ProvinceController;
+        var mapIndex = controllers is not null && province < controllers.Length
+            ? controllers[province]
+            : map.ProvinceToNation[province];
+        return NationAt(campaign, mapIndex);
+    }
+
+    private static Campaign _indexed;
+    private static Nation[] _byMapIndex = Array.Empty<Nation>();
+
+    /// <summary>The country painted with a map index, or null for nobody.</summary>
+    public static Nation NationAt(Campaign campaign, int mapIndex)
+    {
+        if (campaign is null || mapIndex <= 0) return null;
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            if (attempt == 1 || !ReferenceEquals(_indexed, campaign))
+            {
+                _indexed = campaign;
+                var top = 0;
+                foreach (var nation in campaign.Nations) top = Math.Max(top, nation.MapIndex);
+                var index = new Nation[top + 1];
+                foreach (var nation in campaign.Nations)
+                    if (nation.MapIndex > 0) index[nation.MapIndex] = nation;
+                _byMapIndex = index;
+            }
+            var found = mapIndex < _byMapIndex.Length ? _byMapIndex[mapIndex] : null;
+            if (found is not null && found.MapIndex == mapIndex) return found;
+        }
+        return null;
     }
 
     /// <summary>
-    /// Move toward the order, at a speed the fleet's condition sets. A fleet sails a
-    /// straight line over the globe rather than through a graph of sea provinces: this map
-    /// has no sea provinces, and inventing thirty thousand of them to move fifteen fleets
-    /// would be the tail wagging the dog.
+    /// The friendly port nearest a fleet, within the distance that counts as lying in it;
+    /// -1 when there is none.
+    /// </summary>
+    public static int FindBerth(Campaign campaign, Fleet fleet)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null)
+            return Distance(fleet.Latitude, fleet.Longitude, fleet.HomeLatitude, fleet.HomeLongitude) <=
+                   campaign.Defines.FleetBerthRangeDegrees ? Math.Max(1, fleet.HomeProvinceId) : -1;
+
+        var range = campaign.Defines.FleetBerthRangeDegrees;
+        var best = -1;
+        var bestDistance = range;
+        foreach (var province in SeaLanes.CoastalProvinces(map))
+        {
+            if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
+            if (MathF.Abs(latitude - fleet.Latitude) > range) continue;
+            var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (distance > bestDistance) continue;
+            if (!FriendlyPort(campaign, fleet.NationId, province)) continue;
+            // Home first when home is within reach: a fleet lying in its own port is not
+            // lying in the neighbour's.
+            if (province == fleet.HomeProvinceId) return province;
+            bestDistance = distance;
+            best = province;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// A fleet's home port was taken, or never existed: move it to the nearest port its own
+    /// country still holds on the same sea, and send it there if it was lying at the old one.
+    /// </summary>
+    private static void KeepPort(Campaign campaign, Fleet fleet, Nation nation)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null) return;
+
+        var home = HolderOf(campaign, fleet.HomeProvinceId);
+        if (home is null || home.Id != nation.Id) Rehome(campaign, fleet, nation);
+
+        if (fleet.BerthProvinceId > 0 && !FriendlyPort(campaign, fleet.NationId, fleet.BerthProvinceId))
+        {
+            // A port that falls is a port a fleet leaves.
+            fleet.BerthProvinceId = -1;
+            if (fleet.Mission == FleetMission.Anchored && !fleet.HasOrder) SendHome(campaign, fleet);
+        }
+        if (fleet.Mission == FleetMission.Anchored && !fleet.HasOrder && fleet.BerthProvinceId <= 0)
+            fleet.BerthProvinceId = FindBerth(campaign, fleet);
+    }
+
+    public static bool Rehome(Campaign campaign, Fleet fleet, Nation nation)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null) return false;
+        var basin = SeaLanes.BasinAt(map, fleet.Latitude, fleet.Longitude);
+        var best = -1;
+        var bestDistance = float.MaxValue;
+        foreach (var province in SeaLanes.CoastalProvinces(map))
+        {
+            if (basin >= 0 && SeaLanes.HarbourBasin(map, province) != basin) continue;
+            var holder = HolderOf(campaign, province);
+            if (holder is null || holder.Id != nation.Id) continue;
+            if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
+            var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = province;
+        }
+        if (best <= 0) return false;
+
+        var wasHome = fleet.InPort && fleet.BerthProvinceId == fleet.HomeProvinceId;
+        fleet.HomeProvinceId = best;
+        SeaLanes.TryHarbourPoint(map, best, out fleet.HomeLatitude, out fleet.HomeLongitude);
+        if (wasHome || (fleet.Mission == FleetMission.Anchored && fleet.HasOrder)) SendHome(campaign, fleet);
+        return true;
+    }
+
+    /// <summary>Anchor, and sail home to do it. Plotted on the next step, like any order.</summary>
+    public static void SendHome(Campaign campaign, Fleet fleet)
+    {
+        fleet.Mission = FleetMission.Anchored;
+        fleet.TargetProvinceId = -1;
+        fleet.HasOrder = true;
+        fleet.OrderLatitude = fleet.HomeLatitude;
+        fleet.OrderLongitude = fleet.HomeLongitude;
+        fleet.BerthProvinceId = -1;
+    }
+
+    // --- sailing --------------------------------------------------------------------------
+
+    /// <summary>
+    /// Send a fleet somewhere by sea. False, and the fleet left exactly as it was, when the
+    /// place cannot be reached: another ocean's lake, or behind a canal its holder has shut.
+    /// </summary>
+    public static bool SendTo(Campaign campaign, Fleet fleet, float latitude, float longitude)
+    {
+        var course = new List<float>();
+        if (!SeaLanes.Plan(campaign, fleet.NationId, fleet.Latitude, fleet.Longitude, latitude, longitude,
+                course, out _)) return false;
+        fleet.HasOrder = true;
+        fleet.OrderLatitude = latitude;
+        fleet.OrderLongitude = longitude;
+        fleet.Waypoints.Clear();
+        fleet.Waypoints.AddRange(course);
+        fleet.Routed = true;
+        fleet.RoutedLatitude = latitude;
+        fleet.RoutedLongitude = longitude;
+        fleet.BerthProvinceId = -1;
+        return true;
+    }
+
+    /// <summary>Degrees of sea still to sail, along the course rather than as the crow flies.</summary>
+    public static float CourseLength(Fleet fleet)
+    {
+        if (!fleet.HasOrder) return 0f;
+        if (!fleet.Routed || fleet.Waypoints.Count < 2)
+            return Distance(fleet.Latitude, fleet.Longitude, fleet.OrderLatitude, fleet.OrderLongitude);
+        var length = 0f;
+        var latitude = fleet.Latitude;
+        var longitude = fleet.Longitude;
+        for (var index = 0; index + 1 < fleet.Waypoints.Count; index += 2)
+        {
+            length += Distance(latitude, longitude, fleet.Waypoints[index], fleet.Waypoints[index + 1]);
+            latitude = fleet.Waypoints[index];
+            longitude = fleet.Waypoints[index + 1];
+        }
+        return length;
+    }
+
+    /// <summary>Degrees a day at the fleet's present condition.</summary>
+    public static float Speed(Campaign campaign, Fleet fleet) =>
+        campaign.Defines.FleetDegreesPerDay *
+        M.Clamp(0.35f + fleet.Supply * 0.65f, 0.35f, 1f) *
+        M.Clamp(0.50f + fleet.Readiness * 0.50f, 0.5f, 1f);
+
+    /// <summary>Whole days until it gets where it is going, or zero when it is not going anywhere.</summary>
+    public static int DaysToGo(Campaign campaign, Fleet fleet) =>
+        fleet.HasOrder ? (int)MathF.Ceiling(CourseLength(fleet) / MathF.Max(0.01f, Speed(campaign, fleet))) : 0;
+
+    /// <summary>
+    /// Follow the course, at a speed the fleet's condition sets. A course is legs of open
+    /// water between waypoints, so a fleet goes round a continent rather than across it.
     /// </summary>
     private static void Sail(Campaign campaign, Fleet fleet)
     {
         if (!fleet.HasOrder) return;
-        var defines = campaign.Defines;
-        var remaining = Distance(fleet.Latitude, fleet.Longitude, fleet.OrderLatitude, fleet.OrderLongitude);
+        if (!fleet.Routed || fleet.RoutedLatitude != fleet.OrderLatitude ||
+            fleet.RoutedLongitude != fleet.OrderLongitude || fleet.Waypoints.Count < 2)
+        {
+            var course = new List<float>();
+            if (!SeaLanes.Plan(campaign, fleet.NationId, fleet.Latitude, fleet.Longitude,
+                    fleet.OrderLatitude, fleet.OrderLongitude, course, out _))
+            {
+                AbandonOrder(fleet);
+                return;
+            }
+            fleet.Waypoints.Clear();
+            fleet.Waypoints.AddRange(course);
+            fleet.Routed = true;
+            fleet.RoutedLatitude = fleet.OrderLatitude;
+            fleet.RoutedLongitude = fleet.OrderLongitude;
+        }
+        fleet.BerthProvinceId = -1;
+
         // Degrees a DAY, and this is a step - so a crossing that is written as sixty days
         // takes sixty days whatever the clock is set to.
-        var step = defines.FleetDegreesPerDay * campaign.TickScale *
-                   M.Clamp(0.35f + fleet.Supply * 0.65f, 0.35f, 1f) *
-                   M.Clamp(0.50f + fleet.Readiness * 0.50f, 0.5f, 1f);
-        if (remaining <= step)
+        var step = Speed(campaign, fleet) * campaign.TickScale;
+        while (step > 0f && fleet.Waypoints.Count >= 2)
         {
-            fleet.Latitude = fleet.OrderLatitude;
-            fleet.Longitude = fleet.OrderLongitude;
-            fleet.HasOrder = false;
-            return;
+            var latitude = fleet.Waypoints[0];
+            var longitude = fleet.Waypoints[1];
+            var remaining = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (remaining <= step)
+            {
+                fleet.Latitude = latitude;
+                fleet.Longitude = longitude;
+                fleet.Waypoints.RemoveRange(0, 2);
+                step -= remaining;
+                continue;
+            }
+            var deltaLatitude = latitude - fleet.Latitude;
+            var deltaLongitude = ShortestLongitude(longitude - fleet.Longitude);
+            var scale = step / MathF.Max(0.0001f, remaining);
+            fleet.Latitude = M.Clamp(fleet.Latitude + deltaLatitude * scale, -85f, 85f);
+            fleet.Longitude = Wrap(fleet.Longitude + deltaLongitude * scale);
+            step = 0f;
         }
+        if (fleet.Waypoints.Count >= 2) return;
 
-        var deltaLatitude = fleet.OrderLatitude - fleet.Latitude;
-        var deltaLongitude = ShortestLongitude(fleet.OrderLongitude - fleet.Longitude);
-        var scale = step / MathF.Max(0.0001f, remaining);
-        fleet.Latitude = M.Clamp(fleet.Latitude + deltaLatitude * scale, -85f, 85f);
-        fleet.Longitude = Wrap(fleet.Longitude + deltaLongitude * scale);
+        fleet.HasOrder = false;
+        fleet.Routed = false;
+        fleet.Waypoints.Clear();
+        Arrive(campaign, fleet);
     }
+
+    private static void Arrive(Campaign campaign, Fleet fleet)
+    {
+        if (fleet.Mission != FleetMission.Anchored) return;
+        fleet.BerthProvinceId = FindBerth(campaign, fleet);
+        // A fleet ordered into port while loaded lands its passengers there - in the port it
+        // is lying in, not in whichever one it happens to call home.
+        if (fleet.IsLoaded && fleet.BerthProvinceId > 0)
+            NavalInvasion.Disembark(campaign, fleet, fleet.BerthProvinceId);
+    }
+
+    private static void AbandonOrder(Fleet fleet)
+    {
+        fleet.HasOrder = false;
+        fleet.Routed = false;
+        fleet.Waypoints.Clear();
+        if (fleet.Mission != FleetMission.Invasion) return;
+        // A beach that cannot be reached is not a beach; the troops stay aboard.
+        fleet.Mission = FleetMission.Patrol;
+        fleet.TargetProvinceId = -1;
+    }
+
+    // --- fighting -------------------------------------------------------------------------
 
     /// <summary>
     /// Fleets of countries at war that are close enough to see each other fight, on the
@@ -237,9 +565,9 @@ public static class NavalOperations
                 if (theirs.Hulls <= 0 || theirs.InAction || theirs.NationId == mine.NationId) continue;
                 if (theirs.ReadyDay > campaign.ElapsedDays) continue;
                 if (theirs.Mission == FleetMission.Anchored) continue;
-                if (!AtWar(campaign, mine.NationId, theirs.NationId)) continue;
                 if (Distance(mine.Latitude, mine.Longitude, theirs.Latitude, theirs.Longitude) >
                     defines.FleetContactRangeDegrees) continue;
+                if (!AtWar(campaign, mine.NationId, theirs.NationId)) continue;
 
                 Engage(campaign, mine, theirs);
                 break;
@@ -252,6 +580,12 @@ public static class NavalOperations
         var defines = campaign.Defines;
         left.InAction = true;
         right.InAction = true;
+        left.LastActionDay = right.LastActionDay = campaign.ElapsedDays;
+
+        // An action is fought over days, and this is one step of it: each step takes its
+        // share of a day's losses. It used to take a whole day's, so at an hourly step two
+        // fleets that met at breakfast had broken each other by lunch.
+        var share = campaign.TickScale;
 
         // A fleet with an army aboard is a convoy: its decks are full, it is not free to
         // manoeuvre, and it is trying to get somewhere rather than to win. Catching one is
@@ -259,26 +593,25 @@ public static class NavalOperations
         // penalty and what it is carrying is what it stands to lose.
         var leftPower = MathF.Max(0.01f, left.Power * (left.IsLoaded ? defines.FleetConvoyCombatPenalty : 1f));
         var rightPower = MathF.Max(0.01f, right.Power * (right.IsLoaded ? defines.FleetConvoyCombatPenalty : 1f));
-        Damage(campaign, left, rightPower / leftPower);
-        Damage(campaign, right, leftPower / rightPower);
-        DrownPassengers(campaign, left, rightPower / leftPower);
-        DrownPassengers(campaign, right, leftPower / rightPower);
+        Damage(campaign, left, rightPower / leftPower, share);
+        Damage(campaign, right, leftPower / rightPower, share);
+        DrownPassengers(campaign, left, rightPower / leftPower, share);
+        DrownPassengers(campaign, right, leftPower / rightPower, share);
 
-        // Whoever's cohesion gives way breaks off and runs for home. Nothing is sunk
-        // outright: a beaten fleet is a fleet that has to be repaired, which is a cost the
-        // player feels for months rather than a number that vanishes.
-        Withdraw(campaign, left, right);
-        Withdraw(campaign, right, left);
+        // Whoever's cohesion gives way breaks off and runs for home, and what was most
+        // badly hit does not make it back.
+        Withdraw(campaign, left);
+        Withdraw(campaign, right);
     }
 
-    private static void Damage(Campaign campaign, Fleet fleet, float pressure)
+    private static void Damage(Campaign campaign, Fleet fleet, float pressure, float share)
     {
         var defines = campaign.Defines;
-        var organisationLoss = defines.FleetOrganisationLossPerAction * M.Clamp(pressure, 0.25f, 4f);
+        var organisationLoss = defines.FleetOrganisationLossPerAction * M.Clamp(pressure, 0.25f, 4f) * share;
         fleet.Organisation = M.Clamp01(fleet.Organisation - organisationLoss);
         fleet.Strength = M.Clamp01(fleet.Strength -
             organisationLoss * defines.FleetLossesPerOrganisationPoint);
-        fleet.Experience = M.Clamp01(fleet.Experience + defines.FleetExperiencePerAction);
+        fleet.Experience = M.Clamp01(fleet.Experience + defines.FleetExperiencePerAction * share);
     }
 
     /// <summary>
@@ -286,10 +619,10 @@ public static class NavalOperations
     /// weaker than it left, or does not arrive at all - which is what makes escorting a
     /// convoy worth a player's attention rather than a chore.
     /// </summary>
-    private static void DrownPassengers(Campaign campaign, Fleet fleet, float pressure)
+    private static void DrownPassengers(Campaign campaign, Fleet fleet, float pressure, float share)
     {
         if (!fleet.IsLoaded) return;
-        var lost = campaign.Defines.InvasionLossesPerActionAtSea * M.Clamp(pressure, 0.25f, 4f);
+        var lost = campaign.Defines.InvasionLossesPerActionAtSea * M.Clamp(pressure, 0.25f, 4f) * share;
         if (lost <= 0f) return;
         foreach (var id in fleet.Carried)
         {
@@ -300,22 +633,39 @@ public static class NavalOperations
         }
     }
 
-    private static void Withdraw(Campaign campaign, Fleet fleet, Fleet enemy)
+    private static void Withdraw(Campaign campaign, Fleet fleet)
     {
         if (fleet.Organisation > campaign.Defines.FleetBreakOrganisation) return;
+
+        // The worst of the damage goes down. A fleet at ninety per cent strength is ninety
+        // per cent of every ship, which is not how a battle ends: some are untouched and
+        // some are on the bottom. Sinking the wrecks leaves the rest in better order.
+        var wrecked = fleet.Hulls * (1f - fleet.Strength) * campaign.Defines.FleetHullsSunkOnBreak;
+        var sunk = Math.Min(fleet.Hulls, (int)MathF.Round(wrecked));
+        if (sunk > 0)
+        {
+            var afloat = fleet.Hulls * fleet.Strength;
+            fleet.Hulls -= sunk;
+            fleet.HullsLost += sunk;
+            fleet.Strength = fleet.Hulls > 0 ? M.Clamp01(afloat / fleet.Hulls) : 0f;
+        }
+
         // An invasion that is broken at sea turns back with what is left of it.
-        fleet.TargetProvinceId = -1;
-        fleet.Mission = FleetMission.Anchored;
-        fleet.HasOrder = true;
-        fleet.OrderLatitude = fleet.HomeLatitude;
-        fleet.OrderLongitude = fleet.HomeLongitude;
+        SendHome(campaign, fleet);
         fleet.ReadyDay = campaign.ElapsedDays + campaign.Defines.FleetRestAfterActionDays;
     }
+
+    // --- what a navy is worth ----------------------------------------------------------------
 
     /// <summary>
     /// What a navy is worth to a country's trade this week. Raiders take from an enemy's
     /// merchant traffic, escorts protect one's own, and a blockade does both to whatever it
     /// is sitting on. This is where a navy stops being scenery: it is money.
+    ///
+    /// Where the enemy's ships are matters. A blockade is a blockade of the coast it is
+    /// sitting on, not of every coast its enemy has; a raider hunts where merchant shipping
+    /// runs, which is toward the victim's ports, and one in another ocean takes little. And a
+    /// country with no coast has no merchant fleet to sink.
     /// </summary>
     public static void ApplyCommerceEffects(Campaign campaign, Nation nation, Breakdown trade)
     {
@@ -335,8 +685,19 @@ public static class NavalOperations
             }
             if (fleet.Mission != FleetMission.Raid && fleet.Mission != FleetMission.Blockade) continue;
             if (!AtWar(campaign, nation.Id, fleet.NationId)) continue;
-            if (fleet.Mission == FleetMission.Raid) raided += fleet.Presence * defines.FleetRaidValue;
-            else blockaded += fleet.Presence * defines.FleetBlockadeValue;
+
+            var reach = CoastReach(campaign, fleet, nation);
+            if (fleet.Mission == FleetMission.Raid)
+            {
+                var range = MathF.Max(1f, defines.FleetRaidRangeDegrees);
+                var found = reach <= range
+                    ? 1f
+                    : MathF.Max(defines.FleetRaidFloor, 1f - (reach - range) / (range * 2f));
+                if (float.IsPositiveInfinity(reach)) found = 0f;
+                raided += fleet.Presence * defines.FleetRaidValue * found;
+            }
+            else if (reach <= defines.FleetBlockadeRangeDegrees)
+                blockaded += fleet.Presence * defines.FleetBlockadeValue;
         }
 
         var protection = M.Clamp01(guarded / MathF.Max(0.01f, raided + blockaded + guarded));
@@ -344,6 +705,36 @@ public static class NavalOperations
         if (lost <= 0f) return;
         nation.WeeklyTradeBalance -= lost;
         trade?.Add("Shipping lost to enemy navies", -lost);
+    }
+
+    private static readonly Dictionary<long, (float Latitude, float Longitude, int Week, float Reach)> Reaches = new();
+
+    /// <summary>
+    /// Degrees from a fleet to the nearest harbour a country holds; infinity for a country
+    /// with no coast; zero on a campaign with no map, where every fleet is everywhere.
+    /// </summary>
+    public static float CoastReach(Campaign campaign, Fleet fleet, Nation nation)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null) return 0f;
+        var key = ((long)fleet.Id << 32) | (uint)nation.MapIndex;
+        var week = campaign.ElapsedDays / 7;
+        if (Reaches.TryGetValue(key, out var known) && known.Week == week &&
+            MathF.Abs(known.Latitude - fleet.Latitude) < 0.05f && MathF.Abs(known.Longitude - fleet.Longitude) < 0.05f)
+            return known.Reach;
+
+        var reach = float.PositiveInfinity;
+        foreach (var province in SeaLanes.CoastalProvinces(map))
+        {
+            var holder = HolderOf(campaign, province);
+            if (holder is null || holder.Id != nation.Id) continue;
+            if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
+            var distance = Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (distance < reach) reach = distance;
+        }
+        if (Reaches.Count > 4096) Reaches.Clear();
+        Reaches[key] = (fleet.Latitude, fleet.Longitude, week, reach);
+        return reach;
     }
 
     /// <summary>Whether a province's coast is being sat on, for the supply that reaches it.</summary>
@@ -408,23 +799,34 @@ public sealed class SetFleetOrderCommand : ICampaignCommand
     public float Latitude { get; init; }
     public float Longitude { get; init; }
 
+    /// <summary>Why the order was not given, or empty when it was.</summary>
+    public string Refusal { get; private set; } = "";
+
     public void Apply(Campaign campaign)
     {
         var fleet = campaign.Fleets.Find(candidate => candidate.Id == FleetId);
-        if (fleet is null || fleet.NationId != IssuerId) return;
-        fleet.Mission = Mission;
+        if (fleet is null || fleet.NationId != IssuerId) { Refusal = Loc.Get("That fleet is not yours to order."); return; }
         if (HasDestination)
         {
-            fleet.HasOrder = true;
-            fleet.OrderLatitude = M.Clamp(Latitude, -85f, 85f);
-            fleet.OrderLongitude = Longitude;
+            if (!NavalOperations.SendTo(campaign, fleet, M.Clamp(Latitude, -85f, 85f), Longitude))
+            {
+                Refusal = Loc.Get("The fleet cannot reach that by sea.");
+                return;
+            }
+            fleet.Mission = Mission;
+            if (Mission != FleetMission.Invasion) fleet.TargetProvinceId = -1;
         }
         else if (Mission == FleetMission.Anchored)
         {
-            // Ordering a fleet to anchor without saying where means "come home".
-            fleet.HasOrder = true;
-            fleet.OrderLatitude = fleet.HomeLatitude;
-            fleet.OrderLongitude = fleet.HomeLongitude;
+            // Ordering a fleet to anchor without saying where means "come home" - unless it
+            // is already lying in a friendly port, where anchoring means staying put.
+            if (fleet.BerthProvinceId > 0 && !fleet.HasOrder) fleet.Mission = FleetMission.Anchored;
+            else NavalOperations.SendHome(campaign, fleet);
+        }
+        else
+        {
+            fleet.Mission = Mission;
+            fleet.BerthProvinceId = -1;
         }
     }
 }
@@ -464,6 +866,7 @@ public static class NavalBootstrap
                 NationId = nation.Id,
                 Name = port.Name,
                 Hulls = port.Hulls,
+                Establishment = port.Hulls,
                 Latitude = port.Latitude,
                 Longitude = port.Longitude,
                 HomeLatitude = port.Latitude,

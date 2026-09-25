@@ -311,6 +311,7 @@ public partial class DealOrForceGame
             var wars = _campaign.Wars.Count(war => !war.Ended && war.Involves(nation.Id));
             if (wars > 0) CardRow(_countryCardRows, "Wars", wars.ToString("N0"), null, "state.negative");
             AddResearchRows(_countryCardRows);
+            AddStaffRows(_countryCardRows);
             _countryCardLinks.AddChild(ActionButton("Nation", () => OpenScreen("Nation"), 0, 28));
             _countryCardLinks.AddChild(ActionButton("Economy", () => OpenScreen("Economy"), 0, 28));
             _countryCardLinks.AddChild(ActionButton("Military", () => OpenScreen("Military"), 0, 28));

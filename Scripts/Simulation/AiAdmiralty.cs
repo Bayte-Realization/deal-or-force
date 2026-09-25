@@ -3,6 +3,37 @@ using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>Stores below which a fleet the AI commands turns for home to refill.</summary>
+    public float AiFleetReturnSupply { get; set; } = 0.3f;
+
+    /// <summary>Strength below which it turns for home to be repaired.</summary>
+    public float AiFleetReturnStrength { get; set; } = 0.45f;
+
+    /// <summary>Cohesion below which it turns for home to recover.</summary>
+    public float AiFleetReturnOrganisation { get; set; } = 0.3f;
+
+    /// <summary>What a fleet lying in port has to be back to before the AI sends it out again.</summary>
+    public float AiFleetSailSupply { get; set; } = 0.85f;
+
+    public float AiFleetSailOrganisation { get; set; } = 0.8f;
+
+    public float AiFleetSailStrength { get; set; } = 0.6f;
+
+    /// <summary>
+    /// How much farther than the nearest enemy beach the AI will sail for a more thinly held
+    /// one, as a multiple of the nearest one's distance.
+    /// </summary>
+    public float AiInvasionBeachSpread { get; set; } = 1.3f;
+
+    /// <summary>
+    /// The enemy's navy, against one's own, above which the AI will not put an army to sea.
+    /// A convoy sent through a stronger fleet is a convoy sent to the bottom.
+    /// </summary>
+    public float AiInvasionNavalOdds { get; set; } = 1.5f;
+}
+
 /// <summary>
 /// What a country that is not being played does with its navy.
 ///
@@ -14,8 +45,11 @@ namespace DealOrForce.Simulation;
 /// The reasoning is deliberately shallow, and staggered so the cost is spread. A country at
 /// peace keeps its ships at home. A country at war sends them out: to guard its own trade
 /// if it is the weaker navy, to take the enemy's if it is the stronger, and to sit on the
-/// enemy's coast if it can reach one. And a country at war with somebody it cannot walk to
-/// loads an army and goes, because otherwise an island is a country that cannot be fought.
+/// enemy's coast if it can reach one. A fleet that has spent its stores or taken a beating
+/// comes home before it is empty rather than after, and goes out again once it is fit. And
+/// a country at war with somebody it cannot walk to loads an army and goes - to the beach
+/// that is held most thinly among the near ones, and only when its navy is not the weaker
+/// by a distance - because otherwise an island is a country that cannot be fought.
 ///
 /// It is not a naval doctrine. It is enough that the sea is contested, that a blockade is
 /// answered, and that an overseas war is a war rather than a stalemate by geography.
@@ -23,6 +57,8 @@ namespace DealOrForce.Simulation;
 public static class AiAdmiralty
 {
     private static readonly List<Army> Loadable = new();
+    private static readonly Dictionary<int, float> Defenders = new();
+    private static readonly List<(int Province, float Distance)> Beaches = new();
 
     public static void Tick(Campaign campaign)
     {
@@ -35,12 +71,26 @@ public static class AiAdmiralty
         {
             if (fleet.Hulls <= 0) continue;
             var nation = campaign.NationById(fleet.NationId);
-            if (nation is null || nation.IsHuman) continue;
+            // A player's navy is the player's - unless they have handed it to the admiralty,
+            // which then runs it exactly as it runs everybody else's.
+            if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Navy))) continue;
 
             // Each fleet thinks on its own day, so two hundred navies do not all think at
-            // once. A fleet already sailing somewhere is left to get there.
+            // once.
             if ((campaign.ElapsedDays + fleet.Id) % campaign.Defines.AiFleetDecisionInterval != 0) continue;
+
+            // Home to refill before the stores run out, not after - asked even of a fleet on
+            // its way somewhere, because the way somewhere is where they run out.
+            if (!fleet.IsLoaded && fleet.Mission != FleetMission.Anchored && Spent(campaign, fleet))
+            {
+                NavalOperations.SendHome(campaign, fleet);
+                continue;
+            }
+
+            // A fleet already sailing somewhere is left to get there, and one being repaired
+            // is left to be repaired.
             if (fleet.HasOrder) continue;
+            if (fleet.InPort && !fleet.IsLoaded && !Fit(campaign, fleet)) continue;
 
             var war = FindWar(campaign, nation);
             if (war is null)
@@ -64,7 +114,11 @@ public static class AiAdmiralty
             // and raiding rather than competing with them. It has to be the whole decision
             // for this fleet: sending it home to load and then, in the same breath, ordering
             // it out to blockade simply cancels the order it was just given.
-            if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, enemy.MapIndex))
+            //
+            // Unless the enemy's navy is so much the stronger that a convoy would never
+            // arrive, in which case the fleet fights for the sea first.
+            if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, enemy.MapIndex) &&
+                KnownNavy(campaign, enemy, nation) <= OwnNavy(campaign, nation) * campaign.Defines.AiInvasionNavalOdds)
             {
                 if (fleet.Mission != FleetMission.Anchored) { SendHome(campaign, fleet); continue; }
                 if (TryLoad(campaign, fleet, nation)) LaunchIfPossible(campaign, fleet, nation, enemy);
@@ -73,6 +127,22 @@ public static class AiAdmiralty
 
             Deploy(campaign, fleet, nation, enemy);
         }
+    }
+
+    private static bool Spent(Campaign campaign, Fleet fleet)
+    {
+        var defines = campaign.Defines;
+        return fleet.Supply < defines.AiFleetReturnSupply ||
+               fleet.Strength < defines.AiFleetReturnStrength ||
+               fleet.Organisation < defines.AiFleetReturnOrganisation;
+    }
+
+    private static bool Fit(Campaign campaign, Fleet fleet)
+    {
+        var defines = campaign.Defines;
+        return fleet.Supply >= defines.AiFleetSailSupply &&
+               fleet.Organisation >= defines.AiFleetSailOrganisation &&
+               fleet.Strength >= defines.AiFleetSailStrength;
     }
 
     /// <summary>
@@ -107,6 +177,35 @@ public static class AiAdmiralty
         }.Apply(campaign);
     }
 
+    private static float OwnNavy(Campaign campaign, Nation nation)
+    {
+        var mine = 0f;
+        foreach (var other in campaign.Fleets)
+            if (other.NationId == nation.Id) mine += other.Presence;
+        return mine;
+    }
+
+    /// <summary>
+    /// The navy on the other side: the enemy's and that of everyone fighting beside it.
+    ///
+    /// Counted from the fleets themselves. It used to be guessed from how many regions the
+    /// enemy held, which made a landlocked giant a naval power and an island nation with a
+    /// fleet of two hundred a nuisance; navies are the one arm of a country everyone can
+    /// count from a reference book.
+    /// </summary>
+    private static float KnownNavy(Campaign campaign, Nation enemy, Nation nation)
+    {
+        var theirs = 0f;
+        foreach (var other in campaign.Fleets)
+        {
+            if (other.Hulls <= 0) continue;
+            if (other.NationId == enemy.Id ||
+                (other.NationId != nation.Id && CampaignDiplomacy.AtWar(campaign, other.NationId, nation.Id)))
+                theirs += other.Presence;
+        }
+        return theirs;
+    }
+
     /// <summary>
     /// Put to sea, and at what. The weaker navy guards what it has; the stronger one goes
     /// after what the enemy has. Both are the obvious move, which is the point - an AI that
@@ -114,12 +213,8 @@ public static class AiAdmiralty
     /// </summary>
     private static void Deploy(Campaign campaign, Fleet fleet, Nation nation, Nation enemy)
     {
-        var mine = 0f;
-        var theirs = CampaignIntel.EstimatedNavy(campaign, enemy);
-        foreach (var other in campaign.Fleets)
-        {
-            if (other.NationId == nation.Id) mine += other.Presence;
-        }
+        var mine = OwnNavy(campaign, nation);
+        var theirs = KnownNavy(campaign, enemy, nation);
 
         var mission = mine >= theirs * campaign.Defines.AiFleetOffensiveRatio
             ? FleetMission.Blockade
@@ -127,35 +222,32 @@ public static class AiAdmiralty
                 ? FleetMission.Raid
                 : FleetMission.Escort;
 
-        if (mission == FleetMission.Blockade)
+        // Both offensive missions are fought off the enemy's coast: a blockade sits on it,
+        // and a raider hunts the shipping that runs to it. A fleet that cannot reach any of
+        // it guards its own instead.
+        if (mission is FleetMission.Blockade or FleetMission.Raid)
         {
-            var coast = NearestEnemyCoast(campaign, fleet, enemy);
-            if (coast > 0)
+            foreach (var coast in EnemyCoasts(campaign, fleet, enemy, 3))
             {
-                var centre = campaign.ProvinceMap.CenterOf(coast);
-                new SetFleetOrderCommand
-                {
-                    IssuerId = nation.Id, FleetId = fleet.Id, Mission = FleetMission.Blockade,
-                    HasDestination = true, Latitude = centre.Latitude, Longitude = centre.Longitude
-                }.Apply(campaign);
+                if (!SeaLanes.TryHarbourPoint(campaign.ProvinceMap, coast, out var latitude, out var longitude)) continue;
+                if (!NavalOperations.SendTo(campaign, fleet, latitude, longitude)) continue;
+                fleet.Mission = mission;
+                fleet.TargetProvinceId = -1;
                 return;
             }
-            mission = FleetMission.Raid;
+            mission = FleetMission.Escort;
         }
 
-        if (mission == FleetMission.Escort)
+        // Guarding one's own shipping means being where one's own shipping is, which is
+        // also where the enemy's blockade will be. An escort that stays wherever it
+        // happened to be guards nothing and never meets anybody.
+        if (NavalOperations.Distance(fleet.Latitude, fleet.Longitude, fleet.HomeLatitude, fleet.HomeLongitude) >
+            campaign.Defines.FleetBerthRangeDegrees &&
+            NavalOperations.SendTo(campaign, fleet, fleet.HomeLatitude, fleet.HomeLongitude))
         {
-            // Guarding one's own shipping means being where one's own shipping is, which is
-            // also where the enemy's blockade will be. An escort that stays wherever it
-            // happened to be guards nothing and never meets anybody.
-            new SetFleetOrderCommand
-            {
-                IssuerId = nation.Id, FleetId = fleet.Id, Mission = FleetMission.Escort,
-                HasDestination = true, Latitude = fleet.HomeLatitude, Longitude = fleet.HomeLongitude
-            }.Apply(campaign);
+            fleet.Mission = FleetMission.Escort;
             return;
         }
-
         if (fleet.Mission == mission) return;
         new SetFleetOrderCommand { IssuerId = nation.Id, FleetId = fleet.Id, Mission = mission }.Apply(campaign);
     }
@@ -222,36 +314,81 @@ public static class AiAdmiralty
 
     private static void LaunchIfPossible(Campaign campaign, Fleet fleet, Nation nation, Nation enemy)
     {
-        var coast = NearestEnemyCoast(campaign, fleet, enemy);
-        if (coast <= 0)
+        var beach = BestBeach(campaign, fleet, enemy);
+        if (beach > 0)
         {
-            // Nowhere to put them. Better ashore at home than at sea forever.
-            if (fleet.HomeProvinceId > 0) NavalInvasion.Disembark(campaign, fleet, fleet.HomeProvinceId);
-            return;
+            var launch = new LaunchInvasionCommand { IssuerId = nation.Id, FleetId = fleet.Id, ProvinceId = beach };
+            launch.Apply(campaign);
+            if (launch.Refusal.Length == 0) return;
         }
-        new LaunchInvasionCommand { IssuerId = nation.Id, FleetId = fleet.Id, ProvinceId = coast }.Apply(campaign);
+
+        // Nowhere to put them. Better ashore at home than at sea forever - and ashore where
+        // the fleet is, which is home only when the fleet is.
+        if (fleet.InPort) NavalInvasion.Disembark(campaign, fleet, fleet.BerthProvinceId);
+        else NavalOperations.SendHome(campaign, fleet);
     }
 
     /// <summary>
-    /// The nearest province the enemy holds. Nearest rather than best on purpose: an AI
-    /// that picks the weakest beach in the world is an AI that sails past three continents
-    /// to reach it, and this map is the whole planet.
+    /// The enemy's coasts the fleet can reach, nearest first. Nearest rather than best on
+    /// purpose: an AI that picks the weakest beach in the world is an AI that sails past
+    /// three continents to reach it, and this map is the whole planet.
     /// </summary>
-    private static int NearestEnemyCoast(Campaign campaign, Fleet fleet, Nation enemy)
+    private static IEnumerable<int> EnemyCoasts(Campaign campaign, Fleet fleet, Nation enemy, int count)
     {
-        var topology = campaign.ProvinceMap;
-        var controllers = campaign.ProvinceController;
-        if (topology is null || controllers is null) return -1;
+        CollectBeaches(campaign, fleet, enemy);
+        for (var index = 0; index < Beaches.Count && index < count; index++) yield return Beaches[index].Province;
+    }
 
-        var best = -1;
-        var bestDistance = campaign.Defines.AiInvasionSearchDegrees;
-        for (var province = 1; province <= topology.ProvinceCount; province++)
+    private static void CollectBeaches(Campaign campaign, Fleet fleet, Nation enemy)
+    {
+        Beaches.Clear();
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return;
+        var basin = SeaLanes.BasinAt(topology, fleet.Latitude, fleet.Longitude);
+        var search = campaign.Defines.AiInvasionSearchDegrees;
+        foreach (var province in SeaLanes.CoastalProvinces(topology))
         {
-            if (controllers[province] != (ushort)enemy.MapIndex) continue;
-            var centre = topology.CenterOf(province);
-            var distance = NavalOperations.Distance(fleet.Latitude, fleet.Longitude,
-                centre.Latitude, centre.Longitude);
-            if (distance >= bestDistance) continue;
+            if (campaign.ProvinceController[province] != (ushort)enemy.MapIndex) continue;
+            if (basin >= 0 && SeaLanes.HarbourBasin(topology, province) != basin) continue;
+            if (!SeaLanes.TryHarbourPoint(topology, province, out var latitude, out var longitude)) continue;
+            var distance = NavalOperations.Distance(fleet.Latitude, fleet.Longitude, latitude, longitude);
+            if (distance >= search) continue;
+            Beaches.Add((province, distance));
+        }
+        Beaches.Sort((left, right) => left.Distance.CompareTo(right.Distance));
+    }
+
+    /// <summary>
+    /// Where to land: among the beaches not much farther than the nearest, the one the enemy
+    /// holds most thinly - counting what stands on it and half of what stands next to it,
+    /// because a beachhead is attacked from inland the day after it is taken.
+    /// </summary>
+    private static int BestBeach(Campaign campaign, Fleet fleet, Nation enemy)
+    {
+        CollectBeaches(campaign, fleet, enemy);
+        if (Beaches.Count == 0) return -1;
+
+        Defenders.Clear();
+        foreach (var army in campaign.Armies)
+        {
+            if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0) continue;
+            if (army.NationId != enemy.Id && !CampaignDiplomacy.AtWar(campaign, army.NationId, fleet.NationId)) continue;
+            Defenders[army.ProvinceId] = Defenders.GetValueOrDefault(army.ProvinceId) + army.Divisions * army.Strength;
+        }
+
+        var topology = campaign.ProvinceMap;
+        var reach = Beaches[0].Distance * campaign.Defines.AiInvasionBeachSpread + 3f;
+        var best = -1;
+        var bestDefence = float.MaxValue;
+        var bestDistance = float.MaxValue;
+        foreach (var (province, distance) in Beaches)
+        {
+            if (distance > reach) break;
+            var defence = Defenders.GetValueOrDefault(province);
+            foreach (var next in topology.Neighbors[province]) defence += Defenders.GetValueOrDefault(next) * 0.5f;
+            if (defence > bestDefence + 0.001f) continue;
+            if (MathF.Abs(defence - bestDefence) <= 0.001f && distance >= bestDistance) continue;
+            bestDefence = defence;
             bestDistance = distance;
             best = province;
         }

@@ -148,6 +148,8 @@ public static class LogisticsSystem
             }
         }
 
+        SupplyBySea(campaign, nation, armies, controllers, generation);
+
         DemandBySource.Clear();
         foreach (var army in armies)
         {
@@ -217,6 +219,64 @@ public static class LogisticsSystem
                                             campaign.Defines.ReinforcementCapacityShare) +
                                         barracksTotal * 120f) * spendingFactor;
         if (campaign.ElapsedDays % 7 == 0) nation.ReinforcedLastWeek = 0f;
+    }
+
+    /// <summary>
+    /// Supply by sea, for ground of one's own that no road reaches.
+    ///
+    /// The trace above walks the land, so every island that is not a region of its own was
+    /// cut off from the moment the campaign began - and the deployment put divisions on
+    /// them: six of Japan's seventeen, on Rishiri, Shikoku's islets and the Amakusa chain,
+    /// starved to six per cent and were buried inside six weeks of peace. The same trace
+    /// starved every beachhead an invasion took, because a beachhead is exactly ground no
+    /// road reaches.
+    ///
+    /// So a formation on a coastal province its country holds, that the land trace did not
+    /// reach, is supplied through the nearest port the trace did reach on the same sea,
+    /// SeaSupplyHops further away than that port is. A blockade still bites: the supply
+    /// that arrives is charged for any enemy fleet sitting off it, below, like any coast's.
+    /// </summary>
+    private static void SupplyBySea(Campaign campaign, Nation nation, List<Army> armies, ushort[] controllers,
+        int generation)
+    {
+        var topology = campaign.ProvinceMap;
+        var stamp = _stamp;
+        List<int> ports = null;
+        foreach (var army in armies)
+        {
+            if (army.EmbarkedFleetId >= 0) continue;
+            var province = army.ProvinceId;
+            if (province <= 0 || province >= stamp.Length || stamp[province] == generation) continue;
+            if (controllers[province] != nation.MapIndex) continue;
+            if (!SeaLanes.TryHarbourPoint(topology, province, out var latitude, out var longitude)) continue;
+            var basin = SeaLanes.HarbourBasin(topology, province);
+
+            // The ports the land trace reached, found once for the country and only if some
+            // formation needs one.
+            if (ports is null)
+            {
+                ports = new List<int>();
+                foreach (var coast in SeaLanes.CoastalProvinces(topology))
+                    if (coast < stamp.Length && stamp[coast] == generation && controllers[coast] == nation.MapIndex)
+                        ports.Add(coast);
+            }
+
+            var best = -1;
+            var bestDistance = float.MaxValue;
+            foreach (var port in ports)
+            {
+                if (SeaLanes.HarbourBasin(topology, port) != basin) continue;
+                if (!SeaLanes.TryHarbourPoint(topology, port, out var portLatitude, out var portLongitude)) continue;
+                var distance = NavalOperations.Distance(latitude, longitude, portLatitude, portLongitude);
+                if (distance >= bestDistance) continue;
+                bestDistance = distance;
+                best = port;
+            }
+            if (best < 0) continue;
+            stamp[province] = generation;
+            _distance[province] = _distance[best] + Math.Max(0, campaign.Defines.SeaSupplyHops);
+            _source[province] = _source[best];
+        }
     }
 
     private static void SetStranded(Army army)

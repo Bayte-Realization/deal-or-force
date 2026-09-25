@@ -1,0 +1,37 @@
+// Deal or Force - where a navy can go, where it rests, and what it builds.
+//
+// The sea lanes are worked out from the province raster, where every cell that belongs to no
+// province is water. Straits and canals the raster is too narrow to draw are in
+// common/sea_lanes, cut SeaLanePassageWidth cells either side of their line.
+//
+// Every file in this folder is read in name order and later files win.
+{
+  "SeaLaneIceLatitude": 80,
+  "SeaLanePassageWidth": 2,
+
+  "FleetBerthRangeDegrees": 1.6,
+  "FleetHullsSunkOnBreak": 0.3,
+  "FleetRaidRangeDegrees": 18,
+  "FleetRaidFloor": 0.2,
+
+  // An island or a beachhead no road reaches is supplied by sea, through the nearest port the
+  // land trace does reach, counted this many provinces further from the depot.
+  "SeaSupplyHops": 3,
+
+  "AiFleetReturnSupply": 0.3,
+  "AiFleetReturnStrength": 0.45,
+  "AiFleetReturnOrganisation": 0.3,
+  "AiFleetSailSupply": 0.85,
+  "AiFleetSailOrganisation": 0.8,
+  "AiFleetSailStrength": 0.6,
+  "AiInvasionBeachSpread": 1.3,
+  "AiInvasionNavalOdds": 1.5,
+
+  "HullCost": 0.9,
+  "HullBuildDays": 540,
+  "SlipwaysPerEstablishedHull": 0.06,
+  "SlipwaysPerShipyard": 2,
+  "NavalTargetFloor": 0.6,
+  "NavalTargetCeiling": 1.4,
+  "AiNavalReviewDays": 30
+}

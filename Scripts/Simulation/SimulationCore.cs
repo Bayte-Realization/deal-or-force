@@ -681,8 +681,8 @@ public sealed partial class Campaign
         using (SimProfiler.Measure("military")) MilitaryOperations.Tick(this);
         using (SimProfiler.Measure("naval"))
         {
-            AiAdmiralty.Tick(this);
-            NavalOperations.Tick(this);
+            using (SimProfiler.Measure("  naval:admiralty")) AiAdmiralty.Tick(this);
+            using (SimProfiler.Measure("  naval:operations")) NavalOperations.Tick(this);
         }
         using (SimProfiler.Measure("warfare")) Warfare.Tick(this);
         // Right after the fighting: the step's broken formations are removed and the
@@ -702,6 +702,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
             using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
+            using (SimProfiler.Measure("shipbuilding")) Shipbuilding.Tick(this);
             using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);
             using (SimProfiler.Measure("subjects")) SubjectSystem.Tick(this);
             using (SimProfiler.Measure("statecraft")) AiStatecraft.Tick(this);

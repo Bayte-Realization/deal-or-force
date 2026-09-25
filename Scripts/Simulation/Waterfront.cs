@@ -127,11 +127,22 @@ public static class Waterfront
         return Loc.Format("{0}: this region has no coast, no lake and no navigable river.", name);
     }
 
+    // One answer per map, kept for as long as the map is: two campaigns alive at once - two
+    // peers stepped side by side, a client and the snapshot it is rebuilding from - each ask
+    // about their own map, and remembering only the last one re-read sixteen million cells on
+    // every switch.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ProvinceTopology, WaterAccess[]> Known = new();
+
     private static void Refresh(ProvinceTopology map)
     {
         if (map is null || ReferenceEquals(_map, map)) return;
         _map = map;
         _regionStamp = -1;
+        if (Known.TryGetValue(map, out var known))
+        {
+            _byProvince = known;
+            return;
+        }
 
         var access = new WaterAccess[map.ProvinceCount + 1];
         var cells = map.CellToProvince;
@@ -166,6 +177,7 @@ public static class Waterfront
         }
 
         _byProvince = access;
+        Known.AddOrUpdate(map, access);
     }
 
     private static bool Open(ushort[] cells, int x, int y, int width, int height)

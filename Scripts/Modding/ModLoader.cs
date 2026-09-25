@@ -154,6 +154,7 @@ public sealed class ModLoader
         FontCatalog.Load();
         SubjectCatalog.ResetCatalog();
         TechnologyCatalog.ResetCatalog();
+        SeaPassageCatalog.ResetCatalog();
         ProvinceOwnership.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();

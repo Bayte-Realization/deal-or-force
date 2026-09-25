@@ -69,6 +69,8 @@ static class Program
         if (args.Contains("--submission-only")) { SubmissionTests.Run(map); return; }
         if (args.Contains("--agreement-only")) { AgreementTests.Run(map); return; }
         if (args.Contains("--research-only")) { TechnologyTests.Run(map); return; }
+        if (args.Contains("--naval-only")) { NavalTests.Run(map); return; }
+        if (args.Contains("--staff-only")) { StaffTests.Run(map); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();
         var border = BorderFronts.Candidates(c, rus.Id, ukr.Id);
@@ -243,5 +245,7 @@ static class Program
         SubmissionTests.Run(map);
         AgreementTests.Run(map);
         TechnologyTests.Run(map);
+        NavalTests.Run(map);
+        StaffTests.Run(map);
     }
 }

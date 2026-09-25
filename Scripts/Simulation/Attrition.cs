@@ -266,6 +266,10 @@ public static class Attrition
 
             if ((campaign.ElapsedDays + nation.Id) % defines.ArmyRebuildIntervalDays != 0) continue;
 
+            // A player who has taken the army's size into their own hands is left to it: no
+            // formation raised on their treasury, none stood down from under them.
+            if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Army)) continue;
+
             // The establishment follows the country's own budget, and it follows it slowly:
             // an army is not raised or sent home in a fortnight, and a target that jumped
             // would have every country in the world lurching between two sizes.

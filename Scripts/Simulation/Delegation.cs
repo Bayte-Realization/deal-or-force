@@ -36,15 +36,34 @@ public static class Delegation
     /// <summary>The trade desk: what to buy first, what to keep back, what to pay.</summary>
     public const string Trade = "trade";
 
-    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade };
+    /// <summary>
+    /// The admiralty: where the fleets go and what they do, when they come home to refit, and
+    /// what the yards lay down - everything the AI's own navies are run by.
+    /// </summary>
+    public const string Navy = "navy";
+
+    /// <summary>
+    /// The general staff: keeping the army at the size the budget pays for - raising a
+    /// formation to replace one lost, standing one down when a peace leaves too many.
+    ///
+    /// The one portfolio a player's country has always had delegated, without being told: the
+    /// same rebuild every other country runs ran for the player too, so an army the player had
+    /// raised for a war they were planning was quietly stood down, one division a month, while
+    /// they planned it. It stays delegated by default - a player who never opens this keeps the
+    /// army they had - and it can now be taken back.
+    /// </summary>
+    public const string Army = "army";
+
+    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade, Army, Navy };
 
     /// <summary>Whether this country has handed that portfolio over.</summary>
     public static bool Holds(Nation nation, string portfolio) =>
-        nation is not null && nation.Delegated.Contains(portfolio);
+        nation is not null && (portfolio == Army ? !nation.ArmyByHand : nation.Delegated.Contains(portfolio));
 
     public static void Set(Nation nation, string portfolio, bool delegated)
     {
-        if (nation is null || Array.IndexOf(new[] { Budget, Trade }, portfolio) < 0) return;
+        if (nation is null || !((IList<string>)Portfolios).Contains(portfolio)) return;
+        if (portfolio == Army) { nation.ArmyByHand = !delegated; return; }
         if (delegated) nation.Delegated.Add(portfolio);
         else nation.Delegated.Remove(portfolio);
     }
@@ -131,6 +150,16 @@ public static class Delegation
 
     private static void Withdraw(Nation nation, Commodity commodity, string setting) =>
         nation.TradeSettings.Remove(TradeDesk.GoodKey(commodity, setting));
+}
+
+public sealed partial class Nation
+{
+    /// <summary>
+    /// Whether the player has taken the size of the army into their own hands, so the general
+    /// staff neither raises nor stands down formations for it. Stored this way round so that a
+    /// save from before the choice existed keeps the army that was being kept for it.
+    /// </summary>
+    public bool ArmyByHand;
 }
 
 /// <summary>

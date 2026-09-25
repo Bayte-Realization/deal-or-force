@@ -19,6 +19,7 @@ public partial class DealOrForceGame
     private void FlushInterfaceIfDue(double delta)
     {
         KeepMapSelection(delta);
+        KeepFleetPanel(delta);
         _interfaceSinceRefresh += delta;
         if (!_campaign.IsPaused && _interfaceSinceRefresh < RunningInterfaceInterval) return;
         _interfaceSinceRefresh = 0d;
