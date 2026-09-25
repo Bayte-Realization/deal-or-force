@@ -97,6 +97,14 @@
       "war_score_weight": 0,
       "minimum_days": 0,
       "minimum_acceptance": 0
+    },
+    "StatusQuo": {
+      "description": "Each side keeps what it holds securely, drawn into a border, and a five-year truce: the peace of a war nobody is winning.",
+      "cost": 12,
+      "acceptance_base": 50,
+      "war_score_weight": -0.35,
+      "minimum_days": 365,
+      "minimum_acceptance": 50
     }
   }
 }

@@ -203,6 +203,10 @@ public static class Program
             BattlesLeaveRuins());
         failures += Check("a country that has taken all of another has won the war",
             AWonWarScoresAsWon());
+        failures += Check("a peace is a border: joined to the winner, with no pocket of the loser cut off",
+            APeaceIsABorder());
+        failures += Check("no war goes on for ever",
+            NoWarGoesOnForEver());
         failures += Check("a movement without land lives, moves, rises and can lose its land again",
             MovementsLiveWithoutLand());
         failures += Check("a fallen country goes into exile, and a movement can come to an end",
@@ -9318,6 +9322,119 @@ public static class Program
 
         Console.WriteLine($"  dealings: America lists Hamas; Qatar throws it out and it goes to {host?.Tag ?? "nowhere"}; " +
                           $"Turkey pays {Fmt.Money(treasury - turkey.Treasury)} a week.");
+        return "";
+    }
+
+    /// <summary>
+    /// The AI's treaty is drawn as a border. Russia is handed the regions of Ukraine scattered
+    /// about the country - some on its own border, some deep inside - and writes a peace with
+    /// no limit on what it may take: every region it asks for must be joined to Russia by the
+    /// ground it holds or asks for, and what Ukraine keeps must be in no more pieces than it was.
+    /// </summary>
+    private static string APeaceIsABorder()
+    {
+        var campaign = Campaign.CreateBootstrap(20240923);
+        if (!AttachMap(campaign)) return "no province map to fight on";
+        var ukraine = campaign.NationByTag("UKR");
+        var russia = campaign.NationByTag("RUS");
+        var war = campaign.Wars.FirstOrDefault(candidate => !candidate.Ended && candidate.Involves(ukraine.Id) && candidate.Involves(russia.Id));
+        if (war is null) return "no war between Russia and Ukraine to end";
+        var topology = campaign.ProvinceMap;
+
+        // Region adjacency by land, the way the treaty sees it.
+        var next = new Dictionary<int, HashSet<int>>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            int region = topology.ProvinceToState[province];
+            if (region == 0) continue;
+            if (!next.TryGetValue(region, out var set)) next[region] = set = new HashSet<int>();
+            foreach (var neighbour in topology.Neighbors[province])
+                if (topology.ProvinceToState[neighbour] is var other && other != 0 && other != region) set.Add(other);
+        }
+        int Pieces(IEnumerable<int> regions)
+        {
+            var all = regions.ToHashSet();
+            var seen = new HashSet<int>();
+            var parts = 0;
+            foreach (var start in all)
+            {
+                if (!seen.Add(start)) continue;
+                parts++;
+                var queue = new Queue<int>();
+                queue.Enqueue(start);
+                while (queue.Count > 0)
+                    foreach (var other in next.GetValueOrDefault(queue.Dequeue()) ?? new HashSet<int>())
+                        if (all.Contains(other) && seen.Add(other)) queue.Enqueue(other);
+            }
+            return parts;
+        }
+
+        var ukrainian = campaign.StatesOf(ukraine).Select(state => state.MapIndex).ToList();
+        var piecesBefore = Pieces(ukrainian);
+        // Every third region of Ukraine, wherever it is, goes to Russian control.
+        foreach (var region in ukrainian.Where((_, index) => index % 3 == 0))
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+                if (topology.ProvinceToState[province] == region) campaign.SetProvinceController(province, (ushort)russia.MapIndex);
+
+        var ledger = new PeaceLedger(campaign, war, russia.Id);
+        var demand = new PeaceDemand { WarId = war.Id, ProposerId = russia.Id };
+        PeaceShape.Write(campaign, russia, war, ledger, demand, 1_000_000f);
+        var taken = demand.Provinces.Select(province => (int)topology.ProvinceToState[province]).ToHashSet();
+        if (taken.Count == 0) return "Russia asked for nothing it held";
+
+        var russian = campaign.StatesOf(russia).Select(state => state.MapIndex).ToHashSet();
+        foreach (var region in taken)
+        {
+            // Joined: through what Russia holds or asks for, back to Russia.
+            var reached = new HashSet<int> { region };
+            var queue = new Queue<int>();
+            queue.Enqueue(region);
+            var home = false;
+            while (queue.Count > 0 && !home)
+                foreach (var other in next.GetValueOrDefault(queue.Dequeue()) ?? new HashSet<int>())
+                {
+                    if (russian.Contains(other)) { home = true; break; }
+                    if (taken.Contains(other) && reached.Add(other)) queue.Enqueue(other);
+                }
+            if (!home && (next.GetValueOrDefault(region)?.Count ?? 0) > 0)
+                return $"{campaign.States.First(state => state.MapIndex == region).DisplayName} is taken and touches nothing Russian";
+        }
+        var kept = ukrainian.Where(region => !taken.Contains(region)).ToList();
+        var piecesAfter = Pieces(kept);
+        if (kept.Count > 0 && piecesAfter > piecesBefore)
+            return $"what Ukraine keeps is in {piecesAfter} pieces, and it was in {piecesBefore}";
+
+        Console.WriteLine($"  peace: handed a third of Ukraine scattered at random, Russia asks for {taken.Count} region(s) " +
+                          $"({PeaceShape.AimOf(campaign, war, russia)}), all joined to it; Ukraine keeps {kept.Count} in {piecesAfter} piece(s).");
+        return "";
+    }
+
+    /// <summary>
+    /// A war with nobody's player in it does not last past its eighth year, and before that the
+    /// years make both sides readier to sign.
+    /// </summary>
+    private static string NoWarGoesOnForEver()
+    {
+        var campaign = Campaign.CreateBootstrap(20240924);
+        if (!AttachMap(campaign)) return "no province map to fight on";
+        foreach (var nation in campaign.Nations) nation.IsHuman = false;
+        campaign.IsPaused = false;
+        var war = campaign.Wars.FirstOrDefault(candidate => !candidate.Ended);
+        if (war is null) return "no war in the world to end";
+        for (var day = 0; day < campaign.Defines.EconomyTickDays; day++) campaign.TickDay();
+        if (war.Ended) return "the war ended by itself in its first week";
+
+        var fresh = PeaceNegotiation.Acceptance(campaign, war, war.DefenderId, PeaceTerms.WhitePeace);
+        war.StartedDay = campaign.ElapsedDays - campaign.Defines.PeaceWearinessAfterDays - 3 * 365;
+        var weary = PeaceNegotiation.Acceptance(campaign, war, war.DefenderId, PeaceTerms.WhitePeace);
+        if (weary <= fresh && fresh < 100f) return $"five years of war left a white peace at {weary:0} against {fresh:0} fresh";
+
+        war.StartedDay = campaign.ElapsedDays - campaign.Defines.PeaceForcedEndDays - 1;
+        WarWeariness.Tick(campaign);
+        if (!war.Ended) return $"an eight-year war with nobody's player in it is still being fought (day {campaign.ElapsedDays}, offer from {war.PendingOfferFromId}, last word: {war.LastNegotiation})";
+
+        Console.WriteLine($"  weariness: a white peace is {fresh:0} % acceptable fresh and {weary:0} % after five years; " +
+                          $"at eight the war ended: {war.PeaceSummary}");
         return "";
     }
 

@@ -14,7 +14,9 @@ public enum PeaceTerms
     DemilitarizedSettlement,
     EnforceWarGoal,
     EnforceDemands,
-    Capitulate
+    Capitulate,
+    // Last, so every term a save already holds keeps its number.
+    StatusQuo
 }
 
 
@@ -70,7 +72,10 @@ public static class PeaceTermCatalog
             78f, -4f, 1.22f, 0, 50f),
         [PeaceTerms.Capitulate] = new(
             "Unconditional surrender under the current occupation map.",
-            100f, 100f, 0f, 0, 0f)
+            100f, 100f, 0f, 0, 0f),
+        [PeaceTerms.StatusQuo] = new(
+            "Each side keeps what it holds securely, drawn into a border, and a five-year truce: the peace of a war nobody is winning.",
+            12f, 50f, -0.35f, 365, 50f)
     };
 
     static PeaceTermCatalog() => ResetCatalog();
@@ -152,8 +157,9 @@ public static class PeaceNegotiation
             duration / MathF.Max(1f, defines.PeaceTimePressureDays));
 
         var definition = PeaceTermCatalog.Of(terms);
+        // And the weariness of a long war, on both sides of it (WarWeariness).
         return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight +
-                       exhaustion + timePressure, 0f, 100f);
+                       exhaustion + timePressure + WarWeariness.Weariness(campaign, war), 0f, 100f);
     }
 
     public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
@@ -255,6 +261,8 @@ public static class PeaceNegotiation
                 // not a border anybody would draw on purpose - and every region it cuts in
                 // half becomes a new region that every later war starts from.
                 var tidied = PeaceConference.Tidy(campaign, war, kept, winner.MapIndex);
+                // And settled: joined to the winner, no pocket of the loser cut off (PeaceShape).
+                tidied = PeaceShape.SettleProvinces(campaign, war, tidied, winner);
                 foreach (var province in kept)
                     if (!tidied.Contains(province) && war.OriginalController.TryGetValue(province, out var was))
                         campaign.SetProvinceController(province, was);
@@ -263,6 +271,35 @@ public static class PeaceNegotiation
                 war.AnnexedProvinces = kept.Count;
                 war.CreatedStates = created.Count;
             }
+        }
+
+        // A deadlock: both sides keep what they hold securely, each drawn into a border of its own.
+        if (terms == PeaceTerms.StatusQuo && campaign.ProvinceController is not null && campaign.ProvinceOccupation is not null)
+        {
+            var heldBy = new Dictionary<int, List<int>>();
+            foreach (var pair in war.OriginalController)
+            {
+                var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
+                var holder = campaign.Nations.Find(nation => nation.MapIndex == campaign.ProvinceController[pair.Key]);
+                if (!secured || holder is null || !war.Involves(holder.Id)) { campaign.SetProvinceController(pair.Key, pair.Value); continue; }
+                if (!heldBy.TryGetValue(holder.Id, out var list)) heldBy[holder.Id] = list = new List<int>();
+                list.Add(pair.Key);
+            }
+            var annexed = 0;
+            var created = 0;
+            foreach (var (holderId, held) in heldBy)
+            {
+                var holder = campaign.NationById(holderId);
+                var tidied = PeaceShape.SettleProvinces(campaign, war, PeaceConference.Tidy(campaign, war, held, holder.MapIndex), holder);
+                foreach (var province in held)
+                    if (!tidied.Contains(province) && war.OriginalController.TryGetValue(province, out var was))
+                        campaign.SetProvinceController(province, was);
+                if (tidied.Count == 0) continue;
+                created += StatePartition.Annex(campaign, tidied, holder).Count;
+                annexed += tidied.Count;
+            }
+            war.AnnexedProvinces = annexed;
+            war.CreatedStates = created;
         }
 
         war.Ended = true;
@@ -280,6 +317,7 @@ public static class PeaceNegotiation
             PeaceTerms.DemilitarizedSettlement => "Pre-war borders were restored and the defeated armed forces were partially demobilised.",
             PeaceTerms.EnforceWarGoal => "Secured provinces inside the declared war goal were retained; all other advances were evacuated.",
             PeaceTerms.EnforceDemands => "Secured occupations were retained; unsecured advances were evacuated.",
+            PeaceTerms.StatusQuo => "A deadlock: each side kept what it held securely, and the line became the border.",
             _ => $"{campaign.NationById(proposerId)?.Name ?? "A belligerent"} capitulated."
         };
         war.AttackerFront.Clear();

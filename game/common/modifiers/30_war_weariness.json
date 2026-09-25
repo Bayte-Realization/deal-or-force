@@ -1,0 +1,30 @@
+// Deal or Force - what a long war does to the countries fighting it (WarWeariness.cs).
+//
+// Granted every week to every country in a war older than PeaceWearinessAfterDays (two years),
+// and the heavier one once it is older than AiWearyDays (four); each lapses a fortnight after the
+// war ends. The same grammar as 00_modifiers.json.
+{
+  "long_war": {
+    "name": "A long war",
+    "description": "The war is in its third year. The funerals have stopped being news, and so have the victories.",
+    "days": 14,
+    "positive": false,
+    "modifiers": {
+      "war_support_weekly": -0.003,
+      "stability_weekly": -0.0012,
+      "output": -0.02
+    }
+  },
+  "exhausted_by_war": {
+    "name": "Exhausted by war",
+    "description": "Years of it. Nobody remembers what it was for, and everybody knows somebody who did not come back.",
+    "days": 14,
+    "positive": false,
+    "modifiers": {
+      "war_support_weekly": -0.006,
+      "stability_weekly": -0.0025,
+      "output": -0.05,
+      "recruitment_speed": -0.15
+    }
+  }
+}

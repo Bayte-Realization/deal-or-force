@@ -702,6 +702,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
+            using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
             using (SimProfiler.Measure("movements"))
             {
                 MovementRules.Tick(this);

@@ -635,7 +635,7 @@ public partial class DealOrForceGame
         foreach (var terms in new[]
                  {
                      PeaceTerms.Ceasefire, PeaceTerms.WhitePeace, PeaceTerms.WarReparations,
-                     PeaceTerms.EnforceWarGoal, PeaceTerms.EnforceDemands, PeaceTerms.Capitulate
+                     PeaceTerms.StatusQuo, PeaceTerms.EnforceWarGoal, PeaceTerms.EnforceDemands, PeaceTerms.Capitulate
                  })
         {
             var captured = terms;
@@ -658,6 +658,7 @@ public partial class DealOrForceGame
         PeaceTerms.WarReparations => "Reparations",
         PeaceTerms.EnforceWarGoal => "War goal",
         PeaceTerms.EnforceDemands => "Hold occupied",
+        PeaceTerms.StatusQuo => "Status quo",
         PeaceTerms.Capitulate => "Capitulate",
         PeaceTerms.TradeConcessions => "Trade concessions",
         PeaceTerms.DemilitarizedSettlement => "Demilitarize",
