@@ -55,6 +55,28 @@ public static class ScriptedEffects
     {
         NationField("treasury", n => n.Treasury, (n, v) => n.Treasury = v, 0f, float.PositiveInfinity,
             "National treasury in the campaign's currency unit.");
+        // A movement's own figures (Movements). On a country that is not one they read nought
+        // and writing them does nothing, so an event can be written for "all" without asking.
+        NationField("movement.cadres", n => n.Movement?.Cadres ?? 0f,
+            (n, v) => { if (n.Movement is not null) n.Movement.Cadres = v; }, 0f, float.PositiveInfinity,
+            "A movement's organisers and volunteers, in people.");
+        NationField("movement.legitimacy", n => n.Movement?.Legitimacy ?? 0f,
+            (n, v) => { if (n.Movement is not null) n.Movement.Legitimacy = v; }, 0f, 1f,
+            "A movement's standing, 0-1.");
+        NationField("movement.heat", n => n.Movement?.Heat ?? 0f,
+            (n, v) => { if (n.Movement is not null) n.Movement.Heat = v; }, 0f, 1f,
+            "The temper of the country hosting a movement's headquarters, 0-1; at the expel line it is thrown out.");
+        NationField("movement.support", n => n.Movement is null || n.Movement.Support.Count == 0 ? 0f : n.Movement.Support.Values.Max(),
+            (n, v) =>
+            {
+                if (n.Movement is null || n.Movement.Support.Count == 0) return;
+                // Every region's support moves by the same share the strongest one did.
+                var strongest = n.Movement.Support.Values.Max();
+                var scale = strongest <= 0f ? 1f : v / strongest;
+                foreach (var region in n.Movement.Support.Keys.ToList())
+                    n.Movement.Support[region] = Math.Clamp(n.Movement.Support[region] * scale, 0f, 0.92f);
+            }, 0f, 0.92f,
+            "A movement's support in its strongest region, 0-1; changing it moves every region by the same share.");
         NationField("gdp", n => n.Gdp, (n, v) => n.Gdp = v, 0.01f, float.PositiveInfinity,
             "Annual gross domestic product.");
         NationField("productivity", n => n.Productivity, (n, v) => n.Productivity = v, 0.05f, 8f,
@@ -434,6 +456,7 @@ public static class ScriptedEffects
     {
         "stability", "war_support", "standard_of_living", "literacy", "inflation", "key_rate",
         "tax_rate", "military_spending", "welfare_spending", "education_spending", "market_access",
+        "movement.legitimacy", "movement.heat", "movement.support",
         "state.standard_of_living", "state.radicalism", "state.literacy", "state.urbanization", "state.stability",
         "state.war_damage", "worst_war_damage",
         "army.organisation", "army.entrenchment", "army.experience", "army.equipment", "fleet.readiness", "fleet.supply"
@@ -465,7 +488,11 @@ public static class ScriptedEffects
         ["army.equipment"] = "Equipment of every division",
         ["fleet.readiness"] = "Readiness of every fleet",
         ["fleet.supply"] = "Stores of every fleet",
-        ["research"] = "Research points"
+        ["research"] = "Research points",
+        ["movement.cadres"] = "Cadres",
+        ["movement.legitimacy"] = "Standing",
+        ["movement.heat"] = "The host's temper",
+        ["movement.support"] = "Support in every region"
     };
 
     /// <summary>Build an effect in code, for the compiled-in defaults.</summary>

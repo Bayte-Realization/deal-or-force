@@ -1,0 +1,162 @@
+// Movements: countries without land (Movements.cs, MovementRules.cs).
+//
+// A movement is a country in every way the game knows - a tag, a treasury, relations,
+// spirits, decisions, a player who can be it - except that it holds no ground. It has a
+// headquarters instead, a point on the map in somebody else's country that it can move; a
+// following among the peoples it speaks for, region by region; cadres; standing (legitimacy);
+// and a host whose patience it spends. It lives off donations and sponsors. Where its support
+// runs high enough it can rise, and an uprising that succeeds makes it a country like any
+// other - a capital where the headquarters was, militia out of its cadres, and a war with the
+// country it rose against. One that loses all its ground goes back to being landless.
+//
+//   tag            the three letters its country goes by
+//   peoples        cultures it speaks for: support, donations and cadres come from them
+//   faiths         religions whose believers lend it a little support even when not its peoples
+//   headquarters   the region its headquarters stands in on the first day
+//   homeland       regions it claims (the AI rises there first)
+//   support        support among its peoples, by region, on the first day (0 to 1)
+//   sponsors       countries that fund it, in billions a year, while they think well of it
+//   recognised_by  countries that recognise it on the first day
+//   treasury       billions; cadres people; legitimacy 0 to 1
+//   government / ideology   what it is while it has them; state_name what it calls its country
+//   traits         rules of its own:
+//     armed_wing           uprisings more likely to succeed and raise more militia; campaigns heat the host more
+//     tunnel_network       a failed uprising costs fewer cadres; its militia start dug in
+//     charity_network      "Social services": support twice as fast as a campaign, and the region lives better
+//     diaspora_lobby       donations 60 % higher; "Lobby the host" cools the host's temper
+//     street_patrols       "Street patrols": support among its peoples in the host country, and heat
+//     hospitallers         "Field hospital": a region lives better and the order's standing rises
+//     recognised_sovereign its standing never falls below 0.6
+//     government_in_exile  every recognition counts double; "Appeal to the world"
+//     humanitarian         its AI never takes up arms: no uprisings, no fighters sent in (a player still may)
+//     nonviolence          uprisings are mass protests: carried by standing, cheap to lose, one militia at most
+//     refugee_camps        cadres recruit twice as fast
+//     for_hire             "Take a contract" for money; recruits at half price; rises only where a region is falling apart, on money rather than support
+//
+// Later files win, key by key: a mod adds a movement with a key of its own and changes one
+// by naming it again with only the fields it changes.
+{
+  "hamas": {
+    "tag": "HMS",
+    "name": "Hamas",
+    "description": "The Palestinian Islamist movement and its armed wing, the Qassam Brigades. It has governed Gaza since 2007; its political bureau works from Doha. The United States, the European Union, the United Kingdom and others list it as a terrorist organisation.",
+    "colour": "#3f8f4f",
+    "peoples": ["palestinian"],
+    "faiths": ["sunni"],
+    "headquarters": "qa_ra",
+    "homeland": ["ps_wbk"],
+    "support": { "ps_wbk": 0.36, "jo_ma": 0.12, "il_d": 0.1, "lb_bi": 0.08 },
+    "sponsors": { "IRN": 0.1, "QAT": 0.03, "TUR": 0.01 },
+    "treasury": 0.6,
+    "cadres": 30000,
+    "legitimacy": 0.18,
+    "government": "theocracy",
+    "ideology": "theocratic_rule",
+    "state_name": "Palestine",
+    "traits": ["armed_wing", "tunnel_network", "charity_network"]
+  },
+
+  "jewish_defense_league": {
+    "tag": "JDL",
+    "name": "Jewish Defense League",
+    "description": "A militant Jewish group founded in New York in 1968 by Meir Kahane, which grew into the Kach movement in Israel. The FBI has described it as a violent extremist group; what remains of it today is small.",
+    "colour": "#3f5fa8",
+    "peoples": ["jewish", "israeli_jew"],
+    "faiths": ["jewish"],
+    "headquarters": "us_ny",
+    "homeland": ["il_d"],
+    "support": { "us_ny": 0.04, "us_nj": 0.04, "us_fl": 0.02, "us_ca": 0.01, "il_d": 0.02 },
+    "treasury": 0.05,
+    "cadres": 1500,
+    "legitimacy": 0.05,
+    "government": "one_party_state",
+    "ideology": "nationalism",
+    "traits": ["diaspora_lobby", "street_patrols"]
+  },
+
+  "order_of_malta": {
+    "tag": "SMO",
+    "name": "Sovereign Military Order of Malta",
+    "description": "A Catholic order of knights founded in Jerusalem around 1099, sovereign under international law without a square metre of its own since it lost Malta in 1798. It issues passports and stamps, keeps embassies with over a hundred countries, and runs hospitals from Rome.",
+    "colour": "#b83a3a",
+    "peoples": ["maltese"],
+    "faiths": ["catholic"],
+    "headquarters": "it_rm",
+    "homeland": ["mt_12"],
+    "support": { "mt_12": 0.08 },
+    "recognised_by": ["ITA", "VAT", "ESP", "AUT", "POL", "PRT", "HRV", "SVK", "SVN", "HUN", "CZE", "LTU", "IRL", "BRA", "ARG", "MEX", "COL", "PER", "CHL", "PHL", "LBN", "EGY", "MAR", "SEN", "KEN", "ETH", "RUS", "UKR", "ROU", "BGR"],
+    "treasury": 0.4,
+    "cadres": 13500,
+    "legitimacy": 0.7,
+    "government": "absolute_monarchy",
+    "ideology": "traditionalism",
+    "state_name": "Order of Malta",
+    "traits": ["hospitallers", "recognised_sovereign", "humanitarian"]
+  },
+
+  "central_tibetan_administration": {
+    "tag": "CTA",
+    "name": "Central Tibetan Administration",
+    "description": "The Tibetan government in exile, in Dharamsala since 1960 and led by an elected Sikyong. No country recognises it as a government, and many listen to it anyway.",
+    "colour": "#d49a2a",
+    "peoples": ["tibetan"],
+    "faiths": ["buddhist"],
+    "headquarters": "in_hp",
+    "homeland": ["cn_xz", "cn_qh"],
+    "support": { "cn_xz": 0.42, "cn_qh": 0.3, "in_hp": 0.6, "np_na": 0.3 },
+    "treasury": 0.08,
+    "cadres": 4000,
+    "legitimacy": 0.35,
+    "government": "parliamentary_republic",
+    "ideology": "liberalism",
+    "state_name": "Tibet",
+    "traits": ["government_in_exile", "nonviolence"]
+  },
+
+  "council_for_the_republic": {
+    "tag": "CCR",
+    "name": "Council for the Republic",
+    "description": "The Catalan independence movement's government in exile, set up in Waterloo in 2019 by Carles Puigdemont after the 2017 referendum. Spain does not recognise it, and Catalonia is divided over independence.",
+    "colour": "#e0b33a",
+    "peoples": ["catalan"],
+    "faiths": [],
+    "headquarters": "be_wlx",
+    "homeland": ["es_b", "es_l"],
+    "support": { "es_b": 0.33, "es_l": 0.38 },
+    "treasury": 0.04,
+    "cadres": 6000,
+    "legitimacy": 0.25,
+    "government": "parliamentary_republic",
+    "ideology": "social_democracy",
+    "state_name": "Catalonia",
+    "traits": ["government_in_exile", "nonviolence"]
+  },
+
+  "vector_security_group": {
+    "tag": "VSG",
+    "name": "Vector Security Group",
+    "description": "A private military company registered in Abu Dhabi, with contractors from forty countries and no flag of its own. Fictional. It fights for whoever pays, and it has noticed that a region falling apart is a region somebody could simply take.",
+    "colour": "#5a5a5a",
+    "peoples": [],
+    "faiths": [],
+    "headquarters": "ae_az",
+    "homeland": [],
+    "treasury": 1.2,
+    "cadres": 6000,
+    "legitimacy": 0.1,
+    "government": "military_junta",
+    "ideology": "libertarianism",
+    "traits": ["for_hire", "armed_wing"]
+  },
+
+  // Not founded with the world: what a country becomes when it loses the last of its ground
+  // and its government carries on abroad (MovementFall.cs). Its tag, name, colour, peoples and
+  // homeland are its own; the rest is this. A mod changes what every government in exile is by
+  // changing this one entry.
+  "government_in_exile": {
+    "template": true,
+    "description": "A government that has lost the whole of its country and carries on from abroad: recognised by its friends, followed by its people at home, and waiting for its chance to go back.",
+    "legitimacy": 0.55,
+    "traits": ["government_in_exile"]
+  }
+}

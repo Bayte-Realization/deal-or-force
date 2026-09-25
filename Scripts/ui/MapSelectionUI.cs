@@ -512,6 +512,8 @@ public partial class DealOrForceGame
             CardRow(_regionCardProvinceRows, "Divisions here", seen.ToString("N0"),
                 Tr("Formations you can see standing in this province. Foreign forces are hidden by fog of war."));
         }
+        // The movements with their headquarters or a following here, each a click from its panel.
+        if (state is not null) AddMovementsToRegionCard(_regionCardProvinceRows, state);
 
         _regionCardActions.Visible = owned;
         if (owned) RefreshRegionCardCapitalButton();

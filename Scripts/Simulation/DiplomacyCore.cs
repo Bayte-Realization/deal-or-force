@@ -137,6 +137,12 @@ public static class CampaignDiplomacy
         var attacker = campaign.NationById(attackerId);
         var defender = campaign.NationById(defenderId);
         if (attacker is null || defender is null || attacker == defender) { reason = Loc.Get("Invalid target."); return false; }
+        // A movement with no ground fights by rising, and nobody can march on a headquarters.
+        if (attacker.Landless || defender.Landless)
+        {
+            reason = Loc.Get("A movement with no ground of its own cannot be at war.");
+            return false;
+        }
         if (AtWar(campaign, attackerId, defenderId)) { reason = Loc.Get("Already at war."); return false; }
         var relation = Get(campaign, attackerId, defenderId);
         if (relation.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }

@@ -50,6 +50,20 @@ public sealed class CampaignEventDefinition
 
     /// <summary>Relative selection weight once the trigger passes.</summary>
     public float Weight { get; init; } = 1f;
+
+    /// <summary>
+    /// Who it can happen to: "countries" (the default), "movements" - a movement with no
+    /// ground of its own - or "all". A run on the currency means nothing to a movement that
+    /// has no currency, and a split in the leadership nothing to a republic.
+    /// </summary>
+    public string For { get; init; } = "countries";
+
+    public bool Suits(Nation nation) => For switch
+    {
+        "all" => true,
+        "movements" => nation.Landless,
+        _ => !nation.Landless
+    };
 }
 
 public static class EventCatalog
@@ -360,8 +374,13 @@ public static class EventCatalog
                     : new ScriptedTrigger(),
                 Weight = value.TryGetProperty("weight", out var weight) && weight.TryGetSingle(out var parsedWeight)
                     ? MathF.Max(0f, parsedWeight)
-                    : 1f
+                    : 1f,
+                For = value.TryGetProperty("for", out var audience) && audience.ValueKind == JsonValueKind.String
+                    ? (audience.GetString() ?? "countries").Trim().ToLowerInvariant()
+                    : "countries"
             };
+            if (definition.For is not ("countries" or "movements" or "all"))
+                errors?.Add($"Event '{entry.Name}': \"for\" is \"countries\", \"movements\" or \"all\", not \"{definition.For}\".");
 
             var index = Definitions.FindIndex(item => string.Equals(item.Id, entry.Name, StringComparison.OrdinalIgnoreCase));
             if (index >= 0) Definitions[index] = definition;
@@ -455,7 +474,7 @@ public static class EventSystem
         if (nation is null) return null;
 
         var eligible = EventCatalog.All
-            .Where(definition => definition.Weight > 0f && definition.Trigger.Matches(campaign, nation))
+            .Where(definition => definition.Weight > 0f && definition.Suits(nation) && definition.Trigger.Matches(campaign, nation))
             .ToArray();
         if (eligible.Length == 0) return null;
 

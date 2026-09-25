@@ -1,0 +1,186 @@
+// Deal or Force - what happens to a movement with no ground of its own (Movements).
+//
+// `"for": "movements"` is what keeps these away from countries, and the country events away
+// from a movement: a run on the currency means nothing to one that has none. The same grammar
+// as every other event file (see 10_world_events.json), with the movement's own figures:
+//
+//   movement.cadres       its organisers and volunteers, in people
+//   movement.legitimacy   its standing, 0 to 1
+//   movement.heat         the host's temper, 0 to 1 - at the expel line the host throws it out
+//   movement.support      its support in its strongest region; changing it moves every region
+//
+// Written to fit any of them - an armed group, an order of knights, a government in exile, a
+// company for hire - so nothing here names a gun or a prayer.
+{
+  "movement_split": {
+    "title": "A split in the leadership",
+    "description": "The old guard and a younger faction have stopped speaking to each other in meetings. Both are telling the rank and file that the other is leading the cause to ruin.",
+    "for": "movements",
+    "weight": 1.0,
+    "options": [
+      {
+        "title": "Back the hard-liners",
+        "consequence": "The committed stay and more of them come; the world takes note.",
+        "effects": { "movement.cadres_percent": 0.08, "movement.legitimacy": -0.03, "movement.heat": 0.05 }
+      },
+      {
+        "title": "Back the moderates",
+        "consequence": "It looks like something a government could deal with. Some of its people walk out.",
+        "effects": { "movement.legitimacy": 0.03, "movement.cadres_percent": -0.1 }
+      },
+      {
+        "title": "Buy peace between them",
+        "consequence": "Posts, salaries and a new committee for everybody.",
+        "effects": { "treasury_percent": -0.1 }
+      }
+    ]
+  },
+
+  "movement_donors": {
+    "title": "A donors' conference",
+    "description": "Sympathisers abroad have hired a hall and promised the press a full house. They want somebody from the leadership on the stage.",
+    "for": "movements",
+    "weight": 1.0,
+    "trigger": { "min_movement.legitimacy": 0.12 },
+    "options": [
+      {
+        "title": "Send the leadership",
+        "consequence": "The hall fills and the collection with it. The host notices who went.",
+        "effects": { "treasury_percent": 0.08, "movement.heat": 0.02 }
+      },
+      {
+        "title": "Send a humanitarian face",
+        "consequence": "Less money, and better pictures.",
+        "effects": { "treasury_percent": 0.03, "movement.legitimacy": 0.02 }
+      }
+    ]
+  },
+
+  "movement_host_names": {
+    "title": "The host wants names",
+    "description": "The host's intelligence service has asked, politely and then less politely, for a list of the people who come and go through the headquarters.",
+    "for": "movements",
+    "weight": 1.4,
+    "trigger": { "min_movement.heat": 0.35 },
+    "options": [
+      {
+        "title": "Give them a few",
+        "consequence": "The host calms down. The people on the list do not.",
+        "effects": { "movement.heat": -0.15, "movement.cadres_percent": -0.05, "movement.legitimacy": -0.02 }
+      },
+      {
+        "title": "Refuse",
+        "consequence": "Its own people respect it for it. The host's patience is shorter.",
+        "effects": { "movement.heat": 0.08, "movement.legitimacy": 0.01 }
+      },
+      {
+        "title": "Pay somebody to lose the request",
+        "consequence": "It goes away, at a price, until the next one.",
+        "effects": { "treasury_percent": -0.12, "movement.heat": -0.1 }
+      }
+    ]
+  },
+
+  "movement_viral": {
+    "title": "It is all over the world's screens",
+    "description": "A few minutes of footage from one of its rallies has been watched tens of millions of times. Half the comments are furious and the other half ask how to join.",
+    "for": "movements",
+    "weight": 0.9,
+    "options": [
+      {
+        "title": "Ride the wave",
+        "consequence": "Support rises everywhere it has any. So does the host's blood pressure.",
+        "effects": { "movement.support_percent": 0.06, "movement.heat": 0.05 }
+      },
+      {
+        "title": "Say it was taken out of context",
+        "consequence": "A quieter week, and a little respect from people who matter.",
+        "effects": { "movement.legitimacy": 0.015 }
+      }
+    ]
+  },
+
+  "movement_defector": {
+    "title": "A senior figure defects",
+    "description": "One of the founders has turned up in another capital with a lawyer, a publisher and a great deal to say about the people he left behind.",
+    "for": "movements",
+    "weight": 0.8,
+    "trigger": { "min_movement.cadres": 2000 },
+    "options": [
+      {
+        "title": "Denounce him",
+        "consequence": "The ranks close. The book sells anyway.",
+        "effects": { "movement.cadres_percent": -0.04, "movement.legitimacy": -0.015 }
+      },
+      {
+        "title": "Buy his silence",
+        "consequence": "The book is never written.",
+        "effects": { "treasury_percent": -0.06, "movement.cadres_percent": -0.02 }
+      }
+    ]
+  },
+
+  "movement_accounts_frozen": {
+    "title": "The accounts are frozen",
+    "description": "A foreign bank has frozen every account it can connect to the movement, on the request of a government that did not ask twice.",
+    "for": "movements",
+    "weight": 0.9,
+    "trigger": { "min_treasury": 0.05 },
+    "options": [
+      {
+        "title": "Fight it in court",
+        "consequence": "Lawyers are expensive; being seen to obey the law is not.",
+        "effects": { "treasury_percent": -0.05, "movement.legitimacy": 0.01 }
+      },
+      {
+        "title": "Move the money informally",
+        "consequence": "Most of it arrives. The people who carried it are known now.",
+        "effects": { "treasury_percent": -0.1, "movement.heat": 0.04 }
+      },
+      {
+        "title": "Write it off",
+        "consequence": "Gone, and the leadership blamed for it.",
+        "effects": { "treasury_percent": -0.2 }
+      }
+    ]
+  },
+
+  "movement_volunteers": {
+    "title": "Volunteers from abroad",
+    "description": "People from the diaspora have been arriving by the planeload, asking where they can be useful. Some of them are very young.",
+    "for": "movements",
+    "weight": 1.0,
+    "options": [
+      {
+        "title": "Take them all",
+        "consequence": "Cadres by the thousand, and a host that counts them at the airport.",
+        "effects": { "movement.cadres_percent": 0.12, "movement.heat": 0.04 }
+      },
+      {
+        "title": "Send them home to campaign",
+        "consequence": "Every one of them talks to their family and their street.",
+        "effects": { "movement.support_percent": 0.03 }
+      }
+    ]
+  },
+
+  "movement_mediator": {
+    "title": "A mediator calls",
+    "description": "A neutral government's envoy has asked for a meeting. There is a draft on the table, a photograph waiting to be taken and a great deal of fine print.",
+    "for": "movements",
+    "weight": 0.8,
+    "trigger": { "min_movement.legitimacy": 0.25 },
+    "options": [
+      {
+        "title": "Talk",
+        "consequence": "Taken seriously, at the cost of the people who did not want talks.",
+        "effects": { "movement.legitimacy": 0.05, "movement.cadres_percent": -0.03 }
+      },
+      {
+        "title": "Refuse to be seen at the table",
+        "consequence": "The hard core approves.",
+        "effects": { "movement.cadres_percent": 0.05, "movement.legitimacy": -0.02 }
+      }
+    ]
+  }
+}

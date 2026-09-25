@@ -1,0 +1,77 @@
+// What movements and the countries they deal with remember of each other (Movements).
+//
+// Each entry is a reason one country thinks better or worse of another: `opinion` is what it is
+// worth when fresh, `days` how long it is remembered, `decays` whether it fades over that time,
+// and `max_stacks` how many times the same reason can pile up.
+{
+  "expelled_us": {
+    "name": "Expelled our headquarters",
+    "opinion": -30,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 2
+  },
+  "rose_against_us": {
+    "name": "Rose up against us",
+    "opinion": -50,
+    "days": 7300,
+    "decays": true,
+    "max_stacks": 3
+  },
+  "recognised_us": {
+    "name": "Recognised us",
+    "opinion": 25,
+    "days": 7300,
+    "decays": true,
+    "max_stacks": 1
+  },
+  "withdrew_recognition": {
+    "name": "Withdrew its recognition",
+    "opinion": -20,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 1
+  },
+  "recognised_our_rebels": {
+    "name": "Recognised the movement that claims our ground",
+    "opinion": -15,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 1
+  },
+  "funds_us": {
+    "name": "Funds us",
+    "opinion": 30,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 1
+  },
+  "funds_our_rebels": {
+    "name": "Funds the movement that claims our ground",
+    "opinion": -30,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 1
+  },
+  "listed_us_as_terrorists": {
+    "name": "Listed us as terrorists",
+    "opinion": -35,
+    "days": 7300,
+    "decays": true,
+    "max_stacks": 1
+  },
+  "cracked_down_on_us": {
+    "name": "Cracked down on our people",
+    "opinion": -25,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 3
+  },
+  "offered_us_a_home": {
+    "name": "Offered our headquarters a home",
+    "opinion": 20,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 1
+  }
+}

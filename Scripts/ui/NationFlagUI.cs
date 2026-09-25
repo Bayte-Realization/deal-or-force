@@ -48,6 +48,11 @@ public partial class DealOrForceGame
         var key = tag.ToLowerInvariant();
         var sprite = $"flag_{key}";
         nation = FlagWorld?.NationByTag(tag);
+        // A movement's own banner - `flag_<tag>_insignia` - only when the player has asked for
+        // them (`movement_flags`). It is off by default because a video showing an armed
+        // group's flag can be restricted for it; the file beside it is a banner in its colours.
+        if (SettingsCatalog.Flag(MovementFlagsSetting) && SpriteCatalog.Has($"flag_{key}_insignia"))
+            return $"flag_{key}_insignia";
         if (nation is null) return sprite;
         var country = nation;
         var situation = key + "|" + string.Join("|", FlagCatalog.All.Select(q =>
@@ -176,6 +181,9 @@ public partial class DealOrForceGame
     private static Campaign FlagWorld;
 
     private static readonly Dictionary<string, string> ResolvedFlags = new();
+
+    /// <summary>The settings id that lets movements fly their own flags.</summary>
+    private const string MovementFlagsSetting = "movement_flags";
 
     /// <summary>Point the flags at a campaign, forgetting what was worked out for the last one.</summary>
     private static void BindFlags(Campaign campaign)

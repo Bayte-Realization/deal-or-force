@@ -23,6 +23,8 @@ public partial class DealOrForceGame
     private Nation _pickerNation;
     private bool _pickerHotseatMode;
 
+    private HFlowContainer _pickerMovements;
+
     private void BuildCountryPicker()
     {
         _pickerLayer = FullLayer("CountryPicker");
@@ -54,6 +56,20 @@ public partial class DealOrForceGame
         _pickerResults = new VBoxContainer { CustomMinimumSize = new Vector2(0, 142) };
         _pickerResults.AddThemeConstantOverride("separation", 4);
         rows.AddChild(_pickerResults);
+
+        // The countries without land (Movements): a headquarters instead of a map, so a row of
+        // their own rather than something a player has to know to search for.
+        var withoutLand = new HBoxContainer();
+        withoutLand.AddThemeConstantOverride("separation", 6);
+        if (Symbol("movement_headquarters", 14, "text.caption") is { } headquarters) withoutLand.AddChild(headquarters);
+        var withoutLandCaption = Title("WITHOUT LAND", 13, Ui.Colour("text.caption"));
+        withoutLandCaption.AutowrapMode = TextServer.AutowrapMode.Off;
+        withoutLand.AddChild(withoutLandCaption);
+        rows.AddChild(withoutLand);
+        _pickerMovements = new HFlowContainer();
+        _pickerMovements.AddThemeConstantOverride("h_separation", 4);
+        _pickerMovements.AddThemeConstantOverride("v_separation", 4);
+        rows.AddChild(_pickerMovements);
 
         var nameRow = new HBoxContainer();
         nameRow.AddThemeConstantOverride("separation", 10);
@@ -153,6 +169,7 @@ public partial class DealOrForceGame
             : rank <= 80 ? "regional power"
             : "minor power");
         var states = _campaign.States.Count(state => state.NationMapIndex == nation.MapIndex);
+        if (nation.Landless) tier = Tr("movement without land");
         if (focus && !string.IsNullOrWhiteSpace(nation.CapitalName))
             _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude,
                 states <= 2 ? 6.5f : states <= 5 ? 7.3f : 8.4f);
@@ -161,8 +178,12 @@ public partial class DealOrForceGame
         _pickerName.Text = nation.DisplayName;
         SetFlag(_pickerFlag, nation.Tag, 32);
         _pickerTier.Text = Simulation.Loc.Format("{0} · rank #{1} · {2}", nation.Tag, rank, tier);
-        _pickerStats.Text =
-            Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
+        _pickerStats.Text = nation.Landless
+            ? Simulation.Loc.Format("Headquarters  {0}, {1}\nCadres  {2}    Standing  {3}\nTreasury  {4}\nNo land: it campaigns, raises money and rises up to take some.",
+                MovementRules.RegionName(_campaign, nation.Movement.HeadquartersStateMapIndex),
+                Movements.HostOf(_campaign, nation)?.DisplayName ?? "", Fmt.People(nation.Movement.Cadres),
+                Fmt.Percent(nation.Movement.Legitimacy), Fmt.Money(nation.Treasury))
+            : Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
         _pickerLocation.Text = Tr("Click the map to inspect a region and its tactical province.");
         _pickerBegin.Text = _pickerHotseatMode
             ? Simulation.Loc.Format("START HOTSEAT · {0} PLAYERS", _campaign.HumanSeats.Count)
@@ -188,7 +209,7 @@ public partial class DealOrForceGame
         // A country with no land is not one you can play: Antarctica's, once its ice
         // belongs to nobody, or one a war has already swallowed.
         var matches = _campaign.Nations
-            .Where(nation => _campaign.StatesOf(nation).Length > 0)
+            .Where(nation => _campaign.StatesOf(nation).Length > 0 || PlayableMovement(nation))
             .Where(nation => query.Length == 0 ||
                 nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
@@ -205,7 +226,38 @@ public partial class DealOrForceGame
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             _pickerResults.AddChild(button);
         }
+
+        if (_pickerMovements is null) return;
+        foreach (var child in _pickerMovements.GetChildren())
+        {
+            _pickerMovements.RemoveChild(child);
+            child.QueueFree();
+        }
+        foreach (var movement in _campaign.Nations.Where(PlayableMovement))
+        {
+            var captured = movement;
+            var button = ActionButton(movement.DisplayName, () => SetPickerNation(captured, true), 0, 30,
+                movement == _pickerNation);
+            // Its own flag on the button, the way a country in the list is known by its flag.
+            // Read now rather than left to the background loader: the list is built the moment
+            // the picker opens, before the loader has reached six flags nobody has asked for yet.
+            var flag = $"flag_{movement.Tag.ToLowerInvariant()}";
+            var flagPath = SpriteCatalog.TextureOf(flag, $"res://game/gfx/flags/{flag}.png");
+            button.Icon = FlagTexture(movement.Tag) ??
+                (ResourceLoader.Exists(flagPath) ? GD.Load<Texture2D>(flagPath) : null);
+            // Not expanded: an expanded icon adds nothing to the button's minimum width, and a
+            // button in a flowing row is given exactly its minimum - the flag got no room at all.
+            // The width cap scales it down to a small flag instead, and counts in the minimum.
+            button.ExpandIcon = false;
+            button.AddThemeConstantOverride("icon_max_width", 24);
+            button.TooltipText = Ui.Tip(Simulation.Loc.Get(Movements.DefinitionOf(movement)?.Description ?? ""));
+            _pickerMovements.AddChild(button);
+        }
     }
+
+    /// <summary>A movement without land that its definition lets a player be.</summary>
+    private static bool PlayableMovement(Nation nation) =>
+        nation.Landless && !nation.Movement.Dissolved && Movements.DefinitionOf(nation)?.Playable == true;
 
     private void PickRandomNation()
     {

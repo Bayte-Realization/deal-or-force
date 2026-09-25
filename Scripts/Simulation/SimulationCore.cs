@@ -702,6 +702,11 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
+            using (SimProfiler.Measure("movements"))
+            {
+                MovementRules.Tick(this);
+                MovementAi.Tick(this);
+            }
             using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
             using (SimProfiler.Measure("shipbuilding")) Shipbuilding.Tick(this);
             using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);
@@ -923,6 +928,11 @@ public sealed partial class Campaign
         // calibrated on the host an hour ago, and recalibrating a world at war writes the
         // war into every country's institutions.
         if (!StabilityCore.IsCalibrated(this)) StabilityCore.Calibrate(this);
+
+        // The countries without land: founded on a new world once its regions exist, and put
+        // back where their headquarters stand on a loaded one (Movements).
+        Movements.Found(this);
+        Movements.Place(this);
 
         MapRevision++;
 

@@ -446,6 +446,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             "res://game/gfx/globe/globe_division_marker.png"));
         _fleetRoot = new Node3D { Name = "FleetMarkers" };
         world.AddChild(_fleetRoot);
+        BuildMovementLayer(world);
         _fleetTexture = CreateFleetMarkerTexture();
         CreateMilitaryOverlays(world);
         _countryLabelRoot = new Node3D { Name = "CountryLabels" };

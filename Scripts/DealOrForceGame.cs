@@ -463,6 +463,7 @@ public partial class DealOrForceGame : Control
         BuildMainMenu();
         BuildCountryPicker();
         BuildHud();
+        BuildMovementPanel();
         BuildHotseatInterface();
         BuildNetworkMultiplayerInterface();
         BuildPauseMenu();
@@ -1179,6 +1180,7 @@ public partial class DealOrForceGame : Control
                     : Tr("comfortable"),
                 rate > comfort ? -1 : rate < 0f ? -1 : 0);
         }
+        WriteMovementTopBar(player);
 
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
         UpdateSpendingReadout(player);

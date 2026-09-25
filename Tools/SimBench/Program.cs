@@ -203,6 +203,12 @@ public static class Program
             BattlesLeaveRuins());
         failures += Check("a country that has taken all of another has won the war",
             AWonWarScoresAsWon());
+        failures += Check("a movement without land lives, moves, rises and can lose its land again",
+            MovementsLiveWithoutLand());
+        failures += Check("a fallen country goes into exile, and a movement can come to an end",
+            AFallenCountryGoesIntoExile());
+        failures += Check("the world deals with a movement: lists it, funds it and throws it out",
+            TheWorldDealsWithMovements());
         failures += Check("what the enemy stands on makes nothing for its owner",
             OccupationCostsOutput());
         failures += Check("a country short of a good builds what makes it",
@@ -4453,6 +4459,8 @@ public static class Program
         foreach (var nation in campaign.Nations)
         {
             if (string.IsNullOrWhiteSpace(nation.Tag)) continue;
+            // Movements are declared in common/movements, not common/countries.
+            if (nation.Movement is not null) continue;
             if (!shipped.TryGetValue(nation.Tag, out var entry)) { missing.Add(nation.Tag); continue; }
             if (!string.Equals(entry.Name, nation.Name, StringComparison.Ordinal))
                 drifted.Add($"{nation.Tag} name: file '{entry.Name}', game '{nation.Name}'");
@@ -6196,6 +6204,8 @@ public static class Program
         Nation worstNation = null;
         foreach (var nation in campaign.Nations)
         {
+            // A movement without ground has no regions for its stability to be worked out from.
+            if (nation.Landless) continue;
             var drift = MathF.Abs(StabilityCore.Target(campaign, nation) - nation.Stability);
             if (drift <= worst) continue;
             worst = drift;
@@ -8871,6 +8881,8 @@ public static class Program
         var literate = campaign.Nations.Count(nation => nation.Literacy >= 0.95f);
         foreach (var nation in campaign.Nations)
         {
+            // A movement has no economy of its own for its people's schooling to make productive.
+            if (nation.Movement is not null) continue;
             var expected = 0.72f + nation.HumanCapital * 0.50f;
             if (MathF.Abs(nation.Productivity - expected) > 0.001f)
                 return $"{nation.Tag} starts at productivity {nation.Productivity:0.000}, and its human capital puts it at {expected:0.000}";
@@ -9145,6 +9157,167 @@ public static class Program
         if (war.WarScore > 50f) return $"with every province handed back the score is still {war.WarScore:0.0}";
         Console.WriteLine($"  war score: the richer half of Ukraine is {rich:0.0} of occupation, the poorer half {poor:0.0}; " +
                           $"all of it is a collapse and 100 (capital {capital:0.0}); handed back, {war.WarScore:0.0}.");
+        return "";
+    }
+
+    /// <summary>
+    /// A movement without land (Movements) is a country with a headquarters instead of
+    /// a map: founded with the world, standing nowhere and at war with nobody; it lives off its
+    /// following; its headquarters moves; an uprising that takes a region makes it a country
+    /// with a capital and militia; and losing that region makes it landless again, somewhere
+    /// that will have it. On its own world, stepped by hand.
+    /// </summary>
+    private static string MovementsLiveWithoutLand()
+    {
+        var campaign = Campaign.CreateBootstrap(20240905);
+        if (!AttachMap(campaign)) return "no province map to stand on";
+        var all = Movements.Of(campaign).ToList();
+        var declared = MovementCatalog.All.Count(definition => !definition.Template);
+        if (all.Count < declared) return $"{all.Count} movements founded of {declared}";
+        foreach (var movement in all)
+        {
+            if (!movement.Landless) return $"{movement.Tag} starts with land";
+            if (campaign.StatesOf(movement).Length > 0) return $"{movement.Tag} starts owning a region";
+            if (Movements.HostOf(campaign, movement) is null) return $"{movement.Tag} has no host";
+            if (movement.Movement.HeadquartersLatitude == 0f && movement.Movement.HeadquartersLongitude == 0f)
+                return $"{movement.Tag}'s headquarters is not on the map";
+        }
+
+        var hamas = campaign.NationByTag("HMS");
+        var palestine = campaign.NationByTag("PSE");
+        var israel = campaign.NationByTag("ISR");
+        if (hamas is null || palestine is null || israel is null) return "no Hamas, Palestine or Israel to test with";
+        if (CampaignDiplomacy.CanDeclareWar(campaign, israel.Id, hamas.Id, out _))
+            return "a country may declare war on a headquarters";
+
+        // Eight weeks of its following.
+        var treasury = hamas.Treasury;
+        var cadres = hamas.Movement.Cadres;
+        for (var week = 0; week < 8; week++) MovementRules.Week(campaign, hamas);
+        if (hamas.Movement.IncomeWeekly <= 0f || hamas.Treasury <= treasury)
+            return $"eight weeks brought Hamas {hamas.Treasury - treasury:0.000} bn ({hamas.Movement.IncomeWeekly:0.0000} a week)";
+        if (hamas.Movement.Cadres <= cadres) return $"Hamas's cadres went from {cadres:0} to {hamas.Movement.Cadres:0}";
+
+        // The headquarters moves to a sponsor.
+        var iran = campaign.NationByTag("IRN");
+        var tehran = campaign.StatesOf(iran).OrderByDescending(state => state.Population).First();
+        var refusal = MovementActions.Refusal(campaign, hamas, "move", tehran.MapIndex, -1);
+        if (refusal.Length > 0) return $"Hamas cannot move to {tehran.Id}: {refusal}";
+        new MovementActionCommand { IssuerId = hamas.Id, Action = "move", StateMapIndex = tehran.MapIndex }.Apply(campaign);
+        hamas.Movement.ArrivesOnDay = campaign.ElapsedDays;
+        MovementRules.Week(campaign, hamas);
+        if (Movements.HostOf(campaign, hamas) != iran) return $"Hamas's headquarters ended up in {Movements.HostOf(campaign, hamas)?.Tag}";
+
+        // An uprising that takes the West Bank.
+        var westBank = campaign.States.Find(state => state.Id == "ps_wbk");
+        if (westBank is null) return "no West Bank";
+        hamas.Movement.Cadres = 40000f;
+        MovementRules.TakeRegion(campaign, hamas, westBank, palestine);
+        if (hamas.Landless || campaign.StatesOf(hamas).Length == 0) return "Hamas rose and holds nothing";
+        if (hamas.CapitalStateMapIndex != westBank.MapIndex) return "Hamas holds the West Bank and is not governed from it";
+        var militia = campaign.Armies.Count(army => army.NationId == hamas.Id);
+        if (militia == 0) return "Hamas took the West Bank with no militia to hold it";
+
+        // And loses it again.
+        var topology = campaign.ProvinceMap;
+        var provinces = Enumerable.Range(1, topology.ProvinceCount).Where(province => topology.ProvinceToNation[province] == hamas.MapIndex).ToList();
+        StatePartition.Annex(campaign, provinces, israel, asConquest: true);
+        MovementRules.Week(campaign, hamas);
+        if (!hamas.Landless) return "Hamas lost all its ground and is not landless again";
+        var host = Movements.HostOf(campaign, hamas);
+        if (host is null || host == israel) return $"Hamas, landless again, went to {host?.Tag ?? "nowhere"}";
+
+        Console.WriteLine($"  movements: {all.Count} founded ({string.Join(", ", all.Select(nation => nation.Tag))}); " +
+                          $"Hamas made {(hamas.Treasury - treasury) * 1000:0} M in eight weeks, moved to {tehran.Id}, rose in the West Bank " +
+                          $"with {militia} militia, lost it and went on from {host.Tag}.");
+        return "";
+    }
+
+    /// <summary>
+    /// A country that loses the last of its ground can carry on as a government in exile - its
+    /// own peoples, a homeland of the regions it held, a headquarters with a friend that did not
+    /// take its ground, the respect a government has - and a movement ground down to nothing is
+    /// no more. On its own world, stepped by hand.
+    /// </summary>
+    private static string AFallenCountryGoesIntoExile()
+    {
+        var campaign = Campaign.CreateBootstrap(20240921);
+        if (!AttachMap(campaign)) return "no province map to stand on";
+        var ukraine = campaign.NationByTag("UKR");
+        var russia = campaign.NationByTag("RUS");
+        if (ukraine is null || russia is null) return "no Ukraine or Russia to test with";
+        MovementFall.RememberHomelands(campaign);
+        if (!campaign.Homelands.TryGetValue(ukraine.Id, out var home) || home.Count < 10)
+            return $"Ukraine's homeland is {home?.Count ?? 0} region(s)";
+
+        var topology = campaign.ProvinceMap;
+        var provinces = Enumerable.Range(1, topology.ProvinceCount)
+            .Where(province => topology.ProvinceToNation[province] == ukraine.MapIndex).ToList();
+        StatePartition.Annex(campaign, provinces, russia, asConquest: true);
+        if (campaign.StatesOf(ukraine).Length > 0) return "Ukraine still holds ground after losing all of it";
+        var chance = MovementFall.ExileChance(campaign, ukraine, out var refuge);
+        if (refuge is null) return "nowhere would take Ukraine's government in";
+        MovementFall.GoIntoExile(campaign, ukraine, refuge);
+        var state = ukraine.Movement;
+        if (state is null || !state.Exile || !ukraine.Landless) return "Ukraine did not become a government in exile";
+        var definition = Movements.DefinitionOf(ukraine);
+        if (definition is null || !definition.Has("government_in_exile")) return "the government in exile has no definition of its own";
+        if (definition.Homeland.Count < 10) return $"the government in exile claims {definition.Homeland.Count} region(s)";
+        var host = Movements.HostOf(campaign, ukraine);
+        if (host is null || host == russia) return $"the government in exile sits in {host?.Tag ?? "nowhere"}";
+        if (state.Support.Count == 0) return "nobody at home follows the government in exile";
+        if (campaign.Armies.Any(army => army.NationId == ukraine.Id)) return "the army stayed on the map without a country";
+        var recognitions = state.RecognisedBy.Count;
+
+        // And a movement with nothing left is no more.
+        var hamas = campaign.NationByTag("HMS");
+        if (hamas?.Movement is null) return "no Hamas to wear down";
+        hamas.Movement.Cadres = 0f;
+        hamas.Treasury = 0f;
+        hamas.Movement.Support.Clear();
+        MovementFall.Endure(campaign, hamas);
+        if (!hamas.Movement.Dissolved) return "a movement with no cadres, no money and no following carries on";
+        if (MovementActions.Refusal(campaign, hamas, "fundraise", -1, -1).Length == 0) return "a dissolved movement can still act";
+
+        Console.WriteLine($"  exile: Ukraine's government went to {host.Tag} ({refuge.DisplayName}) at a {chance:P0} chance, " +
+                          $"claiming {definition.Homeland.Count} regions, recognised by {recognitions}, with {Fmt.People(state.Cadres)} cadres; " +
+                          $"a Hamas worn to nothing dissolved.");
+        return "";
+    }
+
+    /// <summary>
+    /// The countries' side of a movement: a listing closes the door to recognition from the
+    /// country that listed it, a host that throws the headquarters out sees it go elsewhere, and
+    /// a country that funds it pays it by the week.
+    /// </summary>
+    private static string TheWorldDealsWithMovements()
+    {
+        var campaign = Campaign.CreateBootstrap(20240922);
+        if (!AttachMap(campaign)) return "no province map to stand on";
+        var hamas = campaign.NationByTag("HMS");
+        var usa = campaign.NationByTag("USA");
+        var qatar = campaign.NationByTag("QAT");
+        var turkey = campaign.NationByTag("TUR");
+        if (hamas?.Movement is null || usa is null || qatar is null || turkey is null) return "no Hamas, America, Qatar or Turkey";
+        var state = hamas.Movement;
+
+        new MovementDealingCommand { IssuerId = usa.Id, MovementId = hamas.Id, Action = "designate" }.Apply(campaign);
+        if (!state.DesignatedBy.Contains(usa.Id)) return "America's listing did not stick";
+        if (MovementDealings.Refusal(campaign, usa, hamas, "recognise").Length == 0) return "a country recognises what it lists as terrorist";
+
+        if (Movements.HostOf(campaign, hamas) != qatar) return $"Hamas's headquarters starts in {Movements.HostOf(campaign, hamas)?.Tag}";
+        new MovementDealingCommand { IssuerId = qatar.Id, MovementId = hamas.Id, Action = "expel" }.Apply(campaign);
+        var host = Movements.HostOf(campaign, hamas);
+        if (host == qatar) return "Qatar expelled the headquarters and it stayed";
+
+        var treasury = turkey.Treasury;
+        new MovementDealingCommand { IssuerId = turkey.Id, MovementId = hamas.Id, Action = "sponsor" }.Apply(campaign);
+        if (!state.SponsoredBy.ContainsKey(turkey.Id)) return "Turkey's funding did not stick";
+        MovementRules.Week(campaign, hamas);
+        if (turkey.Treasury >= treasury) return "Turkey funds Hamas and pays nothing";
+
+        Console.WriteLine($"  dealings: America lists Hamas; Qatar throws it out and it goes to {host?.Tag ?? "nowhere"}; " +
+                          $"Turkey pays {Fmt.Money(treasury - turkey.Treasury)} a week.");
         return "";
     }
 

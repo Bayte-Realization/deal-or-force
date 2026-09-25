@@ -296,6 +296,7 @@ public sealed class ModLoader
     private static readonly (string Folder, Action Reset, Action<JsonElement, List<string>> Merge)[] Tunables =
     {
         ("stability", () => StabilityCore.ResetCatalog(), StabilityCore.Merge),
+        ("movements", () => MovementCatalog.ResetCatalog(), MovementCatalog.Merge),
         ("militia", () => MilitiaCore.ResetCatalog(), MilitiaCore.Merge),
         ("secession", () => SecessionCore.ResetCatalog(), SecessionCore.Merge),
         ("settings", () => SettingsCatalog.ResetCatalog(), SettingsCatalog.Merge),

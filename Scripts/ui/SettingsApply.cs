@@ -139,6 +139,12 @@ public partial class DealOrForceGame
                 if (_globe is not null) _globe.CountryLabelsEnabled = SettingsCatalog.Flag("region_names");
                 break;
 
+            case "movement_flags":
+                // Every flag is asked for afresh on the next refresh, so the top bar, the
+                // panels and the picker all change together.
+                if (_campaign is not null && !_applyingEverySetting) Refresh();
+                break;
+
             case "space_backdrop":
                 if (_globe is not null)
                     _globe.SpaceBackdropEnabled = SettingsCatalog.Flag("space_backdrop");
