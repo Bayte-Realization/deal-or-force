@@ -1259,6 +1259,7 @@ sum:
 | `shipbuilding_speed` | how fast the yards finish hulls |
 | `stability_weekly`, `war_support_weekly` | points added every week (0.001 is a tenth of a point) |
 | `radicalism_weekly`, `living_weekly` | the same, in every region of the country |
+| `reconstruction_speed` | how fast regions the war has wrecked are rebuilt - see *War damage* |
 
 A key the list does not have is reported with the list beside it, so a typo is an error rather
 than a bonus that never applies. The keys are fixed because each is a question the simulation
@@ -1508,6 +1509,7 @@ names exactly one region:
 | `buildings` | Counts by id from `common/buildings`. Merged key by key; `0` removes a building. |
 | `resources` | Deposits by good id from `common/goods`. Merged key by key; `0` removes a deposit. |
 | `literacy`, `standard_of_living`, `radicalism` | Optional, 0 to 1. Left out, the region takes its country's figure with a spread of its own. |
+| `war_damage` | Optional, 0 to 1: how much of the region a war has already wrecked on the first day - see *War damage*. |
 | `owner` | Only `"none"` - see *Land that belongs to nobody*. |
 
 **What is written is what the region has.** A building or a deposit left out of a region's record
@@ -1582,6 +1584,40 @@ as human capital, nothing (75.4 held on average before, 74.8 after).
 
 Literacy itself is what triggers read (`min_literacy`, the `poorly_schooled` trigger), and so do the
 AI's choice of a university and the governments that ask for a literate country.
+
+### War damage
+
+Every region has a `war_damage` from 0 (untouched) to 1 (ruins). Each day of battle in one of its
+provinces adds to it: more for a bloody day, shared over the region's provinces, and less the closer
+the region already is to ruins. Every economy week a damaged region:
+
+- makes less: its output is multiplied by `1 - WarDamageOutputLoss x damage`;
+- lives worse: its standard of living falls a little;
+- empties: a share of its people leave, most of them for the regions of their own country the war
+  has not reached (by how many already live there) and the rest for the neighbours at peace,
+  keeping their people and faith. Those who stayed in the country are counted, by people, and come
+  home a share a week once the region is rebuilt and safe;
+- is rebuilt: faster with infrastructure and with the `reconstruction_speed` modifier.
+
+A country can also **pay to rebuild** one region: the region card's *Rebuild*, or the AI for its
+worst ruin once it can spare four times the price. For half a year the region is then rebuilt
+three times as fast. That holds only while no battle is fought in it (nobody rebuilds under
+fire) and only as far as the country's market has the industrial materials it wants. The price is
+a quarter of the region's share of GDP (by its people) times the damage.
+
+The numbers are in `common/defines/14_war_damage.json`. The region card shows the damage, and its
+tooltip says what the damage costs and how fast it comes back.
+
+| Where | How |
+|---|---|
+| an effect (event, decision) | `"state.war_damage": 0.2` adds a fifth in every region of the country; `"state.war_damage_set": 0` clears it |
+| a trigger | `"min_worst_war_damage": 0.15` asks about the worst-hit region, `"min_state.war_damage"` about the average |
+| a modifier | `"reconstruction_speed": 1.0` rebuilds twice as fast |
+| a region's history | `"war_damage": 0.4` opens the scenario with the region already in ruins |
+
+The base game uses them in the **Reconstruction programme**. It is a decision for a country with a
+region at least 15 % in ruins (the `war_torn` trigger). It gives a spirit that rebuilds twice as
+fast for two years, and the AI takes it mostly at peace.
 
 ### The console and mod diagnostics
 

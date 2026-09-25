@@ -701,6 +701,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
+            using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
             using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
             using (SimProfiler.Measure("shipbuilding")) Shipbuilding.Tick(this);
             using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);

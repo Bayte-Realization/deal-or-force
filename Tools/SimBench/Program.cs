@@ -199,6 +199,8 @@ public static class Program
             TheStatedStatisticsCameTrue(campaign));
         failures += Check("the literacy history writes is the literacy a country starts with",
             StatedLiteracyStands(campaign));
+        failures += Check("a battle leaves ruins, and ruins are rebuilt",
+            BattlesLeaveRuins());
         failures += Check("the classes and the sectors count the same people",
             TwoAxesOverOnePopulation(campaign));
         failures += Check("a country can answer to another one, and stop",
@@ -2398,11 +2400,15 @@ public static class Program
             if (wrongOrder is not null)
                 return $"a drawn front line left {wrongOrder.Name} on a {wrongOrder.OrderKind} order";
 
+            // Against the line the command drew. A defence line is snapped to the real border,
+            // which can run through a province the ten hints above did not name.
             var posts = new List<int>();
             foreach (var army in placed)
             {
-                var post = line.Contains(army.OrderProvinceId) ? army.OrderProvinceId
-                    : line.Contains(army.ProvinceId) ? army.ProvinceId : -1;
+                var drawn = campaign.FrontLines.Find(candidate => candidate.Id == army.FrontLineId);
+                bool OnLine(int province) => drawn is not null ? drawn.Provinces.Contains(province) : line.Contains(province);
+                var post = OnLine(army.OrderProvinceId) ? army.OrderProvinceId
+                    : OnLine(army.ProvinceId) ? army.ProvinceId : -1;
                 if (post < 0)
                     return $"{army.Name} is neither on the line it was drawn onto nor moving to it";
                 posts.Add(post);
@@ -8869,6 +8875,123 @@ public static class Program
     }
 
     /// <summary>
+    /// A battle leaves ruins, and ruins are rebuilt. A season of hard fighting in one province of
+    /// a Ukrainian region wrecks a share of the region - not all of it, and not nothing - and the
+    /// region then makes less; a week later some of its people have left, most of them for the
+    /// rest of Ukraine and still Ukrainian; two years of peace rebuild most of it; and a
+    /// reconstruction programme rebuilds it faster. On its own world, stepped by hand, so what is
+    /// measured is the ruins and not the war around them.
+    /// </summary>
+    private static string BattlesLeaveRuins()
+    {
+        var campaign = Campaign.CreateBootstrap(20240901);
+        if (!AttachMap(campaign)) return "no province map to fight on";
+        var ukraine = campaign.NationByTag("UKR");
+        if (ukraine is null) return "there is no Ukraine to fight in";
+        var topology = campaign.ProvinceMap;
+        var states = campaign.StatesOf(ukraine);
+        var region = states.Where(state => state.Population > 500_000)
+            .OrderBy(state => state.Id, StringComparer.Ordinal).FirstOrDefault();
+        if (region is null) return "Ukraine has no region of any size";
+        var province = 0;
+        var provinces = 0;
+        for (var candidate = 1; candidate <= topology.ProvinceCount; candidate++)
+        {
+            if (topology.ProvinceToState[candidate] != region.MapIndex) continue;
+            provinces++;
+            if (province == 0) province = candidate;
+        }
+        if (province == 0) return $"{region.Id} has no province to fight in";
+
+        for (var day = 0; day < 120; day++)
+            WarDamage.Fought(campaign, province, campaign.Defines.WarDamageBattleLosses);
+        var damage = region.WarDamage;
+        if (damage < 0.05f) return $"120 days of battle in one of {region.Id}'s {provinces} provinces wrecked {damage:P1} of it";
+        if (damage > 0.95f) return $"120 days of battle in one of {region.Id}'s {provinces} provinces left it {damage:P0} ruins";
+        var output = WarDamage.OutputFactor(campaign, region);
+        var expected = 1f - damage * campaign.Defines.WarDamageOutputLoss;
+        if (MathF.Abs(output - expected) > 0.001f) return $"{region.Id} at {damage:P0} damage makes {output:P0} of its output, not {expected:P0}";
+        if (states.Any(state => state != region && state.WarDamage > 0f)) return "a battle in one region wrecked another";
+
+        static long Ukrainians(IEnumerable<ScenarioState> of) => of.Sum(state => state.PopulationGroups
+            .Where(group => group.Culture == "ukrainian").Sum(group => group.Size));
+        var everyone = states.Sum(state => state.Population);
+        var ukrainians = Ukrainians(states);
+        var here = region.Population;
+        var atWar = campaign.Wars.Where(war => !war.Ended).SelectMany(war => campaign.Nations.Where(other => war.Involves(other.Id)))
+            .Select(other => other.Id).ToHashSet();
+        var neighbours = CampaignDiplomacy.Neighbours(campaign, ukraine.MapIndex)
+            .Select(index => campaign.Nations.Find(other => other.MapIndex == index))
+            .Where(other => other is not null && !atWar.Contains(other.Id)).ToList();
+        long Abroad() => neighbours.Sum(other => campaign.StatesOf(other).Sum(state => state.Population));
+        var abroadBefore = Abroad();
+        WarDamage.Week(campaign);
+        var left = here - region.Population;
+        if (left <= 0) return $"nobody left {region.Id} at {damage:P0} damage";
+        var stayed = states.Sum(state => state.Population) - (everyone - left);
+        var home = campaign.Defines.WarDamageRefugeesStayHome;
+        if (MathF.Abs(stayed - left * home) > left * 0.05f + 10)
+            return $"{left:N0} left {region.Id} and {stayed:N0} settled elsewhere in Ukraine, not about {left * home:N0}";
+        var groups = states.Sum(state => (long)state.PopulationGroups.Sum(group => group.Size));
+        if (Math.Abs(groups - states.Sum(state => state.Population)) > states.Length * 2)
+            return $"Ukraine's regions count {states.Sum(state => state.Population):N0} people and their peoples {groups:N0}";
+        var displaced = WarDamage.DisplacedTotal(region);
+        if (displaced != stayed) return $"{stayed:N0} fled to the rest of Ukraine and {displaced:N0} are waiting to come home";
+        var arrivedAbroad = Abroad() - abroadBefore;
+        if (neighbours.Count > 0 && arrivedAbroad != left - stayed)
+            return $"{left - stayed:N0} fled abroad and {arrivedAbroad:N0} arrived in {string.Join(", ", neighbours.Select(other => other.Tag))}";
+        var lostUkrainians = ukrainians - Ukrainians(states);
+        if (lostUkrainians > (long)((left - stayed) * 1.05f) + 10)
+            return $"{lostUkrainians:N0} Ukrainians left Ukraine when only {left - stayed:N0} people went abroad: the refugees stopped being who they were";
+
+        var weekly = WarDamage.RebuiltPerWeek(campaign, ukraine, region);
+        ModifierSystem.Grant(campaign, ukraine, "reconstruction_programme");
+        var faster = WarDamage.RebuiltPerWeek(campaign, ukraine, region);
+        ModifierSystem.Revoke(ukraine, "reconstruction_programme");
+        if (faster < weekly * 1.9f) return $"a reconstruction programme rebuilds {faster:P1} a week against {weekly:P1} without it";
+
+        // A paid reconstruction: refused under fire, paid for once it is quiet, and faster by
+        // as much of the boost as the market has industrial materials for.
+        ukraine.Treasury = MathF.Max(ukraine.Treasury, 10f);
+        region.LastFoughtDay = campaign.ElapsedDays;
+        if (WarDamage.RebuildRefusal(campaign, ukraine, region).Length == 0) return "a region was rebuilt on the day of a battle in it";
+        region.LastFoughtDay = campaign.ElapsedDays - campaign.Defines.WarDamageSafeDays;
+        var refusal = WarDamage.RebuildRefusal(campaign, ukraine, region);
+        if (refusal.Length > 0) return $"{region.Id}, quiet for {campaign.Defines.WarDamageSafeDays} days, cannot be rebuilt: {refusal}";
+        var cost = WarDamage.RebuildCost(campaign, ukraine, region);
+        var treasury = ukraine.Treasury;
+        new RebuildRegionCommand { IssuerId = ukraine.Id, StateMapIndex = region.MapIndex }.Apply(campaign);
+        if (MathF.Abs(treasury - cost - ukraine.Treasury) > 0.0001f || cost <= 0f)
+            return $"rebuilding {region.Id} took {treasury - ukraine.Treasury:0.000} bn from the treasury, and it costs {cost:0.000} bn";
+        var paid = WarDamage.RebuiltPerWeek(campaign, ukraine, region);
+        var boost = 1f + campaign.Defines.WarDamageRebuildBoost * WarDamage.Materials(ukraine);
+        if (MathF.Abs(paid - weekly * boost) > 0.0005f)
+            return $"a paid reconstruction rebuilds {paid:P1} a week, and {weekly:P1} x {boost:0.00} is {weekly * boost:P1}";
+        if (WarDamage.RebuildRefusal(campaign, ukraine, region).Length == 0) return "a region being rebuilt can be paid for twice";
+        region.RebuildingUntilDay = -1;
+
+        long peak = 0, lowest = region.Population;
+        for (var week = 0; week < 104; week++)
+        {
+            WarDamage.Week(campaign);
+            peak = Math.Max(peak, WarDamage.DisplacedTotal(region));
+            lowest = Math.Min(lowest, region.Population);
+        }
+        if (region.WarDamage > damage / 3f) return $"two years of peace rebuilt {region.Id} from {damage:P0} only to {region.WarDamage:P0}";
+        var waiting = WarDamage.DisplacedTotal(region);
+        if (waiting > peak * 0.3f)
+            return $"two years after the fighting {waiting:N0} of {region.Id}'s {peak:N0} displaced have still not come home";
+        if (region.Population <= lowest) return $"{region.Id} was rebuilt and nobody came back to it";
+
+        Console.WriteLine($"  ruins: 120 days of battle in one of {region.Id}'s {provinces} provinces wreck {damage:P0} of it " +
+                          $"(output {output:P0}); a week later {left:N0} have left, {stayed:N0} for elsewhere in Ukraine; " +
+                          $"rebuilt {weekly:P1} a week, {faster:P1} under a programme, {paid:P1} paid for ({cost:0.00} bn); " +
+                          $"{region.WarDamage:P0} after two years, {peak - waiting:N0} of {peak:N0} displaced home again; " +
+                          $"{arrivedAbroad:N0} to {string.Join(", ", neighbours.Select(other => other.Tag))}.");
+        return "";
+    }
+
+    /// <summary>
     /// Consolidation invents nobody, and the railways cost what they save.
     ///
     /// Both are the kind of rule that fails silently and pleasantly. A consolidation that
@@ -10527,6 +10650,7 @@ public static class Program
         var orders = new ICampaignCommand[]
         {
             new HaltArmyCommand { IssuerId = 7, ArmyId = 31 },
+            new RebuildRegionCommand { IssuerId = 7, StateMapIndex = 1234 },
             new DetachArmyFromPlanCommand { IssuerId = 7, ArmyId = 31 },
             new ReturnArmyToPlanCommand { IssuerId = 7, ArmyId = 31, FrontLineId = 4 },
             new SupportAttackCommand { IssuerId = 7, ArmyId = 31, SupportOnly = true },

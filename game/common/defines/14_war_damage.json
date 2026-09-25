@@ -1,0 +1,53 @@
+// Deal or Force - the ruins a war leaves (WarDamage.cs).
+//
+// Every region has a war damage from 0 (untouched) to 1 (ruins). Every day of battle in one of
+// its provinces adds WarDamagePerBattleDay x the day's intensity, shared over the region's
+// provinces, and the closer the region already is to ruins the less a day adds - so a region
+// fought over for a year is mostly ruins and never more than that. The day's intensity is its
+// casualties, both sides, over WarDamageBattleLosses, held between a quarter and three.
+//
+// Every economy week a damaged region
+//   - makes less: its output is multiplied by 1 - WarDamageOutputLoss x the damage;
+//   - lives worse: its standard of living falls by WarDamageLivingPerWeek x the damage;
+//   - empties: WarDamageFleePerWeek x the damage of its people leave, WarDamageRefugeesStayHome
+//     of them for the regions of their own country that are damaged less than
+//     WarDamageSafeBelow (by how many people live there already) and the rest for the regions
+//     of the neighbours at no war (the same way; with none, they are lost to the map). Those
+//     who stayed in the country come home, WarDamageReturnPerWeek of them a week, once the
+//     region is damaged less than WarDamageSafeBelow and has seen no battle for WarDamageSafeDays;
+//   - and is rebuilt: the damage falls by WarDamageRecoveryPerWeek of itself, times one plus
+//     WarDamageRecoveryPerInfrastructure for every level of infrastructure, times one plus the
+//     country's reconstruction_speed modifier - and by a last thousandth, so it ends.
+//
+// A country can pay to rebuild one region (the region card's Rebuild, and the AI for its worst
+// ruin): WarDamageRebuildCost x the damage x the region's share of the country's people x GDP.
+// For WarDamageRebuildDays it is then rebuilt 1 + WarDamageRebuildBoost times as fast - as far
+// as the market has the industrial materials it wants, and not while there has been a battle
+// in the region in the last WarDamageSafeDays. Nothing under WarDamageRebuildMinimum is worth it.
+// A country nobody plays orders it for a region at least WarDamageAiRebuildAbove in ruins when
+// the treasury holds WarDamageAiRebuildReserve times the cost.
+//
+// Events and decisions can set the damage with "state.war_damage", and triggers can ask about
+// the worst-hit region with "min_worst_war_damage" / "max_worst_war_damage".
+//
+// Every file in this folder is read in name order and later files win.
+{
+  "WarDamagePerBattleDay": 0.03,
+  "WarDamageBattleLosses": 1500,
+  "WarDamageRecoveryPerWeek": 0.012,
+  "WarDamageRecoveryPerInfrastructure": 0.25,
+  "WarDamageOutputLoss": 0.5,
+  "WarDamageLivingPerWeek": 0.003,
+  "WarDamageFleePerWeek": 0.004,
+  "WarDamageRefugeesStayHome": 0.75,
+  "WarDamageSafeBelow": 0.10,
+  "WarDamageReturnPerWeek": 0.04,
+
+  "WarDamageRebuildDays": 180,
+  "WarDamageRebuildBoost": 2,
+  "WarDamageRebuildCost": 0.25,
+  "WarDamageSafeDays": 14,
+  "WarDamageRebuildMinimum": 0.05,
+  "WarDamageAiRebuildAbove": 0.20,
+  "WarDamageAiRebuildReserve": 4
+}

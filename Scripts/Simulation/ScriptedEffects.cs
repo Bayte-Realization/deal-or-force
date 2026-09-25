@@ -114,6 +114,8 @@ public static class ScriptedEffects
             0f, float.PositiveInfinity, "Population of every state the nation owns.");
         StateField("state.stability", s => s.Stability, (s, v) => s.Stability = v, 0f, 1f,
             "Stability in every state the nation owns.");
+        StateField("state.war_damage", s => s.WarDamage, (s, v) => s.WarDamage = v, 0f, 1f,
+            "War damage in every state the nation owns: 0 untouched, 1 ruins.");
 
         // The country's forces, every division and every fleet at once: an army rested, drilled
         // or re-equipped, a navy back from a refit.
@@ -433,6 +435,7 @@ public static class ScriptedEffects
         "stability", "war_support", "standard_of_living", "literacy", "inflation", "key_rate",
         "tax_rate", "military_spending", "welfare_spending", "education_spending", "market_access",
         "state.standard_of_living", "state.radicalism", "state.literacy", "state.urbanization", "state.stability",
+        "state.war_damage", "worst_war_damage",
         "army.organisation", "army.entrenchment", "army.experience", "army.equipment", "fleet.readiness", "fleet.supply"
     };
 
@@ -454,6 +457,8 @@ public static class ScriptedEffects
         ["state.urbanization"] = "Urbanisation in every region",
         ["state.population"] = "Population of every region",
         ["state.stability"] = "Stability in every region",
+        ["state.war_damage"] = "War damage in every region",
+        ["worst_war_damage"] = "War damage in the worst-hit region",
         ["army.organisation"] = "Organisation of every division",
         ["army.entrenchment"] = "Entrenchment of every division",
         ["army.experience"] = "Experience of every division",
@@ -550,7 +555,7 @@ public sealed class ScriptedTrigger
             }
 
             var key = name[4..];
-            if (!ScriptedEffects.IsKnown(key))
+            if (!ScriptedEffects.IsKnown(key) && !ScriptedValues.IsReadOnly(key))
             {
                 errors?.Add($"{context}: unknown trigger key '{key}'.");
                 continue;
@@ -606,6 +611,14 @@ internal static class ScriptReferences
 /// <summary>Reads the same keys the effects write, for triggers and for the console.</summary>
 public static class ScriptedValues
 {
+    /// <summary>
+    /// What a trigger may ask about and no effect may set, because it is worked out rather than
+    /// kept: the worst-hit region's war damage is a question about every region at once.
+    /// </summary>
+    private static readonly HashSet<string> ReadOnly = new(StringComparer.OrdinalIgnoreCase) { "worst_war_damage" };
+
+    public static bool IsReadOnly(string key) => key is not null && ReadOnly.Contains(key.Trim().Replace('-', '_'));
+
     public static bool TryRead(Campaign campaign, Nation nation, string key, out float value)
     {
         value = 0f;
@@ -634,6 +647,8 @@ public static class ScriptedValues
             case "state.standard_of_living": value = Average(campaign, nation, state => state.StandardOfLiving); return true;
             case "state.radicalism": value = Average(campaign, nation, state => state.Radicalism); return true;
             case "state.literacy": value = Average(campaign, nation, state => state.Literacy); return true;
+            case "state.war_damage": value = Average(campaign, nation, state => state.WarDamage); return true;
+            case "worst_war_damage": value = WarDamage.Worst(campaign, nation); return true;
             case "state.urbanization": value = Average(campaign, nation, state => state.Urbanization); return true;
             case "state.population":
                 value = campaign.StatesOf(nation)

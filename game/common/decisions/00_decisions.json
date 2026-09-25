@@ -165,6 +165,26 @@
     "ai_will_do": "ai_infrastructure_drive"
   },
 
+  "reconstruction_programme": {
+    "name": "Reconstruction programme",
+    "description": "Rebuild what the war destroyed. For two years ruined regions are rebuilt twice as fast, and everything else is built a tenth faster.",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.005,
+    "unavailable": "Only a country with a region in ruins, and the money to rebuild it",
+    "trigger": {
+      "use": [
+        "war_torn",
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "reconstruction_programme": 0
+      }
+    },
+    "ai_will_do": "ai_reconstruction_programme"
+  },
+
   "research_initiative": {
     "name": "National research initiative",
     "description": "Grants, laboratories and a minister for science. A fifth more research for a year.",

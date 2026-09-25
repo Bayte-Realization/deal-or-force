@@ -37,6 +37,7 @@ public static class NationalModifiers
         new("construction_cost", "Construction cost", "What a building costs to put up.", HigherIsBetter: false),
         new("tax_efficiency", "Tax efficiency", "How much of what the taxes ask for actually arrives."),
         new("trade_reach", "Trade reach", "How far the country's goods travel, in the same shares as ports and railways add."),
+        new("reconstruction_speed", "Reconstruction speed", "How fast regions the war has wrecked are rebuilt."),
         // The army.
         new("army_attack", "Division attack", "The fire a division puts down in an attack."),
         new("army_defense", "Division defence", "The fire a division puts down holding ground."),

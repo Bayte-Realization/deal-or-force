@@ -713,6 +713,8 @@ public static partial class Warfare
                 army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningBurnPerCombatDay);
             battle.AttackerLosses += attackerLoss;
             battle.DefenderLosses += defenderLoss;
+            // And the ground they fought over: a day of battle wrecks a share of the region.
+            WarDamage.Fought(campaign, battle.ProvinceId, attackerLoss + defenderLoss);
 
             // By side rather than by leader. This compared the battle's attacker with the
             // war's, so an ally's assault in a coalition war put each side's dead on the other.

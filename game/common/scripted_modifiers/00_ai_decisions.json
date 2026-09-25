@@ -123,6 +123,20 @@
     ]
   },
 
+  "ai_reconstruction_programme": {
+    "base": 0.4,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "at_peace"
+          ]
+        },
+        "add": 1.2
+      }
+    ]
+  },
+
   "ai_infrastructure_drive": {
     "base": 0.3,
     "modifiers": [

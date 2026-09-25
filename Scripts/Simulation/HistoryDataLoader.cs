@@ -343,6 +343,8 @@ public static class HistoryDataLoader
             SetFloat(value, "standard_of_living", number => state.StandardOfLiving = M.Clamp01(number));
             SetFloat(value, "radicalism", number => state.Radicalism = M.Clamp01(number));
             SetFloat(value, "urbanization", number => state.Urbanization = M.Clamp01(number));
+            // A scenario may open on a region already in ruins (WarDamage).
+            SetFloat(value, "war_damage", number => state.WarDamage = M.Clamp01(number));
             if (value.TryGetProperty("buildings", out var buildings) && buildings.ValueKind == JsonValueKind.Object)
                 foreach (var building in buildings.EnumerateObject())
                     if (BuildingCatalog.TryParse(building.Name, out var kind) && building.Value.TryGetInt32(out var level))

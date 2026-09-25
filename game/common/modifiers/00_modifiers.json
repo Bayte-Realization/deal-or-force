@@ -179,6 +179,17 @@
       "tax_efficiency": -0.03
     }
   },
+  "reconstruction_programme": {
+    "name": "Reconstruction programme",
+    "description": "Housing first, then the plants, the bridges and the lines. What the war wrecked is rebuilt twice as fast, and the money for it comes out of everything else.",
+    "days": 730,
+    "positive": true,
+    "modifiers": {
+      "reconstruction_speed": 1.0,
+      "construction_speed": 0.1,
+      "tax_efficiency": -0.02
+    }
+  },
   "research_initiative": {
     "name": "National research initiative",
     "description": "Grants, laboratories and a minister whose whole job is science. The results come in years, the bills in weeks.",

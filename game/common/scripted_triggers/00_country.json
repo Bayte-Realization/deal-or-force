@@ -27,5 +27,9 @@
   // Capacity.
   "poorly_schooled": { "max_literacy": 0.75 },
   "short_of_men": { "at_war": true, "max_manpower": 250000 },
-  "hungry_for_work": { "max_standard_of_living": 0.45 }
+  "hungry_for_work": { "max_standard_of_living": 0.45 },
+
+  // The war. A region at least this much in ruins (WarDamage) - a worked-out figure, so a
+  // trigger may ask about it and no effect set it; "state.war_damage" is the one to set.
+  "war_torn": { "min_worst_war_damage": 0.15 }
 }

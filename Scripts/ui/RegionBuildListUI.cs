@@ -22,6 +22,84 @@ public partial class DealOrForceGame
     private VBoxContainer _regionBuildColumn;
     private VBoxContainer _regionBuildRows;
 
+    /// <summary>
+    /// The ruins, among the region's other figures: how much of it the war has wrecked, what
+    /// that costs it, and how fast it comes back (WarDamage). Nothing for an untouched region,
+    /// and nothing the fog of war hides - the same rule as the rest of the card.
+    /// </summary>
+    private void ShowWarDamage(ScenarioState state)
+    {
+        if (state is null || (state.WarDamage < 0.005f && state.Displaced.Count == 0) ||
+            !IsInstanceValid(_regionCardRegionRows)) return;
+        var owner = _campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
+        if (owner is not null && !CanInspectNation(owner.Id) && !PlayerHoldsMostOf(state)) return;
+        var tip = string.Join("\n",
+            Simulation.Loc.Format("{0} of the region lies in ruins.", Fmt.Percent(state.WarDamage)),
+            Simulation.Loc.Format("Output: -{0}", Fmt.Percent(1f - WarDamage.OutputFactor(_campaign, state))),
+            Simulation.Loc.Format("Leaving: about {0} people a week", Fmt.People(WarDamage.Leaving(_campaign, state))),
+            Simulation.Loc.Format("Rebuilt: about {0} of the damage a week",
+                Fmt.Percent(WarDamage.RebuiltPerWeek(_campaign, owner, state))),
+            Tr("Infrastructure and a reconstruction programme rebuild it faster."));
+        var displaced = WarDamage.DisplacedTotal(state);
+        if (displaced > 0)
+        {
+            tip += "\n\n" + Simulation.Loc.Format("Displaced elsewhere in the country: about {0}", Fmt.People(displaced));
+            var returning = WarDamage.Returning(_campaign, state);
+            tip += "\n" + (returning > 0
+                ? Simulation.Loc.Format("Coming home: about {0} people a week", Fmt.People(returning))
+                : Tr("They come home once the region is rebuilt and safe from the fighting."));
+        }
+        CardRow(_regionCardRegionRows, "War damage", Fmt.Percent(state.WarDamage), tip,
+            state.WarDamage > 0.5f ? "state.negative" : state.WarDamage > 0.2f ? "state.warning" : "text.bright");
+        if (state.NationMapIndex == _campaign.Player.MapIndex && state.WarDamage >= _campaign.Defines.WarDamageRebuildMinimum)
+            ShowRebuild(state);
+    }
+
+    /// <summary>
+    /// The order to rebuild a region of one's own, under its war damage: what it costs, what it
+    /// buys, and - when it cannot be given - why. While a reconstruction runs, how long it has
+    /// left, and whether the fighting has stopped it.
+    /// </summary>
+    private void ShowRebuild(ScenarioState state)
+    {
+        var player = _campaign.Player;
+        var defines = _campaign.Defines;
+        var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        row.AddThemeConstantOverride("separation", 8);
+        row.CustomMinimumSize = new Vector2(0, 23);
+        _regionCardRegionRows.AddChild(row);
+
+        var underway = _campaign.ElapsedDays <= state.RebuildingUntilDay;
+        var status = !underway ? Tr("Reconstruction") :
+            WarDamage.Safe(_campaign, state)
+                ? Simulation.Loc.Format("Rebuilding: {0} days left", state.RebuildingUntilDay - _campaign.ElapsedDays)
+                : Tr("Rebuilding stopped by the fighting");
+        var label = Title(status, 13, Ui.Colour(underway && !WarDamage.Safe(_campaign, state) ? "state.warning" :
+            underway ? "text.accent" : "text.body_soft"));
+        label.AutowrapMode = TextServer.AutowrapMode.Off;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        row.AddChild(label);
+
+        var refusal = WarDamage.RebuildRefusal(_campaign, player, state);
+        var rebuild = ActionButton("Rebuild", () =>
+        {
+            _campaign.Commands.Enqueue(new RebuildRegionCommand { IssuerId = player.Id, StateMapIndex = state.MapIndex });
+            _campaign.Commands.ApplyAll(_campaign);
+            ShowRegionCard();
+        }, 96, 21);
+        rebuild.Disabled = refusal.Length > 0;
+        var tip = Simulation.Loc.Format(
+            "For {0} days the region is rebuilt {1} times as fast, while no battle is fought in it and as far as the market has industrial materials for it.",
+            defines.WarDamageRebuildDays, (1f + defines.WarDamageRebuildBoost).ToString("0.#", CultureInfo.InvariantCulture)) +
+                  "\n" + Simulation.Loc.Format("Costs {0}.", Fmt.Money(WarDamage.RebuildCost(_campaign, player, state))) +
+                  "\n" + Simulation.Loc.Format("Industrial materials: {0} of what the market wants.", Fmt.Percent(WarDamage.Materials(player)));
+        if (refusal.Length > 0) tip += "\n\n" + refusal;
+        rebuild.TooltipText = Ui.Tip(tip);
+        label.TooltipText = rebuild.TooltipText;
+        label.MouseFilter = Control.MouseFilterEnum.Pass;
+        row.AddChild(rebuild);
+    }
+
     /// <summary>The build column, beside the region and the province.</summary>
     private void BuildRegionBuildList(HBoxContainer columns)
     {
@@ -47,6 +125,7 @@ public partial class DealOrForceGame
     /// <summary>One row per building, for a region of one's own; the column hides for anybody else's.</summary>
     private void ShowRegionBuildList(ScenarioState state, bool owned)
     {
+        ShowWarDamage(state);
         if (_regionBuildColumn is null || !IsInstanceValid(_regionBuildRows)) return;
         _regionBuildColumn.Visible = owned && state is not null;
         if (!_regionBuildColumn.Visible) return;
