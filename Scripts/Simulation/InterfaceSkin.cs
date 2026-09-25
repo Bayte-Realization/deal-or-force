@@ -219,7 +219,7 @@ public static class InterfaceSkin
         // What a left click on the map selects: the country, as tall as what it holds, and
         // its region and province along the bottom, clear of the map controls.
         ("hud.country_card",   new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 90f)),
-        ("hud.region_card",    new PanelRect(0f, 1f, 0f, 1f,     540f, -292f, 1300f, -62f)),
+        ("hud.region_card",    new PanelRect(0f, 1f, 0f, 1f,     530f, -262f, 1350f, -8f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
         ("hud.hotseat",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 365f, -6f)),
         ("hud.network",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 425f, -6f)),

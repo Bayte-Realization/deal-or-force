@@ -159,6 +159,41 @@ public static class ProductionChains
         foreach (var recipe in Regional) foreach (var lack in recipe.Shortfall) yield return lack.Good;
     }
 
+    /// <summary>
+    /// What a building makes and what it burns, read out of the recipes rather than written
+    /// beside them, so a tooltip cannot disagree with the economy and a mod's new chain
+    /// describes itself. A good is made when the building is a factor in a term of its
+    /// output - a mine through the efficiency its deposits are dug at - and used when the
+    /// building is a factor in its demand, or the good is a need of something it makes.
+    /// </summary>
+    public static void RolesOf(BuildingKind kind, List<Commodity> makes, List<Commodity> uses)
+    {
+        makes.Clear();
+        uses.Clear();
+        var staffed = StaffedSlot(kind);
+        var raw = RawSlot(kind);
+        var compound = kind == BuildingKind.ExtractionIndustry ? SlotExtractionEfficiency : -1;
+        foreach (var recipes in new[] { Regional, National })
+            foreach (var recipe in recipes)
+            {
+                if (Mentions(recipe.Output, staffed, raw, compound))
+                {
+                    if (!makes.Contains(recipe.Good)) makes.Add(recipe.Good);
+                    foreach (var need in recipe.Needs)
+                        if (!uses.Contains(need.Good)) uses.Add(need.Good);
+                }
+                if (Mentions(recipe.Demand, staffed, raw, -1) && !uses.Contains(recipe.Good)) uses.Add(recipe.Good);
+            }
+    }
+
+    private static bool Mentions(Term[] terms, int staffed, int raw, int compound)
+    {
+        foreach (var term in terms)
+            foreach (var slot in term.Factors)
+                if (slot == staffed || slot == raw || slot == compound) return true;
+        return false;
+    }
+
     // ---------------------------------------------------------------- loading -----------
 
     private static readonly HashSet<BuildingKind> StaffedSeen = new();

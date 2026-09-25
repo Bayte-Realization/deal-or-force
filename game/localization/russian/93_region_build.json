@@ -1,0 +1,17 @@
+{
+  "BUILD": "СТРОИТЬ",
+  "The national construction limit is reached: {0} projects are under way.": "Достигнут предел строек страны: идёт {0} проектов.",
+  "The treasury cannot start it.": "Казне не хватает денег, чтобы начать.",
+  "Costs {0} and takes {1} days.": "Стоит {0}, строится {1} дн.",
+  "In this region: {0} built, {1} under way.": "В этом регионе: построено {0}, строится {1}.",
+  "Each one, once built:": "Каждое, когда достроено:",
+  "Supply throughput, divisions": "Пропускная способность снабжения, дивизий",
+  "March pace in this region": "Скорость марша в регионе",
+  "Literacy in this region": "Грамотность в регионе",
+  "Standard of living in this region": "Уровень жизни в регионе",
+  "Slipways": "Стапели",
+  "Makes: {0}": "Производит: {0}",
+  "Uses: {0}": "Потребляет: {0}",
+  "Nothing lies under this region to dig up.": "Под этим регионом нечего добывать.",
+  "Trade reach": "Дальность торговли"
+}

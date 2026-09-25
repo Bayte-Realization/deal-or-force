@@ -1,0 +1,17 @@
+{
+  "BUILD": "BUILD",
+  "The national construction limit is reached: {0} projects are under way.": "The national construction limit is reached: {0} projects are under way.",
+  "The treasury cannot start it.": "The treasury cannot start it.",
+  "Costs {0} and takes {1} days.": "Costs {0} and takes {1} days.",
+  "In this region: {0} built, {1} under way.": "In this region: {0} built, {1} under way.",
+  "Each one, once built:": "Each one, once built:",
+  "Supply throughput, divisions": "Supply throughput, divisions",
+  "March pace in this region": "March pace in this region",
+  "Literacy in this region": "Literacy in this region",
+  "Standard of living in this region": "Standard of living in this region",
+  "Slipways": "Slipways",
+  "Makes: {0}": "Makes: {0}",
+  "Uses: {0}": "Uses: {0}",
+  "Nothing lies under this region to dig up.": "Nothing lies under this region to dig up.",
+  "Trade reach": "Trade reach"
+}

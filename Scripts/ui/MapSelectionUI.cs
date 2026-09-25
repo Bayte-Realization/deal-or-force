@@ -157,20 +157,15 @@ public partial class DealOrForceGame
         _regionCardProvinceRows.AddThemeConstantOverride("separation", 1);
         province.AddChild(_regionCardProvinceRows);
 
+        // And for a region of one's own, everything it can build, in a column that scrolls.
+        columns.AddChild(new VSeparator());
+        BuildRegionBuildList(columns);
+
         // The orders a region of your own takes. Somebody else's takes none, so the row goes
         // rather than standing there greyed out.
         _regionCardActions = new HBoxContainer();
         _regionCardActions.AddThemeConstantOverride("separation", 5);
         regionRows.AddChild(_regionCardActions);
-        var develop = ActionButton("Develop", () => RegionCardBuild(BuildingKind.Infrastructure), 0, 28, true);
-        develop.TooltipText = Ui.Tip(Tr("Queue infrastructure in this region. Construction uses the national treasury, materials and construction capacity."));
-        _regionCardActions.AddChild(develop);
-        var industry = ActionButton("Industry", () => RegionCardBuild(BuildingKind.CivilianIndustry), 0, 28);
-        industry.TooltipText = Ui.Tip(Tr("Queue civilian industry in this region."));
-        _regionCardActions.AddChild(industry);
-        _regionCardActions.AddChild(ActionButton("Extract", () => RegionCardBuild(BuildingKind.ExtractionIndustry), 0, 28));
-        _regionCardActions.AddChild(ActionButton("Power", () => RegionCardBuild(BuildingKind.PowerPlant), 0, 28));
-        _regionCardActions.AddChild(ActionButton("Arms", () => RegionCardBuild(BuildingKind.ArmsIndustry), 0, 28));
         var raise = ActionButton("Raise army", RaiseRegionalArmy, 0, 28);
         raise.TooltipText = Ui.Tip(Tr("Choose a template, training region and paid recruitment batch."));
         _regionCardActions.AddChild(raise);
@@ -518,6 +513,7 @@ public partial class DealOrForceGame
 
         _regionCardActions.Visible = owned;
         if (owned) RefreshRegionCardCapitalButton();
+        ShowRegionBuildList(state, owned);
     }
 
     private void RefreshRegionCardCapitalButton()
