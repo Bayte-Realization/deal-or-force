@@ -1,0 +1,42 @@
+// Deal or Force - the war score (WarScoring.cs).
+//
+// Seven parts, each worked out for both sides and netted, attacker-positive, between -100
+// and 100:
+//
+//   occupation   WarScoreOccupation x (the share of the defending side's worth the
+//                attackers hold - the share of the attacking side's the defenders hold).
+//                A region's worth is WarScorePeopleWeight its share of its country's people
+//                and the rest its share of its country's buildings, spread over its
+//                provinces; in a coalition each member counts by its GDP.
+//   capitals     WarScoreCapital x the share of each leader's capital region held by the
+//                other side.
+//   armies       WarScoreArmies x (what is left of the attackers' field army against what
+//                they went to war with - the same for the defenders). Militia do not count.
+//   battles      WarScoreBattles x the casualty ratio.
+//   war goal     from WarScoreObjectiveMin (none of it held) to WarScoreObjectiveMax (all of it).
+//   momentum     WarScoreTickingPerMonth a month to whoever holds the war goal, and to the
+//                defender once WarScoreTickingGraceDays have passed with the attacker holding
+//                nothing; never beyond WarScoreTickingMax either way.
+//   home front   WarScoreHomeFront x the difference between the sides' war support.
+//
+// A side has collapsed - and the score is 100 against it - when WarScoreCollapseOccupation
+// of its worth is occupied, or WarScoreCollapseOccupationBroken of it with no more than
+// WarScoreCollapseArmy of its army left.
+//
+// Every file in this folder is read in name order and later files win.
+{
+  "WarScoreOccupation": 50,
+  "WarScoreCapital": 12,
+  "WarScoreArmies": 15,
+  "WarScoreBattles": 12,
+  "WarScoreObjectiveMin": -10,
+  "WarScoreObjectiveMax": 20,
+  "WarScoreTickingPerMonth": 1,
+  "WarScoreTickingMax": 15,
+  "WarScoreTickingGraceDays": 180,
+  "WarScoreHomeFront": 10,
+  "WarScoreCollapseOccupation": 0.9,
+  "WarScoreCollapseOccupationBroken": 0.6,
+  "WarScoreCollapseArmy": 0.15,
+  "WarScorePeopleWeight": 0.5
+}

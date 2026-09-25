@@ -1570,6 +1570,26 @@ is not a saved entity: it groups a country's divisions in one tactical province 
 `ArmyGroup` is a separate headquarters level for a name, a commander and the assignment of a
 shared plan.
 
+### The war score
+
+A war's score runs from -100 to 100, attacker-positive, and is seven parts, each worked out for
+both sides and netted (`Scripts/Simulation/WarScoring.cs`, numbers in
+`common/defines/16_war_score.json`):
+
+| Part | Up to | What it is |
+|---|---|---|
+| occupation | 50 | the share of the other side's worth held: a region counts by its people and its industry, not its province count, and in a coalition each member counts by its GDP |
+| capitals | 12 | how much of each leader's capital region the other side holds |
+| armies | 15 | what is left of each side's field army against what it went to war with |
+| battles | 12 | the casualty ratio |
+| war goal | -10 to 20 | how much of the region the war was declared for the attackers hold |
+| momentum | 15 | a point a month to whoever holds the war goal, and to the defender once the attacker has held nothing of it for half a year |
+| home front | 10 | the difference in war support |
+
+A side has **collapsed** - and the score is 100 against it - when 90 % of its worth is occupied,
+or 60 % of it with no more than 15 % of its army left. Taking all of a country is a won war,
+not a lead of seventy points. The war ledger shows every part.
+
 ### Literacy and human capital
 
 `history/countries/2024/10_statistics.json` gives a country its `literacy`, the share of its people

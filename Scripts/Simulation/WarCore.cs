@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
-public sealed class StrategicWar
+public sealed partial class StrategicWar
 {
     public int Id;
     public string Name = "";

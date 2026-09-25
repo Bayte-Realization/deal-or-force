@@ -492,10 +492,12 @@ public partial class DealOrForceGame
                  war.WarScore.ToString("+0.0;-0.0;0.0"),
                  (war.WarScore >= 0f ? attacker?.DisplayName : defender?.DisplayName) ?? Tr("nobody")),
              NationColour(war.WarScore >= 0f ? attacker : defender));
-        Line("    " + Simulation.Loc.Format("occupation {0}", war.OccupationScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
-             Simulation.Loc.Format("battles {0}", war.BattleScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
-             Simulation.Loc.Format("objective {0}", war.ObjectiveScore.ToString("+0.0;-0.0;0.0")) + "  ·  " +
-             Simulation.Loc.Format("home support {0}", war.SupportScore.ToString("+0.0;-0.0;0.0")));
+        Line("    " + string.Join("  ·  ", WarScoring.Parts(war)
+            .Select(part => Simulation.Loc.Format(part.Name, part.Value.ToString("+0.0;-0.0;0.0")))));
+        if (war.Collapsed != 0)
+            Line("    " + Simulation.Loc.Format("{0} has collapsed: the war is decided.",
+                (war.Collapsed > 0 ? defender?.DisplayName : attacker?.DisplayName) ?? Tr("nobody")),
+                NationColour(war.Collapsed > 0 ? attacker : defender));
         Line(Simulation.Loc.Format("Front: {0} attacking province(s) against {1} defending",
             war.AttackerFront.Count.ToString("N0"), war.DefenderFront.Count.ToString("N0")));
 

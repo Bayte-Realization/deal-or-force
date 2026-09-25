@@ -201,6 +201,8 @@ public static class Program
             StatedLiteracyStands(campaign));
         failures += Check("a battle leaves ruins, and ruins are rebuilt",
             BattlesLeaveRuins());
+        failures += Check("a country that has taken all of another has won the war",
+            AWonWarScoresAsWon());
         failures += Check("what the enemy stands on makes nothing for its owner",
             OccupationCostsOutput());
         failures += Check("a country short of a good builds what makes it",
@@ -9086,6 +9088,63 @@ public static class Program
 
         Console.WriteLine($"  building for shortages: Germany short of electronics builds {electronics} in {plantAt.Id}; " +
                           $"Russia short of oil opens a mine in {mineAt.Id} ({mineAt.ResourceDeposits.GetValueOrDefault(Commodity.Oil):0} of oil).");
+        return "";
+    }
+
+    /// <summary>
+    /// A country that has taken all of another has won the war (WarScoring). The score used to
+    /// count provinces and top out at 65 for occupation, so Russia holding every province of
+    /// Ukraine stood at 71. On its own world: Russia is handed the provinces by hand.
+    ///
+    /// - The richest half of Ukraine's provinces is worth more occupation than the poorest half.
+    /// - All of it, capital included, is a collapse, and a score of 100.
+    /// - Handing it back takes the score back down.
+    /// </summary>
+    private static string AWonWarScoresAsWon()
+    {
+        var campaign = Campaign.CreateBootstrap(20240904);
+        if (!AttachMap(campaign)) return "no province map to occupy";
+        var russia = campaign.NationByTag("RUS");
+        var ukraine = campaign.NationByTag("UKR");
+        if (russia is null || ukraine is null) return "there is no Russia or no Ukraine";
+        var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(russia.Id) && candidate.Involves(ukraine.Id));
+        if (war is null) return "Russia and Ukraine are not at war on the first day";
+        var topology = campaign.ProvinceMap;
+        var holder = (ushort)(war.IsAttacking(russia.Id) ? russia.MapIndex : ukraine.MapIndex);
+        var victim = holder == russia.MapIndex ? ukraine : russia;
+        if (victim != ukraine) return "Ukraine is the attacker in the scenario's war";
+
+        var own = Enumerable.Range(1, topology.ProvinceCount)
+            .Where(province => topology.ProvinceToNation[province] == ukraine.MapIndex).ToList();
+        var original = own.ToDictionary(province => province, province => campaign.ProvinceController[province]);
+        var states = campaign.StatesOf(ukraine).ToDictionary(state => state.MapIndex);
+        float Worth(int province) => states.TryGetValue(topology.ProvinceToState[province], out var state)
+            ? state.Population / (float)Math.Max(1, own.Count(other => topology.ProvinceToState[other] == state.MapIndex)) : 0f;
+        var byWorth = own.OrderByDescending(Worth).ToList();
+
+        void Hold(IEnumerable<int> provinces)
+        {
+            foreach (var province in own) campaign.SetProvinceController(province, original[province]);
+            foreach (var province in provinces) campaign.SetProvinceController(province, holder);
+            WarScoring.Update(campaign, war);
+        }
+
+        Hold(byWorth.Take(byWorth.Count / 2));
+        var rich = war.OccupationScore;
+        Hold(byWorth.Skip(byWorth.Count / 2));
+        var poor = war.OccupationScore;
+        if (rich <= poor) return $"the richer half of Ukraine is worth {rich:0.0} of occupation and the poorer half {poor:0.0}";
+
+        Hold(own);
+        var all = war.WarScore;
+        if (war.Collapsed != 1 || all < 99.9f)
+            return $"Russia holding every province of Ukraine scores {all:0.0} (collapsed {war.Collapsed}), not 100";
+        var capital = war.CapitalScore;
+
+        Hold(Array.Empty<int>());
+        if (war.WarScore > 50f) return $"with every province handed back the score is still {war.WarScore:0.0}";
+        Console.WriteLine($"  war score: the richer half of Ukraine is {rich:0.0} of occupation, the poorer half {poor:0.0}; " +
+                          $"all of it is a collapse and 100 (capital {capital:0.0}); handed back, {war.WarScore:0.0}.");
         return "";
     }
 

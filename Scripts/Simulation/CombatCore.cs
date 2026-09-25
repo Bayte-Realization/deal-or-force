@@ -1017,11 +1017,6 @@ public static partial class Warfare
                 if (campaign.NationById(attackingId) is { } foe)
                     defenderOccupied += Occupied(map, (ushort)foe.MapIndex);
         }
-        war.OccupationScore = (defenderHome == 0 ? 0f : defenderOccupied * 65f / defenderHome) -
-                              (attackerHome == 0 ? 0f : attackerOccupied * 65f / attackerHome);
-        var totalLosses = war.AttackerLosses + war.DefenderLosses;
-        war.BattleScore = totalLosses < 1f ? 0f :
-            (war.DefenderLosses - war.AttackerLosses) / totalLosses * 25f;
         var attackerOccupiedShare = attackerHome == 0 ? 0f : (float)attackerOccupied / attackerHome;
         var defenderOccupiedShare = defenderHome == 0 ? 0f : (float)defenderOccupied / defenderHome;
         var attackerLossBurden = war.AttackerLosses / MathF.Max(50_000f, attacker.Population * 0.035f);
@@ -1029,28 +1024,9 @@ public static partial class Warfare
         war.AttackerWarSupport = M.Clamp01(attacker.WarSupport - attackerLossBurden * 0.52f - attackerOccupiedShare * 0.58f);
         war.DefenderWarSupport = M.Clamp01(defender.WarSupport - defenderLossBurden * 0.52f - defenderOccupiedShare * 0.58f);
 
-        war.ObjectiveScore = 0f;
-        if (war.ClaimedStateMapIndex >= 0)
-        {
-            // Whoever on the attacking side is standing on the goal. An ally holding it
-            // holds it for the coalition.
-            AttackerMaps.Clear();
-            foreach (var attackingId in war.Side(true))
-                if (campaign.NationById(attackingId) is { } member)
-                    AttackerMaps.Add((ushort)member.MapIndex);
-            var goalTotal = 0;
-            var goalControlled = 0;
-            for (var province = 1; province <= topology.ProvinceCount; province++)
-            {
-                if (topology.ProvinceToState[province] != war.ClaimedStateMapIndex) continue;
-                goalTotal++;
-                if (AttackerMaps.Contains(controllers[province])) goalControlled++;
-            }
-            if (goalTotal > 0)
-                war.ObjectiveScore = M.Clamp(-10f + goalControlled * 35f / goalTotal, -10f, 25f);
-        }
-        war.SupportScore = (war.AttackerWarSupport - war.DefenderWarSupport) * 10f;
-        war.WarScore = M.Clamp(war.OccupationScore + war.BattleScore + war.ObjectiveScore + war.SupportScore, -100f, 100f);
+        // The score itself: occupation by worth, the capitals, the armies, the battles, the
+        // war goal, the momentum and the home front, and collapse (WarScoring).
+        WarScoring.Update(campaign, war);
     }
 
     /// <summary>Frontage a side would take if the province had unlimited room.</summary>
