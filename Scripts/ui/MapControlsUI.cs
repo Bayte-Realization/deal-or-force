@@ -80,8 +80,8 @@ public partial class DealOrForceGame
     /// The mark for one map layer.
     ///
     /// Drawn from the same set the top bar and the alert rail use, so a flag means a country
-    /// wherever it appears and crossed swords mean a war. Terrain and relief borrow the
-    /// region and world marks until a contour and a mountain are drawn for them.
+    /// wherever it appears and crossed swords mean a war. Terrain is a mountain with a tree
+    /// at its foot and relief is a contour map: the ground and its height, not a country.
     /// </summary>
     private static string MapModeIcon(StrategicMapMode mode) => mode switch
     {
@@ -90,8 +90,8 @@ public partial class DealOrForceGame
         StrategicMapMode.Wars => "wars",
         StrategicMapMode.Population => "population",
         StrategicMapMode.Economy => "economy",
-        StrategicMapMode.Terrain => "region",
-        _ => "world"
+        StrategicMapMode.Terrain => "terrain",
+        _ => "relief"
     };
 
     /// <summary>What a layer actually shows, for the tooltip under its mark.</summary>

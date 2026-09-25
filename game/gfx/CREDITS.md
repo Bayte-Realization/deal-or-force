@@ -24,9 +24,12 @@ else was skipped rather than used.
 | `flag_alb_absolute_monarchy.png` | [Flag of Albania (1934–1939).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Albania_%281934%E2%80%931939%29.svg) | Public domain | Original: Zscout370 , Fabiodevivo Vector: LSDSL |
 | `flag_alb_communism.png` | [Flag of Albania (1946–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Albania_%281946%E2%80%931992%29.svg) | Public domain | Sadik Kaceli |
 | `flag_alb_puppet.png` | [Flag of Albania (1939–1943).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Albania_%281939%E2%80%931943%29.svg) | Public domain | F l a n k e r |
+| `flag_are_protectorate.png` | [Flag of the Trucial States (1968–1971).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Trucial_States_(1968%E2%80%931971).svg) | Public domain | Svyatoslav |
+| `flag_arg_traditionalism.png` | [Flag of the Argentine Confederation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Argentine_Confederation.svg) | Public domain | Juan Manuel de Rosas (1793–1877), according to La Gazeta website (vector graphics by Guilherme Paula) |
 | `flag_arm_absolute_monarchy.png` | [Flag of Armenian Kingdom of Cilicia.png](https://commons.wikimedia.org/wiki/File:Flag_of_Armenian_Kingdom_of_Cilicia.png) | Public domain | Orange Tuesday |
 | `flag_arm_communism.png` | [Flag of the Armenian Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Armenian_Soviet_Socialist_Republic.svg) | Public domain | Aivazovsky and others |
 | `flag_atg_protectorate.png` | [Flag of Antigua and Barbuda (1956–1962).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Antigua_and_Barbuda_%281956%E2%80%931962%29.svg) | CC BY-SA 4.0 | FOX 52 |
+| `flag_aus_protectorate.png` | [Flag of Australia (1901–1903).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Australia_(1901%E2%80%931903).svg) | Public domain | Roke (original) |
 | `flag_aut_absolute_monarchy.png` | [Flag of the Habsburg Monarchy.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Habsburg_Monarchy.svg) | Public domain | ThrashedParanoid and Peregrine981 . |
 | `flag_aut_traditionalism.png` | [Flag of the Habsburg Monarchy.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Habsburg_Monarchy.svg) | Public domain | ThrashedParanoid and Peregrine981 . |
 | `flag_aze_absolute_monarchy.png` | [Flag of Baku Khanate 001.png](https://commons.wikimedia.org/wiki/File:Flag_of_Baku_Khanate_001.png) | CC BY-SA 4.0 | Naməlum |
@@ -38,13 +41,18 @@ else was skipped rather than used.
 | `flag_bgd_provisional_government.png` | [Flag of Bangladesh (1971).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bangladesh_(1971).svg) | CC BY-SA 3.0 | Himasaram / Nirvik12 (Valid SVG Version) |
 | `flag_bgr_absolute_monarchy.png` | [Flag of Kingdom of Bulgaria 1879–1947(23 civil).png](https://commons.wikimedia.org/wiki/File:Flag_of_Kingdom_of_Bulgaria_1879%E2%80%931947%2823_civil%29.png) | CC BY-SA 4.0 | 愛喝奶茶 |
 | `flag_bgr_communism.png` | [Flag of Bulgaria (1971–1990).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bulgaria_(1971%E2%80%931990).svg) | CC BY-SA 3.0 | Scroch |
+| `flag_bhr_protectorate.png` | [Flag of Bahrain (1932–1972).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bahrain_(1932%E2%80%931972).svg) | Public domain | Orange Tuesday at English Wikipedia (Original text: Orange Tuesday (talk)) |
 | `flag_bih_communism.png` | [Flag of Bosnia and Herzegovina (1946–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bosnia_and_Herzegovina_(1946%E2%80%931992).svg) | Public domain | Zscout370 |
 | `flag_blr_communism.png` | [Flag of the Byelorussian Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Byelorussian_Soviet_Socialist_Republic.svg) | Public domain | Zscout370 , reworked by Pianist |
+| `flag_bol_federation.png` | [Flag of the Peru-Bolivian Confederation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Peru-Bolivian_Confederation.svg) | CC BY-SA 2.5 | No machine-readable author provided. Huhsunqu assumed (based on copyright claims). |
 | `flag_bra_absolute_monarchy.png` | [Flag of Brazil (1870–1889).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Brazil_%281870%E2%80%931889%29.svg) | Public domain | Tonyjeff , based on work of Jean-Baptiste Debret |
 | `flag_bra_fascism.png` | [Flag-of-the-brazilian-integralist-action-1932-1937-v0-orpi07rl6u2b1.png](https://commons.wikimedia.org/wiki/File:Flag-of-the-brazilian-integralist-action-1932-1937-v0-orpi07rl6u2b1.png) | CC BY-SA 4.0 | Fede.itxrre |
 | `flag_bra_traditionalism.png` | [Flag of Brazil (1822–1853).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Brazil_%281822%E2%80%931853%29.svg) | Public domain | This vector image includes elements that have been taken or adapted from this file: |
+| `flag_brb_protectorate.png` | [Flag of Barbados (1870–1966).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Barbados_(1870%E2%80%931966).svg) | CC BY-SA 4.0 | Sodacan |
+| `flag_brn_protectorate.png` | [Flag of Brunei 1906-1959.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Brunei_1906-1959.svg) | Public domain | Orange Tuesday at English Wikipedia (Original text: Orange Tuesday (talk)) |
 | `flag_btn_theocratic_rule.png` | [Buddhist flag.svg](https://commons.wikimedia.org/wiki/File:Buddhist_flag.svg) | Public domain | Jon Harald Søby |
 | `flag_can_traditionalism.png` | [Canadian Red Ensign (1957-1965).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Canada_(1957%E2%80%931965).svg) | Public domain | Denelson83 |
+| `flag_ccr.png` | [Estelada blava.svg](https://commons.wikimedia.org/wiki/File:Estelada_blava.svg) | CC BY-SA 2.5 | Huhsunqu |
 | `flag_che_puppet.png` | [Flag of the Helvetic Republic (French).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Helvetic_Republic_%28French%29.svg) | Public domain | Made by Wikipedian Philippe317 |
 | `flag_chl_socialism.png` | [Flag of the Socialist Party of Chile.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Socialist_Party_of_Chile.svg) | Public domain | B1mbo |
 | `flag_chn_absolute_monarchy.png` | [Flag of China (1889–1912).svg](https://commons.wikimedia.org/wiki/File:Flag_of_China_%281889%E2%80%931912%29.svg) | Public domain | Original: zh:清朝政府 Vector: Sodacan |
@@ -52,11 +60,19 @@ else was skipped rather than used.
 | `flag_chn_liberalism.png` | [Flag of the Republic of China.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_China.svg) | Public domain | Sun Yat-sen |
 | `flag_chn_puppet.png` | [Flag of the Republic of China-Nanjing (Peace, Anti-Communism, National Construction).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_China-Nanjing_%28Peace,_Anti-Communism,_National_Construction%29.svg) | Public domain | SVG file created by User:Mononomic on en.wikipedia.org. |
 | `flag_chn_traditionalism.png` | [Flag of China (1889–1912).svg](https://commons.wikimedia.org/wiki/File:Flag_of_China_%281889%E2%80%931912%29.svg) | Public domain | Original: zh:清朝政府 Vector: Sodacan |
+| `flag_cmr_federation.png` | [Flag of Cameroon (1961–1975).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cameroon_(1961%E2%80%931975).svg) | Public domain | Himasaram |
 | `flag_cod_military_junta.png` | [Flag of Zaire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Zaire.svg) | Public domain | User:Moyogo |
 | `flag_cod_one_party_state.png` | [Flag of Zaire (1971–1997).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Zaire_(1971%E2%80%931997).svg) | Public domain | User:Moyogo |
 | `flag_cod_protectorate.png` | [Flag of the Congo Free State.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Congo_Free_State.svg) | Public domain | See file history below for details. |
 | `flag_cog_communism.png` | [Flag of the People's Republic of the Congo.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_People%27s_Republic_of_the_Congo.svg) | Public domain | Thommy |
+| `flag_col_federation.png` | [Civil ensign of United States of Colombia.svg](https://commons.wikimedia.org/wiki/File:Civil_ensign_of_United_States_of_Colombia.svg) | CC BY-SA 3.0 | Milenioscuro |
+| `flag_col_traditionalism.png` | [Flag of Gran Colombia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Gran_Colombia.svg) | CC BY-SA 3.0 | Milenioscuro |
+| `flag_com_socialism.png` | [Flag of the Comoros (1975–1978).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Comoros_(1975%E2%80%931978).svg) | CC BY-SA 3.0 | Zscout370 |
+| `flag_com_theocratic_rule.png` | [Flag of the Comoros (1978–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Comoros_(1978%E2%80%931992).svg) | Public domain | Mysid |
 | `flag_cpv_communism.png` | [Flag of Cape Verde (1975–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cape_Verde_%281975%E2%80%931992%29.svg) | Public domain | Editor at Large , Waldir |
+| `flag_cri_federation.png` | [Flag of the Federal Republic of Central America.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federal_Republic_of_Central_America.svg) | CC BY-SA 2.5 | Huhsunqu |
+| `flag_cta.png` | [Flag of Tibet.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tibet.svg) | Public domain | Unknown authorUnknown author |
+| `flag_cub_provisional_government.png` | [M-26-7.svg](https://commons.wikimedia.org/wiki/File:M-26-7.svg) | Public domain | Oliver Wolters |
 | `flag_culture_abkhaz.png` | [Flag of the Republic of Abkhazia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_Abkhazia.svg) | Public domain | Drawn by User:Achim1999 |
 | `flag_culture_acehnese.png` | [Flag of Free Aceh Movement.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Free_Aceh_Movement.svg) | Public domain | Himasaram |
 | `flag_culture_acholi.png` | [Flag of Acholi.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Acholi.svg) | CC BY-SA 3.0 | Chrystian Kretowicz |
@@ -112,12 +128,14 @@ else was skipped rather than used.
 | `flag_culture_catalan.png` | [Flag of Catalonia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Catalonia.svg) | Public domain | Motoroil |
 | `flag_culture_catalan_nationalism.png` | [Estelada blava.svg](https://commons.wikimedia.org/wiki/File:Estelada_blava.svg) | CC BY-SA 2.5 | Huhsunqu |
 | `flag_culture_catalan_socialism.png` | [Estelada roja.svg](https://commons.wikimedia.org/wiki/File:Estelada_roja.svg) | CC BY-SA 2.5 | Huhsunqu |
+| `flag_culture_chamorro.png` | [Flag of Guam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Guam.svg) | Public domain | Xrmap |
 | `flag_culture_chechen.png` | [Flag of the Chechen Republic of Ichkeria.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Chechen_Republic_of_Ichkeria.svg) | Public domain | Maxxl² , original author Unknown Unknown |
 | `flag_culture_cherokee.png` | [Flag of the Cherokee Nation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Cherokee_Nation.svg) | Public domain | Original 1978 design by Stanley John [3] , with 1989 addition of black star by Amon Baker |
 | `flag_culture_chin.png` | [Flag of the People's Republic of China.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_People%27s_Republic_of_China.svg) | Public domain | Zeng Liansong |
 | `flag_culture_chinese_communism.png` | [Flag of the Chinese Communist Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Chinese_Communist_Party.svg) | Public domain | See above |
 | `flag_culture_chinese_nationalism.png` | [Flag of the Republic of China.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_China.svg) | Public domain | Sun Yat-sen |
 | `flag_culture_chuvash.png` | [Flag of Chuvashia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Chuvashia.svg) | Public domain | Elli Mikhailovich Yuriev |
+| `flag_culture_copt.png` | [(unofficial) Coptic Flag.svg](https://commons.wikimedia.org/wiki/File:(unofficial)_Coptic_Flag.svg) | CC0 | NoahMusic2009 |
 | `flag_culture_coptic.png` | [(unofficial) Coptic Flag.svg](https://commons.wikimedia.org/wiki/File:%28unofficial%29_Coptic_Flag.svg) | CC0 | NoahMusic2009 |
 | `flag_culture_cornish.png` | [Saint Piran's Flag.svg](https://commons.wikimedia.org/wiki/File:Saint_Piran%27s_Flag.svg) | Public domain | EuropeanV |
 | `flag_culture_corsican.png` | [Flag of Corsica.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Corsica.svg) | CC0 | Patricia.fidi |
@@ -126,11 +144,13 @@ else was skipped rather than used.
 | `flag_culture_croatian.png` | [Croatian-Serbian hybrid flag.svg](https://commons.wikimedia.org/wiki/File:Croatian-Serbian_hybrid_flag.svg) | Public domain | DIREKTOR |
 | `flag_culture_czech.png` | [Czech–Romani fictitious flag.svg](https://commons.wikimedia.org/wiki/File:Czech%E2%80%93Romani_fictitious_flag.svg) | CC BY-SA 4.0 | Dahn |
 | `flag_culture_dagestani.png` | [Flag of Dagestan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dagestan.svg) | Public domain | Stianbh |
+| `flag_culture_dargin.png` | [Flag of Dagestan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dagestan.svg) | Public domain | Stianbh |
 | `flag_culture_dayak.png` | [Flag of Dayak Besar.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dayak_Besar.svg) | CC BY-SA 3.0 | Orange Tuesday |
 | `flag_culture_dinka.png` | [Flag of Dinka people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dinka_people.svg) | Public domain | Dinka flag.gif : User Jolle on ca.wikipedia derivative work: Mnmazur ( talk ) |
 | `flag_culture_dominican.png` | [Flag of the Dominican Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Dominican_Republic.svg) | Public domain | Juan Pablo Duarte |
 | `flag_culture_druze.png` | [Flag of Druze.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Druze.svg) | Public domain | Copyright (c) 2005 Verdy p (also Verdy p ) (attribution line, when needed) |
 | `flag_culture_druze_people.png` | [Flag of Druze.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Druze.svg) | Public domain | Copyright (c) 2005 Verdy p (also Verdy p ) (attribution line, when needed) |
+| `flag_culture_english.png` | [Flag of England.svg](https://commons.wikimedia.org/wiki/File:Flag_of_England.svg) | Public domain | Original: traditional Vector: Nicholas Shanks |
 | `flag_culture_ethiopian_communism.png` | [Flag of Ethiopia (1987–1991).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ethiopia_%281987%E2%80%931991%29.svg) | CC BY-SA 3.0 | TRAJAN 117 This W3C-unspecified vector image was created with Inkscape . |
 | `flag_culture_evenk.png` | [Flag of Evenkia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Evenkia.svg) | Public domain | Sergei Salatkin |
 | `flag_culture_ewe.png` | [Flag of the Ewe people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ewe_people.svg) | Public domain | Mysid |
@@ -140,8 +160,10 @@ else was skipped rather than used.
 | `flag_culture_french.png` | [French heritage.png](https://commons.wikimedia.org/wiki/File:French_heritage.png) | CC BY-SA 3.0 | 440Hertz |
 | `flag_culture_frisian.png` | [Flag of Friesland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Friesland.svg) | Public domain | P.H. Wagemakers and Joh. Koopmans |
 | `flag_culture_fulani.png` | [Flag of Fulani.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Fulani.svg) | CC0 | Frenchybal |
+| `flag_culture_fur.png` | [Flag of Darfur Liberation Front.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Darfur_Liberation_Front.svg) | Public domain | No machine-readable author provided. |
 | `flag_culture_gagauz.png` | [Flag of Gagauzia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Gagauzia.svg) | Public domain | Urmas |
 | `flag_culture_galician.png` | [Flag of Galicia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Galicia.svg) | Public domain | Pedro A. Gracia Fajardo |
+| `flag_culture_ganda.png` | [Flag of Buganda.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Buganda.svg) | Public domain | Mysid |
 | `flag_culture_german.png` | [Flag of the German Community in Belgium.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_German_Community_in_Belgium.svg) | Public domain | Precious alex |
 | `flag_culture_german_absolute_monarchy.png` | [Flag of the German Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_German_Empire.svg) | Public domain | Original: Adolf Soetbeer , Otto von Bismarck Vector: B1mbo , Madden |
 | `flag_culture_german_communism.png` | [Flag of East Germany.svg](https://commons.wikimedia.org/wiki/File:Flag_of_East_Germany.svg) | Public domain | Flaggenentwurf: unbekannt diese Datei: Jwnabd |
@@ -150,6 +172,7 @@ else was skipped rather than used.
 | `flag_culture_hakka.png` | [Flag of Hakka Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hakka_Party.svg) | CC BY 4.0 | Sangjinhwa |
 | `flag_culture_hausa.png` | [Flag of the Hausa people AoE3DE.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Hausa_people_AoE3DE.svg) | CC BY-SA 3.0 | Hosmich modified by Laserlicht |
 | `flag_culture_hawaiian.png` | [Flag of Hawaii.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hawaii.svg) | Public domain | Dbenbenn |
+| `flag_culture_hazara.png` | [Hazaristan Flag.svg](https://commons.wikimedia.org/wiki/File:Hazaristan_Flag.svg) | Public domain | Kamran Mir Hazar |
 | `flag_culture_herero.png` | [Flag of Hereroland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hereroland.svg) | Public domain | Original by Foundert |
 | `flag_culture_hispanic_american.png` | [Flag of the Hispanic peoples.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Hispanic_peoples.svg) | CC BY-SA 3.0 | Banderas |
 | `flag_culture_hmong.png` | [Hmong Flag (UNPO).svg](https://commons.wikimedia.org/wiki/File:Hmong_Flag_%28UNPO%29.svg) | Public domain | Vectorisation: Chainwit. Original flag: https://unpo.org/members/7891 |
@@ -182,6 +205,7 @@ else was skipped rather than used.
 | `flag_culture_khmer.png` | [Flag of the Khmer Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Khmer_Republic.svg) | Public domain | Himasaram |
 | `flag_culture_kikuyu.png` | [Kikuyu Flag (Cowrie on Ochre).svg](https://commons.wikimedia.org/wiki/File:Kikuyu_Flag_%28Cowrie_on_Ochre%29.svg) | CC0 | Femfem5 |
 | `flag_culture_komi.png` | [Flag of Komi.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Komi.svg) | Public domain | В. Я. Сердитов |
+| `flag_culture_korean.png` | [Unification flag of Korea.svg](https://commons.wikimedia.org/wiki/File:Unification_flag_of_Korea.svg) | CC BY-SA 3.0 | File:Unification flag of Korea (pre 2006).svg: Various derivative work: Valentim |
 | `flag_culture_korean_communism.png` | [Flag of North Korea.svg](https://commons.wikimedia.org/wiki/File:Flag_of_North_Korea.svg) | Public domain | Original: Unknown author Vector: Zscout370 |
 | `flag_culture_kumyk.png` | [Flag of Kumyks.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kumyks.svg) | Public domain | User:Jolle |
 | `flag_culture_kurdish.png` | [Flag of Kurdistan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kurdistan.svg) | Public domain | Unknown author Unknown author |
@@ -222,10 +246,12 @@ else was skipped rather than used.
 | `flag_culture_nenets.png` | [Flag of Nenets people.png](https://commons.wikimedia.org/wiki/File:Flag_of_Nenets_people.png) | CC BY-SA 4.0 | RAslik rtahuta |
 | `flag_culture_nicaraguan.png` | [Flag of Nicaragua.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nicaragua.svg) | Public domain | C records |
 | `flag_culture_nogai.png` | [Flag of Nogai El.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nogai_El.svg) | CC BY-SA 4.0 | ProjectHorizons |
+| `flag_culture_nyankole.png` | [Flag of Ankole.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ankole.svg) | Public domain | Himasaram |
 | `flag_culture_occitan.png` | [Flag of Occitania (with star).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Occitania_%28with_star%29.svg) | Public domain | Nimlar |
 | `flag_culture_oromo.png` | [Flag of the Oromo Liberation Front.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Oromo_Liberation_Front.svg) | Public domain | J. Ollé , see es:Wikipedia:Autorizaciones/Banderas de Jaume Ollé |
 | `flag_culture_ossetian.png` | [Flag of North Ossetia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_North_Ossetia.svg) | Public domain | Nardo Polo |
 | `flag_culture_ovambo.png` | [Flag of Ovamboland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ovamboland.svg) | Public domain | Mysid |
+| `flag_culture_ovimbundu.png` | [Flag of UNITA.svg](https://commons.wikimedia.org/wiki/File:Flag_of_UNITA.svg) | Public domain | Ceresnet |
 | `flag_culture_palestinian.png` | [Flag of Palestine.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Palestine.svg) | Public domain | Orionist , previous versions by Makaristos , Mysid , etc. |
 | `flag_culture_panamanian.png` | [Flag of Panama.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Panama.svg) | Public domain | Zscout370 et al. |
 | `flag_culture_papuan.png` | [Morning Star flag.svg](https://commons.wikimedia.org/wiki/File:Morning_Star_flag.svg) | Public domain | Pumbaa80 |
@@ -245,6 +271,7 @@ else was skipped rather than used.
 | `flag_culture_romani.png` | [Flag of the Romani people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Romani_people.svg) | Public domain | AdiJapan |
 | `flag_culture_romanian.png` | [Flag of SFR Yugoslav Romanian Minority.svg](https://commons.wikimedia.org/wiki/File:Flag_of_SFR_Yugoslav_Romanian_Minority.svg) | CC BY-SA 4.0 | Savasampion |
 | `flag_culture_romanian_communism.png` | [Flag of Romania (1965–1989).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Romania_%281965%E2%80%931989%29.svg) | Public domain | Various, see File History below for details. |
+| `flag_culture_romansh.png` | [Flag of Canton of Graubünden.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Canton_of_Graub%C3%BCnden.svg) | Public domain | Unknown authorUnknown author |
 | `flag_culture_russian_absolute_monarchy.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
 | `flag_culture_russian_communism.png` | [Flag of the Russian Soviet Federative Socialist Republic (1954–1991).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Russian_Soviet_Federative_Socialist_Republic_%281954%E2%80%931991%29.svg) | Public domain | Pianist |
 | `flag_culture_rusyn.png` | [Flag of Carpathian Ruthenia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Carpathian_Ruthenia.svg) | Public domain | MrPenguin20 |
@@ -313,6 +340,8 @@ else was skipped rather than used.
 | `flag_culture_zhuang.png` | [Flag of the Zhuang people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Zhuang_people.svg) | CC BY-SA 3.0 | User:Hosmich |
 | `flag_culture_zomi.png` | [Mizoram Flag(INDIA).png](https://commons.wikimedia.org/wiki/File:Mizoram_Flag%28INDIA%29.png) | CC BY-SA 3.0 | AlexR.L. |
 | `flag_culture_zulu.png` | [Flag of KwaZulu (1985–1994).svg](https://commons.wikimedia.org/wiki/File:Flag_of_KwaZulu_%281985%E2%80%931994%29.svg) | Public domain | Himasaram |
+| `flag_cuw_protectorate.png` | [Flag of the Netherlands Antilles (1986–2010).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Netherlands_Antilles_(1986%E2%80%932010).svg) | Public domain | No machine-readable author provided. |
+| `flag_cyn_protectorate.png` | [Flag of Cyprus (1881–1922).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cyprus_(1881%E2%80%931922).svg) | Public domain | Christmas Island |
 | `flag_cyp_protectorate.png` | [Flag of Cyprus (1922–1960).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cyprus_%281922%E2%80%931960%29.svg) | Public domain | Shandris |
 | `flag_cze_absolute_monarchy.png` | [Royal banner of the Kingdom of Bohemia.svg](https://commons.wikimedia.org/wiki/File:Royal_banner_of_the_Kingdom_of_Bohemia.svg) | CC BY-SA 3.0 | Samhanin |
 | `flag_cze_puppet.png` | [Flag of the Protectorate of Bohemia and Moravia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Protectorate_of_Bohemia_and_Moravia.svg) | Public domain | See file history. |
@@ -323,12 +352,15 @@ else was skipped rather than used.
 | `flag_dma_protectorate.png` | [Flag of Dominica (1955–1965).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dominica_%281955%E2%80%931965%29.svg) | Public domain | Government Ensign of the United Kingdom.svg: Pumbaa80 Hogwea |
 | `flag_dnk_absolute_monarchy.png` | [Royal Standard of Denmark.svg](https://commons.wikimedia.org/wiki/File:Royal_Standard_of_Denmark.svg) | Public domain | Sodacan |
 | `flag_dza_absolute_monarchy.png` | [Flag of the Kingdom of Beni Abbas 02.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Beni_Abbas_02.svg) | CC BY-SA 4.0 | Vectorization: Mrmw |
+| `flag_ecu_traditionalism.png` | [Flag of Gran Colombia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Gran_Colombia.svg) | CC BY-SA 3.0 | Milenioscuro |
 | `flag_egy_absolute_monarchy.png` | [Flag of Egypt (1922-1958).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Egypt_%281922-1958%29.svg) | Public domain | Mysid |
+| `flag_egy_federation.png` | [Flag of the United Arab Republic (1958–1971), Flag of Syria (1980–2024).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Arab_Republic_(1958%E2%80%931971),_Flag_of_Syria_(1980%E2%80%932024).svg) | Public domain | See File history below for details. For further informations, see also: en:Syrian Arab Republic and the en:United Arab Republic. |
 | `flag_egy_liberalism.png` | [Flag of Egypt (1952–1958).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Egypt_%281952%E2%80%931958%29.svg) | Public domain | F l a n k e r |
 | `flag_egy_military_junta.png` | [Flag of Egypt (1953-1958).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Egypt_(1953-1958).svg) | Public domain | Dylam X |
 | `flag_egy_one_party_state.png` | [Flag of the United Arab Republic (1958–1971).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Arab_Republic_(1958%E2%80%931971),_Flag_of_Syria_(1980%E2%80%932024).svg) | Public domain | See File history below for details. For further information |
 | `flag_egy_protectorate.png` | [Flag of Egypt (1882–1922).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Egypt_%281882%E2%80%931922%29.svg) | Public domain | Converted to svg by Daniel78 |
 | `flag_egy_traditionalism.png` | [Flag of Egypt (1922-1958).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Egypt_%281922-1958%29.svg) | Public domain | Mysid |
+| `flag_eri_federation.png` | [Flag of Eritrea (1952-1961).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Eritrea_(1952-1961).svg) | Public domain | Orange Tuesday (talk) Original uploader was Orange Tuesday at en.wikipedia |
 | `flag_esp_absolute_monarchy.png` | [Flag of Spain (1785–1873, 1875–1931).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Spain_%281785%E2%80%931873%2C_1875%E2%80%931931%29.svg) | CC BY-SA 3.0 | previous version User:Ignaciogavira ; current version HansenBCN , designs from SanchoPanza |
 | `flag_esp_communism.png` | [Flag of the Communist Party of Spain (1930s).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Communist_Party_of_Spain_%281930s%29.svg) | CC0 | Partido Comunista de España Martufellon (vector) |
 | `flag_esp_fascism.png` | [Flag of Spain (1945–1977).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Spain_%281945%E2%80%931977%29.svg) | CC BY-SA 4.0 | SanchoPanzaXXI |
@@ -390,6 +422,7 @@ else was skipped rather than used.
 | `flag_fra_fascism.png` | [Flag of Free France (1940-1944).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Free_France_%281940-1944%29.svg) | Public domain | See File history below for details. |
 | `flag_fra_provisional_government.png` | [Flag of Free France (1940-1944).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Free_France_(1940-1944).svg) | Public domain | See File history below for details. |
 | `flag_fra_traditionalism.png` | [Pavillon royal de la France.svg](https://commons.wikimedia.org/wiki/File:Pavillon_royal_de_la_France.svg) | CC BY-SA 3.0 | Oren neu dag ( talk ) |
+| `flag_fsm_protectorate.png` | [Flag of the Trust Territory of the Pacific Islands.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Trust_Territory_of_the_Pacific_Islands.svg) | CC0 | No machine-readable author provided. |
 | `flag_gbr_absolute_monarchy.png` | [Royal Standard of the United Kingdom.svg](https://commons.wikimedia.org/wiki/File:Royal_Standard_of_the_United_Kingdom.svg) | CC BY-SA 4.0 | Own work |
 | `flag_gbr_parliamentary_republic.png` | [Flag of the Commonwealth (1649-1651).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Commonwealth_%281649-1651%29.svg) | Public domain | Guilherme Paula |
 | `flag_geo_communism.png` | [Flag of the Georgian Soviet Socialist Republic (1951–1990).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Georgian_Soviet_Socialist_Republic_%281951%E2%80%931990%29.svg) | Public domain | Dbenbenn , Nokka |
@@ -403,8 +436,14 @@ else was skipped rather than used.
 | `flag_grc_military_junta.png` | [Flag of Greece (1970–1975).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Greece_%281970%E2%80%931975%29.svg) | Public domain | SeNeKa, redone by Johannes Rössel |
 | `flag_grc_theocratic_rule.png` | [Flag of the Greek Orthodox Church.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Greek_Orthodox_Church.svg) | Public domain | F l a n k e r |
 | `flag_grc_traditionalism.png` | [State Flag of Greece (1863-1924 and 1935-1973).svg](https://commons.wikimedia.org/wiki/File:State_Flag_of_Greece_%281863-1924_and_1935-1973%29.svg) | Public domain | User:peeperman |
+| `flag_grd_protectorate.png` | [Flag of the West Indies Federation (1958–1962).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_West_Indies_Federation_(1958%E2%80%931962).svg) | Public domain | Stepshep |
+| `flag_gtm_federation.png` | [Flag of the Federal Republic of Central America.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federal_Republic_of_Central_America.svg) | CC BY-SA 2.5 | Huhsunqu |
+| `flag_hms_insignia.png` | [Flag of Hamas (3-2).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hamas_(3-2).svg) | Public domain | Sangjinhwa |
+| `flag_hnd_federation.png` | [Flag of the Federal Republic of Central America.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federal_Republic_of_Central_America.svg) | CC BY-SA 2.5 | Huhsunqu |
 | `flag_hrv_absolute_monarchy.png` | [Flag of the Triune Kingdom of Croatia, Slavonia and Dalmatia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Triune_Kingdom_of_Croatia%2C_Slavonia_and_Dalmatia.svg) | CC0 | Samhanin |
 | `flag_hrv_communism.png` | [Flag of the Socialist Republic of Croatia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Croatia_(1947%E2%80%931990).svg) | Public domain | Zscout370 |
+| `flag_hti_absolute_monarchy.png` | [Kingdom of Haiti flag (1811).svg](https://commons.wikimedia.org/wiki/File:Kingdom_of_Haiti_flag_(1811).svg) | Public domain | Flag of Haiti (1814-1820).svg: Jaume Ollé derivative work: Dannyboybs18 (talk) |
+| `flag_hti_liberalism.png` | [Flag of Haiti (1820–1849, 1859–1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Haiti_(1820%E2%80%931849,_1859%E2%80%931964).svg) | Public domain | Wrestlingring |
 | `flag_hti_one_party_state.png` | [Flag of Haiti (1964-1986).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Haiti_(1964%E2%80%931986).svg) | Public domain | B1mbo Coat of arms :Lokal_Profil and Myriam Thyes |
 | `flag_hun_absolute_monarchy.png` | [Flag of Hungary (1915-1918; angels).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hungary_%281915-1918%3B_angels%29.svg) | Public domain | Thommy |
 | `flag_hun_communism.png` | [Flag of Hungary (1949-1956).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hungary_%281949-1956%29.svg) | Public domain | Thommy |
@@ -422,9 +461,11 @@ else was skipped rather than used.
 | `flag_idn_communism.png` | [Flag of the Communist Party of Indonesia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Communist_Party_of_Indonesia.svg) | Public domain | PKI |
 | `flag_idn_theocratic_rule.png` | [Flag of Nahdlatul Ulama.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nahdlatul_Ulama.svg) | Public domain | Nahdlatul Ulama |
 | `flag_ind_absolute_monarchy.png` | [British Raj Red Ensign.svg](https://commons.wikimedia.org/wiki/File:British_Raj_Red_Ensign.svg) | Public domain | Barryob |
+| `flag_ind_protectorate.png` | [British Raj Red Ensign.svg](https://commons.wikimedia.org/wiki/File:British_Raj_Red_Ensign.svg) | Public domain | Barryob |
 | `flag_irl_absolute_monarchy.png` | [Green harp flag of Ireland.svg](https://commons.wikimedia.org/wiki/File:Green_harp_flag_of_Ireland.svg) | CC BY-SA 3.0 | Raymond1922A |
 | `flag_irl_constitutional_monarchy.png` | [Green harp flag of Ireland.svg](https://commons.wikimedia.org/wiki/File:Green_harp_flag_of_Ireland.svg) | CC BY-SA 3.0 | Raymond1922A |
 | `flag_irn_absolute_monarchy.png` | [State flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:State_flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
+| `flag_irn_communism.png` | [Flag of Persian Socialist Soviet Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Persian_Socialist_Soviet_Republic.svg) | CC BY-SA 3.0 | Froztbyte |
 | `flag_irn_liberalism.png` | [Civil flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:Civil_flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
 | `flag_irn_traditionalism.png` | [Flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
 | `flag_irq_absolute_monarchy.png` | [Flag of Iraq (1924–1959).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraq_%281924%E2%80%931959%29.svg) | Public domain | unattributed |
@@ -435,6 +476,7 @@ else was skipped rather than used.
 | `flag_irq_socialism.png` | [Flag of Iraq (1991–2004).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraq_%281991%E2%80%932004%29.svg) | Public domain | See File history below for details. |
 | `flag_irq_traditionalism.png` | [Flag of Iraq (1921–1959).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraq_%281921%E2%80%931959%29.svg) | Public domain | unattributed |
 | `flag_isl_absolute_monarchy.png` | [Flag of Iceland (1918–1944).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iceland_%281918%E2%80%931944%29.svg) | Public domain | Original: Matthías Þórðarson Vector: Gustavo Ronconi |
+| `flag_isr_protectorate.png` | [Ensign of the Palestine Mandate (1927–1948).svg](https://commons.wikimedia.org/wiki/File:Ensign_of_the_Palestine_Mandate_(1927%E2%80%931948).svg) | Public domain | User:Greentubing, User:AnonMoos |
 | `flag_ita_absolute_monarchy.png` | [Flag of Italy (1861–1946).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Italy_%281861%E2%80%931946%29.svg) | Public domain | F l a n k e r |
 | `flag_ita_communism.png` | [Flag of the Italian Communist Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Italian_Communist_Party.svg) | CC BY-SA 4.0 | Ethelium |
 | `flag_ita_fascism.png` | [Flag of the Italian Social Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Italian_Social_Republic.svg) | Public domain | F l a n k e r |
@@ -442,6 +484,7 @@ else was skipped rather than used.
 | `flag_ita_traditionalism.png` | [Flag of Italy (1861–1946).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Italy_%281861%E2%80%931946%29.svg) | Public domain | F l a n k e r |
 | `flag_jam_federation.png` | [Flag of the West Indies Federation (1958–1962).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_West_Indies_Federation_(1958%E2%80%931962).svg) | Public domain | Stepshep |
 | `flag_jam_protectorate.png` | [Flag of Jamaica (1906–1957).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Jamaica_%281906%E2%80%931957%29.svg) | Public domain | Thommy |
+| `flag_jdl_insignia.png` | [Jewish Defense League.svg](https://commons.wikimedia.org/wiki/File:Jewish_Defense_League.svg) | Public domain | Jewish Defense League |
 | `flag_jor_protectorate.png` | [Flag of the Emirate of Transjordan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Emirate_of_Transjordan.svg) | Public domain | SKopp |
 | `flag_jpn_absolute_monarchy.png` | [Flag of Japan (1870-1999).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Japan_%281870-1999%29.svg) | Public domain | kahusi - (Talk) |
 | `flag_jpn_fascism.png` | [Rising sun flag illusion.svg](https://commons.wikimedia.org/wiki/File:Rising_sun_flag_illusion.svg) | CC BY-SA 4.0 | Xnou |
@@ -464,21 +507,29 @@ else was skipped rather than used.
 | `flag_lao_absolute_monarchy.png` | [Flag of Kingdom of Laos (1955-1975 United Nations design).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kingdom_of_Laos_%281955-1975_United_Nations_design%29.svg) | CC BY-SA 4.0 | Nor Sanavongsay |
 | `flag_lao_protectorate.png` | [Flag of Laos (1893–1952).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Laos_%281893%E2%80%931952%29.svg) | Public domain | Thommy |
 | `flag_lbn_nationalism.png` | [Flag of Kataeb Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kataeb_Party.svg) | Public domain | MrPenguin20 |
+| `flag_lby_federation.png` | [Flag of Syria (1972–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Syria_(1972%E2%80%931980).svg) | Public domain | Flag_of_Egypt_1972.svg: Current vector version by Editor at Large derivative work: Orange Tuesday (talk) |
 | `flag_lby_military_junta.png` | [Flag of Libya (1969–1972).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Libya_%281969%E2%80%931972%29.svg) | Public domain | F l a n k e r |
 | `flag_lby_one_party_state.png` | [Flag of Libya (1977–2011).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Libya_(1977%E2%80%932011).svg) | Public domain | Zscout370 |
 | `flag_lca_protectorate.png` | [Flag of Saint Lucia (1939–1967).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Saint_Lucia_%281939%E2%80%931967%29.svg) | CC0 | Thommy |
+| `flag_lie_absolute_monarchy.png` | [Flag of Liechtenstein (1852–1921).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Liechtenstein_(1852%E2%80%931921).svg) | Public domain | arz |
 | `flag_lka_dominion.png` | [Flag of Ceylon (1948–1951).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ceylon_%281948%E2%80%931951%29.svg) | Public domain | Zscout370 |
 | `flag_lka_protectorate.png` | [Flag of Ceylon (1875–1948).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ceylon_%281875%E2%80%931948%29.svg) | Public domain | Samhanin (original) |
 | `flag_lka_theocratic_rule.png` | [Buddhist flag.svg](https://commons.wikimedia.org/wiki/File:Buddhist_flag.svg) | Public domain | Jon Harald Søby |
 | `flag_lka_traditionalism.png` | [Flag of Ceylon (1951-1972).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ceylon_(1951%E2%80%931972).svg) | Public domain | Thommy |
+| `flag_lso_liberalism.png` | [Flag of Lesotho (1966–1987).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Lesotho_(1966%E2%80%931987).svg) | CC BY-SA 3.0 | Zscout370 |
+| `flag_lso_military_junta.png` | [Flag of Lesotho (1987–2006).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Lesotho_(1987%E2%80%932006).svg) | Public domain | Courtesy an e-mail from the author of xrmap - modifications by Denelson83 - uploaded by Zscout370 |
 | `flag_ltu_communism.png` | [Flag of the Lithuanian Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Lithuanian_Soviet_Socialist_Republic.svg) | Public domain | unattributed |
 | `flag_lva_communism.png` | [Flag of the Latvian Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Latvian_Soviet_Socialist_Republic.svg) | Public domain | Denelson83 , Urmas , Nokka , Great Brightstar |
 | `flag_mar_absolute_monarchy.png` | [Flag of Almohad Dynasty.png](https://commons.wikimedia.org/wiki/File:Flag_of_Almohad_Dynasty.png) | Public domain | unattributed |
 | `flag_mda_communism.png` | [Flag of the Moldavian Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Moldavian_Soviet_Socialist_Republic.svg) | Public domain | SVG by Pianist |
+| `flag_mdg_absolute_monarchy.png` | [Flag of the Merina Kingdom.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Merina_Kingdom.svg) | CC BY 3.0 | Samhanin |
+| `flag_mdv_protectorate.png` | [Flag of the Maldives 1953.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Maldives_1953.svg) | Public domain | Amit6 |
 | `flag_mex_absolute_monarchy.png` | [Flag of the Second Mexican Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Second_Mexican_Empire.svg) | Public domain | Amartin2671 Using some elements from: Keepscases , Sodacan , Sarumo74 Flag of the Second M |
 | `flag_mex_agrarianism.png` | [Ejército Zapatista de Liberación Nacional, Flag.svg](https://commons.wikimedia.org/wiki/File:Ej%C3%A9rcito_Zapatista_de_Liberaci%C3%B3n_Nacional%2C_Flag.svg) | Public domain | No machine-readable author provided. Zscout370 assumed (based on copyright claims). |
 | `flag_mex_traditionalism.png` | [Flag of the Second Mexican Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Second_Mexican_Empire.svg) | Public domain | Amartin2671 Using some elements from: Keepscases , Sodacan , Sarumo74 Flag of the Second M |
+| `flag_mhl_protectorate.png` | [Flag of the Trust Territory of the Pacific Islands.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Trust_Territory_of_the_Pacific_Islands.svg) | CC0 | No machine-readable author provided. |
 | `flag_mkd_communism.png` | [Flag of the Socialist Republic of Macedonia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Socialist_Republic_of_Macedonia_(1946%E2%80%931991);_Flag_of_North_Macedonia_(1991-1992).svg) | CC BY-SA 3.0 | Unknown authorUnknown author, but under the authority of the |
+| `flag_mli_federation.png` | [Flag of Mali (1959–1961).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mali_(1959%E2%80%931961).svg) | Public domain | SKopp |
 | `flag_mlt_protectorate.png` | [Flag of Malta (1943-1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Malta_%281943-1964%29.svg) | Public domain | Orange Tuesday (talk) |
 | `flag_mmr_absolute_monarchy.png` | [Flag of Kingdom of Mrauk-U.png](https://commons.wikimedia.org/wiki/File:Flag_of_Kingdom_of_Mrauk-U.png) | CC0 | Aizwal |
 | `flag_mmr_one_party_state.png` | [Flag of Myanmar (1974–2010).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Myanmar_(1974%E2%80%932010).svg) | Public domain | See File history below for details. |
@@ -491,6 +542,7 @@ else was skipped rather than used.
 | `flag_mng_communism.png` | [Flag of the Mongolian People's Republic (1945–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Mongolian_People%27s_Republic_%281945%E2%80%931992%29.svg) | Public domain | Drawn by User:latebird |
 | `flag_mng_puppet.png` | [Flag of Mongol United Autonomous Government (1937-1939).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mongol_United_Autonomous_Government_%281937-1939%29.svg) | Public domain | Marce79 |
 | `flag_mng_theocratic_rule.png` | [Buddhist flag.svg](https://commons.wikimedia.org/wiki/File:Buddhist_flag.svg) | Public domain | Jon Harald Søby |
+| `flag_mnp_protectorate.png` | [Flag of the Trust Territory of the Pacific Islands.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Trust_Territory_of_the_Pacific_Islands.svg) | CC0 | No machine-readable author provided. |
 | `flag_moz_communism.png` | [Flag of Mozambique (1975–1983).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mozambique_%281975%E2%80%931983%29.svg) | Public domain | See File history below for details. |
 | `flag_mrt_traditionalism.png` | [Flag of Mauritania (1959-2017).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mauritania_(1959%E2%80%932017).svg) | Public domain | See File history for details. |
 | `flag_mus_protectorate.png` | [Flag of Mauritius (1923–1968).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mauritius_%281923%E2%80%931968%29.svg) | Public domain | Orange Tuesday (talk) Original uploader was Orange Tuesday |
@@ -499,13 +551,21 @@ else was skipped rather than used.
 | `flag_mys_protectorate.png` | [Flag of the Federated Malay States (1895–1946).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federated_Malay_States_%281895%E2%80%931946%29.svg) | Public domain | Unknown authorUnknown author |
 | `flag_ncl_absolute_monarchy.png` | [Flag of the Kingdom of Mudwan.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Mudwan.png) | CC BY-SA 4.0 | Yohgui |
 | `flag_nga_protectorate.png` | [Flag of Nigeria (1914–1952).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nigeria_%281914%E2%80%931952%29.svg) | CC BY-SA 4.0 | Benchill (original) |
+| `flag_nic_federation.png` | [Flag of the Federal Republic of Central America.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federal_Republic_of_Central_America.svg) | CC BY-SA 2.5 | Huhsunqu |
+| `flag_nic_socialism.png` | [Flag of the FSLN.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_FSLN.svg) | Public domain | User:Inti; User:Stannered |
 | `flag_nld_absolute_monarchy.png` | [Royal Standard of the Netherlands.svg](https://commons.wikimedia.org/wiki/File:Royal_Standard_of_the_Netherlands.svg) | CC BY-SA 3.0 | TRAJAN 117 This W3C-unspecified vector image was created with Inkscape . |
 | `flag_nld_parliamentary_republic.png` | [Flag of the Batavian Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Batavian_Republic.svg) | CC0 | Tom Lemmens |
 | `flag_nor_absolute_monarchy.png` | [Royal Standard of Norway.svg](https://commons.wikimedia.org/wiki/File:Royal_Standard_of_Norway.svg) | Public domain | Ssolbergj |
 | `flag_nor_fascism.png` | [Flag of Nasjonal Samling.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nasjonal_Samling.svg) | Public domain | Ricordisamoa |
+| `flag_nzl_traditionalism.png` | [Flag of the United Tribes of New Zealand.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Tribes_of_New_Zealand.svg) | CC BY-SA 2.5 | No machine-readable author provided. Greentubing assumed (based on copyright claims). |
 | `flag_omn_absolute_monarchy.png` | [Flag of Muscat.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Muscat.svg) | Public domain | Wikimedia Commons |
+| `flag_pak_protectorate.png` | [British Raj Red Ensign.svg](https://commons.wikimedia.org/wiki/File:British_Raj_Red_Ensign.svg) | Public domain | Barryob |
 | `flag_pak_theocratic_rule.png` | [Jamaat-e-Islami Pakistan Flag.svg](https://commons.wikimedia.org/wiki/File:Jamaat-e-Islami_Pakistan_Flag.svg) | Public domain | SVG by Ali Zifan |
+| `flag_pan_protectorate.png` | [Flag of Panama Canal Zone.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Panama_Canal_Zone.svg) | Public domain | BMacZero |
+| `flag_pan_traditionalism.png` | [Flag of Gran Colombia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Gran_Colombia.svg) | CC BY-SA 3.0 | Milenioscuro |
+| `flag_per_federation.png` | [Flag of the Peru-Bolivian Confederation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Peru-Bolivian_Confederation.svg) | CC BY-SA 2.5 | No machine-readable author provided. Huhsunqu assumed (based on copyright claims). |
 | `flag_phl_at_war.png` | [War Flag of the Philippines.svg](https://commons.wikimedia.org/wiki/File:War_Flag_of_the_Philippines.svg) | Public domain | See File history below for details. |
+| `flag_plw_protectorate.png` | [Flag of the Trust Territory of the Pacific Islands.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Trust_Territory_of_the_Pacific_Islands.svg) | CC0 | No machine-readable author provided. |
 | `flag_pol_absolute_monarchy.png` | [Flag of the Polish-Lithuanian Commonwealth (2-3).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Polish-Lithuanian_Commonwealth_%282-3%29.svg) | CC BY-SA 4.0 | 愛喝奶茶 |
 | `flag_pol_communism.png` | [Flag of Poland (1928–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Poland_%281928%E2%80%931980%29.svg) | Public domain | Arvedui89 |
 | `flag_prk_absolute_monarchy.png` | [Flag of Korea (1882–1910).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Korea_%281882%E2%80%931910%29.svg) | Public domain | Daniil Ivanov |
@@ -514,26 +574,38 @@ else was skipped rather than used.
 | `flag_prt_liberalism.png` | [Flag of Portugal (1830–1910).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Portugal_%281830%E2%80%931910%29.svg) | Public domain | Tonyjeff , based on ancient national symbol. |
 | `flag_prt_socialism.png` | [Flag of Portugal (1830–1910).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Portugal_%281830%E2%80%931910%29.svg) | Public domain | Tonyjeff , based on ancient national symbol. |
 | `flag_prt_traditionalism.png` | [Flag Portugal (1830).svg](https://commons.wikimedia.org/wiki/File:Flag_Portugal_%281830%29.svg) | Public domain | Tonyjeff , based on ancient national symbol. |
+| `flag_pse_protectorate.png` | [Ensign of the Palestine Mandate (1927–1948).svg](https://commons.wikimedia.org/wiki/File:Ensign_of_the_Palestine_Mandate_(1927%E2%80%931948).svg) | Public domain | User:Greentubing, User:AnonMoos |
 | `flag_pyf_absolute_monarchy.png` | [Flag of the Kingdom of Bora Bora (1837-1842).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Bora_Bora_%281837-1842%29.svg) | Public domain | Ivan Sache |
+| `flag_qat_protectorate.png` | [Flag of Qatar (1949–1971).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Qatar_(1949%E2%80%931971).svg) | Public domain | Bringing It All Back Home |
 | `flag_rou_absolute_monarchy.png` | [Flag of the Kingdom of Romania.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Romania.png) | CC BY-SA 3.0 | Gneisenauu |
 | `flag_rou_communism.png` | [Flag of Romania (1965–1989).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Romania_(1965%E2%80%931989).svg) | Public domain | Various, see File History below for details. |
 | `flag_rus_absolute_monarchy.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
 | `flag_rus_communism.png` | [Flag of the Russian Soviet Federative Socialist Republic (1954–1991).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Russian_Soviet_Federative_Socialist_Republic_(1954%E2%80%931991).svg) | Public domain | Pianist |
 | `flag_rus_traditionalism.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
+| `flag_sau_traditionalism.png` | [Flag of Hejaz (1920).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hejaz_(1920).svg) | Public domain | Orange Tuesday at English Wikipedia (Original text: Orange Tuesday (talk)) |
+| `flag_sdn_liberalism.png` | [Flag of Sudan (1956–1970).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sudan_(1956%E2%80%931970).svg) | Public domain | Mysid |
 | `flag_sdn_traditionalism.png` | [Flag of Sudan (1956-1970).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sudan_(1956%E2%80%931970).svg) | Public domain | Mysid |
+| `flag_sen_federation.png` | [Flag of Mali (1959–1961).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mali_(1959%E2%80%931961).svg) | Public domain | SKopp |
 | `flag_ser_communism.png` | [Flag of the Socialist Republic of Serbia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Montenegro_(1946%E2%80%931993),_Flag_of_Serbia_(1947%E2%80%931992).svg) | Public domain | User:CrnaGora |
 | `flag_sgp_protectorate.png` | [Flag of the British Straits Settlements (1925–1946).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_British_Straits_Settlements_%281925%E2%80%931946%29.svg) | Public domain | Flag_of_the_British_Straits_Settlements_(1874-1942).svg: Him |
 | `flag_slb_protectorate.png` | [Flag of the Solomon Islands (1956–1966).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Solomon_Islands_%281956%E2%80%931966%29.svg) | Public domain | Thommy (original) |
 | `flag_sle_protectorate.png` | [Flag of Sierra Leone (1889–1916).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sierra_Leone_%281889%E2%80%931916%29.svg) | CC0 | Thommy |
+| `flag_slv_federation.png` | [Flag of the Federal Republic of Central America.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federal_Republic_of_Central_America.svg) | CC BY-SA 2.5 | Huhsunqu |
+| `flag_slv_socialism.png` | [The flag of the Farabundo Martí National Liberation Front (FMLN).svg](https://commons.wikimedia.org/wiki/File:The_flag_of_the_Farabundo_Mart%C3%AD_National_Liberation_Front_(FMLN).svg) | Public domain | MrPenguin20 |
+| `flag_smo.png` | [Flag of the Order of St. John (various).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Order_of_St._John_(various).svg) | Public domain | Zscout370 |
 | `flag_som_protectorate.png` | [Flag of British Somaliland (1950–1952).svg](https://commons.wikimedia.org/wiki/File:Flag_of_British_Somaliland_%281950%E2%80%931952%29.svg) | CC BY-SA 4.0 | Sodacan |
 | `flag_srb_absolute_monarchy.png` | [State Flag of Serbia (1882-1918).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Serbia_(1882%E2%80%931918).svg) | CC BY-SA 3.0 | Guilherme Paula |
 | `flag_srb_communism.png` | [Flag of Yugoslavia (1946–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Yugoslavia_%281946%E2%80%931992%29.svg) | Public domain | Flag designed by Đorđe Andrejević-Kun [3] SVG coding: Zscout370 |
 | `flag_srb_puppet.png` | [Flag of the Government of National Salvation (occupied Yugoslavia).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Government_of_National_Salvation_(occupied_Yugoslavia).svg) | Public domain | File:Flag of serbia 1941 1944.JPG / derivative work: DIREKTO |
+| `flag_sur_protectorate.png` | [Flag of Suriname (1959–1975).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Suriname_(1959%E2%80%931975).svg) | Public domain | Mysid |
 | `flag_svk_communism.png` | [Flag of Slovakia (1939–1945).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovakia_%281939%E2%80%931945%29.svg) | Public domain | DarkEvil , PhiLiP |
 | `flag_svk_fascism.png` | [Flag of Slovakia (1939–1945).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovakia_%281939%E2%80%931945%29.svg) | Public domain | DarkEvil , PhiLiP |
 | `flag_svn_communism.png` | [Flag of the Socialist Republic of Slovenia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovenia_(1945%E2%80%931991).svg) | Public domain | No machine-readable author provided. Zscout370 assumed (base |
 | `flag_swe_absolute_monarchy.png` | [Royal standard of Sweden.svg](https://commons.wikimedia.org/wiki/File:Royal_standard_of_Sweden.svg) | CC BY-SA 4.0 | Sodacan |
+| `flag_syc_liberalism.png` | [Flag of Seychelles (1976–1977).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Seychelles_(1976%E2%80%931977).svg) | Public domain | No machine-readable author provided. |
+| `flag_syc_socialism.png` | [Flag of Seychelles (1977–1996).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Seychelles_(1977%E2%80%931996).svg) | Public domain | No machine-readable author provided. |
 | `flag_syr_absolute_monarchy.png` | [Flag of Kingdom of Syria (1920-03-08 to 1920-07-24).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kingdom_of_Syria_%281920-03-08_to_1920-07-24%29.svg) | Public domain | Ch1902 |
+| `flag_syr_federation.png` | [Flag of the United Arab Republic (1958–1971), Flag of Syria (1980–2024).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Arab_Republic_(1958%E2%80%931971),_Flag_of_Syria_(1980%E2%80%932024).svg) | Public domain | See File history below for details. For further informations, see also: en:Syrian Arab Republic and the en:United Arab Republic. |
 | `flag_syr_one_party_state.png` | [Flag of Syria (1980–2024).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Arab_Republic_(1958%E2%80%931971),_Flag_of_Syria_(1980%E2%80%932024).svg) | Public domain | See File history below for details. For further information |
 | `flag_syr_protectorate.png` | [Flag of the French Mandate of Syria (1920).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_French_Mandate_of_Syria_%281920%29.svg) | Public domain | Thommy |
 | `flag_syr_socialism.png` | [Flag of Syria (1980–2024).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Syria_%281980%E2%80%932024%29.svg) | Public domain | See File history below for details. For further informations, see also: en:Syrian Arab Rep |
@@ -541,10 +613,13 @@ else was skipped rather than used.
 | `flag_tha_theocratic_rule.png` | [Buddhist flag.svg](https://commons.wikimedia.org/wiki/File:Buddhist_flag.svg) | Public domain | Jon Harald Søby |
 | `flag_tjk_communism.png` | [Flag of the Tajik Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Tajik_Soviet_Socialist_Republic.svg) | Public domain | SVG by Pianist |
 | `flag_tkm_communism.png` | [Flag of the Turkmen Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Turkmen_Soviet_Socialist_Republic.svg) | Public domain | Denelson83 , Urmas , Nokka |
+| `flag_tls_socialism.png` | [Flag of FRETILIN (East Timor).svg](https://commons.wikimedia.org/wiki/File:Flag_of_FRETILIN_(East_Timor).svg) | Public domain | Thommy |
 | `flag_tur_absolute_monarchy.png` | [Flag of the Ottoman Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ottoman_Empire.svg) | Public domain | User:Orwellianist |
 | `flag_tur_theocratic_rule.png` | [Flag of the Ottoman Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ottoman_Empire.svg) | Public domain | User:Orwellianist |
 | `flag_twn.png` | [Flag of the Republic of China.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_China.svg) | Public domain | Sun Yat-sen |
 | `flag_twn_provisional_government.png` | [Flag of the Republic of Formosa (1895).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_Formosa_%281895%29.svg) | Public domain | Henry Szytko, vectorised by cypp0847 |
+| `flag_tza_absolute_monarchy.png` | [Flag of the Sultanate of Zanzibar.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Sultanate_of_Zanzibar.svg) | Public domain | Mysid |
+| `flag_tza_communism.png` | [Flag of Zanzibar (January-April 1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Zanzibar_(January-April_1964).svg) | Public domain | SuperManu |
 | `flag_tza_protectorate.png` | [Flag of Tanganyika (1923–1961).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tanganyika_%281923%E2%80%931961%29.svg) | Public domain | Mysid |
 | `flag_tza_traditionalism.png` | [Flag of Tanganyika (1961-1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tanganyika_(1961%E2%80%931964).svg) | CC BY-SA 3.0 | Mysid |
 | `flag_uga_absolute_monarchy.png` | [Flag of Buganda.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Buganda.svg) | Public domain | Mysid |
@@ -552,8 +627,10 @@ else was skipped rather than used.
 | `flag_ukr_fascism.png` | [Flag of the Ukrainian Insurgent Army.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ukrainian_Insurgent_Army.svg) | Public domain | Riwnodennyk |
 | `flag_usa_traditionalism.png` | [Flag of the United States (1777-1795).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_States_%281777-1795%29.svg) | Public domain | Jacobolus (SVG file) · Raster 2: TRAJAN 117 Vector: Mliu92 |
 | `flag_uzb_communism.png` | [Flag of the Uzbek Soviet Socialist Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Uzbek_Soviet_Socialist_Republic.svg) | Public domain | Denelson83 , Urmas , Nokka |
+| `flag_vat_absolute_monarchy.png` | [Flag of the Papal States (pre 1808).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Papal_States_(pre_1808).svg) | Public domain | User:Dinozzo2005 |
 | `flag_vct_protectorate.png` | [Flag of Saint Vincent and the Grenadines (1907-1979).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Saint_Vincent_and_the_Grenadines_%281907-1979%29.svg) | Public domain | Thommy |
 | `flag_ven_liberalism.png` | [Flag of Venezuela (1954–2006).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Venezuela_%281954%E2%80%932006%29.svg) | Public domain | See File history below for details. |
+| `flag_ven_traditionalism.png` | [Flag of Gran Colombia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Gran_Colombia.svg) | CC BY-SA 3.0 | Milenioscuro |
 | `flag_vnm_absolute_monarchy.png` | [Flag of the Empire of Vietnam (1945).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Empire_of_Vietnam_(1945).svg) | Public domain | Great Brightstar |
 | `flag_vnm_communism.png` | [Flag of Vietnam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Vietnam.svg) | Public domain | See File history below for details. |
 | `flag_vnm_liberalism.png` | [Flag of South Vietnam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_South_Vietnam.svg) | Public domain | (many, see history) |
@@ -565,5 +642,106 @@ else was skipped rather than used.
 | `flag_yem_socialism.png` | [Flag of South Yemen.svg](https://commons.wikimedia.org/wiki/File:Flag_of_South_Yemen.svg) | Public domain | National Front - الجبهة القومية |
 | `flag_yug_absolute_monarchy.png` | [Flag of the Kingdom of Yugoslavia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Yugoslavia.svg) | Public domain | Fibonacci |
 | `flag_yug_communism.png` | [Flag of Yugoslavia (1946-1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Yugoslavia_(1946-1992).svg) | Public domain | Flag designed by Đorđe Andrejević-Kun[3]SVG coding: Zscout37 |
+| `flag_zaf_protectorate.png` | [Red Ensign of South Africa (1912–1951).svg](https://commons.wikimedia.org/wiki/File:Red_Ensign_of_South_Africa_(1912%E2%80%931951).svg) | CC BY-SA 3.0 | Fornax |
+| `flag_zaf_traditionalism.png` | [Flag of South Africa (1928–1994, dark colors).svg](https://commons.wikimedia.org/wiki/File:Flag_of_South_Africa_(1928%E2%80%931994,_dark_colors).svg) | Public domain | Parliament of South Africa (Vector graphics image by Denelson83) |
 | `flag_zwe_absolute_monarchy.png` | [Flag of Rhodesia (1968–1979).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Rhodesia_%281968%E2%80%931979%29.svg) | Public domain | Actarux (original) |
 | `flag_zwe_protectorate.png` | [Flag of Southern Rhodesia (1924–1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Southern_Rhodesia_%281924%E2%80%931964%29.svg) | Public domain | Greentubing |
+
+<!-- people-flags -->
+## A people's flag that is its state's
+
+When a people with a state of its own founds another one - a secession, a breakaway - the
+new country flies that state's flag until it has one of its own. These files are exact
+copies of the game's own flag for that state, and come under whatever terms that file did.
+
+| Game file | Copy of |
+|---|---|
+| `flag_culture_albanian.png` | `flag_alb.png` |
+| `flag_culture_arab_saudi.png` | `flag_sau.png` |
+| `flag_culture_arab_sudanese.png` | `flag_sdn.png` |
+| `flag_culture_arab_yemeni.png` | `flag_yem.png` |
+| `flag_culture_argentine.png` | `flag_arg.png` |
+| `flag_culture_armenian.png` | `flag_arm.png` |
+| `flag_culture_austrian.png` | `flag_aut.png` |
+| `flag_culture_baoule.png` | `flag_civ.png` |
+| `flag_culture_belarusian.png` | `flag_blr.png` |
+| `flag_culture_bhutanese.png` | `flag_btn.png` |
+| `flag_culture_bolivian.png` | `flag_bol.png` |
+| `flag_culture_brazilian.png` | `flag_bra.png` |
+| `flag_culture_bruneian_malay.png` | `flag_brn.png` |
+| `flag_culture_burmese.png` | `flag_mmr.png` |
+| `flag_culture_canadian.png` | `flag_can.png` |
+| `flag_culture_cape_coloured.png` | `flag_zaf.png` |
+| `flag_culture_chagga.png` | `flag_tza.png` |
+| `flag_culture_chewa.png` | `flag_mwi.png` |
+| `flag_culture_chilean.png` | `flag_chl.png` |
+| `flag_culture_colombian.png` | `flag_col.png` |
+| `flag_culture_comorian.png` | `flag_com.png` |
+| `flag_culture_creole_african.png` | `flag_sle.png` |
+| `flag_culture_cuban.png` | `flag_cub.png` |
+| `flag_culture_danish.png` | `flag_dnk.png` |
+| `flag_culture_dutch.png` | `flag_nld.png` |
+| `flag_culture_ecuadorian.png` | `flag_ecu.png` |
+| `flag_culture_estonian.png` | `flag_est.png` |
+| `flag_culture_fang.png` | `flag_gnq.png` |
+| `flag_culture_fijian.png` | `flag_fji.png` |
+| `flag_culture_finnish.png` | `flag_fin.png` |
+| `flag_culture_georgian.png` | `flag_geo.png` |
+| `flag_culture_greek.png` | `flag_grc.png` |
+| `flag_culture_greenlander.png` | `flag_grl.png` |
+| `flag_culture_guyanese.png` | `flag_guy.png` |
+| `flag_culture_haitian.png` | `flag_hti.png` |
+| `flag_culture_hindustani.png` | `flag_ind.png` |
+| `flag_culture_hutu.png` | `flag_bdi.png` |
+| `flag_culture_icelandic.png` | `flag_isl.png` |
+| `flag_culture_irish.png` | `flag_irl.png` |
+| `flag_culture_israeli_jew.png` | `flag_isr.png` |
+| `flag_culture_japanese.png` | `flag_jpn.png` |
+| `flag_culture_kalenjin.png` | `flag_ken.png` |
+| `flag_culture_kamba.png` | `flag_ken.png` |
+| `flag_culture_kazakh.png` | `flag_kaz.png` |
+| `flag_culture_kru.png` | `flag_lbr.png` |
+| `flag_culture_lao.png` | `flag_lao.png` |
+| `flag_culture_latvian.png` | `flag_lva.png` |
+| `flag_culture_lithuanian.png` | `flag_ltu.png` |
+| `flag_culture_luhya.png` | `flag_ken.png` |
+| `flag_culture_luo.png` | `flag_ken.png` |
+| `flag_culture_makua.png` | `flag_moz.png` |
+| `flag_culture_maltese.png` | `flag_mlt.png` |
+| `flag_culture_mandinka.png` | `flag_gmb.png` |
+| `flag_culture_mbundu.png` | `flag_ago.png` |
+| `flag_culture_mexican.png` | `flag_mex.png` |
+| `flag_culture_moldovan.png` | `flag_mda.png` |
+| `flag_culture_mongo.png` | `flag_cod.png` |
+| `flag_culture_mossi.png` | `flag_bfa.png` |
+| `flag_culture_nepali.png` | `flag_npl.png` |
+| `flag_culture_new_zealander.png` | `flag_nzl.png` |
+| `flag_culture_ni_vanuatu.png` | `flag_vut.png` |
+| `flag_culture_norwegian.png` | `flag_nor.png` |
+| `flag_culture_nubian.png` | `flag_sdn.png` |
+| `flag_culture_nuer.png` | `flag_ssd.png` |
+| `flag_culture_omani_arab.png` | `flag_omn.png` |
+| `flag_culture_peruvian.png` | `flag_per.png` |
+| `flag_culture_portuguese.png` | `flag_prt.png` |
+| `flag_culture_russian.png` | `flag_rus.png` |
+| `flag_culture_samoan.png` | `flag_wsm.png` |
+| `flag_culture_san.png` | `flag_bwa.png` |
+| `flag_culture_senufo.png` | `flag_civ.png` |
+| `flag_culture_shona.png` | `flag_zwe.png` |
+| `flag_culture_sinhalese.png` | `flag_lka.png` |
+| `flag_culture_solomon_islander.png` | `flag_slb.png` |
+| `flag_culture_songhai.png` | `flag_mli.png` |
+| `flag_culture_soninke.png` | `flag_mli.png` |
+| `flag_culture_sotho.png` | `flag_lso.png` |
+| `flag_culture_sukuma.png` | `flag_tza.png` |
+| `flag_culture_swahili.png` | `flag_tza.png` |
+| `flag_culture_swedish.png` | `flag_swe.png` |
+| `flag_culture_temne.png` | `flag_sle.png` |
+| `flag_culture_timorese.png` | `flag_tls.png` |
+| `flag_culture_tiv.png` | `flag_nga.png` |
+| `flag_culture_tongan.png` | `flag_ton.png` |
+| `flag_culture_trinidadian.png` | `flag_tto.png` |
+| `flag_culture_tutsi.png` | `flag_rwa.png` |
+| `flag_culture_vietnamese.png` | `flag_vnm.png` |
+| `flag_culture_wolof.png` | `flag_sen.png` |
+| `flag_culture_xhosa.png` | `flag_zaf.png` |

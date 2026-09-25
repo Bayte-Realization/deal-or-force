@@ -1446,7 +1446,7 @@ public partial class DealOrForceGame : Control
     /// <summary>A small capitalised rule between groups of rows.</summary>
 
     /// <summary>
-    /// Which of the thirty-two symbols stands for a dossier row, by its caption.
+    /// Which symbol stands for a dossier row, by its caption.
     ///
     /// Deliberately partial. A caption nobody has drawn for has no symbol and the row simply
     /// carries none, so a mod or a new screen never has to supply art before it can add a
@@ -1491,24 +1491,34 @@ public partial class DealOrForceGame : Control
         "Population" or "Largest people" or "Largest minority" or "Minorities" => "population",
         "Capital" or "Form of government" or "Politics" or "Ideology" or "Status" => "government",
         "Literacy" => "literacy",
-        "Standard of living" => "welfare",
+        "Standard of living" => "living",
         "Radicalism" or "Wants out" => "unrest",
         "Stability" => "stability",
-        "Urbanisation" or "Urbanization" or "Buildings" or "Productivity" => "industry",
-        "Largest faith" => "research",
+        "Urbanisation" or "Urbanization" => "urbanisation",
+        "Buildings" => "production_capacity",
+        "Productivity" => "productivity",
+        "Largest faith" => "faith",
 
         // ---- the money ---------------------------------------------------------------
         "Treasury" => "treasury",
         "GDP" or "GDP per head" => "gdp",
-        "Balance" or "Taxes" or "Tax rate" or "Expenses" or "Military spending"
-            or "Tariffs" or "Tribute" => "balance",
+        // Money coming and going is the cash-flow mark; money the state takes is the scales
+        // with coins on them - the two used to share the scales, which read as justice.
+        "Balance" or "Expenses" or "Military spending" => "balance",
+        "Taxes" or "Tax rate" or "Tariffs" or "Tribute" => "taxes",
+        "Income" => "income",
         "Trade balance" or "Market access" => "trade",
         "Inflation" => "inflation",
 
         // ---- the ground --------------------------------------------------------------
-        "Provinces" or "States held" or "Neighbours" or "Owner" or "Controller" => "world",
+        // A province is a pin on the map and whoever holds it is a flag; the globe is kept
+        // for the one row that really is about the world around a country.
+        "Provinces" or "States held" => "province",
+        "Owner" or "Controller" => "nation",
+        "Neighbours" => "world",
         "Occupation" => "war",
-        "River crossings" or "Lake shore" => "port",
+        "Terrain" => "terrain",
+        "River crossings" or "Lake shore" => "water",
 
         // ---- the forces --------------------------------------------------------------
         "Divisions" or "Divisions here" or "Field armies" or "Visible divisions"

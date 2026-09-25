@@ -40,17 +40,19 @@ If you fork the code, the fork is yours to publish. The art is not.
 
 `game/gfx/flags/**` comes from Wikimedia Commons. Every file is listed in
 [`game/gfx/CREDITS.md`](game/gfx/CREDITS.md) with its source, its licence and its author.
-As of writing, 544 flags:
+As of writing, 632 flags:
 
 | Licence | Files | What it means here |
 |---|---:|---|
-| Public domain | 404 | no conditions |
-| CC0 | 36 | no conditions |
+| Public domain | 457 | no conditions |
+| CC0 | 41 | no conditions |
+| CC BY 3.0 | 3 | attribution required |
 | CC BY 4.0 | 3 | attribution required |
-| CC BY-SA 3.0 | 48 | attribution **and** share-alike |
-| CC BY-SA 4.0 | 53 | attribution **and** share-alike |
+| CC BY-SA 2.5 | 16 | attribution **and** share-alike |
+| CC BY-SA 3.0 | 58 | attribution **and** share-alike |
+| CC BY-SA 4.0 | 54 | attribution **and** share-alike |
 
-The 101 share-alike files **cannot** be placed under section (a), now or ever. Share-alike
+The 128 share-alike files **cannot** be placed under section (a), now or ever. Share-alike
 is a copyleft condition: an adapted file stays under the same licence, and resampling one to
 the game's flag height is an adaptation. They stay as they are, and `CREDITS.md` is what
 keeps that honest.
