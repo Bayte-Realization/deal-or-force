@@ -169,6 +169,7 @@
   "karen": { "name": "Karen", "country": "Kawthoolei", "group": "tibeto_burman", "colour": "#d18352", "religion": { "buddhist": 0.60, "protestant": 0.40 } },
   "kashmiri": { "name": "Kashmiri", "country": "Kashmir", "group": "indo_aryan", "colour": "#e2812f", "religion": "sunni" },
   "kazakh": { "name": "Kazakh", "group": "turkic", "colour": "#4fb066", "religion": "sunni" },
+  "altai": { "name": "Altai", "group": "turkic", "colour": "#3f9a7a", "religion": { "orthodox": 0.45, "folk": 0.55 } },
   "khmer": { "name": "Khmer", "group": "austroasiatic", "colour": "#8284cd", "religion": "buddhist" },
   "kikuyu": { "name": "Kikuyu", "group": "bantu", "colour": "#58876e", "religion": "protestant" },
   "komi": { "name": "Komi", "group": "finnic", "colour": "#4587b4", "religion": "orthodox" },

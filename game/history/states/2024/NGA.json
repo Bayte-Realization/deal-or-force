@@ -17,7 +17,7 @@
     "urbanization": 0.22,
     "cultures": { "fulani": 0.9066, "akan": 0.0178, "bassa": 0.0178, "mossi": 0.0178, "senufo": 0.0178, "ewe": 0.0133, "songhai": 0.0089 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
-    "resources": { "Food": 2.075, "Coal": 0.155, "Oil": 9.351, "IronOre": 0.106, "RareEarths": 0.042, "NaturalGas": 7.559, "Timber": 0.71, "Bauxite": 0.065, "Uranium": 0.007 }
+    "resources": { "Food": 2.075, "Coal": 0.155, "Oil": 0.365, "IronOre": 0.106, "RareEarths": 0.042, "NaturalGas": 0.396, "Timber": 0.71, "Bauxite": 0.065, "Uranium": 0.007 }
   },
   // Bauchi State
   "ng_ba": {
@@ -25,7 +25,7 @@
     "urbanization": 0.15,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 5, "Infrastructure": 1 },
-    "resources": { "Food": 1.734, "Coal": 0.485, "Oil": 3.903, "IronOre": 0.192, "RareEarths": 0.092, "NaturalGas": 7.207, "Timber": 1.676, "Bauxite": 0.095, "Uranium": 0.019 }
+    "resources": { "Food": 1.734, "Coal": 0.485, "Oil": 0.365, "IronOre": 0.192, "RareEarths": 0.092, "NaturalGas": 0.396, "Timber": 1.676, "Bauxite": 0.095, "Uranium": 0.019 }
   },
   // Benue State
   "ng_be": {
@@ -33,7 +33,7 @@
     "urbanization": 0.79,
     "cultures": { "tiv": 0.561, "akan": 0.0836, "bassa": 0.0836, "mossi": 0.0836, "senufo": 0.0836, "ewe": 0.0627, "songhai": 0.0418 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.708, "Coal": 0.161, "Oil": 5.635, "IronOre": 0.164, "RareEarths": 0.029, "NaturalGas": 8.094, "Timber": 2.531, "Bauxite": 0.041, "Uranium": 0.008 }
+    "resources": { "Food": 1.708, "Coal": 0.161, "Oil": 0.365, "IronOre": 0.164, "RareEarths": 0.029, "NaturalGas": 0.396, "Timber": 2.531, "Bauxite": 0.041, "Uranium": 0.008 }
   },
   // Borno State
   "ng_bo": {
@@ -41,7 +41,7 @@
     "urbanization": 0.22,
     "cultures": { "kanuri": 0.56, "hausa": 0.24, "fulani": 0.15, "tiv": 0.02, "igbo": 0.015, "yoruba": 0.015 },
     "buildings": { "Agriculture": 7, "Infrastructure": 1 },
-    "resources": { "Food": 2.152, "Coal": 0.085, "Oil": 12.128, "IronOre": 0.141, "RareEarths": 0.05, "NaturalGas": 11.198, "Timber": 2.593, "Bauxite": 0.045, "Uranium": 0.007 }
+    "resources": { "Food": 2.152, "Coal": 0.085, "Oil": 0.365, "IronOre": 0.141, "RareEarths": 0.05, "NaturalGas": 0.396, "Timber": 2.593, "Bauxite": 0.045, "Uranium": 0.007 }
   },
   // Cross River State
   "ng_cr": {
@@ -49,7 +49,7 @@
     "urbanization": 0.58,
     "cultures": { "igbo": 0.97, "akan": 0.0057, "bassa": 0.0057, "mossi": 0.0057, "senufo": 0.0057, "ewe": 0.0043, "songhai": 0.0029 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.891, "Coal": 0.342, "Oil": 7.108, "IronOre": 0.197, "RareEarths": 0.071, "NaturalGas": 7.973, "Timber": 2.12, "Bauxite": 0.089, "Uranium": 0.01 }
+    "resources": { "Food": 1.891, "Coal": 0.342, "Oil": 9.727, "IronOre": 0.197, "RareEarths": 0.071, "NaturalGas": 8.524, "Timber": 2.12, "Bauxite": 0.089, "Uranium": 0.01 }
   },
   // Delta State
   "ng_de": {
@@ -57,7 +57,7 @@
     "urbanization": 0.67,
     "cultures": { "ijaw": 0.6042, "akan": 0.0754, "bassa": 0.0754, "mossi": 0.0754, "senufo": 0.0754, "ewe": 0.0565, "songhai": 0.0377 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.305, "Coal": 0.566, "Oil": 7.45, "IronOre": 0.374, "RareEarths": 0.138, "NaturalGas": 10.922, "Timber": 2.29, "Bauxite": 0.095, "Uranium": 0.013 }
+    "resources": { "Food": 1.305, "Coal": 0.566, "Oil": 65.899, "IronOre": 0.374, "RareEarths": 0.138, "NaturalGas": 71.516, "Timber": 2.29, "Bauxite": 0.095, "Uranium": 0.013 }
   },
   // Edo State
   "ng_ed": {
@@ -65,7 +65,7 @@
     "urbanization": 0.73,
     "cultures": { "igbo": 0.97, "akan": 0.0057, "bassa": 0.0057, "mossi": 0.0057, "senufo": 0.0057, "ewe": 0.0043, "songhai": 0.0029 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.623, "Coal": 0.138, "Oil": 12.476, "IronOre": 0.133, "RareEarths": 0.03, "NaturalGas": 7.298, "Timber": 1.083, "Bauxite": 0.045, "Uranium": 0.002 }
+    "resources": { "Food": 1.623, "Coal": 0.138, "Oil": 15.344, "IronOre": 0.133, "RareEarths": 0.03, "NaturalGas": 16.652, "Timber": 1.083, "Bauxite": 0.045, "Uranium": 0.002 }
   },
   // Enugu State
   "ng_en": {
@@ -73,7 +73,7 @@
     "urbanization": 0.82,
     "cultures": { "igbo": 0.93, "yoruba": 0.025, "hausa": 0.02, "ijaw": 0.015, "fulani": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.297, "Coal": 0.188, "Oil": 9.104, "IronOre": 0.323, "RareEarths": 0.037, "NaturalGas": 9.085, "Timber": 2.901, "Bauxite": 0.063, "Uranium": 0.006 }
+    "resources": { "Food": 2.297, "Coal": 0.188, "Oil": 9.727, "IronOre": 0.323, "RareEarths": 0.037, "NaturalGas": 6.492, "Timber": 2.901, "Bauxite": 0.063, "Uranium": 0.006 }
   },
   // Gombe State
   "ng_go": {
@@ -81,7 +81,7 @@
     "urbanization": 0.21,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 2.335, "Coal": 0.285, "Oil": 8.071, "IronOre": 0.284, "RareEarths": 0.12, "NaturalGas": 7.566, "Timber": 2.311, "Bauxite": 0.076, "Uranium": 0.013 }
+    "resources": { "Food": 2.335, "Coal": 0.285, "Oil": 0.365, "IronOre": 0.284, "RareEarths": 0.12, "NaturalGas": 0.396, "Timber": 2.311, "Bauxite": 0.076, "Uranium": 0.013 }
   },
   // Jigawa State
   "ng_ji": {
@@ -89,7 +89,7 @@
     "urbanization": 0.05,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.65, "Coal": 0.358, "Oil": 8.746, "IronOre": 0.114, "RareEarths": 0.051, "NaturalGas": 8.654, "Timber": 1.743, "Bauxite": 0.085, "Uranium": 0.004 }
+    "resources": { "Food": 1.65, "Coal": 0.358, "Oil": 0.365, "IronOre": 0.114, "RareEarths": 0.051, "NaturalGas": 0.396, "Timber": 1.743, "Bauxite": 0.085, "Uranium": 0.004 }
   },
   // Kaduna State
   "ng_kd": {
@@ -97,7 +97,7 @@
     "urbanization": 0.3,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 10, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.994, "Coal": 0.498, "Oil": 6.439, "IronOre": 0.359, "RareEarths": 0.139, "NaturalGas": 7.688, "Timber": 1.072, "Bauxite": 0.159, "Uranium": 0.016 }
+    "resources": { "Food": 1.994, "Coal": 0.498, "Oil": 0.365, "IronOre": 0.359, "RareEarths": 0.139, "NaturalGas": 0.396, "Timber": 1.072, "Bauxite": 0.159, "Uranium": 0.016 }
   },
   // Kano State
   "ng_kn": {
@@ -105,7 +105,7 @@
     "urbanization": 0.58,
     "cultures": { "hausa": 0.845, "fulani": 0.12, "kanuri": 0.012, "yoruba": 0.01, "igbo": 0.008, "tiv": 0.005 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.285, "Coal": 0.093, "Oil": 11.093, "IronOre": 0.096, "RareEarths": 0.04, "NaturalGas": 7.793, "Timber": 1.522, "Bauxite": 0.048, "Uranium": 0.004 }
+    "resources": { "Food": 1.285, "Coal": 0.093, "Oil": 0.365, "IronOre": 0.096, "RareEarths": 0.04, "NaturalGas": 0.396, "Timber": 1.522, "Bauxite": 0.048, "Uranium": 0.004 }
   },
   // Katsina State
   "ng_kt": {
@@ -113,7 +113,7 @@
     "urbanization": 0.31,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.263, "Coal": 0.209, "Oil": 6.616, "IronOre": 0.21, "RareEarths": 0.063, "NaturalGas": 10.015, "Timber": 1.749, "Bauxite": 0.088, "Uranium": 0.008 }
+    "resources": { "Food": 1.263, "Coal": 0.209, "Oil": 0.365, "IronOre": 0.21, "RareEarths": 0.063, "NaturalGas": 0.396, "Timber": 1.749, "Bauxite": 0.088, "Uranium": 0.008 }
   },
   // Kebbi State
   "ng_ke": {
@@ -121,7 +121,7 @@
     "urbanization": 0.13,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.344, "Coal": 0.103, "Oil": 8.378, "IronOre": 0.116, "RareEarths": 0.027, "NaturalGas": 11.853, "Timber": 1.142, "Bauxite": 0.051, "Uranium": 0.006 }
+    "resources": { "Food": 1.344, "Coal": 0.103, "Oil": 0.365, "IronOre": 0.116, "RareEarths": 0.027, "NaturalGas": 0.396, "Timber": 1.142, "Bauxite": 0.051, "Uranium": 0.006 }
   },
   // Kogi State
   "ng_ko": {
@@ -129,7 +129,7 @@
     "urbanization": 0.33,
     "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.4, "Coal": 0.343, "Oil": 6.481, "IronOre": 0.197, "RareEarths": 0.09, "NaturalGas": 6.584, "Timber": 1.505, "Bauxite": 0.044, "Uranium": 0.011 }
+    "resources": { "Food": 1.4, "Coal": 0.343, "Oil": 0.365, "IronOre": 0.197, "RareEarths": 0.09, "NaturalGas": 0.396, "Timber": 1.505, "Bauxite": 0.044, "Uranium": 0.011 }
   },
   // Kwara State
   "ng_kw": {
@@ -137,7 +137,7 @@
     "urbanization": 0.66,
     "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.147, "Coal": 0.449, "Oil": 9.295, "IronOre": 0.344, "RareEarths": 0.124, "NaturalGas": 8.658, "Timber": 1.077, "Bauxite": 0.15, "Uranium": 0.017 }
+    "resources": { "Food": 1.147, "Coal": 0.449, "Oil": 0.365, "IronOre": 0.344, "RareEarths": 0.124, "NaturalGas": 0.396, "Timber": 1.077, "Bauxite": 0.15, "Uranium": 0.017 }
   },
   // Nasarawa State
   "ng_na": {
@@ -145,7 +145,7 @@
     "urbanization": 0.72,
     "cultures": { "akan": 0.1905, "bassa": 0.1905, "mossi": 0.1905, "senufo": 0.1905, "ewe": 0.1429, "songhai": 0.0952 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.269, "Coal": 0.106, "Oil": 6.131, "IronOre": 0.077, "RareEarths": 0.039, "NaturalGas": 8.004, "Timber": 2.874, "Bauxite": 0.023, "Uranium": 0.005 }
+    "resources": { "Food": 2.269, "Coal": 0.106, "Oil": 0.365, "IronOre": 0.077, "RareEarths": 0.039, "NaturalGas": 0.396, "Timber": 2.874, "Bauxite": 0.023, "Uranium": 0.005 }
   },
   // Niger State
   "ng_ni": {
@@ -153,7 +153,7 @@
     "urbanization": 0.39,
     "cultures": { "fulani": 0.9066, "akan": 0.0178, "bassa": 0.0178, "mossi": 0.0178, "senufo": 0.0178, "ewe": 0.0133, "songhai": 0.0089 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.025, "Coal": 0.142, "Oil": 3.67, "IronOre": 0.114, "RareEarths": 0.028, "NaturalGas": 11.562, "Timber": 3.176, "Bauxite": 0.047, "Uranium": 0.003 }
+    "resources": { "Food": 1.025, "Coal": 0.142, "Oil": 0.365, "IronOre": 0.114, "RareEarths": 0.028, "NaturalGas": 0.396, "Timber": 3.176, "Bauxite": 0.047, "Uranium": 0.003 }
   },
   // Ogun State
   "ng_og": {
@@ -161,7 +161,7 @@
     "urbanization": 0.91,
     "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 3, "Infrastructure": 3 },
-    "resources": { "Food": 1.709, "Coal": 0.149, "Oil": 10.425, "IronOre": 0.118, "RareEarths": 0.041, "NaturalGas": 10.852, "Timber": 3.273, "Bauxite": 0.112, "Uranium": 0.011 }
+    "resources": { "Food": 1.709, "Coal": 0.149, "Oil": 0.365, "IronOre": 0.118, "RareEarths": 0.041, "NaturalGas": 0.396, "Timber": 3.273, "Bauxite": 0.112, "Uranium": 0.011 }
   },
   // Ondo State
   "ng_on": {
@@ -169,7 +169,7 @@
     "urbanization": 0.82,
     "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.224, "Coal": 0.106, "Oil": 8.125, "IronOre": 0.089, "RareEarths": 0.024, "NaturalGas": 8.501, "Timber": 1.922, "Bauxite": 0.046, "Uranium": 0.005 }
+    "resources": { "Food": 1.224, "Coal": 0.106, "Oil": 13.472, "IronOre": 0.089, "RareEarths": 0.024, "NaturalGas": 10.556, "Timber": 1.922, "Bauxite": 0.046, "Uranium": 0.005 }
   },
   // Oyo State
   "ng_oy": {
@@ -177,7 +177,7 @@
     "urbanization": 0.85,
     "cultures": { "yoruba": 0.905, "hausa": 0.035, "igbo": 0.03, "fulani": 0.015, "ijaw": 0.008, "akan": 0.007 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.844, "Coal": 0.188, "Oil": 8.091, "IronOre": 0.102, "RareEarths": 0.057, "NaturalGas": 9.259, "Timber": 2.045, "Bauxite": 0.06, "Uranium": 0.004 }
+    "resources": { "Food": 1.844, "Coal": 0.188, "Oil": 0.365, "IronOre": 0.102, "RareEarths": 0.057, "NaturalGas": 0.396, "Timber": 2.045, "Bauxite": 0.06, "Uranium": 0.004 }
   },
   // Plateau State
   "ng_pl": {
@@ -185,7 +185,7 @@
     "urbanization": 0.43,
     "cultures": { "tiv": 0.561, "akan": 0.0836, "bassa": 0.0836, "mossi": 0.0836, "senufo": 0.0836, "ewe": 0.0627, "songhai": 0.0418 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.395, "Coal": 0.257, "Oil": 5.459, "IronOre": 0.19, "RareEarths": 0.041, "NaturalGas": 8.483, "Timber": 2.595, "Bauxite": 0.043, "Uranium": 0.006 }
+    "resources": { "Food": 1.395, "Coal": 0.257, "Oil": 0.365, "IronOre": 0.19, "RareEarths": 0.041, "NaturalGas": 0.396, "Timber": 2.595, "Bauxite": 0.043, "Uranium": 0.006 }
   },
   // Rivers State
   "ng_ri": {
@@ -193,7 +193,7 @@
     "urbanization": 0.7,
     "cultures": { "igbo": 0.4, "ijaw": 0.4, "yoruba": 0.09, "hausa": 0.055, "fulani": 0.03, "tiv": 0.025 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.391, "Coal": 0.261, "Oil": 9.987, "IronOre": 0.369, "RareEarths": 0.082, "NaturalGas": 6.575, "Timber": 2.522, "Bauxite": 0.174, "Uranium": 0.009 }
+    "resources": { "Food": 1.391, "Coal": 0.261, "Oil": 75.261, "IronOre": 0.369, "RareEarths": 0.082, "NaturalGas": 91.836, "Timber": 2.522, "Bauxite": 0.174, "Uranium": 0.009 }
   },
   // Sokoto State
   "ng_so": {
@@ -201,7 +201,7 @@
     "urbanization": 0.47,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.417, "Coal": 0.548, "Oil": 9.941, "IronOre": 0.277, "RareEarths": 0.051, "NaturalGas": 10.996, "Timber": 2.511, "Bauxite": 0.097, "Uranium": 0.011 }
+    "resources": { "Food": 1.417, "Coal": 0.548, "Oil": 0.365, "IronOre": 0.277, "RareEarths": 0.051, "NaturalGas": 0.396, "Timber": 2.511, "Bauxite": 0.097, "Uranium": 0.011 }
   },
   // Taraba State
   "ng_ta": {
@@ -209,7 +209,7 @@
     "urbanization": 0.19,
     "cultures": { "fulani": 0.9066, "akan": 0.0178, "bassa": 0.0178, "mossi": 0.0178, "senufo": 0.0178, "ewe": 0.0133, "songhai": 0.0089 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 0.856, "Coal": 0.15, "Oil": 6.475, "IronOre": 0.139, "RareEarths": 0.062, "NaturalGas": 10.083, "Timber": 3.128, "Bauxite": 0.109, "Uranium": 0.008 }
+    "resources": { "Food": 0.856, "Coal": 0.15, "Oil": 0.365, "IronOre": 0.139, "RareEarths": 0.062, "NaturalGas": 0.396, "Timber": 3.128, "Bauxite": 0.109, "Uranium": 0.008 }
   },
   // Yobe State
   "ng_yo": {
@@ -217,7 +217,7 @@
     "urbanization": 0.3,
     "cultures": { "kanuri": 0.97, "akan": 0.0057, "bassa": 0.0057, "mossi": 0.0057, "senufo": 0.0057, "ewe": 0.0043, "songhai": 0.0029 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.959, "Coal": 0.208, "Oil": 7.462, "IronOre": 0.337, "RareEarths": 0.055, "NaturalGas": 6.588, "Timber": 3.159, "Bauxite": 0.122, "Uranium": 0.015 }
+    "resources": { "Food": 1.959, "Coal": 0.208, "Oil": 0.365, "IronOre": 0.337, "RareEarths": 0.055, "NaturalGas": 0.396, "Timber": 3.159, "Bauxite": 0.122, "Uranium": 0.015 }
   },
   // Zamfara State
   "ng_za": {
@@ -225,6 +225,6 @@
     "urbanization": 0.13,
     "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
-    "resources": { "Food": 1.257, "Coal": 0.161, "Oil": 6.862, "IronOre": 0.105, "RareEarths": 0.028, "NaturalGas": 4.642, "Timber": 2.883, "Bauxite": 0.025, "Uranium": 0.005 }
+    "resources": { "Food": 1.257, "Coal": 0.161, "Oil": 0.365, "IronOre": 0.105, "RareEarths": 0.028, "NaturalGas": 0.396, "Timber": 2.883, "Bauxite": 0.025, "Uranium": 0.005 }
   }
 }

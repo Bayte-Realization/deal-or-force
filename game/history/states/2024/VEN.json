@@ -17,7 +17,7 @@
     "urbanization": 0.44,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 0.886, "Coal": 0.344, "Oil": 9.705, "IronOre": 0.423, "RareEarths": 0.09, "NaturalGas": 0.825, "Timber": 1.605, "Bauxite": 0.14, "Uranium": 0.014 }
+    "resources": { "Food": 0.886, "Coal": 0.344, "Oil": 0.386, "IronOre": 0.423, "RareEarths": 0.09, "NaturalGas": 0.825, "Timber": 1.605, "Bauxite": 0.14, "Uranium": 0.014 }
   },
   // Anzoátegui
   "ve_b": {
@@ -25,7 +25,7 @@
     "urbanization": 0.89,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.629, "Coal": 0.357, "Oil": 6.624, "IronOre": 0.16, "RareEarths": 0.053, "NaturalGas": 0.467, "Timber": 1.791, "Bauxite": 0.132, "Uranium": 0.011 }
+    "resources": { "Food": 1.629, "Coal": 0.357, "Oil": 33.4, "IronOre": 0.16, "RareEarths": 0.053, "NaturalGas": 0.467, "Timber": 1.791, "Bauxite": 0.132, "Uranium": 0.011 }
   },
   // Apure
   "ve_c": {
@@ -33,7 +33,7 @@
     "urbanization": 0.68,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 2.27, "Coal": 0.103, "Oil": 4.354, "IronOre": 0.111, "RareEarths": 0.014, "NaturalGas": 0.218, "Timber": 2.172, "Bauxite": 0.033, "Uranium": 0.002 }
+    "resources": { "Food": 2.27, "Coal": 0.103, "Oil": 3.688, "IronOre": 0.111, "RareEarths": 0.014, "NaturalGas": 0.218, "Timber": 2.172, "Bauxite": 0.033, "Uranium": 0.002 }
   },
   // Aragua
   "ve_d": {
@@ -41,7 +41,7 @@
     "urbanization": 0.95,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.074, "Coal": 0.235, "Oil": 12.57, "IronOre": 0.189, "RareEarths": 0.134, "NaturalGas": 1.001, "Timber": 1.764, "Bauxite": 0.155, "Uranium": 0.018 }
+    "resources": { "Food": 1.074, "Coal": 0.235, "Oil": 0.386, "IronOre": 0.189, "RareEarths": 0.134, "NaturalGas": 1.001, "Timber": 1.764, "Bauxite": 0.155, "Uranium": 0.018 }
   },
   // Barinas
   "ve_e": {
@@ -49,7 +49,7 @@
     "urbanization": 0.79,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.374, "Coal": 0.291, "Oil": 5.147, "IronOre": 0.194, "RareEarths": 0.053, "NaturalGas": 0.305, "Timber": 2.999, "Bauxite": 0.091, "Uranium": 0.013 }
+    "resources": { "Food": 1.374, "Coal": 0.291, "Oil": 5.889, "IronOre": 0.194, "RareEarths": 0.053, "NaturalGas": 0.305, "Timber": 2.999, "Bauxite": 0.091, "Uranium": 0.013 }
   },
   // Bolívar
   "ve_f": {
@@ -57,7 +57,7 @@
     "urbanization": 0.84,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 0.994, "Coal": 0.183, "Oil": 8.726, "IronOre": 0.331, "RareEarths": 0.07, "NaturalGas": 0.679, "Timber": 1.297, "Bauxite": 0.079, "Uranium": 0.006 }
+    "resources": { "Food": 0.994, "Coal": 0.183, "Oil": 2.587, "IronOre": 0.331, "RareEarths": 0.07, "NaturalGas": 0.679, "Timber": 1.297, "Bauxite": 0.079, "Uranium": 0.006 }
   },
   // Cojedes
   "ve_h": {
@@ -65,7 +65,7 @@
     "urbanization": 0.58,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 0.766, "Coal": 0.633, "Oil": 8.047, "IronOre": 0.266, "RareEarths": 0.113, "NaturalGas": 0.549, "Timber": 2.814, "Bauxite": 0.151, "Uranium": 0.016 }
+    "resources": { "Food": 0.766, "Coal": 0.633, "Oil": 0.386, "IronOre": 0.266, "RareEarths": 0.113, "NaturalGas": 0.549, "Timber": 2.814, "Bauxite": 0.151, "Uranium": 0.016 }
   },
   // Delta Amacuro
   "ve_y": {
@@ -73,7 +73,7 @@
     "urbanization": 0.55,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 2.277, "Coal": 0.117, "Oil": 8.311, "IronOre": 0.151, "RareEarths": 0.025, "NaturalGas": 0.153, "Timber": 3.307, "Bauxite": 0.052, "Uranium": 0.004 }
+    "resources": { "Food": 2.277, "Coal": 0.117, "Oil": 0.386, "IronOre": 0.151, "RareEarths": 0.025, "NaturalGas": 0.153, "Timber": 3.307, "Bauxite": 0.052, "Uranium": 0.004 }
   },
   // Falcón
   "ve_i": {
@@ -81,7 +81,7 @@
     "urbanization": 0.65,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.869, "Coal": 0.442, "Oil": 5.917, "IronOre": 0.269, "RareEarths": 0.068, "NaturalGas": 1.041, "Timber": 1.082, "Bauxite": 0.168, "Uranium": 0.009 }
+    "resources": { "Food": 1.869, "Coal": 0.442, "Oil": 0.386, "IronOre": 0.269, "RareEarths": 0.068, "NaturalGas": 1.041, "Timber": 1.082, "Bauxite": 0.168, "Uranium": 0.009 }
   },
   // Guárico State
   "ve_j": {
@@ -89,7 +89,7 @@
     "urbanization": 0.77,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.49, "Coal": 0.358, "Oil": 12.614, "IronOre": 0.354, "RareEarths": 0.112, "NaturalGas": 0.7, "Timber": 1.174, "Bauxite": 0.058, "Uranium": 0.014 }
+    "resources": { "Food": 2.49, "Coal": 0.358, "Oil": 0.386, "IronOre": 0.354, "RareEarths": 0.112, "NaturalGas": 0.7, "Timber": 1.174, "Bauxite": 0.058, "Uranium": 0.014 }
   },
   // Lara
   "ve_k": {
@@ -97,7 +97,7 @@
     "urbanization": 0.83,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.949, "Coal": 0.445, "Oil": 12.158, "IronOre": 0.314, "RareEarths": 0.066, "NaturalGas": 0.373, "Timber": 1.435, "Bauxite": 0.146, "Uranium": 0.018 }
+    "resources": { "Food": 1.949, "Coal": 0.445, "Oil": 0.386, "IronOre": 0.314, "RareEarths": 0.066, "NaturalGas": 0.373, "Timber": 1.435, "Bauxite": 0.146, "Uranium": 0.018 }
   },
   // Merida
   "ve_l": {
@@ -105,7 +105,7 @@
     "urbanization": 0.91,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.418, "Coal": 0.323, "Oil": 4.415, "IronOre": 0.221, "RareEarths": 0.041, "NaturalGas": 0.567, "Timber": 1.504, "Bauxite": 0.125, "Uranium": 0.009 }
+    "resources": { "Food": 1.418, "Coal": 0.323, "Oil": 0.386, "IronOre": 0.221, "RareEarths": 0.041, "NaturalGas": 0.567, "Timber": 1.504, "Bauxite": 0.125, "Uranium": 0.009 }
   },
   // Monagas
   "ve_n": {
@@ -113,7 +113,7 @@
     "urbanization": 0.83,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.464, "Coal": 0.102, "Oil": 3.975, "IronOre": 0.052, "RareEarths": 0.037, "NaturalGas": 0.265, "Timber": 3.044, "Bauxite": 0.031, "Uranium": 0.004 }
+    "resources": { "Food": 1.464, "Coal": 0.102, "Oil": 38.903, "IronOre": 0.052, "RareEarths": 0.037, "NaturalGas": 0.265, "Timber": 3.044, "Bauxite": 0.031, "Uranium": 0.004 }
   },
   // Portuguesa
   "ve_p": {
@@ -121,7 +121,7 @@
     "urbanization": 0.88,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.268, "Coal": 0.11, "Oil": 8.769, "IronOre": 0.082, "RareEarths": 0.04, "NaturalGas": 0.262, "Timber": 2.91, "Bauxite": 0.048, "Uranium": 0.007 }
+    "resources": { "Food": 2.268, "Coal": 0.11, "Oil": 0.386, "IronOre": 0.082, "RareEarths": 0.04, "NaturalGas": 0.262, "Timber": 2.91, "Bauxite": 0.048, "Uranium": 0.007 }
   },
   // Zulia
   "ve_v": {
@@ -129,6 +129,6 @@
     "urbanization": 0.94,
     "cultures": { "venezuelan": 0.86, "colombian": 0.05, "african_american": 0.035, "native_american": 0.03, "italian": 0.01, "portuguese": 0.01, "spanish": 0.005 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.995, "Coal": 0.15, "Oil": 11.348, "IronOre": 0.094, "RareEarths": 0.034, "NaturalGas": 0.236, "Timber": 1.144, "Bauxite": 0.04, "Uranium": 0.004 }
+    "resources": { "Food": 1.995, "Coal": 0.15, "Oil": 27.898, "IronOre": 0.094, "RareEarths": 0.034, "NaturalGas": 0.236, "Timber": 1.144, "Bauxite": 0.04, "Uranium": 0.004 }
   }
 }

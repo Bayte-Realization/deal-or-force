@@ -17,7 +17,7 @@
     "urbanization": 0.26,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Agriculture": 16, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.671, "Coal": 0.256, "Oil": 0.32, "IronOre": 0.254, "RareEarths": 0.079, "NaturalGas": 4.984, "Timber": 2.977, "Bauxite": 0.045, "Uranium": 0.006 }
+    "resources": { "Food": 1.671, "Coal": 0.256, "Oil": 0.32, "IronOre": 0.254, "RareEarths": 0.079, "NaturalGas": 17.344, "Timber": 2.977, "Bauxite": 0.045, "Uranium": 0.006 }
   },
   // Aswan
   "eg_asn": {
@@ -25,7 +25,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 0.948, "Coal": 0.599, "Oil": 0.545, "IronOre": 0.178, "RareEarths": 0.068, "NaturalGas": 9.505, "Timber": 1.277, "Bauxite": 0.074, "Uranium": 0.01 }
+    "resources": { "Food": 0.948, "Coal": 0.599, "Oil": 0.545, "IronOre": 0.178, "RareEarths": 0.068, "NaturalGas": 0.405, "Timber": 1.277, "Bauxite": 0.074, "Uranium": 0.01 }
   },
   // Beheira
   "eg_bh": {
@@ -33,7 +33,7 @@
     "urbanization": 0.42,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Agriculture": 7, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.723, "Coal": 0.17, "Oil": 0.123, "IronOre": 0.126, "RareEarths": 0.028, "NaturalGas": 4.522, "Timber": 3.217, "Bauxite": 0.028, "Uranium": 0.003 }
+    "resources": { "Food": 1.723, "Coal": 0.17, "Oil": 0.123, "IronOre": 0.126, "RareEarths": 0.028, "NaturalGas": 34.283, "Timber": 3.217, "Bauxite": 0.028, "Uranium": 0.003 }
   },
   // Faiyum
   "eg_fym": {
@@ -41,7 +41,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.699, "Coal": 0.407, "Oil": 0.612, "IronOre": 0.179, "RareEarths": 0.086, "NaturalGas": 11.581, "Timber": 2.743, "Bauxite": 0.051, "Uranium": 0.011 }
+    "resources": { "Food": 1.699, "Coal": 0.407, "Oil": 0.612, "IronOre": 0.179, "RareEarths": 0.086, "NaturalGas": 0.405, "Timber": 2.743, "Bauxite": 0.051, "Uranium": 0.011 }
   },
   // Giza
   "eg_gz": {
@@ -49,7 +49,7 @@
     "urbanization": 0.64,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 0.893, "Coal": 0.204, "Oil": 0.432, "IronOre": 0.172, "RareEarths": 0.059, "NaturalGas": 5.294, "Timber": 2.107, "Bauxite": 0.04, "Uranium": 0.005 }
+    "resources": { "Food": 0.893, "Coal": 0.204, "Oil": 0.432, "IronOre": 0.172, "RareEarths": 0.059, "NaturalGas": 0.405, "Timber": 2.107, "Bauxite": 0.04, "Uranium": 0.005 }
   },
   // Matrouh
   "eg_mt": {
@@ -57,7 +57,7 @@
     "urbanization": 0.9,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.762, "Coal": 0.324, "Oil": 0.893, "IronOre": 0.345, "RareEarths": 0.096, "NaturalGas": 10.275, "Timber": 2.02, "Bauxite": 0.176, "Uranium": 0.016 }
+    "resources": { "Food": 1.762, "Coal": 0.324, "Oil": 0.893, "IronOre": 0.345, "RareEarths": 0.096, "NaturalGas": 17.344, "Timber": 2.02, "Bauxite": 0.176, "Uranium": 0.016 }
   },
   // Minya
   "eg_mn": {
@@ -65,7 +65,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.296, "Coal": 0.227, "Oil": 0.51, "IronOre": 0.207, "RareEarths": 0.061, "NaturalGas": 4.064, "Timber": 0.863, "Bauxite": 0.09, "Uranium": 0.008 }
+    "resources": { "Food": 1.296, "Coal": 0.227, "Oil": 0.51, "IronOre": 0.207, "RareEarths": 0.061, "NaturalGas": 0.405, "Timber": 0.863, "Bauxite": 0.09, "Uranium": 0.008 }
   },
   // New Valley
   "eg_wad": {
@@ -73,7 +73,7 @@
     "urbanization": 0.89,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.334, "Coal": 0.437, "Oil": 0.461, "IronOre": 0.198, "RareEarths": 0.057, "NaturalGas": 11.103, "Timber": 2.076, "Bauxite": 0.142, "Uranium": 0.013 }
+    "resources": { "Food": 2.334, "Coal": 0.437, "Oil": 0.461, "IronOre": 0.198, "RareEarths": 0.057, "NaturalGas": 0.405, "Timber": 2.076, "Bauxite": 0.142, "Uranium": 0.013 }
   },
   // North Sinai
   "eg_sin": {
@@ -81,7 +81,7 @@
     "urbanization": 0.93,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 0.9, "Coal": 0.311, "Oil": 0.393, "IronOre": 0.217, "RareEarths": 0.046, "NaturalGas": 3.577, "Timber": 1.8, "Bauxite": 0.061, "Uranium": 0.008 }
+    "resources": { "Food": 0.9, "Coal": 0.311, "Oil": 0.393, "IronOre": 0.217, "RareEarths": 0.046, "NaturalGas": 8.875, "Timber": 1.8, "Bauxite": 0.061, "Uranium": 0.008 }
   },
   // Red Sea Governorate
   "eg_ba": {
@@ -89,7 +89,7 @@
     "urbanization": 0.41,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.054, "Coal": 0.143, "Oil": 0.259, "IronOre": 0.09, "RareEarths": 0.016, "NaturalGas": 5.547, "Timber": 2.478, "Bauxite": 0.041, "Uranium": 0.004 }
+    "resources": { "Food": 2.054, "Coal": 0.143, "Oil": 0.259, "IronOre": 0.09, "RareEarths": 0.016, "NaturalGas": 8.875, "Timber": 2.478, "Bauxite": 0.041, "Uranium": 0.004 }
   },
   // South Sinai
   "eg_js": {
@@ -97,6 +97,6 @@
     "urbanization": 0.05,
     "cultures": { "arab_egyptian": 0.88, "copt": 0.085, "bedouin": 0.015, "nubian": 0.012, "arab_sudanese": 0.005, "berber": 0.003 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.713, "Coal": 0.282, "Oil": 0.455, "IronOre": 0.165, "RareEarths": 0.045, "NaturalGas": 6.057, "Timber": 3.2, "Bauxite": 0.049, "Uranium": 0.009 }
+    "resources": { "Food": 1.713, "Coal": 0.282, "Oil": 0.455, "IronOre": 0.165, "RareEarths": 0.045, "NaturalGas": 0.405, "Timber": 3.2, "Bauxite": 0.049, "Uranium": 0.009 }
   }
 }

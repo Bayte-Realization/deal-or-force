@@ -17,7 +17,7 @@
     "urbanization": 0.296,
     "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.854, "Coal": 1.966, "Oil": 0.347, "IronOre": 2.443, "RareEarths": 3.184, "NaturalGas": 0.276, "Timber": 1.041, "Bauxite": 2.554, "Uranium": 0.005 }
+    "resources": { "Food": 1.854, "Coal": 0.155, "Oil": 0.347, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.276, "Timber": 1.041, "Bauxite": 0.159, "Uranium": 0.005 }
   },
   // Andhra Pradesh
   "in_ap": {
@@ -25,7 +25,7 @@
     "urbanization": 0.35,
     "cultures": { "telugu": 0.4943, "nepali": 0.3034, "sindhi": 0.1517, "parsi": 0.0506 },
     "buildings": { "Agriculture": 25, "CivilianIndustry": 3, "Infrastructure": 1 },
-    "resources": { "Food": 2.162, "Coal": 4.271, "Oil": 0.241, "IronOre": 1.917, "RareEarths": 4.433, "NaturalGas": 0.32, "Timber": 1.644, "Bauxite": 4.27, "Uranium": 0.005 }
+    "resources": { "Food": 2.162, "Coal": 1.863, "Oil": 0.241, "IronOre": 1.708, "RareEarths": 8.499, "NaturalGas": 0.32, "Timber": 1.644, "Bauxite": 0.159, "Uranium": 0.005 }
   },
   // Arunachal Pradesh
   "in_ar": {
@@ -33,7 +33,7 @@
     "urbanization": 0.15,
     "cultures": { "tibetan": 0.25, "assamese": 0.2, "hindustani": 0.18, "bengali": 0.12, "nepali": 0.1, "burmese": 0.07, "chin": 0.05, "kachin": 0.03 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 2.137, "Coal": 1.748, "Oil": 0.216, "IronOre": 3.983, "RareEarths": 4.499, "NaturalGas": 0.275, "Timber": 2.319, "Bauxite": 4.187, "Uranium": 0.011 }
+    "resources": { "Food": 2.137, "Coal": 0.155, "Oil": 0.216, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.275, "Timber": 2.319, "Bauxite": 0.159, "Uranium": 0.011 }
   },
   // Assam
   "in_as": {
@@ -41,7 +41,7 @@
     "urbanization": 0.2,
     "cultures": { "assamese": 0.48, "bengali_muslim": 0.3, "bengali": 0.12, "hindustani": 0.045, "nepali": 0.025, "odia": 0.015, "marathi": 0.005, "punjabi": 0.005, "tamil": 0.005 },
     "buildings": { "Agriculture": 6, "Infrastructure": 1 },
-    "resources": { "Food": 0.81, "Coal": 4.294, "Oil": 0.354, "IronOre": 3.617, "RareEarths": 2.504, "NaturalGas": 0.434, "Timber": 2.447, "Bauxite": 4.316, "Uranium": 0.014 }
+    "resources": { "Food": 0.81, "Coal": 1.009, "Oil": 0.354, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.434, "Timber": 2.447, "Bauxite": 0.159, "Uranium": 0.014 }
   },
   // Bihar
   "in_br": {
@@ -49,7 +49,7 @@
     "urbanization": 0.22,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 15, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.459, "Coal": 3.588, "Oil": 0.589, "IronOre": 3.08, "RareEarths": 2.479, "NaturalGas": 0.457, "Timber": 3.363, "Bauxite": 2.885, "Uranium": 0.006 }
+    "resources": { "Food": 2.459, "Coal": 0.155, "Oil": 0.589, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.457, "Timber": 3.363, "Bauxite": 0.159, "Uranium": 0.006 }
   },
   // Chhattisgarh
   "in_ct": {
@@ -57,7 +57,7 @@
     "urbanization": 0.23,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 10, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.85, "Coal": 4.411, "Oil": 0.23, "IronOre": 1.362, "RareEarths": 3.106, "NaturalGas": 0.224, "Timber": 1.697, "Bauxite": 1.971, "Uranium": 0.003 }
+    "resources": { "Food": 1.85, "Coal": 18.947, "Oil": 0.23, "IronOre": 12.669, "RareEarths": 0.151, "NaturalGas": 0.224, "Timber": 1.697, "Bauxite": 4.537, "Uranium": 0.003 }
   },
   // Gujarat
   "in_gj": {
@@ -65,7 +65,7 @@
     "urbanization": 0.35,
     "cultures": { "gujarati": 0.526, "nepali": 0.2844, "sindhi": 0.1422, "parsi": 0.0474 },
     "buildings": { "Agriculture": 30, "CivilianIndustry": 3, "Infrastructure": 1 },
-    "resources": { "Food": 2.183, "Coal": 1.284, "Oil": 0.217, "IronOre": 4.219, "RareEarths": 4.161, "NaturalGas": 0.172, "Timber": 1.083, "Bauxite": 1.947, "Uranium": 0.004 }
+    "resources": { "Food": 2.183, "Coal": 0.155, "Oil": 0.217, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.172, "Timber": 1.083, "Bauxite": 8.916, "Uranium": 0.004 }
   },
   // Haryana
   "in_hr": {
@@ -73,7 +73,7 @@
     "urbanization": 0.49,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 16, "CivilianIndustry": 3, "Infrastructure": 1 },
-    "resources": { "Food": 1.945, "Coal": 1.725, "Oil": 0.257, "IronOre": 1.687, "RareEarths": 2.916, "NaturalGas": 0.253, "Timber": 1.797, "Bauxite": 2.089, "Uranium": 0.005 }
+    "resources": { "Food": 1.945, "Coal": 0.155, "Oil": 0.257, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.253, "Timber": 1.797, "Bauxite": 0.159, "Uranium": 0.005 }
   },
   // Himachal Pradesh
   "in_hp": {
@@ -81,7 +81,7 @@
     "urbanization": 0.29,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.152, "Coal": 4.262, "Oil": 0.119, "IronOre": 3.714, "RareEarths": 4.259, "NaturalGas": 0.292, "Timber": 1.146, "Bauxite": 3.432, "Uranium": 0.005 }
+    "resources": { "Food": 1.152, "Coal": 0.155, "Oil": 0.119, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.292, "Timber": 1.146, "Bauxite": 0.159, "Uranium": 0.005 }
   },
   // Jammu and Kashmir
   "in_jk": {
@@ -89,7 +89,7 @@
     "urbanization": 0.64,
     "cultures": { "kashmiri": 0.55, "hindustani": 0.3, "punjabi": 0.075, "ladakhi": 0.02, "tibetan": 0.015, "bengali": 0.01, "gujarati": 0.01, "nepali": 0.01, "rajasthani": 0.01 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.187, "Coal": 2.023, "Oil": 0.508, "IronOre": 2.286, "RareEarths": 4.037, "NaturalGas": 0.499, "Timber": 2.938, "Bauxite": 1.395, "Uranium": 0.004 }
+    "resources": { "Food": 1.187, "Coal": 0.155, "Oil": 0.508, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.499, "Timber": 2.938, "Bauxite": 0.159, "Uranium": 0.004 }
   },
   // Jharkhand
   "in_jh": {
@@ -97,7 +97,7 @@
     "urbanization": 0.25,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 12, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.463, "Coal": 3.093, "Oil": 0.376, "IronOre": 1.778, "RareEarths": 1.616, "NaturalGas": 0.328, "Timber": 3.397, "Bauxite": 1.939, "Uranium": 0.004 }
+    "resources": { "Food": 2.463, "Coal": 14.676, "Oil": 0.376, "IronOre": 7.971, "RareEarths": 0.151, "NaturalGas": 0.328, "Timber": 3.397, "Bauxite": 7.164, "Uranium": 0.004 }
   },
   // Karnataka
   "in_ka": {
@@ -105,7 +105,7 @@
     "urbanization": 0.33,
     "cultures": { "kannada": 0.4217, "nepali": 0.347, "sindhi": 0.1735, "parsi": 0.0578 },
     "buildings": { "Agriculture": 33, "CivilianIndustry": 3, "Infrastructure": 1 },
-    "resources": { "Food": 1.492, "Coal": 3.279, "Oil": 0.318, "IronOre": 4.455, "RareEarths": 3.037, "NaturalGas": 0.849, "Timber": 2.881, "Bauxite": 3.046, "Uranium": 0.01 }
+    "resources": { "Food": 1.492, "Coal": 0.155, "Oil": 0.318, "IronOre": 11.886, "RareEarths": 0.151, "NaturalGas": 0.849, "Timber": 2.881, "Bauxite": 0.159, "Uranium": 0.01 }
   },
   // Kerala
   "in_kl": {
@@ -113,7 +113,7 @@
     "urbanization": 0.67,
     "cultures": { "malayali": 0.94, "tamil": 0.032, "kannada": 0.01, "hindustani": 0.008, "bengali": 0.005, "telugu": 0.005 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.637, "Coal": 4.463, "Oil": 0.605, "IronOre": 2.1, "RareEarths": 4.284, "NaturalGas": 0.617, "Timber": 1.966, "Bauxite": 3.737, "Uranium": 0.012 }
+    "resources": { "Food": 1.637, "Coal": 0.155, "Oil": 0.605, "IronOre": 0.142, "RareEarths": 33.54, "NaturalGas": 0.617, "Timber": 1.966, "Bauxite": 0.159, "Uranium": 0.012 }
   },
   // Ladakh
   "in_la": {
@@ -121,7 +121,7 @@
     "urbanization": 0.12,
     "cultures": { "ladakhi": 0.42, "kashmiri": 0.4, "tibetan": 0.1, "hindustani": 0.06, "punjabi": 0.02 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.331, "Coal": 2.729, "Oil": 0.224, "IronOre": 2.078, "RareEarths": 2.9, "NaturalGas": 0.279, "Timber": 2.175, "Bauxite": 3.606, "Uranium": 0.004 }
+    "resources": { "Food": 1.331, "Coal": 0.155, "Oil": 0.224, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.279, "Timber": 2.175, "Bauxite": 0.159, "Uranium": 0.004 }
   },
   // Lakshadweep
   "in_ld": {
@@ -129,7 +129,7 @@
     "urbanization": 0.465,
     "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.834, "Coal": 1.662, "Oil": 0.19, "IronOre": 3.527, "RareEarths": 3.361, "NaturalGas": 0.17, "Timber": 3.173, "Bauxite": 3.204, "Uranium": 0.004 }
+    "resources": { "Food": 1.834, "Coal": 0.155, "Oil": 0.19, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.17, "Timber": 3.173, "Bauxite": 0.159, "Uranium": 0.004 }
   },
   // Madhya Pradesh
   "in_mp": {
@@ -137,7 +137,7 @@
     "urbanization": 0.19,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 39, "CivilianIndustry": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.535, "Coal": 3.577, "Oil": 0.348, "IronOre": 2.761, "RareEarths": 2.5, "NaturalGas": 0.408, "Timber": 1.69, "Bauxite": 1.458, "Uranium": 0.005 }
+    "resources": { "Food": 1.535, "Coal": 11.259, "Oil": 0.348, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.408, "Timber": 1.69, "Bauxite": 0.159, "Uranium": 0.005 }
   },
   // Maharashtra
   "in_mh": {
@@ -145,7 +145,7 @@
     "urbanization": 0.47,
     "cultures": { "marathi": 0.3955, "nepali": 0.3627, "sindhi": 0.1814, "parsi": 0.0605 },
     "buildings": { "Agriculture": 51, "CivilianIndustry": 9, "Infrastructure": 1 },
-    "resources": { "Food": 2.348, "Coal": 1.706, "Oil": 0.663, "IronOre": 4.129, "RareEarths": 3.943, "NaturalGas": 0.531, "Timber": 1.211, "Bauxite": 4.156, "Uranium": 0.006 }
+    "resources": { "Food": 2.348, "Coal": 6.134, "Oil": 0.663, "IronOre": 1.708, "RareEarths": 0.151, "NaturalGas": 0.531, "Timber": 1.211, "Bauxite": 6.289, "Uranium": 0.006 }
   },
   // Manipur
   "in_mn": {
@@ -153,7 +153,7 @@
     "urbanization": 0.3,
     "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.037, "Coal": 4.486, "Oil": 0.329, "IronOre": 2.688, "RareEarths": 4.199, "NaturalGas": 0.277, "Timber": 1.063, "Bauxite": 3.646, "Uranium": 0.007 }
+    "resources": { "Food": 2.037, "Coal": 0.155, "Oil": 0.329, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.277, "Timber": 1.063, "Bauxite": 0.159, "Uranium": 0.007 }
   },
   // Meghalaya
   "in_ml": {
@@ -161,7 +161,7 @@
     "urbanization": 0.37,
     "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.337, "Coal": 1.947, "Oil": 0.539, "IronOre": 4.159, "RareEarths": 3.188, "NaturalGas": 0.488, "Timber": 0.85, "Bauxite": 3.032, "Uranium": 0.009 }
+    "resources": { "Food": 1.337, "Coal": 1.009, "Oil": 0.539, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.488, "Timber": 0.85, "Bauxite": 0.159, "Uranium": 0.009 }
   },
   // Mizoram
   "in_mz": {
@@ -169,7 +169,7 @@
     "urbanization": 0.35,
     "cultures": { "chin": 0.64, "kachin": 0.14, "bengali": 0.08, "assamese": 0.06, "hindustani": 0.05, "nepali": 0.03 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.729, "Coal": 3.004, "Oil": 0.246, "IronOre": 4.185, "RareEarths": 3.974, "NaturalGas": 0.345, "Timber": 1.674, "Bauxite": 3.948, "Uranium": 0.004 }
+    "resources": { "Food": 1.729, "Coal": 0.155, "Oil": 0.246, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.345, "Timber": 1.674, "Bauxite": 0.159, "Uranium": 0.004 }
   },
   // Nagaland
   "in_nl": {
@@ -177,7 +177,7 @@
     "urbanization": 0.43,
     "cultures": { "kachin": 0.3, "chin": 0.25, "assamese": 0.18, "bengali": 0.1, "hindustani": 0.09, "nepali": 0.05, "burmese": 0.03 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 0.913, "Coal": 1.333, "Oil": 0.512, "IronOre": 1.615, "RareEarths": 2.639, "NaturalGas": 0.388, "Timber": 2.845, "Bauxite": 3.989, "Uranium": 0.006 }
+    "resources": { "Food": 0.913, "Coal": 0.155, "Oil": 0.512, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.388, "Timber": 2.845, "Bauxite": 0.159, "Uranium": 0.006 }
   },
   // Odisha
   "in_or": {
@@ -185,7 +185,7 @@
     "urbanization": 0.23,
     "cultures": { "odia": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 12, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.217, "Coal": 2.897, "Oil": 0.533, "IronOre": 2.551, "RareEarths": 2.877, "NaturalGas": 0.707, "Timber": 3.07, "Bauxite": 3.36, "Uranium": 0.013 }
+    "resources": { "Food": 1.217, "Coal": 19.801, "Oil": 0.533, "IronOre": 43.202, "RareEarths": 25.193, "NaturalGas": 0.707, "Timber": 3.07, "Bauxite": 61.455, "Uranium": 0.013 }
   },
   // Punjab
   "in_pb": {
@@ -193,7 +193,7 @@
     "urbanization": 0.31,
     "cultures": { "punjabi": 0.905, "hindustani": 0.07, "rajasthani": 0.01, "bengali": 0.005, "nepali": 0.005, "odia": 0.005 },
     "buildings": { "Agriculture": 14, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.475, "Coal": 2.527, "Oil": 0.569, "IronOre": 2.932, "RareEarths": 2.589, "NaturalGas": 0.776, "Timber": 2.116, "Bauxite": 2.507, "Uranium": 0.016 }
+    "resources": { "Food": 1.475, "Coal": 0.155, "Oil": 0.569, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.776, "Timber": 2.116, "Bauxite": 0.159, "Uranium": 0.016 }
   },
   // Rajasthan
   "in_rj": {
@@ -201,7 +201,7 @@
     "urbanization": 0.25,
     "cultures": { "rajasthani": 0.6876, "nepali": 0.1874, "sindhi": 0.0937, "parsi": 0.0312 },
     "buildings": { "Agriculture": 30, "CivilianIndustry": 2, "Infrastructure": 1 },
-    "resources": { "Food": 2.027, "Coal": 3.217, "Oil": 0.435, "IronOre": 1.677, "RareEarths": 3.1, "NaturalGas": 0.586, "Timber": 2.122, "Bauxite": 3.214, "Uranium": 0.01 }
+    "resources": { "Food": 2.027, "Coal": 0.155, "Oil": 0.435, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.586, "Timber": 2.122, "Bauxite": 0.159, "Uranium": 0.01 }
   },
   // Tamil Nadu
   "in_tn": {
@@ -209,7 +209,7 @@
     "urbanization": 0.48,
     "cultures": { "tamil": 0.885, "telugu": 0.055, "kannada": 0.02, "hindustani": 0.015, "malayali": 0.015, "bengali": 0.005, "marathi": 0.005 },
     "buildings": { "Agriculture": 20, "CivilianIndustry": 4, "Infrastructure": 1 },
-    "resources": { "Food": 0.947, "Coal": 4.307, "Oil": 0.356, "IronOre": 1.708, "RareEarths": 4.45, "NaturalGas": 0.47, "Timber": 2.459, "Bauxite": 2.094, "Uranium": 0.019 }
+    "resources": { "Food": 0.947, "Coal": 0.155, "Oil": 0.356, "IronOre": 0.142, "RareEarths": 16.846, "NaturalGas": 0.47, "Timber": 2.459, "Bauxite": 0.159, "Uranium": 0.019 }
   },
   // Telangana
   "in_tg": {
@@ -217,7 +217,7 @@
     "urbanization": 0.3,
     "cultures": { "telugu": 0.4943, "nepali": 0.3034, "sindhi": 0.1517, "parsi": 0.0506 },
     "buildings": { "Agriculture": 25, "CivilianIndustry": 2, "Infrastructure": 1 },
-    "resources": { "Food": 0.809, "Coal": 3.757, "Oil": 0.214, "IronOre": 1.919, "RareEarths": 1.63, "NaturalGas": 0.27, "Timber": 0.959, "Bauxite": 3.945, "Uranium": 0.003 }
+    "resources": { "Food": 0.809, "Coal": 6.134, "Oil": 0.214, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.27, "Timber": 0.959, "Bauxite": 0.159, "Uranium": 0.003 }
   },
   // Uttar Pradesh
   "in_up": {
@@ -225,7 +225,7 @@
     "urbanization": 0.37,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 55, "CivilianIndustry": 6, "Infrastructure": 1 },
-    "resources": { "Food": 1.432, "Coal": 2.054, "Oil": 0.205, "IronOre": 2.305, "RareEarths": 2.595, "NaturalGas": 0.299, "Timber": 3.181, "Bauxite": 2.614, "Uranium": 0.006 }
+    "resources": { "Food": 1.432, "Coal": 2.718, "Oil": 0.205, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.299, "Timber": 3.181, "Bauxite": 0.159, "Uranium": 0.006 }
   },
   // Uttarakhand
   "in_ut": {
@@ -233,7 +233,7 @@
     "urbanization": 0.4,
     "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.275, "Coal": 4.256, "Oil": 0.735, "IronOre": 4.282, "RareEarths": 4.147, "NaturalGas": 0.943, "Timber": 1.176, "Bauxite": 4.213, "Uranium": 0.015 }
+    "resources": { "Food": 2.275, "Coal": 0.155, "Oil": 0.735, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.943, "Timber": 1.176, "Bauxite": 0.159, "Uranium": 0.015 }
   },
   // West Bengal
   "in_wb": {
@@ -241,6 +241,6 @@
     "urbanization": 0.46,
     "cultures": { "bengali": 0.7, "bengali_muslim": 0.23, "hindustani": 0.04, "nepali": 0.015, "odia": 0.008, "punjabi": 0.004, "tamil": 0.003 },
     "buildings": { "Agriculture": 25, "CivilianIndustry": 4, "Infrastructure": 1 },
-    "resources": { "Food": 1.801, "Coal": 4.468, "Oil": 1.018, "IronOre": 2.205, "RareEarths": 1.749, "NaturalGas": 0.568, "Timber": 0.757, "Bauxite": 4.189, "Uranium": 0.008 }
+    "resources": { "Food": 1.801, "Coal": 3.572, "Oil": 1.018, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.568, "Timber": 0.757, "Bauxite": 0.159, "Uranium": 0.008 }
   }
 }

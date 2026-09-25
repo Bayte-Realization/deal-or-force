@@ -17,7 +17,7 @@
     "urbanization": 0.68,
     "cultures": { "acehnese": 0.7, "javanese": 0.1, "malay": 0.095, "batak": 0.08, "minangkabau": 0.015, "chinese_diaspora": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.439, "Coal": 3.872, "Oil": 0.949, "IronOre": 0.366, "RareEarths": 0.138, "NaturalGas": 0.47, "Timber": 1.146, "Bauxite": 2.359, "Uranium": 0.011 }
+    "resources": { "Food": 2.439, "Coal": 0.157, "Oil": 0.949, "IronOre": 0.366, "RareEarths": 0.138, "NaturalGas": 0.47, "Timber": 1.146, "Bauxite": 0.171, "Uranium": 0.011 }
   },
   // Bangka Belitung Islands
   "id_bb": {
@@ -25,7 +25,7 @@
     "urbanization": 0.3,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.886, "Coal": 3.737, "Oil": 0.436, "IronOre": 0.172, "RareEarths": 0.039, "NaturalGas": 0.406, "Timber": 2.022, "Bauxite": 3.453, "Uranium": 0.009 }
+    "resources": { "Food": 1.886, "Coal": 0.157, "Oil": 0.436, "IronOre": 0.172, "RareEarths": 0.039, "NaturalGas": 0.406, "Timber": 2.022, "Bauxite": 0.171, "Uranium": 0.009 }
   },
   // Bengkulu
   "id_be": {
@@ -33,7 +33,7 @@
     "urbanization": 0.78,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.191, "Coal": 2.576, "Oil": 0.778, "IronOre": 0.31, "RareEarths": 0.087, "NaturalGas": 0.437, "Timber": 0.883, "Bauxite": 2.141, "Uranium": 0.006 }
+    "resources": { "Food": 2.191, "Coal": 1.764, "Oil": 0.778, "IronOre": 0.31, "RareEarths": 0.087, "NaturalGas": 0.437, "Timber": 0.883, "Bauxite": 0.171, "Uranium": 0.006 }
   },
   // Central Java
   "id_jt": {
@@ -41,7 +41,7 @@
     "urbanization": 0.69,
     "cultures": { "javanese": 0.7784, "malay": 0.1741, "chinese_diaspora": 0.0139, "moro": 0.0116, "timorese": 0.0093, "arab_yemeni": 0.007, "indian_diaspora": 0.0058 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.73, "Coal": 3.116, "Oil": 0.618, "IronOre": 0.302, "RareEarths": 0.109, "NaturalGas": 0.751, "Timber": 1.245, "Bauxite": 4.416, "Uranium": 0.012 }
+    "resources": { "Food": 1.73, "Coal": 0.157, "Oil": 0.618, "IronOre": 0.302, "RareEarths": 0.109, "NaturalGas": 0.751, "Timber": 1.245, "Bauxite": 0.171, "Uranium": 0.012 }
   },
   // Central Kalimantan
   "id_kt": {
@@ -49,7 +49,7 @@
     "urbanization": 0.26,
     "cultures": { "malay": 0.6023, "dayak": 0.2331, "chinese_diaspora": 0.0482, "moro": 0.0402, "timorese": 0.0321, "arab_yemeni": 0.0241, "indian_diaspora": 0.0201 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 2.251, "Coal": 2.131, "Oil": 0.25, "IronOre": 0.135, "RareEarths": 0.032, "NaturalGas": 0.5, "Timber": 3.322, "Bauxite": 3.814, "Uranium": 0.006 }
+    "resources": { "Food": 2.251, "Coal": 6.586, "Oil": 0.25, "IronOre": 0.135, "RareEarths": 0.032, "NaturalGas": 0.5, "Timber": 3.322, "Bauxite": 0.171, "Uranium": 0.006 }
   },
   // Central Sulawesi
   "id_st": {
@@ -57,7 +57,7 @@
     "urbanization": 0.74,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.308, "Coal": 1.835, "Oil": 0.487, "IronOre": 0.217, "RareEarths": 0.072, "NaturalGas": 0.429, "Timber": 1.49, "Bauxite": 3.872, "Uranium": 0.016 }
+    "resources": { "Food": 1.308, "Coal": 0.157, "Oil": 0.487, "IronOre": 0.217, "RareEarths": 0.072, "NaturalGas": 0.429, "Timber": 1.49, "Bauxite": 0.171, "Uranium": 0.016 }
   },
   // East Java
   "id_ji": {
@@ -65,7 +65,7 @@
     "urbanization": 0.67,
     "cultures": { "javanese": 0.7784, "malay": 0.1741, "chinese_diaspora": 0.0139, "moro": 0.0116, "timorese": 0.0093, "arab_yemeni": 0.007, "indian_diaspora": 0.0058 },
     "buildings": { "Agriculture": 8, "CivilianIndustry": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.506, "Coal": 2.589, "Oil": 0.55, "IronOre": 0.289, "RareEarths": 0.062, "NaturalGas": 0.549, "Timber": 1.215, "Bauxite": 3.043, "Uranium": 0.006 }
+    "resources": { "Food": 1.506, "Coal": 0.157, "Oil": 0.55, "IronOre": 0.289, "RareEarths": 0.062, "NaturalGas": 0.549, "Timber": 1.215, "Bauxite": 0.171, "Uranium": 0.006 }
   },
   // East Kalimantan
   "id_ki": {
@@ -73,7 +73,7 @@
     "urbanization": 0.39,
     "cultures": { "malay": 0.6023, "dayak": 0.2331, "chinese_diaspora": 0.0482, "moro": 0.0402, "timorese": 0.0321, "arab_yemeni": 0.0241, "indian_diaspora": 0.0201 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 0.76, "Coal": 1.572, "Oil": 0.169, "IronOre": 0.095, "RareEarths": 0.026, "NaturalGas": 0.101, "Timber": 3.272, "Bauxite": 4.086, "Uranium": 0.002 }
+    "resources": { "Food": 0.76, "Coal": 40.339, "Oil": 0.169, "IronOre": 0.095, "RareEarths": 0.026, "NaturalGas": 0.101, "Timber": 3.272, "Bauxite": 0.171, "Uranium": 0.002 }
   },
   // East Nusa Tenggara
   "id_nt": {
@@ -81,7 +81,7 @@
     "urbanization": 0.53,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.674, "Coal": 2.839, "Oil": 0.285, "IronOre": 0.26, "RareEarths": 0.085, "NaturalGas": 0.732, "Timber": 0.974, "Bauxite": 1.333, "Uranium": 0.011 }
+    "resources": { "Food": 1.674, "Coal": 0.157, "Oil": 0.285, "IronOre": 0.26, "RareEarths": 0.085, "NaturalGas": 0.732, "Timber": 0.974, "Bauxite": 0.171, "Uranium": 0.011 }
   },
   // Jambi
   "id_ja": {
@@ -89,7 +89,7 @@
     "urbanization": 0.27,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 4, "Infrastructure": 1 },
-    "resources": { "Food": 2.391, "Coal": 3.328, "Oil": 0.465, "IronOre": 0.187, "RareEarths": 0.057, "NaturalGas": 0.392, "Timber": 1.025, "Bauxite": 4.347, "Uranium": 0.009 }
+    "resources": { "Food": 2.391, "Coal": 1.764, "Oil": 0.465, "IronOre": 0.187, "RareEarths": 0.057, "NaturalGas": 0.392, "Timber": 1.025, "Bauxite": 0.171, "Uranium": 0.009 }
   },
   // Lampung
   "id_la": {
@@ -97,7 +97,7 @@
     "urbanization": 0.42,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
-    "resources": { "Food": 1.215, "Coal": 2.882, "Oil": 0.496, "IronOre": 0.291, "RareEarths": 0.08, "NaturalGas": 0.73, "Timber": 0.816, "Bauxite": 2.701, "Uranium": 0.007 }
+    "resources": { "Food": 1.215, "Coal": 0.157, "Oil": 0.496, "IronOre": 0.291, "RareEarths": 0.08, "NaturalGas": 0.73, "Timber": 0.816, "Bauxite": 0.171, "Uranium": 0.007 }
   },
   // Maluku
   "id_ma": {
@@ -105,7 +105,7 @@
     "urbanization": 0.64,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.104, "Coal": 3.1, "Oil": 0.627, "IronOre": 0.219, "RareEarths": 0.118, "NaturalGas": 0.893, "Timber": 3.299, "Bauxite": 2.267, "Uranium": 0.02 }
+    "resources": { "Food": 1.104, "Coal": 0.157, "Oil": 0.627, "IronOre": 0.219, "RareEarths": 0.118, "NaturalGas": 0.893, "Timber": 3.299, "Bauxite": 0.171, "Uranium": 0.02 }
   },
   // North Maluku
   "id_mu": {
@@ -113,7 +113,7 @@
     "urbanization": 0.52,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 2.367, "Coal": 4.279, "Oil": 0.325, "IronOre": 0.153, "RareEarths": 0.079, "NaturalGas": 0.506, "Timber": 1.239, "Bauxite": 2.189, "Uranium": 0.005 }
+    "resources": { "Food": 2.367, "Coal": 0.157, "Oil": 0.325, "IronOre": 0.153, "RareEarths": 0.079, "NaturalGas": 0.506, "Timber": 1.239, "Bauxite": 0.171, "Uranium": 0.005 }
   },
   // North Sulawesi
   "id_sa": {
@@ -121,7 +121,7 @@
     "urbanization": 0.68,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.204, "Coal": 4.037, "Oil": 0.249, "IronOre": 0.113, "RareEarths": 0.034, "NaturalGas": 0.144, "Timber": 2.381, "Bauxite": 3.78, "Uranium": 0.004 }
+    "resources": { "Food": 1.204, "Coal": 0.157, "Oil": 0.249, "IronOre": 0.113, "RareEarths": 0.034, "NaturalGas": 0.144, "Timber": 2.381, "Bauxite": 0.171, "Uranium": 0.004 }
   },
   // North Sumatra
   "id_su": {
@@ -129,7 +129,7 @@
     "urbanization": 0.52,
     "cultures": { "batak": 0.44, "javanese": 0.33, "malay": 0.13, "minangkabau": 0.04, "chinese_diaspora": 0.035, "acehnese": 0.025 },
     "buildings": { "Agriculture": 9, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.186, "Coal": 2.302, "Oil": 0.593, "IronOre": 0.202, "RareEarths": 0.078, "NaturalGas": 0.456, "Timber": 1.746, "Bauxite": 2.239, "Uranium": 0.014 }
+    "resources": { "Food": 1.186, "Coal": 0.157, "Oil": 0.593, "IronOre": 0.202, "RareEarths": 0.078, "NaturalGas": 0.456, "Timber": 1.746, "Bauxite": 0.171, "Uranium": 0.014 }
   },
   // Papua
   "id_pa": {
@@ -137,7 +137,7 @@
     "urbanization": 0.36,
     "cultures": { "papuan": 0.83, "javanese": 0.09, "malay": 0.045, "buginese": 0.02, "batak": 0.01, "chinese_diaspora": 0.005 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
-    "resources": { "Food": 1.003, "Coal": 1.956, "Oil": 0.348, "IronOre": 0.247, "RareEarths": 0.097, "NaturalGas": 0.596, "Timber": 3.181, "Bauxite": 3.104, "Uranium": 0.008 }
+    "resources": { "Food": 1.003, "Coal": 0.157, "Oil": 0.348, "IronOre": 0.247, "RareEarths": 0.097, "NaturalGas": 0.596, "Timber": 3.181, "Bauxite": 0.171, "Uranium": 0.008 }
   },
   // Riau
   "id_ri": {
@@ -145,7 +145,7 @@
     "urbanization": 0.22,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 7, "Infrastructure": 1 },
-    "resources": { "Food": 1.572, "Coal": 4.387, "Oil": 0.56, "IronOre": 0.186, "RareEarths": 0.103, "NaturalGas": 0.98, "Timber": 2.125, "Bauxite": 2.597, "Uranium": 0.013 }
+    "resources": { "Food": 1.572, "Coal": 0.157, "Oil": 0.56, "IronOre": 0.186, "RareEarths": 0.103, "NaturalGas": 0.98, "Timber": 2.125, "Bauxite": 13.316, "Uranium": 0.013 }
   },
   // South Kalimantan
   "id_ks": {
@@ -153,7 +153,7 @@
     "urbanization": 0.53,
     "cultures": { "malay": 0.6023, "dayak": 0.2331, "chinese_diaspora": 0.0482, "moro": 0.0402, "timorese": 0.0321, "arab_yemeni": 0.0241, "indian_diaspora": 0.0201 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.939, "Coal": 2.281, "Oil": 0.563, "IronOre": 0.478, "RareEarths": 0.121, "NaturalGas": 1.048, "Timber": 2.028, "Bauxite": 1.705, "Uranium": 0.01 }
+    "resources": { "Food": 1.939, "Coal": 24.266, "Oil": 0.563, "IronOre": 0.478, "RareEarths": 0.121, "NaturalGas": 1.048, "Timber": 2.028, "Bauxite": 0.171, "Uranium": 0.01 }
   },
   // South Sulawesi
   "id_sn": {
@@ -161,7 +161,7 @@
     "urbanization": 0.68,
     "cultures": { "buginese": 0.7979, "malay": 0.1587, "chinese_diaspora": 0.0127, "moro": 0.0106, "timorese": 0.0085, "arab_yemeni": 0.0063, "indian_diaspora": 0.0053 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.077, "Coal": 4.161, "Oil": 0.154, "IronOre": 0.155, "RareEarths": 0.042, "NaturalGas": 0.311, "Timber": 2.744, "Bauxite": 4.239, "Uranium": 0.003 }
+    "resources": { "Food": 2.077, "Coal": 0.157, "Oil": 0.154, "IronOre": 0.155, "RareEarths": 0.042, "NaturalGas": 0.311, "Timber": 2.744, "Bauxite": 0.171, "Uranium": 0.003 }
   },
   // South Sumatra
   "id_ss": {
@@ -169,7 +169,7 @@
     "urbanization": 0.3,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 11, "CivilianIndustry": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.37, "Coal": 1.851, "Oil": 0.879, "IronOre": 0.387, "RareEarths": 0.114, "NaturalGas": 0.389, "Timber": 1.199, "Bauxite": 1.721, "Uranium": 0.015 }
+    "resources": { "Food": 2.37, "Coal": 6.586, "Oil": 0.879, "IronOre": 0.387, "RareEarths": 0.114, "NaturalGas": 0.389, "Timber": 1.199, "Bauxite": 0.171, "Uranium": 0.015 }
   },
   // Southeast Sulawesi
   "id_sg": {
@@ -177,7 +177,7 @@
     "urbanization": 0.42,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.486, "Coal": 3.997, "Oil": 0.405, "IronOre": 0.286, "RareEarths": 0.112, "NaturalGas": 0.711, "Timber": 1.772, "Bauxite": 2.671, "Uranium": 0.019 }
+    "resources": { "Food": 2.486, "Coal": 0.157, "Oil": 0.405, "IronOre": 0.286, "RareEarths": 0.112, "NaturalGas": 0.711, "Timber": 1.772, "Bauxite": 0.171, "Uranium": 0.019 }
   },
   // West Java
   "id_jb": {
@@ -185,7 +185,7 @@
     "urbanization": 0.8,
     "cultures": { "javanese": 0.7784, "sundanese": 0.215, "malay": 0.0052, "chinese_diaspora": 0.0004, "moro": 0.0003, "timorese": 0.0003, "arab_yemeni": 0.0002, "indian_diaspora": 0.0002 },
     "buildings": { "Agriculture": 10, "CivilianIndustry": 5, "Infrastructure": 3 },
-    "resources": { "Food": 1.884, "Coal": 1.492, "Oil": 0.629, "IronOre": 0.479, "RareEarths": 0.117, "NaturalGas": 0.821, "Timber": 0.825, "Bauxite": 1.941, "Uranium": 0.011 }
+    "resources": { "Food": 1.884, "Coal": 0.157, "Oil": 0.629, "IronOre": 0.479, "RareEarths": 0.117, "NaturalGas": 0.821, "Timber": 0.825, "Bauxite": 0.171, "Uranium": 0.011 }
   },
   // West Kalimantan
   "id_kb": {
@@ -193,7 +193,7 @@
     "urbanization": 0.25,
     "cultures": { "malay": 0.6023, "dayak": 0.2331, "chinese_diaspora": 0.0482, "moro": 0.0402, "timorese": 0.0321, "arab_yemeni": 0.0241, "indian_diaspora": 0.0201 },
     "buildings": { "Agriculture": 6, "Infrastructure": 1 },
-    "resources": { "Food": 2.217, "Coal": 1.853, "Oil": 0.267, "IronOre": 0.099, "RareEarths": 0.045, "NaturalGas": 0.335, "Timber": 3.153, "Bauxite": 3.004, "Uranium": 0.005 }
+    "resources": { "Food": 2.217, "Coal": 0.157, "Oil": 0.267, "IronOre": 0.099, "RareEarths": 0.045, "NaturalGas": 0.335, "Timber": 3.153, "Bauxite": 74.661, "Uranium": 0.005 }
   },
   // West Nusa Tenggara
   "id_nb": {
@@ -201,7 +201,7 @@
     "urbanization": 0.76,
     "cultures": { "balinese": 0.52, "javanese": 0.23, "buginese": 0.11, "malay": 0.1, "timorese": 0.025, "chinese_diaspora": 0.015 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.407, "Coal": 4.191, "Oil": 0.773, "IronOre": 0.403, "RareEarths": 0.099, "NaturalGas": 0.765, "Timber": 2.343, "Bauxite": 1.762, "Uranium": 0.02 }
+    "resources": { "Food": 1.407, "Coal": 0.157, "Oil": 0.773, "IronOre": 0.403, "RareEarths": 0.099, "NaturalGas": 0.765, "Timber": 2.343, "Bauxite": 0.171, "Uranium": 0.02 }
   },
   // West Papua
   "id_pb": {
@@ -209,7 +209,7 @@
     "urbanization": 0.42,
     "cultures": { "papuan": 0.97, "malay": 0.0236, "chinese_diaspora": 0.0019, "moro": 0.0016, "timorese": 0.0013, "arab_yemeni": 0.0009, "indian_diaspora": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.893, "Coal": 1.486, "Oil": 0.503, "IronOre": 0.319, "RareEarths": 0.067, "NaturalGas": 0.643, "Timber": 2.866, "Bauxite": 2.667, "Uranium": 0.01 }
+    "resources": { "Food": 1.893, "Coal": 0.157, "Oil": 0.503, "IronOre": 0.319, "RareEarths": 0.067, "NaturalGas": 0.643, "Timber": 2.866, "Bauxite": 0.171, "Uranium": 0.01 }
   },
   // West Sulawesi
   "id_sr": {
@@ -217,7 +217,7 @@
     "urbanization": 0.75,
     "cultures": { "malay": 0.7853, "chinese_diaspora": 0.0628, "moro": 0.0524, "timorese": 0.0419, "arab_yemeni": 0.0314, "indian_diaspora": 0.0262 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.471, "Coal": 3.458, "Oil": 0.456, "IronOre": 0.284, "RareEarths": 0.079, "NaturalGas": 0.575, "Timber": 1.152, "Bauxite": 3.005, "Uranium": 0.013 }
+    "resources": { "Food": 1.471, "Coal": 0.157, "Oil": 0.456, "IronOre": 0.284, "RareEarths": 0.079, "NaturalGas": 0.575, "Timber": 1.152, "Bauxite": 0.171, "Uranium": 0.013 }
   },
   // West Sumatra
   "id_sb": {
@@ -225,6 +225,6 @@
     "urbanization": 0.8,
     "cultures": { "minangkabau": 0.97, "malay": 0.0236, "chinese_diaspora": 0.0019, "moro": 0.0016, "timorese": 0.0013, "arab_yemeni": 0.0009, "indian_diaspora": 0.0008 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.236, "Coal": 1.535, "Oil": 0.656, "IronOre": 0.417, "RareEarths": 0.106, "NaturalGas": 0.798, "Timber": 2.027, "Bauxite": 4.061, "Uranium": 0.014 }
+    "resources": { "Food": 2.236, "Coal": 0.157, "Oil": 0.656, "IronOre": 0.417, "RareEarths": 0.106, "NaturalGas": 0.798, "Timber": 2.027, "Bauxite": 0.171, "Uranium": 0.014 }
   }
 }

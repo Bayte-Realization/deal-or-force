@@ -17,7 +17,7 @@
     "urbanization": 0.97,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.197, "Coal": 0.309, "Oil": 0.529, "IronOre": 0.196, "RareEarths": 0.044, "NaturalGas": 0.485, "Timber": 1.107, "Bauxite": 0.101, "Uranium": 0.886 }
+    "resources": { "Food": 1.197, "Coal": 0.309, "Oil": 0.529, "IronOre": 0.196, "RareEarths": 0.044, "NaturalGas": 0.485, "Timber": 1.107, "Bauxite": 0.101, "Uranium": 1.045 }
   },
   // Jizzakh
   "uz_ji": {
@@ -25,7 +25,7 @@
     "urbanization": 0.21,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.081, "Coal": 0.165, "Oil": 0.112, "IronOre": 0.074, "RareEarths": 0.039, "NaturalGas": 0.179, "Timber": 0.799, "Bauxite": 0.048, "Uranium": 0.577 }
+    "resources": { "Food": 2.081, "Coal": 0.165, "Oil": 0.112, "IronOre": 0.074, "RareEarths": 0.039, "NaturalGas": 0.179, "Timber": 0.799, "Bauxite": 0.048, "Uranium": 0.537 }
   },
   // Karakalpakstan
   "uz_qr": {
@@ -33,7 +33,7 @@
     "urbanization": 0.33,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 2.243, "Coal": 0.148, "Oil": 0.151, "IronOre": 0.111, "RareEarths": 0.031, "NaturalGas": 0.209, "Timber": 2.714, "Bauxite": 0.025, "Uranium": 0.31 }
+    "resources": { "Food": 2.243, "Coal": 0.148, "Oil": 0.151, "IronOre": 0.111, "RareEarths": 0.031, "NaturalGas": 0.209, "Timber": 2.714, "Bauxite": 0.025, "Uranium": 0.03 }
   },
   // Namangan
   "uz_ng": {
@@ -41,7 +41,7 @@
     "urbanization": 0.56,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.944, "Coal": 0.322, "Oil": 0.414, "IronOre": 0.119, "RareEarths": 0.039, "NaturalGas": 0.561, "Timber": 1.511, "Bauxite": 0.101, "Uranium": 0.438 }
+    "resources": { "Food": 1.944, "Coal": 0.322, "Oil": 0.414, "IronOre": 0.119, "RareEarths": 0.039, "NaturalGas": 0.561, "Timber": 1.511, "Bauxite": 0.101, "Uranium": 0.03 }
   },
   // Navoiy
   "uz_nw": {
@@ -49,7 +49,7 @@
     "urbanization": 0.52,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.382, "Coal": 0.608, "Oil": 0.691, "IronOre": 0.433, "RareEarths": 0.059, "NaturalGas": 0.562, "Timber": 1.133, "Bauxite": 0.096, "Uranium": 0.81 }
+    "resources": { "Food": 1.382, "Coal": 0.608, "Oil": 0.691, "IronOre": 0.433, "RareEarths": 0.059, "NaturalGas": 0.562, "Timber": 1.133, "Bauxite": 0.096, "Uranium": 3.584 }
   },
   // Qashqadaryo
   "uz_qa": {
@@ -57,7 +57,7 @@
     "urbanization": 0.46,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.614, "Coal": 0.262, "Oil": 0.391, "IronOre": 0.202, "RareEarths": 0.052, "NaturalGas": 0.423, "Timber": 1.031, "Bauxite": 0.071, "Uranium": 0.662 }
+    "resources": { "Food": 1.614, "Coal": 0.262, "Oil": 0.391, "IronOre": 0.202, "RareEarths": 0.052, "NaturalGas": 0.423, "Timber": 1.031, "Bauxite": 0.071, "Uranium": 0.03 }
   },
   // Samarqand
   "uz_sa": {
@@ -65,7 +65,7 @@
     "urbanization": 0.56,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.07, "Coal": 0.159, "Oil": 0.262, "IronOre": 0.065, "RareEarths": 0.026, "NaturalGas": 0.12, "Timber": 2.37, "Bauxite": 0.031, "Uranium": 0.397 }
+    "resources": { "Food": 2.07, "Coal": 0.159, "Oil": 0.262, "IronOre": 0.065, "RareEarths": 0.026, "NaturalGas": 0.12, "Timber": 2.37, "Bauxite": 0.031, "Uranium": 0.03 }
   },
   // Surxondaryo
   "uz_su": {
@@ -73,7 +73,7 @@
     "urbanization": 0.43,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 0.891, "Coal": 0.202, "Oil": 0.471, "IronOre": 0.129, "RareEarths": 0.043, "NaturalGas": 0.287, "Timber": 0.848, "Bauxite": 0.08, "Uranium": 0.699 }
+    "resources": { "Food": 0.891, "Coal": 0.202, "Oil": 0.471, "IronOre": 0.129, "RareEarths": 0.043, "NaturalGas": 0.287, "Timber": 0.848, "Bauxite": 0.08, "Uranium": 0.03 }
   },
   // Tashkent
   "uz_to": {
@@ -81,6 +81,6 @@
     "urbanization": 0.58,
     "cultures": { "uzbek": 0.8419, "tajik": 0.0493, "kazakh": 0.0242, "russian": 0.0232, "karakalpak": 0.0211, "kyrgyz": 0.0091, "persian": 0.006, "turkmen": 0.006, "korean": 0.005, "tatar": 0.005, "azerbaijani": 0.003, "armenian": 0.002, "ukrainian": 0.002, "uyghur": 0.002 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.058, "Coal": 0.267, "Oil": 0.233, "IronOre": 0.202, "RareEarths": 0.027, "NaturalGas": 0.442, "Timber": 2.993, "Bauxite": 0.079, "Uranium": 0.929 }
+    "resources": { "Food": 2.058, "Coal": 0.267, "Oil": 0.233, "IronOre": 0.202, "RareEarths": 0.027, "NaturalGas": 0.442, "Timber": 2.993, "Bauxite": 0.079, "Uranium": 0.03 }
   }
 }

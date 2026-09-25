@@ -17,7 +17,7 @@
     "urbanization": 0.75,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 3 },
-    "resources": { "Food": 0.828, "Coal": 2.655, "Oil": 6.348, "IronOre": 0.201, "RareEarths": 3.814, "NaturalGas": 6.004, "Timber": 1.049, "Bauxite": 0.065, "Uranium": 0.978 }
+    "resources": { "Food": 0.828, "Coal": 3.231, "Oil": 0.399, "IronOre": 0.201, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.049, "Bauxite": 0.065, "Uranium": 0.038 }
   },
   // Alaska
   "us_ak": {
@@ -25,7 +25,7 @@
     "urbanization": 0.6,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.814, "Coal": 2.516, "Oil": 8.626, "IronOre": 0.454, "RareEarths": 3.116, "NaturalGas": 7.783, "Timber": 2.732, "Bauxite": 0.104, "Uranium": 0.998 }
+    "resources": { "Food": 1.814, "Coal": 0.161, "Oil": 14.907, "IronOre": 0.454, "RareEarths": 0.13, "NaturalGas": 5.595, "Timber": 2.732, "Bauxite": 0.104, "Uranium": 0.038 }
   },
   // Arizona
   "us_az": {
@@ -33,7 +33,7 @@
     "urbanization": 0.74,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.298, "Coal": 2.708, "Oil": 12.122, "IronOre": 0.201, "RareEarths": 1.355, "NaturalGas": 10.818, "Timber": 2.682, "Bauxite": 0.08, "Uranium": 0.756 }
+    "resources": { "Food": 2.298, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.201, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.682, "Bauxite": 0.08, "Uranium": 1.788 }
   },
   // Arkansas
   "us_ar": {
@@ -41,7 +41,7 @@
     "urbanization": 0.67,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.332, "Coal": 3.142, "Oil": 12.317, "IronOre": 0.19, "RareEarths": 2.04, "NaturalGas": 3.842, "Timber": 2.809, "Bauxite": 0.051, "Uranium": 0.498 }
+    "resources": { "Food": 1.332, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.19, "RareEarths": 0.13, "NaturalGas": 3.852, "Timber": 2.809, "Bauxite": 0.051, "Uranium": 0.038 }
   },
   // California
   "us_ca": {
@@ -49,7 +49,7 @@
     "urbanization": 0.87,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 12, "CivilianIndustry": 4, "Infrastructure": 3 },
-    "resources": { "Food": 0.96, "Coal": 1.703, "Oil": 11.868, "IronOre": 0.216, "RareEarths": 2.518, "NaturalGas": 8.533, "Timber": 3.218, "Bauxite": 0.108, "Uranium": 0.521 }
+    "resources": { "Food": 0.96, "Coal": 0.161, "Oil": 11.28, "IronOre": 0.216, "RareEarths": 106.6, "NaturalGas": 0.366, "Timber": 3.218, "Bauxite": 0.108, "Uranium": 0.038 }
   },
   // Colorado
   "us_co": {
@@ -57,7 +57,7 @@
     "urbanization": 0.77,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 0.79, "Coal": 3.462, "Oil": 5.492, "IronOre": 0.179, "RareEarths": 3.895, "NaturalGas": 4.551, "Timber": 2.397, "Bauxite": 0.084, "Uranium": 0.856 }
+    "resources": { "Food": 0.79, "Coal": 3.231, "Oil": 14.907, "IronOre": 0.179, "RareEarths": 0.13, "NaturalGas": 14.31, "Timber": 2.397, "Bauxite": 0.084, "Uranium": 0.038 }
   },
   // Connecticut
   "us_ct": {
@@ -65,7 +65,7 @@
     "urbanization": 0.94,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.261, "Coal": 1.456, "Oil": 12.12, "IronOre": 0.498, "RareEarths": 1.302, "NaturalGas": 4.612, "Timber": 1.381, "Bauxite": 0.126, "Uranium": 0.809 }
+    "resources": { "Food": 2.261, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.498, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.381, "Bauxite": 0.126, "Uranium": 0.038 }
   },
   // Florida
   "us_fl": {
@@ -73,7 +73,7 @@
     "urbanization": 0.93,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.598, "Coal": 3.155, "Oil": 6.888, "IronOre": 0.253, "RareEarths": 1.705, "NaturalGas": 5.203, "Timber": 2.216, "Bauxite": 0.18, "Uranium": 0.809 }
+    "resources": { "Food": 1.598, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.253, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.216, "Bauxite": 0.18, "Uranium": 0.038 }
   },
   // Georgia
   "us_ga": {
@@ -81,7 +81,7 @@
     "urbanization": 0.83,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.15, "Coal": 2.96, "Oil": 8.48, "IronOre": 0.187, "RareEarths": 2.005, "NaturalGas": 6.06, "Timber": 3.044, "Bauxite": 0.204, "Uranium": 0.415 }
+    "resources": { "Food": 2.15, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.187, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 3.044, "Bauxite": 0.204, "Uranium": 0.038 }
   },
   // Hawaii
   "us_hi": {
@@ -89,7 +89,7 @@
     "urbanization": 0.95,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.21, "Coal": 2.295, "Oil": 6.379, "IronOre": 0.153, "RareEarths": 1.806, "NaturalGas": 6.349, "Timber": 2.005, "Bauxite": 0.043, "Uranium": 0.676 }
+    "resources": { "Food": 1.21, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.153, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.005, "Bauxite": 0.043, "Uranium": 0.038 }
   },
   // Idaho
   "us_id": {
@@ -97,7 +97,7 @@
     "urbanization": 0.45,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.596, "Coal": 1.64, "Oil": 6.878, "IronOre": 0.335, "RareEarths": 3.868, "NaturalGas": 6.295, "Timber": 1.042, "Bauxite": 0.073, "Uranium": 0.762 }
+    "resources": { "Food": 1.596, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.335, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.042, "Bauxite": 0.073, "Uranium": 0.038 }
   },
   // Illinois
   "us_il": {
@@ -105,7 +105,7 @@
     "urbanization": 0.93,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.006, "Coal": 2.703, "Oil": 10.561, "IronOre": 0.242, "RareEarths": 4.101, "NaturalGas": 10.267, "Timber": 2.464, "Bauxite": 0.1, "Uranium": 0.945 }
+    "resources": { "Food": 1.006, "Coal": 9.37, "Oil": 0.399, "IronOre": 0.242, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.464, "Bauxite": 0.1, "Uranium": 0.038 }
   },
   // Indiana
   "us_in": {
@@ -113,7 +113,7 @@
     "urbanization": 0.65,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 0.885, "Coal": 3.365, "Oil": 5.68, "IronOre": 0.371, "RareEarths": 3.154, "NaturalGas": 5.456, "Timber": 1.249, "Bauxite": 0.062, "Uranium": 0.764 }
+    "resources": { "Food": 0.885, "Coal": 4.766, "Oil": 0.399, "IronOre": 0.371, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.249, "Bauxite": 0.062, "Uranium": 0.038 }
   },
   // Iowa
   "us_ia": {
@@ -121,7 +121,7 @@
     "urbanization": 0.6,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.097, "Coal": 2.823, "Oil": 6.452, "IronOre": 0.093, "RareEarths": 2.139, "NaturalGas": 4.711, "Timber": 1.385, "Bauxite": 0.037, "Uranium": 0.871 }
+    "resources": { "Food": 1.097, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.093, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.385, "Bauxite": 0.037, "Uranium": 0.038 }
   },
   // Kansas
   "us_ks": {
@@ -129,7 +129,7 @@
     "urbanization": 0.7,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.589, "Coal": 2.81, "Oil": 7.103, "IronOre": 0.252, "RareEarths": 2.97, "NaturalGas": 4.357, "Timber": 2.396, "Bauxite": 0.112, "Uranium": 0.656 }
+    "resources": { "Food": 1.589, "Coal": 0.161, "Oil": 2.937, "IronOre": 0.252, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.396, "Bauxite": 0.112, "Uranium": 0.038 }
   },
   // Kentucky
   "us_ky": {
@@ -137,7 +137,7 @@
     "urbanization": 0.74,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.1, "Coal": 2.669, "Oil": 11.86, "IronOre": 0.252, "RareEarths": 3.338, "NaturalGas": 10.707, "Timber": 2.259, "Bauxite": 0.107, "Uranium": 0.679 }
+    "resources": { "Food": 2.1, "Coal": 7.835, "Oil": 0.399, "IronOre": 0.252, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.259, "Bauxite": 0.107, "Uranium": 0.038 }
   },
   // Louisiana
   "us_la": {
@@ -145,7 +145,7 @@
     "urbanization": 0.8,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.452, "Coal": 2.864, "Oil": 7.958, "IronOre": 0.077, "RareEarths": 2.239, "NaturalGas": 10.387, "Timber": 2.787, "Bauxite": 0.034, "Uranium": 0.84 }
+    "resources": { "Food": 2.452, "Coal": 0.161, "Oil": 36.67, "IronOre": 0.077, "RareEarths": 0.13, "NaturalGas": 35.227, "Timber": 2.787, "Bauxite": 0.034, "Uranium": 0.038 }
   },
   // Maine
   "us_me": {
@@ -153,7 +153,7 @@
     "urbanization": 0.58,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.208, "Coal": 3.522, "Oil": 10.274, "IronOre": 0.106, "RareEarths": 3.432, "NaturalGas": 8.018, "Timber": 3.169, "Bauxite": 0.03, "Uranium": 0.502 }
+    "resources": { "Food": 2.208, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.106, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 3.169, "Bauxite": 0.03, "Uranium": 0.038 }
   },
   // Maryland
   "us_md": {
@@ -161,7 +161,7 @@
     "urbanization": 0.92,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.964, "Coal": 2.678, "Oil": 4.273, "IronOre": 0.127, "RareEarths": 1.336, "NaturalGas": 12.027, "Timber": 2.187, "Bauxite": 0.037, "Uranium": 0.484 }
+    "resources": { "Food": 1.964, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.127, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.187, "Bauxite": 0.037, "Uranium": 0.038 }
   },
   // Massachusetts
   "us_ma": {
@@ -169,7 +169,7 @@
     "urbanization": 0.94,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.089, "Coal": 1.793, "Oil": 5.93, "IronOre": 0.204, "RareEarths": 2.67, "NaturalGas": 8.027, "Timber": 2.245, "Bauxite": 0.081, "Uranium": 0.762 }
+    "resources": { "Food": 2.089, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.204, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.245, "Bauxite": 0.081, "Uranium": 0.038 }
   },
   // Michigan
   "us_mi": {
@@ -177,7 +177,7 @@
     "urbanization": 0.85,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.89, "Coal": 1.725, "Oil": 9.295, "IronOre": 0.064, "RareEarths": 4.156, "NaturalGas": 6.789, "Timber": 2.978, "Bauxite": 0.057, "Uranium": 0.397 }
+    "resources": { "Food": 1.89, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.064, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.978, "Bauxite": 0.057, "Uranium": 0.038 }
   },
   // Minnesota
   "us_mn": {
@@ -185,7 +185,7 @@
     "urbanization": 0.84,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.729, "Coal": 3.115, "Oil": 11.16, "IronOre": 0.324, "RareEarths": 2.785, "NaturalGas": 7.006, "Timber": 2.54, "Bauxite": 0.13, "Uranium": 0.492 }
+    "resources": { "Food": 1.729, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.324, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.54, "Bauxite": 0.13, "Uranium": 0.038 }
   },
   // Mississippi
   "us_ms": {
@@ -193,7 +193,7 @@
     "urbanization": 0.65,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.328, "Coal": 3.355, "Oil": 7.622, "IronOre": 0.272, "RareEarths": 2.359, "NaturalGas": 5.864, "Timber": 2.269, "Bauxite": 0.134, "Uranium": 0.654 }
+    "resources": { "Food": 1.328, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.272, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.269, "Bauxite": 0.134, "Uranium": 0.038 }
   },
   // Missouri
   "us_mo": {
@@ -201,7 +201,7 @@
     "urbanization": 0.82,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 3 },
-    "resources": { "Food": 2.157, "Coal": 1.806, "Oil": 6.701, "IronOre": 0.138, "RareEarths": 1.576, "NaturalGas": 11.433, "Timber": 1.279, "Bauxite": 0.091, "Uranium": 0.921 }
+    "resources": { "Food": 2.157, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.138, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.279, "Bauxite": 0.091, "Uranium": 0.038 }
   },
   // Montana
   "us_mt": {
@@ -209,7 +209,7 @@
     "urbanization": 0.39,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 2.235, "Coal": 1.632, "Oil": 7.792, "IronOre": 0.197, "RareEarths": 1.736, "NaturalGas": 7.618, "Timber": 3.099, "Bauxite": 0.065, "Uranium": 0.489 }
+    "resources": { "Food": 2.235, "Coal": 6.3, "Oil": 2.212, "IronOre": 0.197, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 3.099, "Bauxite": 0.065, "Uranium": 0.038 }
   },
   // Nebraska
   "us_ne": {
@@ -217,7 +217,7 @@
     "urbanization": 0.65,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.44, "Coal": 1.442, "Oil": 5.201, "IronOre": 0.185, "RareEarths": 4.4, "NaturalGas": 8.472, "Timber": 2.264, "Bauxite": 0.137, "Uranium": 0.296 }
+    "resources": { "Food": 2.44, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.185, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.264, "Bauxite": 0.137, "Uranium": 0.038 }
   },
   // Nevada
   "us_nv": {
@@ -225,7 +225,7 @@
     "urbanization": 0.69,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 0.993, "Coal": 3.718, "Oil": 10.175, "IronOre": 0.119, "RareEarths": 4.121, "NaturalGas": 11.705, "Timber": 3.363, "Bauxite": 0.033, "Uranium": 0.951 }
+    "resources": { "Food": 0.993, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.119, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 3.363, "Bauxite": 0.033, "Uranium": 0.038 }
   },
   // New Hampshire
   "us_nh": {
@@ -233,7 +233,7 @@
     "urbanization": 0.68,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.212, "Coal": 3.646, "Oil": 6.392, "IronOre": 0.112, "RareEarths": 1.398, "NaturalGas": 7.477, "Timber": 0.891, "Bauxite": 0.062, "Uranium": 0.419 }
+    "resources": { "Food": 1.212, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.112, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 0.891, "Bauxite": 0.062, "Uranium": 0.038 }
   },
   // New Jersey
   "us_nj": {
@@ -241,7 +241,7 @@
     "urbanization": 0.96,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.688, "Coal": 2.27, "Oil": 5.371, "IronOre": 0.416, "RareEarths": 3.568, "NaturalGas": 5.669, "Timber": 2.773, "Bauxite": 0.075, "Uranium": 0.376 }
+    "resources": { "Food": 1.688, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.416, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.773, "Bauxite": 0.075, "Uranium": 0.038 }
   },
   // New Mexico
   "us_nm": {
@@ -249,7 +249,7 @@
     "urbanization": 0.58,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 0.956, "Coal": 3.367, "Oil": 8.984, "IronOre": 0.074, "RareEarths": 3.7, "NaturalGas": 8.373, "Timber": 1.118, "Bauxite": 0.016, "Uranium": 0.76 }
+    "resources": { "Food": 0.956, "Coal": 2.463, "Oil": 51.178, "IronOre": 0.074, "RareEarths": 0.13, "NaturalGas": 24.768, "Timber": 1.118, "Bauxite": 0.016, "Uranium": 3.537 }
   },
   // New York
   "us_ny": {
@@ -257,7 +257,7 @@
     "urbanization": 0.89,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.023, "Coal": 3.989, "Oil": 4.454, "IronOre": 0.159, "RareEarths": 2.14, "NaturalGas": 11.396, "Timber": 1.756, "Bauxite": 0.053, "Uranium": 0.85 }
+    "resources": { "Food": 2.023, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.159, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.756, "Bauxite": 0.053, "Uranium": 0.038 }
   },
   // North Carolina
   "us_nc": {
@@ -265,7 +265,7 @@
     "urbanization": 0.79,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.612, "Coal": 3.471, "Oil": 5.181, "IronOre": 0.095, "RareEarths": 2.437, "NaturalGas": 8.944, "Timber": 2.623, "Bauxite": 0.027, "Uranium": 0.375 }
+    "resources": { "Food": 1.612, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.095, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.623, "Bauxite": 0.027, "Uranium": 0.038 }
   },
   // North Dakota
   "us_nd": {
@@ -273,7 +273,7 @@
     "urbanization": 0.57,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.21, "Coal": 3.848, "Oil": 8.114, "IronOre": 0.182, "RareEarths": 3.188, "NaturalGas": 7.845, "Timber": 1.467, "Bauxite": 0.11, "Uranium": 0.368 }
+    "resources": { "Food": 1.21, "Coal": 7.835, "Oil": 33.043, "IronOre": 0.182, "RareEarths": 0.13, "NaturalGas": 10.824, "Timber": 1.467, "Bauxite": 0.11, "Uranium": 0.038 }
   },
   // Ohio
   "us_oh": {
@@ -281,7 +281,7 @@
     "urbanization": 0.81,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.125, "Coal": 2.878, "Oil": 4.794, "IronOre": 0.25, "RareEarths": 3.245, "NaturalGas": 4.409, "Timber": 1.329, "Bauxite": 0.103, "Uranium": 0.634 }
+    "resources": { "Food": 1.125, "Coal": 3.231, "Oil": 2.212, "IronOre": 0.25, "RareEarths": 0.13, "NaturalGas": 21.282, "Timber": 1.329, "Bauxite": 0.103, "Uranium": 0.038 }
   },
   // Oklahoma
   "us_ok": {
@@ -289,7 +289,7 @@
     "urbanization": 0.63,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 3, "Infrastructure": 2 },
-    "resources": { "Food": 2.323, "Coal": 4.426, "Oil": 11, "IronOre": 0.492, "RareEarths": 3.494, "NaturalGas": 4.677, "Timber": 2.449, "Bauxite": 0.167, "Uranium": 0.426 }
+    "resources": { "Food": 2.323, "Coal": 0.161, "Oil": 13.093, "IronOre": 0.492, "RareEarths": 0.13, "NaturalGas": 21.282, "Timber": 2.449, "Bauxite": 0.167, "Uranium": 0.038 }
   },
   // Oregon
   "us_or": {
@@ -297,7 +297,7 @@
     "urbanization": 0.62,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 3, "Infrastructure": 2 },
-    "resources": { "Food": 1.671, "Coal": 2.808, "Oil": 8.565, "IronOre": 0.368, "RareEarths": 1.825, "NaturalGas": 7.122, "Timber": 1.312, "Bauxite": 0.138, "Uranium": 0.91 }
+    "resources": { "Food": 1.671, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.368, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.312, "Bauxite": 0.138, "Uranium": 0.038 }
   },
   // Pennsylvania
   "us_pa": {
@@ -305,7 +305,7 @@
     "urbanization": 0.87,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.758, "Coal": 3.041, "Oil": 4.176, "IronOre": 0.129, "RareEarths": 4.228, "NaturalGas": 7.906, "Timber": 0.821, "Bauxite": 0.07, "Uranium": 0.535 }
+    "resources": { "Food": 1.758, "Coal": 7.835, "Oil": 0.399, "IronOre": 0.129, "RareEarths": 0.13, "NaturalGas": 70.087, "Timber": 0.821, "Bauxite": 0.07, "Uranium": 0.038 }
   },
   // South Carolina
   "us_sc": {
@@ -313,7 +313,7 @@
     "urbanization": 0.78,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.63, "Coal": 3.058, "Oil": 11.729, "IronOre": 0.184, "RareEarths": 2.552, "NaturalGas": 10.871, "Timber": 2.535, "Bauxite": 0.081, "Uranium": 0.76 }
+    "resources": { "Food": 1.63, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.184, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.535, "Bauxite": 0.081, "Uranium": 0.038 }
   },
   // South Dakota
   "us_sd": {
@@ -321,7 +321,7 @@
     "urbanization": 0.54,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.478, "Coal": 1.644, "Oil": 8.605, "IronOre": 0.123, "RareEarths": 1.584, "NaturalGas": 9.172, "Timber": 1.464, "Bauxite": 0.035, "Uranium": 0.297 }
+    "resources": { "Food": 2.478, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.123, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.464, "Bauxite": 0.035, "Uranium": 0.038 }
   },
   // Tennessee
   "us_tn": {
@@ -329,7 +329,7 @@
     "urbanization": 0.83,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 3 },
-    "resources": { "Food": 2.403, "Coal": 2.964, "Oil": 12.621, "IronOre": 0.321, "RareEarths": 2.142, "NaturalGas": 6.806, "Timber": 1.984, "Bauxite": 0.105, "Uranium": 0.94 }
+    "resources": { "Food": 2.403, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.321, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 1.984, "Bauxite": 0.105, "Uranium": 0.038 }
   },
   // Texas
   "us_tx": {
@@ -337,7 +337,7 @@
     "urbanization": 0.86,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 7, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 2.277, "Coal": 4.093, "Oil": 6.356, "IronOre": 0.4, "RareEarths": 3.982, "NaturalGas": 7.391, "Timber": 2.122, "Bauxite": 0.162, "Uranium": 0.735 }
+    "resources": { "Food": 2.277, "Coal": 3.231, "Oil": 170.9, "IronOre": 0.4, "RareEarths": 6.043, "NaturalGas": 94.49, "Timber": 2.122, "Bauxite": 0.162, "Uranium": 7.036 }
   },
   // Utah
   "us_ut": {
@@ -345,7 +345,7 @@
     "urbanization": 0.68,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.905, "Coal": 2.636, "Oil": 6.229, "IronOre": 0.196, "RareEarths": 1.387, "NaturalGas": 7.966, "Timber": 3.134, "Bauxite": 0.12, "Uranium": 0.309 }
+    "resources": { "Food": 1.905, "Coal": 3.231, "Oil": 4.026, "IronOre": 0.196, "RareEarths": 0.13, "NaturalGas": 2.806, "Timber": 3.134, "Bauxite": 0.12, "Uranium": 5.286 }
   },
   // Vermont
   "us_vt": {
@@ -353,7 +353,7 @@
     "urbanization": 0.32,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 2.153, "Coal": 3.948, "Oil": 5.647, "IronOre": 0.149, "RareEarths": 2.135, "NaturalGas": 6.149, "Timber": 0.891, "Bauxite": 0.095, "Uranium": 0.949 }
+    "resources": { "Food": 2.153, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.149, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 0.891, "Bauxite": 0.095, "Uranium": 0.038 }
   },
   // Virginia
   "us_va": {
@@ -361,7 +361,7 @@
     "urbanization": 0.86,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.485, "Coal": 3.623, "Oil": 10.2, "IronOre": 0.191, "RareEarths": 3.816, "NaturalGas": 11.149, "Timber": 3.128, "Bauxite": 0.109, "Uranium": 0.545 }
+    "resources": { "Food": 1.485, "Coal": 3.231, "Oil": 0.399, "IronOre": 0.191, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 3.128, "Bauxite": 0.109, "Uranium": 0.038 }
   },
   // Washington
   "us_wa": {
@@ -369,7 +369,7 @@
     "urbanization": 0.76,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.254, "Coal": 2.3, "Oil": 9.034, "IronOre": 0.357, "RareEarths": 2.896, "NaturalGas": 4.098, "Timber": 2.942, "Bauxite": 0.163, "Uranium": 0.401 }
+    "resources": { "Food": 1.254, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.357, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.942, "Bauxite": 0.163, "Uranium": 0.038 }
   },
   // West Virginia
   "us_wv": {
@@ -377,7 +377,7 @@
     "urbanization": 0.57,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.068, "Coal": 2.802, "Oil": 9.017, "IronOre": 0.236, "RareEarths": 4.346, "NaturalGas": 5.614, "Timber": 3.106, "Bauxite": 0.053, "Uranium": 0.903 }
+    "resources": { "Food": 1.068, "Coal": 21.65, "Oil": 2.212, "IronOre": 0.236, "RareEarths": 0.13, "NaturalGas": 24.768, "Timber": 3.106, "Bauxite": 0.053, "Uranium": 0.038 }
   },
   // Wisconsin
   "us_wi": {
@@ -385,7 +385,7 @@
     "urbanization": 0.82,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.452, "Coal": 1.641, "Oil": 12.008, "IronOre": 0.154, "RareEarths": 3.74, "NaturalGas": 11.159, "Timber": 2.214, "Bauxite": 0.049, "Uranium": 1.028 }
+    "resources": { "Food": 2.452, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.154, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.214, "Bauxite": 0.049, "Uranium": 0.038 }
   },
   // Wyoming
   "us_wy": {
@@ -393,6 +393,6 @@
     "urbanization": 0.34,
     "cultures": { "american": 0.5689, "hispanic_american": 0.188, "african_american": 0.1197, "chinese_diaspora": 0.0148, "indian_diaspora": 0.0139, "native_american": 0.0109, "german": 0.0079, "irish": 0.0079, "tagalog": 0.0079, "arab_levantine": 0.0069, "italian": 0.0069, "jewish": 0.0069, "cuban": 0.0059, "korean": 0.0059, "puerto_rican": 0.0059, "vietnamese": 0.0059, "polish": 0.004, "haitian": 0.003, "jamaican": 0.003, "russian": 0.003, "japanese": 0.002, "ukrainian": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 0.821, "Coal": 4.161, "Oil": 11.559, "IronOre": 0.247, "RareEarths": 2.726, "NaturalGas": 6.788, "Timber": 1.54, "Bauxite": 0.084, "Uranium": 0.654 }
+    "resources": { "Food": 0.821, "Coal": 61.558, "Oil": 9.466, "IronOre": 0.247, "RareEarths": 6.043, "NaturalGas": 9.081, "Timber": 1.54, "Bauxite": 0.084, "Uranium": 17.531 }
   }
 }

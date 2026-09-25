@@ -17,7 +17,7 @@
     "urbanization": 0.36,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 0.842, "Coal": 0.196, "Oil": 0.453, "IronOre": 0.158, "RareEarths": 0.092, "NaturalGas": 0.731, "Timber": 3.408, "Bauxite": 3.372, "Uranium": 0.006 }
+    "resources": { "Food": 0.842, "Coal": 0.196, "Oil": 0.453, "IronOre": 0.158, "RareEarths": 0.092, "NaturalGas": 0.731, "Timber": 3.408, "Bauxite": 0.142, "Uranium": 0.006 }
   },
   // Dinguiraye Prefecture
   "gn_di": {
@@ -25,7 +25,7 @@
     "urbanization": 0.09,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.045, "Coal": 0.234, "Oil": 0.583, "IronOre": 0.185, "RareEarths": 0.061, "NaturalGas": 0.276, "Timber": 1.15, "Bauxite": 3.16, "Uranium": 0.012 }
+    "resources": { "Food": 1.045, "Coal": 0.234, "Oil": 0.583, "IronOre": 0.185, "RareEarths": 0.061, "NaturalGas": 0.276, "Timber": 1.15, "Bauxite": 0.142, "Uranium": 0.012 }
   },
   // Dubréka Prefecture
   "gn_du": {
@@ -33,7 +33,7 @@
     "urbanization": 0.47,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.248, "Coal": 0.305, "Oil": 0.492, "IronOre": 0.203, "RareEarths": 0.096, "NaturalGas": 0.695, "Timber": 3.209, "Bauxite": 4.455, "Uranium": 0.011 }
+    "resources": { "Food": 1.248, "Coal": 0.305, "Oil": 0.492, "IronOre": 0.203, "RareEarths": 0.096, "NaturalGas": 0.695, "Timber": 3.209, "Bauxite": 7.581, "Uranium": 0.011 }
   },
   // Faranah
   "gn_fa": {
@@ -41,7 +41,7 @@
     "urbanization": 0.19,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 2.115, "Coal": 0.485, "Oil": 0.927, "IronOre": 0.464, "RareEarths": 0.106, "NaturalGas": 0.665, "Timber": 3.148, "Bauxite": 3.125, "Uranium": 0.011 }
+    "resources": { "Food": 2.115, "Coal": 0.485, "Oil": 0.927, "IronOre": 0.464, "RareEarths": 0.106, "NaturalGas": 0.665, "Timber": 3.148, "Bauxite": 0.142, "Uranium": 0.011 }
   },
   // Gaoual Prefecture
   "gn_ga": {
@@ -49,7 +49,7 @@
     "urbanization": 0.1,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.038, "Coal": 0.165, "Oil": 0.276, "IronOre": 0.073, "RareEarths": 0.039, "NaturalGas": 0.38, "Timber": 1.578, "Bauxite": 2.925, "Uranium": 0.008 }
+    "resources": { "Food": 1.038, "Coal": 0.165, "Oil": 0.276, "IronOre": 0.073, "RareEarths": 0.039, "NaturalGas": 0.38, "Timber": 1.578, "Bauxite": 9.068, "Uranium": 0.008 }
   },
   // Kankan
   "gn_k": {
@@ -57,7 +57,7 @@
     "urbanization": 0.27,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.455, "Coal": 0.54, "Oil": 0.501, "IronOre": 0.316, "RareEarths": 0.051, "NaturalGas": 0.717, "Timber": 0.735, "Bauxite": 1.825, "Uranium": 0.011 }
+    "resources": { "Food": 1.455, "Coal": 0.54, "Oil": 0.501, "IronOre": 0.316, "RareEarths": 0.051, "NaturalGas": 0.717, "Timber": 0.735, "Bauxite": 3.118, "Uranium": 0.011 }
   },
   // Kissidougou Prefecture
   "gn_ks": {
@@ -65,7 +65,7 @@
     "urbanization": 0.34,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.423, "Coal": 0.22, "Oil": 0.442, "IronOre": 0.222, "RareEarths": 0.054, "NaturalGas": 0.546, "Timber": 1.166, "Bauxite": 2.43, "Uranium": 0.008 }
+    "resources": { "Food": 1.423, "Coal": 0.22, "Oil": 0.442, "IronOre": 0.222, "RareEarths": 0.054, "NaturalGas": 0.546, "Timber": 1.166, "Bauxite": 0.142, "Uranium": 0.008 }
   },
   // Kouroussa Prefecture
   "gn_ko": {
@@ -73,7 +73,7 @@
     "urbanization": 0.09,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.545, "Coal": 0.565, "Oil": 0.85, "IronOre": 0.173, "RareEarths": 0.086, "NaturalGas": 0.469, "Timber": 2.569, "Bauxite": 2.533, "Uranium": 0.009 }
+    "resources": { "Food": 1.545, "Coal": 0.565, "Oil": 0.85, "IronOre": 0.173, "RareEarths": 0.086, "NaturalGas": 0.469, "Timber": 2.569, "Bauxite": 0.142, "Uranium": 0.009 }
   },
   // Mali Prefecture
   "gn_ml": {
@@ -81,7 +81,7 @@
     "urbanization": 0.11,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 2.242, "Coal": 0.087, "Oil": 0.213, "IronOre": 0.079, "RareEarths": 0.016, "NaturalGas": 0.193, "Timber": 1.922, "Bauxite": 1.355, "Uranium": 0.003 }
+    "resources": { "Food": 2.242, "Coal": 0.087, "Oil": 0.213, "IronOre": 0.079, "RareEarths": 0.016, "NaturalGas": 0.193, "Timber": 1.922, "Bauxite": 3.118, "Uranium": 0.003 }
   },
   // Pita Prefecture
   "gn_pi": {
@@ -89,7 +89,7 @@
     "urbanization": 0.24,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 0.824, "Coal": 0.131, "Oil": 0.346, "IronOre": 0.147, "RareEarths": 0.062, "NaturalGas": 0.395, "Timber": 0.877, "Bauxite": 2.173, "Uranium": 0.008 }
+    "resources": { "Food": 0.824, "Coal": 0.131, "Oil": 0.346, "IronOre": 0.147, "RareEarths": 0.062, "NaturalGas": 0.395, "Timber": 0.877, "Bauxite": 4.605, "Uranium": 0.008 }
   },
   // Siguiri Prefecture
   "gn_si": {
@@ -97,6 +97,6 @@
     "urbanization": 0.87,
     "cultures": { "fulani": 0.335, "mandinka": 0.31, "temne": 0.09, "soninke": 0.08, "mende": 0.07, "kru": 0.06, "wolof": 0.03, "bambara": 0.025 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.15, "Coal": 0.18, "Oil": 0.402, "IronOre": 0.175, "RareEarths": 0.03, "NaturalGas": 0.41, "Timber": 2.857, "Bauxite": 3.679, "Uranium": 0.009 }
+    "resources": { "Food": 2.15, "Coal": 0.18, "Oil": 0.402, "IronOre": 0.175, "RareEarths": 0.03, "NaturalGas": 0.41, "Timber": 2.857, "Bauxite": 3.118, "Uranium": 0.009 }
   }
 }

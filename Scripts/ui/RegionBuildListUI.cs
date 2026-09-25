@@ -169,9 +169,10 @@ public partial class DealOrForceGame
         var mine = kind == BuildingKind.ExtractionIndustry;
         if (mine)
         {
-            // Almost every region holds a trace of almost everything; name what is worth digging,
-            // richest first, so the order itself says what this mine would be for.
-            _buildingMakes.RemoveAll(good => state.ResourceDeposits.GetValueOrDefault(good) < 0.1f);
+            // Almost every region holds a trace of almost everything - a twentieth of its country's
+            // average, so a find is still possible; name what is worth digging, richest first, so
+            // the order itself says what this mine would be for.
+            _buildingMakes.RemoveAll(good => state.ResourceDeposits.GetValueOrDefault(good) < 0.5f);
             _buildingMakes.Sort((a, b) => state.ResourceDeposits.GetValueOrDefault(b).CompareTo(state.ResourceDeposits.GetValueOrDefault(a)));
         }
 

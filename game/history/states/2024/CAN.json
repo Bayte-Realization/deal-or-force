@@ -17,7 +17,7 @@
     "urbanization": 0.77,
     "cultures": { "canadian": 0.7061, "chinese_diaspora": 0.0611, "indian_diaspora": 0.0543, "tagalog": 0.0339, "punjabi": 0.0272, "ukrainian": 0.0209, "arab_levantine": 0.0163, "italian": 0.0163, "german": 0.0136, "irish": 0.0109, "vietnamese": 0.0081, "haitian": 0.0068, "jamaican": 0.0068, "polish": 0.0068, "korean": 0.0054, "russian": 0.0054 },
     "buildings": { "Agriculture": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.373, "Coal": 0.316, "Oil": 8.856, "IronOre": 3.734, "RareEarths": 0.072, "NaturalGas": 4.742, "Timber": 2.609, "Bauxite": 0.185, "Uranium": 0.907 }
+    "resources": { "Food": 1.373, "Coal": 0.316, "Oil": 65.061, "IronOre": 0.166, "RareEarths": 0.072, "NaturalGas": 48.415, "Timber": 2.609, "Bauxite": 0.185, "Uranium": 0.039 }
   },
   // British Columbia
   "ca_bc": {
@@ -25,7 +25,7 @@
     "urbanization": 0.78,
     "cultures": { "canadian": 0.7061, "chinese_diaspora": 0.0611, "indian_diaspora": 0.0543, "tagalog": 0.0339, "punjabi": 0.0272, "ukrainian": 0.0209, "arab_levantine": 0.0163, "italian": 0.0163, "german": 0.0136, "irish": 0.0109, "vietnamese": 0.0081, "haitian": 0.0068, "jamaican": 0.0068, "polish": 0.0068, "korean": 0.0054, "russian": 0.0054 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.075, "Coal": 0.236, "Oil": 5.028, "IronOre": 3.402, "RareEarths": 0.036, "NaturalGas": 8.686, "Timber": 1.367, "Bauxite": 0.057, "Uranium": 0.686 }
+    "resources": { "Food": 2.075, "Coal": 0.236, "Oil": 1.134, "IronOre": 0.166, "RareEarths": 0.036, "NaturalGas": 25.925, "Timber": 1.367, "Bauxite": 0.057, "Uranium": 0.039 }
   },
   // Manitoba
   "ca_mb": {
@@ -33,7 +33,7 @@
     "urbanization": 0.71,
     "cultures": { "first_nations": 0.4211, "canadian": 0.4088, "chinese_diaspora": 0.0354, "indian_diaspora": 0.0314, "tagalog": 0.0197, "punjabi": 0.0157, "ukrainian": 0.0121, "arab_levantine": 0.0094, "italian": 0.0094, "german": 0.0079, "irish": 0.0063, "vietnamese": 0.0047, "haitian": 0.0039, "jamaican": 0.0039, "polish": 0.0039, "korean": 0.0031, "russian": 0.0031 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.327, "Coal": 0.308, "Oil": 5.962, "IronOre": 2.998, "RareEarths": 0.037, "NaturalGas": 11.134, "Timber": 1.216, "Bauxite": 0.086, "Uranium": 0.504 }
+    "resources": { "Food": 1.327, "Coal": 0.308, "Oil": 1.528, "IronOre": 0.166, "RareEarths": 0.037, "NaturalGas": 0.333, "Timber": 1.216, "Bauxite": 0.086, "Uranium": 0.039 }
   },
   // New Brunswick
   "ca_nb": {
@@ -41,7 +41,7 @@
     "urbanization": 0.72,
     "cultures": { "canadian": 0.7061, "chinese_diaspora": 0.0611, "indian_diaspora": 0.0543, "tagalog": 0.0339, "punjabi": 0.0272, "ukrainian": 0.0209, "arab_levantine": 0.0163, "italian": 0.0163, "german": 0.0136, "irish": 0.0109, "vietnamese": 0.0081, "haitian": 0.0068, "jamaican": 0.0068, "polish": 0.0068, "korean": 0.0054, "russian": 0.0054 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 2.407, "Coal": 0.187, "Oil": 7.066, "IronOre": 3.205, "RareEarths": 0.093, "NaturalGas": 7.898, "Timber": 1.778, "Bauxite": 0.087, "Uranium": 0.346 }
+    "resources": { "Food": 2.407, "Coal": 0.187, "Oil": 0.344, "IronOre": 0.166, "RareEarths": 0.093, "NaturalGas": 0.333, "Timber": 1.778, "Bauxite": 0.087, "Uranium": 0.039 }
   },
   // Newfoundland and Labrador
   "ca_nl": {
@@ -49,7 +49,7 @@
     "urbanization": 0.6,
     "cultures": { "canadian": 0.7061, "chinese_diaspora": 0.0611, "indian_diaspora": 0.0543, "tagalog": 0.0339, "punjabi": 0.0272, "ukrainian": 0.0209, "arab_levantine": 0.0163, "italian": 0.0163, "german": 0.0136, "irish": 0.0109, "vietnamese": 0.0081, "haitian": 0.0068, "jamaican": 0.0068, "polish": 0.0068, "korean": 0.0054, "russian": 0.0054 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 2.45, "Coal": 0.491, "Oil": 10.986, "IronOre": 3.815, "RareEarths": 0.049, "NaturalGas": 4.703, "Timber": 1.399, "Bauxite": 0.147, "Uranium": 0.731 }
+    "resources": { "Food": 2.45, "Coal": 0.491, "Oil": 5.08, "IronOre": 17.157, "RareEarths": 0.049, "NaturalGas": 0.333, "Timber": 1.399, "Bauxite": 0.147, "Uranium": 0.039 }
   },
   // Northwest Territories
   "ca_nt": {
@@ -57,7 +57,7 @@
     "urbanization": 0.38,
     "cultures": { "first_nations": 0.5, "canadian": 0.42, "inuit": 0.04, "quebecois": 0.015, "tagalog": 0.015, "indian_diaspora": 0.01 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.772, "Coal": 0.135, "Oil": 9.441, "IronOre": 3.01, "RareEarths": 0.042, "NaturalGas": 10.134, "Timber": 1.837, "Bauxite": 0.069, "Uranium": 0.959 }
+    "resources": { "Food": 1.772, "Coal": 0.135, "Oil": 0.344, "IronOre": 0.166, "RareEarths": 0.042, "NaturalGas": 0.333, "Timber": 1.837, "Bauxite": 0.069, "Uranium": 0.039 }
   },
   // Nova Scotia
   "ca_ns": {
@@ -65,7 +65,7 @@
     "urbanization": 0.81,
     "cultures": { "canadian": 0.7061, "chinese_diaspora": 0.0611, "indian_diaspora": 0.0543, "tagalog": 0.0339, "punjabi": 0.0272, "ukrainian": 0.0209, "arab_levantine": 0.0163, "italian": 0.0163, "german": 0.0136, "irish": 0.0109, "vietnamese": 0.0081, "haitian": 0.0068, "jamaican": 0.0068, "polish": 0.0068, "korean": 0.0054, "russian": 0.0054 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.016, "Coal": 0.144, "Oil": 8.973, "IronOre": 3.529, "RareEarths": 0.062, "NaturalGas": 6.874, "Timber": 2.148, "Bauxite": 0.053, "Uranium": 0.726 }
+    "resources": { "Food": 1.016, "Coal": 0.144, "Oil": 0.344, "IronOre": 0.166, "RareEarths": 0.062, "NaturalGas": 0.333, "Timber": 2.148, "Bauxite": 0.053, "Uranium": 0.039 }
   },
   // Nunavut
   "ca_nu": {
@@ -73,7 +73,7 @@
     "urbanization": 0.8,
     "cultures": { "inuit": 0.85, "canadian": 0.13, "first_nations": 0.01, "quebecois": 0.005, "tagalog": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.676, "Coal": 0.237, "Oil": 7.307, "IronOre": 4.008, "RareEarths": 0.04, "NaturalGas": 6.046, "Timber": 2.674, "Bauxite": 0.053, "Uranium": 0.994 }
+    "resources": { "Food": 1.676, "Coal": 0.237, "Oil": 0.344, "IronOre": 0.166, "RareEarths": 0.04, "NaturalGas": 0.333, "Timber": 2.674, "Bauxite": 0.053, "Uranium": 0.039 }
   },
   // Ontario
   "ca_on": {
@@ -81,7 +81,7 @@
     "urbanization": 0.87,
     "cultures": { "canadian": 0.7061, "chinese_diaspora": 0.0611, "indian_diaspora": 0.0543, "tagalog": 0.0339, "punjabi": 0.0272, "ukrainian": 0.0209, "arab_levantine": 0.0163, "italian": 0.0163, "german": 0.0136, "irish": 0.0109, "vietnamese": 0.0081, "haitian": 0.0068, "jamaican": 0.0068, "polish": 0.0068, "korean": 0.0054, "russian": 0.0054 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.791, "Coal": 0.317, "Oil": 4.013, "IronOre": 4.073, "RareEarths": 0.084, "NaturalGas": 6.896, "Timber": 2.489, "Bauxite": 0.124, "Uranium": 0.538 }
+    "resources": { "Food": 1.791, "Coal": 0.317, "Oil": 0.344, "IronOre": 0.166, "RareEarths": 0.084, "NaturalGas": 0.333, "Timber": 2.489, "Bauxite": 0.124, "Uranium": 0.039 }
   },
   // Quebec
   "ca_qc": {
@@ -89,7 +89,7 @@
     "urbanization": 0.84,
     "cultures": { "quebecois": 0.78, "canadian": 0.13, "arab_levantine": 0.02, "haitian": 0.013, "arab_maghrebi": 0.01, "first_nations": 0.01, "italian": 0.01, "chinese_diaspora": 0.008, "french": 0.008, "indian_diaspora": 0.008, "inuit": 0.003 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.276, "Coal": 0.489, "Oil": 9.327, "IronOre": 1.719, "RareEarths": 0.106, "NaturalGas": 10.724, "Timber": 1.179, "Bauxite": 0.155, "Uranium": 0.882 }
+    "resources": { "Food": 2.276, "Coal": 0.489, "Oil": 0.344, "IronOre": 20.933, "RareEarths": 0.106, "NaturalGas": 0.333, "Timber": 1.179, "Bauxite": 0.155, "Uranium": 0.039 }
   },
   // Saskatchewan
   "ca_sk": {
@@ -97,7 +97,7 @@
     "urbanization": 0.64,
     "cultures": { "first_nations": 0.4211, "canadian": 0.4088, "chinese_diaspora": 0.0354, "indian_diaspora": 0.0314, "tagalog": 0.0197, "punjabi": 0.0157, "ukrainian": 0.0121, "arab_levantine": 0.0094, "italian": 0.0094, "german": 0.0079, "irish": 0.0063, "vietnamese": 0.0047, "haitian": 0.0039, "jamaican": 0.0039, "polish": 0.0039, "korean": 0.0031, "russian": 0.0031 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.487, "Coal": 0.185, "Oil": 4.281, "IronOre": 3.562, "RareEarths": 0.044, "NaturalGas": 5.012, "Timber": 1.073, "Bauxite": 0.021, "Uranium": 0.648 }
+    "resources": { "Food": 1.487, "Coal": 0.185, "Oil": 7.447, "IronOre": 0.166, "RareEarths": 0.044, "NaturalGas": 2.66, "Timber": 1.073, "Bauxite": 0.021, "Uranium": 8.955 }
   },
   // Yukon
   "ca_yt": {
@@ -105,6 +105,6 @@
     "urbanization": 0.28,
     "cultures": { "canadian": 0.75, "first_nations": 0.21, "quebecois": 0.015, "tagalog": 0.015, "indian_diaspora": 0.01 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.749, "Coal": 0.344, "Oil": 10.181, "IronOre": 4.397, "RareEarths": 0.047, "NaturalGas": 6.954, "Timber": 3.207, "Bauxite": 0.114, "Uranium": 0.913 }
+    "resources": { "Food": 1.749, "Coal": 0.344, "Oil": 0.344, "IronOre": 0.166, "RareEarths": 0.047, "NaturalGas": 0.333, "Timber": 3.207, "Bauxite": 0.114, "Uranium": 0.039 }
   }
 }

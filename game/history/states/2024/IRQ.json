@@ -17,7 +17,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.809, "Coal": 0.275, "Oil": 11.948, "IronOre": 0.2, "RareEarths": 0.026, "NaturalGas": 0.178, "Timber": 3.158, "Bauxite": 0.047, "Uranium": 0.005 }
+    "resources": { "Food": 1.809, "Coal": 0.275, "Oil": 0.397, "IronOre": 0.2, "RareEarths": 0.026, "NaturalGas": 0.178, "Timber": 3.158, "Bauxite": 0.047, "Uranium": 0.005 }
   },
   // Al Muthanna
   "iq_mu": {
@@ -25,7 +25,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.344, "Coal": 0.375, "Oil": 4.18, "IronOre": 0.157, "RareEarths": 0.09, "NaturalGas": 0.271, "Timber": 2.748, "Bauxite": 0.121, "Uranium": 0.014 }
+    "resources": { "Food": 2.344, "Coal": 0.375, "Oil": 0.397, "IronOre": 0.157, "RareEarths": 0.09, "NaturalGas": 0.271, "Timber": 2.748, "Bauxite": 0.121, "Uranium": 0.014 }
   },
   // Basra
   "iq_ba": {
@@ -33,7 +33,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.501, "Coal": 0.207, "Oil": 9.332, "IronOre": 0.192, "RareEarths": 0.045, "NaturalGas": 0.245, "Timber": 1.758, "Bauxite": 0.072, "Uranium": 0.004 }
+    "resources": { "Food": 1.501, "Coal": 0.207, "Oil": 69.064, "IronOre": 0.192, "RareEarths": 0.045, "NaturalGas": 0.245, "Timber": 1.758, "Bauxite": 0.072, "Uranium": 0.004 }
   },
   // Dhi Qar
   "iq_dq": {
@@ -41,7 +41,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.659, "Coal": 0.325, "Oil": 10.549, "IronOre": 0.3, "RareEarths": 0.061, "NaturalGas": 0.614, "Timber": 2.151, "Bauxite": 0.073, "Uranium": 0.01 }
+    "resources": { "Food": 1.659, "Coal": 0.325, "Oil": 6.283, "IronOre": 0.3, "RareEarths": 0.061, "NaturalGas": 0.614, "Timber": 2.151, "Bauxite": 0.073, "Uranium": 0.01 }
   },
   // Diyala
   "iq_di": {
@@ -49,7 +49,7 @@
     "urbanization": 0.97,
     "cultures": { "kurdish": 0.6204, "arab_iraqi": 0.3549, "arab_levantine": 0.0099, "bedouin": 0.0074, "persian": 0.0059, "armenian": 0.0015 },
     "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.332, "Coal": 0.592, "Oil": 9.945, "IronOre": 0.355, "RareEarths": 0.108, "NaturalGas": 0.569, "Timber": 2.489, "Bauxite": 0.136, "Uranium": 0.009 }
+    "resources": { "Food": 2.332, "Coal": 0.592, "Oil": 0.397, "IronOre": 0.355, "RareEarths": 0.108, "NaturalGas": 0.569, "Timber": 2.489, "Bauxite": 0.136, "Uranium": 0.009 }
   },
   // Erbil
   "iq_ar": {
@@ -57,7 +57,7 @@
     "urbanization": 0.42,
     "cultures": { "kurdish": 0.925, "arab_iraqi": 0.035, "turkmen_iraqi": 0.02, "assyrian": 0.015, "arab_levantine": 0.005 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 1.966, "Coal": 0.267, "Oil": 8.455, "IronOre": 0.148, "RareEarths": 0.038, "NaturalGas": 0.371, "Timber": 3.09, "Bauxite": 0.076, "Uranium": 0.009 }
+    "resources": { "Food": 1.966, "Coal": 0.267, "Oil": 4.321, "IronOre": 0.148, "RareEarths": 0.038, "NaturalGas": 0.371, "Timber": 3.09, "Bauxite": 0.076, "Uranium": 0.009 }
   },
   // Kirkuk
   "iq_ts": {
@@ -65,7 +65,7 @@
     "urbanization": 0.51,
     "cultures": { "kurdish": 0.45, "arab_iraqi": 0.35, "turkmen_iraqi": 0.17, "assyrian": 0.025, "arab_levantine": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.15, "Coal": 0.574, "Oil": 9.567, "IronOre": 0.404, "RareEarths": 0.093, "NaturalGas": 0.605, "Timber": 2.385, "Bauxite": 0.116, "Uranium": 0.008 }
+    "resources": { "Food": 2.15, "Coal": 0.574, "Oil": 10.207, "IronOre": 0.404, "RareEarths": 0.093, "NaturalGas": 0.605, "Timber": 2.385, "Bauxite": 0.116, "Uranium": 0.008 }
   },
   // Maysan
   "iq_ma": {
@@ -73,7 +73,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 0.774, "Coal": 0.3, "Oil": 4.409, "IronOre": 0.243, "RareEarths": 0.077, "NaturalGas": 0.612, "Timber": 2.771, "Bauxite": 0.073, "Uranium": 0.012 }
+    "resources": { "Food": 0.774, "Coal": 0.3, "Oil": 8.245, "IronOre": 0.243, "RareEarths": 0.077, "NaturalGas": 0.612, "Timber": 2.771, "Bauxite": 0.073, "Uranium": 0.012 }
   },
   // Najaf
   "iq_na": {
@@ -81,7 +81,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.332, "Coal": 0.434, "Oil": 10.629, "IronOre": 0.207, "RareEarths": 0.053, "NaturalGas": 0.672, "Timber": 3.133, "Bauxite": 0.109, "Uranium": 0.018 }
+    "resources": { "Food": 1.332, "Coal": 0.434, "Oil": 0.397, "IronOre": 0.207, "RareEarths": 0.053, "NaturalGas": 0.672, "Timber": 3.133, "Bauxite": 0.109, "Uranium": 0.018 }
   },
   // Nineveh
   "iq_ni": {
@@ -89,7 +89,7 @@
     "urbanization": 0.5,
     "cultures": { "arab_iraqi": 0.68, "kurdish": 0.22, "assyrian": 0.055, "turkmen_iraqi": 0.035, "armenian": 0.01 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.076, "Coal": 0.453, "Oil": 10.103, "IronOre": 0.398, "RareEarths": 0.127, "NaturalGas": 0.686, "Timber": 2.994, "Bauxite": 0.097, "Uranium": 0.009 }
+    "resources": { "Food": 1.076, "Coal": 0.453, "Oil": 0.397, "IronOre": 0.398, "RareEarths": 0.127, "NaturalGas": 0.686, "Timber": 2.994, "Bauxite": 0.097, "Uranium": 0.009 }
   },
   // Saladin
   "iq_sd": {
@@ -97,7 +97,7 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.183, "Coal": 0.14, "Oil": 8.749, "IronOre": 0.064, "RareEarths": 0.028, "NaturalGas": 0.121, "Timber": 1.052, "Bauxite": 0.04, "Uranium": 0.004 }
+    "resources": { "Food": 1.183, "Coal": 0.14, "Oil": 2.359, "IronOre": 0.064, "RareEarths": 0.028, "NaturalGas": 0.121, "Timber": 1.052, "Bauxite": 0.04, "Uranium": 0.004 }
   },
   // Sulaymaniyah
   "iq_su": {
@@ -105,7 +105,7 @@
     "urbanization": 0.28,
     "cultures": { "kurdish": 0.955, "arab_iraqi": 0.02, "turkmen_iraqi": 0.012, "assyrian": 0.008, "persian": 0.005 },
     "buildings": { "Agriculture": 4, "Infrastructure": 1 },
-    "resources": { "Food": 2.439, "Coal": 0.215, "Oil": 3.888, "IronOre": 0.175, "RareEarths": 0.026, "NaturalGas": 0.187, "Timber": 2.196, "Bauxite": 0.073, "Uranium": 0.008 }
+    "resources": { "Food": 2.439, "Coal": 0.215, "Oil": 0.397, "IronOre": 0.175, "RareEarths": 0.026, "NaturalGas": 0.187, "Timber": 2.196, "Bauxite": 0.073, "Uranium": 0.008 }
   },
   // Wasit
   "iq_wa": {
@@ -113,6 +113,6 @@
     "urbanization": 0.97,
     "cultures": { "arab_iraqi": 0.9351, "arab_levantine": 0.026, "bedouin": 0.0195, "persian": 0.0156, "armenian": 0.0039 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.268, "Coal": 0.225, "Oil": 5.62, "IronOre": 0.108, "RareEarths": 0.029, "NaturalGas": 0.149, "Timber": 2.254, "Bauxite": 0.032, "Uranium": 0.005 }
+    "resources": { "Food": 1.268, "Coal": 0.225, "Oil": 0.397, "IronOre": 0.108, "RareEarths": 0.029, "NaturalGas": 0.149, "Timber": 2.254, "Bauxite": 0.032, "Uranium": 0.005 }
   }
 }

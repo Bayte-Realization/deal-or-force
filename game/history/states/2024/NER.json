@@ -17,7 +17,7 @@
     "urbanization": 0.39,
     "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.779, "Coal": 0.327, "Oil": 0.24, "IronOre": 0.147, "RareEarths": 0.076, "NaturalGas": 0.519, "Timber": 3.015, "Bauxite": 0.05, "Uranium": 0.692 }
+    "resources": { "Food": 1.779, "Coal": 0.327, "Oil": 0.24, "IronOre": 0.147, "RareEarths": 0.076, "NaturalGas": 0.519, "Timber": 3.015, "Bauxite": 0.05, "Uranium": 4.751 }
   },
   // Diffa
   "ne_2": {
@@ -25,7 +25,7 @@
     "urbanization": 0.1,
     "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.063, "Coal": 0.619, "Oil": 0.663, "IronOre": 0.338, "RareEarths": 0.055, "NaturalGas": 0.734, "Timber": 3.31, "Bauxite": 0.168, "Uranium": 0.673 }
+    "resources": { "Food": 1.063, "Coal": 0.619, "Oil": 0.663, "IronOre": 0.338, "RareEarths": 0.055, "NaturalGas": 0.734, "Timber": 3.31, "Bauxite": 0.168, "Uranium": 0.035 }
   },
   // Dosso
   "ne_3": {
@@ -33,7 +33,7 @@
     "urbanization": 0.06,
     "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 2.258, "Coal": 0.261, "Oil": 0.625, "IronOre": 0.24, "RareEarths": 0.045, "NaturalGas": 0.524, "Timber": 2.171, "Bauxite": 0.112, "Uranium": 0.683 }
+    "resources": { "Food": 2.258, "Coal": 0.261, "Oil": 0.625, "IronOre": 0.24, "RareEarths": 0.045, "NaturalGas": 0.524, "Timber": 2.171, "Bauxite": 0.112, "Uranium": 0.035 }
   },
   // Maradi
   "ne_4": {
@@ -41,7 +41,7 @@
     "urbanization": 0.18,
     "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.648, "Coal": 0.211, "Oil": 0.496, "IronOre": 0.236, "RareEarths": 0.032, "NaturalGas": 0.491, "Timber": 2.259, "Bauxite": 0.039, "Uranium": 0.922 }
+    "resources": { "Food": 1.648, "Coal": 0.211, "Oil": 0.496, "IronOre": 0.236, "RareEarths": 0.032, "NaturalGas": 0.491, "Timber": 2.259, "Bauxite": 0.039, "Uranium": 0.035 }
   },
   // Tahoua
   "ne_5": {
@@ -49,7 +49,7 @@
     "urbanization": 0.15,
     "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.315, "Coal": 0.397, "Oil": 0.411, "IronOre": 0.163, "RareEarths": 0.081, "NaturalGas": 0.321, "Timber": 3.041, "Bauxite": 0.056, "Uranium": 0.637 }
+    "resources": { "Food": 1.315, "Coal": 0.397, "Oil": 0.411, "IronOre": 0.163, "RareEarths": 0.081, "NaturalGas": 0.321, "Timber": 3.041, "Bauxite": 0.056, "Uranium": 0.035 }
   },
   // Tillabéri
   "ne_6": {
@@ -57,7 +57,7 @@
     "urbanization": 0.19,
     "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
-    "resources": { "Food": 2.149, "Coal": 0.452, "Oil": 0.657, "IronOre": 0.274, "RareEarths": 0.119, "NaturalGas": 0.749, "Timber": 2.61, "Bauxite": 0.153, "Uranium": 0.63 }
+    "resources": { "Food": 2.149, "Coal": 0.452, "Oil": 0.657, "IronOre": 0.274, "RareEarths": 0.119, "NaturalGas": 0.749, "Timber": 2.61, "Bauxite": 0.153, "Uranium": 0.035 }
   },
   // Zinder
   "ne_7": {
@@ -65,6 +65,6 @@
     "urbanization": 0.17,
     "cultures": { "hausa": 0.535, "songhai": 0.212, "tuareg": 0.105, "fulani": 0.095, "kanuri": 0.045, "arab_maghrebi": 0.008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.7, "Coal": 0.393, "Oil": 0.488, "IronOre": 0.372, "RareEarths": 0.072, "NaturalGas": 0.597, "Timber": 2.767, "Bauxite": 0.108, "Uranium": 0.727 }
+    "resources": { "Food": 1.7, "Coal": 0.393, "Oil": 0.488, "IronOre": 0.372, "RareEarths": 0.072, "NaturalGas": 0.597, "Timber": 2.767, "Bauxite": 0.108, "Uranium": 0.035 }
   }
 }

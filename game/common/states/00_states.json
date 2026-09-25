@@ -728,7 +728,7 @@
   "kz_pav": { "name": "Pavlodar", "kind": "Region" },
   "ru_nvs": { "name": "Novosibirsk", "kind": "Region" },
   "ru_che": { "name": "Chelyabinsk", "kind": "Region" },
-  "ru_alt": { "name": "Altai Republic", "kind": "Territory" },
+  "ru_alt": { "name": "Altai Krai", "kind": "Territory" },
   "ru_ore": { "name": "Orenburg", "kind": "Region" },
   "kz_zap": { "name": "West Kazakhstan", "kind": "Region" },
   "ru_sar": { "name": "Saratov", "kind": "Region" },

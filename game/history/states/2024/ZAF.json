@@ -17,7 +17,7 @@
     "urbanization": 0.52,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 3, "Infrastructure": 2 },
-    "resources": { "Food": 1.751, "Coal": 2.878, "Oil": 0.133, "IronOre": 2.639, "RareEarths": 0.022, "NaturalGas": 0.277, "Timber": 1.419, "Bauxite": 0.025, "Uranium": 0.879 }
+    "resources": { "Food": 1.751, "Coal": 0.175, "Oil": 0.133, "IronOre": 0.174, "RareEarths": 0.022, "NaturalGas": 0.277, "Timber": 1.419, "Bauxite": 0.025, "Uranium": 0.03 }
   },
   // Free State
   "za_fs": {
@@ -25,7 +25,7 @@
     "urbanization": 0.59,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.417, "Coal": 1.653, "Oil": 0.189, "IronOre": 1.712, "RareEarths": 0.042, "NaturalGas": 0.346, "Timber": 3.19, "Bauxite": 0.029, "Uranium": 0.704 }
+    "resources": { "Food": 1.417, "Coal": 1.672, "Oil": 0.189, "IronOre": 0.174, "RareEarths": 0.042, "NaturalGas": 0.346, "Timber": 3.19, "Bauxite": 0.029, "Uranium": 1.325 }
   },
   // Gauteng
   "za_gt": {
@@ -33,7 +33,7 @@
     "urbanization": 0.94,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.693, "Coal": 4.006, "Oil": 0.417, "IronOre": 2.217, "RareEarths": 0.083, "NaturalGas": 0.644, "Timber": 1.666, "Bauxite": 0.153, "Uranium": 0.416 }
+    "resources": { "Food": 1.693, "Coal": 0.175, "Oil": 0.417, "IronOre": 0.174, "RareEarths": 0.083, "NaturalGas": 0.644, "Timber": 1.666, "Bauxite": 0.153, "Uranium": 1.584 }
   },
   // KwaZulu-Natal
   "za_nl": {
@@ -41,7 +41,7 @@
     "urbanization": 0.66,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.146, "Coal": 4.327, "Oil": 0.285, "IronOre": 4.17, "RareEarths": 0.047, "NaturalGas": 0.321, "Timber": 2.356, "Bauxite": 0.028, "Uranium": 0.671 }
+    "resources": { "Food": 2.146, "Coal": 0.774, "Oil": 0.285, "IronOre": 0.174, "RareEarths": 0.047, "NaturalGas": 0.321, "Timber": 2.356, "Bauxite": 0.028, "Uranium": 0.03 }
   },
   // Limpopo
   "za_lp": {
@@ -49,7 +49,7 @@
     "urbanization": 0.35,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 0.972, "Coal": 3.38, "Oil": 0.637, "IronOre": 3.57, "RareEarths": 0.053, "NaturalGas": 0.321, "Timber": 0.791, "Bauxite": 0.073, "Uranium": 0.594 }
+    "resources": { "Food": 0.972, "Coal": 2.569, "Oil": 0.637, "IronOre": 4.632, "RareEarths": 0.053, "NaturalGas": 0.321, "Timber": 0.791, "Bauxite": 0.073, "Uranium": 0.03 }
   },
   // Mpumalanga
   "za_mp": {
@@ -57,7 +57,7 @@
     "urbanization": 0.45,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
-    "resources": { "Food": 2.219, "Coal": 3.621, "Oil": 0.305, "IronOre": 4.312, "RareEarths": 0.024, "NaturalGas": 0.328, "Timber": 2.115, "Bauxite": 0.026, "Uranium": 0.586 }
+    "resources": { "Food": 2.219, "Coal": 25.615, "Oil": 0.305, "IronOre": 0.174, "RareEarths": 0.024, "NaturalGas": 0.328, "Timber": 2.115, "Bauxite": 0.026, "Uranium": 0.03 }
   },
   // North West
   "za_nw": {
@@ -65,7 +65,7 @@
     "urbanization": 0.53,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.224, "Coal": 2.248, "Oil": 0.948, "IronOre": 2.252, "RareEarths": 0.118, "NaturalGas": 0.694, "Timber": 2.514, "Bauxite": 0.156, "Uranium": 0.853 }
+    "resources": { "Food": 2.224, "Coal": 0.175, "Oil": 0.948, "IronOre": 0.174, "RareEarths": 0.118, "NaturalGas": 0.694, "Timber": 2.514, "Bauxite": 0.156, "Uranium": 2.361 }
   },
   // Northern Cape
   "za_nc": {
@@ -73,7 +73,7 @@
     "urbanization": 0.34,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 0.909, "Coal": 2.456, "Oil": 0.436, "IronOre": 2.649, "RareEarths": 0.117, "NaturalGas": 0.711, "Timber": 2.559, "Bauxite": 0.063, "Uranium": 0.351 }
+    "resources": { "Food": 0.909, "Coal": 0.175, "Oil": 0.436, "IronOre": 25.437, "RareEarths": 0.117, "NaturalGas": 0.711, "Timber": 2.559, "Bauxite": 0.063, "Uranium": 0.03 }
   },
   // Western Cape
   "za_wc": {
@@ -81,6 +81,6 @@
     "urbanization": 0.72,
     "cultures": { "zulu": 0.23, "xhosa": 0.16, "sotho": 0.14, "afrikaner": 0.135, "cape_coloured": 0.085, "tswana": 0.08, "tsonga": 0.045, "english": 0.035, "indian_diaspora": 0.025, "swazi": 0.025, "venda": 0.024, "shona": 0.01, "ndebele": 0.006 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.371, "Coal": 2.305, "Oil": 0.437, "IronOre": 3.333, "RareEarths": 0.056, "NaturalGas": 0.335, "Timber": 3.201, "Bauxite": 0.128, "Uranium": 0.93 }
+    "resources": { "Food": 2.371, "Coal": 0.175, "Oil": 0.437, "IronOre": 0.174, "RareEarths": 0.056, "NaturalGas": 0.335, "Timber": 3.201, "Bauxite": 0.128, "Uranium": 0.03 }
   }
 }

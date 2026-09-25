@@ -17,7 +17,7 @@
     "urbanization": 0.8,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.497, "Coal": 0.323, "Oil": 8.467, "IronOre": 3.732, "RareEarths": 3.924, "NaturalGas": 0.612, "Timber": 1.279, "Bauxite": 3.211, "Uranium": 0.013 }
+    "resources": { "Food": 2.497, "Coal": 0.323, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.612, "Timber": 1.279, "Bauxite": 0.146, "Uranium": 0.013 }
   },
   // Alagoas
   "br_al": {
@@ -25,7 +25,7 @@
     "urbanization": 0.94,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.707, "Coal": 0.198, "Oil": 6.569, "IronOre": 2.595, "RareEarths": 3.333, "NaturalGas": 0.333, "Timber": 3.034, "Bauxite": 3.26, "Uranium": 0.011 }
+    "resources": { "Food": 1.707, "Coal": 0.198, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.333, "Timber": 3.034, "Bauxite": 0.146, "Uranium": 0.011 }
   },
   // Amapá
   "br_ap": {
@@ -33,7 +33,7 @@
     "urbanization": 0.92,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.406, "Coal": 0.226, "Oil": 4.005, "IronOre": 3.273, "RareEarths": 2.939, "NaturalGas": 0.163, "Timber": 2.95, "Bauxite": 3.195, "Uranium": 0.007 }
+    "resources": { "Food": 2.406, "Coal": 0.226, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.163, "Timber": 2.95, "Bauxite": 0.146, "Uranium": 0.007 }
   },
   // Amazonas
   "br_am": {
@@ -41,7 +41,7 @@
     "urbanization": 0.81,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.89, "Coal": 0.227, "Oil": 10.892, "IronOre": 2.14, "RareEarths": 4.221, "NaturalGas": 0.704, "Timber": 0.728, "Bauxite": 3.694, "Uranium": 0.011 }
+    "resources": { "Food": 1.89, "Coal": 0.227, "Oil": 2.381, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.704, "Timber": 0.728, "Bauxite": 0.146, "Uranium": 0.011 }
   },
   // Bahia
   "br_ba": {
@@ -49,7 +49,7 @@
     "urbanization": 0.83,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.054, "Coal": 0.33, "Oil": 5.616, "IronOre": 3.324, "RareEarths": 4.065, "NaturalGas": 0.364, "Timber": 2.351, "Bauxite": 3.165, "Uranium": 0.007 }
+    "resources": { "Food": 1.054, "Coal": 0.33, "Oil": 2.381, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.364, "Timber": 2.351, "Bauxite": 0.146, "Uranium": 0.007 }
   },
   // Ceará
   "br_ce": {
@@ -57,7 +57,7 @@
     "urbanization": 0.95,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.394, "Coal": 0.225, "Oil": 12.122, "IronOre": 3.458, "RareEarths": 2.849, "NaturalGas": 0.516, "Timber": 2.153, "Bauxite": 2.762, "Uranium": 0.008 }
+    "resources": { "Food": 1.394, "Coal": 0.225, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.516, "Timber": 2.153, "Bauxite": 0.146, "Uranium": 0.008 }
   },
   // Espírito Santo
   "br_es": {
@@ -65,7 +65,7 @@
     "urbanization": 0.92,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.433, "Coal": 0.641, "Oil": 10.658, "IronOre": 2.593, "RareEarths": 4.427, "NaturalGas": 0.956, "Timber": 1.074, "Bauxite": 4.084, "Uranium": 0.009 }
+    "resources": { "Food": 2.433, "Coal": 0.641, "Oil": 14.261, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.956, "Timber": 1.074, "Bauxite": 0.146, "Uranium": 0.009 }
   },
   // Goiás
   "br_go": {
@@ -73,7 +73,7 @@
     "urbanization": 0.8,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 7, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.677, "Coal": 0.243, "Oil": 10.604, "IronOre": 3.293, "RareEarths": 2.485, "NaturalGas": 0.363, "Timber": 2.287, "Bauxite": 4.241, "Uranium": 0.007 }
+    "resources": { "Food": 1.677, "Coal": 0.243, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 37.717, "NaturalGas": 0.363, "Timber": 2.287, "Bauxite": 0.146, "Uranium": 0.007 }
   },
   // Maranhão
   "br_ma": {
@@ -81,7 +81,7 @@
     "urbanization": 0.86,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.886, "Coal": 0.35, "Oil": 11.833, "IronOre": 4.387, "RareEarths": 2.225, "NaturalGas": 0.23, "Timber": 1.807, "Bauxite": 1.793, "Uranium": 0.006 }
+    "resources": { "Food": 1.886, "Coal": 0.35, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.23, "Timber": 1.807, "Bauxite": 0.146, "Uranium": 0.006 }
   },
   // Mato Grosso
   "br_mt": {
@@ -89,7 +89,7 @@
     "urbanization": 0.65,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 3, "Infrastructure": 2 },
-    "resources": { "Food": 0.983, "Coal": 0.332, "Oil": 5.898, "IronOre": 3.217, "RareEarths": 2.627, "NaturalGas": 0.546, "Timber": 3.384, "Bauxite": 2.078, "Uranium": 0.009 }
+    "resources": { "Food": 0.983, "Coal": 0.332, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.546, "Timber": 3.384, "Bauxite": 0.146, "Uranium": 0.009 }
   },
   // Mato Grosso do Sul
   "br_ms": {
@@ -97,7 +97,7 @@
     "urbanization": 0.65,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 3, "Infrastructure": 2 },
-    "resources": { "Food": 1.84, "Coal": 0.265, "Oil": 4.985, "IronOre": 2.053, "RareEarths": 3.64, "NaturalGas": 0.383, "Timber": 2.868, "Bauxite": 1.358, "Uranium": 0.009 }
+    "resources": { "Food": 1.84, "Coal": 0.265, "Oil": 0.401, "IronOre": 2.386, "RareEarths": 0.152, "NaturalGas": 0.383, "Timber": 2.868, "Bauxite": 0.146, "Uranium": 0.009 }
   },
   // Minas Gerais
   "br_mg": {
@@ -105,7 +105,7 @@
     "urbanization": 0.81,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 10, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.785, "Coal": 0.087, "Oil": 3.686, "IronOre": 2.192, "RareEarths": 1.446, "NaturalGas": 0.185, "Timber": 1.295, "Bauxite": 1.444, "Uranium": 0.006 }
+    "resources": { "Food": 1.785, "Coal": 0.087, "Oil": 0.401, "IronOre": 41.128, "RareEarths": 37.717, "NaturalGas": 0.185, "Timber": 1.295, "Bauxite": 7.376, "Uranium": 0.006 }
   },
   // Paraná
   "br_pr": {
@@ -113,7 +113,7 @@
     "urbanization": 0.86,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.621, "Coal": 0.107, "Oil": 8.349, "IronOre": 3.195, "RareEarths": 3.847, "NaturalGas": 0.363, "Timber": 1.566, "Bauxite": 3.724, "Uranium": 0.007 }
+    "resources": { "Food": 1.621, "Coal": 0.107, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.363, "Timber": 1.566, "Bauxite": 0.146, "Uranium": 0.007 }
   },
   // Paraíba
   "br_pb": {
@@ -121,7 +121,7 @@
     "urbanization": 0.86,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.263, "Coal": 0.625, "Oil": 8.779, "IronOre": 2.479, "RareEarths": 2.915, "NaturalGas": 0.574, "Timber": 2.873, "Bauxite": 1.917, "Uranium": 0.022 }
+    "resources": { "Food": 1.263, "Coal": 0.625, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.574, "Timber": 2.873, "Bauxite": 0.146, "Uranium": 0.022 }
   },
   // Pará
   "br_pa": {
@@ -129,7 +129,7 @@
     "urbanization": 0.84,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.405, "Coal": 0.363, "Oil": 11.291, "IronOre": 2.675, "RareEarths": 3.979, "NaturalGas": 0.278, "Timber": 2.089, "Bauxite": 2.543, "Uranium": 0.006 }
+    "resources": { "Food": 1.405, "Coal": 0.363, "Oil": 0.401, "IronOre": 31.442, "RareEarths": 0.152, "NaturalGas": 0.278, "Timber": 2.089, "Bauxite": 65.211, "Uranium": 0.006 }
   },
   // Pernambuco
   "br_pe": {
@@ -137,7 +137,7 @@
     "urbanization": 0.93,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.459, "Coal": 0.072, "Oil": 8.573, "IronOre": 4.023, "RareEarths": 1.326, "NaturalGas": 0.248, "Timber": 2.274, "Bauxite": 1.88, "Uranium": 0.002 }
+    "resources": { "Food": 1.459, "Coal": 0.072, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.248, "Timber": 2.274, "Bauxite": 0.146, "Uranium": 0.002 }
   },
   // Piauí
   "br_pi": {
@@ -145,7 +145,7 @@
     "urbanization": 0.88,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 0.808, "Coal": 0.25, "Oil": 6.516, "IronOre": 4.037, "RareEarths": 3.636, "NaturalGas": 0.366, "Timber": 2.809, "Bauxite": 1.299, "Uranium": 0.008 }
+    "resources": { "Food": 0.808, "Coal": 0.25, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.366, "Timber": 2.809, "Bauxite": 0.146, "Uranium": 0.008 }
   },
   // Rio de Janeiro
   "br_rj": {
@@ -153,7 +153,7 @@
     "urbanization": 0.97,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 2.016, "Coal": 0.64, "Oil": 7.916, "IronOre": 2.497, "RareEarths": 4.271, "NaturalGas": 0.741, "Timber": 2.058, "Bauxite": 3.477, "Uranium": 0.021 }
+    "resources": { "Food": 2.016, "Coal": 0.64, "Oil": 154.8, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.741, "Timber": 2.058, "Bauxite": 0.146, "Uranium": 0.021 }
   },
   // Rio Grande do Norte
   "br_rn": {
@@ -161,7 +161,7 @@
     "urbanization": 0.84,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.044, "Coal": 0.402, "Oil": 10.709, "IronOre": 3.325, "RareEarths": 2.99, "NaturalGas": 0.321, "Timber": 1.779, "Bauxite": 4.35, "Uranium": 0.012 }
+    "resources": { "Food": 1.044, "Coal": 0.402, "Oil": 2.381, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.321, "Timber": 1.779, "Bauxite": 0.146, "Uranium": 0.012 }
   },
   // Rio Grande do Sul
   "br_rs": {
@@ -169,7 +169,7 @@
     "urbanization": 0.85,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.161, "Coal": 0.214, "Oil": 6.019, "IronOre": 4.468, "RareEarths": 1.369, "NaturalGas": 0.281, "Timber": 2.124, "Bauxite": 1.795, "Uranium": 0.009 }
+    "resources": { "Food": 1.161, "Coal": 0.214, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.281, "Timber": 2.124, "Bauxite": 0.146, "Uranium": 0.009 }
   },
   // Rondônia
   "br_ro": {
@@ -177,7 +177,7 @@
     "urbanization": 0.77,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 0.835, "Coal": 0.192, "Oil": 6.853, "IronOre": 1.528, "RareEarths": 3.673, "NaturalGas": 0.206, "Timber": 0.959, "Bauxite": 4.004, "Uranium": 0.007 }
+    "resources": { "Food": 0.835, "Coal": 0.192, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.206, "Timber": 0.959, "Bauxite": 0.146, "Uranium": 0.007 }
   },
   // Roraima
   "br_rr": {
@@ -185,7 +185,7 @@
     "urbanization": 0.81,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.503, "Coal": 0.214, "Oil": 6.475, "IronOre": 3.026, "RareEarths": 2.257, "NaturalGas": 0.369, "Timber": 0.753, "Bauxite": 2.938, "Uranium": 0.005 }
+    "resources": { "Food": 1.503, "Coal": 0.214, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.369, "Timber": 0.753, "Bauxite": 0.146, "Uranium": 0.005 }
   },
   // Santa Catarina
   "br_sc": {
@@ -193,7 +193,7 @@
     "urbanization": 0.92,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.201, "Coal": 0.266, "Oil": 12.511, "IronOre": 3.474, "RareEarths": 4.189, "NaturalGas": 0.248, "Timber": 3.038, "Bauxite": 3.68, "Uranium": 0.008 }
+    "resources": { "Food": 1.201, "Coal": 0.266, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.248, "Timber": 3.038, "Bauxite": 0.146, "Uranium": 0.008 }
   },
   // Sergipe
   "br_se": {
@@ -201,7 +201,7 @@
     "urbanization": 0.87,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.001, "Coal": 0.18, "Oil": 11.723, "IronOre": 3.301, "RareEarths": 2.174, "NaturalGas": 0.243, "Timber": 1.67, "Bauxite": 3.624, "Uranium": 0.008 }
+    "resources": { "Food": 2.001, "Coal": 0.18, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.243, "Timber": 1.67, "Bauxite": 0.146, "Uranium": 0.008 }
   },
   // São Paulo
   "br_sp": {
@@ -209,7 +209,7 @@
     "urbanization": 0.92,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 11, "CivilianIndustry": 5, "Infrastructure": 3 },
-    "resources": { "Food": 2.243, "Coal": 0.105, "Oil": 5.963, "IronOre": 1.972, "RareEarths": 1.625, "NaturalGas": 0.284, "Timber": 2.674, "Bauxite": 3.387, "Uranium": 0.004 }
+    "resources": { "Food": 2.243, "Coal": 0.105, "Oil": 24.161, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 0.284, "Timber": 2.674, "Bauxite": 0.146, "Uranium": 0.004 }
   },
   // Tocantins
   "br_to": {
@@ -217,6 +217,6 @@
     "urbanization": 0.65,
     "cultures": { "brazilian": 0.83, "african_american": 0.095, "italian": 0.015, "german": 0.01, "guarani": 0.01, "native_american": 0.01, "portuguese": 0.01, "japanese": 0.008, "venezuelan": 0.007, "haitian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.328, "Coal": 0.543, "Oil": 3.67, "IronOre": 3.136, "RareEarths": 4.377, "NaturalGas": 1.029, "Timber": 2.544, "Bauxite": 4.457, "Uranium": 0.013 }
+    "resources": { "Food": 2.328, "Coal": 0.543, "Oil": 0.401, "IronOre": 0.151, "RareEarths": 0.152, "NaturalGas": 1.029, "Timber": 2.544, "Bauxite": 0.146, "Uranium": 0.013 }
   }
 }

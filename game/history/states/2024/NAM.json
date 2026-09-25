@@ -17,7 +17,7 @@
     "urbanization": 0.53,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 2.349, "Coal": 0.262, "Oil": 0.529, "IronOre": 0.102, "RareEarths": 0.081, "NaturalGas": 0.236, "Timber": 2.597, "Bauxite": 0.05, "Uranium": 0.724 }
+    "resources": { "Food": 2.349, "Coal": 0.262, "Oil": 0.529, "IronOre": 0.102, "RareEarths": 0.081, "NaturalGas": 0.236, "Timber": 2.597, "Bauxite": 0.05, "Uranium": 6.409 }
   },
   // Hardap
   "na_ha": {
@@ -25,7 +25,7 @@
     "urbanization": 0.45,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.798, "Coal": 0.211, "Oil": 0.313, "IronOre": 0.332, "RareEarths": 0.113, "NaturalGas": 0.419, "Timber": 2.142, "Bauxite": 0.12, "Uranium": 0.843 }
+    "resources": { "Food": 1.798, "Coal": 0.211, "Oil": 0.313, "IronOre": 0.332, "RareEarths": 0.113, "NaturalGas": 0.419, "Timber": 2.142, "Bauxite": 0.12, "Uranium": 0.031 }
   },
   // Karas
   "na_ka": {
@@ -33,7 +33,7 @@
     "urbanization": 0.32,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.647, "Coal": 0.385, "Oil": 0.559, "IronOre": 0.256, "RareEarths": 0.054, "NaturalGas": 0.557, "Timber": 2.706, "Bauxite": 0.099, "Uranium": 0.313 }
+    "resources": { "Food": 1.647, "Coal": 0.385, "Oil": 0.559, "IronOre": 0.256, "RareEarths": 0.054, "NaturalGas": 0.557, "Timber": 2.706, "Bauxite": 0.099, "Uranium": 0.031 }
   },
   // Kavango
   "na_ok": {
@@ -41,7 +41,7 @@
     "urbanization": 0.7,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.33, "Coal": 0.298, "Oil": 0.938, "IronOre": 0.484, "RareEarths": 0.063, "NaturalGas": 0.926, "Timber": 2.514, "Bauxite": 0.185, "Uranium": 0.836 }
+    "resources": { "Food": 1.33, "Coal": 0.298, "Oil": 0.938, "IronOre": 0.484, "RareEarths": 0.063, "NaturalGas": 0.926, "Timber": 2.514, "Bauxite": 0.185, "Uranium": 0.031 }
   },
   // Khomas
   "na_kh": {
@@ -49,7 +49,7 @@
     "urbanization": 0.72,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.386, "Coal": 0.161, "Oil": 0.363, "IronOre": 0.121, "RareEarths": 0.039, "NaturalGas": 0.317, "Timber": 1.079, "Bauxite": 0.054, "Uranium": 0.625 }
+    "resources": { "Food": 1.386, "Coal": 0.161, "Oil": 0.363, "IronOre": 0.121, "RareEarths": 0.039, "NaturalGas": 0.317, "Timber": 1.079, "Bauxite": 0.054, "Uranium": 0.031 }
   },
   // Kunene
   "na_ku": {
@@ -57,7 +57,7 @@
     "urbanization": 0.17,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.336, "Coal": 0.467, "Oil": 0.503, "IronOre": 0.163, "RareEarths": 0.08, "NaturalGas": 0.53, "Timber": 2.981, "Bauxite": 0.14, "Uranium": 0.715 }
+    "resources": { "Food": 1.336, "Coal": 0.467, "Oil": 0.503, "IronOre": 0.163, "RareEarths": 0.08, "NaturalGas": 0.53, "Timber": 2.981, "Bauxite": 0.14, "Uranium": 0.031 }
   },
   // Omaheke
   "na_oh": {
@@ -65,7 +65,7 @@
     "urbanization": 0.37,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 1.052, "Coal": 0.257, "Oil": 0.264, "IronOre": 0.158, "RareEarths": 0.057, "NaturalGas": 0.29, "Timber": 2.773, "Bauxite": 0.055, "Uranium": 0.68 }
+    "resources": { "Food": 1.052, "Coal": 0.257, "Oil": 0.264, "IronOre": 0.158, "RareEarths": 0.057, "NaturalGas": 0.29, "Timber": 2.773, "Bauxite": 0.055, "Uranium": 0.031 }
   },
   // Omusati
   "na_os": {
@@ -73,7 +73,7 @@
     "urbanization": 0.61,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.561, "Coal": 0.232, "Oil": 0.468, "IronOre": 0.335, "RareEarths": 0.093, "NaturalGas": 0.434, "Timber": 0.783, "Bauxite": 0.132, "Uranium": 0.512 }
+    "resources": { "Food": 1.561, "Coal": 0.232, "Oil": 0.468, "IronOre": 0.335, "RareEarths": 0.093, "NaturalGas": 0.434, "Timber": 0.783, "Bauxite": 0.132, "Uranium": 0.031 }
   },
   // Oshikoto
   "na_ot": {
@@ -81,7 +81,7 @@
     "urbanization": 0.54,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.247, "Coal": 0.328, "Oil": 0.202, "IronOre": 0.192, "RareEarths": 0.036, "NaturalGas": 0.46, "Timber": 0.706, "Bauxite": 0.087, "Uranium": 0.41 }
+    "resources": { "Food": 1.247, "Coal": 0.328, "Oil": 0.202, "IronOre": 0.192, "RareEarths": 0.036, "NaturalGas": 0.46, "Timber": 0.706, "Bauxite": 0.087, "Uranium": 0.031 }
   },
   // Otjozondjupa
   "na_od": {
@@ -89,7 +89,7 @@
     "urbanization": 0.54,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 2.305, "Coal": 0.064, "Oil": 0.174, "IronOre": 0.081, "RareEarths": 0.033, "NaturalGas": 0.218, "Timber": 3.043, "Bauxite": 0.022, "Uranium": 1.023 }
+    "resources": { "Food": 2.305, "Coal": 0.064, "Oil": 0.174, "IronOre": 0.081, "RareEarths": 0.033, "NaturalGas": 0.218, "Timber": 3.043, "Bauxite": 0.022, "Uranium": 0.031 }
   },
   // Zambezi
   "na_ca": {
@@ -97,6 +97,6 @@
     "urbanization": 0.43,
     "cultures": { "ovambo": 0.49, "cape_coloured": 0.07, "herero": 0.07, "afrikaner": 0.06, "shona": 0.06, "sotho": 0.06, "tswana": 0.05, "zulu": 0.05, "ndebele": 0.04, "san": 0.03, "english": 0.01, "german": 0.01 },
     "buildings": { "Infrastructure": 1 },
-    "resources": { "Food": 2.066, "Coal": 0.433, "Oil": 0.547, "IronOre": 0.25, "RareEarths": 0.089, "NaturalGas": 0.542, "Timber": 2.873, "Bauxite": 0.111, "Uranium": 0.655 }
+    "resources": { "Food": 2.066, "Coal": 0.433, "Oil": 0.547, "IronOre": 0.25, "RareEarths": 0.089, "NaturalGas": 0.542, "Timber": 2.873, "Bauxite": 0.111, "Uranium": 0.031 }
   }
 }

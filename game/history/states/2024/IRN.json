@@ -17,7 +17,7 @@
     "urbanization": 0.78,
     "cultures": { "azerbaijani": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.46, "Coal": 0.082, "Oil": 12.465, "IronOre": 0.115, "RareEarths": 0.019, "NaturalGas": 11.518, "Timber": 2.591, "Bauxite": 0.028, "Uranium": 0.003 }
+    "resources": { "Food": 1.46, "Coal": 0.082, "Oil": 0.377, "IronOre": 0.115, "RareEarths": 0.019, "NaturalGas": 0.412, "Timber": 2.591, "Bauxite": 0.028, "Uranium": 0.003 }
   },
   // Bushehr
   "ir_06": {
@@ -25,7 +25,7 @@
     "urbanization": 0.59,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.506, "Coal": 0.29, "Oil": 6.166, "IronOre": 0.231, "RareEarths": 0.051, "NaturalGas": 6.496, "Timber": 2.695, "Bauxite": 0.07, "Uranium": 0.011 }
+    "resources": { "Food": 1.506, "Coal": 0.29, "Oil": 11.119, "IronOre": 0.231, "RareEarths": 0.051, "NaturalGas": 153, "Timber": 2.695, "Bauxite": 0.07, "Uranium": 0.011 }
   },
   // Chaharmahal and Bakhtiari
   "ir_08": {
@@ -33,7 +33,7 @@
     "urbanization": 0.59,
     "cultures": { "lur": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.386, "Coal": 0.326, "Oil": 7.704, "IronOre": 0.282, "RareEarths": 0.091, "NaturalGas": 11.071, "Timber": 3.088, "Bauxite": 0.061, "Uranium": 0.014 }
+    "resources": { "Food": 1.386, "Coal": 0.326, "Oil": 0.377, "IronOre": 0.282, "RareEarths": 0.091, "NaturalGas": 0.412, "Timber": 3.088, "Bauxite": 0.061, "Uranium": 0.014 }
   },
   // East Azerbaijan
   "ir_01": {
@@ -41,7 +41,7 @@
     "urbanization": 0.76,
     "cultures": { "azerbaijani": 0.89, "persian": 0.07, "kurdish": 0.02, "armenian": 0.01, "talysh": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.019, "Coal": 0.241, "Oil": 3.691, "IronOre": 0.233, "RareEarths": 0.05, "NaturalGas": 7.257, "Timber": 2.696, "Bauxite": 0.09, "Uranium": 0.006 }
+    "resources": { "Food": 1.019, "Coal": 0.241, "Oil": 0.377, "IronOre": 0.233, "RareEarths": 0.05, "NaturalGas": 0.412, "Timber": 2.696, "Bauxite": 0.09, "Uranium": 0.006 }
   },
   // Fars
   "ir_14": {
@@ -49,7 +49,7 @@
     "urbanization": 0.63,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
-    "resources": { "Food": 1.474, "Coal": 0.299, "Oil": 8.954, "IronOre": 0.391, "RareEarths": 0.08, "NaturalGas": 5.507, "Timber": 1.442, "Bauxite": 0.125, "Uranium": 0.008 }
+    "resources": { "Food": 1.474, "Coal": 0.299, "Oil": 6.822, "IronOre": 0.391, "RareEarths": 0.08, "NaturalGas": 19.191, "Timber": 1.442, "Bauxite": 0.125, "Uranium": 0.008 }
   },
   // Gilan
   "ir_19": {
@@ -57,7 +57,7 @@
     "urbanization": 0.89,
     "cultures": { "gilaki": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.258, "Coal": 0.217, "Oil": 8.166, "IronOre": 0.196, "RareEarths": 0.037, "NaturalGas": 10.018, "Timber": 0.827, "Bauxite": 0.083, "Uranium": 0.007 }
+    "resources": { "Food": 1.258, "Coal": 0.217, "Oil": 0.377, "IronOre": 0.196, "RareEarths": 0.037, "NaturalGas": 0.412, "Timber": 0.827, "Bauxite": 0.083, "Uranium": 0.007 }
   },
   // Golestan
   "ir_27": {
@@ -65,7 +65,7 @@
     "urbanization": 0.82,
     "cultures": { "turkmen": 0.6577, "persian": 0.3298, "pashtun": 0.006, "tajik": 0.0042, "armenian": 0.0012, "assyrian": 0.0006, "parsi": 0.0006 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.255, "Coal": 0.095, "Oil": 7.892, "IronOre": 0.171, "RareEarths": 0.025, "NaturalGas": 10.741, "Timber": 3.188, "Bauxite": 0.053, "Uranium": 0.006 }
+    "resources": { "Food": 1.255, "Coal": 0.095, "Oil": 0.377, "IronOre": 0.171, "RareEarths": 0.025, "NaturalGas": 0.412, "Timber": 3.188, "Bauxite": 0.053, "Uranium": 0.006 }
   },
   // Hamadan
   "ir_24": {
@@ -73,7 +73,7 @@
     "urbanization": 0.72,
     "cultures": { "kurdish": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.523, "Coal": 0.332, "Oil": 7.986, "IronOre": 0.192, "RareEarths": 0.062, "NaturalGas": 11.735, "Timber": 2.932, "Bauxite": 0.067, "Uranium": 0.005 }
+    "resources": { "Food": 1.523, "Coal": 0.332, "Oil": 0.377, "IronOre": 0.192, "RareEarths": 0.062, "NaturalGas": 0.412, "Timber": 2.932, "Bauxite": 0.067, "Uranium": 0.005 }
   },
   // Hormozgan
   "ir_23": {
@@ -81,7 +81,7 @@
     "urbanization": 0.67,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.776, "Coal": 0.424, "Oil": 8.671, "IronOre": 0.197, "RareEarths": 0.065, "NaturalGas": 6.864, "Timber": 2.519, "Bauxite": 0.071, "Uranium": 0.009 }
+    "resources": { "Food": 1.776, "Coal": 0.424, "Oil": 4.674, "IronOre": 0.197, "RareEarths": 0.065, "NaturalGas": 12.149, "Timber": 2.519, "Bauxite": 0.071, "Uranium": 0.009 }
   },
   // Ilam
   "ir_05": {
@@ -89,7 +89,7 @@
     "urbanization": 0.55,
     "cultures": { "kurdish": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.165, "Coal": 0.314, "Oil": 11.513, "IronOre": 0.21, "RareEarths": 0.049, "NaturalGas": 4.855, "Timber": 1.979, "Bauxite": 0.041, "Uranium": 0.006 }
+    "resources": { "Food": 1.165, "Coal": 0.314, "Oil": 8.971, "IronOre": 0.21, "RareEarths": 0.049, "NaturalGas": 5.107, "Timber": 1.979, "Bauxite": 0.041, "Uranium": 0.006 }
   },
   // Isfahan
   "ir_04": {
@@ -97,7 +97,7 @@
     "urbanization": 0.75,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.175, "Coal": 0.158, "Oil": 4.675, "IronOre": 0.248, "RareEarths": 0.056, "NaturalGas": 10.098, "Timber": 3.395, "Bauxite": 0.053, "Uranium": 0.007 }
+    "resources": { "Food": 1.175, "Coal": 0.158, "Oil": 0.377, "IronOre": 0.248, "RareEarths": 0.056, "NaturalGas": 0.412, "Timber": 3.395, "Bauxite": 0.053, "Uranium": 0.007 }
   },
   // Kerman
   "ir_15": {
@@ -105,7 +105,7 @@
     "urbanization": 0.62,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.285, "Coal": 0.28, "Oil": 8.448, "IronOre": 0.235, "RareEarths": 0.047, "NaturalGas": 5.783, "Timber": 3.07, "Bauxite": 0.062, "Uranium": 0.006 }
+    "resources": { "Food": 2.285, "Coal": 0.28, "Oil": 0.377, "IronOre": 0.235, "RareEarths": 0.047, "NaturalGas": 0.412, "Timber": 3.07, "Bauxite": 0.062, "Uranium": 0.006 }
   },
   // Kermanshah
   "ir_17": {
@@ -113,7 +113,7 @@
     "urbanization": 0.73,
     "cultures": { "kurdish": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.032, "Coal": 0.57, "Oil": 3.622, "IronOre": 0.169, "RareEarths": 0.072, "NaturalGas": 10.393, "Timber": 2.904, "Bauxite": 0.102, "Uranium": 0.014 }
+    "resources": { "Food": 2.032, "Coal": 0.57, "Oil": 6.822, "IronOre": 0.169, "RareEarths": 0.072, "NaturalGas": 0.412, "Timber": 2.904, "Bauxite": 0.102, "Uranium": 0.014 }
   },
   // Khuzestan
   "ir_10": {
@@ -121,7 +121,7 @@
     "urbanization": 0.89,
     "cultures": { "arab_iraqi": 0.52, "persian": 0.34, "lur": 0.09, "kurdish": 0.03, "arab_levantine": 0.02 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.379, "Coal": 0.249, "Oil": 7.788, "IronOre": 0.279, "RareEarths": 0.084, "NaturalGas": 6.243, "Timber": 2.625, "Bauxite": 0.121, "Uranium": 0.006 }
+    "resources": { "Food": 1.379, "Coal": 0.249, "Oil": 161.5, "IronOre": 0.279, "RareEarths": 0.084, "NaturalGas": 23.886, "Timber": 2.625, "Bauxite": 0.121, "Uranium": 0.006 }
   },
   // Kohgiluyeh and Boyer-Ahmad
   "ir_18": {
@@ -129,7 +129,7 @@
     "urbanization": 0.73,
     "cultures": { "lur": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.844, "Coal": 0.202, "Oil": 7.607, "IronOre": 0.216, "RareEarths": 0.046, "NaturalGas": 9.012, "Timber": 2.107, "Bauxite": 0.068, "Uranium": 0.007 }
+    "resources": { "Food": 1.844, "Coal": 0.202, "Oil": 17.564, "IronOre": 0.216, "RareEarths": 0.046, "NaturalGas": 5.107, "Timber": 2.107, "Bauxite": 0.068, "Uranium": 0.007 }
   },
   // Kurdistan
   "ir_16": {
@@ -137,7 +137,7 @@
     "urbanization": 0.57,
     "cultures": { "kurdish": 0.9, "persian": 0.06, "azerbaijani": 0.025, "lur": 0.01, "assyrian": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.013, "Coal": 0.467, "Oil": 11.246, "IronOre": 0.236, "RareEarths": 0.081, "NaturalGas": 4.9, "Timber": 1.417, "Bauxite": 0.149, "Uranium": 0.011 }
+    "resources": { "Food": 2.013, "Coal": 0.467, "Oil": 0.377, "IronOre": 0.236, "RareEarths": 0.081, "NaturalGas": 0.412, "Timber": 1.417, "Bauxite": 0.149, "Uranium": 0.011 }
   },
   // Lorestan
   "ir_20": {
@@ -145,7 +145,7 @@
     "urbanization": 0.66,
     "cultures": { "lur": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.106, "Coal": 0.119, "Oil": 9.59, "IronOre": 0.114, "RareEarths": 0.058, "NaturalGas": 8.516, "Timber": 2.422, "Bauxite": 0.042, "Uranium": 0.004 }
+    "resources": { "Food": 2.106, "Coal": 0.119, "Oil": 0.377, "IronOre": 0.114, "RareEarths": 0.058, "NaturalGas": 0.412, "Timber": 2.422, "Bauxite": 0.042, "Uranium": 0.004 }
   },
   // Markazi
   "ir_22": {
@@ -153,7 +153,7 @@
     "urbanization": 0.61,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 0.774, "Coal": 0.314, "Oil": 9.359, "IronOre": 0.395, "RareEarths": 0.081, "NaturalGas": 9.846, "Timber": 1.203, "Bauxite": 0.095, "Uranium": 0.018 }
+    "resources": { "Food": 0.774, "Coal": 0.314, "Oil": 0.377, "IronOre": 0.395, "RareEarths": 0.081, "NaturalGas": 0.412, "Timber": 1.203, "Bauxite": 0.095, "Uranium": 0.018 }
   },
   // Mazandaran
   "ir_21": {
@@ -161,7 +161,7 @@
     "urbanization": 0.82,
     "cultures": { "gilaki": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.93, "Coal": 0.131, "Oil": 8.681, "IronOre": 0.109, "RareEarths": 0.048, "NaturalGas": 10.984, "Timber": 3.402, "Bauxite": 0.034, "Uranium": 0.004 }
+    "resources": { "Food": 1.93, "Coal": 0.131, "Oil": 0.377, "IronOre": 0.109, "RareEarths": 0.048, "NaturalGas": 0.412, "Timber": 3.402, "Bauxite": 0.034, "Uranium": 0.004 }
   },
   // North Khorasan
   "ir_31": {
@@ -169,7 +169,7 @@
     "urbanization": 0.54,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.91, "Coal": 0.166, "Oil": 6.49, "IronOre": 0.186, "RareEarths": 0.039, "NaturalGas": 9.183, "Timber": 3.322, "Bauxite": 0.036, "Uranium": 0.009 }
+    "resources": { "Food": 1.91, "Coal": 0.166, "Oil": 0.377, "IronOre": 0.186, "RareEarths": 0.039, "NaturalGas": 0.412, "Timber": 3.322, "Bauxite": 0.036, "Uranium": 0.009 }
   },
   // Qazvin
   "ir_28": {
@@ -177,7 +177,7 @@
     "urbanization": 0.88,
     "cultures": { "azerbaijani": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.049, "Coal": 0.278, "Oil": 7.869, "IronOre": 0.179, "RareEarths": 0.069, "NaturalGas": 6.667, "Timber": 2.173, "Bauxite": 0.053, "Uranium": 0.008 }
+    "resources": { "Food": 1.049, "Coal": 0.278, "Oil": 0.377, "IronOre": 0.179, "RareEarths": 0.069, "NaturalGas": 0.412, "Timber": 2.173, "Bauxite": 0.053, "Uranium": 0.008 }
   },
   // Qom
   "ir_26": {
@@ -185,7 +185,7 @@
     "urbanization": 0.88,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.652, "Coal": 0.333, "Oil": 10.913, "IronOre": 0.182, "RareEarths": 0.101, "NaturalGas": 6.595, "Timber": 1.771, "Bauxite": 0.146, "Uranium": 0.009 }
+    "resources": { "Food": 1.652, "Coal": 0.333, "Oil": 0.377, "IronOre": 0.182, "RareEarths": 0.101, "NaturalGas": 0.412, "Timber": 1.771, "Bauxite": 0.146, "Uranium": 0.009 }
   },
   // Razavi Khorasan
   "ir_30": {
@@ -193,7 +193,7 @@
     "urbanization": 0.76,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.07, "Coal": 0.502, "Oil": 8.464, "IronOre": 0.338, "RareEarths": 0.092, "NaturalGas": 5.491, "Timber": 3.198, "Bauxite": 0.118, "Uranium": 0.016 }
+    "resources": { "Food": 1.07, "Coal": 0.502, "Oil": 0.377, "IronOre": 0.338, "RareEarths": 0.092, "NaturalGas": 12.149, "Timber": 3.198, "Bauxite": 0.118, "Uranium": 0.016 }
   },
   // Semnan
   "ir_12": {
@@ -201,7 +201,7 @@
     "urbanization": 0.5,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 2.46, "Coal": 0.282, "Oil": 10.56, "IronOre": 0.125, "RareEarths": 0.063, "NaturalGas": 10.633, "Timber": 1.628, "Bauxite": 0.066, "Uranium": 0.006 }
+    "resources": { "Food": 2.46, "Coal": 0.282, "Oil": 0.377, "IronOre": 0.125, "RareEarths": 0.063, "NaturalGas": 7.454, "Timber": 1.628, "Bauxite": 0.066, "Uranium": 0.006 }
   },
   // Sistan and Baluchestan
   "ir_13": {
@@ -209,7 +209,7 @@
     "urbanization": 0.69,
     "cultures": { "baloch": 0.7, "persian": 0.23, "pashtun": 0.03, "hazara": 0.025, "kurdish": 0.015 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.636, "Coal": 0.301, "Oil": 10.484, "IronOre": 0.391, "RareEarths": 0.114, "NaturalGas": 5.013, "Timber": 1.027, "Bauxite": 0.133, "Uranium": 0.009 }
+    "resources": { "Food": 1.636, "Coal": 0.301, "Oil": 0.377, "IronOre": 0.391, "RareEarths": 0.114, "NaturalGas": 0.412, "Timber": 1.027, "Bauxite": 0.133, "Uranium": 0.009 }
   },
   // South Khorasan
   "ir_29": {
@@ -217,7 +217,7 @@
     "urbanization": 0.48,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
-    "resources": { "Food": 1.409, "Coal": 0.4, "Oil": 8.337, "IronOre": 0.333, "RareEarths": 0.057, "NaturalGas": 3.871, "Timber": 0.877, "Bauxite": 0.07, "Uranium": 0.005 }
+    "resources": { "Food": 1.409, "Coal": 0.4, "Oil": 0.377, "IronOre": 0.333, "RareEarths": 0.057, "NaturalGas": 0.412, "Timber": 0.877, "Bauxite": 0.07, "Uranium": 0.005 }
   },
   // Tehran
   "ir_07": {
@@ -225,7 +225,7 @@
     "urbanization": 0.97,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
-    "resources": { "Food": 1.793, "Coal": 0.288, "Oil": 7.074, "IronOre": 0.222, "RareEarths": 0.077, "NaturalGas": 9.523, "Timber": 2.322, "Bauxite": 0.086, "Uranium": 0.015 }
+    "resources": { "Food": 1.793, "Coal": 0.288, "Oil": 0.377, "IronOre": 0.222, "RareEarths": 0.077, "NaturalGas": 0.412, "Timber": 2.322, "Bauxite": 0.086, "Uranium": 0.015 }
   },
   // West Azerbaijan
   "ir_02": {
@@ -233,7 +233,7 @@
     "urbanization": 0.71,
     "cultures": { "azerbaijani": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.443, "Coal": 0.238, "Oil": 7.15, "IronOre": 0.152, "RareEarths": 0.073, "NaturalGas": 6.754, "Timber": 3.357, "Bauxite": 0.138, "Uranium": 0.014 }
+    "resources": { "Food": 1.443, "Coal": 0.238, "Oil": 0.377, "IronOre": 0.152, "RareEarths": 0.073, "NaturalGas": 0.412, "Timber": 3.357, "Bauxite": 0.138, "Uranium": 0.014 }
   },
   // Yazd
   "ir_25": {
@@ -241,7 +241,7 @@
     "urbanization": 0.53,
     "cultures": { "persian": 0.9632, "pashtun": 0.0175, "tajik": 0.0123, "armenian": 0.0035, "assyrian": 0.0018, "parsi": 0.0018 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.077, "Coal": 0.364, "Oil": 6.949, "IronOre": 0.218, "RareEarths": 0.029, "NaturalGas": 4.708, "Timber": 2.01, "Bauxite": 0.046, "Uranium": 0.006 }
+    "resources": { "Food": 1.077, "Coal": 0.364, "Oil": 0.377, "IronOre": 0.218, "RareEarths": 0.029, "NaturalGas": 0.412, "Timber": 2.01, "Bauxite": 0.046, "Uranium": 0.006 }
   },
   // Zanjan
   "ir_11": {
@@ -249,6 +249,6 @@
     "urbanization": 0.66,
     "cultures": { "azerbaijani": 0.97, "persian": 0.0289, "pashtun": 0.0005, "tajik": 0.0004, "armenian": 0.0001, "assyrian": 0.0001, "parsi": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
-    "resources": { "Food": 1.597, "Coal": 0.528, "Oil": 5.066, "IronOre": 0.218, "RareEarths": 0.098, "NaturalGas": 6.239, "Timber": 2.743, "Bauxite": 0.087, "Uranium": 0.022 }
+    "resources": { "Food": 1.597, "Coal": 0.528, "Oil": 0.377, "IronOre": 0.218, "RareEarths": 0.098, "NaturalGas": 0.412, "Timber": 2.743, "Bauxite": 0.087, "Uranium": 0.022 }
   }
 }

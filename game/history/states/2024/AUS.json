@@ -17,7 +17,7 @@
     "urbanization": 0.88,
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 0.885, "Coal": 2.286, "Oil": 0.239, "IronOre": 3.636, "RareEarths": 3.432, "NaturalGas": 9.371, "Timber": 1.594, "Bauxite": 3.931, "Uranium": 0.869 }
+    "resources": { "Food": 0.885, "Coal": 9.057, "Oil": 0.239, "IronOre": 0.136, "RareEarths": 0.158, "NaturalGas": 0.437, "Timber": 1.594, "Bauxite": 0.158, "Uranium": 0.037 }
   },
   // Northern Territory
   "au_nt": {
@@ -25,7 +25,7 @@
     "urbanization": 0.86,
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 0.938, "Coal": 4.219, "Oil": 0.964, "IronOre": 1.851, "RareEarths": 4.446, "NaturalGas": 10.95, "Timber": 1.064, "Bauxite": 1.744, "Uranium": 0.975 }
+    "resources": { "Food": 0.938, "Coal": 0.159, "Oil": 0.964, "IronOre": 0.316, "RareEarths": 1.21, "NaturalGas": 3.923, "Timber": 1.064, "Bauxite": 1.206, "Uranium": 1.525 }
   },
   // Queensland
   "au_qld": {
@@ -33,7 +33,7 @@
     "urbanization": 0.91,
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.359, "Coal": 4.152, "Oil": 0.777, "IronOre": 2.225, "RareEarths": 1.389, "NaturalGas": 8.255, "Timber": 1.869, "Bauxite": 2.081, "Uranium": 0.597 }
+    "resources": { "Food": 2.359, "Coal": 11.812, "Oil": 0.777, "IronOre": 0.136, "RareEarths": 1.21, "NaturalGas": 17.867, "Timber": 1.869, "Bauxite": 8.547, "Uranium": 0.037 }
   },
   // South Australia
   "au_sa": {
@@ -41,7 +41,7 @@
     "urbanization": 0.76,
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.353, "Coal": 3.372, "Oil": 0.348, "IronOre": 1.366, "RareEarths": 2.547, "NaturalGas": 7.992, "Timber": 0.709, "Bauxite": 4.253, "Uranium": 0.991 }
+    "resources": { "Food": 2.353, "Coal": 0.159, "Oil": 0.348, "IronOre": 0.497, "RareEarths": 0.158, "NaturalGas": 0.437, "Timber": 0.709, "Bauxite": 0.158, "Uranium": 3.509 }
   },
   // Tasmania
   "au_tas": {
@@ -49,7 +49,7 @@
     "urbanization": 0.77,
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 1.857, "Coal": 2.012, "Oil": 0.295, "IronOre": 3.758, "RareEarths": 2.81, "NaturalGas": 6.729, "Timber": 1.238, "Bauxite": 2.851, "Uranium": 0.693 }
+    "resources": { "Food": 1.857, "Coal": 0.159, "Oil": 0.295, "IronOre": 0.136, "RareEarths": 0.158, "NaturalGas": 0.437, "Timber": 1.238, "Bauxite": 0.158, "Uranium": 0.037 }
   },
   // Victoria
   "au_vic": {
@@ -57,7 +57,7 @@
     "urbanization": 0.85,
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 1.656, "Coal": 4.253, "Oil": 0.437, "IronOre": 2.849, "RareEarths": 3.855, "NaturalGas": 9.783, "Timber": 3.099, "Bauxite": 2.808, "Uranium": 0.691 }
+    "resources": { "Food": 1.656, "Coal": 0.583, "Oil": 0.437, "IronOre": 0.136, "RareEarths": 0.158, "NaturalGas": 2.761, "Timber": 3.099, "Bauxite": 0.158, "Uranium": 0.037 }
   },
   // Western Australia
   "au_wa": {
@@ -65,6 +65,6 @@
     "urbanization": 0.81,
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
-    "resources": { "Food": 2.323, "Coal": 2.007, "Oil": 1.019, "IronOre": 3.328, "RareEarths": 3.665, "NaturalGas": 8.079, "Timber": 3.29, "Bauxite": 4.408, "Uranium": 0.405 }
+    "resources": { "Food": 2.323, "Coal": 0.371, "Oil": 1.019, "IronOre": 17.656, "RareEarths": 19.091, "NaturalGas": 35.297, "Timber": 3.29, "Bauxite": 11.692, "Uranium": 0.037 }
   }
 }
