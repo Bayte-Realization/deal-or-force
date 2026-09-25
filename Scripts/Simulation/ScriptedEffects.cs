@@ -33,6 +33,10 @@ public static class ScriptedEffects
         public Action<Nation, float> SetNation;
         public Func<ScenarioState, float> GetState;
         public Action<ScenarioState, float> SetState;
+        public Func<Army, float> GetArmy;
+        public Action<Army, float> SetArmy;
+        public Func<Fleet, float> GetFleet;
+        public Action<Fleet, float> SetFleet;
         public float Min = float.NegativeInfinity;
         public float Max = float.PositiveInfinity;
         public string Help = "";
@@ -108,7 +112,37 @@ public static class ScriptedEffects
             "Urbanisation in every state the nation owns.");
         StateField("state.population", s => s.Population, (s, v) => s.Population = (long)MathF.Max(0f, v),
             0f, float.PositiveInfinity, "Population of every state the nation owns.");
+        StateField("state.stability", s => s.Stability, (s, v) => s.Stability = v, 0f, 1f,
+            "Stability in every state the nation owns.");
+
+        // The country's forces, every division and every fleet at once: an army rested, drilled
+        // or re-equipped, a navy back from a refit.
+        ArmyField("army.organisation", a => a.Organisation, (a, v) => a.Organisation = v, 0f, 1f,
+            "Organisation of every division the nation has, 0-1.");
+        ArmyField("army.entrenchment", a => a.Entrenchment, (a, v) => a.Entrenchment = v, 0f, 1f,
+            "Entrenchment of every division the nation has, 0-1.");
+        ArmyField("army.experience", a => a.Experience, (a, v) => a.Experience = v, 0f, 1f,
+            "Experience of every division the nation has, 0-1.");
+        ArmyField("army.equipment", a => a.Equipment, (a, v) => a.Equipment = v, 0f, 1f,
+            "Equipment of every division the nation has, 0-1.");
+        FleetField("fleet.readiness", f => f.Readiness, (f, v) => f.Readiness = v, 0f, 1f,
+            "Readiness of every fleet the nation has, 0-1.");
+        FleetField("fleet.supply", f => f.Supply, (f, v) => f.Supply = v, 0f, 1f,
+            "Stores of every fleet the nation has, 0-1.");
+        // Research points on whatever the country is researching now; nothing when it is not.
+        NationField("research",
+            n => n.ResearchProgress.GetValueOrDefault(n.CurrentResearch ?? ""),
+            (n, v) => { if (!string.IsNullOrEmpty(n.CurrentResearch)) n.ResearchProgress[n.CurrentResearch] = v; },
+            0f, float.PositiveInfinity, "Research points on the technology being researched now.");
     }
+
+    private static void ArmyField(string name, Func<Army, float> get, Action<Army, float> set,
+        float min, float max, string help) =>
+        Fields[name] = new Field { Name = name, GetArmy = get, SetArmy = set, Min = min, Max = max, Help = help };
+
+    private static void FleetField(string name, Func<Fleet, float> get, Action<Fleet, float> set,
+        float min, float max, string help) =>
+        Fields[name] = new Field { Name = name, GetFleet = get, SetFleet = set, Min = min, Max = max, Help = help };
 
     private static void NationField(string name, Func<Nation, float> get, Action<Nation, float> set,
         float min, float max, string help) =>
@@ -158,15 +192,28 @@ public static class ScriptedEffects
     public sealed class Effect
     {
         private readonly List<Entry> _entries = new();
+        private readonly List<(string Id, int Days)> _grants = new();
+        private readonly List<string> _revokes = new();
 
         public IReadOnlyList<Entry> Entries => _entries;
-        public bool IsEmpty => _entries.Count == 0;
+
+        /// <summary>National spirits the effect hangs on the country, and for how long (0: their own length).</summary>
+        public IReadOnlyList<(string Id, int Days)> Grants => _grants;
+
+        /// <summary>National spirits the effect takes off the country.</summary>
+        public IReadOnlyList<string> Revokes => _revokes;
+
+        public bool IsEmpty => _entries.Count == 0 && _grants.Count == 0 && _revokes.Count == 0;
 
         internal void Add(string key, float value) => _entries.Add(new Entry(key, value));
+        internal void Grant(string id, int days) => _grants.Add((id, days));
+        internal void Revoke(string id) => _revokes.Add(id);
 
         public void Apply(Campaign campaign, Nation nation)
         {
             if (nation is null) return;
+            foreach (var id in _revokes) ModifierSystem.Revoke(nation, id);
+            foreach (var (id, days) in _grants) ModifierSystem.Grant(campaign, nation, id, days);
             List<ScenarioState> owned = null;
 
             foreach (var entry in _entries)
@@ -176,6 +223,18 @@ public static class ScriptedEffects
                 if (field.SetNation is not null)
                 {
                     field.SetNation(nation, Combine(field.GetNation(nation), entry.Value, operation, field));
+                    continue;
+                }
+                if (field.SetArmy is not null)
+                {
+                    foreach (var army in campaign.Armies)
+                        if (army.NationId == nation.Id) field.SetArmy(army, Combine(field.GetArmy(army), entry.Value, operation, field));
+                    continue;
+                }
+                if (field.SetFleet is not null)
+                {
+                    foreach (var fleet in campaign.Fleets)
+                        if (fleet.NationId == nation.Id) field.SetFleet(fleet, Combine(field.GetFleet(fleet), entry.Value, operation, field));
                     continue;
                 }
 
@@ -236,9 +295,41 @@ public static class ScriptedEffects
                         errors?.Add($"{context}: unknown scripted effect '{reference}'.");
                         continue;
                     }
-                    foreach (var entry in Parse(block, $"scripted_effects/{reference}", errors, depth + 1).Entries)
-                        effect.Add(entry.Key, entry.Value);
+                    var borrowed = Parse(block, $"scripted_effects/{reference}", errors, depth + 1);
+                    foreach (var entry in borrowed.Entries) effect.Add(entry.Key, entry.Value);
+                    foreach (var (id, days) in borrowed.Grants) effect.Grant(id, days);
+                    foreach (var id in borrowed.Revokes) effect.Revoke(id);
                 }
+                continue;
+            }
+
+            // A national spirit: { "add_modifier": { "war_economy": 365 } } hangs it on the
+            // country for that many days (0 for its own length), and "remove_modifier" takes
+            // one or a list of them off. The whole of how an event or a decision says "for a
+            // year, this country is on a war footing".
+            if (property.Name.Equals("add_modifier", StringComparison.OrdinalIgnoreCase))
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object)
+                {
+                    errors?.Add($"{context}: add_modifier takes {{ \"modifier\": days }}.");
+                    continue;
+                }
+                foreach (var grant in property.Value.EnumerateObject())
+                {
+                    if (grant.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+                    if (ModifierCatalog.Get(grant.Name) is null)
+                    {
+                        errors?.Add($"{context}: add_modifier names '{grant.Name}', which common/modifiers does not declare.");
+                        continue;
+                    }
+                    var days = grant.Value.ValueKind == JsonValueKind.Number && grant.Value.TryGetInt32(out var parsed) ? parsed : 0;
+                    effect.Grant(grant.Name, Math.Max(0, days));
+                }
+                continue;
+            }
+            if (property.Name.Equals("remove_modifier", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var name in ScriptReferences.Names(property.Value)) effect.Revoke(name);
                 continue;
             }
 
@@ -272,6 +363,11 @@ public static class ScriptedEffects
     {
         var lines = new List<string>();
         if (effect is null) return lines;
+        // The spirits first: they are usually the point of the option.
+        lines.AddRange(SpiritLines(effect.Grants));
+        foreach (var id in effect.Revokes)
+            if (ModifierCatalog.Get(id) is { } spirit)
+                lines.Add(Loc.Format("Loses «{0}»", Loc.Get(spirit.Name)));
         foreach (var entry in effect.Entries)
         {
             if (!Resolve(entry.Key, out var field, out var operation)) continue;
@@ -303,6 +399,27 @@ public static class ScriptedEffects
         return lines;
     }
 
+    /// <summary>
+    /// "Gains «War economy» for 365 days", and under it, indented, what the spirit does while it
+    /// lasts - so a choice that hangs a spirit on the country says what the spirit is.
+    /// </summary>
+    public static IReadOnlyList<string> SpiritLines(IEnumerable<(string Id, int Days)> grants)
+    {
+        var lines = new List<string>();
+        if (grants is null) return lines;
+        foreach (var (id, days) in grants)
+        {
+            var spirit = ModifierCatalog.Get(id);
+            if (spirit is null) continue;
+            var length = days > 0 ? days : spirit.Days;
+            lines.Add(length > 0
+                ? Loc.Format("Gains «{0}» for {1} days", Loc.Get(spirit.Name), length)
+                : Loc.Format("Gains «{0}»", Loc.Get(spirit.Name)));
+            foreach (var line in NationalModifiers.Lines(spirit.Modifiers)) lines.Add("  " + line);
+        }
+        return lines;
+    }
+
     /// <summary>The same lines under a heading, ready to go under a tooltip's prose. Empty when there are none.</summary>
     public static string Block(Effect effect)
     {
@@ -315,7 +432,8 @@ public static class ScriptedEffects
     {
         "stability", "war_support", "standard_of_living", "literacy", "inflation", "key_rate",
         "tax_rate", "military_spending", "welfare_spending", "education_spending", "market_access",
-        "state.standard_of_living", "state.radicalism", "state.literacy", "state.urbanization"
+        "state.standard_of_living", "state.radicalism", "state.literacy", "state.urbanization", "state.stability",
+        "army.organisation", "army.entrenchment", "army.experience", "army.equipment", "fleet.readiness", "fleet.supply"
     };
 
     /// <summary>What each field is called on screen - an English key the tables translate.</summary>
@@ -334,7 +452,15 @@ public static class ScriptedEffects
         ["state.radicalism"] = "Radicalism in every region",
         ["state.literacy"] = "Literacy in every region",
         ["state.urbanization"] = "Urbanisation in every region",
-        ["state.population"] = "Population of every region"
+        ["state.population"] = "Population of every region",
+        ["state.stability"] = "Stability in every region",
+        ["army.organisation"] = "Organisation of every division",
+        ["army.entrenchment"] = "Entrenchment of every division",
+        ["army.experience"] = "Experience of every division",
+        ["army.equipment"] = "Equipment of every division",
+        ["fleet.readiness"] = "Readiness of every fleet",
+        ["fleet.supply"] = "Stores of every fleet",
+        ["research"] = "Research points"
     };
 
     /// <summary>Build an effect in code, for the compiled-in defaults.</summary>

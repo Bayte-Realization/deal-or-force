@@ -39,6 +39,14 @@ public sealed class ModifierDefinition
     public bool IsPositive { get; init; } = true;
 
     public ScriptedEffects.Effect Effects { get; init; } = new();
+
+    /// <summary>
+    /// What it adds while it lasts, in the keys of <see cref="NationalModifiers"/>: shares of
+    /// what the simulation works out anyway - "construction_speed": 0.15 is a sixth faster -
+    /// rather than the per-tick drifts `effects` are.
+    /// </summary>
+    public IReadOnlyDictionary<string, float> Modifiers { get; init; } =
+        new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>One modifier actually attached to one country.</summary>
@@ -154,7 +162,10 @@ public static class ModifierCatalog
                              positive.ValueKind != JsonValueKind.False,
                 Effects = value.TryGetProperty("effects", out var effects)
                     ? ScriptedEffects.Parse(effects, $"Modifier '{entry.Name}'", errors)
-                    : new ScriptedEffects.Effect()
+                    : new ScriptedEffects.Effect(),
+                Modifiers = value.TryGetProperty("modifiers", out var modifiers)
+                    ? NationalModifiers.Read(modifiers, $"Modifier '{entry.Name}'", errors)
+                    : new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
             };
         }
         return true;
@@ -183,6 +194,7 @@ public static class ModifierSystem
             existing.ExpiresDay = expires;
             return true;
         }
+        NationalModifiers.Invalidate(nation);
 
         nation.Modifiers.Add(new ActiveModifier
         {
@@ -193,9 +205,12 @@ public static class ModifierSystem
         return true;
     }
 
-    public static bool Revoke(Nation nation, string id) =>
-        nation is not null && nation.Modifiers.RemoveAll(item =>
+    public static bool Revoke(Nation nation, string id)
+    {
+        NationalModifiers.Invalidate(nation);
+        return nation is not null && nation.Modifiers.RemoveAll(item =>
             string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase)) > 0;
+    }
 
     public static bool Has(Nation nation, string id) =>
         nation is not null && nation.Modifiers.Any(item =>
@@ -208,6 +223,8 @@ public static class ModifierSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        // Every day: what the modifiers add up to, and the weekly ones paid a day at a time.
+        NationalModifiers.Tick(campaign);
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
 
         foreach (var nation in campaign.Nations)

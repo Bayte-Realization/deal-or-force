@@ -459,7 +459,8 @@ public static class NavalOperations
     public static float Speed(Campaign campaign, Fleet fleet) =>
         campaign.Defines.FleetDegreesPerDay *
         M.Clamp(0.35f + fleet.Supply * 0.65f, 0.35f, 1f) *
-        M.Clamp(0.50f + fleet.Readiness * 0.50f, 0.5f, 1f);
+        M.Clamp(0.50f + fleet.Readiness * 0.50f, 0.5f, 1f) *
+        NationalModifiers.Factor(campaign.NationById(fleet.NationId), "naval_speed");
 
     /// <summary>Whole days until it gets where it is going, or zero when it is not going anywhere.</summary>
     public static int DaysToGo(Campaign campaign, Fleet fleet) =>

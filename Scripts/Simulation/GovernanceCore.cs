@@ -32,8 +32,13 @@ public static class GovernmentFocusRules
     public static string ShortName(GovernmentFocus focus) =>
         Loc.Get(GovernmentFocusCatalog.Of(focus).ShortName);
 
-    public static string Description(GovernmentFocus focus) =>
-        Loc.Get(GovernmentFocusCatalog.Of(focus).Description);
+    /// <summary>What the priority is, and under it what it adds while it holds (NationalModifiers).</summary>
+    public static string Description(GovernmentFocus focus)
+    {
+        var definition = GovernmentFocusCatalog.Of(focus);
+        var modifiers = NationalModifiers.Block(definition.Modifiers);
+        return Loc.Get(definition.Description) + (modifiers.Length > 0 ? "\n\n" + modifiers : "");
+    }
 
     public static float AnnualGrowth(GovernmentFocus focus) =>
         GovernmentFocusCatalog.Of(focus).Growth;

@@ -347,8 +347,10 @@ public sealed class QueueConstructionCommand : ICampaignCommand
             NationId = nation.Id,
             StateMapIndex = state.MapIndex,
             Building = Building,
-            Cost = definition.Cost,
-            DurationDays = definition.Days
+            // What the country's modifiers make of it: cheaper, and quicker, while a
+            // construction drive or a war economy lasts (NationalModifiers).
+            Cost = definition.Cost * NationalModifiers.Factor(nation, "construction_cost"),
+            DurationDays = Math.Max(1, (int)MathF.Round(definition.Days / NationalModifiers.Factor(nation, "construction_speed")))
         });
         campaign.MarkStrategicChange();
     }

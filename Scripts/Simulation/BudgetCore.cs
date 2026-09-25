@@ -642,7 +642,7 @@ public static class BudgetCore
         var amount = BasisOf(nation, line, weeklyOutput) * rate * line.Yield * ScaleOf(line);
         // At the rate being asked about, not the one the country has set - otherwise the
         // slider would promise money that the rate it is promising it for would evade.
-        if (IsLevy(line)) amount *= Compliance(nation, weeklyOutput, line, rate);
+        if (IsLevy(line)) amount *= Compliance(nation, weeklyOutput, line, rate) * NationalModifiers.Factor(nation, "tax_efficiency");
         return line.Charge == BudgetBasis.TradeBalance ? amount : MathF.Max(0f, amount);
     }
 
@@ -650,7 +650,7 @@ public static class BudgetCore
         float compliance)
     {
         var amount = BasisOf(nation, line, weeklyOutput) * RateOf(nation, line) * line.Yield * ScaleOf(line);
-        if (IsLevy(line)) amount *= compliance;
+        if (IsLevy(line)) amount *= compliance * NationalModifiers.Factor(nation, "tax_efficiency");
         // A trade balance is allowed to be a loss; nothing else is allowed to be negative,
         // because a tax that pays money out because the country is miserable is a bug
         // wearing a formula's clothes.

@@ -628,6 +628,11 @@ public static partial class FrontPlanner
         for (var index = 0; index < armies.Count; index++)
         {
             var army = armies[index];
+            // A division on a march it was sent on directly - railed somewhere, called to a port
+            // for the admiralty's landing - finishes it first. Handing it a role mid-journey
+            // threw the journey away and left it riding the rails to a post it was never sent
+            // to; when it arrives it is free again and gets its role then.
+            if (army.DirectOrder && (army.Route.Count > 0 || army.PlannedRoute.Count > 0)) continue;
             var order = RoleAt(index, spearhead, advance, defend);
 
             // Damping this is the wrong cure, and both attempts at it proved so. Bucketing

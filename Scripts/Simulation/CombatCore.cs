@@ -1080,9 +1080,9 @@ public static partial class Warfare
     /// One division's fire against a target of the given hardness. Soft attack lands on
     /// infantry, hard attack on armour, and a mixed force gets a mixture of both.
     /// </summary>
-    /// <summary>One plus what a formation's country has researched for this (ResearchSystem).</summary>
+    /// <summary>One plus what a formation's country adds to this: research, spirits, government (NationalModifiers).</summary>
     private static float Researched(Campaign campaign, Army army, string effect) =>
-        1f + ResearchSystem.Bonus(campaign.NationById(army.NationId), effect);
+        NationalModifiers.Factor(campaign.NationById(army.NationId), effect);
 
     private static float Offence(Army army, float targetHardness)
     {

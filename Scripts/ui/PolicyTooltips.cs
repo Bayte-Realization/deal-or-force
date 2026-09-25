@@ -139,6 +139,8 @@ public partial class DealOrForceGame
             government.Centralisation.ToString("P0", CultureInfo.CurrentCulture));
         var doing = EffectLines(government.Growth, government.Living, government.Literacy,
             government.Radicalism, government.Stability, government.WarSupport, 1f);
+        // And what it adds to how the country works (NationalModifiers).
+        doing.AddRange(NationalModifiers.Lines(government.Modifiers));
         if (doing.Count > 0) text += "\n" + EffectBlock(Tr("While it lasts:"), doing);
         text += "\n" + Simulation.Loc.Format("Leaving it costs about {0} stability.",
             (PoliticsCore.BaseChangeCost * government.ChangeCost).ToString("P0", CultureInfo.CurrentCulture));
@@ -150,6 +152,7 @@ public partial class DealOrForceGame
         var text = Tr(ideology.Description);
         var doing = EffectLines(ideology.Growth, ideology.Living, ideology.Literacy,
             ideology.Radicalism, ideology.Stability, ideology.WarSupport, 1f);
+        doing.AddRange(NationalModifiers.Lines(ideology.Modifiers));
         if (doing.Count > 0) text += "\n\n" + EffectBlock(Tr("While it lasts:"), doing);
         if (ideology.PrefersGovernments.Count > 0)
             text += "\n" + Simulation.Loc.Format("At home in: {0}. Anywhere else costs stability every week.",

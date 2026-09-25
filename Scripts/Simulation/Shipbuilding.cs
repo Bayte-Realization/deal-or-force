@@ -57,6 +57,10 @@ public sealed partial class Defines
 /// </summary>
 public static class Shipbuilding
 {
+    /// <summary>Days a hull takes for this country: the define, over its shipbuilding speed.</summary>
+    public static float BuildDays(Campaign campaign, Nation nation) =>
+        MathF.Max(1f, campaign.Defines.HullBuildDays) / NationalModifiers.Factor(nation, "shipbuilding_speed");
+
     private static readonly Dictionary<int, float> SlipwaysByNation = new();
     private static int _slipwaysDay = -1;
     private static Campaign _slipwaysCampaign;
@@ -72,9 +76,9 @@ public static class Shipbuilding
         if (!anyOrdered) return;
 
         var defines = campaign.Defines;
-        var buildDays = MathF.Max(1f, defines.HullBuildDays);
         foreach (var nation in campaign.Nations)
         {
+            var buildDays = BuildDays(campaign, nation);
             var ordered = 0;
             foreach (var fleet in campaign.Fleets)
                 if (fleet.NationId == nation.Id && fleet.Hulls > 0) ordered += fleet.HullsOrdered;
@@ -157,7 +161,7 @@ public static class Shipbuilding
         foreach (var fleet in campaign.Fleets)
             if (fleet.NationId == nation.Id && fleet.Hulls > 0) ordered += fleet.HullsOrdered;
         var working = MathF.Min(Slipways(campaign, nation), ordered);
-        return working <= 0f ? 0f : working * campaign.Defines.HullCost / MathF.Max(1f, campaign.Defines.HullBuildDays);
+        return working <= 0f ? 0f : working * campaign.Defines.HullCost / BuildDays(campaign, nation);
     }
 
     /// <summary>
@@ -177,7 +181,7 @@ public static class Shipbuilding
         }
         var slips = MathF.Min(MathF.Max(0f, working), fleet.HullsOrdered);
         if (slips <= 0f) return -1;
-        return (int)MathF.Ceiling((1f - fleet.HullProgress) * MathF.Max(1f, campaign.Defines.HullBuildDays) / slips);
+        return (int)MathF.Ceiling((1f - fleet.HullProgress) * BuildDays(campaign, campaign.NationById(fleet.NationId)) / slips);
     }
 
     /// <summary>The navy an AI keeps for this fleet: what it began with, scaled by the budget.</summary>

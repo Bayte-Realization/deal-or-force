@@ -47,6 +47,9 @@ public sealed class GovernmentDefinition
     /// </summary>
     public float ChangeCost = 1f;
 
+    /// <summary>What the arrangement adds for as long as it lasts (<see cref="NationalModifiers"/>).</summary>
+    public Dictionary<string, float> Modifiers = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// How readily this country's people take up arms without being told to, as a
     /// multiple. One is the ordinary case. See <see cref="MilitiaCore"/>.
@@ -103,6 +106,9 @@ public sealed class IdeologyDefinition
     public List<string> PrefersGovernments = new();
 
     public float MismatchStability = -0.0004f;
+
+    /// <summary>What the ideology adds for as long as the country holds it (<see cref="NationalModifiers"/>).</summary>
+    public Dictionary<string, float> Modifiers = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public static class GovernmentCatalog
@@ -199,6 +205,9 @@ public static class GovernmentCatalog
                     break;
                 case "change_cost": definition.ChangeCost = MathF.Max(0f, Number(field.Value, 1f)); break;
                 case "militia": definition.Militia = MathF.Max(0f, Number(field.Value, 1f)); break;
+                case "modifiers":
+                    definition.Modifiers = NationalModifiers.Read(field.Value, $"government `{id}`", errors);
+                    break;
                 case "effects" when field.Value.ValueKind == JsonValueKind.Object:
                     foreach (var effect in field.Value.EnumerateObject())
                     {
@@ -334,6 +343,9 @@ public static class IdeologyCatalog
                     break;
                 case "militia":
                     definition.Militia = MathF.Max(0f, GovernmentCatalog.Number(field.Value, 1f));
+                    break;
+                case "modifiers":
+                    definition.Modifiers = NationalModifiers.Read(field.Value, $"ideology `{id}`", errors);
                     break;
                 case "prefers_governments" when field.Value.ValueKind == JsonValueKind.Array:
                     definition.PrefersGovernments.Clear();

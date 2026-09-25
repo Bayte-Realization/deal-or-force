@@ -395,7 +395,8 @@ public static class TradeNetwork
             var counted = Counts.GetValueOrDefault(nation.MapIndex);
             var averageInfrastructure = counted.States == 0 ? 0f : counted.Infrastructure / (float)counted.States;
             Reach[nation.Id] = M.Clamp(
-                0.45f + averageInfrastructure * 0.06f + counted.Ports * 0.05f + counted.Rails * 0.035f,
+                0.45f + averageInfrastructure * 0.06f + counted.Ports * 0.05f + counted.Rails * 0.035f +
+                NationalModifiers.Of(nation, "trade_reach"),
                 0.45f, 1.50f);
         }
     }

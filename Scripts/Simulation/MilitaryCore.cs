@@ -417,7 +417,7 @@ public sealed class RaiseArmyCommand : ICampaignCommand
         if (FailureReason.Length > 0) return;
         var nation = campaign.NationById(IssuerId);
         var template = UnitTypeCatalog.Get(TemplateId);
-        var cost = template.RecruitmentCost * count;
+        var cost = RecruitmentSystem.CostOf(nation, template) * count;
         nation.Treasury -= cost;
         nation.ManpowerReserve -= template.RecruitmentPersonnel * count;
         campaign.Recruitment.Add(new RecruitmentOrder
@@ -425,7 +425,7 @@ public sealed class RaiseArmyCommand : ICampaignCommand
             Id = campaign.NextRecruitmentId++,
             NationId = IssuerId, StateMapIndex = StateMapIndex, TemplateId = TemplateId,
             Count = count, PersonnelPerDivision = template.RecruitmentPersonnel,
-            PaidCost = cost, DurationDays = template.TrainingDays, LastProcessedDay = campaign.ElapsedDays
+            PaidCost = cost, DurationDays = RecruitmentSystem.TrainingDaysOf(nation, template), LastProcessedDay = campaign.ElapsedDays
         });
         campaign.MarkStrategicChange();
     }
@@ -518,7 +518,8 @@ public static class MilitaryOperations
             {
                 var recovery = campaign.Defines.OrganisationRecoveryPerDay * campaign.TickScale *
                     MilitaryDoctrine.Recovery(army.Stance) *
-                    M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f);
+                    M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
+                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery");
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
                 army.Organisation = M.Clamp01(army.Organisation + recovery);
                 Reinforce(campaign, army, reinforcementWeights.GetValueOrDefault(army.NationId, 1f));
@@ -541,7 +542,8 @@ public static class MilitaryOperations
                 if (!army.InBattle)
                 {
                     army.Entrenchment = M.Clamp01(army.Entrenchment + campaign.Defines.EntrenchmentPerDay * campaign.TickScale *
-                        MilitaryDoctrine.Entrenchment(army.Stance));
+                        MilitaryDoctrine.Entrenchment(army.Stance) *
+                        NationalModifiers.Factor(campaign.NationById(army.NationId), "entrenchment_speed"));
                     if (army.AssignedWarId >= 0 &&
                         (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead))
                         army.Planning = M.Clamp01(army.Planning + campaign.Defines.PlanningGainPerDay * campaign.TickScale *
@@ -567,7 +569,7 @@ public static class MilitaryOperations
                 M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) * riverMovement *
                 topology.TerrainAt(nextProvince).MovementSpeed *
                 StrategicRedeployment.DayOf(campaign, army) *
-                (1f + ResearchSystem.Bonus(nation, "army_speed")) *
+                NationalModifiers.Factor(nation, "army_speed") *
                 // And on roads: the march is always through the country's own ground, and a
                 // region with a network of them is crossed faster than one without.
                 MovementPace.Roads(campaign, nextProvince);

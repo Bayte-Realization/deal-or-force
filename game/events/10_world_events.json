@@ -234,7 +234,13 @@
           "treasury_percent": 0.02,
           "productivity": -0.008,
           "literacy": -0.003
-        }
+        },
+        "modifiers": [
+          {
+            "id": "brain_drain",
+            "days": 540
+          }
+        ]
       }
     ]
   },
@@ -567,7 +573,13 @@
           "stability": 0.018,
           "state.radicalism": -0.018,
           "treasury_percent": 0.02
-        }
+        },
+        "modifiers": [
+          {
+            "id": "clean_hands",
+            "days": 365
+          }
+        ]
       },
       {
         "title": "Close ranks",
@@ -1015,6 +1027,105 @@
         "consequence": "A newspaper is a newspaper.",
         "effects": {
           "stability": 0.004
+        }
+      }
+    ]
+  },
+
+  // Events that bring a national spirit with them.
+  "rally_round_the_flag": {
+    "title": "The country rallies",
+    "description": "The war has come to us, and for the moment nobody is arguing about anything else. The recruiting offices have queues round the block.",
+    "weight": 0.8,
+    "trigger": {
+      "at_war": true,
+      "min_war_support": 0.6
+    },
+    "options": [
+      {
+        "title": "Every hand to the defence",
+        "consequence": "The mood will not last. Use it while it does.",
+        "effects": {
+          "stability": 0.006
+        },
+        "modifiers": [
+          {
+            "id": "rally_round_the_flag",
+            "days": 180
+          }
+        ]
+      }
+    ]
+  },
+
+  "war_weariness_sets_in": {
+    "title": "The funerals outnumber the victories",
+    "description": "Every town has its list of names, and the papers have stopped printing maps of the front. Recruiting officers are met with closed doors.",
+    "weight": 1.0,
+    "trigger": {
+      "at_war": true,
+      "max_war_support": 0.45
+    },
+    "options": [
+      {
+        "title": "Promise it will be over soon",
+        "consequence": "A promise is cheap until somebody counts it.",
+        "effects": {
+          "war_support": 0.01,
+          "stability": -0.006
+        },
+        "modifiers": [
+          {
+            "id": "war_weariness",
+            "days": 270
+          }
+        ]
+      },
+      {
+        "title": "Censor the casualty lists",
+        "consequence": "What is not printed still happened.",
+        "effects": {
+          "stability": 0.004,
+          "state.radicalism": 0.006
+        },
+        "modifiers": [
+          {
+            "id": "war_weariness",
+            "days": 365
+          }
+        ]
+      }
+    ]
+  },
+
+  "sanctions_bite": {
+    "title": "The banks close their doors",
+    "description": "Letters of credit come back unsigned, insurers will not cover the tankers, and the correspondent banks have stopped answering. The trade that is left goes through middlemen who know exactly how much they are needed.",
+    "weight": 1.0,
+    "trigger": {
+      "max_market_access": 0.7
+    },
+    "options": [
+      {
+        "title": "Find other buyers",
+        "consequence": "There is always somebody who will buy. They set the price.",
+        "effects": {
+          "treasury_percent": -0.02
+        },
+        "modifiers": [
+          {
+            "id": "under_sanctions",
+            "days": 365
+          }
+        ]
+      },
+      {
+        "title": "Make concessions",
+        "consequence": "The doors open a little. At home, somebody calls it surrender.",
+        "effects": {
+          "market_access": 0.05,
+          "stability": -0.012,
+          "war_support": -0.01
         }
       }
     ]

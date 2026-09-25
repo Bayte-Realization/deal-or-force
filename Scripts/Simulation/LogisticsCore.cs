@@ -202,7 +202,7 @@ public static class LogisticsSystem
             var blockade = NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude);
             var blockadeFactor = 1f - blockade * campaign.Defines.FleetBlockadeSupplyPenalty;
             var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor *
-                                   topology.TerrainAt(province).Supply * (1f + ResearchSystem.Bonus(nation, "supply")));
+                                   topology.TerrainAt(province).Supply * NationalModifiers.Factor(nation, "supply"));
             army.SupplyDistance = distance[province];
             army.SupplySourceStateMapIndex = sourceState;
             army.SupplyCongestion = congestion;
@@ -217,7 +217,8 @@ public static class LogisticsSystem
             MathF.Max(0.01f, campaign.Defines.BaselineMilitarySpending), 0.25f, 2.5f);
         nation.ReinforcementCapacity = (MathF.Max(80f, MilitaryBootstrap.Personnel(nation.Tag, nation.Population) *
                                             campaign.Defines.ReinforcementCapacityShare) +
-                                        barracksTotal * 120f) * spendingFactor;
+                                        barracksTotal * 120f) * spendingFactor *
+                                       NationalModifiers.Factor(nation, "reinforcement_rate");
         if (campaign.ElapsedDays % 7 == 0) nation.ReinforcedLastWeek = 0f;
     }
 

@@ -101,5 +101,185 @@
       "state.radicalism": -0.012
     },
     "ai_will_do": "ai_amnesty"
+  },
+
+  // Decisions that hang a national spirit on the country for a while (common/modifiers):
+  // "add_modifier": { "<spirit>": days }, 0 for the spirit's own length.
+  "declare_general_mobilisation": {
+    "name": "Declare general mobilisation",
+    "description": "Call up every reservist and put the training grounds on shifts. Divisions are raised and refilled far faster; the factories lose the men.",
+    "cooldown_days": 400,
+    "gdp_cost_share": 0.003,
+    "unavailable": "Only a country at war mobilises",
+    "trigger": {
+      "use": [
+        "at_war"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "general_mobilisation": 0
+      },
+      "stability": -0.01
+    },
+    "ai_will_do": "ai_general_mobilisation"
+  },
+
+  "military_reform": {
+    "name": "Military reform",
+    "description": "New regulations, new staff colleges, and officers promoted for what they can do. An army that recovers and digs in faster.",
+    "cooldown_days": 900,
+    "gdp_cost_share": 0.003,
+    "unavailable": "Requires peace and money to spend on it",
+    "trigger": {
+      "use": [
+        "at_peace",
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "military_reform": 0
+      },
+      "army.experience": 0.05
+    },
+    "ai_will_do": "ai_military_reform"
+  },
+
+  "infrastructure_drive": {
+    "name": "Infrastructure drive",
+    "description": "Make roads, rail and grids the state's first priority for a year. Everything is built a fifth faster.",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.004,
+    "unavailable": "Requires money to spend on it",
+    "trigger": {
+      "use": [
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "infrastructure_drive": 0
+      }
+    },
+    "ai_will_do": "ai_infrastructure_drive"
+  },
+
+  "research_initiative": {
+    "name": "National research initiative",
+    "description": "Grants, laboratories and a minister for science. A fifth more research for a year.",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.003,
+    "unavailable": "Requires money to spend on it",
+    "trigger": {
+      "use": [
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "research_initiative": 0
+      },
+      "research": 15
+    },
+    "ai_will_do": "ai_research_initiative"
+  },
+
+  "tax_reform": {
+    "name": "Tax reform",
+    "description": "Simplify the code and close the loopholes. A tenth more of the taxes arrives, and every week somebody complains about it.",
+    "cooldown_days": 1095,
+    "gdp_cost_share": 0.001,
+    "unavailable": "Only a settled country can take the argument",
+    "trigger": {
+      "use": [
+        "settled"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "tax_reform": 0
+      }
+    },
+    "ai_will_do": "ai_tax_reform"
+  },
+
+  "naval_programme": {
+    "name": "Naval programme",
+    "description": "Give the yards the first call on steel. Hulls are laid down and finished a quarter faster.",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.0035,
+    "unavailable": "Requires money to spend on it",
+    "trigger": {
+      "use": [
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "naval_programme": 0
+      },
+      "fleet.readiness": 0.1
+    },
+    "ai_will_do": "ai_naval_programme"
+  },
+
+  "trade_offensive": {
+    "name": "Trade offensive",
+    "description": "Export credits and trade missions: every embassy becomes a sales office, and the country's goods travel further.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0015,
+    "unavailable": "Trade offensives are for peacetime",
+    "trigger": {
+      "use": [
+        "at_peace"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "trade_offensive": 0
+      }
+    },
+    "ai_will_do": "ai_trade_offensive"
+  },
+
+  "martial_law": {
+    "name": "Declare martial law",
+    "description": "Curfews, checkpoints and night courts for three months. The streets go quiet and so does the economy.",
+    "cooldown_days": 720,
+    "gdp_cost_share": 0.0005,
+    "unavailable": "The country is calm enough not to need it",
+    "trigger": {
+      "use": [
+        "restive"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "martial_law": 0
+      },
+      "war_support": -0.01
+    },
+    "ai_will_do": "ai_martial_law"
+  },
+
+  "fortress_programme": {
+    "name": "Fortress programme",
+    "description": "Concrete and wire along every border that matters. Divisions dig in a quarter faster and hold better.",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.003,
+    "unavailable": "Requires money to spend on it",
+    "trigger": {
+      "use": [
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "fortress_programme": 0
+      },
+      "army.entrenchment": 0.1
+    },
+    "ai_will_do": "ai_fortress_programme"
   }
 }

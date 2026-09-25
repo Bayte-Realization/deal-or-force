@@ -1082,7 +1082,11 @@ The rules of the effects language:
 - the `_percent` suffix multiplies by `(1 + value)`: `"treasury_percent": -0.08` is minus 8 %;
 - the `_mult` suffix multiplies directly, `_set` assigns;
 - the `state.` prefix applies the entry **to every region of the country** rather than to the
-  country;
+  country; `army.` to every one of its divisions (`army.organisation`, `army.entrenchment`,
+  `army.experience`, `army.equipment`) and `fleet.` to every fleet (`fleet.readiness`,
+  `fleet.supply`); `research` puts points on the technology being researched;
+- `"add_modifier": { "<spirit>": days }` hangs a national spirit on the country, and
+  `"remove_modifier"` takes one or a list off (see *National modifiers*);
 - an unknown key does not break the file: it is written to the log with the list of permitted
   keys, and the rest of the mod goes on loading.
 
@@ -1115,8 +1119,10 @@ event that hung a named condition on a country for a year stays part of the game
 
 `days` = 0 makes a modifier permanent. The effects are applied **once per economic tick** while
 the modifier is active, so the numbers here are rates per tick, not one-off amounts. Granting it
-again refreshes the timer rather than stacking a second copy. A country's active modifiers are
-visible to the player in the National Ledger on the "In effect" line.
+again refreshes the timer rather than stacking a second copy. A spirit may also carry a
+`modifiers` block - shares of what the simulation works out, such as `"construction_speed": 0.15` -
+for as long as it lasts; see *National modifiers*. The country card lists the spirits a country
+carries with the days each has left, and the National Ledger shows them on the "In effect" line.
 
 An event refers to them with a `modifiers` array: the short form `["war_economy"]` or the full
 `[{ "id": "war_economy", "days": 180 }]`.
@@ -1207,6 +1213,65 @@ stays at the slower `UnopposedCapturePerDay`. Both are in `common/defines/07_mov
 
 `SimBench --fronts 180` plays half a year and prints every front: its posts, the ones nobody
 holds, and the largest pile. `--define Key=Value` changes one define for one run.
+
+### National modifiers
+
+A country's **modifiers** are shares added to what the simulation works out anyway:
+`"construction_speed": 0.15` builds a sixth faster, `"output": -0.05` makes five per cent less.
+Five kinds of content may carry a `modifiers` block, and the country's total for each key is their
+sum:
+
+| Where | For how long |
+|---|---|
+| `common/modifiers` (national spirits) | while the spirit lasts |
+| `common/governments` | while the country has that form of government |
+| `common/ideologies` | while it holds that ideology |
+| `common/government_focus` | while its cabinet has that priority |
+| `common/technologies` (`effects`) | once researched, for ever |
+
+```jsonc
+"general_mobilisation": {
+  "name": "General mobilisation",
+  "description": "Every reservist has been called up...",
+  "days": 180,
+  "positive": true,
+  "modifiers": { "recruitment_speed": 0.30, "reinforcement_rate": 0.25, "output": -0.05 }
+}
+```
+
+| Key | What it changes |
+|---|---|
+| `output` | what farms, mines and factories produce |
+| `research_speed` | research points a week |
+| `construction_speed` | build time, divided by one plus this |
+| `construction_cost` | what a building costs (negative is cheaper) |
+| `tax_efficiency` | how much of what the taxes ask for arrives |
+| `trade_reach` | how far the country's goods travel |
+| `army_attack`, `army_defense` | a division's fire attacking and holding ground |
+| `army_speed` | how fast divisions march |
+| `supply` | supply throughput along the country's lines |
+| `organisation_recovery` | how fast a division out of battle recovers |
+| `entrenchment_speed` | how fast a division standing still digs in |
+| `reinforcement_rate` | replacements a day |
+| `recruitment_speed` | training time, divided by one plus this |
+| `recruitment_cost` | what a division costs to raise (negative is cheaper) |
+| `naval_speed` | how fast fleets sail |
+| `shipbuilding_speed` | how fast the yards finish hulls |
+| `stability_weekly`, `war_support_weekly` | points added every week (0.001 is a tenth of a point) |
+| `radicalism_weekly`, `living_weekly` | the same, in every region of the country |
+
+A key the list does not have is reported with the list beside it, so a typo is an error rather
+than a bonus that never applies. The keys are fixed because each is a question the simulation
+has to be written to ask; who carries them, and how much, is entirely data. Construction and
+training speeds apply to what is started while they last. The modifiers of a spirit are separate
+from its `effects`, which stay per-tick drifts in the effect keys events use.
+
+**Giving a country a spirit.** Any effect block - an event option, a decision, a scripted effect -
+may say `"add_modifier": { "tax_reform": 540 }` (0 for the length the spirit declares) and
+`"remove_modifier": "martial_law"` (or a list). An event option may also list
+`"modifiers": [ { "id": "war_weariness", "days": 270 } ]`, as before. Tooltips show a granted spirit
+with what it does indented under it; the country card lists the spirits a country carries, the days
+each has left, and under **All modifiers** the country's totals and where each part comes from.
 
 ### Technologies
 

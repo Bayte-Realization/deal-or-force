@@ -176,6 +176,11 @@ public partial class DealOrForceGame
     {
         var text = Loc.Get(option.Consequence);
         var effects = ScriptedEffects.Block(option.Effect);
+        // And the spirits the option hangs on the country, with what each of them does.
+        var spirits = ScriptedEffects.SpiritLines(option.Modifiers.Select(entry => (entry.Id, entry.Days)));
+        if (spirits.Count > 0)
+            effects = (effects.Length == 0 ? Loc.Get("Effects:") : effects) + "\n" +
+                      string.Join("\n", spirits.Select(line => "  " + line));
         return effects.Length == 0 ? text : text + "\n\n" + effects;
     }
 }

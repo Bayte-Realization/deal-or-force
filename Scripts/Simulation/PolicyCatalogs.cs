@@ -32,6 +32,9 @@ public sealed class GovernmentFocusDefinition
 
     /// <summary>Added to the productivity a country's literacy is pulling it towards.</summary>
     public float ProductivityTarget;
+
+    /// <summary>What the cabinet's priority adds while it holds (<see cref="NationalModifiers"/>).</summary>
+    public Dictionary<string, float> Modifiers = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public static class GovernmentFocusCatalog
@@ -143,6 +146,9 @@ public static class GovernmentFocusCatalog
                     break;
                 case "effects" when field.Value.ValueKind == JsonValueKind.Object:
                     ReadEffects(id, field.Value, definition, errors);
+                    break;
+                case "modifiers":
+                    definition.Modifiers = NationalModifiers.Read(field.Value, $"government focus `{id}`", errors);
                     break;
                 default:
                     errors?.Add($"government focus `{id}`: `{field.Name}` is not a field a cabinet has.");

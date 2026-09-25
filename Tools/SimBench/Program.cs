@@ -1896,18 +1896,30 @@ public static class Program
         if (lengths["Norfolk to San Diego"] > 110f)
             return $"Norfolk to San Diego is {lengths["Norfolk to San Diego"]:0} degrees: the fleet went round the Horn instead of through Panama";
 
-        // And a strait somebody holds is shut to the holder's enemies.
-        var italy = campaign.NationByTag("ITA");
-        var italian = italy is null ? null : campaign.Fleets.Find(candidate => candidate.NationId == italy.Id);
+        // And a strait somebody holds is shut to the holder's enemies. Asked of a Mediterranean
+        // navy that is at peace: one already at war with anybody is a belligerent, and Montreux
+        // shuts the Turkish straits to every belligerent, which is the rule working rather than a
+        // course that cannot be found. Italy when it is at peace, otherwise the next one that is.
+        Nation italy = null;
+        Fleet italian = null;
+        foreach (var tag in new[] { "ITA", "FRA", "ESP", "GRC", "GBR" })
+        {
+            var candidate = campaign.NationByTag(tag);
+            var fleet = candidate is null ? null : campaign.Fleets.Find(item => item.NationId == candidate.Id);
+            if (fleet is null || campaign.Wars.Any(war => !war.Ended && war.Involves(candidate.Id))) continue;
+            italy = candidate;
+            italian = fleet;
+            break;
+        }
         var turkey = campaign.NationByTag("TUR");
         var egypt = campaign.NationByTag("EGY");
-        if (italian is null || turkey is null || egypt is null) return "no Italian fleet, or no Turkey or Egypt, to shut a strait on";
+        if (italian is null || turkey is null || egypt is null) return "no Mediterranean navy at peace, or no Turkey or Egypt, to shut a strait on";
         var course = new List<float>();
         foreach (var (holder, to, latitude, longitude, mustFail) in new[]
                  { (turkey, "the Black Sea", 44.6f, 33.45f, true), (egypt, "the Red Sea", 20f, 38.5f, false) })
         {
             if (!SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude, course, out var open))
-                return $"Italy cannot reach {to} even at peace";
+                return $"{italy.Tag} cannot reach {to} even at peace";
             var war = new StrategicWar
             {
                 Id = 91_001, Name = "Bench strait war", AttackerId = italy.Id, DefenderId = holder.Id,
@@ -1916,10 +1928,10 @@ public static class Program
             campaign.Wars.Add(war);
             var found = SeaLanes.Plan(campaign, italy.Id, italian.Latitude, italian.Longitude, latitude, longitude, course, out var shut);
             campaign.Wars.Remove(war);
-            if (mustFail && found) return $"at war with {holder.Tag}, Italy still sailed into {to}";
+            if (mustFail && found) return $"at war with {holder.Tag}, {italy.Tag} still sailed into {to}";
             if (!mustFail && found && shut < open * 3f)
-                return $"at war with {holder.Tag}, Italy reached {to} in {shut:0} degrees against {open:0} at peace: the canal was not shut";
-            Console.WriteLine($"  straits: Italy to {to} is {open:0}° at peace and " +
+                return $"at war with {holder.Tag}, {italy.Tag} reached {to} in {shut:0} degrees against {open:0} at peace: the canal was not shut";
+            Console.WriteLine($"  straits: {italy.Tag} to {to} is {open:0}° at peace and " +
                               (found ? $"{shut:0}° round Africa" : "shut") + $" at war with {holder.Tag}.");
         }
         Console.WriteLine($"  sea lanes: Bombay to Toulon {lengths["Bombay to Toulon"]:0}°, Norfolk to San Diego " +
@@ -6250,7 +6262,10 @@ public static class Program
         // The eight expressions as they were written before any of this was data.
         var shipped = new[]
         {
-            Compare("income_tax", output * nation.TaxRate * 0.24f * (0.72f + nation.Stability * 0.22f)),
+            // And what the country's government and spirits make of its collection (tax_efficiency),
+            // which the old formula had no word for.
+            Compare("income_tax", output * nation.TaxRate * 0.24f * (0.72f + nation.Stability * 0.22f) *
+                NationalModifiers.Factor(nation, "tax_efficiency")),
             Compare("tariffs", nation.WeeklyTariffIncome),
             Compare("trade", nation.WeeklyTradeBalance),
             Compare("administration", output * 0.030f),
@@ -6344,7 +6359,8 @@ public static class Program
         // Its own numbers, and then what the country is actually willing to hand over: a
         // seventh levy lands on the same economy as the other six.
         var expectedModded = output * 0.10f * 0.40f *
-                             BudgetCore.ComplianceAt(nation, output, atWar: false);
+                             BudgetCore.ComplianceAt(nation, output, atWar: false) *
+                             NationalModifiers.Factor(nation, "tax_efficiency");
         if (MathF.Abs(modded - expectedModded) > MathF.Max(tolerance, expectedModded * 1e-4f))
             return $"the mod's tax is worth {modded:0.##} where its own numbers say {expectedModded:0.##}";
 

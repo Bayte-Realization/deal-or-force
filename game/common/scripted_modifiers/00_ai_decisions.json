@@ -85,5 +85,156 @@
       { "trigger": { "use": [ "restive" ] }, "add": 1.5 },
       { "trigger": { "use": [ "at_war" ] }, "factor": 0.6 }
     ]
+  },
+
+  "ai_general_mobilisation": {
+    "base": 0.2,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "short_of_men"
+          ]
+        },
+        "add": 1.4
+      },
+      {
+        "trigger": {
+          "use": [
+            "war_weary"
+          ]
+        },
+        "factor": 0.5
+      }
+    ]
+  },
+
+  "ai_military_reform": {
+    "base": 0.25,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "deep_reserves"
+          ]
+        },
+        "add": 0.4
+      }
+    ]
+  },
+
+  "ai_infrastructure_drive": {
+    "base": 0.3,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "deep_reserves"
+          ]
+        },
+        "add": 0.6
+      },
+      {
+        "trigger": {
+          "use": [
+            "at_war"
+          ]
+        },
+        "factor": 0.5
+      }
+    ]
+  },
+
+  "ai_research_initiative": {
+    "base": 0.3,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "settled",
+            "solvent"
+          ]
+        },
+        "add": 0.5
+      },
+      {
+        "trigger": {
+          "use": [
+            "at_war"
+          ]
+        },
+        "factor": 0.4
+      }
+    ]
+  },
+
+  "ai_tax_reform": {
+    "base": 0.2,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "empty_coffers"
+          ]
+        },
+        "add": 1.0
+      }
+    ]
+  },
+
+  "ai_naval_programme": {
+    "base": 0.1,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "deep_reserves"
+          ]
+        },
+        "add": 0.3
+      }
+    ]
+  },
+
+  "ai_trade_offensive": {
+    "base": 0.3,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "hungry_for_work"
+          ]
+        },
+        "add": 0.6
+      }
+    ]
+  },
+
+  "ai_martial_law": {
+    "base": 0.05,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "restive"
+          ]
+        },
+        "add": 0.6
+      }
+    ]
+  },
+
+  "ai_fortress_programme": {
+    "base": 0.1,
+    "modifiers": [
+      {
+        "trigger": {
+          "use": [
+            "at_war"
+          ]
+        },
+        "add": 0.8
+      }
+    ]
   }
 }

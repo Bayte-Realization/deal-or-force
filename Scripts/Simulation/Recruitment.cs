@@ -36,10 +36,18 @@ public static class RecruitmentSystem
         if (template is null || count < 1 || count > 6) return "Choose a valid template and 1–6 divisions.";
         if (DeploymentProvince(c, issuer, stateId) <= 0) return "No controlled province in this region.";
         if (c.Recruitment.Count(o => o.NationId == issuer) >= 12) return "Training capacity reached: 12 batches.";
-        if (nation.Treasury < template.RecruitmentCost * count) return "Insufficient treasury.";
+        if (nation.Treasury < CostOf(nation, template) * count) return "Insufficient treasury.";
         if (nation.ManpowerReserve < template.RecruitmentPersonnel * count) return "Insufficient manpower reserve.";
         return "";
     }
+
+    /// <summary>What one division of this template costs this country to raise (recruitment_cost).</summary>
+    public static float CostOf(Nation nation, UnitTypeDefinition template) =>
+        template.RecruitmentCost * NationalModifiers.Factor(nation, "recruitment_cost");
+
+    /// <summary>Days one batch of this template takes this country to train (recruitment_speed).</summary>
+    public static int TrainingDaysOf(Nation nation, UnitTypeDefinition template) =>
+        Math.Max(1, (int)MathF.Round(template.TrainingDays / NationalModifiers.Factor(nation, "recruitment_speed")));
 
     public static int DeploymentProvince(Campaign c, int issuer, int stateId)
     {

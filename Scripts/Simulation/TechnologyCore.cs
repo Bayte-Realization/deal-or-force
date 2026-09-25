@@ -53,10 +53,7 @@ public static class TechnologyCatalog
     /// What a technology can do, by the name its `effects` give it. Each is a share added to
     /// something the simulation already computes, summed over what a country has researched.
     /// </summary>
-    public static readonly IReadOnlyList<string> EffectNames = new[]
-    {
-        "output", "research_speed", "army_attack", "army_defense", "army_speed", "supply"
-    };
+    public static readonly IReadOnlyList<string> EffectNames = NationalModifiers.Keys.Select(key => key.Id).ToArray();
 
     public static readonly IReadOnlyList<string> Categories = new[] { "industry", "society", "military", "logistics" };
 
@@ -237,7 +234,7 @@ public static class ResearchSystem
         var economy = defines.ResearchGdpWeight * MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * M.Clamp01(nation.Literacy);
         var schools = MathF.Pow(M.Clamp(nation.EducationSpending / MathF.Max(0.0001f, defines.ResearchEducationBaseline),
             0.1f, 4f), defines.ResearchEducationExponent);
-        return (defines.ResearchBasePerWeek + economy * schools) * (1f + Bonus(nation, "research_speed"));
+        return (defines.ResearchBasePerWeek + economy * schools) * NationalModifiers.Factor(nation, "research_speed");
     }
 
     /// <summary>What this country pays for it: its cost, less what the world having it already gives away.</summary>
