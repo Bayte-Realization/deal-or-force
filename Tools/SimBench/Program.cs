@@ -6065,11 +6065,24 @@ public static class Program
 
             if (campaign.ProvinceController is { } control)
             {
+                // Held by itself or by an enemy it is fighting: a country whose one province is
+                // occupied is being overrun, not lost track of - Macau, seceded from Vietnam and
+                // taken by Taiwan in the war that followed. Held by anybody else, the region was
+                // handed over and the ground never was.
                 var provinces = 0;
+                var elsewhere = "";
+                var regions = new HashSet<int>(campaign.StatesOf(country.MapIndex).Select(region => region.MapIndex));
                 for (var province = 1; province < control.Length; province++)
-                    if (control[province] == (ushort)country.MapIndex) provinces++;
-                if (provinces == 0)
-                    return $"{country.Tag} owns {held} region(s) and holds not one province of them";
+                {
+                    if (control[province] == (ushort)country.MapIndex) { provinces++; continue; }
+                    if (!regions.Contains(campaign.ProvinceMap.ProvinceToState[province])) continue;
+                    var holder = campaign.Nations.FirstOrDefault(nation => nation.MapIndex == control[province]);
+                    if (holder is null || !CampaignDiplomacy.AtWar(campaign, holder.Id, country.Id))
+                        elsewhere = holder?.Tag ?? "nobody";
+                }
+                if (provinces == 0 && elsewhere.Length > 0)
+                    return $"{country.Tag} owns {held} region(s) and holds not one province of them: " +
+                           $"{elsewhere} does, and is not at war with it";
             }
         }
 

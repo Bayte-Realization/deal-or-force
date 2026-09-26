@@ -204,7 +204,7 @@ public static class MovementFall
         {
             var weight = MathF.Sqrt(MathF.Max(1f, region.Population));
             foreach (var (culture, size) in EconomySystem.Cultures(region))
-                if (peoples.Contains(culture, StringComparer.OrdinalIgnoreCase) && region.Population > 0)
+                if (MovementDefinition.Listed(peoples, culture) && region.Population > 0)
                     weight *= 1f + 4f * size / (float)region.Population;
             weights.Add(weight);
         }

@@ -259,8 +259,8 @@ public static class MovementRules
         foreach (var group in region.PopulationGroups)
         {
             if (group.Size <= 0) continue;
-            if (definition.Peoples.Contains(group.Culture, StringComparer.OrdinalIgnoreCase)) own += group.Size;
-            else if (definition.Faiths.Contains(group.Religion, StringComparer.OrdinalIgnoreCase)) faithful += group.Size;
+            if (MovementDefinition.Listed(definition.Peoples, group.Culture)) own += group.Size;
+            else if (MovementDefinition.Listed(definition.Faiths, group.Religion)) faithful += group.Size;
         }
         return own;
     }

@@ -64,19 +64,27 @@ public static class MovementAi
         // that does not take up arms (the humanitarian trait: an order of knights runs hospitals).
         if (campaign.ElapsedDays >= defines.MovementAiUprisingAfterDays && !definition.Has("humanitarian"))
         {
-            var targets = campaign.States
-                .Where(region => region.NationMapIndex != nation.MapIndex &&
-                                 (definition.Has("for_hire")
-                                     ? region.Stability <= 0.35f
-                                     : state.Support.GetValueOrDefault(region.MapIndex) >= defines.MovementUprisingSupport))
-                .Select(region => (Region: region, Chance: MovementRules.UprisingChance(campaign, nation, region),
-                                   Home: definition.Homeland.Contains(region.Id, StringComparer.OrdinalIgnoreCase)))
-                .Where(entry => entry.Chance >= defines.MovementAiUprisingChance)
-                .OrderByDescending(entry => entry.Home).ThenByDescending(entry => entry.Chance)
-                .FirstOrDefault();
-            if (targets.Region is not null &&
+            // The homeland first, then the likeliest.
+            var forHire = definition.Has("for_hire");
+            ScenarioState target = null;
+            var targetHome = false;
+            var targetChance = 0f;
+            foreach (var region in campaign.States)
+            {
+                if (region.NationMapIndex == nation.MapIndex) continue;
+                if (forHire ? region.Stability > 0.35f
+                            : state.Support.GetValueOrDefault(region.MapIndex) < defines.MovementUprisingSupport) continue;
+                var chance = MovementRules.UprisingChance(campaign, nation, region);
+                if (chance < defines.MovementAiUprisingChance) continue;
+                var home = MovementDefinition.Listed(definition.Homeland, region.Id);
+                if (target is not null && (targetHome && !home || targetHome == home && chance <= targetChance)) continue;
+                target = region;
+                targetHome = home;
+                targetChance = chance;
+            }
+            if (target is not null &&
                 MovementRules.Roll(campaign.Seed, nation.Id, campaign.ElapsedDays, 17) < defines.MovementAiUprisingAppetite)
-                Try("rise", targets.Region.MapIndex);
+                Try("rise", target.MapIndex);
         }
 
         // Recognition from whoever thinks best of it.
@@ -129,10 +137,16 @@ public static class MovementAi
         if (definition.Has("street_patrols") && state.Heat < 0.45f) Try("patrols");
         if (definition.Has("hospitallers"))
         {
-            var needy = campaign.States
-                .Where(region => region.Population > 0)
-                .OrderByDescending(region => region.WarDamage * 2f + (1f - region.StandardOfLiving))
-                .FirstOrDefault();
+            ScenarioState needy = null;
+            var need = float.MinValue;
+            foreach (var region in campaign.States)
+            {
+                if (region.Population <= 0) continue;
+                var score = region.WarDamage * 2f + (1f - region.StandardOfLiving);
+                if (score <= need) continue;
+                need = score;
+                needy = region;
+            }
             if (needy is not null) Try("hospital", needy.MapIndex);
         }
         if (definition.Has("for_hire") && state.ContractNationId < 0)
@@ -153,7 +167,7 @@ public static class MovementAi
             var people = MovementRules.PeopleOf(region, definition, out _);
             if (people <= 0) continue;
             var score = people * (1f - state.Support.GetValueOrDefault(region.MapIndex)) *
-                        (definition.Homeland.Contains(region.Id, StringComparer.OrdinalIgnoreCase) ? 3f : 1f);
+                        (MovementDefinition.Listed(definition.Homeland, region.Id) ? 3f : 1f);
             if (score <= groundScore) continue;
             groundScore = score;
             ground = region;

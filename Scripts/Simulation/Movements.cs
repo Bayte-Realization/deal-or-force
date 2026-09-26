@@ -47,7 +47,20 @@ public sealed class MovementDefinition
     /// </summary>
     public bool Template;
 
-    public bool Has(string trait) => Traits.Contains(trait, StringComparer.OrdinalIgnoreCase);
+    public bool Has(string trait) => Listed(Traits, trait);
+
+    /// <summary>
+    /// Whether a list of names holds this one, whatever its case. A loop rather than
+    /// Enumerable.Contains, which with a comparer boxes an enumerator on every call - and this
+    /// is asked of every population group of every region, by every movement, every week.
+    /// </summary>
+    public static bool Listed(List<string> names, string name)
+    {
+        if (names is null || name is null) return false;
+        for (var index = 0; index < names.Count; index++)
+            if (string.Equals(names[index], name, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 }
 
 /// <summary>`common/movements`, keyed by id, later files winning key by key.</summary>
