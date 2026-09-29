@@ -461,7 +461,7 @@ Open debts:
 
 `MapRasterCatalog` reads `default.map`, `provinces.png` and `definition.csv`, checks every
 colour against the political layers and hands the IDs to `ProvinceTopology`. The base PNG
-holds 37,909 irregular anisotropic provinces and forms a graph of 98,794 land edges. A wide
+holds 38,013 irregular anisotropic provinces and forms a graph of 99,207 land edges. A wide
 distribution of area, orientation and elongation removes the even "scale pattern" while
 keeping the connectivity fronts need. IDs stay 16-bit, so shader selection, the controller
 texture, pathfinding, fronts and saves all use one contract. `Tools/MapDataCompiler` builds

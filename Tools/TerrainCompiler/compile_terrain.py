@@ -1,5 +1,9 @@
 """Offline GIS import, never used by the game at runtime. Does not change province IDs.
 Requires numpy, Pillow, rasterio, scipy; source archives stay in ignored cache/.
+
+--recount-only recounts terrain_provinces.csv from the terrain.png already there and the
+current provinces.png - what a recompiled map needs, its cells having kept their terrain - and
+needs only numpy and Pillow.
 """
 import argparse
 import csv
@@ -10,10 +14,6 @@ import zipfile
 
 import numpy as np
 from PIL import Image
-import rasterio
-from rasterio.warp import reproject, Resampling
-from rasterio.transform import from_bounds
-from scipy.ndimage import distance_transform_edt, maximum_filter, minimum_filter
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = Path(__file__).resolve().parent / "cache"
@@ -25,6 +25,9 @@ def raster(archive, width, height, kind, cache_name):
         array = np.load(cached)
         if array.shape == (height, width):
             return array
+    import rasterio
+    from rasterio.warp import reproject, Resampling
+    from rasterio.transform import from_bounds
     with zipfile.ZipFile(archive) as z:
         tif = next(n for n in z.namelist() if n.endswith('.tif') and 'QL' not in n)
     target = np.full((height, width), -32768 if kind == 'elevation' else 0,
@@ -44,6 +47,8 @@ def raster(archive, width, height, kind, cache_name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--initialize-relief', action='store_true', help='Create flat data layers only if missing')
+    parser.add_argument('--recount-only', action='store_true',
+                        help='Recount terrain_provinces.csv from the existing terrain.png for the current provinces.png')
     args = parser.parse_args()
     config = json.loads((Path(__file__).parent / 'classification.json').read_text())
     definitions = {}
@@ -67,6 +72,10 @@ def main():
     provinces = ids[packed]
     del rgb, ids, packed
     land = provinces > 0
+    if args.recount_only:
+        recount(names, slots, palette, provinces, land)
+        return
+    from scipy.ndimage import distance_transform_edt, maximum_filter, minimum_filter
     cover = raster(CACHE / 'globcover2009.zip', width, height, 'cover', 'cover_aligned.npy')
     elevation = raster(CACHE / 'elevation.zip', width, height, 'elevation', 'elevation_aligned.npy')
     lat = 90 - (np.arange(height)[:, None] + .5) * 180 / height
@@ -97,15 +106,7 @@ def main():
     if np.any(types[land] == 0):
         raise RuntimeError('Unassigned land pixels')
     Image.fromarray(palette[types]).save(ROOT / 'game/map_data/terrain.png')
-    counts = np.bincount((provinces.astype(np.int64) * len(palette) + types).ravel(),
-                         minlength=(int(provinces.max()) + 1) * len(palette)).reshape(-1, len(palette))
-    dominant = counts.argmax(axis=1)
-    with (ROOT / 'game/map_data/terrain_provinces.csv').open('w', newline='') as f:
-        writer = csv.writer(f, delimiter=';')
-        writer.writerow(['province_id', 'terrain', 'dominant_share'])
-        for p in range(1, len(counts)):
-            if counts[p].sum():
-                writer.writerow([p, names[int(dominant[p]) - 1], round(float(counts[p].max() / counts[p].sum()), 4)])
+    counts, dominant = write_province_terrain(names, provinces, types, len(palette))
     if args.initialize_relief:
         for name, color in [('heightmap.png', (128, 128, 128)), ('relief_color.png', (146, 149, 119))]:
             path = ROOT / 'game/map_data' / name
@@ -121,6 +122,41 @@ def main():
                          for p in [CACHE / 'globcover2009.zip', CACHE / 'elevation.zip']}}
     (ROOT / 'game/map_data/terrain_provenance.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2), flush=True)
+
+
+def write_province_terrain(names, provinces, types, slots_count):
+    counts = np.bincount((provinces.astype(np.int64) * slots_count + types).ravel(),
+                         minlength=(int(provinces.max()) + 1) * slots_count).reshape(-1, slots_count)
+    dominant = counts.argmax(axis=1)
+    with (ROOT / 'game/map_data/terrain_provinces.csv').open('w', newline='') as f:
+        writer = csv.writer(f, delimiter=';')
+        writer.writerow(['province_id', 'terrain', 'dominant_share'])
+        for p in range(1, len(counts)):
+            if counts[p].sum():
+                writer.writerow([p, names[int(dominant[p]) - 1], round(float(counts[p].max() / counts[p].sum()), 4)])
+    return counts, dominant
+
+
+def recount(names, slots, palette, provinces, land):
+    """terrain.png read back into slots, and the provinces counted over it again."""
+    terrain = np.asarray(Image.open(ROOT / 'game/map_data/terrain.png').convert('RGB'), dtype=np.uint32)
+    packed = terrain[:, :, 0] << 16 | terrain[:, :, 1] << 8 | terrain[:, :, 2]
+    lookup = np.zeros(1 << 24, dtype=np.uint8)
+    for name, slot in slots.items():
+        colour = palette[slot]
+        lookup[int(colour[0]) << 16 | int(colour[1]) << 8 | int(colour[2])] = slot
+    types = lookup[packed]
+    if np.any(types[land] == 0):
+        raise RuntimeError('terrain.png leaves land pixels without a terrain; run the full import')
+    types[~land] = 0
+    counts, dominant = write_province_terrain(names, provinces, types, len(palette))
+    report_path = ROOT / 'game/map_data/terrain_provenance.json'
+    report = json.loads(report_path.read_text())
+    used = counts[1:].sum(axis=1) > 0
+    report['provinces'] = int(np.count_nonzero(used))
+    report['province_distribution'] = {n: int(np.count_nonzero(dominant[1:][used] == slots[n])) for n in names}
+    report_path.write_text(json.dumps(report, indent=2) + '\n')
+    print(json.dumps({'provinces': report['provinces'], 'province_distribution': report['province_distribution']}, indent=2))
 
 
 if __name__ == '__main__':

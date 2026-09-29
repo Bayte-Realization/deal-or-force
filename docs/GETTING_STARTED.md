@@ -57,7 +57,7 @@ Open the folder in Godot (**Import** → pick `project.godot`) and press **F5**,
 
 The game opens on `Scenes/MainMenu.tscn` — the menu is a scene of its own and comes up
 immediately. The world is built when you press **Singleplayer** or **Load latest campaign**,
-which takes ten to thirty seconds depending on the machine: it is reading 37 909 provinces
+which takes ten to thirty seconds depending on the machine: it is reading 38 013 provinces
 out of a raster and working out who borders whom.
 
 ### After a fresh clone, two things will complain

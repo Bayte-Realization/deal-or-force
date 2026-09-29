@@ -25,5 +25,11 @@
   "The settlers come home and the land stays nobody's. What was spent is spent.": "The settlers come home and the land stays nobody's. What was spent is spent.",
   "Send settlers for {0}. In {1:N0} days the region is ours, with the people who went.": "Send settlers for {0}. In {1:N0} days the region is ours, with the people who went.",
   "Our settlers set out for {0}.": "Our settlers set out for {0}.",
-  "The settlers are coming home.": "The settlers are coming home."
+  "The settlers are coming home.": "The settlers are coming home.",
+  "Claimed by": "Claimed by",
+  "Claims the 1959 Antarctic Treaty froze rather than ended. A claimant settles its own claim for less and sooner; anybody else who settles it makes an enemy of every claimant.": "Claims the 1959 Antarctic Treaty froze rather than ended. A claimant settles its own claim for less and sooner; anybody else who settles it makes an enemy of every claimant.",
+  "Our claim: we settle it for less, and sooner.": "Our claim: we settle it for less, and sooner.",
+  "Claimed by {0}. They will not forgive it.": "Claimed by {0}. They will not forgive it.",
+  "Settling land we claim": "Settling land we claim",
+  "Took land we claim": "Took land we claim"
 }

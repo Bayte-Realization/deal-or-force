@@ -63,6 +63,69 @@ static class ColonisationTests
         Check(ColonisationCore.Refusal(c, aus, small).Length > 0, "a treasury that cannot pay is refused");
         aus.Treasury = 1_000f;
 
+        // --- F: the lands, and the claims on them ------------------------------------------
+        // Antarctica was one region, so whoever settled first had a continent. It is its lands
+        // now, and the seven claims the Treaty froze are worth something again.
+        var lands = c.States.Where(s => s.Id.StartsWith("aq_", StringComparison.Ordinal)).ToList();
+        Check(lands.Count >= 15 && lands.All(ColonisationCore.IsUnclaimed) &&
+              lands.All(s => PeaceConference.ProvincesOfState(map, s.MapIndex).Count > 0),
+            $"Antarctica is {lands.Count} lands, each nobody's and each with ground of its own");
+        // And the borders between them are the ground's, not ruled: no stretch of one runs down a
+        // meridian or along a parallel for long - the spokes and rings a cell-a-step growth drew
+        // around the Pole before the partition was measured on the ground (TerritorialTopology).
+        var isLand = new System.Collections.Generic.HashSet<int>(lands.Select(s => s.MapIndex));
+        int RegionAt(int x, int y)
+        {
+            var province = map.CellToProvince[y * map.Width + x];
+            return province == 0 ? 0 : map.ProvinceToState[province];
+        }
+        var downMeridian = 0;
+        var alongParallel = 0f;
+        var runs = new int[map.Width];
+        for (var y = 0; y < map.Height; y++)
+        {
+            var latitude = 90f - (y + 0.5f) * 180f / map.Height;
+            if (latitude > -60f) continue;
+            var across = MathF.Cos(latitude * MathF.PI / 180f);
+            var along = 0;
+            for (var x = 0; x < map.Width; x++)
+            {
+                var here = RegionAt(x, y);
+                var east = RegionAt((x + 1) % map.Width, y);
+                runs[x] = isLand.Contains(here) && isLand.Contains(east) && here != east ? runs[x] + 1 : 0;
+                downMeridian = Math.Max(downMeridian, runs[x]);
+                var south = y + 1 < map.Height ? RegionAt(x, y + 1) : 0;
+                along = isLand.Contains(here) && isLand.Contains(south) && here != south ? along + 1 : 0;
+                alongParallel = MathF.Max(alongParallel, along * across);
+            }
+        }
+        Check(downMeridian <= 40 && alongParallel <= 48f,
+            $"no border between them runs down a meridian or along a parallel for long (at most {downMeridian} cells " +
+            $"down one and {alongParallel:0} along one)");
+        var nor = c.NationByTag("NOR");
+        var rus = c.NationByTag("RUS");
+        var maud = lands.First(s => s.Id == "aq_qml");
+        var byrd = lands.First(s => s.Id == "aq_mbl");
+        Check(ColonisationCore.Claims(maud, nor) && !ColonisationCore.Claims(maud, rus) && byrd.Claims.Count == 0,
+            "Norway claims Queen Maud Land, Russia does not, and Marie Byrd Land is nobody's claim");
+        Check(ColonisationCore.CostFor(c, nor, maud) < ColonisationCore.CostFor(c, rus, maud) &&
+              ColonisationCore.DaysFor(c, nor, maud) < ColonisationCore.DaysFor(c, rus, maud),
+            "a claimant settles its own claim for less, and sooner");
+        var norway = CampaignDiplomacy.Get(c, nor.Id, rus.Id);
+        var fondness = norway.Opinion;
+        var chance = c.Defines.AiColonisationChancePerMonth;
+        c.Defines.AiColonisationChancePerMonth = 0f;
+        rus.Treasury = Math.Max(rus.Treasury, 1_000f);
+        Check(ColonisationCore.Start(c, rus, maud) && norway.Reasons.Any(r => r.Id == "settling_our_claim"),
+            "Norway remembers who is settling its claim");
+        var voyage = ColonisationCore.DaysFor(c, rus, maud);
+        for (var day = 0; day <= voyage; day++) ColonisationCore.Tick(c);
+        Check(maud.NationMapIndex == rus.MapIndex && norway.Reasons.Any(r => r.Id == "took_our_claim") &&
+              norway.Opinion < fondness,
+            $"Russia's flag goes up over Queen Maud Land after {voyage} days, and Norway does not forget it " +
+            $"({fondness:0} -> {norway.Opinion:0})");
+        c.Defines.AiColonisationChancePerMonth = chance;
+
         // --- D: settling ---------------------------------------------------------------------
         var order = new ColoniseCommand { IssuerId = aus.Id, StateMapIndex = small.MapIndex };
         order.Apply(c);
@@ -108,10 +171,15 @@ static class ColonisationTests
         c.Defines.AiColonisationChancePerMonth = 1f;
         foreach (var nation in c.Nations) nation.Treasury = Math.Max(nation.Treasury, 10_000f);
         for (var day = 0; day < 30; day++) ColonisationCore.Tick(c);
-        var settler = ColonisationCore.Colonist(c, ice);
-        Check(settler is not null && !settler.IsHuman && ColonisationCore.Reaches(c, settler, ice),
-            $"a country nobody plays sets out for the ice when it can ({settler?.Tag ?? "nobody"})");
-        Check(c.Wars.Where(w => !w.Ended).All(w => !w.Involves(settler.Id)), "and only one at peace");
+        // Antarctica is its lands, and a country goes for the cheapest it can reach - its own
+        // claim cheapest of all - so which land is settled first is the AI's to choose.
+        var bound = lands.Where(s => ColonisationCore.Colonist(c, s) is { IsHuman: false }).ToList();
+        var goers = bound.Select(s => ColonisationCore.Colonist(c, s)).ToList();
+        Console.WriteLine("  set out: " + string.Join(", ", bound.Select(s =>
+            $"{ColonisationCore.Colonist(c, s).Tag}->{s.Name}{(ColonisationCore.Claims(s, ColonisationCore.Colonist(c, s)) ? " (its claim)" : "")}")));
+        Check(bound.Count > 0 && bound.All(s => ColonisationCore.Reaches(c, ColonisationCore.Colonist(c, s), s)),
+            $"countries nobody plays set out for the ice when they can ({bound.Count} of {lands.Count} lands)");
+        Check(goers.All(settler => c.Wars.Where(w => !w.Ended).All(w => !w.Involves(settler.Id))), "and only ones at peace");
 
         // The campaign's random stream is not touched: whether a country settles comes from a
         // hash, so a world does not change because somebody considered Antarctica.

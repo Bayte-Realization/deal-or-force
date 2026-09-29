@@ -208,6 +208,42 @@
         { "map_index": 1722, "name": "Chengde", "iso": "CN-HE-CDE", "kind": "Prefecture",
           "population": 3350000, "seed": [117.94, 41.00] }
       ]
+    },
+    {
+      // Antarctica was one region of nine thousand provinces, so the first country to plant a
+      // flag on it had a continent. It is the lands its coasts are named for - Queen Maud Land,
+      // Wilkes Land, Victoria Land, Marie Byrd Land, the peninsula's Graham and Palmer Lands -
+      // the two great ice shelves, and the high plateau behind them, where Vostok and Kunlun
+      // stand and the Pole is. Each is settled on its own.
+      //
+      // "polar" grows the shares on the ground rather than on the raster (see GrowPolar): near
+      // the pole a cell is a sliver, and grown a cell a step the borders came out as the spokes
+      // and rings of a dartboard. The islands of the old "Region 2549", a hundred and fifty
+      // specks off every coast, go to whichever land they lie off; the region keeps its index
+      // as Graham Land.
+      "nation": "ATA",
+      "carve_from_iso": "AQ-X01~",
+      "also_carve_from_iso": ["AQ-X02~"],
+      "polar": true,
+      "pieces": [
+        { "map_index": 893, "name": "Polar Plateau", "iso": "AQ-X01~", "kind": "Plateau", "seed": [0.0, -89.6] },
+        { "map_index": 1723, "name": "Queen Maud Land", "iso": "AQ-QML", "kind": "Land", "seed": [4.0, -72.5] },
+        { "map_index": 1724, "name": "Enderby Land", "iso": "AQ-END", "kind": "Land", "seed": [50.0, -68.0] },
+        { "map_index": 1725, "name": "Mac. Robertson Land", "iso": "AQ-MRL", "kind": "Land", "seed": [63.0, -69.5] },
+        { "map_index": 1726, "name": "Princess Elizabeth Land", "iso": "AQ-PEL", "kind": "Land", "seed": [80.0, -70.5] },
+        { "map_index": 1727, "name": "Queen Mary Land", "iso": "AQ-QMA", "kind": "Land", "seed": [95.0, -67.5] },
+        { "map_index": 1728, "name": "Wilkes Land", "iso": "AQ-WIL", "kind": "Land", "seed": [115.0, -69.0] },
+        { "map_index": 1729, "name": "Adélie Land", "iso": "AQ-ADE", "kind": "Land", "seed": [140.0, -68.0] },
+        { "map_index": 1730, "name": "George V Land", "iso": "AQ-GEO", "kind": "Land", "seed": [153.0, -69.5] },
+        { "map_index": 1731, "name": "Victoria Land", "iso": "AQ-VIC", "kind": "Land", "seed": [163.0, -74.5] },
+        { "map_index": 1733, "name": "Marie Byrd Land", "iso": "AQ-MBL", "kind": "Land", "seed": [-130.0, -77.0] },
+        { "map_index": 1734, "name": "Ellsworth Land", "iso": "AQ-ELL", "kind": "Land", "seed": [-88.0, -76.0] },
+        { "map_index": 1735, "name": "Palmer Land", "iso": "AQ-PAL", "kind": "Land", "seed": [-65.0, -72.0] },
+        { "map_index": 1206, "name": "Graham Land", "iso": "AQ-X02~", "kind": "Land", "seed": [-62.0, -65.5] },
+        { "map_index": 1737, "name": "Coats Land", "iso": "AQ-COA", "kind": "Land", "seed": [-30.0, -77.5] },
+        { "map_index": 1738, "name": "Dome Argus", "iso": "AQ-DOA", "kind": "Plateau", "seed": [77.0, -80.5] },
+        { "map_index": 1739, "name": "Vostok", "iso": "AQ-VOS", "kind": "Plateau", "seed": [107.0, -78.5] }
+      ]
     }
   ],
   "adjacency_repairs": [

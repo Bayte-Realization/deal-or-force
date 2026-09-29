@@ -21,6 +21,14 @@ public sealed partial class ScenarioState
 
     /// <summary>How far the settlement has got, from nothing to a colony.</summary>
     public float ColonisationProgress;
+
+    /// <summary>
+    /// The countries that claim this land without holding it, by tag: Antarctica's seven, whose
+    /// claims the 1959 Treaty froze rather than ended. From history ("claims"). A claimant
+    /// settles its own claim for less and sooner; anybody else who settles it makes an enemy of
+    /// every claimant.
+    /// </summary>
+    public List<string> Claims = new();
 }
 
 public sealed partial class Defines
@@ -59,6 +67,13 @@ public sealed partial class Defines
 
     /// <summary>How many times the price a country nobody plays wants in the treasury before it spends it on a colony.</summary>
     public float AiColonisationTreasuryMultiple { get; set; } = 4f;
+
+    /// <summary>What settling land it claims costs a claimant, and how long it takes, as shares of the full price and time.</summary>
+    public float ColonisationClaimantCostShare { get; set; } = 0.6f;
+    public float ColonisationClaimantDaysShare { get; set; } = 0.75f;
+
+    /// <summary>How much dearer a country nobody plays reckons land somebody else claims: the price of the quarrel.</summary>
+    public float AiColonisationForeignClaimWeight { get; set; } = 2.5f;
 }
 
 /// <summary>
@@ -100,6 +115,37 @@ public static class ColonisationCore
         return Math.Max(1, defines.ColonisationDaysBase +
                            (int)MathF.Round(defines.ColonisationDaysPerProvinceRoot * MathF.Sqrt(Provinces(campaign, state))));
     }
+
+    /// <summary>Whether this country claims this land.</summary>
+    public static bool Claims(ScenarioState state, Nation nation)
+    {
+        if (state?.Claims is not { Count: > 0 } claims || nation is null) return false;
+        foreach (var tag in claims)
+            if (string.Equals(tag, nation.Tag, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>The claimants of this land that are countries in this world, other than this one.</summary>
+    public static List<Nation> OtherClaimants(Campaign campaign, ScenarioState state, Nation nation)
+    {
+        var found = new List<Nation>();
+        if (campaign is null || state?.Claims is not { Count: > 0 } claims) return found;
+        foreach (var tag in claims)
+            if (campaign.NationByTag(tag) is { } claimant && claimant != nation && claimant.Movement is null &&
+                campaign.StatesOf(claimant).Length > 0)
+                found.Add(claimant);
+        return found;
+    }
+
+    /// <summary>What founding a colony here costs this country: less, when the land is its claim.</summary>
+    public static float CostFor(Campaign campaign, Nation nation, ScenarioState state) =>
+        Cost(campaign, state) * (Claims(state, nation) ? campaign.Defines.ColonisationClaimantCostShare : 1f);
+
+    /// <summary>And how long it takes this country.</summary>
+    public static int DaysFor(Campaign campaign, Nation nation, ScenarioState state) =>
+        Claims(state, nation)
+            ? Math.Max(1, (int)MathF.Round(Days(campaign, state) * campaign.Defines.ColonisationClaimantDaysShare))
+            : Days(campaign, state);
 
     /// <summary>
     /// Whether a country can get settlers there: across a land border from ground of its own,
@@ -143,7 +189,7 @@ public static class ColonisationCore
             return Loc.Get("Our settlers are already busy founding another colony.");
         if (!Reaches(campaign, nation, state))
             return Loc.Get("We cannot reach it: it borders none of our land, and we have no coast to sail from.");
-        var cost = Cost(campaign, state);
+        var cost = CostFor(campaign, nation, state);
         if (nation.Treasury < cost)
             return Loc.Format("Founding a colony here costs {0:0.00}; the treasury holds {1:0.00}.", cost, nation.Treasury);
         return "";
@@ -153,11 +199,14 @@ public static class ColonisationCore
     public static bool Start(Campaign campaign, Nation nation, ScenarioState state)
     {
         if (Refusal(campaign, nation, state).Length > 0) return false;
-        nation.Treasury -= Cost(campaign, state);
+        nation.Treasury -= CostFor(campaign, nation, state);
         state.ColonistMapIndex = nation.MapIndex;
         state.ColonisationProgress = 0f;
+        // Every other country that claims it hears of it the day the ships sail.
+        foreach (var claimant in OtherClaimants(campaign, state, nation))
+            OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, claimant.Id, nation.Id), "settling_our_claim");
         DiagnosticLogs.Write("simulation",
-            $"COLONY_STARTED nation={nation.Tag} region={state.Id} days={Days(campaign, state)} day={campaign.ElapsedDays}");
+            $"COLONY_STARTED nation={nation.Tag} region={state.Id} days={DaysFor(campaign, nation, state)} day={campaign.ElapsedDays}");
         campaign.MarkStrategicChange();
         return true;
     }
@@ -192,7 +241,7 @@ public static class ColonisationCore
             if (!Reaches(campaign, nation, state)) continue;
             // Half a day's grace on the finish: a day's share added up a few hundred times in
             // single precision can land a hair short of one, and the colony would be a day late.
-            var days = Days(campaign, state);
+            var days = DaysFor(campaign, nation, state);
             state.ColonisationProgress += 1f / days;
             if (state.ColonisationProgress >= 1f - 0.5f / days) Found(campaign, nation, state);
         }
@@ -204,6 +253,9 @@ public static class ColonisationCore
     {
         var map = campaign.ProvinceMap;
         var own = (ushort)nation.MapIndex;
+        // And every other claimant, the day the flag goes up, for years.
+        foreach (var claimant in OtherClaimants(campaign, state, nation))
+            OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, claimant.Id, nation.Id), "took_our_claim");
         foreach (var province in PeaceConference.ProvincesOfState(map, state.MapIndex))
         {
             map.ProvinceToNation[province] = own;
@@ -271,16 +323,22 @@ public static class ColonisationCore
             if (campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id))) continue;
             if (Chance(nation.Id, month) >= defines.AiColonisationChancePerMonth) continue;
 
+            // The cheapest it can reach and afford - its own claims cheaper still, and anybody
+            // else's dearer by the quarrel it would start.
             ScenarioState best = null;
             var bestCost = float.MaxValue;
             foreach (var state in open)
             {
                 if (state.ColonistMapIndex != 0) continue;
-                var cost = Cost(campaign, state);
-                if (cost >= bestCost || nation.Treasury < cost * defines.AiColonisationTreasuryMultiple) continue;
+                var cost = CostFor(campaign, nation, state);
+                if (nation.Treasury < cost * defines.AiColonisationTreasuryMultiple) continue;
+                var reckoned = !Claims(state, nation) && OtherClaimants(campaign, state, nation).Count > 0
+                    ? cost * defines.AiColonisationForeignClaimWeight
+                    : cost;
+                if (reckoned >= bestCost) continue;
                 if (!Reaches(campaign, nation, state)) continue;
                 best = state;
-                bestCost = cost;
+                bestCost = reckoned;
             }
             if (best is not null) Start(campaign, nation, best);
         }

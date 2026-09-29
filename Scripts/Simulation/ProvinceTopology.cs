@@ -131,7 +131,10 @@ public sealed class ProvinceTopology
         {
             var start = cursor;
             var state = states[start];
-            if (state == 0 || control[start] == 0 || cellToProvince[start] >= 0)
+            // A lake has a region and no owner (LakeRegions), and it still has provinces: the
+            // game reads them from provinces.png, and a compile that grew none left every lake
+            // uncoloured there and failed its own round trip.
+            if (state == 0 || control[start] == 0 && !LakeRegions.IsLakeRegion(state) || cellToProvince[start] >= 0)
                 continue;
 
             var province = provinceToState.Count;

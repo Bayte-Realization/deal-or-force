@@ -61,20 +61,36 @@ public partial class DealOrForceGame
                             "or by sea from a coast of its own - may settle it.");
 
         var colonist = ColonisationCore.Colonist(_campaign, state);
-        var days = ColonisationCore.Days(_campaign, state);
+        // What it would take us - a claimant settles its own claim for less, and sooner.
+        var cost = player is null ? ColonisationCore.Cost(_campaign, state) : ColonisationCore.CostFor(_campaign, player, state);
+        var days = player is null ? ColonisationCore.Days(_campaign, state) : ColonisationCore.DaysFor(_campaign, player, state);
         DetailHeading("SETTLEMENT");
         DetailRow("Provinces", ColonisationCore.Provinces(_campaign, state).ToString("N0"));
-        DetailRow("Cost of founding", Fmt.Money(ColonisationCore.Cost(_campaign, state)),
+        DetailRow("Cost of founding", Fmt.Money(cost),
             Tr("Paid from the treasury once, when the settlers set out. Calling them home returns none of it."));
         DetailRow("Time to found", Loc.Format("{0:N0} days", days),
             Tr("From the day the settlers set out to the day the region is the country's own."));
+        if (state.Claims.Count > 0)
+        {
+            var claimants = new System.Collections.Generic.List<string>();
+            foreach (var tag in state.Claims) claimants.Add(_campaign.NationByTag(tag)?.DisplayName ?? tag);
+            DetailRow("Claimed by", string.Join(", ", claimants),
+                Tr("Claims the 1959 Antarctic Treaty froze rather than ended. A claimant settles its own claim for less and sooner; anybody else who settles it makes an enemy of every claimant."));
+        }
         if (colonist is not null)
         {
+            var theirs = ColonisationCore.DaysFor(_campaign, colonist, state);
             DetailRow("Being settled by", colonist.DisplayName);
             DetailRow("Progress", Fmt.Percent(state.ColonisationProgress),
-                Loc.Format("About {0:N0} days to go.", Mathf.CeilToInt((1f - state.ColonisationProgress) * days)));
+                Loc.Format("About {0:N0} days to go.", Mathf.CeilToInt((1f - state.ColonisationProgress) * theirs)));
         }
         if (player is null) return;
+        var others = ColonisationCore.OtherClaimants(_campaign, state, player);
+        var claimNote = ColonisationCore.Claims(state, player)
+            ? Tr("Our claim: we settle it for less, and sooner.")
+            : others.Count > 0
+                ? Loc.Format("Claimed by {0}. They will not forgive it.", string.Join(", ", others.ConvertAll(nation => nation.DisplayName)))
+                : "";
 
         var ours = colonist == player;
         var button = ours
@@ -87,10 +103,10 @@ public partial class DealOrForceGame
             ? Tr("The settlers come home and the land stays nobody's. What was spent is spent.")
             : refusal.Length > 0 ? refusal
             : Loc.Format("Send settlers for {0}. In {1:N0} days the region is ours, with the people who went.",
-                Fmt.Money(ColonisationCore.Cost(_campaign, state)), days));
+                Fmt.Money(cost), days));
         _sideDetail.AddChild(button);
 
-        var note = feedback.Length > 0 ? feedback : refusal;
+        var note = feedback.Length > 0 ? feedback : refusal.Length > 0 ? refusal : claimNote;
         if (note.Length > 0)
         {
             var line = Title(note, 12, Ui.Colour("text.accent_dim"));

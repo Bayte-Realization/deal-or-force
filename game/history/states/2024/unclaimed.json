@@ -7,20 +7,186 @@
 // a province is otherwise history/provinces/ownership.csv. A colonial-era scenario would list
 // its unclaimed regions here the same way.
 {
-  // Antarctica - held by no state under the 1959 Antarctic Treaty; nobody lives there for good
+  // Antarctica - held by no state under the 1959 Antarctic Treaty; nobody lives there for good.
+  //
+  // Seventeen lands, each settled on its own (ColonisationCore). "claims" are the seven
+  // claimants' sectors, frozen by the Treaty's fourth article: whoever settles a land somebody
+  // else claims makes an enemy of the claimant, and a claimant settles its own for less.
+  // Buildings are the stations; what is under the ice is what the geology says is there.
+  // Polar Plateau - the high ice behind the Transantarctic Mountains, and the Pole. Amundsen-Scott
+  // (USA) at the Pole; the coal of the Beardmore Glacier and the chromium and platinum of the
+  // Dufek Massif under the ice. Every claimant's sector meets here.
   "aq_x01": {
     "owner": "none",
     "population": 0,
-    "urbanization": 0.93,
-    "buildings": { "Infrastructure": 3 },
-    "resources": { "Food": 2.082, "Coal": 0.163, "Oil": 0.275, "IronOre": 0.119, "RareEarths": 0.028, "NaturalGas": 0.256, "Timber": 3.389, "Bauxite": 0.029, "Uranium": 0.003 }
+    "urbanization": 0.0,
+    "claims": ["NOR", "AUS", "NZL", "CHL", "ARG", "GBR"],
+    "buildings": {"ResearchLab": 1, "Infrastructure": 1},
+    "resources": { "Food": 0.0, "Coal": 2.0, "Oil": 0.0, "IronOre": 0.3, "RareEarths": 1.2, "NaturalGas": 0.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
   },
-  // Region 2549 - held by no state under the 1959 Antarctic Treaty; nobody lives there for good
+  // Queen Maud Land - Neumayer III (Germany), Troll (Norway), SANAE IV (South Africa),
+  // Novolazarevskaya (Russia), Maitri (India), Princess Elisabeth (Belgium), and the DROMLAN air
+  // network that joins them to Cape Town. Claimed by Norway.
+  "aq_qml": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["NOR"],
+    "buildings": {"ResearchLab": 2, "Infrastructure": 2},
+    "resources": { "Food": 0.8, "Coal": 0.4, "Oil": 0.3, "IronOre": 0.4, "RareEarths": 0.0, "NaturalGas": 0.6, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Enderby Land - Syowa (Japan) and the old Soviet Molodyozhnaya; the oldest rock on the
+  // continent, in the Napier Complex. Australia claims it; Norway claims its western coast.
+  "aq_end": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS", "NOR"],
+    "buildings": {"ResearchLab": 1, "Infrastructure": 1},
+    "resources": { "Food": 0.8, "Coal": 0.0, "Oil": 0.0, "IronOre": 0.5, "RareEarths": 1.5, "NaturalGas": 0.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.4 }
+  },
+  // Mac. Robertson Land - Mawson (Australia), the oldest station still open on the continent.
+  // Claimed by Australia.
+  "aq_mrl": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS"],
+    "buildings": {"ResearchLab": 1, "Infrastructure": 1},
+    "resources": { "Food": 0.6, "Coal": 0.8, "Oil": 0.0, "IronOre": 1.5, "RareEarths": 0.0, "NaturalGas": 0.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Princess Elizabeth Land - the Larsemann Hills stations, Davis (Australia), Zhongshan (China),
+  // Progress (Russia) and Bharati (India), and the Prince Charles Mountains behind the Amery Ice
+  // Shelf: iron formations a thousand metres thick and Permian coal. The Prydz Bay shelf may hold
+  // oil. Claimed by Australia.
+  "aq_pel": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS"],
+    "buildings": {"ResearchLab": 2, "Infrastructure": 1},
+    "resources": { "Food": 0.8, "Coal": 3.5, "Oil": 1.2, "IronOre": 7.5, "RareEarths": 0.0, "NaturalGas": 1.8, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Queen Mary Land - Mirny (Russia) on the Davis Sea. Claimed by Australia.
+  "aq_qma": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS"],
+    "buildings": {"ResearchLab": 1, "Infrastructure": 1},
+    "resources": { "Food": 0.6, "Coal": 0.0, "Oil": 0.0, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 0.5, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Wilkes Land - Casey (Australia) and the Wilkins runway, and inland Concordia (France and
+  // Italy) on Dome C. The Sabrina Coast shelf may hold gas. Claimed by Australia.
+  "aq_wil": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS"],
+    "buildings": {"ResearchLab": 2, "Infrastructure": 1},
+    "resources": { "Food": 0.6, "Coal": 0.0, "Oil": 0.6, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 1.5, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Adelie Land - Dumont d'Urville (France), and Mawson's huts at Cape Denison, the windiest place
+  // at sea level on Earth. Claimed by France.
+  "aq_ade": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["FRA"],
+    "buildings": {"ResearchLab": 1, "Infrastructure": 1},
+    "resources": { "Food": 0.6, "Coal": 0.0, "Oil": 0.0, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 0.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // George V Land - a coast of glaciers and nobody. Claimed by Australia.
+  "aq_geo": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS"],
+    "buildings": {},
+    "resources": { "Food": 0.6, "Coal": 0.3, "Oil": 0.0, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 0.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Victoria Land - McMurdo (USA), the largest settlement on the continent, and New Zealand's
+  // Scott Base beside it on Ross Island; Mario Zucchelli (Italy) and Jang Bogo (Korea) on Terra
+  // Nova Bay. The Dry Valleys, the Beacon coal measures of the Transantarctic Mountains, and the
+  // Ross Sea shelf. Claimed by New Zealand.
+  "aq_vic": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["NZL"],
+    "buildings": {"ResearchLab": 3, "Infrastructure": 2, "Port": 1},
+    "resources": { "Food": 1.2, "Coal": 4.5, "Oil": 2.5, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 4.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.2 }
+  },
+  // Marie Byrd Land - the one land nobody claims, and the old Byrd station's ice. The Amundsen Sea
+  // shelf may hold oil.
+  "aq_mbl": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "buildings": {},
+    "resources": { "Food": 0.5, "Coal": 0.0, "Oil": 1.2, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 2.2, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Ellsworth Land - the Vinson Massif, the continent's highest mountain, and the Union Glacier
+  // camp where the private flights land. Claimed by Chile and Britain.
+  "aq_ell": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["CHL", "GBR"],
+    "buildings": {"Infrastructure": 1},
+    "resources": { "Food": 0.5, "Coal": 0.0, "Oil": 1.8, "IronOre": 0.3, "RareEarths": 0.0, "NaturalGas": 3.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Palmer Land - the southern peninsula and the Larsen basin under its ice shelves. Claimed by
+  // Britain, Chile and Argentina.
+  "aq_pal": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["GBR", "CHL", "ARG"],
+    "buildings": {"ResearchLab": 1},
+    "resources": { "Food": 1.0, "Coal": 0.0, "Oil": 1.5, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 2.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Graham Land - the peninsula and its islands: King George Island's six stations, Esperanza
+  // (Argentina) with its families and school, Marambio's airfield, Rothera (Britain), Vernadsky
+  // (Ukraine), Palmer (USA). The krill of the Scotia Sea is the Southern Ocean's fishery. Claimed
+  // by Britain, Chile and Argentina.
   "aq_x02": {
     "owner": "none",
     "population": 0,
-    "urbanization": 0.54,
-    "buildings": { "Infrastructure": 2 },
-    "resources": { "Food": 1.089, "Coal": 0.344, "Oil": 0.712, "IronOre": 0.22, "RareEarths": 0.114, "NaturalGas": 0.708, "Timber": 0.885, "Bauxite": 0.115, "Uranium": 0.015 }
+    "urbanization": 0.0,
+    "claims": ["GBR", "CHL", "ARG"],
+    "buildings": {"ResearchLab": 3, "Infrastructure": 2, "Port": 1},
+    "resources": { "Food": 2.0, "Coal": 0.0, "Oil": 0.8, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 1.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Coats Land - Halley VI (Britain) on the Brunt Ice Shelf and Belgrano II (Argentina), and the
+  // Weddell Sea shelf. Claimed by Britain and Argentina.
+  "aq_coa": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["GBR", "ARG"],
+    "buildings": {"ResearchLab": 2},
+    "resources": { "Food": 0.6, "Coal": 0.0, "Oil": 2.0, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 3.5, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Dome Argus - the summit of the East Antarctic ice, the coldest place on Earth, where China's
+  // Kunlun opens in summer; Japan's Dome Fuji on its flank. Four kilometres of ice over anything
+  // there is. Claimed by Australia and Norway.
+  "aq_doa": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS", "NOR"],
+    "buildings": {},
+    "resources": { "Food": 0.0, "Coal": 0.0, "Oil": 0.0, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 0.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
+  },
+  // Vostok - the Russian station over Lake Vostok, four kilometres down and sealed for fifteen
+  // million years. Claimed by Australia.
+  "aq_vos": {
+    "owner": "none",
+    "population": 0,
+    "urbanization": 0.0,
+    "claims": ["AUS"],
+    "buildings": {"ResearchLab": 1},
+    "resources": { "Food": 0.0, "Coal": 0.0, "Oil": 0.0, "IronOre": 0.0, "RareEarths": 0.0, "NaturalGas": 0.0, "Timber": 0.0, "Bauxite": 0.0, "Uranium": 0.0 }
   }
 }

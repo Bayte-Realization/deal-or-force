@@ -343,6 +343,14 @@ public static class HistoryDataLoader
             SetFloat(value, "standard_of_living", number => state.StandardOfLiving = M.Clamp01(number));
             SetFloat(value, "radicalism", number => state.Radicalism = M.Clamp01(number));
             SetFloat(value, "urbanization", number => state.Urbanization = M.Clamp01(number));
+            // Who claims it without holding it (ColonisationCore): Antarctica's seven.
+            if (value.TryGetProperty("claims", out var claims) && claims.ValueKind == JsonValueKind.Array)
+            {
+                state.Claims.Clear();
+                foreach (var claim in claims.EnumerateArray())
+                    if (claim.ValueKind == JsonValueKind.String && claim.GetString() is { Length: > 0 } tag)
+                        state.Claims.Add(tag);
+            }
             // A scenario may open on a region already in ruins (WarDamage).
             SetFloat(value, "war_damage", number => state.WarDamage = M.Clamp01(number));
             if (value.TryGetProperty("buildings", out var buildings) && buildings.ValueKind == JsonValueKind.Object)

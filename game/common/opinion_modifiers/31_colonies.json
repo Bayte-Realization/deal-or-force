@@ -1,0 +1,21 @@
+// What a country remembers of the one that settled land it claims (ColonisationCore).
+//
+// Each entry is a reason one country thinks better or worse of another: `opinion` is what it is
+// worth when fresh, `days` how long it is remembered, `decays` whether it fades over that time,
+// and `max_stacks` how many times the same reason can pile up.
+{
+  "settling_our_claim": {
+    "name": "Settling land we claim",
+    "opinion": -15,
+    "days": 720,
+    "decays": true,
+    "max_stacks": 2
+  },
+  "took_our_claim": {
+    "name": "Took land we claim",
+    "opinion": -40,
+    "days": 5475,
+    "decays": true,
+    "max_stacks": 3
+  }
+}

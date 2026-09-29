@@ -1,5 +1,5 @@
 {
-  "//": "Written by Tools/MapDataCompiler - it records which region layer provinces.png was cut from, so a mismatch can say so instead of looking like a corrupt map. The region hash here was restamped by hand once, when two whole provinces moved from Salyan to Nakhchivan: the region layer changed and the province cut did not have to, because the cells that moved are exactly those provinces. A recut would have been the same map with ninety-four fewer provinces and every id in the world shifted. What guarantees the two halves still fit is not this number but the load-time rule that no province may straddle a region border.",
-  "regions": 4661313993172811926,
-  "provinces": 37909
+  "//": "Written by Tools/MapDataCompiler. Not hand-edited - it records which region layer provinces.png was cut from, so a mismatch can say so instead of looking like a corrupt map.",
+  "regions": 11823705214027135008,
+  "provinces": 38013
 }

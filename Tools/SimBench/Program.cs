@@ -7631,7 +7631,8 @@ public static class Program
         {
             var provinces = counts.GetValueOrDefault(state.MapIndex);
             if (provinces == 0) broken.Add($"{state.Name} holds no province");
-            else if (state.Population <= 0) broken.Add($"{state.Name} has no people");
+            // Land that belongs to nobody - Antarctica's lands - has nobody on it by design.
+            else if (state.Population <= 0 && !ColonisationCore.IsUnclaimed(state)) broken.Add($"{state.Name} has no people");
         }
         if (broken.Count > 0) return string.Join("; ", broken);
 

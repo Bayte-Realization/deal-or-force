@@ -25,5 +25,11 @@
   "The settlers come home and the land stays nobody's. What was spent is spent.": "Поселенцы вернутся, а земля останется ничьей. Потраченное не вернуть.",
   "Send settlers for {0}. In {1:N0} days the region is ours, with the people who went.": "Отправить поселенцев за {0}. Через {1:N0} дн. регион станет нашим — вместе с теми, кто туда уехал.",
   "Our settlers set out for {0}.": "Наши поселенцы отправились осваивать регион «{0}».",
-  "The settlers are coming home.": "Поселенцы возвращаются домой."
+  "The settlers are coming home.": "Поселенцы возвращаются домой.",
+  "Claimed by": "Претенденты",
+  "Claims the 1959 Antarctic Treaty froze rather than ended. A claimant settles its own claim for less and sooner; anybody else who settles it makes an enemy of every claimant.": "Претензии, которые Договор об Антарктике 1959 года заморозил, а не отменил. Претендент заселяет свою землю дешевле и быстрее; кто заселит чужую, наживёт врага в каждом претенденте.",
+  "Our claim: we settle it for less, and sooner.": "Это наша претензия: заселим дешевле и быстрее.",
+  "Claimed by {0}. They will not forgive it.": "На эту землю претендуют: {0}. Этого не простят.",
+  "Settling land we claim": "Заселяет нашу землю",
+  "Took land we claim": "Забрал нашу землю"
 }

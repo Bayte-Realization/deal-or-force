@@ -110,7 +110,7 @@ occupation and the military AI's parameters. A mod's `common/defines/*.json` is 
 top of that base layer.
 
 The base map's geometry uses 16-bit IDs and is read from `game/map_data/provinces.png`. Each
-of the 37,909 polygons has a unique RGB colour mapped to an ID in `definition.csv`. A modded
+of the 38,013 polygons has a unique RGB colour mapped to an ID in `definition.csv`. A modded
 map must not exceed 65,535 land provinces; otherwise startup stops with an explicit error
 rather than corrupting controllers and the save. The bundled `Tools/MapDataCompiler` is a
 separate offline tool for map authors: its output is ordinary PNG/CSV that can be edited
@@ -924,7 +924,7 @@ data.
 ### The political map as data
 
 The shape of the world has been data for a long time: `provinces.png` and `definition.csv`
-together say where each of the 37,909 provinces is. **Who owns them** was not: ownership came
+together say where each of the 38,013 provinces is. **Who owns them** was not: ownership came
 from a control raster compiled into the executable. A mod could redraw the shape of the world
 and not move one border on it.
 
@@ -941,7 +941,7 @@ province;owner;controller
 out: then the owner holds it. Provinces the file does not mention keep the base game's owner —
 a mod that moves one border does not have to rewrite the other thirty-seven thousand.
 
-The base game ships the full map (`game/history/provinces/ownership.csv`, 37,909 lines), and it
+The base game ships the full map (`game/history/provinces/ownership.csv`, 38,013 lines), and it
 is **exported by the same compiler** that builds the raster — so what a modder edits is exactly
 what the game runs on, not a hand-written approximation of it. The bench checks that the file
 and the map have not drifted apart, and that a one-line edit moves exactly one province.
@@ -977,6 +977,33 @@ number of days, and on the last one the region is its own, with the settlers (ta
 populous region) living there. One country settles a region at a time, and a country founds one
 colony at a time. Countries nobody plays do the same, rarely, when they are at peace and have
 several times the price to spare.
+
+**Claims.** A region's history can name the countries that claim it without holding it:
+`"claims": ["NOR"]`. A claimant settles its own claim for `ColonisationClaimantCostShare` of the
+price and `ColonisationClaimantDaysShare` of the time. Anybody else who settles it is remembered
+by every claimant - `settling_our_claim` when the settlers sail and `took_our_claim` when the flag
+goes up (`common/opinion_modifiers/31_colonies.json`) - and a country nobody plays reckons land
+somebody else claims `AiColonisationForeignClaimWeight` times dearer than it is. The base game
+gives Antarctica's lands the claims the 1959 Treaty froze rather than ended: Norway's Queen Maud
+Land, Australia's quarter of the continent, France's Adelie Land, New Zealand's Ross sector, and
+the peninsula that Britain, Chile and Argentina all claim. Marie Byrd Land is the one land nobody
+claims.
+
+**Antarctica's lands.** Antarctica is seventeen regions - the lands its coasts are named for, the
+Polar Plateau at the Pole, Dome Argus and Vostok - with the stations as their buildings and what
+the geology says is under the ice as their resources: the iron and coal of the Prince Charles
+Mountains, the Beacon coal of the Transantarctic Mountains, oil and gas on the Ross and Weddell
+shelves, the krill of the Scotia Sea off Graham Land. They are cut by a partition in
+`map_data/state_regions/00_region_overrides.json`, which names the region it divides
+(`carve_from_iso`), any other region whose ground goes with it (`also_carve_from_iso`) and a seed
+point for each share; the shares grow from their seeds until they meet. `"polar": true` measures
+that growth on the ground rather than on the raster - near a pole a cell is a sliver, and grown a
+cell a step the borders come out as the spokes and rings of a dartboard - bends the result with
+smooth noise so that no border runs down a meridian or along a parallel for long, and gives each
+island to the share nearest across the water. A partition changes the region layer, so the map is
+recompiled with `Tools/MapDataCompiler`, which renumbers the provinces; `terrain_provinces.csv`
+is then recounted from the unchanged `terrain.png` with
+`python Tools/TerrainCompiler/compile_terrain.py --recount-only`, which needs only numpy and Pillow.
 
 The numbers are in `common/defines/08_colonisation.json`: `ColonisationCostBase` and
 `ColonisationCostPerProvinceRoot` (the price grows with the square root of the region's
