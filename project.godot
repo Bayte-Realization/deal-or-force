@@ -47,3 +47,7 @@ enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
 rendering_device/d3d12/max_resource_descriptors=131072.0
 textures/canvas_textures/default_texture_filter=2
 rendering_device/driver.windows="d3d12"
+
+[window]
+
+energy_saving/render_when_hidden=true

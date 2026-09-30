@@ -67,13 +67,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private const float CounterPlatePixelSize = 0.000115f;
     private const float CounterTextPixelSize = 0.00025f;
     private const int CounterOutlineSize = 6;
-
-    /// <summary>
-    /// The card slides under its marker so the strength number's own field lands on the
-    /// marker's origin, where a label needs no offset to reach it. The number field of the
-    /// 176x104 counter card is centred on (120, 52); the card is centred on (88, 52).
-    /// </summary>
-    private static readonly Vector2 CounterNumberField = new(88f - 120f, 0f);
     private const float CounterCloseScale = 1.35f;
 
     /// <summary>Above this the counters are simply their normal size.</summary>
@@ -942,6 +935,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
             marker.Count.FixedSize = !_flatMap;
             marker.Count.HorizontalAlignment = HorizontalAlignment.Center;
             marker.Count.VerticalAlignment = VerticalAlignment.Center;
+            // Godot's Label3D defaults Width to 500 - a half-kilometre of text field the
+            // label then centres the text inside of, which parks the number to the right
+            // of the counter it belongs to. Zero is "as wide as the text", which is what
+            // centres the number on the anchor.
+            marker.Count.Width = 0f;
             if (marker.Glow is not null)
             {
                 marker.Glow.FixedSize = marker.Plate.FixedSize;
@@ -954,27 +952,29 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         if (_flatMap) marker.Node.Scale = Vector3.One * _counterWorldPixel;
         else marker.Node.Scale = Vector3.One;
-        // One layout for the map and the globe, in the card's own pixels (176x104). The
-        // card is slid under its marker until the number field is at the marker's origin,
-        // and the number is drawn there.
+        // One layout for the map and the globe, in the card's own pixels (176x104): the
+        // strength number sits in the middle of the card - where the marker is anchored -
+        // and the symbol box keeps to the left of it.
         //
-        // A label parked beside its card by a world offset drifts away from it as the
-        // camera moves: fixed-size sprites keep their size by compensating distance in the
-        // renderer, and the offset between two of them gets no such compensation. That is
-        // how every counter came to drag its digits across the map below and beyond the
-        // frame they belong to. With the number at the origin and the layout carried by the
-        // card's pixels, there is no offset left to drift - at any distance, on any map.
+        // The number used to be a Label3D parked beside the card by an offset, and it
+        // drifted away from the card with every zoom: fixed-size sprites keep their size by
+        // compensating distance in the renderer, while the offset between two of them gets
+        // no such compensation. Every counter ended up dragging its digits across the map
+        // below and beyond the frame they belong to. A label at its own origin, with the
+        // card's pixels carrying the layout, has no offset that could drift - at any
+        // distance, on any map.
         var platePixel = _flatMap ? 52f / 176f : CounterPlatePixelSize * _counterScale;
         marker.Plate.PixelSize = platePixel;
-        marker.Plate.Offset = CounterNumberField;
-        if (marker.Glow is not null)
-        {
-            marker.Glow.PixelSize = platePixel;
-            marker.Glow.Offset = CounterNumberField;
-        }
-        marker.Count.PixelSize = platePixel * 1.45f;
+        if (marker.Glow is not null) marker.Glow.PixelSize = platePixel;
+        marker.Count.PixelSize = platePixel * 1.35f;
         marker.Count.OutlineSize = _flatMap ? 2 : Mathf.Max(1, Mathf.RoundToInt(4 * _counterScale));
         marker.Count.Position = new Vector3(0f, 0f, _flatMap ? 4f : .004f);
+        // Measured against a crosshair at the card texture's centre: the fixed-size globe
+        // label needs no compensation (its Width=0 fix was the whole bug), while the flat
+        // map's non-fixed-size path anchors its two-line block a quarter-card left and
+        // low, so it gets a small nudge. Offset is scaled by pixel_size, so both hold at
+        // any zoom.
+        marker.Count.Offset = _flatMap ? new Vector2(-33f, 12f) : new Vector2(1f, -2f);
     }
 
     /// <summary>

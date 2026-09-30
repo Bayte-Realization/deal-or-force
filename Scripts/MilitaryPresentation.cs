@@ -58,31 +58,32 @@ public sealed partial class GlobePresentation
 
         // NATO-inspired symbols share one frame language while the unit type remains
         // readable without opening a panel. The symbol box is the square left of the
-        // strength number: centre (45,54), half-extent 21.
+        // strength number: centre (36,54), half-extent 20, kept wholly clear of the
+        // number's field - which is the middle of the card, where the marker is anchored.
         var symbol = new Color(0.90f, 0.94f, 0.96f, 0.94f);
-        const int cx = 45, cy = 54;
+        const int cx = 36, cy = 54;
         var counterSymbol = UnitTypeCatalog.Get(templateId).CounterSymbol;
         switch (counterSymbol)
         {
             case "armor":
-                DrawEllipse(pixels, width, cx, cy, 21, 14, symbol, 4);
+                DrawEllipse(pixels, width, cx, cy, 15, 10, symbol, 4);
                 break;
             case "artillery":
                 // The dot is the whole art of it: heavy, filled, unmistakable at a glance -
                 // the one symbol on the map that is solid, because guns do not manoeuvre.
-                FillEllipse(pixels, width, cx, cy, 13, 13, symbol);
+                FillEllipse(pixels, width, cx, cy, 11, 11, symbol);
                 break;
             case "mechanized":
-                DrawEllipse(pixels, width, cx, cy, 21, 14, symbol, 4);
-                DrawCross(pixels, width, cx, cy, 12, symbol, 4);
+                DrawEllipse(pixels, width, cx, cy, 15, 10, symbol, 4);
+                DrawCross(pixels, width, cx, cy, 9, symbol, 4);
                 break;
             case "motorized":
-                DrawCross(pixels, width, cx, cy, 20, symbol, 4);
+                DrawCross(pixels, width, cx, cy, 15, symbol, 4);
                 // The wheel: an arc under the cross, open at the top.
-                DrawArc(pixels, width, cx, cy + 13, 11, 20, 160, symbol, 4);
+                DrawArc(pixels, width, cx, cy + 11, 9, 20, 160, symbol, 4);
                 break;
             default: // infantry
-                DrawCross(pixels, width, cx, cy, 20, symbol, 4);
+                DrawCross(pixels, width, cx, cy, 15, symbol, 4);
                 break;
         }
 
