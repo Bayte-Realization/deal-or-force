@@ -26,8 +26,8 @@ public partial class DealOrForceGame
     private Button _pickerSeedApply = null!;
     private Label _pickerSeedNote = null!;
 
-    private HFlowContainer _pickerMovements;
-
+    private GridContainer _pickerMovements;
+    private VBoxContainer _pickerMovementsBox;
     private void BuildCountryPicker()
     {
         _pickerLayer = FullLayer("CountryPicker");
@@ -61,18 +61,30 @@ public partial class DealOrForceGame
         rows.AddChild(_pickerResults);
 
         // The countries without land (Movements): a headquarters instead of a map, so a row of
-        // their own rather than something a player has to know to search for.
+        // their own rather than something a player has to know to search for. A movement's
+        // name sets its own width, so an unchecked flow left the buttons a ragged pile - two
+        // wide, three narrow, wrapping wherever they met. Now a two-column grid of equal cells
+        // in a scroll, reading like the country list above it; a long name clips and leaves
+        // the full text to the tooltip.
+        _pickerMovementsBox = new VBoxContainer();
+        rows.AddChild(_pickerMovementsBox);
         var withoutLand = new HBoxContainer();
         withoutLand.AddThemeConstantOverride("separation", 6);
         if (Symbol("movement_headquarters", 14, "text.caption") is { } headquarters) withoutLand.AddChild(headquarters);
         var withoutLandCaption = Title("WITHOUT LAND", 13, Ui.Colour("text.caption"));
         withoutLandCaption.AutowrapMode = TextServer.AutowrapMode.Off;
         withoutLand.AddChild(withoutLandCaption);
-        rows.AddChild(withoutLand);
-        _pickerMovements = new HFlowContainer();
+        _pickerMovementsBox.AddChild(withoutLand);
+        var movementScroll = new ScrollContainer
+        {
+            CustomMinimumSize = new Vector2(0, 62),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        _pickerMovementsBox.AddChild(movementScroll);
+        _pickerMovements = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _pickerMovements.AddThemeConstantOverride("h_separation", 4);
         _pickerMovements.AddThemeConstantOverride("v_separation", 4);
-        rows.AddChild(_pickerMovements);
+        movementScroll.AddChild(_pickerMovements);
 
         var nameRow = new HBoxContainer();
         nameRow.AddThemeConstantOverride("separation", 10);
@@ -330,11 +342,17 @@ public partial class DealOrForceGame
             _pickerMovements.RemoveChild(child);
             child.QueueFree();
         }
-        foreach (var movement in _campaign.Nations.Where(PlayableMovement))
+        // Alphabetical, so a movement stands where a reader looks for it rather than where the
+        // nation list happened to load it.
+        var movements = _campaign.Nations.Where(PlayableMovement).OrderBy(movement => movement.DisplayName).ToArray();
+        _pickerMovementsBox.Visible = movements.Length > 0;
+        foreach (var movement in movements)
         {
             var captured = movement;
             var button = ActionButton(movement.DisplayName, () => SetPickerNation(captured, true), 0, 30,
                 movement == _pickerNation);
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            button.ClipText = true;
             // Its own flag on the button, the way a country in the list is known by its flag.
             // Read now rather than left to the background loader: the list is built the moment
             // the picker opens, before the loader has reached six flags nobody has asked for yet.
