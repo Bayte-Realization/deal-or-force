@@ -178,7 +178,13 @@ public static class WarBootstrap
         });
         var relation = CampaignDiplomacy.Get(campaign, russia.Id, ukraine.Id);
         relation.Stance = DiplomaticStance.AtWar;
-        relation.Opinion = -80f;
+        // Remembered, the way a declared war is, not written into the opinion: opinion is the
+        // sum of its reasons, and the minus eighty that used to be set here was summed away at
+        // the next settle - Ukraine thought +11 of Russia a week into the war. The ground Russia
+        // holds of Ukraine's is a reason of its own.
+        OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
+        OpinionSystem.Remember(campaign, relation, "fought_a_war");
+        OpinionSystem.Remember(campaign, relation, "took_our_land");
     }
 }
 
