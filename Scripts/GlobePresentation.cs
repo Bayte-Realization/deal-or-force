@@ -1872,7 +1872,15 @@ void weigh_label(float label, vec4 r0, vec4 r1, vec4 r2, vec4 r3, vec2 f,
 /// answer jump at every cell edge, which is a staircase again by another route. With two
 /// labels the lead changes by one a texel across a straight edge, as the raw coverage did,
 /// so the lines drawn off it keep their width in screen pixels.
-float resolve_block(vec4 r0, vec4 r1, vec4 r2, vec4 r3, vec2 f, out float near_id, out float other_id) {
+///
+/// `reach` is how far away that edge is, in texels. The coverage cannot say: it is full half a
+/// texel from the boundary, and every pixel beyond that read as standing half a texel off it.
+/// Once a texel was a few pixels across, the shoulder and the stroke of every line reached
+/// right out to the edge of the block - a pale band two texels wide down each side of each
+/// province line, its outer edge the texel grid, and a grey one down every coast. The lead
+/// itself keeps growing: one a texel for the first half texel, as the coverage does, then a
+/// half a texel as the blur runs out, to one at a texel and a half.
+float resolve_block(vec4 r0, vec4 r1, vec4 r2, vec4 r3, vec2 f, out float near_id, out float other_id, out float reach) {
     float best = -1.0;
     float best_id = -1.0;
     float second = 0.0;
@@ -1896,6 +1904,8 @@ float resolve_block(vec4 r0, vec4 r1, vec4 r2, vec4 r3, vec2 f, out float near_i
     weigh_label(r3.w, r0, r1, r2, r3, f, best, best_id, second, second_id);
     near_id = best_id;
     other_id = second_id < -0.5 ? best_id : second_id;
+    float lead = clamp(best - second, 0.0, 1.0);
+    reach = lead < 0.5 ? lead : lead * 2.0 - 0.5;
     return clamp(0.5 + best - second, 0.0, 1.0);
 }
 
@@ -1923,9 +1933,10 @@ float terrain_coverage(sampler2D surface, vec2 uv, bool smooth_edges, out float 
     vec2 base_cell = floor(g);
     vec2 f = g - base_cell;
     if (smooth_edges) {
+        float reach;
         return resolve_block(slot_row(surface, base_cell + vec2(0.0, -1.0), size), slot_row(surface, base_cell, size),
                              slot_row(surface, base_cell + vec2(0.0, 1.0), size), slot_row(surface, base_cell + vec2(0.0, 2.0), size),
-                             f, near_slot, other_slot);
+                             f, near_slot, other_slot, reach);
     }
 
     float s00 = slot_at(surface, base_cell, size);
@@ -1964,7 +1975,7 @@ float terrain_coverage(sampler2D surface, vec2 uv, bool smooth_edges, out float 
 /// nearest to. That is a smooth field whose half-way line is a straight edge cutting through
 /// the texel grid at any angle, which is exactly the boundary the raster was drawn from -
 /// recovered rather than approximated. Everything else here is reading off that one number.
-float boundary_coverage(sampler2D ids, vec2 uv, bool smooth_edges, out float near_id, out float other_id) {
+float boundary_coverage(sampler2D ids, vec2 uv, bool smooth_edges, out float near_id, out float other_id, out float reach) {
     vec2 size = vec2(textureSize(ids, 0));
     vec2 grid = uv * size - vec2(0.5);
     vec2 base_cell = floor(grid);
@@ -1973,7 +1984,7 @@ float boundary_coverage(sampler2D ids, vec2 uv, bool smooth_edges, out float nea
     if (smooth_edges) {
         return resolve_block(id_row(ids, base_cell + vec2(0.0, -1.0), size), id_row(ids, base_cell, size),
                              id_row(ids, base_cell + vec2(0.0, 1.0), size), id_row(ids, base_cell + vec2(0.0, 2.0), size),
-                             f, near_id, other_id);
+                             f, near_id, other_id, reach);
     }
     float i00 = id_at(ids, base_cell, size);
     float i10 = id_at(ids, base_cell + vec2(1.0, 0.0), size);
@@ -1999,6 +2010,7 @@ float boundary_coverage(sampler2D ids, vec2 uv, bool smooth_edges, out float nea
     if (abs(i10 - near_id) >= 0.5 && w10 > claim) { claim = w10; other_id = i10; }
     if (abs(i01 - near_id) >= 0.5 && w01 > claim) { claim = w01; other_id = i01; }
     if (abs(i11 - near_id) >= 0.5 && w11 > claim) { claim = w11; other_id = i11; }
+    reach = abs(coverage - 0.5);
     return coverage;
 }
 
@@ -2026,7 +2038,7 @@ vec4 nation_row(vec2 cell, vec2 size) {
 
 /// The same for countries - and, the sea being a country id like any other here, for every
 /// shore on the map as well.
-float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float other_id) {
+float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float other_id, out float reach) {
     vec2 size = vec2(textureSize(nation_ids, 0));
     vec2 grid = uv * size - vec2(0.5);
     vec2 base_cell = floor(grid);
@@ -2035,7 +2047,7 @@ float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float o
     if (smooth_edges) {
         return resolve_block(nation_row(base_cell + vec2(0.0, -1.0), size), nation_row(base_cell, size),
                              nation_row(base_cell + vec2(0.0, 1.0), size), nation_row(base_cell + vec2(0.0, 2.0), size),
-                             f, near_id, other_id);
+                             f, near_id, other_id, reach);
     }
     float i00 = nation_at(base_cell, size);
     float i10 = nation_at(base_cell + vec2(1.0, 0.0), size);
@@ -2061,6 +2073,7 @@ float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float o
     if (abs(i10 - near_id) >= 0.5 && w10 > claim) { claim = w10; other_id = i10; }
     if (abs(i01 - near_id) >= 0.5 && w01 > claim) { claim = w01; other_id = i01; }
     if (abs(i11 - near_id) >= 0.5 && w11 > claim) { claim = w11; other_id = i11; }
+    reach = abs(coverage - 0.5);
     return coverage;
 }
 
@@ -2177,7 +2190,8 @@ void fragment() {
     bool smooth_edges = map_smoothing > 0.5 && id_span < 8.0;
     float near_nation;
     float other_nation;
-    float nation_cover = nation_coverage(map_uv, smooth_edges, near_nation, other_nation);
+    float nation_reach;
+    float nation_cover = nation_coverage(map_uv, smooth_edges, near_nation, other_nation, nation_reach);
     float nation_aa = id_aa;
     float nation_share = smoothstep(0.5 - nation_aa, 0.5 + nation_aa, nation_cover);
 
@@ -2403,9 +2417,10 @@ void fragment() {
     // field as the province and country lines.
     float near_region;
     float other_region_id;
-    float region_cover = boundary_coverage(region_ids, map_uv, smooth_edges, near_region, other_region_id);
+    float region_reach;
+    float region_cover = boundary_coverage(region_ids, map_uv, smooth_edges, near_region, other_region_id, region_reach);
     float region_aa = id_aa;
-    float region_edge = 1.0 - smoothstep(0.0, border_pixels, abs(region_cover - 0.5) / region_aa);
+    float region_edge = 1.0 - smoothstep(0.0, border_pixels, region_reach / region_aa);
     region_edge *= step(0.5, abs(near_region - other_region_id));
     // A province line drawn by asking four neighbours whether they differ is one texel wide
     // and either on or off, which is a staircase wearing a border's clothes. The same
@@ -2414,9 +2429,10 @@ void fragment() {
     // than aliased when a pixel covers more of the map than a line could describe.
     float near_province;
     float other_province_id;
-    float province_cover = boundary_coverage(province_ids, map_uv, smooth_edges, near_province, other_province_id);
+    float province_reach;
+    float province_cover = boundary_coverage(province_ids, map_uv, smooth_edges, near_province, other_province_id, province_reach);
     float province_aa = id_aa;
-    float province_distance = abs(province_cover - 0.5) / province_aa;
+    float province_distance = province_reach / province_aa;
     float province_width = mix(border_pixels, province_border_pixels, province_detail);
     float province_edge = 1.0 - smoothstep(province_width * 0.3, province_width, province_distance);
     province_edge *= step(0.5, abs(near_province - other_province_id));
@@ -2450,7 +2466,7 @@ void fragment() {
     // Solid to a pixel and a bit, then two more pixels of shoulder. Written as a distance
     // in screen pixels rather than in coverage, so the line is the same weight at every zoom
     // - which is what makes it read as a drawn border and not as an artefact of the data.
-    float nation_edge_pixels = abs(nation_cover - 0.5) / nation_aa;
+    float nation_edge_pixels = nation_reach / nation_aa;
     float country_edge = 1.0 - smoothstep(border_pixels * 0.9, border_pixels * 2.1, nation_edge_pixels);
     country_edge *= step(0.5, abs(near_nation - other_nation)) *
                     step(0.5, near_nation) * clamp(2.2 - pixel_texels, 0.0, 1.0);
