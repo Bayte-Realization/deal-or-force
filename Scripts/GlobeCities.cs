@@ -188,6 +188,23 @@ public sealed partial class GlobePresentation
 
         _cityTaken.Clear();
         _movementLayer?.AddMedallions(_cityTaken);
+        // An army card is a mark too: a city's name must not be written across it (Goyang sat
+        // under a counter at Seoul). The card's screen size follows the same two paths the
+        // counter itself does - world-sized on the flat map, fixed-size on the globe.
+        foreach (var marker in _armyStacks.Values)
+        {
+            if (marker.Plate is not { Visible: true } plate) continue;
+            var world = plate.GlobalPosition;
+            if (_camera.IsPositionBehind(world)) continue;
+            var screen = _camera.UnprojectPosition(world);
+            if (screen.X < -60f || screen.Y < -40f || screen.X > viewport.X + 60f || screen.Y > viewport.Y + 40f) continue;
+            var pixels = _flatMap
+                ? 176f * plate.PixelSize * marker.Node.Scale.X / flatPixel
+                : 176f * plate.PixelSize / fixedPixel;
+            var cardWidth = pixels + 8f;
+            _cityTaken.Add(new Rect2(screen.X - cardWidth * 0.5f, screen.Y - pixels * (104f / 176f) * 0.5f - 4f,
+                cardWidth, pixels * (104f / 176f) + 8f));
+        }
         var used = 0;
 
         // Where every capital's star stands on the screen, before any name is set: a name is
