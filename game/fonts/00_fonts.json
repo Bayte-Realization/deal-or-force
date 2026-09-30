@@ -11,9 +11,10 @@
 //     }
 //   }
 //
-// Roles: ui.default and map.countries. File paths override system_families when available.
+// Roles: ui.default, map.countries and map.cities. File paths override system_families when available.
 {
   "fonts": {
-    "map.countries": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif"] }
+    "map.countries": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif"] },
+    "map.cities": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif"] }
   }
 }

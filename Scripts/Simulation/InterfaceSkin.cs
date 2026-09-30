@@ -146,6 +146,9 @@ public static class InterfaceSkin
         ("globe.label_province",         "#e8f5f7"),
         ("globe.label_province_outline", "#10202a"),
         ("globe.selection",              "#f4d66b"),
+        ("globe.city",                   "#eef2f4"),
+        ("globe.city_outline",           "#0b1117"),
+        ("globe.city_capital",           "#f7df92"),
 
         // Formation counters
         ("military.routed",         "#ef8c62"),

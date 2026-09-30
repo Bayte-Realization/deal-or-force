@@ -847,6 +847,8 @@
   "Frame": "Frame",
   "Paint province by province: the left button takes, the right gives back.": "Paint province by province: the left button takes, the right gives back.",
   "Drag a rectangle: the left button takes everything inside it, the right gives it all back.": "Drag a rectangle: the left button takes everything inside it, the right gives it all back.",
+  "Cities on the map": "Cities on the map",
+  "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.": "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.",
   "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.": "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.",
   "PAN": "PAN",
   "RANGE": "RANGE"

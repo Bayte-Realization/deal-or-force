@@ -457,6 +457,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         CreateMilitaryOverlays(world);
         _countryLabelRoot = new Node3D { Name = "CountryLabels" };
         world.AddChild(_countryLabelRoot);
+        CreateCityLayer(world);
         CreateRoutePreview(world);
         CreateFrontPreview(world);
         ApplyCamera();
@@ -524,6 +525,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
         if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
         using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
+        UpdateCityLabels(delta);
         if (_flatMap)
             using (Simulation.SimProfiler.Measure("f:flat positions")) UpdateFlatWorldPositions();
         UpdateMapModePaletteIfNeeded();

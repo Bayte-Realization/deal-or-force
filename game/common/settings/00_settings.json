@@ -79,6 +79,12 @@
     "description": "Draw each country's name across its territory.",
     "default": true
   },
+  "city_names": {
+    "category": "interface", "order": 235, "kind": "toggle",
+    "name": "Cities on the map",
+    "description": "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.",
+    "default": true
+  },
   "map_smoothing": {
     "category": "interface", "order": 240, "kind": "toggle",
     "name": "Smooth the map",

@@ -144,6 +144,9 @@ public partial class DealOrForceGame
                 if (_globe is not null) _globe.CountryLabelsEnabled = SettingsCatalog.Flag("region_names");
                 break;
 
+            case "city_names":
+                if (_globe is not null) _globe.CityLabelsEnabled = SettingsCatalog.Flag("city_names");
+                break;
 
             case "movement_flags":
                 // Every flag is asked for afresh on the next refresh, so the top bar, the

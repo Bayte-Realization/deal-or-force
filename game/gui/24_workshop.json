@@ -6,7 +6,14 @@
     "map.country_font_size": 64,
     "map.country_tracking": 0.86,
     "map.province_border_width": 2.0,
-    "map.province_border_opacity": 0.72,
-    "map.province_border_halo": 0.15
+    "map.province_border_opacity": 0.85,
+    "map.province_border_halo": 0.15,
+    "map.city_font_size": 28,
+    "map.city_text_pixels": 13,
+    "map.city_label_limit": 140,
+    "map.city_tier0_distance": 15.0,
+    "map.city_tier1_distance": 11.0,
+    "map.city_tier2_distance": 8.4,
+    "map.city_tier3_distance": 6.6
   }
 }
