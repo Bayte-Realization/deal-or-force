@@ -17,6 +17,21 @@ public sealed partial class GlobePresentation
         world.AddChild(_battleRoot);
     }
 
+    /// <summary>
+    /// The plate a stacked formation wears: a framed card in the nation's colours with the
+    /// unit type drawn NATO-style in the symbol box.
+    ///
+    /// Everything about the old version was tuned at texture scale and then displayed at a
+    /// sixth of it, so the near-black fill became a black smear and the two-pixel symbol
+    /// strokes vanished into nothing - which is why the counters on a live map read as
+    /// unreadable dark plates rather than as unit cards. The colours here are what they
+    /// become on screen: the fill is slate that a border can stand out from, and the symbol
+    /// strokes are thick enough to survive the shrink.
+    ///
+    /// The five catalogue symbols each get their own shape now. Artillery used to fall
+    /// through to the infantry X, so the formations players most need to spot - the ones
+    /// shooting from behind the front - were invisible at a glance.
+    /// </summary>
     private Texture2D ArmyCounterTexture(Nation nation, string templateId)
     {
         var key = (nation.MapIndex, templateId ?? "line_infantry");
@@ -25,9 +40,9 @@ public sealed partial class GlobePresentation
         const int height = 104;
         var pixels = new byte[width * height * 4];
         var national = new Color(nation.Color);
-        var border = national.Lightened(0.20f);
-        var dark = new Color(0.055f, 0.075f, 0.085f, 0.96f);
-        var middle = new Color(0.11f, 0.14f, 0.15f, 0.96f);
+        var border = national.Lightened(0.32f);
+        var dark = new Color(0.115f, 0.145f, 0.170f, 0.97f);
+        var middle = new Color(0.165f, 0.200f, 0.230f, 0.97f);
 
         for (var y = 0; y < height; y++)
         for (var x = 0; x < width; x++)
@@ -36,46 +51,89 @@ public sealed partial class GlobePresentation
             var commandBand = y < 18;
             var nationalStripe = x >= 7 && x < 15 && y >= 7 && y < height - 7;
             var weave = ((x / 7 + y / 5 + nation.MapIndex) & 3) == 0;
-            var color = edge ? border : commandBand ? national.Darkened(0.28f) : weave ? middle : dark;
+            var color = edge ? border : commandBand ? national.Darkened(0.18f) : weave ? middle : dark;
             if (nationalStripe) color = national.Lightened(0.08f);
             WritePixel(pixels, width, x, y, color);
         }
 
         // NATO-inspired symbols share one frame language while the unit type remains
-        // readable without opening a panel.
-        var symbol = new Color(0.72f, 0.78f, 0.78f, 0.66f);
+        // readable without opening a panel. The symbol box is the square left of the
+        // strength number: centre (45,54), half-extent 21.
+        var symbol = new Color(0.90f, 0.94f, 0.96f, 0.94f);
+        const int cx = 45, cy = 54;
         var counterSymbol = UnitTypeCatalog.Get(templateId).CounterSymbol;
-        if (counterSymbol == "armor")
+        switch (counterSymbol)
         {
-            for (var y = 36; y <= 75; y++)
-            for (var x = 43; x <= 132; x++)
-            {
-                var nx = (x - 87.5f) / 44.5f;
-                var ny = (y - 55.5f) / 19.5f;
-                var shell = nx * nx + ny * ny;
-                if (shell is >= 0.67f and <= 1.0f) WritePixel(pixels, width, 23 + (x-43)/2, y, symbol);
-            }
-        }
-        else
-        {
-            for (var step = 0; step < 44; step++)
-            for (var thickness = -2; thickness <= 2; thickness++)
-            {
-                WritePixel(pixels, width, 23 + step, 32 + step + thickness, symbol);
-                WritePixel(pixels, width, 66 - step, 32 + step + thickness, symbol);
-            }
-            if (counterSymbol == "motorized")
-                for (var angle = 0; angle < 360; angle++)
-                {
-                    var radians = Mathf.DegToRad(angle);
-                    WritePixel(pixels, width, 45 + Mathf.RoundToInt(Mathf.Cos(radians) * 20f),
-                        56 + Mathf.RoundToInt(Mathf.Sin(radians) * 20f), symbol);
-                }
+            case "armor":
+                DrawEllipse(pixels, width, cx, cy, 21, 14, symbol, 4);
+                break;
+            case "artillery":
+                // The dot is the whole art of it: heavy, filled, unmistakable at a glance -
+                // the one symbol on the map that is solid, because guns do not manoeuvre.
+                FillEllipse(pixels, width, cx, cy, 13, 13, symbol);
+                break;
+            case "mechanized":
+                DrawEllipse(pixels, width, cx, cy, 21, 14, symbol, 4);
+                DrawCross(pixels, width, cx, cy, 12, symbol, 4);
+                break;
+            case "motorized":
+                DrawCross(pixels, width, cx, cy, 20, symbol, 4);
+                // The wheel: an arc under the cross, open at the top.
+                DrawArc(pixels, width, cx, cy + 13, 11, 20, 160, symbol, 4);
+                break;
+            default: // infantry
+                DrawCross(pixels, width, cx, cy, 20, symbol, 4);
+                break;
         }
 
         var texture = ImageTexture.CreateFromImage(Image.CreateFromData(width, height, false, Image.Format.Rgba8, pixels));
         _armyCounterTextures[key] = texture;
         return texture;
+    }
+
+    private static void DrawCross(byte[] pixels, int width, int cx, int cy, int reach, Color color, int thickness)
+    {
+        for (var step = -reach; step <= reach; step++)
+        for (var t = -thickness; t <= thickness; t++)
+        {
+            WritePixel(pixels, width, cx + step, cy + step + t, color);
+            WritePixel(pixels, width, cx + step, cy - step + t, color);
+        }
+    }
+
+    private static void DrawEllipse(byte[] pixels, int width, int cx, int cy, int rx, int ry, Color color, int thickness)
+    {
+        for (var angle = 0; angle < 360; angle++)
+        {
+            var radians = Mathf.DegToRad(angle);
+            var x = cx + Mathf.RoundToInt(Mathf.Cos(radians) * rx);
+            var y = cy + Mathf.RoundToInt(Mathf.Sin(radians) * ry);
+            for (var t = -thickness; t <= thickness; t++)
+                WritePixel(pixels, width, x + t, y + t, color);
+        }
+    }
+
+    private static void DrawArc(byte[] pixels, int width, int cx, int cy, int radius, int degrees, int from, Color color, int thickness)
+    {
+        for (var angle = from; angle < from + degrees; angle++)
+        {
+            var radians = Mathf.DegToRad(angle);
+            var x = cx + Mathf.RoundToInt(Mathf.Cos(radians) * radius);
+            var y = cy + Mathf.RoundToInt(Mathf.Sin(radians) * radius);
+            for (var t = -thickness; t <= thickness; t++)
+                WritePixel(pixels, width, x + t, y, color);
+        }
+    }
+
+    private static void FillEllipse(byte[] pixels, int width, int cx, int cy, int rx, int ry, Color color)
+    {
+        for (var y = cy - ry; y <= cy + ry; y++)
+        {
+            var dy = (float)(y - cy) / ry;
+            var half = Mathf.RoundToInt(rx * MathF.Sqrt(MathF.Max(0f, 1f - dy * dy)));
+            for (var x = cx - half; x <= cx + half; x++)
+                WritePixel(pixels, width, x, y, color);
+        }
     }
 
     private readonly Dictionary<(int, int, int), Texture2D> _selectionGlows = new();

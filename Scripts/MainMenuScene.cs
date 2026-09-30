@@ -688,7 +688,27 @@ public partial class AtlasBackdrop : Control
     public override void _Process(double delta)
     {
         _longitude = (_longitude + (float)delta * Drift) % Spacing;
+        _time += (float)delta;
         QueueRedraw();
+    }
+
+    /// <summary>Seconds since the menu opened. Drives the slow breathing of the backdrop.</summary>
+    private float _time;
+
+    /// <summary>
+    /// Fixed star field for the corners of the frame, so the dark ground reads as a war room
+    /// at night rather than as an empty rectangle. Generated once from a fixed seed - the
+    /// menu is the one screen where a random twinkle would be noticed as churn.
+    /// </summary>
+    private static readonly Vector2[] Stars = MakeStars();
+
+    private static Vector2[] MakeStars()
+    {
+        var rng = new Random(20260101);
+        var stars = new Vector2[90];
+        for (var i = 0; i < stars.Length; i++)
+            stars[i] = new Vector2((float)rng.NextDouble(), (float)rng.NextDouble());
+        return stars;
     }
 
     public override void _Draw()
@@ -696,9 +716,40 @@ public partial class AtlasBackdrop : Control
         var size = Size;
         if (size.X < 2f || size.Y < 2f) return;
 
-        DrawRect(new Rect2(Vector2.Zero, size), Ui.Colour("surface.background"));
+        // The ground is not one colour. A flat #060b13 rectangle is what made the old menu
+        // feel like a dialog box on a desktop; a vertical gradient from near-black at the top
+        // to a warmer, faintly lit navy at the bottom puts the light source where the panel
+        // is, and the eye reads it as a room rather than as a form.
+        var baseColour = Ui.Colour("surface.background");
+        var bands = 24;
+        for (var band = 0; band < bands; band++)
+        {
+            var t = band / (float)(bands - 1);
+            var colour = baseColour.Lerp(new Color(0.045f, 0.070f, 0.105f), t * 0.85f);
+            DrawRect(new Rect2(0, size.Y * band / bands, size.X, size.Y / bands + 1f), colour);
+        }
 
+        // A halo behind where the panel stands, so the menu sits in a pool of light.
         var line = Ui.Colour("surface.line");
+        var glowCentre = new Vector2(size.X * 0.5f, size.Y * 0.50f);
+        var glowRadius = Mathf.Min(size.X, size.Y) * 0.62f;
+        for (var ring = 14; ring >= 1; ring--)
+        {
+            var t = ring / 14f;
+            DrawCircle(glowCentre, glowRadius * t, new Color(0.10f, 0.14f, 0.20f, 0.030f * (1f - t)));
+        }
+
+        // Stars in the outer margins only. Under the panel they would be hidden anyway, and
+        // crowding the centre is exactly what the gradient and the halo are there to avoid.
+        foreach (var star in Stars)
+        {
+            var at = new Vector2(star.X * size.X, star.Y * size.Y);
+            var fromCentre = at.DistanceTo(glowCentre) / glowRadius;
+            if (fromCentre < 0.55f) continue;
+            var twinkle = 0.5f + 0.5f * Mathf.Sin(_time * 0.7f + star.X * 40f + star.Y * 17f);
+            DrawCircle(at, 1f, new Color(0.75f, 0.82f, 0.90f, 0.10f + 0.16f * twinkle * fromCentre));
+        }
+
         var faint = new Color(line, 0.055f);
         var marked = new Color(line, 0.13f);
 
@@ -721,12 +772,32 @@ public partial class AtlasBackdrop : Control
             DrawLine(new Vector2(0, y), new Vector2(size.X, y), equator ? marked : faint, 1f);
         }
 
-        // And the limb of a globe, off to one side, so the grid reads as a projection of
-        // something rather than as graph paper.
+        // The globe, and it turns. The old backdrop drew two static arcs, which read as a
+        // logo rather than as a planet; a wireframe sphere with the same meridian spacing as
+        // the grid behind it reads as the thing the game is actually about. Only the near
+        // hemisphere is drawn - the far side of a wireframe is clutter, and hiding it is what
+        // makes the rotation legible.
         var centre = new Vector2(size.X * 0.5f, size.Y * 0.52f);
         var radius = Mathf.Min(size.X, size.Y) * 0.44f;
+        var spin = _time * 0.06f;
         DrawArc(centre, radius, 0f, Mathf.Tau, 128, new Color(line, 0.16f), 1.5f, true);
-        DrawArc(centre, radius * 0.62f, 0f, Mathf.Tau, 96, new Color(line, 0.07f), 1f, true);
+        for (var meridian = 0; meridian < 12; meridian++)
+        {
+            var phase = spin + meridian * Mathf.Tau / 12f;
+            var squash = Mathf.Cos(phase);
+            if (squash < 0f) continue; // far side
+            var width = radius * Mathf.Abs(squash);
+            if (width < 2f) continue;
+            DrawArc(centre, width, phase > Mathf.Pi ? 0f : Mathf.Pi, Mathf.Tau, 64,
+                new Color(line, 0.05f + 0.07f * squash), 1f, false);
+        }
+        for (var parallel = 1; parallel <= 4; parallel++)
+        {
+            var lat = parallel * 0.2f;
+            var ringRadius = radius * Mathf.Cos(lat * Mathf.Pi * 0.5f);
+            var ringY = centre.Y - radius * Mathf.Sin(lat * Mathf.Pi * 0.5f) * 0.85f;
+            DrawArc(new Vector2(centre.X, ringY), ringRadius, 0f, Mathf.Tau, 96, new Color(line, 0.07f), 1f, true);
+        }
 
         // Two brass hairlines, top and bottom, the same rule the dossier frames are drawn in.
         var brass = Ui.Colour("button.primary_border");

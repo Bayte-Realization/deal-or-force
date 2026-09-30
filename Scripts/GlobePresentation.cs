@@ -67,6 +67,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private const float CounterPlatePixelSize = 0.000115f;
     private const float CounterTextPixelSize = 0.00025f;
     private const int CounterOutlineSize = 6;
+
+    /// <summary>
+    /// The card slides under its marker so the strength number's own field lands on the
+    /// marker's origin, where a label needs no offset to reach it. The number field of the
+    /// 176x104 counter card is centred on (120, 52); the card is centred on (88, 52).
+    /// </summary>
+    private static readonly Vector2 CounterNumberField = new(88f - 120f, 0f);
     private const float CounterCloseScale = 1.35f;
 
     /// <summary>Above this the counters are simply their normal size.</summary>
@@ -931,29 +938,41 @@ public sealed partial class GlobePresentation : SubViewportContainer
             marker.FlatLayout = _flatMap;
             marker.Plate.FixedSize = !_flatMap;
             marker.Count.FixedSize = !_flatMap;
-            marker.Plate.PixelSize = _flatMap ? 52f / 176f : CounterPlatePixelSize * _counterScale;
+            marker.Count.HorizontalAlignment = HorizontalAlignment.Center;
+            marker.Count.VerticalAlignment = VerticalAlignment.Center;
             if (marker.Glow is not null)
             {
                 marker.Glow.FixedSize = marker.Plate.FixedSize;
                 marker.Glow.PixelSize = marker.Plate.PixelSize;
             }
-            marker.Count.PixelSize = _flatMap ? .60f : CounterTextPixelSize * _counterScale;
-            marker.Count.OutlineSize = _flatMap ? 2 : Mathf.RoundToInt(CounterOutlineSize * _counterScale);
-            marker.Count.Position = _flatMap ? new Vector3(10f, -1f, 4f) : new Vector3(0f, -.004f, .004f);
             marker.Compact = false;
             marker.Plate.Scale = Vector3.One;
             marker.Plate.Visible = true;
             marker.Count.Visible = true;
         }
         if (_flatMap) marker.Node.Scale = Vector3.One * _counterWorldPixel;
-        else
+        else marker.Node.Scale = Vector3.One;
+        // One layout for the map and the globe, in the card's own pixels (176x104). The
+        // card is slid under its marker until the number field is at the marker's origin,
+        // and the number is drawn there.
+        //
+        // A label parked beside its card by a world offset drifts away from it as the
+        // camera moves: fixed-size sprites keep their size by compensating distance in the
+        // renderer, and the offset between two of them gets no such compensation. That is
+        // how every counter came to drag its digits across the map below and beyond the
+        // frame they belong to. With the number at the origin and the layout carried by the
+        // card's pixels, there is no offset left to drift - at any distance, on any map.
+        var platePixel = _flatMap ? 52f / 176f : CounterPlatePixelSize * _counterScale;
+        marker.Plate.PixelSize = platePixel;
+        marker.Plate.Offset = CounterNumberField;
+        if (marker.Glow is not null)
         {
-            marker.Node.Scale = Vector3.One;
-            marker.Plate.PixelSize = CounterPlatePixelSize * _counterScale;
-            if (marker.Glow is not null) marker.Glow.PixelSize = marker.Plate.PixelSize;
-            marker.Count.PixelSize = CounterTextPixelSize * _counterScale;
-            marker.Count.OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale);
+            marker.Glow.PixelSize = platePixel;
+            marker.Glow.Offset = CounterNumberField;
         }
+        marker.Count.PixelSize = platePixel * 1.45f;
+        marker.Count.OutlineSize = _flatMap ? 2 : Mathf.Max(1, Mathf.RoundToInt(4 * _counterScale));
+        marker.Count.Position = new Vector3(0f, 0f, _flatMap ? 4f : .004f);
     }
 
     /// <summary>
@@ -3135,6 +3154,8 @@ void fragment() {
                 LineSpacing = -5f,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 FixedSize = true,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale),
                 Modulate = Ui.Colour("military.ready"),
                 OutlineModulate = Ui.Colour("globe.label_outline"),
@@ -3259,6 +3280,7 @@ void fragment() {
             {
                 Text = fleet.Hulls.ToString(), FontSize = 24, PixelSize = FleetTextPixelSize * _counterScale,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FixedSize = true,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 OutlineSize = 7, Modulate = Ui.Colour("globe.label_province"), OutlineModulate = Ui.Colour("globe.label_province_outline"),
                 Position = new Vector3(0f, 0f, 0.004f), NoDepthTest = true
             };
@@ -3353,11 +3375,13 @@ void fragment() {
             var color = new Color(0f, 0f, 0f, 0f);
             var inside = x >= 3 && x < width - 3 && y >= 3 && y < height - 3;
             if (inside) color = x < 8 || x >= width - 8 || y < 8 || y >= height - 8 ? border : background;
-            if (y >= 55 && y <= 72 && x >= 27 + (y - 55) && x <= 133 - (y - 55)) color = ship;
-            if (x >= 58 && x <= 101 && y >= 36 && y < 56) color = ship;
-            if (x >= 71 && x <= 86 && y >= 22 && y < 37) color = ship;
-            if (x >= 77 && x <= 81 && y >= 12 && y < 23) color = ship;
-            if (y >= 80 && y <= 84 && ((x / 18) + (y - 80)) % 2 == 0) color = wave;
+            // The ship rides low in the card, so the hull count has the clear middle of it
+            // to itself: the number is drawn at the marker's origin and must never sit on
+            // the silhouette or drift off the card.
+            if (y >= 74 && y <= 84 && x >= 34 + (y - 74) && x <= 126 - (y - 74)) color = ship;
+            if (x >= 62 && x <= 98 && y >= 66 && y < 75) color = ship;
+            if (x >= 72 && x <= 84 && y >= 61 && y < 67) color = ship;
+            if (y >= 85 && y <= 87 && ((x / 18) + (y - 85)) % 2 == 0) color = wave;
             var write = (y * width + x) * 4;
             pixels[write] = (byte)(color.R * 255f);
             pixels[write + 1] = (byte)(color.G * 255f);

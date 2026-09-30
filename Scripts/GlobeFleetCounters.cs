@@ -11,8 +11,11 @@ public sealed partial class GlobePresentation
     /// <summary>The fleet plate at the far zoom; multiplied by the same counter scale armies use.</summary>
     private const float FleetPlatePixelSize = 0.00011f;
 
-    /// <summary>The hull count on it, likewise.</summary>
-    private const float FleetTextPixelSize = 0.00024f;
+    /// <summary>
+    /// The hull count on it, likewise - sized to read as a number on a card rather than a
+    /// headline across it, in the clear middle the ship's silhouette leaves free.
+    /// </summary>
+    private const float FleetTextPixelSize = 0.00012f;
 
     /// <summary>How much larger the selected fleet's counter stands.</summary>
     private const float SelectedFleetScale = 1.2f;
