@@ -2160,7 +2160,7 @@ void fragment() {
     vec2 map_uv = UV;
     if (map_smoothing > 0.5) {
         map_drift = vec2(grain(UV * id_size * 0.9), grain(UV * id_size * 0.9 + 71.3));
-        map_uv = UV + map_drift * id_wander_texels * clamp(2.5 - id_span * 0.75, 0.0, 1.0) / id_size;
+        map_uv = UV + map_drift * id_wander_texels * clamp(3.2 - id_span * 0.4, 0.0, 1.0) / id_size;
     }
 
     // Far away the authored raster is right: a screen pixel covers many map texels and what
@@ -2174,7 +2174,7 @@ void fragment() {
     // Smoothed boundaries only where a texel is bigger than a pixel - further out the raster
     // is averaged by its mipmaps and has no staircase to show - and only for a player who
     // has the map smoothed at all.
-    bool smooth_edges = map_smoothing > 0.5 && id_span < 3.0;
+    bool smooth_edges = map_smoothing > 0.5 && id_span < 8.0;
     float near_nation;
     float other_nation;
     float nation_cover = nation_coverage(map_uv, smooth_edges, near_nation, other_nation);
