@@ -1,7 +1,8 @@
 // The soundtrack.
 //
-// Deal or Force ships without music, which makes this the shortest list in the game and
-// the easiest thing in it to change: a mod drops its own files in and names them here.
+// Four tracks of the game's own (audio/README.md says where they came from), and the easiest
+// list in the game to change: a mod drops its own files in and names them here - under a key
+// of its own to add a track, under one of these to replace it.
 //
 //   {
 //     "tracks": {
@@ -13,5 +14,10 @@
 // when    - "menu", "campaign", or "any" (the default).
 // weight  - how often it comes round relative to the others. One by default.
 {
-  "tracks": {}
+  "tracks": {
+    "menu_theme": { "file": "audio/menu_theme.ogg", "weight": 2, "when": "menu" },
+    "campaign_ambient": { "file": "audio/campaign_ambient.ogg", "weight": 3, "when": "campaign" },
+    "war_theme": { "file": "audio/war_theme.ogg", "weight": 2, "when": "campaign" },
+    "victory_theme": { "file": "audio/victory_theme.ogg", "weight": 1, "when": "campaign" }
+  }
 }

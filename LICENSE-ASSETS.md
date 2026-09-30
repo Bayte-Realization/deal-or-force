@@ -26,7 +26,8 @@ source under the same licence.
 Original artwork and audio made for this game:
 
 - `game/gfx/globe/**`, `game/gfx/interface/**`, `game/gfx/terrain/**`
-- `game/sound/**`, `game/music/**`
+- `game/sound/**`, `game/music/**` - the soundtrack and the long-range forces' interface
+  sounds were generated for this game with Creative Claw; each audio folder's README lists them
 - the Deal or Force name, logo and brand marks
 
 **These are not licensed under the GPL and are not free to redistribute.** All rights
