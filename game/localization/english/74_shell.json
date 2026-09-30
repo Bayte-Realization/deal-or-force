@@ -1,6 +1,6 @@
 {
   "Campaign speed {0}": "Campaign speed {0}",
-  "Campaign speed {0} · {1:0.##}s per day": "Campaign speed {0} · {1:0.##}s per day",
+  "Campaign speed {0} · {1:0.#} campaign hours a second, {2} hour(s) a step": "Campaign speed {0} · {1:0.#} campaign hours a second, {2} hour(s) a step",
   "Province topology loading": "Province topology loading",
   "Tactical province #{0:N0}": "Tactical province #{0:N0}",
   "Unmapped land": "Unmapped land",

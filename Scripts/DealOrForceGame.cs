@@ -1691,8 +1691,8 @@ public partial class DealOrForceGame : Control
             StyleButton(button, running && index + 1 == _speed);
             button.TooltipText = Ui.Tip(_campaign is null
                 ? Simulation.Loc.Format("Campaign speed {0}", index + 1)
-                : Simulation.Loc.Format("Campaign speed {0} · {1:0.##}s per day",
-                    index + 1, _campaign.Defines.SecondsForSpeed(index + 1)));
+                : Simulation.Loc.Format("Campaign speed {0} · {1:0.#} campaign hours a second, {2} hour(s) a step",
+                    index + 1, 24f / Mathf.Max(0.001f, _campaign.Defines.SecondsForSpeed(index + 1)), _campaign.TickHours));
         }
     }
 

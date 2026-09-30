@@ -74,8 +74,15 @@ public sealed partial class Defines
 	/// saves load either way: the reader tells them apart by their first two bytes.</summary>
 	public bool SaveTextFormat { get; set; } = true;
 
-	/// <summary>Real seconds per in-game day at speed 1.</summary>
-	public float SecondsPerDay { get; set; } = 0.55f;
+	/// <summary>
+	/// Real seconds per in-game day at speed 1.
+	///
+	/// Five, so the slowest speed is one a player can watch hour by hour: a little under five
+	/// campaign hours a second. It was 0.55 - a figure set when a step was a whole day, which
+	/// at the hourly step made the slowest speed forty-four hours a second, as fast as the
+	/// middle speeds of the games this one follows, and read as "a tick is not an hour".
+	/// </summary>
+	public float SecondsPerDay { get; set; } = 5f;
 
 	/// <summary>
 	/// Hours of campaign time one step of the simulation covers.
@@ -174,11 +181,16 @@ public sealed partial class Defines
 	/// </summary>
 	public float FrameSimulationBudgetMs { get; set; } = 9f;
 
-	/// <summary>Days a single frame may advance however cheap they turn out to be.</summary>
+	/// <summary>Steps (not days) a single frame may advance however cheap they turn out to be.
+	/// Twelve one-hour steps at sixty frames is thirty days a second, the top speed.</summary>
 	public int MaxDaysPerFrame { get; set; } = 12;
 
-	/// <summary>Multipliers applied to <see cref="SecondsPerDay"/> for speeds 1..5.</summary>
-	public List<float> SpeedFactors { get; set; } = new() { 1f, 0.55f, 0.3f, 0.15f, 0.06f };
+	/// <summary>
+	/// Multipliers applied to <see cref="SecondsPerDay"/> for speeds 1..5: about 5, 12, 32
+	/// campaign hours a second, then 4 and 30 days a second - the last is what twelve steps a
+	/// frame allows. Wider apart than they were, because the slowest speed is now slow.
+	/// </summary>
+	public List<float> SpeedFactors { get; set; } = new() { 1f, 0.4f, 0.15f, 0.05f, 0.0066f };
 
 	// --- the globe ---
 

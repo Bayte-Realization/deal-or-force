@@ -32,7 +32,7 @@
   "PopulationTickDays": 30,
   "AutosaveIntervalDays": 30,
   "SaveTextFormat": true,
-  "SecondsPerDay": 0.55,
+  "SecondsPerDay": 5,
   "GlobeRadius": 2600,
   "LandRelief": 26,
   "ReliefScale": 1.6,

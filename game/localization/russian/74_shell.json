@@ -1,6 +1,6 @@
 {
   "Campaign speed {0}": "Скорость кампании {0}",
-  "Campaign speed {0} · {1:0.##}s per day": "Скорость кампании {0} · {1:0.##} с на день",
+  "Campaign speed {0} · {1:0.#} campaign hours a second, {2} hour(s) a step": "Скорость кампании {0} · {1:0.#} ч кампании в секунду, шаг — {2} ч",
   "Tactical province #{0:N0}": "Тактическая провинция №{0:N0}",
   "Unmapped land": "Неразмеченная земля",
   "player nation": "страна игрока",
