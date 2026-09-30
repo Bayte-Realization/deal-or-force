@@ -1671,6 +1671,15 @@ uniform sampler2D border_plan_targets : filter_nearest, repeat_disable;
 uniform sampler2D border_controller_ids : filter_nearest, repeat_disable;
 uniform sampler2D relief_height : filter_linear_mipmap, repeat_enable;
 uniform sampler2D relief_color : source_color, filter_linear_mipmap, repeat_enable;
+// The depth of the sea (map_data/bathymetry.png): 1 at the coast and on the shelves, 0 over the abyss.
+uniform sampler2D ocean_depth : filter_linear_mipmap, repeat_enable;
+uniform float ocean_depth_ready = 0.0;
+uniform vec3 ocean_shelf_color = vec3(0.050, 0.185, 0.225);
+uniform float terrain_detail = 0.35;
+// The atlas hillshade: slopes lit from the north-west, as a printed relief map lights them. It is
+// worked out on the surface itself, so the flat map - which the scene's sun meets face on -
+// shows its mountains as plainly as the globe does.
+uniform float relief_shading = 0.9;
 uniform float terrain_ready = 0.0;
 uniform float terrain_mode = 0.0;
 uniform float political_opacity = 0.68;
@@ -1741,6 +1750,93 @@ float grain(vec2 p) {
     return value_noise(p) * 0.66 + value_noise(p * 2.7 + 11.3) * 0.34 - 0.5;
 }
 
+/// One row of the four-by-four block of ids around a cell: the column before it, its own two
+/// columns, and the one after.
+vec4 id_row(sampler2D ids, vec2 cell, vec2 size) {
+    return vec4(id_at(ids, cell + vec2(-1.0, 0.0), size), id_at(ids, cell, size),
+                id_at(ids, cell + vec2(1.0, 0.0), size), id_at(ids, cell + vec2(2.0, 0.0), size));
+}
+
+/// Which of four ids are the one asked about, as ones and zeroes.
+vec4 same_id(vec4 ids, float id) {
+    return step(abs(ids - vec4(id)), vec4(0.5));
+}
+
+/// How strongly one label claims a point of a cell, smoothed over the texels around it.
+///
+/// Each of the cell's four corners is blurred with its eight neighbours - a tent of one texel
+/// either way - and the point is interpolated between the blurred corners rather than the raw
+/// ones. A blur alone would also dissolve anything a texel wide, and a one-texel island or a
+/// city state is exactly the ground a player most wants to see, so a corner the blur would
+/// hand to its neighbours is pulled most of the way back to the label it was painted with.
+float label_claim(vec4 m0, vec4 m1, vec4 m2, vec4 m3, vec2 f) {
+    vec2 r0 = vec2(m0.x * 0.5 + m0.y + m0.z * 0.5, m0.y * 0.5 + m0.z + m0.w * 0.5);
+    vec2 r1 = vec2(m1.x * 0.5 + m1.y + m1.z * 0.5, m1.y * 0.5 + m1.z + m1.w * 0.5);
+    vec2 r2 = vec2(m2.x * 0.5 + m2.y + m2.z * 0.5, m2.y * 0.5 + m2.z + m2.w * 0.5);
+    vec2 r3 = vec2(m3.x * 0.5 + m3.y + m3.z * 0.5, m3.y * 0.5 + m3.z + m3.w * 0.5);
+    vec2 top = (r0 * 0.5 + r1 + r2 * 0.5) * 0.25;
+    vec2 bottom = (r1 * 0.5 + r2 + r3 * 0.5) * 0.25;
+    vec2 own_top = m1.yz;
+    vec2 own_bottom = m2.yz;
+    top = mix(top, own_top, 0.8 * mix(step(0.48, top), 1.0 - step(0.52, top), own_top));
+    bottom = mix(bottom, own_bottom, 0.8 * mix(step(0.48, bottom), 1.0 - step(0.52, bottom), own_bottom));
+    return mix(mix(top.x, top.y, f.x), mix(bottom.x, bottom.y, f.x), f.y);
+}
+
+/// One label's turn in the vote below: its claim is weighed only if it is not already the
+/// leader or the runner-up, which with two labels in a block - nearly every block - means
+/// each is weighed once however many of the sixteen texels it holds.
+void weigh_label(float label, vec4 r0, vec4 r1, vec4 r2, vec4 r3, vec2 f,
+                 inout float best, inout float best_id, inout float second, inout float second_id) {
+    if (abs(label - best_id) < 0.5 || abs(label - second_id) < 0.5) return;
+    float claim = label_claim(same_id(r0, label), same_id(r1, label), same_id(r2, label), same_id(r3, label), f);
+    if (claim > best) { second = best; second_id = best_id; best = claim; best_id = label; }
+    else if (claim > second) { second = claim; second_id = label; }
+}
+
+/// Boundaries recovered from the four-by-four block of ids around a cell.
+///
+/// The four-texel reconstruction recovers a boundary to within half a texel, which is exact
+/// for a straight edge at forty-five degrees and wrong for everything else: a coast running at
+/// a shallow angle was digitised as runs of four texels and a one-texel step, and half a texel
+/// of reconstruction keeps every step. Close in a texel is several screen pixels, and the
+/// steps are the staircase the map was criticised for.
+///
+/// So every label in the block makes its smoothed claim, the strongest takes the pixel, and
+/// the coverage is how far it leads the runner-up. The half-way line is where the two claims
+/// are equal - the coast as it ran before it was digitised, a shallow slope as a slope and a
+/// round bay as a round bay. Every label in the block is asked, not only those at the cell's
+/// corners: a label two texels away still has a claim here, and leaving it out makes the
+/// answer jump at every cell edge, which is a staircase again by another route. With two
+/// labels the lead changes by one a texel across a straight edge, as the raw coverage did,
+/// so the lines drawn off it keep their width in screen pixels.
+float resolve_block(vec4 r0, vec4 r1, vec4 r2, vec4 r3, vec2 f, out float near_id, out float other_id) {
+    float best = -1.0;
+    float best_id = -1.0;
+    float second = 0.0;
+    float second_id = -1.0;
+    // The cell's own corners first: they are nearly always the two that matter.
+    weigh_label(r1.y, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r1.z, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r2.y, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r2.z, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r0.x, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r0.y, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r0.z, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r0.w, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r1.x, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r1.w, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r2.x, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r2.w, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r3.x, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r3.y, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r3.z, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    weigh_label(r3.w, r0, r1, r2, r3, f, best, best_id, second, second_id);
+    near_id = best_id;
+    other_id = second_id < -0.5 ? best_id : second_id;
+    return clamp(0.5 + best - second, 0.0, 1.0);
+}
+
 /// The terrain type this point stands on, as the slot number of its ground texture.
 float slot_at(sampler2D surface, vec2 cell, vec2 size) {
     vec2 uv = (cell + vec2(0.5)) / size;
@@ -1754,11 +1850,21 @@ float slot_at(sampler2D surface, vec2 cell, vec2 size) {
 /// rounded, and the ground changed abruptly at the edge of a texel. That is the single most
 /// visible grid on the map: not a line anywhere, but every square of grass meeting every
 /// square of rock, over the whole world.
-float terrain_coverage(sampler2D surface, vec2 uv, out float near_slot, out float other_slot) {
+vec4 slot_row(sampler2D surface, vec2 cell, vec2 size) {
+    return vec4(slot_at(surface, cell + vec2(-1.0, 0.0), size), slot_at(surface, cell, size),
+                slot_at(surface, cell + vec2(1.0, 0.0), size), slot_at(surface, cell + vec2(2.0, 0.0), size));
+}
+
+float terrain_coverage(sampler2D surface, vec2 uv, bool smooth_edges, out float near_slot, out float other_slot) {
     vec2 size = vec2(textureSize(surface, 0));
     vec2 g = uv * size - vec2(0.5);
     vec2 base_cell = floor(g);
     vec2 f = g - base_cell;
+    if (smooth_edges) {
+        return resolve_block(slot_row(surface, base_cell + vec2(0.0, -1.0), size), slot_row(surface, base_cell, size),
+                             slot_row(surface, base_cell + vec2(0.0, 1.0), size), slot_row(surface, base_cell + vec2(0.0, 2.0), size),
+                             f, near_slot, other_slot);
+    }
 
     float s00 = slot_at(surface, base_cell, size);
     float s10 = slot_at(surface, base_cell + vec2(1.0, 0.0), size);
@@ -1796,12 +1902,17 @@ float terrain_coverage(sampler2D surface, vec2 uv, out float near_slot, out floa
 /// nearest to. That is a smooth field whose half-way line is a straight edge cutting through
 /// the texel grid at any angle, which is exactly the boundary the raster was drawn from -
 /// recovered rather than approximated. Everything else here is reading off that one number.
-float boundary_coverage(sampler2D ids, vec2 uv, out float near_id, out float other_id) {
+float boundary_coverage(sampler2D ids, vec2 uv, bool smooth_edges, out float near_id, out float other_id) {
     vec2 size = vec2(textureSize(ids, 0));
     vec2 grid = uv * size - vec2(0.5);
     vec2 base_cell = floor(grid);
     vec2 f = grid - base_cell;
 
+    if (smooth_edges) {
+        return resolve_block(id_row(ids, base_cell + vec2(0.0, -1.0), size), id_row(ids, base_cell, size),
+                             id_row(ids, base_cell + vec2(0.0, 1.0), size), id_row(ids, base_cell + vec2(0.0, 2.0), size),
+                             f, near_id, other_id);
+    }
     float i00 = id_at(ids, base_cell, size);
     float i10 = id_at(ids, base_cell + vec2(1.0, 0.0), size);
     float i01 = id_at(ids, base_cell + vec2(0.0, 1.0), size);
@@ -1846,12 +1957,24 @@ float nation_at(vec2 cell, vec2 size) {
 }
 
 /// boundary_coverage, for countries: the same reconstruction, read through nation_at.
-float nation_coverage(vec2 uv, out float near_id, out float other_id) {
+vec4 nation_row(vec2 cell, vec2 size) {
+    return vec4(nation_at(cell + vec2(-1.0, 0.0), size), nation_at(cell, size),
+                nation_at(cell + vec2(1.0, 0.0), size), nation_at(cell + vec2(2.0, 0.0), size));
+}
+
+/// The same for countries - and, the sea being a country id like any other here, for every
+/// shore on the map as well.
+float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float other_id) {
     vec2 size = vec2(textureSize(nation_ids, 0));
     vec2 grid = uv * size - vec2(0.5);
     vec2 base_cell = floor(grid);
     vec2 f = grid - base_cell;
 
+    if (smooth_edges) {
+        return resolve_block(nation_row(base_cell + vec2(0.0, -1.0), size), nation_row(base_cell, size),
+                             nation_row(base_cell + vec2(0.0, 1.0), size), nation_row(base_cell + vec2(0.0, 2.0), size),
+                             f, near_id, other_id);
+    }
     float i00 = nation_at(base_cell, size);
     float i10 = nation_at(base_cell + vec2(1.0, 0.0), size);
     float i01 = nation_at(base_cell + vec2(0.0, 1.0), size);
@@ -1986,9 +2109,13 @@ void fragment() {
     // antialiased over one screen pixel. The raster is not being filtered; it is not being
     // asked.
     vec4 political_smooth = texture(political_map, UV);
+    // Smoothed boundaries only where a texel is bigger than a pixel - further out the raster
+    // is averaged by its mipmaps and has no staircase to show - and only for a player who
+    // has the map smoothed at all.
+    bool smooth_edges = map_smoothing > 0.5 && id_span < 1.0;
     float near_nation;
     float other_nation;
-    float nation_cover = nation_coverage(map_uv, near_nation, other_nation);
+    float nation_cover = nation_coverage(map_uv, smooth_edges, near_nation, other_nation);
     float nation_aa = id_aa;
     float nation_share = smoothstep(0.5 - nation_aa, 0.5 + nation_aa, nation_cover);
 
@@ -2015,7 +2142,56 @@ void fragment() {
         : nation_paint(near_nation);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
-    vec3 water = ocean_color * (0.72 + rim * 0.28);
+    // The sea has a floor. Deep water keeps the strategic navy it always had; the continental
+    // slope lifts it a little, and the shelf along every coast - the North Sea, the Yellow Sea,
+    // the Sunda shelf, the Grand Banks - is a clear shallow teal, so a coast reads as a coast from
+    // orbit, the way it does on every Paradox map, before any border line has been drawn.
+    float sea_floor = ocean_depth_ready > 0.5 ? texture(ocean_depth, UV).r : 0.0;
+    // A smoothstep over a smooth raster draws contour lines across an ocean that has none in
+    // it: the shelf arrives as a band with an edge parallel to the texel rows. The same wander
+    // the coast uses is added here, a texel or so wide, so the shelf reads as ground under
+    // water rather than as a level in a depth chart.
+    vec2 sea_size = vec2(textureSize(ocean_depth, 0));
+    float sea_wander = grain(UV * sea_size * 0.85 + 17.0);
+    sea_floor = clamp(sea_floor + sea_wander * 0.014, 0.0, 1.0);
+    float slope_rise = smoothstep(0.62, 0.955, sea_floor);
+    float shelf = smoothstep(0.945, 0.992, sea_floor);
+    vec3 sea = mix(ocean_color * 0.88, ocean_color * 1.22, slope_rise);
+    sea = mix(sea, ocean_shelf_color, shelf * 0.80);
+    // Living water. Three directional sine waves, crossing at angles, rather than value
+    // noise: noise interpolates on its own axis-aligned grid, and on a surface this large
+    // the grid arrives as a tiling of diamonds with visible seams. Sines have no grid to
+    // show. The directions are deliberately off-axis and incommensurate, so the combined
+    // field never lines up with itself into a pattern, and the whole thing drifts slowly.
+    // Faded out at strategic zoom, where the mipmaps already average the surface flat and
+    // the same field would only add shimmer.
+    vec2 sea_texels = UV * sea_size;
+    float wave_fade = clamp(1.0 - id_span, 0.0, 1.0);
+    // A slow warp of the sampling point, so even the wave lines breathe rather than march.
+    vec2 warp = vec2(sin(TIME * 0.05 + sea_texels.y * 0.002), cos(TIME * 0.04 + sea_texels.x * 0.002));
+    vec2 wave_at = sea_texels + warp * 26.0;
+    float waves = sin(dot(wave_at, vec2(0.0105, 0.0062)) + TIME * 0.55)
+                + 0.62 * sin(dot(wave_at, vec2(-0.0180, 0.0094)) + TIME * 0.41)
+                + 0.38 * sin(dot(wave_at, vec2(0.0072, -0.0230)) + TIME * 0.72);
+    waves /= 2.0;
+    vec3 water = sea * (0.72 + rim * 0.28);
+    water *= 1.0 + waves * 0.085 * wave_fade;
+    // Sun glint riding the sharpest of the three - the crests catching light, which is what
+    // tells the eye this is a surface and not a fill. Kept at low zoom too: a flat map has
+    // no rim to speak of, and gating it on the limb would delete it where players live.
+    //
+    // One crest train with its phase bent by the second wave, not the sum of the two: added
+    // together they only reinforce along short diagonals, and the light landed as scattered
+    // white scratches across the open sea rather than as a wave line.
+    float crest = sin(dot(wave_at, vec2(-0.0180, 0.0094)) + TIME * 0.41
+                + 1.1 * sin(dot(wave_at, vec2(0.0330, 0.0195)) + TIME * 0.9));
+    float glint = pow(clamp(crest * 0.5 + 0.5, 0.0, 1.0), 6.0);
+    water += vec3(0.55, 0.72, 0.80) * glint * 0.16 * wave_fade;
+    // Foam: a pale surf line where the sea meets the shore. Its width follows a screen pixel
+    // rather than a texel, so it stays a line and never a halo.
+    float shore_band = max(fwidth(political.a) * 2.0, 0.02);
+    float shore_edge = smoothstep(shore_band, 0.0, abs(political.a - 0.5));
+    water += vec3(0.80, 0.88, 0.92) * shore_edge * 0.45 * wave_fade;
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     float region = map_id(region_ids, map_uv);
     float province = map_id(province_ids, map_uv);
@@ -2090,7 +2266,7 @@ void fragment() {
 
         float near_slot;
         float other_slot;
-        float slot_cover = terrain_coverage(terrain_surface, terrain_lookup, near_slot, other_slot);
+        float slot_cover = terrain_coverage(terrain_surface, terrain_lookup, smooth_edges, near_slot, other_slot);
         float slot_span = max(length(fwidth(UV) * terrain_size), 0.0001);
         float slot_band = max(terrain_blend_texels * 0.25, slot_span);
         float slot_share = smoothstep(0.5 - slot_band, 0.5 + slot_band, slot_cover);
@@ -2105,6 +2281,15 @@ void fragment() {
                          texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb, slot_share);
         else
             ground = texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb;
+        // Close in a tile is magnified until its texels show. A second look at the same ground at
+        // four times the frequency puts fine grain back under the coarse - as brightness only, so
+        // the colours stay the tile's own - and only as close in as the province lines appear.
+        if (terrain_detail > 0.001 && province_detail > 0.001) {
+            vec3 fine = texture(terrain_tiles, vec3(terrain_uv * 4.0, near_slot)).rgb;
+            vec3 tile_mean = textureLod(terrain_tiles, vec3(terrain_uv, near_slot), 7.0).rgb;
+            float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
+            ground *= 1.0 + terrain_detail * province_detail * grain_shift * 2.2;
+        }
         vec3 relief_tint = texture(relief_color, UV).rgb;
         ground = mix(ground, relief_tint, relief_color_opacity);
         // Political tint is an albedo blend, not transparent 3D geometry.
@@ -2119,8 +2304,17 @@ void fragment() {
         float north = texture(relief_height, vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
         float south = texture(relief_height, vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
         vec2 slope = clamp(vec2(west - east, south - north) * relief_strength * 8.0, vec2(-0.8), vec2(0.8));
-        NORMAL_MAP = normalize(vec3(slope * political.a, 1.0)) * 0.5 + 0.5;
+        vec3 relief_normal = normalize(vec3(slope * political.a, 1.0));
+        NORMAL_MAP = normalize(vec3(slope * political.a * 0.55, 1.0)) * 0.5 + 0.5;
         NORMAL_MAP_DEPTH = 1.0;
+        // West and north are -x and +y in the surface's own frame; the light stands high over
+        // the north-west. Flat ground keeps its colour exactly: the shade is the difference a
+        // slope makes, not a dimmer on the whole map.
+        vec3 atlas_light = normalize(vec3(-0.62, 0.62, 0.48));
+        float flat_lit = atlas_light.z;
+        float lit = dot(relief_normal, atlas_light);
+        float hillshade = clamp(1.0 + (lit - flat_lit) * 1.35, 0.55, 1.35);
+        base = mix(base, base * hillshade, political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.85));
     }
     // A shore drawn by thresholding a filtered raster takes the shape of the filter: the
     // diamonds bilinear interpolation makes between four texels, which is a grid again by
@@ -2143,7 +2337,7 @@ void fragment() {
     // field as the province and country lines.
     float near_region;
     float other_region_id;
-    float region_cover = boundary_coverage(region_ids, map_uv, near_region, other_region_id);
+    float region_cover = boundary_coverage(region_ids, map_uv, smooth_edges, near_region, other_region_id);
     float region_aa = id_aa;
     float region_edge = 1.0 - smoothstep(0.0, border_pixels, abs(region_cover - 0.5) / region_aa);
     region_edge *= step(0.5, abs(near_region - other_region_id));
@@ -2154,7 +2348,7 @@ void fragment() {
     // than aliased when a pixel covers more of the map than a line could describe.
     float near_province;
     float other_province_id;
-    float province_cover = boundary_coverage(province_ids, map_uv, near_province, other_province_id);
+    float province_cover = boundary_coverage(province_ids, map_uv, smooth_edges, near_province, other_province_id);
     float province_aa = id_aa;
     float province_distance = abs(province_cover - 0.5) / province_aa;
     float province_width = mix(border_pixels, province_border_pixels, province_detail);

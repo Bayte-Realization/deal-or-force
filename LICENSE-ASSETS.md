@@ -60,6 +60,33 @@ keeps that honest.
 All of these permit commercial use, so none of them stands in the way of a paid release.
 What they require is that the credits file ships with the game and stays accurate.
 
+Not every flag is in that table yet, and it is better written down than discovered:
+
+- the 263 national flags, `flag_<iso>.png`, were rendered from the public-domain SVGs
+  Wikipedia serves for each country's flag when the flags were first added. They are
+  public domain, but `CREDITS.md` does not list them file by file yet;
+- the 89 people's flags in the second table of `CREDITS.md` are copies of a state flag and
+  carry that flag's terms;
+- 21 variants (`*_protectorate`, `*_at_war`, a few ideology and formable flags) have no
+  source recorded. Until one is, treat them as unverified: replace or credit them before a
+  commercial release.
+
+### Map data
+
+The rasters in `game/map_data/` are built from open data, and the builders are in `Tools/`:
+
+| File | Source | Terms |
+|---|---|---|
+| `terrain.png`, `terrain_provinces.csv` | land cover from ESA GlobCover 2009 ([doi:10.1594/PANGAEA.787668](https://doi.org/10.1594/PANGAEA.787668)), relief from the row below, classified by `Tools/TerrainCompiler` | © ESA 2010 and UCLouvain; credit required |
+| `heightmap.png`, `bathymetry.png`, `relief_color.png` | NASA Earth Observatory, [Blue Marble topography and bathymetry](https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/topography-bathymetry-maps/): imagery by Jesse Allen, NASA Earth Observatory, using data from the General Bathymetric Chart of the Oceans (GEBCO) produced by the British Oceanographic Data Centre | NASA imagery may be reused, commercially included, with credit |
+| `rivers.png`, `lakes.png`, `hydrography/` | [Natural Earth](https://www.naturalearthdata.com/) rivers and lakes | public domain |
+| `cities/00_cities.json` and the `city.*` names in `localization/*/24_cities.json` | [Natural Earth](https://www.naturalearthdata.com/) populated places, read by `Tools/CityCompiler` | public domain |
+
+The terrain once took its elevation from WorldClim 2.1, which is licensed CC BY-NC-SA 4.0 -
+non-commercial - and could not have shipped in a game that is sold. It was replaced by the
+NASA and GEBCO relief above in September 2026; `terrain_provenance.json` records which source
+and which files (by SHA-256) the current rasters were built from.
+
 `game/history/states/2024/20_population.json` is derived from
 [Natural Earth](https://www.naturalearthdata.com/)'s populated places, which are public
 domain: no conditions, credited here because it is right to say where the numbers came from.

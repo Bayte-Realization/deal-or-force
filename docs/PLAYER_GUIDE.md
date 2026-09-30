@@ -55,9 +55,13 @@ strategically meaningful labels and markers.
 The map is stored as a raster: every texel is tagged with the number of a country, a region,
 a province and a terrain type. A number here is a label, not a quantity — the average of two
 labels is not a label — so the raster cannot simply be filtered, and up close the grid it
-was written on shows through. With smoothing on, the border is reconstructed from the four
-neighbouring texels and pulled off the grid, so a coastline looks like a coastline instead
-of a staircase, and two terrains meet raggedly instead of by squares.
+was written on shows through. With smoothing on, close in every border is reconstructed from
+the sixteen texels around the point: each label there makes a smoothed claim, the strongest
+takes the pixel, and the line runs where the two strongest are equal. A coast digitised as a
+staircase comes out as the coast it was digitised from, a round bay as a round bay, and a
+one-texel island or city state keeps its place. Two terrains meet along the same kind of
+curve, and the ground photographs are made seamless as they load, so the grid does not come
+back through the fields either.
 
 You can switch it off with **"Map smoothing"** in the main menu or with **`F3`** on the map
 itself. Off is not a degraded version of on — it is a different picture: the raster exactly

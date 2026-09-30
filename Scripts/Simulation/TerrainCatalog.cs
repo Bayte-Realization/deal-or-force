@@ -20,6 +20,20 @@ public static class TerrainCatalog
     public static string TerrainPath { get; private set; } = "";
     public static string HeightPath { get; private set; } = "";
     public static string ReliefColorPath { get; private set; } = "";
+    /// <summary>The depth of the sea: white along the coast and on the shelves, dark over the abyss.</summary>
+    public static string BathymetryPath { get; private set; } = "";
+    /// <summary>The side of a terrain tile on the GPU. Close in a tile is magnified many times, so
+    /// it is kept sharper than the 256 it used to be squeezed to; a slow machine can ask for less.</summary>
+    public static int TileResolution { get; private set; } = 512;
+    /// <summary>How much fine grain the ground gets back close in, from a second, finer look at the same tile.</summary>
+    public static float DetailStrength { get; private set; } = .35f;
+    /// <summary>How strongly slopes are shaded, lit from the north-west as an atlas lights them.</summary>
+    public static float ReliefShading { get; private set; } = .9f;
+    /// <summary>How wide the meeting of two grounds is, in terrain texels.</summary>
+    public static float TerrainBlendTexels { get; private set; } = 2.6f;
+    /// <summary>Whether ground tiles are made seamless as they load. A mod whose tiles already
+    /// repeat cleanly - painted to tile - can switch it off and keep them exactly as drawn.</summary>
+    public static bool SeamlessTiles { get; private set; } = true;
     public static float PoliticalOpacity { get; private set; } = .68f;
     public static float TileRepeat { get; private set; } = 180;
     public static float ReliefStrength { get; private set; } = .8f;
@@ -34,7 +48,12 @@ public static class TerrainCatalog
         Definitions.Clear();
         Overrides.Clear();
         Definitions["plains"] = new("plains", "Plains", 0x8DAB68, "");
-        TerrainPath = HeightPath = ReliefColorPath = "";
+        TerrainPath = HeightPath = ReliefColorPath = BathymetryPath = "";
+        TileResolution = 512;
+        DetailStrength = .35f;
+        ReliefShading = .9f;
+        TerrainBlendTexels = 2.6f;
+        SeamlessTiles = true;
         PoliticalOpacity = .68f;
         TileRepeat = 180;
         ReliefStrength = .8f;
@@ -93,6 +112,7 @@ public static class TerrainCatalog
         if (File.Exists(LocalPath(root, "map_data/terrain.png"))) TerrainPath = LocalPath(root, "map_data/terrain.png");
         if (File.Exists(LocalPath(root, "map_data/heightmap.png"))) HeightPath = LocalPath(root, "map_data/heightmap.png");
         if (File.Exists(LocalPath(root, "map_data/relief_color.png"))) ReliefColorPath = LocalPath(root, "map_data/relief_color.png");
+        if (File.Exists(LocalPath(root, "map_data/bathymetry.png"))) BathymetryPath = LocalPath(root, "map_data/bathymetry.png");
         var settingsPath = LocalPath(root, "map_data/terrain_settings.json");
         if (File.Exists(settingsPath))
         try
@@ -102,6 +122,14 @@ public static class TerrainCatalog
             TerrainPath = MapAsset(s, "terrain", root, TerrainPath);
             HeightPath = MapAsset(s, "heightmap", root, HeightPath);
             ReliefColorPath = MapAsset(s, "relief_color", root, ReliefColorPath);
+            BathymetryPath = MapAsset(s, "bathymetry", root, BathymetryPath);
+            TileResolution = (int)Number(s, "tile_resolution", TileResolution, 64, 2048);
+            DetailStrength = Number(s, "detail_strength", DetailStrength, 0, 1);
+            ReliefShading = Number(s, "relief_shading", ReliefShading, 0, 2);
+            TerrainBlendTexels = Number(s, "terrain_blend_texels", TerrainBlendTexels, 0.2f, 8);
+            if (s.TryGetProperty("seamless_tiles", out var seamless) &&
+                seamless.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                SeamlessTiles = seamless.GetBoolean();
             PoliticalOpacity = Number(s, "political_opacity", PoliticalOpacity, 0, 1);
             TileRepeat = Number(s, "tile_repeat", TileRepeat, 1, 1000);
             ReliefStrength = Number(s, "relief_strength", ReliefStrength, 0, 8);
