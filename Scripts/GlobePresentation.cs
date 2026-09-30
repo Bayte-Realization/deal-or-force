@@ -875,6 +875,19 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private float _counterScale = 1f;
     private float _counterWorldPixel;
+
+    /// <summary>
+    /// How far out the flat map has pulled the counters toward their compact chip: one close
+    /// in, down to the "map.counter_far_scale" metric at world view. On the flat map a
+    /// counter keeps its screen size at every zoom, so the world shrinks under it while it
+    /// stays put - and at strategic range a coastline's worth of full-size cards and fleets
+    /// piles into a litter. Out there the counters follow the zoom down instead, and past
+    /// <see cref="CounterCompactBelow"/> the number makes way for the symbol alone.
+    /// </summary>
+    private float _counterFlatFar = 1f;
+
+    /// <summary>Below this far-scale the card draws its symbol, not its digits.</summary>
+    private const float CounterCompactBelow = 0.92f;
     public bool MilitaryMarkersEnabled { get; set; } = true;
     private bool _showcasePan;
     public bool ShowcasePan => _showcasePan;
@@ -950,7 +963,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
             marker.Plate.Visible = true;
             marker.Count.Visible = true;
         }
-        if (_flatMap) marker.Node.Scale = Vector3.One * _counterWorldPixel;
+        if (_flatMap)
+        {
+            marker.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
+            // Far out the digits stop carrying their weight: a nine-pixel number on a
+            // twenty-nine-pixel card is noise, so the card keeps the symbol only - and
+            // picking agrees, giving the chip the smaller reach it is drawn at.
+            marker.Compact = _counterFlatFar < CounterCompactBelow;
+            marker.Count.Visible = !marker.Compact;
+        }
         else marker.Node.Scale = Vector3.One;
         // One layout for the map and the globe, in the card's own pixels (176x104): the
         // strength number sits in the middle of the card - where the marker is anchored -
@@ -993,11 +1014,20 @@ public sealed partial class GlobePresentation : SubViewportContainer
             : Mathf.Lerp(CounterCloseScale, 1f,
                 Mathf.InverseLerp(MinimumDistance, CounterGrowthDistance, _distance));
         wanted = Mathf.Clamp(wanted, 1f, CounterCloseScale);
+        // The flat map's strategic range: counters shrink toward a compact chip instead of
+        // keeping their operational size over a world-scale map. One metric owns the curve,
+        // so a mod can keep the old behaviour with a value of one.
+        var flatFar = _flatMap
+            ? Mathf.Lerp(1f, Simulation.InterfaceSkin.Metric("map.counter_far_scale", 0.45f),
+                Mathf.InverseLerp(CounterGrowthFlatZoom, MinimumFlatZoom, _flatZoom))
+            : 1f;
         var worldPixel = _flatMap ? _camera.Size / Math.Max(1f, _camera.GetViewport().GetVisibleRect().Size.Y) : 0f;
         if (Mathf.Abs(wanted - _counterScale) < 0.03f &&
-            Math.Abs(worldPixel - _counterWorldPixel) <= Math.Max(.0000001f, worldPixel * .01f)) return;
+            Math.Abs(worldPixel - _counterWorldPixel) <= Math.Max(.0000001f, worldPixel * .01f) &&
+            Mathf.Abs(flatFar - _counterFlatFar) < 0.02f) return;
         _counterScale = wanted;
         _counterWorldPixel = worldPixel;
+        _counterFlatFar = flatFar;
 
         foreach (var marker in _armyStacks.Values)
         {
@@ -1006,12 +1036,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         // Fleets grow with the camera as armies do. They were fixed at their far size, so
         // up close a fleet was a speck beside the divisions in the port it was guarding.
+        // On the flat map they also follow the strategic zoom down, with the armies.
         foreach (var (_, count, plate) in _fleetNodes.Values)
         {
             if (!IsInstanceValid(plate) || !IsInstanceValid(count)) continue;
-            plate.PixelSize = FleetPlatePixelSize * _counterScale;
+            plate.PixelSize = FleetPlatePixelSize * _counterScale * (_flatMap ? _counterFlatFar : 1f);
             if (plate.GetChildOrNull<Sprite3D>(0) is { } glow) glow.PixelSize = plate.PixelSize;
-            count.PixelSize = FleetTextPixelSize * _counterScale;
+            count.PixelSize = FleetTextPixelSize * _counterScale * (_flatMap ? _counterFlatFar : 1f);
+            count.Visible = !_flatMap || _counterFlatFar >= CounterCompactBelow;
         }
         foreach (var marker in _supportMapMarkers.Values)
             if (IsInstanceValid(marker.Node)) PlaceSupportMarker(marker);

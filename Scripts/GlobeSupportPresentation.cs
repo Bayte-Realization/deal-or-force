@@ -16,7 +16,6 @@ public sealed partial class GlobePresentation
     {
         public Node3D Node = null!;
         public Sprite3D Plate = null!;
-        public Sprite3D Icon = null!;
         public Label3D Readiness = null!;
         public SupportFormation Formation = null!;
         public float Latitude;
@@ -27,9 +26,9 @@ public sealed partial class GlobePresentation
     private Node3D _supportMarkerRoot = null!;
     private MeshInstance3D _supportRangeNode = null!;
     private ImmediateMesh _supportRangeMesh = null!;
-    private Texture2D _supportPlateTexture = null!;
+    private readonly Dictionary<string, Texture2D> _supportPlates = new();
     private readonly Dictionary<int, SupportMapMarker> _supportMapMarkers = new();
-    private readonly Dictionary<string, Texture2D> _supportCutoutIcons = new();
+    private readonly Dictionary<string, Image> _supportCutoutIcons = new();
     private readonly List<(Node3D Node, Vector3 Normal)> _supportVisibility = new();
     private Campaign _supportMarkedCampaign;
     private int _supportRosterFingerprint = int.MinValue;
@@ -84,7 +83,6 @@ public sealed partial class GlobePresentation
     {
         _supportMarkerRoot = new Node3D { Name = "LongRangeBases" };
         world.AddChild(_supportMarkerRoot);
-        _supportPlateTexture = CreateSupportPlate();
         _supportRangeMesh = new ImmediateMesh();
         _supportRangeNode = new MeshInstance3D
         {
@@ -187,25 +185,20 @@ public sealed partial class GlobePresentation
             var longitude = center.Longitude + (slot % 3 - 1) * .22f;
             var node = new Node3D { Name = $"LongRange_{formation.Id}" };
             _supportMarkerRoot.AddChild(node);
+            // The symbol is part of the card now: cut out and fitted into its slot on the
+            // left when the card is built. It used to be a sprite parked over the card at a
+            // hard-coded size, so a catalogue tile with a wide drawing on it - a plane, say
+            // - simply overran the frame it was supposed to sit in.
+            var iconPath = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
             var plate = new Sprite3D
             {
-                Texture = _supportPlateTexture,
+                Texture = SupportPlate(iconPath),
                 Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 NoDepthTest = true
             };
             node.AddChild(plate);
-            var iconPath = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
-            var icon = new Sprite3D
-            {
-                Texture = SupportCutoutIcon(iconPath),
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-                AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
-                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                NoDepthTest = true
-            };
-            node.AddChild(icon);
             var readiness = new Label3D
             {
                 FontSize = 20, OutlineSize = 5,
@@ -218,7 +211,7 @@ public sealed partial class GlobePresentation
             var normal = SurfacePoint(latitude, longitude, 1f).Normalized();
             var marker = new SupportMapMarker
             {
-                Node = node, Plate = plate, Icon = icon, Readiness = readiness,
+                Node = node, Plate = plate, Readiness = readiness,
                 Formation = formation, Latitude = latitude, Longitude = longitude, Normal = normal
             };
             _supportMapMarkers[formation.Id] = marker;
@@ -232,9 +225,6 @@ public sealed partial class GlobePresentation
         BuildSupportRange();
     }
 
-    /// <summary>How much of the plate's 64x48 pixels the symbol may span, whatever it was cut to.</summary>
-    private const float SupportIconSlotPixels = 19f;
-
     private void PlaceSupportMarker(SupportMapMarker marker)
     {
         marker.Node.Position = _flatMap
@@ -243,22 +233,21 @@ public sealed partial class GlobePresentation
         var flatScale = MathF.Max(.00001f, _counterWorldPixel);
         marker.Node.Scale = _flatMap ? Vector3.One * flatScale : Vector3.One;
         marker.Plate.FixedSize = !_flatMap;
-        marker.Icon.FixedSize = !_flatMap;
         marker.Readiness.FixedSize = !_flatMap;
-        // Everything below is laid out in the plate's own pixels (64x48), so the flat map
-        // and the globe draw the same marker and one tuning moves both. The symbol is
-        // fitted to one slot inside the frame whatever its cut-out bounds came to: a wide
-        // plane and a compact drone share a footprint, and none of them spills over the
-        // frame any more - the icon used to keep its canvas size, so the largest drawing
-        // in the catalogue was wider than the plate it sat on.
-        var platePixel = _flatMap ? .72f : .00027f * _counterScale;
+        // Everything below is laid out in the card's own pixels (80x48), so the flat map
+        // and the globe draw the same marker and one tuning moves both. The readiness
+        // number sits in the middle of the card - where the marker is anchored - and the
+        // symbol is drawn inside the card to the left of it. A label parked beside its
+        // card by an offset drifts away from it as the camera moves; at the origin there
+        // is no offset left to drift.
+        // The flat map's strategic zoom shrinks the marker with the armies and the fleets,
+        // from the same metric - everything on the map heeds the same curve.
+        var platePixel = _flatMap ? .72f * _counterFlatFar : .00027f * _counterScale;
         marker.Plate.PixelSize = platePixel;
-        var iconSize = marker.Icon.Texture.GetSize();
-        var span = MathF.Max(iconSize.X, iconSize.Y);
-        marker.Icon.PixelSize = span > 1f ? platePixel * SupportIconSlotPixels / span : platePixel * .3f;
-        marker.Readiness.PixelSize = platePixel * .70f;
-        marker.Icon.Position = new Vector3(-11f * platePixel, 3f * platePixel, _flatMap ? 2f : .003f);
-        marker.Readiness.Position = new Vector3(13f * platePixel, -7f * platePixel, _flatMap ? 3f : .004f);
+        marker.Readiness.PixelSize = platePixel * .85f;
+        marker.Readiness.Position = new Vector3(0f, 0f, _flatMap ? 3f : .004f);
+        marker.Readiness.HorizontalAlignment = HorizontalAlignment.Center;
+        marker.Readiness.VerticalAlignment = VerticalAlignment.Center;
     }
 
     private void PaintSupportMarker(SupportMapMarker marker, SupportFormation formation)
@@ -268,7 +257,6 @@ public sealed partial class GlobePresentation
         var active = formation.Mission != SupportCore.MissionStandby;
         marker.Plate.Modulate = displaced ? new Color(.76f, .35f, .34f) :
             active ? new Color(.92f, .80f, .49f) : new Color(.77f, .87f, .92f);
-        marker.Icon.Modulate = displaced ? new Color(1f, .76f, .70f) : Colors.White;
         var readiness = Math.Clamp((int)MathF.Round(formation.Strength * 100f), 0, 100).ToString();
         if (marker.Readiness.Text != readiness) marker.Readiness.Text = readiness;
         marker.Readiness.Modulate = formation.Strength >= .7f ? new Color(.80f, .94f, .81f) :
@@ -281,7 +269,6 @@ public sealed partial class GlobePresentation
         {
             var selected = _selectedSupportIds.Contains(id);
             marker.Plate.Scale = Vector3.One * (selected ? 1.22f : 1f);
-            marker.Icon.Scale = marker.Plate.Scale;
             marker.Readiness.Scale = marker.Plate.Scale;
         }
     }
@@ -435,30 +422,60 @@ public sealed partial class GlobePresentation
         }
     }
 
-    private static Texture2D CreateSupportPlate()
+    /// <summary>
+    /// The base card: brass frame and command band over dark slate, 80x48, with the arm's
+    /// symbol blended into its slot on the left. The symbol is part of the card so that it
+    /// is inside the frame by construction - it used to be a sprite of its own parked over
+    /// the card, and a wide drawing simply overran the frame it was meant to sit in.
+    /// </summary>
+    private Texture2D SupportPlate(string path)
     {
-        const int width = 64, height = 48;
+        if (_supportPlates.TryGetValue(path, out var cached)) return cached;
+        const int width = 80, height = 48;
         var data = new byte[width * height * 4];
         for (var y = 0; y < height; y++)
         for (var x = 0; x < width; x++)
         {
             var border = x < 2 || x >= width - 2 || y < 2 || y >= height - 2;
             var top = y < 6;
-            var r = border || top ? (byte)201 : (byte)15;
-            var g = border || top ? (byte)166 : (byte)32;
-            var b = border || top ? (byte)91 : (byte)48;
+            var stripe = x >= 70 && x < 75;
+            var brass = border || top || stripe;
+            var r = brass ? (byte)201 : (byte)15;
+            var g = brass ? (byte)166 : (byte)32;
+            var b = brass ? (byte)91 : (byte)48;
             var offset = (y * width + x) * 4;
             data[offset] = r; data[offset + 1] = g; data[offset + 2] = b;
             data[offset + 3] = (byte)(border ? 245 : 226);
         }
-        return ImageTexture.CreateFromImage(Image.CreateFromData(width, height, false, Image.Format.Rgba8, data));
+        var card = Image.CreateFromData(width, height, false, Image.Format.Rgba8, data);
+        var icon = SupportCutoutImage(path);
+        if (icon is not null)
+        {
+            // Fitted to the slot whatever bounds the cut-out came to: a wide plane and a
+            // compact drone share one footprint here, both wholly inside the frame.
+            const float slot = 20f;
+            var iconWidth = icon.GetWidth();
+            var iconHeight = icon.GetHeight();
+            var span = MathF.Max(iconWidth, iconHeight);
+            if (span > slot)
+            {
+                icon = icon.Duplicate() as Image;
+                icon.Resize(Mathf.RoundToInt(iconWidth * slot / span), Mathf.RoundToInt(iconHeight * slot / span),
+                    Image.Interpolation.Lanczos);
+                iconWidth = icon.GetWidth();
+                iconHeight = icon.GetHeight();
+            }
+            card.BlendRect(icon, new Rect2I(0, 0, iconWidth, iconHeight),
+                new Vector2I(14 - iconWidth / 2, 24 - iconHeight / 2));
+        }
+        return _supportPlates[path] = ImageTexture.CreateFromImage(card);
     }
 
-    private Texture2D SupportCutoutIcon(string path)
+    private Image SupportCutoutImage(string path)
     {
         if (_supportCutoutIcons.TryGetValue(path, out var cached)) return cached;
         var source = GD.Load<Texture2D>(path);
-        if (source is null) return _supportCutoutIcons[path] = _supportPlateTexture;
+        if (source is null) return null;
         var image = source.GetImage();
         image.Convert(Image.Format.Rgba8);
         // Most catalogue icons are opaque black-on-gold UI tiles. On the world map,
@@ -492,6 +509,6 @@ public sealed partial class GlobePresentation
         if (right >= left && bottom >= top &&
             (left > 0 || top > 0 || right < width - 1 || bottom < height - 1))
             image = image.GetRegion(new Rect2I(left, top, right - left + 1, bottom - top + 1));
-        return _supportCutoutIcons[path] = ImageTexture.CreateFromImage(image);
+        return _supportCutoutIcons[path] = image;
     }
 }
