@@ -1,0 +1,18 @@
+{
+  "fusion_power": {
+    "name": "Energy systems III",
+    "description": "A conditional late-game improvement in energy efficiency and supply. This abstracts possible advances rather than predicting a particular invention or date."
+  },
+  "superconducting_grids": {
+    "name": "Power transmission II",
+    "description": "A conditional improvement in grid efficiency, reliability and transmission capacity; no specific future breakthrough is assumed."
+  },
+  "autonomous_combat_systems": {
+    "name": "Combat automation II",
+    "description": "A further stage of assisted coordination and automation, represented by improved attack and defence rather than a predicted weapon system."
+  },
+  "personalized_medicine": {
+    "name": "Medical systems II",
+    "description": "A conditional improvement in treatment effectiveness and recovery, combining medical data and biological research."
+  }
+}

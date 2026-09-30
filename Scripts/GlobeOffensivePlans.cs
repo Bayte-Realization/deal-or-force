@@ -12,6 +12,7 @@ public sealed partial class GlobePresentation
 
     public void SetOffensivePlanPreview(IEnumerable<int> goals, IEnumerable<int> departure)
     {
+        _defensivePreview.Clear();
         _objectivePreview.Clear(); _objectivePreview.AddRange(goals);
         _departurePreview.Clear(); _departurePreview.UnionWith(departure);
         _planPreview.Clear(); _planPreview.UnionWith(_objectivePreview);

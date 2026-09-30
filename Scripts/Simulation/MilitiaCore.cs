@@ -337,7 +337,10 @@ public static class MilitiaCore
 
             var threatened = state is not null && nation is not null &&
                              Threat(ControlTally.World(campaign, nation.MapIndex, state.MapIndex)) > 0.0001f;
-            if (threatened || army.InBattle) { nation.MilitiaQuietSince.Remove(army.Id); continue; }
+            // A new war cancels the quiet-period clock even before the enemy reaches
+            // this region. Otherwise a reserve could disappear on the declaration day.
+            if (Enemies.Count > 0 || threatened || army.InBattle)
+            { nation.MilitiaQuietSince.Remove(army.Id); continue; }
 
             if (!nation.MilitiaQuietSince.TryGetValue(army.Id, out var since))
             {

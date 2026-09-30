@@ -6,7 +6,11 @@
     "navigation": [
       {"screen":"Nation", "icon":"nation", "help":"Capital, people and institutions."},
       {"screen":"Economy", "icon":"economy", "help":"Budget, markets and construction."},
+      {"screen":"Research", "label":"Technologies", "icon":"research", "help":"Technology tree, prerequisites and research progress."},
+      {"screen":"Production", "icon":"industry", "help":"War industry, production lines and the goods they make."},
+      {"screen":"Trade", "icon":"trade", "help":"The market, the partners it crosses the border with, and the rules it travels under."},
       {"screen":"Military", "icon":"military", "help":"Recruitment, readiness and supply."},
+      {"screen":"Support", "label":"Long-range forces", "icon":"artillery", "help":"Artillery, aviation, drones and air defence: bases, training and missions."},
       {"screen":"Diplomacy", "icon":"diplomacy", "help":"Relations with the selected country."},
       {"screen":"Wars", "icon":"wars", "help":"Wars and peace negotiations."},
       {"screen":"Decisions", "icon":"decisions", "help":"National decisions and formable nations."},

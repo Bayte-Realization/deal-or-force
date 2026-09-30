@@ -11,6 +11,7 @@ public partial class DealOrForceGame
     private Control _ledgerLayer = null!;
     private Label _ledgerTitle = null!;
     private Label _ledgerSummary = null!;
+    private Label _ledgerPolicyLine = null!;
     // The ledger reads; it no longer governs. Everything a player can actually change now
     // lives in State Affairs, because a screen that is half report and half control desk
     // teaches nobody where to look for either.
@@ -74,13 +75,15 @@ public partial class DealOrForceGame
         header.AddChild(selectedView);
         header.AddChild(ActionButton("×", CloseLedger, 38, 32));
 
-        var tabs = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        tabs.AddThemeConstantOverride("separation", 6);
+        var tabs = new HFlowContainer();
+        tabs.AddThemeConstantOverride("h_separation", 6);
+        tabs.AddThemeConstantOverride("v_separation", 6);
         rows.AddChild(tabs);
-        foreach (var tab in new[] { "Overview", "Economy", "Market", "Population", "Military", "Rankings" })
+        foreach (var definition in CampaignUiCatalog.For("Ledger").Tabs)
         {
+            var tab = definition.Id;
             var captured = tab;
-            var button = ActionButton(tab, () =>
+            var button = ActionButton(definition.Label, () =>
             {
                 _ledgerTab = captured;
                 RefreshLedger();
@@ -92,6 +95,8 @@ public partial class DealOrForceGame
                 "Market" => "Prices, shortages, and what trade policy has done. Change it in State Affairs.",
                 "Population" => "Population growth, living standards, classes and the largest states.",
                 "Military" => "Field strength, reserves, formations and active-war performance.",
+                "Chronicle" => "Recorded events in the world and this country.",
+                "Vulnerabilities" => "Import dependence and concentration of named suppliers.",
                 _ => "Compare this country with the largest powers in the current world."
             }));
             tabs.AddChild(button);
@@ -102,6 +107,13 @@ public partial class DealOrForceGame
         _ledgerSummary.CustomMinimumSize = new Vector2(0, 34);
         rows.AddChild(_ledgerSummary);
 
+        // The Market tab's own caption. It used to write into a label that lived in State
+        // Affairs - the text was set in a window nobody was looking at. It lives here now,
+        // under the charts it belongs to.
+        _ledgerPolicyLine = Title("", 12, Ui.Colour("text.caption"));
+        _ledgerPolicyLine.CustomMinimumSize = new Vector2(0, 20);
+        rows.AddChild(_ledgerPolicyLine);
+
         var grid = new GridContainer
         {
             Columns = 2,
@@ -111,6 +123,8 @@ public partial class DealOrForceGame
         grid.AddThemeConstantOverride("h_separation", 9);
         grid.AddThemeConstantOverride("v_separation", 9);
         rows.AddChild(grid);
+        _ledgerGrid = grid;
+        BuildStrategicReports(rows);
         _ledgerLineA = new StrategicLineChart();
         _ledgerLineB = new StrategicLineChart();
         _ledgerBarsA = new StrategicBarChart();
@@ -210,13 +224,33 @@ public partial class DealOrForceGame
     private void RefreshLedger()
     {
         if (_campaign?.Player is null || _ledgerLayer is null || !_ledgerLayer.Visible) return;
+        if (!_ledgerTabButtons.ContainsKey(_ledgerTab))
+            _ledgerTab = _ledgerTabButtons.Keys.FirstOrDefault() ?? "";
+        if (_ledgerTab.Length == 0)
+        {
+            _ledgerGrid.Visible = _ledgerReportScroll.Visible = false;
+            _ledgerSummary.Text = _ledgerPolicyLine.Text = "";
+            return;
+        }
         var nation = ViewedLedgerNation() ?? _campaign.Player;
         var known = CanInspectNation(nation.Id);
+        var report = _ledgerTab is "Chronicle" or "Vulnerabilities";
+        _ledgerGrid.Visible = known && !report;
+        _ledgerReportScroll.Visible = known && report;
         _ledgerLineA.Visible = _ledgerLineB.Visible = _ledgerBarsA.Visible = _ledgerBarsB.Visible = known;
         if (!known)
         {
             _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.DisplayName);
             _ledgerSummary.Text = Tr("Fog of war — foreign internal statistics are unavailable. Choose Player nation.");
+            _ledgerPolicyLine.Text = "";
+            return;
+        }
+        if (report)
+        {
+            _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.DisplayName);
+            _ledgerPolicyLine.Text = "";
+            foreach (var (tab, button) in _ledgerTabButtons) ApplyLedgerButtonState(button, tab == _ledgerTab);
+            RefreshStrategicReport(nation);
             return;
         }
         var samples = _campaign.History.ForNation(nation.Id);
@@ -313,7 +347,7 @@ public partial class DealOrForceGame
 
     private void ShowLedgerMarket(Nation nation, IReadOnlyList<NationHistorySample> samples, IReadOnlyList<int> days)
     {
-        _statePolicyFeedback.Text = Simulation.Loc.Format("Current: {0} · tariffs {1:P0}", TradePolicyRules.Name(nation.TradePolicy), TradePolicyRules.TariffRate(nation.TradePolicy));
+        _ledgerPolicyLine.Text = Simulation.Loc.Format("Current: {0} · tariffs {1:P0}", TradePolicyRules.Name(nation.TradePolicy), TradePolicyRules.TariffRate(nation.TradePolicy));
         _ledgerLineA.SetData("Market health", "Access rises when domestic output and imports cover demand", days, new[]
         {
             Series("Access", Green, samples, sample => sample.MarketAccess),

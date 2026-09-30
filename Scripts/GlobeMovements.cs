@@ -131,7 +131,7 @@ public sealed partial class GlobePresentation
             _insignia = insignia;
             foreach (var marker in _markers) if (IsInstanceValid(marker.Node)) marker.Node.QueueFree();
             _markers.Clear();
-            _ring ??= CircleTexture(50f, 60f);
+            _ring ??= CircleTexture(52f, 60f);
             _disc ??= CircleTexture(0f, 60f);
             _mark ??= GD.Load<Texture2D>(SpriteCatalog.TextureOf("icon_movement_headquarters",
                 "res://game/gfx/interface/icons/icon_movement_headquarters.png"));
@@ -179,7 +179,7 @@ public sealed partial class GlobePresentation
             }
         }
 
-        /// <summary>The movement's flag, cut to a disc for the medallion; null when it has none to show.</summary>
+        /// <summary>The complete flag or emblem, fitted inside the ring without cropping.</summary>
         private Texture2D Roundel(Simulation.Nation nation)
         {
             var key = nation.Tag.ToLowerInvariant();
@@ -194,20 +194,21 @@ public sealed partial class GlobePresentation
                 {
                     if (image.IsCompressed()) image.Decompress();
                     image.Convert(Image.Format.Rgba8);
-                    // The middle of the flag, square, where most flags keep what they are.
-                    var side = Math.Min(image.GetWidth(), image.GetHeight());
-                    var square = image.GetRegion(new Rect2I((image.GetWidth() - side) / 2, (image.GetHeight() - side) / 2, side, side));
-                    square.Resize(128, 128, Image.Interpolation.Lanczos);
-                    var centre = 127 / 2f;
-                    for (var y = 0; y < 128; y++)
-                    for (var x = 0; x < 128; x++)
-                    {
-                        var distance = new Vector2(x - centre, y - centre).Length();
-                        var pixel = square.GetPixel(x, y);
-                        pixel.A = MathF.Min(pixel.A, Mathf.Clamp(51f - distance + 0.5f, 0f, 1f));
-                        square.SetPixel(x, y, pixel);
-                    }
-                    made = ImageTexture.CreateFromImage(square);
+                    // Fit the rectangle's diagonal, not just its width. Its corners then
+                    // stay inside the ring even for square emblems or very tall mod flags.
+                    // Never assume the important part of a flag is in its centre.
+                    var radius = Mathf.Clamp(Ui.Metric("movement_marker.art_radius", 46f), 16f, 48f);
+                    var diagonal = MathF.Sqrt((float)image.GetWidth() * image.GetWidth() +
+                                              (float)image.GetHeight() * image.GetHeight());
+                    var scale = radius * 2f / MathF.Max(1f, diagonal);
+                    var width = Math.Max(1, (int)MathF.Floor(image.GetWidth() * scale));
+                    var height = Math.Max(1, (int)MathF.Floor(image.GetHeight() * scale));
+                    image.Resize(width, height, Image.Interpolation.Lanczos);
+                    var canvas = Image.CreateEmpty(128, 128, false, Image.Format.Rgba8);
+                    canvas.Fill(Colors.Transparent);
+                    canvas.BlitRect(image, new Rect2I(0, 0, width, height),
+                        new Vector2I((128 - width) / 2, (128 - height) / 2));
+                    made = ImageTexture.CreateFromImage(canvas);
                 }
             }
             _roundels[key] = made;

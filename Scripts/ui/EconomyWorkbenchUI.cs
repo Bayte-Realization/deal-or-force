@@ -11,6 +11,7 @@ public partial class DealOrForceGame
     private VBoxContainer _economyBuildRows;
     private VBoxContainer _economyMarketRows;
     private VBoxContainer _buildingCatalogRows;
+    private VBoxContainer _constructionQueueRows;
     private VBoxContainer _marketTableRows;
     private OptionButton _constructionRegion;
     private LineEdit _buildingSearch;
@@ -36,6 +37,15 @@ public partial class DealOrForceGame
         _economyBuildRows.AddChild(_constructionRegion);
         _constructionStatus = Title("", 13, Ui.Colour("text.body_soft"));
         _economyBuildRows.AddChild(_constructionStatus);
+        var queueScroll = new ScrollContainer
+        {
+            Name = "ConstructionQueueScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, Math.Clamp(InterfaceSkin.Metric("construction.queue_height", 190), 100, 360)),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        _economyBuildRows.AddChild(queueScroll);
+        _constructionQueueRows = new VBoxContainer { Name = "ConstructionQueue", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        queueScroll.AddChild(_constructionQueueRows);
         _buildingSearch = ShellSearch("Search buildings…", "BuildingSearch");
         _buildingSearch.TextChanged += _ => RefreshBuildingCatalog();
         _economyBuildRows.AddChild(_buildingSearch);
@@ -86,6 +96,7 @@ public partial class DealOrForceGame
     private void RefreshBuildingCatalog()
     {
         if (_campaign?.Player is null || _buildingCatalogRows is null) return;
+        RefreshConstructionQueue();
         ClearRuntimeChildren(_buildingCatalogRows);
         var player = _campaign.Player;
         var count = _campaign.Construction.Count(project => project.NationId == player.Id);
@@ -161,6 +172,37 @@ public partial class DealOrForceGame
         }
         if (_buildingCatalogRows.GetChildCount() == 0)
             _buildingCatalogRows.AddChild(Title("No matches", 13, Ui.Colour("text.muted")));
+    }
+
+    private void RefreshConstructionQueue()
+    {
+        if (_constructionQueueRows is null) return;
+        ClearRuntimeChildren(_constructionQueueRows);
+        var queue = _campaign.Construction.Where(p => p.NationId == _campaign.Player.Id).OrderBy(p => p.Id).ToArray();
+        _constructionQueueRows.GetParent<Control>().Visible = queue.Length > 0;
+        foreach (var project in queue)
+        {
+            var region = _campaign.States.FirstOrDefault(s => s.MapIndex == project.StateMapIndex);
+            var card = WorkbenchCard(_constructionQueueRows);
+            var title = Title(Simulation.Loc.Format("{0} — {1}", Tr(BuildingCatalog.Get(project.Building).Name), region?.DisplayName ?? "—"), 13, Ui.Colour("text.bright"));
+            title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            card.AddChild(title);
+            var row = new HBoxContainer();
+            card.AddChild(row);
+            var progress = new ProgressBar
+            {
+                Value = project.Progress * 100, SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                CustomMinimumSize = new Vector2(90, 28)
+            };
+            row.AddChild(progress);
+            var id = project.Id;
+            var cancel = ActionButton("Cancel", () => CancelConstruction(id), 92, 28);
+            cancel.Name = "CancelConstruction" + id;
+            cancel.TooltipText = Ui.Tip(Simulation.Loc.Format(
+                "Cancel only this project. Spent: {0} (not refunded). Remaining: {1} (will not be charged).",
+                Fmt.Money(project.Paid), Fmt.Money(Math.Max(0, project.Cost - project.Paid))));
+            row.AddChild(cancel);
+        }
     }
 
     private VBoxContainer WorkbenchCard(Container parent)

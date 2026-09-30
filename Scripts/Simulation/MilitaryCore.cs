@@ -684,8 +684,17 @@ public static class MilitaryOperations
         var need = army.Divisions * MilitaryBootstrap.DivisionSize * (1f - army.Strength);
         var dailyShare = nation.ReinforcementCapacity * ReinforcementDoctrine.Weight(army.ReinforcementPriority) /
                          MathF.Max(0.1f, totalWeight);
+        // Men are not equipment. A division refills with people, rifles, shells and boots,
+        // and only the people half of that comes out of the manpower reserve: the rest
+        // comes out of the arms on the national market. A country that makes none and buys
+        // none still sends men - at half the rate of a supplied one, which is a shortage a
+        // war industry can answer and a country can survive, where a fifth was not: the
+        // front it bought was one that churned its own orders, and the divisions walked
+        // about it more than they held it.
+        var arms = nation.Market.TryGetValue(Commodity.Arms, out var armsQuote) ? armsQuote.Satisfaction : 1f;
+        var equipment = 0.50f + 0.50f * M.Clamp01(arms);
         var people = MathF.Min(need, MathF.Min(nation.ManpowerReserve,
-            dailyShare * M.Clamp(army.SupplyLevel, 0.15f, 1f)));
+            dailyShare * M.Clamp(army.SupplyLevel, 0.15f, 1f) * equipment));
         if (people <= 0f) return;
         army.Strength = M.Clamp01(army.Strength + people /
             MathF.Max(1f, army.Divisions * MilitaryBootstrap.DivisionSize));
@@ -884,6 +893,11 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         var war = WarFor(campaign, IssuerId, WarId, servedWar, army.ProvinceId);
         var nation = campaign.NationById(IssuerId);
         var peacefulLine = BattlePlanning.LineFor(campaign, army);
+        if (peacefulLine is { Kind: FrontLineKind.Fallback })
+        {
+            DefensivePlanning.Route(campaign, army, peacefulLine);
+            return;
+        }
         if (peacefulLine is { Kind: FrontLineKind.Offensive } && peacefulLine.Objectives.Count > 0 &&
             Order is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)
         {

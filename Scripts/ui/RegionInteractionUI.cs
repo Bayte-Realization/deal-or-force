@@ -112,7 +112,7 @@ public partial class DealOrForceGame
         DetailRow("Urbanisation", Fmt.Percent(_selectedState.Urbanization),
             "Share living in towns. Urban regions industrialise more easily and riot more readily.");
         DetailRow("Radicalism", Fmt.Percent(_selectedState.Radicalism),
-            "How angry the region is. Poverty, austerity and foreign rule all raise it.",
+            RadicalismTooltip(_selectedState),
             _selectedState.Radicalism > 0.45f ? "state.negative" :
             _selectedState.Radicalism > 0.25f ? "state.warning" : "state.positive");
 
@@ -157,6 +157,8 @@ public partial class DealOrForceGame
         }
 
         DetailHeading("ECONOMY");
+        DetailRow("GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, _selectedState)),
+            Tr(RegionalStatistics.GdpExplanation));
         var buildings = BuildingCatalog.All
             .Select(kind => (Kind: kind, Count: _selectedState.Buildings.GetValueOrDefault(kind)))
             .Where(entry => entry.Count > 0)
@@ -242,7 +244,7 @@ public partial class DealOrForceGame
             "Share living in towns — and what decides the trades below: a rural region is mostly " +
             "peasants, a city is mostly wage labour, counters and desks.");
         DetailRow("Radicalism", Fmt.Percent(_selectedState.Radicalism),
-            "How angry the region is. Poverty, austerity and foreign rule all raise it.",
+            RadicalismTooltip(_selectedState),
             _selectedState.Radicalism > 0.45f ? "state.negative" :
             _selectedState.Radicalism > 0.25f ? "state.warning" : "state.positive");
         var foreign = EconomySystem.ForeignShare(_selectedState, owner?.Tag ?? "");

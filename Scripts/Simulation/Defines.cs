@@ -67,6 +67,13 @@ public sealed partial class Defines
 	/// noticing next to the (much heavier) weekly economy tick it can land alongside.</summary>
 	public int AutosaveIntervalDays { get; set; } = 30;
 
+	/// <summary>Write saves as readable, editable text rather than gzip. The whole point of
+	/// the save folder is that a player can open a campaign in any editor, change a number
+	/// and load it again - so text is the default and compression is the opt-out for the
+	/// machine that would rather not write a five-year history as prose. Old compressed
+	/// saves load either way: the reader tells them apart by their first two bytes.</summary>
+	public bool SaveTextFormat { get; set; } = true;
+
 	/// <summary>Real seconds per in-game day at speed 1.</summary>
 	public float SecondsPerDay { get; set; } = 0.55f;
 
@@ -872,6 +879,24 @@ public sealed partial class Defines
 	public float MaxPlanningAttackBonus { get; set; } = 0.30f;
 	/// <summary>March multiplier for the strongest mapped river crossing. Rivers never block movement.</summary>
 	public float RiverMovementMultiplier { get; set; } = 0.78f;
+	// ---- long-range forces -----------------------------------------------------------
+	//
+	// The guns, aircraft and drones a country reaches with, rather than stands on. All of
+	// their effects are saturating fractions of the battles inside their radius, so the
+	// constants are three answers: how much is added at saturation, how fast it saturates,
+	// and how much of the enemy's contribution the sky over the ground takes away.
+	/// <summary>Offence a side's long-range fire adds to its battles at full saturation.</summary>
+	public float MaxSupportFireBonus { get; set; } = 0.30f;
+	/// <summary>Long-range fire points at which the bonus reaches half its ceiling.</summary>
+	public float SupportFireSaturation { get; set; } = 8f;
+	/// <summary>Share of enemy defence a side's interdiction strips at full saturation.</summary>
+	public float MaxSupportInterdiction { get; set; } = 0.25f;
+	/// <summary>Interdiction points at which the strip reaches half its ceiling.</summary>
+	public float InterdictionSaturation { get; set; } = 12f;
+	/// <summary>Fraction of enemy long-range fire lost per point of air superiority over it.</summary>
+	public float AirSuppressionPerPoint { get; set; } = 0.02f;
+	/// <summary>Readiness a long-range formation recovers per day, with a supplied arms market.</summary>
+	public float SupportRegenPerDay { get; set; } = 0.005f;
 	/// <summary>Attacker power retained while crossing an ordinary river.</summary>
 	public float RiverAttackMultiplier { get; set; } = 0.82f;
 	/// <summary>Attacker power retained while crossing a major river.</summary>
@@ -1019,6 +1044,12 @@ public sealed partial class Defines
 	public float AiWartimeMilitarySpending { get; set; } = 0.16f;
 	public float AiTenseMilitarySpending { get; set; } = 0.09f;
 	public float AiPeacetimeMilitarySpending { get; set; } = 0.045f;
+	// How far an AI turns its civilian economy over to war production. The wartime figure
+	// is deliberately short of one: a country that converts everything starves the
+	// civilian goods its own population and tax base run on, and an AI that did that
+	// would lose the war in its market before it lost it on the front.
+	public float AiWartimeArmsFocus { get; set; } = 0.40f;
+	public float AiPeacetimeArmsFocus { get; set; } = 0.04f;
 	public float AiStabilityConcern { get; set; } = 0.52f;
 	public float AiSocialStep { get; set; } = 0.006f;
 	public float AiBuildTreasuryFloor { get; set; } = 0.03f;

@@ -1,0 +1,29 @@
+{
+  "metrics": {
+    "production.cells_per_page": 20,
+    "production.grid_columns": 10,
+    "production.cell_size": 28,
+    "production.map_shade": 0.30,
+    "production.line_gap": 8
+  },
+  "colors": {
+    "production.card": "#172630",
+    "production.border": "#374a54",
+    "production.inset": "#0c151b",
+    "production.empty_border": "#4d626b",
+    "production.empty_icon": "#37454c",
+    "production.blocked": "#252e34",
+    "production.civilian": "#a5c588",
+    "production.civilian_fill": "#293b2f",
+    "production.military": "#dac082",
+    "production.military_fill": "#443b26",
+    "production.hover": "#394749",
+    "production.focus": "#f5dfa2"
+  },
+  "layout": {
+    "modal.production": {
+      "anchors": [0.044, 0.084, 0.044, 0.944],
+      "offsets": [0, 0, 850, 0]
+    }
+  }
+}

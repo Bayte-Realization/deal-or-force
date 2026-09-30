@@ -76,7 +76,7 @@ public sealed class DiplomaticRelation
     public readonly List<OpinionReason> Reasons = new();
 
     /// <summary>The same sum, named part by name, for the screen that shows it.</summary>
-    public readonly Breakdown OpinionDrivers = new();
+    public Breakdown OpinionDrivers = new();
 
     public int Other(int nationId) => nationId == A ? B : A;
 }
@@ -251,6 +251,7 @@ public static class CampaignDiplomacy
             ClaimedStateMapIndex = ResolveWarGoal(campaign, defender.MapIndex, claimedStateMapIndex)
         };
         campaign.Wars.Add(war);
+        campaign.Chronicle.Record(campaign, "war_started", attackerId, defenderId);
         Statecraft.RecordDeclaration(campaign, attacker, defender,
             justification ?? Statecraft.CasusBelli(campaign, attacker, defender));
         Warfare.RebuildFronts(campaign);
@@ -375,7 +376,8 @@ public sealed class ImproveRelationsCommand : ICampaignCommand
         nation.Treasury -= 0.1f;
         OpinionSystem.Remember(campaign, relation, "improved_relations");
         relation.LastActionDay = campaign.ElapsedDays;
-        if (relation.Opinion >= 35f && relation.Stance == DiplomaticStance.Neutral)
+        if (relation.Opinion >= 35f &&
+            relation.Stance is (DiplomaticStance.Neutral or DiplomaticStance.Rival))
             relation.Stance = DiplomaticStance.Friendly;
     }
 }
@@ -390,7 +392,8 @@ public sealed class DenounceCommand : ICampaignCommand
         if (relation is null || campaign.ElapsedDays - relation.LastActionDay < 14) return;
         OpinionSystem.Remember(campaign, relation, "denounced");
         relation.LastActionDay = campaign.ElapsedDays;
-        if (relation.Opinion <= -35f && relation.Stance == DiplomaticStance.Neutral)
+        if (relation.Opinion <= -35f &&
+            relation.Stance is (DiplomaticStance.Neutral or DiplomaticStance.Friendly))
             relation.Stance = DiplomaticStance.Rival;
     }
 }
@@ -424,6 +427,7 @@ public sealed class SetEmbargoCommand : ICampaignCommand
         relation.LastActionDay = campaign.ElapsedDays;
         if (Embargo) OpinionSystem.Remember(campaign, relation, "embargoed_us");
         else OpinionSystem.Forget(campaign, relation, "embargoed_us");
+        campaign.Chronicle.Record(campaign, Embargo ? "embargo_started" : "embargo_ended", IssuerId, TargetId);
         campaign.MarkStrategicChange();
     }
 }

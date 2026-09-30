@@ -735,12 +735,22 @@ public partial class DealOrForceGame
     private void TopBarAs(StatReadout stat, string icon, string tooltip)
     {
         if (stat?.Value?.GetParent() is not ExplainedStat box) return;
-        var glyph = box.GetChildCount() > 0 ? box.GetChild(0) as TextureRect : null;
+        var glyph = stat.Glyph;
         if (!_topBarAsCountry.ContainsKey(stat))
             _topBarAsCountry[stat] = (box.Explain, box.Plain, box.TooltipText, glyph?.Texture);
         box.Explain = null;
         box.Plain = "";
         box.TooltipText = Ui.Tip(tooltip);
+        stat.Caption.Text = Tr(icon switch
+        {
+            "income" => "Income",
+            "movement_cadres" => "Cadres",
+            "movement_legitimacy" => "Standing",
+            "movement_support" => "Support",
+            "movement_heat" => "Host's temper",
+            "movement_uprising" => "Uprising",
+            _ => stat.CountryCaption
+        });
         if (glyph is not null && SpriteCatalog.Has("icon_" + icon))
             glyph.Texture = Art("icon_" + icon, $"res://game/gfx/interface/icons/icon_{icon}.png");
     }
@@ -755,7 +765,8 @@ public partial class DealOrForceGame
             box.Explain = country.Explain;
             box.Plain = country.Plain;
             box.TooltipText = country.Tooltip;
-            if (box.GetChildCount() > 0 && box.GetChild(0) is TextureRect glyph && country.Icon is not null) glyph.Texture = country.Icon;
+            stat.Caption.Text = Tr(stat.CountryCaption);
+            if (stat.Glyph is { } glyph && country.Icon is not null) glyph.Texture = country.Icon;
         }
         _topBarAsCountry.Clear();
     }

@@ -354,38 +354,29 @@ public static partial class AiStatecraft
             if (relation.Opinion < worstOpinion) { worstOpinion = relation.Opinion; worstRival = other; }
         }
 
-        // One action a week, on whichever relationship is furthest from neutral. A country
-        // that spent the week courting its friend did not also spend it insulting its rival.
+        // One action a week. Try the most promising friends in opinion order: the warmest
+        // partner may be human (and cannot be signed for), cooling down, or already bound
+        // by every treaty. None of those should freeze the rest of foreign policy.
         if (bestFriend is not null && bestOpinion >= defines.AiFriendshipThreshold &&
             MathF.Abs(bestOpinion) >= MathF.Abs(worstOpinion))
         {
-            var relation = CampaignDiplomacy.Get(campaign, nation.Id, bestFriend.Id);
-            if (!relation.TradeAgreement && bestOpinion >= defines.AiTradeThreshold)
+            FriendlyCandidates.Clear();
+            foreach (var other in Circle)
             {
-                relation.TradeAgreement = true;
-                OpinionSystem.Remember(campaign, relation, "trade_agreement");
-                relation.LastActionDay = campaign.ElapsedDays;
+                if (other.Id == nation.Id) continue;
+                var bond = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
+                if (bond.Stance != DiplomaticStance.AtWar &&
+                    bond.Opinion >= defines.AiFriendshipThreshold)
+                    FriendlyCandidates.Add(other);
             }
-            else if (!relation.NonAggressionPact && bestOpinion >= defines.AiPactThreshold)
+            FriendlyCandidates.Sort((left, right) =>
             {
-                relation.NonAggressionPact = true;
-                OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
-                relation.LastActionDay = campaign.ElapsedDays;
-            }
-            else if (relation.Stance != DiplomaticStance.Allied && bestOpinion >= defines.AiAllianceThreshold)
-            {
-                // It used to set the stance itself, on both countries' behalf, which is how
-                // a player could watch alliances appear on the map and never be offered one.
-                // Now it asks, and what it asks goes through the same door a player's offer
-                // does: answered on the spot by another computer, and put on the table when
-                // the country being asked is somebody playing.
-                AllianceSystem.Propose(campaign, nation, bestFriend, out _);
-            }
-            else if (relation.Stance == DiplomaticStance.Neutral)
-            {
-                relation.Stance = DiplomaticStance.Friendly;
-            }
-            return;
+                var byOpinion = CampaignDiplomacy.Get(campaign, nation.Id, right.Id).Opinion
+                    .CompareTo(CampaignDiplomacy.Get(campaign, nation.Id, left.Id).Opinion);
+                return byOpinion != 0 ? byOpinion : left.Id.CompareTo(right.Id);
+            });
+            foreach (var friend in FriendlyCandidates)
+                if (TryFriendlyMove(campaign, nation, friend)) return;
         }
 
         // Frightened, and somebody large enough to be worth asking: ask for a guarantee.
@@ -417,12 +408,7 @@ public static partial class AiStatecraft
                 // its named reasons - erased it every seven days. A country could court a
                 // neighbour for a decade and end exactly where it started, which is why in
                 // two years of a world running itself not one alliance was ever signed.
-                if (campaign.ElapsedDays - relation.LastActionDay >= 14 && nation.Treasury > 0.1f)
-                {
-                    nation.Treasury -= 0.1f;
-                    OpinionSystem.Remember(campaign, relation, "improved_relations");
-                    relation.LastActionDay = campaign.ElapsedDays;
-                }
+                new ImproveRelationsCommand { IssuerId = nation.Id, TargetId = bestFriend.Id }.Apply(campaign);
                 return;
             }
         }
@@ -432,8 +418,11 @@ public static partial class AiStatecraft
             var relation = CampaignDiplomacy.Get(campaign, nation.Id, worstRival.Id);
             if (relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Friendly)
             {
-                relation.Stance = DiplomaticStance.Rival;
-                relation.LastActionDay = campaign.ElapsedDays;
+                // A denunciation is a visible, remembered diplomatic action, not an
+                // unexplained stance switch. It observes the same mission cooldown.
+                var lastAction = relation.LastActionDay;
+                new DenounceCommand { IssuerId = nation.Id, TargetId = worstRival.Id }.Apply(campaign);
+                if (relation.LastActionDay != lastAction) Count("denounced");
                 return;
             }
 
@@ -495,10 +484,22 @@ public static partial class AiStatecraft
             : threatened ? defines.AiTenseMilitarySpending : defines.AiPeacetimeMilitarySpending;
         nation.MilitarySpending = M.Lerp(nation.MilitarySpending, militaryTarget, 0.35f);
 
+        // And the war industry follows the budget it is part of. A country at war runs
+        // its plants harder; a country at peace spins them mostly back down. The AI sets
+        // the same capacity pool the player uses, by the same rule it sets the military budget
+        // by - so the world's economies behave like the player's rather than around it.
+        var focusTarget = atWar
+            ? defines.AiWartimeArmsFocus
+            : threatened ? defines.AiWartimeArmsFocus * 0.5f : defines.AiPeacetimeArmsFocus;
+        nation.ArmsFocus = M.Lerp(nation.ArmsFocus, focusTarget, 0.20f);
+        // AI policy is quantised by the same capacity allocator as player orders.
+        nation.ConvertedCivilianUnits = -1;
+
         // An unhappy country buys quiet, when it can afford it.
-        if (nation.Stability < defines.AiStabilityConcern && reserves > defines.AiTreasuryFloor)
+        if ((nation.Stability < defines.AiStabilityConcern || RadicalismCore.NeedsAttention(campaign, nation)) &&
+            reserves > defines.AiTreasuryFloor)
         {
-            nation.WelfareSpending = M.Clamp(nation.WelfareSpending + defines.AiSocialStep, 0f, 0.20f);
+            nation.WelfareSpending = M.Clamp(nation.WelfareSpending + defines.AiSocialStep, 0f, 0.18f);
             nation.EducationSpending = M.Clamp(nation.EducationSpending + defines.AiSocialStep * 0.6f, 0f, 0.15f);
         }
         else if (reserves < defines.AiTreasuryFloor * 0.5f)
@@ -566,15 +567,6 @@ public static partial class AiStatecraft
             nation.StandardOfLiving < 0.55f ? BuildingKind.Agriculture :
             BuildingKind.CivilianIndustry;
 
-        // At peace with nothing more pressing: whatever its market is shortest of (AiBuilder).
-        if (wanted == BuildingKind.CivilianIndustry && !atWar && !congested &&
-            AiBuilder.Choose(campaign, nation, states, out var shortOf, out var where))
-        {
-            new QueueConstructionCommand { IssuerId = nation.Id, StateMapIndex = where.MapIndex, Building = shortOf }
-                .Apply(campaign);
-            return;
-        }
-
         // Put it where there is most to gain: the biggest region that has fewest of these.
         ScenarioState target = null;
         var bestScore = float.MinValue;
@@ -641,6 +633,7 @@ public static partial class AiStatecraft
                 judgement -= defines.AiOverseasCaution;
             if (judgement > 0f) Count("wanted");
             if (judgement <= bestJudgement) continue;
+            if (judgement > 0f && !CanStageWar(campaign, nation, other)) { Count("unreachable_or_unready"); continue; }
             bestJudgement = judgement;
             target = other;
         }
@@ -663,6 +656,7 @@ public static partial class AiStatecraft
             return;
         }
         Count("targeted");
+        if (!PreparationComplete(campaign, nation, target)) { Count("preparing"); return; }
 
         // Even a country that wants a war does not start one on a particular Tuesday.
         // The die keeps the map from lurching every time a balance of power tips.
@@ -690,11 +684,13 @@ public static partial class AiStatecraft
     internal static void Negotiate(Campaign campaign, Nation nation, StrategicWar war)
     {
         var defines = campaign.Defines;
-        if (campaign.ElapsedDays < war.AiNegotiationUnlockDay) return;
+        // A decided war is negotiated whatever the scenario's opening lock says: the lock keeps the
+        // wars on the map from ending in their first weeks, not a beaten country from surrendering.
+        if (campaign.ElapsedDays < war.AiNegotiationUnlockDay && MathF.Abs(war.WarScore) < defines.AiDecisiveWarScore) return;
         if (campaign.ElapsedDays - war.StartedDay < defines.AiMinimumWarDays) return;
         if (campaign.ElapsedDays - war.LastPeaceProposalDay < defines.AiPeaceProposalInterval) return;
 
-        var opponentId = war.AttackerId == nation.Id ? war.DefenderId : war.AttackerId;
+        var opponentId = war.EnemyLeaderOf(nation.Id);
         var opponent = campaign.NationById(opponentId);
         if (opponent is null) return;
 
@@ -760,11 +756,15 @@ public static partial class AiStatecraft
     internal static void ConsiderSubjugation(Campaign campaign, Nation nation, StrategicWar war,
         PeaceLedger ledger, PeaceDemand demand, float budget)
     {
-        var loser = campaign.NationById(nation.Id == war.AttackerId ? war.DefenderId : war.AttackerId);
+        var loser = campaign.NationById(war.EnemyLeaderOf(nation.Id));
         if (loser is null || loser.IsSubject) return;
 
-        var claimable = PeaceConference.Claimable(campaign, war, nation.Id).Count;
-        if (claimable == 0 || demand.Provinces.Count * 2 >= claimable) return;
+        var topology = campaign.ProvinceMap;
+        if (topology is null) return;
+        var claimable = PeaceConference.Claimable(campaign, war, nation.Id)
+            .Count(province => topology.ProvinceToNation[province] == loser.MapIndex);
+        var takenFromSubject = demand.Provinces.Count(province => topology.ProvinceToNation[province] == loser.MapIndex);
+        if (claimable == 0 || takenFromSubject * 2 >= claimable) return;
 
         var left = budget - ledger.Cost(demand);
         SubjectType best = null;
@@ -970,7 +970,9 @@ public static partial class AiStatecraft
         var bestAnswer = float.MinValue;
         foreach (var other in Circle)
         {
-            if (other.Id == rival.Id || other.Id == nation.Id || other.IsSubject) continue;
+            // A human decides whether their country guarantees somebody. An AI plea
+            // cannot create that commitment on the player's behalf.
+            if (other.Id == rival.Id || other.Id == nation.Id || other.IsSubject || other.IsHuman) continue;
 
             var ours = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
             if (ours.GuaranteedBy(other.Id) || ours.Stance == DiplomaticStance.AtWar) continue;
@@ -1007,6 +1009,7 @@ public static partial class AiStatecraft
 
         new GuaranteeCommand { IssuerId = best.Id, TargetId = nation.Id, Guarantee = true }
             .Apply(campaign);
+        Count("shelter_granted");
         CampaignDiplomacy.Get(campaign, nation.Id, best.Id).LastActionDay = campaign.ElapsedDays;
         DiagnosticLogs.Write("simulation",
             $"SHELTER {best.Tag} guarantees {nation.Tag} against {rival.Tag} " +

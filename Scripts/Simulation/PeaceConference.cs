@@ -74,8 +74,8 @@ public static class PeaceConference
     public static float Budget(Campaign campaign, StrategicWar war, int proposerId)
     {
         if (war is null || war.Ended || !war.Involves(proposerId)) return 0f;
-        var score = proposerId == war.AttackerId ? war.WarScore : -war.WarScore;
-        var opponentSupport = proposerId == war.AttackerId ? war.DefenderWarSupport : war.AttackerWarSupport;
+        var score = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
+        var opponentSupport = war.IsAttacking(proposerId) ? war.DefenderWarSupport : war.AttackerWarSupport;
         var exhaustion = (1f - M.Clamp01(opponentSupport)) * 30f;
         var duration = M.Clamp((campaign.ElapsedDays - war.StartedDay) / 30f, 0f, 20f);
         return M.Max(0f, score + exhaustion + duration);
@@ -121,11 +121,19 @@ public static class PeaceConference
         var topology = campaign.ProvinceMap;
         if (topology is null) return Loc.Get("The map is not ready");
 
-        var loser = campaign.NationById(demand.ProposerId == war.AttackerId ? war.DefenderId : war.AttackerId);
+        var loser = campaign.NationById(war.EnemyLeaderOf(demand.ProposerId));
+        var enemyOwners = war.EnemiesOf(demand.ProposerId).Select(campaign.NationById)
+            .Where(nation => nation is not null).Select(nation => nation.MapIndex).ToHashSet();
         foreach (var province in demand.Provinces)
             if (province <= 0 || province > topology.ProvinceCount ||
-                topology.ProvinceToNation[province] != (ushort)(loser?.MapIndex ?? -1))
+                !enemyOwners.Contains(topology.ProvinceToNation[province]))
                 return Loc.Get("The demand includes ground that is not theirs to give");
+
+        var rounded = Round(campaign, war, demand);
+        // A mod or a changed map may contain a region with more than one owner.
+        // Rounding must not silently add a neutral or friendly country's ground.
+        if (rounded.Provinces.Any(province => !enemyOwners.Contains(topology.ProvinceToNation[province])))
+            return Loc.Get("The demand includes ground that is not theirs to give");
 
         if (demand.Subjugate.Length > 0)
         {
@@ -138,7 +146,8 @@ public static class PeaceConference
                 return Loc.Format("{0} answers to somebody else; that has to end first", loser.DisplayName);
             // A country you have taken entirely is not a country that can answer to you.
             // The demand has to leave something standing for the arrangement to be about.
-            if (Claimable(campaign, war, demand.ProposerId).Count - demand.Provinces.Count <= 0)
+            if (!Enumerable.Range(1, topology.ProvinceCount).Any(province =>
+                    topology.ProvinceToNation[province] == loser.MapIndex && !rounded.Provinces.Contains(province)))
                 return Loc.Get("A country you are annexing whole cannot also answer to you");
         }
 
@@ -152,7 +161,7 @@ public static class PeaceConference
         // number, say they would sign, and then refuse - because the thing actually put in
         // front of them was bigger than the thing that was priced. One rounding, used by
         // both.
-        var cost = ledger.Cost(Round(campaign, war, demand));
+        var cost = ledger.Cost(rounded);
         if (cost > budget)
             return Loc.Format("They will not sign: the demand is worth {0:0} and the war is worth {1:0}", cost, budget);
         return "";
@@ -206,6 +215,13 @@ public static class PeaceConference
     /// </summary>
     public static bool Resolve(Campaign campaign, StrategicWar war, PeaceDemand demand)
     {
+        // Validate before indexing provinces in Round, and leave a refused draft intact.
+        var block = BlockReason(campaign, war, demand);
+        if (war is null) return false;
+        war.LastPeaceProposalDay = campaign.ElapsedDays;
+        war.LastNegotiation = block.Length == 0 ? "Agreement reached" : block;
+        if (block.Length > 0) return false;
+
         if (demand is not null && demand.Provinces.Count > 0)
         {
             var whole = Round(campaign, war, demand);
@@ -213,13 +229,8 @@ public static class PeaceConference
             foreach (var province in whole.Provinces) demand.Provinces.Add(province);
         }
 
-        var block = BlockReason(campaign, war, demand);
-        war.LastPeaceProposalDay = campaign.ElapsedDays;
-        war.LastNegotiation = block.Length == 0 ? "Agreement reached" : block;
-        if (block.Length > 0) return false;
-
         var winner = campaign.NationById(demand.ProposerId);
-        var loser = campaign.NationById(demand.ProposerId == war.AttackerId ? war.DefenderId : war.AttackerId);
+        var loser = campaign.NationById(war.EnemyLeaderOf(demand.ProposerId));
         if (winner is null || loser is null) return false;
 
         // Anything not being kept goes back to whoever held it when the war began.
@@ -230,13 +241,15 @@ public static class PeaceConference
 
         if (demand.Provinces.Count > 0)
         {
+            var cededOwners = demand.Provinces.Select(province => campaign.ProvinceMap.ProvinceToNation[province]).ToHashSet();
             var created = StatePartition.Annex(campaign, demand.Provinces, winner);
             war.AnnexedProvinces = demand.Provinces.Count;
             war.CreatedStates = created.Count;
 
             // Losing ground is not a one-day event. The country goes on naming the land
             // for years, which is quieter than a humiliation and lasts longer.
-            ModifierSystem.Grant(campaign, loser, "ceded_territory", 0);
+            foreach (var formerOwner in campaign.Nations.Where(nation => cededOwners.Contains((ushort)nation.MapIndex)))
+                ModifierSystem.Grant(campaign, formerOwner, "ceded_territory", 0);
         }
 
         if (demand.Reparations || demand.TradeConcessions)
@@ -249,7 +262,7 @@ public static class PeaceConference
         }
 
         if (demand.TradeConcessions)
-            CampaignDiplomacy.Get(campaign, war.AttackerId, war.DefenderId).TradeAgreement = true;
+            CampaignDiplomacy.Get(campaign, winner.Id, loser.Id).TradeAgreement = true;
 
         if (demand.Demilitarise)
             foreach (var division in campaign.Armies.Where(division => division.NationId == loser.Id))
@@ -276,6 +289,7 @@ public static class PeaceConference
         war.EndedDay = campaign.ElapsedDays;
         war.WinnerId = winner.Id;
         war.PeaceSummary = Summary(campaign, war, demand, winner, loser);
+        campaign.Chronicle.Record(campaign, "peace_signed", winner.Id, loser.Id);
         war.AttackerFront.Clear();
         war.DefenderFront.Clear();
         war.UnopposedProgress.Clear();
@@ -362,17 +376,24 @@ public static class PeaceConference
         var down = M.Clamp01(defines.PeaceRoundDownShare);
         if (up <= 0f && down <= 0f) return wanted.ToList();
 
-        // How big each region touched is, and how much of it is being taken. One walk.
-        var total = new Dictionary<int, int>();
+        // Keep the province IDs from this one walk: a large brush can touch dozens of
+        // regions, and scanning the entire world again for each of them stalls the UI.
+        var byRegion = new Dictionary<int, List<int>>();
         var asked = new Dictionary<int, int>();
         var regions = new HashSet<int>();
-        foreach (var province in wanted) regions.Add(topology.ProvinceToState[province]);
+        foreach (var province in wanted)
+        {
+            var region = topology.ProvinceToState[province];
+            regions.Add(region);
+            asked[region] = asked.GetValueOrDefault(region) + 1;
+        }
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var region = topology.ProvinceToState[province];
             if (!regions.Contains(region)) continue;
-            total[region] = total.GetValueOrDefault(region) + 1;
-            if (wanted.Contains(province)) asked[region] = asked.GetValueOrDefault(region) + 1;
+            if (!byRegion.TryGetValue(region, out var members))
+                byRegion[region] = members = new List<int>();
+            members.Add(province);
         }
 
         // A region goes whole or it does not go.
@@ -389,7 +410,7 @@ public static class PeaceConference
         foreach (var region in regions)
         {
             if (region == 0) continue;
-            var size = total.GetValueOrDefault(region, 1);
+            var size = byRegion.TryGetValue(region, out var members) ? members.Count : 1;
             var share = asked.GetValueOrDefault(region) / (float)(size <= 0 ? 1 : size);
             var goal = war is not null && region == war.ClaimedStateMapIndex;
 
@@ -405,20 +426,19 @@ public static class PeaceConference
             // the loser refuses a treaty worth more than the war, so an army that walked one
             // province into its own war goal does not get the other thirty-nine for nothing -
             // it gets a refusal, and asks again when it has won more of the war.
-            if (share >= up || (goal && share > 0f && up > 0f))
+            if (up > 0f && (share >= up || (goal && share > 0f)))
             {
                 // Whole. Including ground the winner does not stand on: the border follows
                 // the region, which is the entire point, and the alternative is the cut.
-                for (var province = 1; province <= topology.ProvinceCount; province++)
-                    if (topology.ProvinceToState[province] == (ushort)region) wanted.Add(province);
+                if (members is not null)
+                    foreach (var province in members) wanted.Add(province);
                 continue;
             }
             if (goal && up <= 0f) continue;  // rounding up is forbidden; leave the goal as drawn
             if (share >= down) continue;     // the middle band, left exactly as it was drawn
 
-            foreach (var province in wanted.Where(province =>
-                         topology.ProvinceToState[province] == (ushort)region).ToList())
-                wanted.Remove(province);
+            if (members is not null)
+                foreach (var province in members) wanted.Remove(province);
         }
 
         // Never down to nothing, and never down to a fragment either: a country that won a
@@ -432,15 +452,14 @@ public static class PeaceConference
             foreach (var region in regions)
             {
                 if (region == 0) continue;
-                var size = total.GetValueOrDefault(region, 1);
+                var size = byRegion.TryGetValue(region, out var members) ? members.Count : 1;
                 var share = asked.GetValueOrDefault(region) / (float)(size <= 0 ? 1 : size);
                 if (share <= bestShare) continue;
                 bestShare = share;
                 bestRegion = region;
             }
-            if (bestRegion > 0)
-                for (var province = 1; province <= topology.ProvinceCount; province++)
-                    if (topology.ProvinceToState[province] == (ushort)bestRegion) wanted.Add(province);
+            if (bestRegion > 0 && byRegion.TryGetValue(bestRegion, out var bestMembers))
+                foreach (var province in bestMembers) wanted.Add(province);
         }
 
         return wanted.ToList();
@@ -505,7 +524,8 @@ public sealed class PeaceLedger
     private readonly Nation _loser;
     private readonly Dictionary<int, int> _provincesPerState = new();
     private readonly Dictionary<int, long> _statePopulation = new();
-    private int _capitalStateMapIndex = -1;
+    private readonly Dictionary<int, Nation> _enemies = new();
+    private readonly HashSet<int> _capitalStates = new();
     private bool _surveyed;
 
     public PeaceLedger(Campaign campaign, StrategicWar war, int proposerId)
@@ -513,8 +533,10 @@ public sealed class PeaceLedger
         _campaign = campaign;
         _war = war;
         _proposer = campaign.NationById(proposerId);
-        _loser = war is null ? null : campaign.NationById(
-            proposerId == war.AttackerId ? war.DefenderId : war.AttackerId);
+        _loser = war is null ? null : campaign.NationById(war.EnemyLeaderOf(proposerId));
+        if (war is not null)
+            foreach (var enemyId in war.EnemiesOf(proposerId))
+                if (campaign.NationById(enemyId) is { } enemy) _enemies[enemy.MapIndex] = enemy;
         Budget = PeaceConference.Budget(campaign, war, proposerId);
     }
 
@@ -537,23 +559,21 @@ public sealed class PeaceLedger
         var topology = campaign.ProvinceMap;
         if (topology is null || _loser is null) return;
 
-        var capital = -1;
-        var capitalDistance = float.MaxValue;
+        var capitals = new Dictionary<int, (int Province, float Distance)>();
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
-            if (topology.ProvinceToNation[province] != (ushort)_loser.MapIndex) continue;
+            if (!_enemies.TryGetValue(topology.ProvinceToNation[province], out var owner)) continue;
             var state = topology.ProvinceToState[province];
             _provincesPerState[state] = _provincesPerState.GetValueOrDefault(state) + 1;
 
             var centre = topology.CenterOf(province);
-            var latitude = centre.Latitude - _loser.CapitalLatitude;
-            var longitude = centre.Longitude - _loser.CapitalLongitude;
+            var latitude = centre.Latitude - owner.CapitalLatitude;
+            var longitude = centre.Longitude - owner.CapitalLongitude;
             var distance = latitude * latitude + longitude * longitude;
-            if (distance >= capitalDistance) continue;
-            capitalDistance = distance;
-            capital = province;
+            if (!capitals.TryGetValue(owner.MapIndex, out var nearest) || distance < nearest.Distance)
+                capitals[owner.MapIndex] = (province, distance);
         }
-        if (capital > 0) _capitalStateMapIndex = topology.ProvinceToState[capital];
+        foreach (var capital in capitals.Values) _capitalStates.Add(topology.ProvinceToState[capital.Province]);
 
         foreach (var state in campaign.States)
             if (_provincesPerState.ContainsKey(state.MapIndex))
@@ -581,7 +601,7 @@ public sealed class PeaceLedger
         if (topology is null || _proposer is null || _loser is null ||
             province <= 0 || province > topology.ProvinceCount)
             return new PeaceConference.ProvinceCost(province, 0f, "not a province");
-        if (topology.ProvinceToNation[province] != (ushort)_loser.MapIndex)
+        if (!_enemies.ContainsKey(topology.ProvinceToNation[province]))
             return new PeaceConference.ProvinceCost(province, 0f, "not theirs to give");
 
         var defines = _campaign.Defines;
@@ -611,7 +631,7 @@ public sealed class PeaceLedger
             cost *= 1f + M.Clamp(share / M.Max(1f, defines.PeaceCostPopulationScale), 0f, 2.5f);
         }
 
-        if (stateMapIndex == _capitalStateMapIndex)
+        if (_capitalStates.Contains(stateMapIndex))
         {
             cost *= defines.PeaceCostCapitalFactor;
             reason += ", the seat of government";

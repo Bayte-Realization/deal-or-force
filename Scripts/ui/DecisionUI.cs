@@ -17,6 +17,7 @@ public partial class DealOrForceGame
 
     private void ShowDecisionsScreen()
     {
+        if (_dossierTab == "Opportunities") { ShowOpportunityAtlas(); return; }
         if (_dossierTab == "Formables") { ShowFormableNations(); return; }
         _formationConfirmation = "";
         var nation = _campaign.Player;

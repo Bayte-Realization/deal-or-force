@@ -11,8 +11,8 @@
 //
 // A country researches ResearchBasePerWeek + ResearchGdpWeight * sqrt(GDP in billions) *
 // literacy a week, bent by education spending, times (1 + research_speed). A technology is
-// cheaper the more of the world's economy already has it (ResearchDiffusion), which is how a
-// small country catches up rather than falling a century behind. The numbers are in
+// cheaper when the wider world, land neighbours or treaty partners already have it, which is
+// how a small country catches up rather than falling a century behind. The numbers are in
 // common/defines/11_research.json.
 //
 // The scenario opens in 2024 with everything before it taken as known, so these are what

@@ -19,11 +19,8 @@ public partial class DealOrForceGame
 
     private void BuildAgreementControls(VBoxContainer parent)
     {
-        // A flow for the same reason as the dependency row: four captions do not fit one line
-        // in every language.
-        var row = new HFlowContainer();
-        row.AddThemeConstantOverride("h_separation", 5);
-        row.AddThemeConstantOverride("v_separation", 5);
+        var row = new VBoxContainer { Name = "AgreementActions" };
+        row.AddThemeConstantOverride("separation", 5);
         parent.AddChild(row);
         _tradeAgreementButton = ActionButton("Trade agreement", () => ToggleAgreement(AgreementKind.TradeAgreement), 0, 32);
         _pactButton = ActionButton("Non-aggression pact", () => ToggleAgreement(AgreementKind.NonAggressionPact), 0, 32);
@@ -36,6 +33,10 @@ public partial class DealOrForceGame
     }
 
     private void RefreshAgreementButtons(Nation nation)
+        => RefreshAgreementButtons(nation, _tradeAgreementButton, _pactButton, _aidButton, _embargoButton);
+
+    private void RefreshAgreementButtons(Nation nation, Button _tradeAgreementButton, Button _pactButton,
+        Button _aidButton, Button _embargoButton)
     {
         if (_tradeAgreementButton is null || _campaign?.Player is null || nation == _campaign.Player) return;
         var player = _campaign.Player;
@@ -103,10 +104,12 @@ public partial class DealOrForceGame
     }
 
     private void ToggleAgreement(AgreementKind kind)
+        => ToggleAgreement(kind, _selectedNation, _countryActionFeedback);
+
+    private void ToggleAgreement(AgreementKind kind, Nation target, Label feedback)
     {
-        if (!ValidForeignSelection()) return;
+        if (_campaign?.Player is null || target is null || target == _campaign.Player) return;
         var player = _campaign.Player;
-        var target = _selectedNation;
         var relation = CampaignDiplomacy.Get(_campaign, player.Id, target.Id);
         var name = kind == AgreementKind.TradeAgreement ? Tr("trade agreement") : Tr("non-aggression pact");
         if (AgreementSystem.Signed(relation, kind))
@@ -114,7 +117,7 @@ public partial class DealOrForceGame
             var cancel = new CancelAgreementCommand { IssuerId = player.Id, TargetId = target.Id, Kind = kind };
             _campaign.Commands.Enqueue(cancel);
             _campaign.Commands.ApplyAll(_campaign);
-            _countryActionFeedback.Text = cancel.Cancelled
+            feedback.Text = cancel.Cancelled
                 ? Simulation.Loc.Format("The {0} with {1} is over.", name, target.DisplayName)
                 : Tr("Nothing to cancel.");
         }
@@ -123,41 +126,54 @@ public partial class DealOrForceGame
             var propose = new ProposeAgreementCommand { IssuerId = player.Id, TargetId = target.Id, Kind = kind };
             _campaign.Commands.Enqueue(propose);
             _campaign.Commands.ApplyAll(_campaign);
-            _countryActionFeedback.Text = propose.Result switch
+            feedback.Text = propose.Result switch
             {
                 AgreementResult.Signed => Simulation.Loc.Format("{0} signed the {1}.", target.DisplayName, name),
                 AgreementResult.Refused => Simulation.Loc.Format("{0} declined the {1}.", target.DisplayName, name),
                 _ => propose.Reason
             };
         }
-        RefreshCountryViews("Diplomacy");
+        RefreshDiplomaticActionViews();
     }
 
     private void SendSelectedAid()
+        => SendAidTo(_selectedNation, _countryActionFeedback);
+
+    private void SendAidTo(Nation target, Label feedback)
     {
-        if (!ValidForeignSelection()) return;
-        var send = new SendAidCommand { IssuerId = _campaign.Player.Id, TargetId = _selectedNation.Id };
+        if (_campaign?.Player is null || target is null || target == _campaign.Player) return;
+        var send = new SendAidCommand { IssuerId = _campaign.Player.Id, TargetId = target.Id };
         _campaign.Commands.Enqueue(send);
         _campaign.Commands.ApplyAll(_campaign);
-        _countryActionFeedback.Text = send.Sent > 0f
-            ? Simulation.Loc.Format("{0} of aid is on its way to {1}.", Fmt.Money(send.Sent), _selectedNation.DisplayName)
+        feedback.Text = send.Sent > 0f
+            ? Simulation.Loc.Format("{0} of aid is on its way to {1}.", Fmt.Money(send.Sent), target.DisplayName)
             : Tr("The package could not be sent.");
-        RefreshCountryViews("Diplomacy");
+        RefreshDiplomaticActionViews();
     }
 
     private void ToggleSelectedEmbargo()
+        => ToggleEmbargoOn(_selectedNation, _countryActionFeedback);
+
+    private void ToggleEmbargoOn(Nation target, Label feedback)
     {
-        if (!ValidForeignSelection()) return;
-        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, _selectedNation.Id);
+        if (_campaign?.Player is null || target is null || target == _campaign.Player) return;
+        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, target.Id);
         var on = !relation.EmbargoBy(_campaign.Player.Id);
         _campaign.Commands.Enqueue(new SetEmbargoCommand
         {
-            IssuerId = _campaign.Player.Id, TargetId = _selectedNation.Id, Embargo = on
+            IssuerId = _campaign.Player.Id, TargetId = target.Id, Embargo = on
         });
         _campaign.Commands.ApplyAll(_campaign);
-        _countryActionFeedback.Text = on
-            ? Simulation.Loc.Format("Embargo on {0} in force.", _selectedNation.DisplayName)
-            : Simulation.Loc.Format("Embargo on {0} lifted.", _selectedNation.DisplayName);
+        feedback.Text = on
+            ? Simulation.Loc.Format("Embargo on {0} in force.", target.DisplayName)
+            : Simulation.Loc.Format("Embargo on {0} lifted.", target.DisplayName);
+        RefreshDiplomaticActionViews();
+    }
+
+    private void RefreshDiplomaticActionViews()
+    {
         RefreshCountryViews("Diplomacy");
+        RefreshDiplomacyScreen();
+        Refresh();
     }
 }

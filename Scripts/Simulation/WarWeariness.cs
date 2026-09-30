@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -16,8 +17,26 @@ public sealed partial class Defines
     public int AiWearyDays { get; set; } = 1460;
     /// <summary>A war with nobody's player in it ends of exhaustion at this age: each side keeps what it holds securely.</summary>
     public int PeaceForcedEndDays { get; set; } = 2920;
+    /// <summary>An AI war with no battle and no province ever contested ends in white peace after this many days. Zero disables it.</summary>
+    public int AiNoContactPeaceDays { get; set; } = 365;
+    /// <summary>Earlier white peace for an AI war with no front and no land or naval route on either side. Zero disables the early check.</summary>
+    public int AiUnreachableWarPeaceDays { get; set; } = 180;
     /// <summary>At that end, a lead of this much war score keeps its ground; less is a white peace.</summary>
     public float PeaceForcedEndLead { get; set; } = 15f;
+    /// <summary>A war score this decided lifts the lock a scenario puts on its opening wars' negotiations.</summary>
+    public float AiDecisiveWarScore { get; set; } = 80f;
+    /// <summary>A side this far behind, or with this much of its worth occupied, is losing the war - and then collapsing.</summary>
+    public float WarGoingBadlyScore { get; set; } = -30f;
+    public float WarGoingBadlyOccupied { get; set; } = 0.2f;
+    public float FrontCollapsingScore { get; set; } = -80f;
+    public float FrontCollapsingOccupied { get; set; } = 0.5f;
+    /// <summary>A people's young men and women coming of age, as a share of the population a year; the most a country can have in reserve.</summary>
+    public float ManpowerGrowthPerYear { get; set; } = 0.0015f;
+    public float MobilisationCeilingShare { get; set; } = 0.05f;
+    /// <summary>How much faster men are called up by a country at war whose own ground is being taken.</summary>
+    public float MobilisationMultiplier { get; set; } = 4f;
+    /// <summary>How deep into debt a country being overrun goes to raise an army, as a share of its GDP.</summary>
+    public float WarDebtLimitShare { get; set; } = 0.4f;
 }
 
 public sealed partial class StrategicWar
@@ -51,12 +70,34 @@ public static class WarWeariness
     {
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
         var defines = campaign.Defines;
+        Mobilise(campaign);
         foreach (var war in campaign.Wars.ToList())
         {
             if (war.Ended) continue;
+            // How it is going, felt at home: a side losing badly stops believing in it, and a side
+            // whose front is collapsing - or half of whose country is under the enemy - stops
+            // believing in anything. It is what lets a beaten country bring itself to sign.
+            foreach (var attacking in new[] { true, false })
+            {
+                var score = attacking ? war.WarScore : -war.WarScore;
+                var occupied = attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
+                var mood = score <= defines.FrontCollapsingScore || occupied >= defines.FrontCollapsingOccupied ? "front_collapsing"
+                    : score <= defines.WarGoingBadlyScore || occupied >= defines.WarGoingBadlyOccupied ? "war_going_badly"
+                    : null;
+                if (mood is null) continue;
+                foreach (var id in war.Side(attacking))
+                    if (campaign.NationById(id) is { } side && side.Movement is null)
+                        ModifierSystem.Grant(campaign, side, mood, defines.EconomyTickDays * 2);
+            }
+
             // The weight of it: a long war is felt at home - in the support for it, in how settled
             // the country is and in what it makes - and the longer the heavier.
             var age = campaign.ElapsedDays - war.StartedDay;
+            if (NoContactPeaceReady(campaign, war))
+            {
+                PeaceNegotiation.Resolve(campaign, war, war.AttackerId, PeaceTerms.WhitePeace);
+                if (war.Ended) continue;
+            }
             if (age >= defines.PeaceWearinessAfterDays)
             {
                 var weight = age >= defines.AiWearyDays ? "exhausted_by_war" : "long_war";
@@ -82,9 +123,80 @@ public static class WarWeariness
         }
     }
 
+    /// <summary>
+    /// Men and women coming of age, and called up. The reserve every country started with used to
+    /// be all it would ever have - Ukraine had drafted its last man by the end of the first year -
+    /// so each week a small share of the population comes of age into it, up to a ceiling, and a
+    /// country at war whose own ground is being taken calls its people up several times as fast.
+    /// </summary>
+    private static void Mobilise(Campaign campaign)
+    {
+        var defines = campaign.Defines;
+        var overrun = new HashSet<int>();
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended) continue;
+            if (war.AttackerOccupiedValue > 0.02f) foreach (var id in war.Side(true)) overrun.Add(id);
+            if (war.DefenderOccupiedValue > 0.02f) foreach (var id in war.Side(false)) overrun.Add(id);
+        }
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Movement is not null || nation.Population <= 0) continue;
+            var ceiling = nation.Population * defines.MobilisationCeilingShare;
+            if (nation.ManpowerReserve >= ceiling) continue;
+            var grown = nation.Population * defines.ManpowerGrowthPerYear / 52f;
+            if (overrun.Contains(nation.Id)) grown *= defines.MobilisationMultiplier * MathF.Max(0.25f, nation.WarSupport);
+            nation.ManpowerReserve = MathF.Min(ceiling, nation.ManpowerReserve + grown);
+        }
+    }
+
+    /// <summary>Whether this country is at war and has lost ground to the enemy - fighting for its life.</summary>
+    public static bool Overrun(Campaign campaign, Nation nation)
+    {
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended || !war.Involves(nation.Id)) continue;
+            var occupied = war.IsAttacking(nation.Id) ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
+            if (occupied > 0.02f) return true;
+        }
+        return false;
+    }
+
     /// <summary>Whether any country on either side is somebody's.</summary>
     public static bool PlayedByAnyone(Campaign campaign, StrategicWar war) =>
         war.Side(true).Concat(war.Side(false)).Any(id => campaign.NationById(id)?.IsHuman == true);
+
+    /// <summary>
+    /// A declaration that never became a fight. This is deliberately narrower than a
+    /// stalemate: even an unopposed province capture is territorial progress, and a war
+    /// involving a player must remain their decision. The scenario's peace lock applies.
+    /// </summary>
+    public static bool NoContactPeaceReady(Campaign campaign, StrategicWar war)
+    {
+        if (campaign is null || war is null || war.Ended || campaign.Defines.AiNoContactPeaceDays <= 0 ||
+            campaign.ElapsedDays < war.AiNegotiationUnlockDay || PlayedByAnyone(campaign, war) ||
+            war.AttackerLosses + war.DefenderLosses >= .001f || war.OriginalController.Count > 0)
+            return false;
+        if (campaign.Battles.Any(battle => !battle.Ended && battle.WarId == war.Id)) return false;
+        var age = campaign.ElapsedDays - war.StartedDay;
+        if (age >= campaign.Defines.AiNoContactPeaceDays) return true;
+        if (campaign.Defines.AiUnreachableWarPeaceDays <= 0 ||
+            age < campaign.Defines.AiUnreachableWarPeaceDays ||
+            war.AttackerFront.Count > 0 || war.DefenderFront.Count > 0) return false;
+
+        // Check every belligerent, not only the two leaders: a coalition member might
+        // still have a viable land or amphibious route even when its leader does not.
+        foreach (var attackerId in war.Side(true))
+        foreach (var defenderId in war.Side(false))
+        {
+            var attacker = campaign.NationById(attackerId);
+            var defender = campaign.NationById(defenderId);
+            if (attacker is null || defender is null) continue;
+            if (AiStatecraft.CanStageWar(campaign, attacker, defender) ||
+                AiStatecraft.CanStageWar(campaign, defender, attacker)) return false;
+        }
+        return true;
+    }
 
     /// <summary>What the length of the war adds to what either side will accept.</summary>
     public static float Weariness(Campaign campaign, StrategicWar war)

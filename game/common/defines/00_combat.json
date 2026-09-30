@@ -70,6 +70,16 @@
   "PlanningBurnPerCombatDay": 0.055,
   "MaxPlanningAttackBonus": 0.30,
 
+  // Long-range forces: how much the guns, aircraft and drones a country reaches with
+  // add to the battles inside their radius - and how much of the enemy's contribution
+  // the sky over the ground takes away. Saturating fractions, never cliffs.
+  "MaxSupportFireBonus": 0.30,
+  "SupportFireSaturation": 8.0,
+  "MaxSupportInterdiction": 0.25,
+  "InterdictionSaturation": 12.0,
+  "AirSuppressionPerPoint": 0.02,
+  "SupportRegenPerDay": 0.005,
+
   // Pockets. A formation cut off from supply loses strength and organisation every day it
   // stays cut off - faster while it is also being attacked - and takes more from the same
   // fire, because nothing reaches it and it has nowhere to fall back to. Of what a starving

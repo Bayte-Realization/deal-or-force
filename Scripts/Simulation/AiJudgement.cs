@@ -261,11 +261,33 @@ public static partial class AiStatecraft
     /// something the rest of the simulation can feel: an embargo cuts real goods, a
     /// guarantee brings a real army, and a coalition is a real bloc.
     /// </summary>
-    private static bool ActShortOfWar(Campaign campaign, Nation nation, Nation rival)
+    internal static bool ActShortOfWar(Campaign campaign, Nation nation, Nation rival)
     {
         if (rival is null) return false;
         var relation = CampaignDiplomacy.Get(campaign, nation.Id, rival.Id);
         if (campaign.ElapsedDays - relation.LastActionDay < 21) return false;
+
+        // Treaties are commitments, not permanent shackles. A government that has made
+        // this country its rival must first pay the normal political price to break the
+        // promises that would otherwise keep it allied to its own embargo target forever.
+        if (relation.TradeAgreement)
+        {
+            new CancelAgreementCommand
+            {
+                IssuerId = nation.Id, TargetId = rival.Id, Kind = AgreementKind.TradeAgreement
+            }.Apply(campaign);
+            Count("trade_cancelled");
+            return true;
+        }
+        if (relation.NonAggressionPact)
+        {
+            new CancelAgreementCommand
+            {
+                IssuerId = nation.Id, TargetId = rival.Id, Kind = AgreementKind.NonAggressionPact
+            }.Apply(campaign);
+            Count("pact_broken");
+            return true;
+        }
 
         // Sanctions, if we can stand to lose the trade and they cannot. A country that runs
         // more of its economy through us than we do through it is a country we can squeeze.
@@ -275,6 +297,7 @@ public static partial class AiStatecraft
             theirDependence > ourDependence + campaign.Defines.AiEmbargoLeverage)
         {
             new SetEmbargoCommand { IssuerId = nation.Id, TargetId = rival.Id, Embargo = true }.Apply(campaign);
+            Count("embargo_started");
             return true;
         }
 
@@ -298,6 +321,7 @@ public static partial class AiStatecraft
         if (Strength(campaign, nation) < CampaignIntel.EstimatedStrength(campaign, nation.Id, rival) * 0.85f) return false;
 
         new GuaranteeCommand { IssuerId = nation.Id, TargetId = shelter.Id, Guarantee = true }.Apply(campaign);
+        Count("guarantee_issued");
         relation.LastActionDay = campaign.ElapsedDays;
         return true;
     }

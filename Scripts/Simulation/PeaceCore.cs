@@ -144,6 +144,7 @@ public static class PeaceNegotiation
     {
         if (war is null || war.Ended || !war.Involves(proposerId)) return 0f;
         if (terms == PeaceTerms.Capitulate) return 100f;
+        if (terms == PeaceTerms.WhitePeace && WarWeariness.NoContactPeaceReady(campaign, war)) return 100f;
 
         // Which side is proposing, not which country started it: in a coalition war an ally
         // proposing terms is proposing them for its whole side.
@@ -198,7 +199,7 @@ public static class PeaceNegotiation
 
         if (terms is PeaceTerms.WarReparations or PeaceTerms.TradeConcessions)
         {
-            var payer = campaign.NationById(proposerId == war.AttackerId ? war.DefenderId : war.AttackerId);
+            var payer = campaign.NationById(war.EnemyLeaderOf(proposerId));
             var receiver = campaign.NationById(proposerId);
             if (payer is not null && receiver is not null)
             {
@@ -212,7 +213,7 @@ public static class PeaceNegotiation
 
         if (terms == PeaceTerms.TradeConcessions)
         {
-            var tradeRelation = CampaignDiplomacy.Get(campaign, war.AttackerId, war.DefenderId);
+            var tradeRelation = CampaignDiplomacy.Get(campaign, proposerId, war.EnemyLeaderOf(proposerId));
             tradeRelation.TradeAgreement = true;
             OpinionSystem.Remember(campaign, tradeRelation, "trade_agreement");
         }
@@ -220,7 +221,7 @@ public static class PeaceNegotiation
         if (terms == PeaceTerms.DemilitarizedSettlement)
         {
             var winnerId = proposerId;
-            var loserId = proposerId == war.AttackerId ? war.DefenderId : war.AttackerId;
+            var loserId = war.EnemyLeaderOf(proposerId);
             foreach (var division in campaign.Armies.Where(division => division.NationId == loserId))
             {
                 division.Equipment = MathF.Min(division.Equipment, 0.45f);
@@ -239,7 +240,7 @@ public static class PeaceNegotiation
             campaign.ProvinceController is not null && campaign.ProvinceOccupation is not null)
         {
             var winnerId = terms == PeaceTerms.Capitulate
-                ? (proposerId == war.AttackerId ? war.DefenderId : war.AttackerId)
+                ? war.EnemyLeaderOf(proposerId)
                 : proposerId;
             var winner = campaign.NationById(winnerId);
             var kept = new List<int>();
@@ -307,6 +308,7 @@ public static class PeaceNegotiation
         var sideScore = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
         war.WinnerId = terms == PeaceTerms.Capitulate
             ? war.EnemyLeaderOf(proposerId)
+            : terms is PeaceTerms.WhitePeace or PeaceTerms.Ceasefire ? -1
             : sideScore > 0f ? proposerId : -1;
         war.PeaceSummary = terms switch
         {

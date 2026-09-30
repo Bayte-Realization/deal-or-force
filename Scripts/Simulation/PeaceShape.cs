@@ -10,6 +10,8 @@ public sealed partial class Defines
     public float PeaceShapeOccupiedShare { get; set; } = 0.25f;
     /// <summary>A pocket a treaty would cut off is taken with it when it has at most this share of the people the loser keeps.</summary>
     public float PeaceShapePocketShare { get; set; } = 0.3f;
+    /// <summary>Secured occupied coasts can anchor overseas settlements without a land border.</summary>
+    public bool PeaceShapeAllowCoastalBridgeheads { get; set; } = true;
 }
 
 /// <summary>
@@ -23,7 +25,7 @@ public sealed partial class Defines
 ///
 /// A treaty is written here region by region, from the winner's own border outwards: every
 /// region it asks for touches ground it already holds or has just asked for, so what it takes
-/// is one piece joined to its country. Islands, which touch nothing, may be taken anywhere.
+/// is joined to its country or to a secured occupied coastal bridgehead.
 /// Which regions it wants is what countries really say when they take land - our people live
 /// there, it was ours, it gives us the sea, it keeps them away from our capital - weighted by
 /// how much of it the army actually holds and by what it costs; and each war has one of those
@@ -48,6 +50,7 @@ public static class PeaceShape
         public readonly Dictionary<int, HashSet<int>> Next = new();
         public readonly Dictionary<int, List<int>> Provinces = new();
         public readonly HashSet<int> Coastal = new();
+        public readonly List<int> CoastalProvinces = new();
     }
 
     private static ProvinceTopology _builtFor;
@@ -75,7 +78,11 @@ public static class PeaceShape
             }
         }
         foreach (var province in SeaLanes.CoastalProvinces(topology))
-            if (province > 0 && province <= topology.ProvinceCount) regions.Coastal.Add(topology.ProvinceToState[province]);
+            if (province > 0 && province <= topology.ProvinceCount)
+            {
+                regions.Coastal.Add(topology.ProvinceToState[province]);
+                regions.CoastalProvinces.Add(province);
+            }
         _builtFor = topology;
         _builtAt = campaign.MapRevision;
         _built = regions;
@@ -85,7 +92,26 @@ public static class PeaceShape
     private static IEnumerable<int> Touching(Regions graph, int region) =>
         graph.Next.TryGetValue(region, out var next) ? next : Enumerable.Empty<int>();
 
-    private static bool Island(Regions graph, int region) => !graph.Next.TryGetValue(region, out var next) || next.Count == 0;
+    private static HashSet<int> Anchors(Campaign campaign, Regions graph, Nation winner, HashSet<int> winnerRegions)
+    {
+        var anchors = winnerRegions.SelectMany(region => Touching(graph, region)).ToHashSet();
+        if (!campaign.Defines.PeaceShapeAllowCoastalBridgeheads || campaign.ProvinceController is null ||
+            campaign.ProvinceOccupation is null) return anchors;
+        var map = campaign.ProvinceMap;
+        var occupiedCoasts = new HashSet<int>();
+        foreach (var province in graph.CoastalProvinces)
+            if (campaign.ProvinceController[province] == winner.MapIndex &&
+                campaign.ProvinceOccupation[province] >= campaign.Defines.OccupationSecureThreshold)
+                occupiedCoasts.Add(map.ProvinceToState[province]);
+        foreach (var region in occupiedCoasts)
+        {
+            if (!graph.Provinces.TryGetValue(region, out var provinces)) continue;
+            var held = provinces.Count(province => campaign.ProvinceController[province] == winner.MapIndex);
+            if (held / (float)provinces.Count >= M.Clamp01(campaign.Defines.PeaceShapeOccupiedShare))
+                anchors.Add(region);
+        }
+        return anchors;
+    }
 
     // ------------------------------------------------------------------ writing a demand ----
 
@@ -112,6 +138,7 @@ public static class PeaceShape
             StringComparer.OrdinalIgnoreCase);
         var homeland = campaign.Homelands.TryGetValue(winner.Id, out var home) ? home.ToHashSet() : new HashSet<int>();
         var winnerRegions = campaign.States.Where(state => state.NationMapIndex == winner.MapIndex).Select(state => state.MapIndex).ToHashSet();
+        var anchors = Anchors(campaign, graph, winner, winnerRegions);
         var landlocked = !winnerRegions.Any(graph.Coastal.Contains);
         var nearCapital = Touching(graph, winner.CapitalStateMapIndex).ToHashSet();
         var candidates = new Dictionary<int, float>();
@@ -157,8 +184,10 @@ public static class PeaceShape
         }
         bool Affordable() { Apply(); return ledger.Cost(demand) <= budget; }
 
-        // The war goal first, touching or not: a war fought for a region ends with that region.
-        if (war.ClaimedStateMapIndex >= 0 && candidates.ContainsKey(war.ClaimedStateMapIndex))
+        // Prefer the war goal, but a declaration alone cannot create a remote enclave.
+        // A non-adjacent goal may still be reached later through a chosen corridor.
+        if (war.ClaimedStateMapIndex >= 0 && candidates.ContainsKey(war.ClaimedStateMapIndex) &&
+            anchors.Contains(war.ClaimedStateMapIndex))
         {
             chosen.Add(war.ClaimedStateMapIndex);
             if (!Affordable()) chosen.Remove(war.ClaimedStateMapIndex);
@@ -172,8 +201,7 @@ public static class PeaceShape
             foreach (var (region, value) in candidates)
             {
                 if (chosen.Contains(region)) continue;
-                var joined = Island(graph, region) ||
-                             Touching(graph, region).Any(next => winnerRegions.Contains(next) || chosen.Contains(next));
+                var joined = anchors.Contains(region) || Touching(graph, region).Any(chosen.Contains);
                 if (!joined) continue;
                 var score = value / MathF.Pow(MathF.Max(0.01f, CostOf(region)), 0.8f);
                 if (score <= bestScore) continue;
@@ -220,6 +248,7 @@ public static class PeaceShape
         var byIndex = campaign.States.ToDictionary(state => state.MapIndex);
         var winnerRegions = campaign.States.Where(state => state.NationMapIndex == winner.MapIndex)
             .Select(state => state.MapIndex).ToHashSet();
+        var anchors = Anchors(campaign, graph, winner, winnerRegions);
         var goal = war?.ClaimedStateMapIndex ?? -1;
         float Worth(int region) => worth is not null && worth.TryGetValue(region, out var value) ? value : 0f;
 
@@ -229,8 +258,7 @@ public static class PeaceShape
 
             // Joined to the winner: reached from its own ground through what it takes.
             var reached = new HashSet<int>();
-            var queue = new Queue<int>(chosen.Where(region => Island(graph, region) || region == goal ||
-                                                              Touching(graph, region).Any(winnerRegions.Contains)));
+            var queue = new Queue<int>(chosen.Where(anchors.Contains));
             foreach (var start in queue) reached.Add(start);
             while (queue.Count > 0)
                 foreach (var next in Touching(graph, queue.Dequeue()))
@@ -251,42 +279,45 @@ public static class PeaceShape
                 var loser = campaign.Nations.Find(nation => nation.MapIndex == loserIndex);
                 var beforeParts = Parts(graph, before);
                 var afterParts = Parts(graph, after);
-                // The part that is still the country: the one with the capital, else the most people.
-                var main = afterParts.FirstOrDefault(part => loser is not null && part.Contains(loser.CapitalStateMapIndex)) ??
-                           afterParts.OrderByDescending(part => part.Sum(region => byIndex.TryGetValue(region, out var s) ? s.Population : 0L)).First();
-                var mainPeople = main.Sum(region => byIndex.TryGetValue(region, out var s) ? s.Population : 0L);
-                foreach (var part in afterParts)
+                // Preserve each old land component separately. Comparing everything to
+                // the capital's component silently allowed treaties to bisect exclaves.
+                foreach (var original in beforeParts)
                 {
-                    if (ReferenceEquals(part, main)) continue;
-                    // Already apart before the treaty - an exclave it always had - is not the treaty's doing.
-                    var wasJoined = beforeParts.Any(old => old.Overlaps(part) && old.Overlaps(main));
-                    if (!wasJoined) continue;
-                    var people = part.Sum(region => byIndex.TryGetValue(region, out var s) ? s.Population : 0L);
-                    if (people <= mainPeople * campaign.Defines.PeaceShapePocketShare)
+                    var remaining = afterParts.Where(part => part.Overlaps(original)).ToList();
+                    if (remaining.Count < 2) continue;
+                    var main = remaining.FirstOrDefault(part => loser is not null && part.Contains(loser.CapitalStateMapIndex)) ??
+                               remaining.OrderByDescending(part => part.Sum(region => byIndex.TryGetValue(region, out var s) ? s.Population : 0L)).First();
+                    var mainPeople = main.Sum(region => byIndex.TryGetValue(region, out var s) ? s.Population : 0L);
+                    foreach (var part in remaining)
                     {
-                        // A pocket: it falls with the ground around it.
-                        foreach (var region in part) chosen.Add(region);
-                        if (affordable is null || affordable())
+                        if (ReferenceEquals(part, main)) continue;
+                        var people = part.Sum(region => byIndex.TryGetValue(region, out var s) ? s.Population : 0L);
+                        if (people <= mainPeople * campaign.Defines.PeaceShapePocketShare)
                         {
-                            changed = true;
-                            continue;
+                            // A pocket: it falls with the ground around it.
+                            foreach (var region in part) chosen.Add(region);
+                            if (affordable is null || affordable())
+                            {
+                                changed = true;
+                                continue;
+                            }
+                            foreach (var region in part) chosen.Remove(region);
                         }
-                        foreach (var region in part) chosen.Remove(region);
+                        // Too big to swallow, or too dear: give back what cuts it off, least worth first.
+                        var cutters = chosen.Where(region => original.Contains(region) && region != goal && Touching(graph, region).Any(part.Contains))
+                            .OrderBy(Worth).ToList();
+                        if (cutters.Count == 0) cutters = chosen.Where(region => original.Contains(region) && Touching(graph, region).Any(part.Contains)).ToList();
+                        if (cutters.Count == 0) continue;
+                        chosen.Remove(cutters[0]);
+                        changed = true;
                     }
-                    // Too big to swallow, or too dear: give back what cuts it off, least worth first.
-                    var cutters = chosen.Where(region => region != goal && Touching(graph, region).Any(part.Contains))
-                        .OrderBy(Worth).ToList();
-                    if (cutters.Count == 0) cutters = chosen.Where(region => Touching(graph, region).Any(part.Contains)).ToList();
-                    if (cutters.Count == 0) continue;
-                    chosen.Remove(cutters[0]);
-                    changed = true;
                 }
             }
 
             // Within what the war score buys: the least worth of the regions at the edge goes first.
             while (affordable is not null && chosen.Count > 0 && !affordable())
             {
-                var leaf = chosen.Where(region => region != goal && Leaf(graph, chosen, winnerRegions, region))
+                var leaf = chosen.Where(region => region != goal && Leaf(graph, chosen, anchors, region))
                     .OrderBy(Worth).FirstOrDefault(-1);
                 if (leaf < 0) leaf = chosen.Where(region => region != goal).OrderBy(Worth).FirstOrDefault(-1);
                 if (leaf < 0) { chosen.Clear(); break; }
@@ -299,12 +330,12 @@ public static class PeaceShape
     }
 
     /// <summary>Whether giving this region back leaves the rest of what is taken still joined to the winner.</summary>
-    private static bool Leaf(Regions graph, HashSet<int> chosen, HashSet<int> winnerRegions, int region)
+    private static bool Leaf(Regions graph, HashSet<int> chosen, HashSet<int> anchors, int region)
     {
         var rest = chosen.Where(other => other != region).ToHashSet();
         if (rest.Count == 0) return true;
         var reached = new HashSet<int>();
-        var queue = new Queue<int>(rest.Where(other => Island(graph, other) || Touching(graph, other).Any(winnerRegions.Contains)));
+        var queue = new Queue<int>(rest.Where(anchors.Contains));
         foreach (var start in queue) reached.Add(start);
         while (queue.Count > 0)
             foreach (var next in Touching(graph, queue.Dequeue()))

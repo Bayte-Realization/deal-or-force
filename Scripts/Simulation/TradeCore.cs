@@ -27,6 +27,8 @@ public sealed partial class Campaign
     /// game works it out again on its first market pass rather than carrying a stale copy.
     /// </summary>
     public readonly List<TradeRoute> TradeRoutes = new();
+    // Routes are derived and not saved. -1 explicitly means attribution is unavailable.
+    public int TradeRoutesDay = -1;
 }
 
 public sealed partial class Nation
@@ -151,6 +153,7 @@ public static class TradeNetwork
 
         foreach (var commodity in CommodityCatalog.All)
             RouteOne(campaign, commodity);
+        campaign.TradeRoutesDay = campaign.ElapsedDays;
     }
 
     private static void RouteOne(Campaign campaign, Commodity commodity)

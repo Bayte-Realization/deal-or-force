@@ -15,7 +15,12 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--peace81-only")) { Peace81Tests.Run(); return; }
+        if (args.Contains("--peace-coalition-only")) { PeaceCoalitionTests.Run(); return; }
         var c = Campaign.CreateBootstrap(20260906);
+        // These isolated subsystem fixtures count steps in days, without running the
+        // world's economy/AI. Do not silently inherit the campaign's hourly UI clock.
+        c.Defines.HoursPerTick = 24;
         var rus = c.NationByTag("RUS"); var ukr = c.NationByTag("UKR");
         c.ConfigureSinglePlayer(rus.Id);
         var own = c.Armies.First(a => a.NationId == rus.Id);
@@ -59,6 +64,26 @@ static class Program
         Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
             Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
+        if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
+        if (args.Contains("--ai-diplomacy-only")) { AiDiplomacyTests.Run(c); return; }
+        if (args.Contains("--save-seed-mature-only"))
+        {
+            c.IsPaused = false;
+            for (var day = 0; day < 365; day++) c.TickDay();
+            c.IsPaused = true;
+            SaveAndSeedTests.Run(c);
+            return;
+        }
+        if (args.Contains("--save-seed-only")) { SaveAndSeedTests.Run(c); return; }
+        if (args.Contains("--quiet-war-only")) { QuietWarTests.Run(c); return; }
+        if (args.Contains("--peace-tidy-only")) { PeaceTidyTests.Run(c); return; }
+        if (args.Contains("--peace-maritime-only")) { MaritimePeaceTests.Run(c); return; }
+        if (args.Contains("--peace-real-only")) { PeaceCoalitionTests.RunReal(c); return; }
+        if (args.Contains("--movement82-only")) { Movement82Tests.Run(c); return; }
+        if (args.Contains("--ai-war-only")) { AiWarTests.Run(map); return; }
+        if (args.Contains("--backlog69-only")) { Backlog69Tests.Run(c); return; }
+        if (args.Contains("--defence-only")) { DefensivePlanTests.Run(c); return; }
+        if (args.Contains("--radicalism-only")) { RadicalismTests.Run(c); return; }
         if (args.Contains("--offensive-only")) { OffensivePlanTests.Run(c); return; }
         if (args.Contains("--pocket-only")) { PocketTests.Run(map); return; }
         if (args.Contains("--loss-only")) { LossTests.Run(map); return; }
@@ -91,15 +116,31 @@ static class Program
         var march = new MoveArmyCommand { IssuerId = rus.Id, ArmyId = own.Id, TargetProvinceId = target };
         march.Apply(c);
         Check(march.Result == ArmyMoveResult.AttackIssued, "RMB order to empty hostile province accepted");
-        for (var day = 0; day < 60 && own.ProvinceId != target; day++)
+        float hourlyCoveredProgress = 0;
+        foreach (var hours in new[] { 1, 24 })
         {
-            MilitaryOperations.Tick(c);
+            c.Defines.HoursPerTick = hours;
+            own.MoveProgress = 0;
+            own.DirectOrder = false;
             Warfare.Tick(c);
+            Check(own.ProvinceId == start && own.MoveProgress == 0,
+                $"{hours}h: defensive cover blocks an autonomous gap exploit");
+            own.DirectOrder = true;
+            Warfare.Tick(c);
+            var coveredProgress = own.MoveProgress;
+            Check(own.ProvinceId == start && coveredProgress > 0,
+                $"{hours}h: explicit order advances through cover without teleporting");
+            if (hours == 1) hourlyCoveredProgress = coveredProgress;
+            else Check(Math.Abs(coveredProgress - hourlyCoveredProgress * 24) < 0.00001f,
+                "covered advance scales with elapsed hours rather than number of ticks");
+            c.Armies.Remove(foreign);
+            own.MoveProgress = 0;
+            Warfare.Tick(c);
+            Check(own.MoveProgress > coveredProgress && own.ProvinceId == start,
+                $"{hours}h: covering force slows the same explicit order");
+            c.Armies.Add(foreign);
         }
-        Check(own.ProvinceId == start && c.ProvinceController[target] == ukr.MapIndex,
-            "strong neighboring formations cover an empty province under current zone-of-control rules");
-        // Do not turn a pathfinding regression into a demand to bypass defensive cover.
-        // The same explicit order must resume once the covering force leaves.
+        c.Defines.HoursPerTick = 24;
         c.Armies.Remove(foreign);
         for (var day = 0; day < 60 && own.ProvinceId != target; day++)
         { MilitaryOperations.Tick(c); Warfare.Tick(c); }

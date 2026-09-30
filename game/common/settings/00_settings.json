@@ -16,6 +16,14 @@
 // To hide an option rather than fork this file, give it a category the screen does not show.
 {
   // ---------------------------------------------------------------- the game itself -----
+  "save_format": {
+    "category": "game", "scope": "campaign", "order": 95, "kind": "choice",
+    "name": "Save format",
+    "description": "Text saves open in any editor: change a number, load the campaign again, carry on - and there is no checksum to argue with. Compressed saves are smaller and quicker to write, which a five-year history written every month will notice.",
+    "values": ["true", "false"],
+    "labels": ["Text (editable)", "Compressed"],
+    "default": "true"
+  },
   "autosave_interval": {
     "category": "game", "scope": "campaign", "order": 100, "kind": "choice",
     "name": "Autosave",

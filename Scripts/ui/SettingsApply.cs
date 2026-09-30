@@ -97,6 +97,11 @@ public partial class DealOrForceGame
                     _campaign.Defines.AutosaveIntervalDays = Whole("autosave_interval");
                 break;
 
+            case "save_format":
+                if (_campaign is not null)
+                    _campaign.Defines.SaveTextFormat = SettingsCatalog.Chosen("save_format") != "false";
+                break;
+
             case "hours_per_tick":
                 if (_campaign is not null)
                     _campaign.Defines.HoursPerTick = Math.Clamp(Whole("hours_per_tick"), 1, 240);
@@ -138,6 +143,7 @@ public partial class DealOrForceGame
             case "region_names":
                 if (_globe is not null) _globe.CountryLabelsEnabled = SettingsCatalog.Flag("region_names");
                 break;
+
 
             case "movement_flags":
                 // Every flag is asked for afresh on the next refresh, so the top bar, the

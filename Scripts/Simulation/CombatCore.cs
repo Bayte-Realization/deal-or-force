@@ -38,6 +38,10 @@ public sealed class LandBattle
     public int AttackerReinforcements;
     public int DefenderReinforcements;
     public float RiverCrossingStrength;
+    /// <summary>What each side's long-range forces - guns, aircraft, drones - contributed
+    /// to this battle, in raw reach points. Written each round; shown in the report.</summary>
+    public float AttackerSupport;
+    public float DefenderSupport;
     public readonly List<int> Attackers = new();
     public readonly List<int> Defenders = new();
     public readonly List<Round> Rounds = new();
@@ -675,28 +679,40 @@ public static partial class Warfare
             // attack survives a counter-attack it would not survive on defence, and a
             // dug-in division survives an assault it could never have launched.
             // ----------------------------------------------------------------------
+            // The long-range forces over the ground: artillery, attack aircraft, drones,
+            // the sweep overhead. Reaches the battle from bases within range, saturating,
+            // and the enemy's sky and missile brigades take their cut of whatever the
+            // other side managed to contribute - a wing over a defended front pays first.
+            var attackerNations = new HashSet<int>(attacking.Select(army => army.NationId));
+            var defenderNations = new HashSet<int>(defending.Select(army => army.NationId));
+            var (attackerFire, defenderFire, defenderStripped, attackerStripped,
+                    attackerSupportShown, defenderSupportShown) =
+                SupportCore.Engagement(campaign, battle.ProvinceId, attackerNations, defenderNations);
+            battle.AttackerSupport = attackerSupportShown;
+            battle.DefenderSupport = defenderSupportShown;
+
             var attackerOffence = attacking.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, defenderHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack")) *
                 attackerEngagement * attackerPierces * riverAttackMultiplier * terrain.Attack *
-                (1f + attackerPlanning * defines.MaxPlanningAttackBonus);
+                (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * attackerFire;
 
             var defenderOffence = defending.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, attackerHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack")) *
-                defenderEngagement * defenderPierces * defines.DefenderCounterFire;
+                defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire;
 
             var dugIn = defending.Average(army => army.Entrenchment);
             var defenderProtection = defending.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
                     MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
                 defenderEngagement * defines.DefenderAdvantage * terrain.Defense *
-                (1f + dugIn * defines.EntrenchmentBonus);
+                (1f + dugIn * defines.EntrenchmentBonus) * defenderStripped;
 
             var attackerProtection = attacking.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
                     MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
-                attackerEngagement;
+                attackerEngagement * attackerStripped;
 
             var pressureOnDefender = M.Clamp(attackerOffence / M.Max(0.01f, defenderProtection), 0.05f, 14f);
             var pressureOnAttacker = M.Clamp(defenderOffence / M.Max(0.01f, attackerProtection), 0.05f, 14f);

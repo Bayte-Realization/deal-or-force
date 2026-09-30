@@ -60,7 +60,8 @@ public static class MovementActions
         var definition = Movements.DefinitionOf(nation);
         if (definition is null) yield break;
         foreach (var kind in Kinds)
-            if (kind.Trait is null || definition.Has(kind.Trait)) yield return kind;
+            if ((kind.Trait is null || definition.Has(kind.Trait)) &&
+                (kind.Id != "rise" || definition.CanStageUprising)) yield return kind;
     }
 
     /// <summary>What it costs now, in billions.</summary>
@@ -125,6 +126,8 @@ public static class MovementActions
         var kind = Of(action);
         if (state is null || definition is null || kind is null) return Loc.Get("Only a movement can do this.");
         if (state.Dissolved) return Loc.Get("The movement is no more.");
+        if (action == "rise" && !definition.CanStageUprising)
+            return Loc.Get("This company takes contracts, not territory.");
         if (kind.Trait is not null && !definition.Has(kind.Trait)) return Loc.Get("This movement does not do that.");
         var defines = campaign.Defines;
         var region = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);

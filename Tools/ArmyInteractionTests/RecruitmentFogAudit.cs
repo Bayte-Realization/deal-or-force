@@ -79,18 +79,33 @@ static class RecruitmentFogAudit
         c.SetProvinceController(target,(ushort)ukr.MapIndex);
         foreach(var p in map.Neighbors[target]) c.SetProvinceController(p,(ushort)rus.MapIndex);
         capture.Invoke(null,new object[]{c,war,target,rus.Id,new[]{own},new[]{enemy},"retreat-audit"});
-        Check(enemy.ProvinceId==target && c.ProvinceController[target]==rus.MapIndex,"AUDIT reproduces trapped loser remaining on lost province (known defect, NOT fixed)");
+        Check(!c.Armies.Contains(enemy) && c.ProvinceController[target]==rus.MapIndex,
+            "trapped defeated division is removed instead of remaining on captured ground");
         var fallback=map.Neighbors[target].First(p=>!map.IsWater(p) && map.Neighbors[p].Any(n=>n!=target && !map.IsWater(n)));
         var next=map.Neighbors[fallback].First(n=>n!=target && !map.IsWater(n));
         c.SetProvinceController(target,(ushort)ukr.MapIndex);
         c.SetProvinceController(fallback,(ushort)ukr.MapIndex);
         c.SetProvinceController(next,(ushort)ukr.MapIndex);
         own.ProvinceId=start;
+        // A fresh defender: the preceding one was destroyed, not a reusable survivor.
+        enemy=new Army{Id=99002,NationId=ukr.Id,ProvinceId=target,Divisions=1,
+            Strength=1,Organisation=1,SupplyLevel=1,BattleId=-1,ReadyDay=0};
+        c.Armies.Add(enemy);
         capture.Invoke(null,new object[]{c,war,target,rus.Id,new[]{own},new[]{enemy},"retreat-audit"});
         Check(enemy.ProvinceId==fallback && enemy.ReadyDay>c.ElapsedDays && enemy.Route.Count==0,"normal defeat relocates to friendly neighbor and sets recovery deadline");
         enemy.OrderKind=ArmyOrder.Manual;enemy.AssignedWarId=-1;enemy.BattleId=-1;enemy.SupplyLevel=1;
         new MoveArmyCommand{IssuerId=ukr.Id,ArmyId=enemy.Id,TargetProvinceId=next}.Apply(c);
         MilitaryOperations.Tick(c);
-        Check(enemy.MoveProgress>0 || enemy.ProvinceId==next,"AUDIT reproduces friendly movement during retreat recovery (known discrepancy, NOT fixed)");
+        Check(enemy.MoveProgress>0 || enemy.ProvinceId==next,
+            "recovering division may continue marching through friendly territory");
+        new HaltArmyCommand{IssuerId=ukr.Id,ArmyId=enemy.Id}.Apply(c);
+        enemy.ProvinceId=fallback;
+        var counterattack=new MoveArmyCommand{IssuerId=ukr.Id,ArmyId=enemy.Id,TargetProvinceId=target};
+        counterattack.Apply(c);
+        Check(counterattack.Result==ArmyMoveResult.AttackIssued && enemy.ReadyDay>c.ElapsedDays,
+            "counterattack can be queued without cancelling retreat recovery");
+        Warfare.Tick(c);
+        Check(enemy.ProvinceId==fallback && enemy.MoveProgress==0 && !enemy.InBattle &&
+            !c.Battles.Any(b=>!b.Ended), "retreat recovery prevents an immediate counterattack");
     }
 }

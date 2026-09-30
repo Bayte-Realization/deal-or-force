@@ -1,0 +1,8 @@
+{
+  // The 2024 kingdom is traditionalist. The Hejaz artwork previously bound by
+  // this filename is not its national flag. Keep the sprite id compatible with
+  // saves/mod references, but resolve it to the existing Saudi national artwork.
+  "sprites": {
+    "flag_sau_traditionalism": { "texture": "res://game/gfx/flags/flag_sau.png" }
+  }
+}

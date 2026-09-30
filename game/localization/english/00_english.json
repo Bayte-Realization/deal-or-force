@@ -846,5 +846,8 @@
   "Brush": "Brush",
   "Frame": "Frame",
   "Paint province by province: the left button takes, the right gives back.": "Paint province by province: the left button takes, the right gives back.",
-  "Drag a rectangle: the left button takes everything inside it, the right gives it all back.": "Drag a rectangle: the left button takes everything inside it, the right gives it all back."
+  "Drag a rectangle: the left button takes everything inside it, the right gives it all back.": "Drag a rectangle: the left button takes everything inside it, the right gives it all back.",
+  "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.": "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.",
+  "PAN": "PAN",
+  "RANGE": "RANGE"
 }

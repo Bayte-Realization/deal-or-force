@@ -227,6 +227,7 @@ public sealed class TakeDecisionCommand : ICampaignCommand
         var item = definition.Value;
         nation.Treasury -= DecisionCatalog.Cost(nation, item);
         nation.DecisionAvailableDay[item.Id] = campaign.ElapsedDays + item.CooldownDays;
+        campaign.Chronicle.Record(campaign, "decision_taken", nation.Id, subject: item.Name, isPublic: false);
         switch (item.Kind)
         {
             case DecisionKind.EconomicStimulus:

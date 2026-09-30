@@ -179,8 +179,11 @@ public partial class DealOrForceGame
         {
             var enemyId = battle.AttackerId == player.Id ? battle.DefenderId : battle.AttackerId;
             var enemy = _campaign.NationById(enemyId);
-            AddOutlinerButton(Simulation.Loc.Format("⚔ province {0:N0} · {1}",
-                    battle.ProvinceId, enemy?.Tag ?? "?"),
+            // Where the fight is, in words: a province number is a coordinate, and the
+            // region it belongs to is the name the player actually knows the place by -
+            // the same words the war dossier and the map tooltip use for it.
+            AddOutlinerButton(Simulation.Loc.Format("⚔ {0} · {1}",
+                    StateNameOfProvince(battle.ProvinceId), enemy?.Tag ?? "?"),
                 () => ShowBattleDetails(battle), "Open the battle report and focus the engagement.");
         }
 
@@ -538,6 +541,11 @@ public partial class DealOrForceGame
                 : "") +
             Simulation.Loc.Format("Committed formations: {0:N0}/{1:N0}",
                 battle.Attackers.Count, battle.Defenders.Count) + "\n" +
+            // What the guns and aircraft over this ground added, when any of them did.
+            (battle.AttackerSupport > 0f || battle.DefenderSupport > 0f
+                ? Simulation.Loc.Format("Long-range fire: {0:0.#}/{1:0.#}",
+                    battle.AttackerSupport, battle.DefenderSupport) + "\n"
+                : "") +
             Simulation.Loc.Format("Attacker: {0}",
                 attackerTypes.Length == 0 ? Tr("none") : attackerTypes) + "\n" +
             Simulation.Loc.Format("Defender: {0}",

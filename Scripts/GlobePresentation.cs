@@ -126,6 +126,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private readonly Dictionary<(int Nation, string Template), Texture2D> _armyCounterTextures = new();
     private readonly List<(Node3D Node, Vector3 Normal, int Cells)> _countryLabels = new();
     private readonly List<(Label3D Node, float Latitude, float Longitude, Basis SurfaceBasis, float FlatRotation)> _countryGlyphs = new();
+    private readonly Dictionary<int, Node3D> _countryLabelGroups = new();
     private SubViewport _viewport = null!;
     private Camera3D _camera = null!;
     private Node3D _orbit = null!;
@@ -212,6 +213,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public bool CountrySelectionOnly { get; set; }
     public event Action<Simulation.Army> ArmyPicked;
     public event Action<Simulation.Fleet> FleetPicked;
+    public event Action<Simulation.SupportFormation> SupportPicked;
     public event Action<Simulation.LandBattle> BattlePicked;
     public event Action<IReadOnlyList<Simulation.Army>> ArmiesBoxPicked;
     public event Action<GlobePick> ProvinceCommanded;
@@ -261,6 +263,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     public void SetPlanPreview(IEnumerable<int> provinces, int kind)
     {
+        _defensivePreview.Clear();
         _objectivePreview.Clear(); _departurePreview.Clear();
         _planPreviewForeignId = -1;
         _planPreview.Clear();
@@ -271,6 +274,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public void SetBorderPlanPreview(IEnumerable<int> provinces, int foreignId)
     {
+        _defensivePreview.Clear();
         _planPreview.Clear();
         _planPreview.UnionWith(provinces);
         _planPreviewKind = 0;
@@ -280,6 +284,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public void ClearPlanPreview()
     {
+        _defensivePreview.Clear();
         _objectivePreview.Clear(); _departurePreview.Clear();
         _planPreviewForeignId = -1;
         if (_planPreview.Count == 0) return;
@@ -446,6 +451,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             "res://game/gfx/globe/globe_division_marker.png"));
         _fleetRoot = new Node3D { Name = "FleetMarkers" };
         world.AddChild(_fleetRoot);
+        CreateSupportPresentation(world);
         BuildMovementLayer(world);
         _fleetTexture = CreateFleetMarkerTexture();
         CreateMilitaryOverlays(world);
@@ -508,6 +514,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (MilitaryMarkersEnabled)
             using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
         UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && ViewDistance <= 13.5f);
+        UpdateSupportPresentation(delta);
         if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
@@ -865,6 +872,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _counterScale = 1f;
     private float _counterWorldPixel;
     public bool MilitaryMarkersEnabled { get; set; } = true;
+    private bool _showcasePan;
+    public bool ShowcasePan => _showcasePan;
+
+    public void SetShowcasePan(bool enabled) => _showcasePan = enabled;
 
     private bool _mapSmoothing = Simulation.PlayerSettings.Bool("map_smoothing", true);
 
@@ -979,6 +990,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (plate.GetChildOrNull<Sprite3D>(0) is { } glow) glow.PixelSize = plate.PixelSize;
             count.PixelSize = FleetTextPixelSize * _counterScale;
         }
+        foreach (var marker in _supportMapMarkers.Values)
+            if (IsInstanceValid(marker.Node)) PlaceSupportMarker(marker);
     }
 
     private bool TryPickArmyStack(Vector2 pixel, out IReadOnlyList<Simulation.Army> armies, bool selectableOnly = true)
@@ -1133,6 +1146,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             if (line.NationId != _campaign.Player?.Id) continue;
             Simulation.BorderFronts.Refresh(_campaign, line);
+            if (line.Kind == Simulation.FrontLineKind.Fallback)
+            {
+                DrawDefensiveGeometry(line.DefensiveSequence.Count > 0 ? line.DefensiveSequence : line.Provinces.OrderBy(p => p).ToList(), line.NationId, false);
+                continue;
+            }
             if (line.Kind == Simulation.FrontLineKind.Offensive && line.ObjectiveSequence.Count > 0)
             {
                 foreach (var p in line.SourceProvinces)
@@ -1154,7 +1172,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
             }
         }
         if (_objectivePreview.Count > 0) DrawOffensiveGeometry(_objectivePreview, _departurePreview, true);
-        if (_planPreview.Count > 0 && _objectivePreview.Count == 0)
+        if (_defensivePreview.Count > 0) DrawDefensiveGeometry(_defensivePreview, _campaign.Player.Id, true);
+        if (_planPreview.Count > 0 && _objectivePreview.Count == 0 && _defensivePreview.Count == 0)
         {
             var code = (byte)(Mathf.Clamp(_planPreviewKind + 1, 1, 3) * 64);
             foreach (var province in _planPreview)
@@ -1347,6 +1366,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         }
                         else if (TryPickBattle(button.Position, out var battle)) BattlePicked?.Invoke(battle);
                         else if (TryPickFleet(button.Position, out var fleet)) FleetPicked?.Invoke(fleet);
+                        else if (TryPickSupport(button.Position, out var support)) SupportPicked?.Invoke(support);
                         else if (TryPickArmyStack(button.Position, out var stack))
                         {
                             if (stack.Count == 1) ArmyPicked?.Invoke(stack[0]);
@@ -2338,6 +2358,15 @@ void fragment() {
     /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
     private void UpdateOrbitCamera(double delta)
     {
+        if (_showcasePan)
+        {
+            // A complete, level orbit takes roughly 90 seconds in either projection.
+            // This moves the camera's target, never the world's geographic coordinates;
+            // country labels, unit counters and borders continue to agree with the map.
+            const float radiansPerSecond = 0.07f;
+            if (_flatMap) _targetFlatX += FlatMapWidth * radiansPerSecond / Mathf.Tau * (float)delta;
+            else _targetYaw += radiansPerSecond * (float)delta;
+        }
         var weight = 1f - Mathf.Pow(0.0008f, (float)delta);
         _yaw = Mathf.LerpAngle(_yaw, _targetYaw, weight);
         _pitch = Mathf.Lerp(_pitch, _targetPitch, weight);
@@ -3502,9 +3531,9 @@ void fragment() {
         if (!IsInstanceValid(_countryLabelRoot)) return;
         _lastLabelAnchors = anchors;
         _lastLabelNames.Clear();
-        foreach (var child in _countryLabelRoot.GetChildren()) child.QueueFree();
         _countryLabels.Clear();
         _countryGlyphs.Clear();
+        var activeGroups = new HashSet<int>();
 
         var countryFont = PresentationFonts.For("map.countries");
 
@@ -3516,8 +3545,18 @@ void fragment() {
             var text = nation.MapName.ToUpperInvariant();
             _lastLabelNames[mapIndex] = nation.MapName;
             if (text.Length == 0) continue;
-            var group = new Node3D { Name = $"CountryLabel_{nation.Tag}" };
-            _countryLabelRoot.AddChild(group);
+            // Retain the glyph instances when names or borders change. Replacing every
+            // Label3D at once overlaps old/new GPU resources with resized render targets,
+            // which can exhaust D3D12's descriptor heap during a language/window switch.
+            if (!_countryLabelGroups.TryGetValue(mapIndex, out var group) || !IsInstanceValid(group))
+            {
+                group = new Node3D { Name = $"CountryLabel_{nation.Tag}", Visible = false };
+                _countryLabelRoot.AddChild(group);
+                _countryLabelGroups[mapIndex] = group;
+            }
+            activeGroups.Add(mapIndex);
+            var existingGlyphs = group.GetChildren().OfType<Label3D>().ToArray();
+            var usedGlyphs = 0;
 
             // One letter at a time, along the chord.
             //
@@ -3651,32 +3690,46 @@ void fragment() {
                 var up = normal.Cross(baseline).Normalized();
                 var surfaceBasis = new Basis(baseline, up, normal).Orthonormalized();
 
-                var glyph = new Label3D
-                {
-                    Name = $"Glyph{index}",
-                    Text = character.ToString(),
-                    FontSize = fontSize,
-                    Font = countryFont,
-                    PixelSize = pixelSize,
-                    FixedSize = false,
-                    Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    OutlineSize = outline,
-                    Modulate = new Color(0.93f, 0.94f, 0.96f, 0.88f),
-                    OutlineModulate = new Color(0.02f, 0.032f, 0.048f, 0.92f),
-                    NoDepthTest = false,
-                    Position = SurfacePoint(latitude, longitude, SurfaceTextRadius),
-                    Basis = surfaceBasis,
-                    CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
-                };
-                group.AddChild(glyph);
+                var glyph = usedGlyphs < existingGlyphs.Length ? existingGlyphs[usedGlyphs]
+                    : new Label3D { Name = $"Glyph{usedGlyphs}" };
+                usedGlyphs++;
+                glyph.Text = character.ToString();
+                glyph.FontSize = fontSize;
+                glyph.Font = countryFont;
+                glyph.PixelSize = pixelSize;
+                glyph.FixedSize = false;
+                glyph.Billboard = BaseMaterial3D.BillboardModeEnum.Disabled;
+                glyph.HorizontalAlignment = HorizontalAlignment.Center;
+                glyph.VerticalAlignment = VerticalAlignment.Center;
+                glyph.OutlineSize = outline;
+                glyph.Modulate = new Color(0.93f, 0.94f, 0.96f, 0.88f);
+                glyph.OutlineModulate = new Color(0.02f, 0.032f, 0.048f, 0.92f);
+                glyph.NoDepthTest = false;
+                glyph.Position = SurfacePoint(latitude, longitude, SurfaceTextRadius);
+                glyph.Basis = surfaceBasis;
+                glyph.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+                if (glyph.GetParent() is null) group.AddChild(glyph);
                 _countryGlyphs.Add((glyph, latitude, longitude, surfaceBasis, flatRotation));
+            }
+            for (var index = usedGlyphs; index < existingGlyphs.Length; index++)
+            {
+                group.RemoveChild(existingGlyphs[index]);
+                existingGlyphs[index].QueueFree();
             }
 
             var center = SurfacePoint(centreLatitude, centreLongitude, SurfaceTextRadius);
             _countryLabels.Add((group, center.Normalized(), anchor.Cells));
         }
+        foreach (var id in _countryLabelGroups.Keys.Where(id => !activeGroups.Contains(id)).ToArray())
+        {
+            var group = _countryLabelGroups[id];
+            if (IsInstanceValid(group)) { _countryLabelRoot.RemoveChild(group); group.QueueFree(); }
+            _countryLabelGroups.Remove(id);
+        }
+        // Refreshes may run after this frame's normal visibility/projection pass.
+        // Never briefly render every country, or globe-space glyphs on the flat map.
+        if (_flatMap) UpdateFlatWorldPositions();
+        UpdateCountryLabelVisibility();
     }
 
     /// <summary>A map column, wrapped round the date line.</summary>

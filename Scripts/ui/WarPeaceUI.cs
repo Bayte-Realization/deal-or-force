@@ -6,6 +6,29 @@ namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
+    // Involvement alone includes allies on our own side: only opponents can negotiate here.
+    private StrategicWar DiplomaticPeaceWar(Nation target) => _campaign?.Player is null || target is null
+        ? null
+        : _campaign.Wars.FirstOrDefault(war => !war.Ended && war.Opposes(_campaign.Player.Id, target.Id));
+
+    private void RefreshDiplomaticPeaceButton(Button button, Nation target)
+    {
+        var war = DiplomaticPeaceWar(target);
+        button.Visible = war is not null;
+        button.TooltipText = war is null ? "" : Ui.Tip(Loc.Format(
+            "Open negotiations for {0}. Review the terms before proposing peace; opening this window does not end the war.", war.Name));
+    }
+
+    private void OpenDiplomaticPeace(Nation target)
+    {
+        var war = DiplomaticPeaceWar(target);
+        if (war is null) return;
+        CloseDiplomacyScreen();
+        HideMapSelection(false);
+        OpenPeaceConference(war);
+        _peaceLayer.MoveToFront();
+    }
+
     /// <summary>
     /// The war a shortcut means when the player has not named one. Fine while there is a
     /// single war; the war ledger names the war it is settling, which is why the fixed

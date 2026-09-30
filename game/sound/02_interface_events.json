@@ -90,6 +90,25 @@
       "channel": "interface",
       "volume_db": 0,
       "cooldown_ms": 500
+    },
+    "support_order": {
+      "file": "audio/interface/support_order.wav",
+      "channel": "interface",
+      "volume_db": -3,
+      "cooldown_ms": 300
+    },
+    "support_mission": {
+      "file": "audio/interface/support_mission.wav",
+      "channel": "interface",
+      "volume_db": -5,
+      "cooldown_ms": 180
+    },
+    "support_ready": {
+      "file": "audio/interface/support_ready.wav",
+      "channel": "notification",
+      "volume_db": -4,
+      "cooldown_ms": 2000,
+      "yields_to_anything_playing": true
     }
   }
 }

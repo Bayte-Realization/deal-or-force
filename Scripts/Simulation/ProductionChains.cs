@@ -402,7 +402,7 @@ public static class ProductionChains
     /// products over that table, which is the same arithmetic the compiled version did in
     /// the same order, through one level of indirection.
     /// </summary>
-    public static void RunRegion(Nation nation, ScenarioState state, float outputFactor)
+    public static void RunRegion(Nation nation, ScenarioState state, float outputFactor, ProductionAllocation allocation = null)
     {
         if (Regional.Count == 0) return;
         var slots = Slots;
@@ -420,6 +420,26 @@ public static class ProductionChains
         foreach (var commodity in UsedDeposits)
             slots[DepositSlot(commodity)] = state.ResourceDeposits.GetValueOrDefault(commodity);
 
+        // ---- the government's hand on the economy -----------------------------------------
+        //
+        // War industry conversion: a share of the civilian industry counted above is
+        // re-counted as arms industry, at the conversion efficiency the programme
+        // declares. What is converted stops contributing to the recipes it used to and
+        // starts contributing to the ones an arms plant feeds, which is the entire trade
+        // in one move: the same week's clearing shows the arms rising and the consumer
+        // goods falling, and nobody has to be told the country is on a war footing.
+        //
+        // The national market pass computes one allocation and shares it across regions.
+        // Distribute converted capacity proportionally; never round once per province.
+        allocation ??= ProductionProgramme.Allocate(new[] { state }, nation);
+        if (allocation.Converted > 0 && allocation.RawCivilian > 0)
+        {
+            var civilian = slots[StaffedSlot(BuildingKind.CivilianIndustry)];
+            slots[StaffedSlot(BuildingKind.CivilianIndustry)] = civilian * (1f - allocation.Converted / (float)allocation.RawCivilian);
+            slots[StaffedSlot(BuildingKind.ArmsIndustry)] +=
+                civilian * (allocation.ConvertedMilitary / (float)allocation.RawCivilian);
+        }
+
         // Read straight from the region rather than from the table, because the two
         // compound factors below are built out of them whether or not any recipe named them.
         var infrastructure = (float)state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure);
@@ -430,7 +450,7 @@ public static class ProductionChains
             0.55f + state.Buildings.GetValueOrDefault(BuildingKind.Agriculture) * outputFactor * 0.06f +
             extraction * 0.20f;
 
-        Run(Regional, nation, slots);
+        state.RegionalOutputValue = Run(Regional, nation, slots, allocation);
     }
 
     /// <summary>What a country as a whole makes and spends, once, after its regions.</summary>
@@ -448,11 +468,30 @@ public static class ProductionChains
         Run(National, nation, slots);
     }
 
-    private static void Run(List<Recipe> recipes, Nation nation, float[] slots)
+    private static float Run(List<Recipe> recipes, Nation nation, float[] slots, ProductionAllocation allocation = null)
     {
+        // Production lines, worked out here because this is the one place every recipe of a
+        // pass goes through. A line scales its pool's factory term of its own good's
+        // recipes; a good with no line scales by what the lines have left; a country with
+        // no lines at all skips the whole step and runs exactly as it always did. The
+        // national pass never applies lines - the recipes there are a country's upkeep and
+        // its construction bill, not its industry.
+        var applyLines = allocation is not null && nation.ProductionLines.Count > 0;
+        var civilianSlot = StaffedSlot(BuildingKind.CivilianIndustry);
+        var civilianBase = applyLines ? slots[civilianSlot] : 0f;
+        var militarySlot = StaffedSlot(BuildingKind.ArmsIndustry);
+        var militaryBase = applyLines ? slots[militarySlot] : 0f;
+        var grossValue = 0f;
+
         foreach (var recipe in recipes)
         {
             if (!nation.Market.TryGetValue(recipe.Good, out var quote)) continue;
+
+            if (applyLines)
+            {
+                slots[civilianSlot] = civilianBase * allocation.Fraction(recipe.Good, ProductionPool.Civilian);
+                slots[militarySlot] = militaryBase * allocation.Fraction(recipe.Good, ProductionPool.Military);
+            }
 
             if (recipe.Output.Length > 0)
             {
@@ -463,11 +502,20 @@ public static class ProductionChains
                 // below zero; anything else may not, because a factory does not un-make
                 // things when it is short of coal.
                 quote.Production += recipe.Shortfall.Length > 0 ? output : MathF.Max(0f, output);
+                grossValue += (recipe.Shortfall.Length > 0 ? output : MathF.Max(0f, output)) * MathF.Max(0f, quote.Price);
             }
 
+            if (applyLines)
+            {
+                slots[civilianSlot] = civilianBase;
+                slots[militarySlot] = militaryBase;
+            }
+            // Input recipes describe all working factories, not a production line for
+            // that input. Assigning machinery must not erase their coal/iron demand.
             if (recipe.Demand.Length > 0)
                 quote.Demand += MathF.Max(0f, recipe.Sum(recipe.Demand, slots));
         }
+        return MathF.Max(0f, grossValue);
     }
 
     /// <summary>

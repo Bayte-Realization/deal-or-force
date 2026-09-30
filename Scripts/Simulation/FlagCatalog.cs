@@ -244,7 +244,9 @@ public static class FlagCatalog
                         if (id.Length > 0 && !chain.Contains(id, StringComparer.OrdinalIgnoreCase))
                             chain.Add(id);
                     }
-                    if (chain.Count > 0) table[Slug(entry.Name)] = chain;
+                    // An explicit empty list removes inherited aliases. Otherwise a mod
+                    // cannot stop socialism borrowing a communist flag, for example.
+                    table[Slug(entry.Name)] = chain;
                 }
             }
 
@@ -285,7 +287,10 @@ public static class FlagCatalog
                     var accepted = string.Join(AnyOf, values.Select(Slug).Where(value => value.Length > 0));
                     if (accepted.Length > 0) conditions.Add((field.Name, accepted));
                 }
-                if (conditions.Count > 0) Native[Slug(entry.Name)] = conditions.ToArray();
+                // An explicit empty object removes the base regime restriction. Clear the
+                // inherited alternative as well unless this declaration supplies its own.
+                Native[Slug(entry.Name)] = conditions.ToArray();
+                if (!entry.Value.TryGetProperty("otherwise", out _)) Otherwise.Remove(Slug(entry.Name));
             }
 
         ReadFamilies(root, "identities", Identities, errors);

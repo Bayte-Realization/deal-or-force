@@ -1,0 +1,21 @@
+{
+  "metrics": { "map_controls.active_label": 1 },
+  "campaign": {
+    "icons": {
+      "hud.TREASURY": "treasury",
+      "hud.BALANCE": "balance",
+      "hud.GDP": "gdp",
+      "hud.INFLATION": "inflation",
+      "hud.POPULATION": "population",
+      "hud.STABILITY": "stability",
+      "hud.MANPOWER": "manpower",
+      "map.Political": "nation",
+      "map.Diplomatic": "diplomacy",
+      "map.Wars": "wars",
+      "map.Population": "population",
+      "map.Economy": "gdp",
+      "map.Terrain": "terrain",
+      "map.Relief": "relief"
+    }
+  }
+}

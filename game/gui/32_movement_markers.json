@@ -1,0 +1,5 @@
+{
+  // Art fits completely inside the HQ medallion. Radius is measured in its
+  // 128px source canvas; the renderer clamps it to 16..48 to protect the ring.
+  "metrics": { "movement_marker.art_radius": 46 }
+}

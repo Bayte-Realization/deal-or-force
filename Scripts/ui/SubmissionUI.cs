@@ -13,17 +13,15 @@ namespace DealOrForce;
 /// </summary>
 public partial class DealOrForceGame
 {
-    private HFlowContainer _submissionActions = null!;
+    private VBoxContainer _submissionActions = null!;
     private readonly Dictionary<SubmissionRoute, Button> _submissionButtons = new();
 
     private void BuildSubmissionControls(VBoxContainer parent)
     {
-        // A flow rather than a row: the three captions do not fit one line in every language,
-        // and a clipped "Back a governme" is a button nobody can read.
-        _submissionActions = new HFlowContainer { Visible = false };
-        _submissionActions.AddThemeConstantOverride("h_separation", 5);
-        _submissionActions.AddThemeConstantOverride("v_separation", 5);
+        _submissionActions = new VBoxContainer { Name = "InfluenceActions", Visible = false };
+        _submissionActions.AddThemeConstantOverride("separation", 5);
         parent.AddChild(_submissionActions);
+        _submissionActions.AddChild(Title("Influence and protection", 12, Ui.Colour("text.caption")));
         foreach (var (route, caption) in new[]
                  {
                      (SubmissionRoute.Protection, "Offer protection"),
@@ -39,6 +37,10 @@ public partial class DealOrForceGame
     }
 
     private void RefreshSubmissionButtons(Nation nation)
+        => RefreshSubmissionButtons(nation, _submissionActions, _submissionButtons);
+
+    private void RefreshSubmissionButtons(Nation nation, VBoxContainer _submissionActions,
+        Dictionary<SubmissionRoute, Button> _submissionButtons)
     {
         if (_submissionActions is null) return;
         var player = _campaign?.Player;
@@ -85,14 +87,17 @@ public partial class DealOrForceGame
     }
 
     private void OfferSubmission(SubmissionRoute route)
+        => OfferSubmission(route, _selectedNation, _countryActionFeedback);
+
+    private void OfferSubmission(SubmissionRoute route, Nation target, Label feedback)
     {
-        if (!ValidForeignSelection()) return;
+        if (_campaign?.Player is null || target is null || target == _campaign.Player) return;
         var command = new OfferSubmissionCommand
-            { IssuerId = _campaign.Player.Id, TargetId = _selectedNation.Id, Route = route };
+            { IssuerId = _campaign.Player.Id, TargetId = target.Id, Route = route };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         var answer = command.Answer;
-        RefreshCountryViews("Diplomacy");
-        _countryActionFeedback.Text = answer;
+        RefreshDiplomaticActionViews();
+        feedback.Text = answer;
     }
 }

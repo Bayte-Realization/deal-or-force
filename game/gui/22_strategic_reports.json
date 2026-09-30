@@ -1,0 +1,14 @@
+{
+  "campaign": {
+    "screens": {
+      "Ledger": {
+        "tabs": [
+          {"id":"Overview"}, {"id":"Economy"}, {"id":"Market"},
+          {"id":"Population"}, {"id":"Military"}, {"id":"Rankings"},
+          {"id":"Chronicle"}, {"id":"Vulnerabilities"}
+        ]
+      }
+    }
+  },
+  "metrics": {"chronicle.page_size":30, "exposure.suppliers_shown":4}
+}

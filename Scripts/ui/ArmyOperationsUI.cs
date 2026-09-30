@@ -720,8 +720,10 @@ public partial class DealOrForceGame
         _selectedProvinceId = _selectedArmy.ProvinceId;
         _selectedNation = _campaign.NationById(_selectedArmy.NationId);
         if (_selectedState is null || _selectedNation is null) return;
-        _armyOrders.Visible = false;
-        ShowRegionOverview();
+        // This is an inspector shortcut, not an army order. The dossier lives in the
+        // generic side panel, so hand the corner over to it instead of hiding the
+        // command tabs inside a still-visible army panel (which left a blank deck).
+        OpenSelectedRegionDossier();
     }
 
     /// <summary>How tightly a plan is allowed to shuffle its divisions, in words.</summary>

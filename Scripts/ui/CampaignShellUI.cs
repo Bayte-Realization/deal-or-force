@@ -48,6 +48,11 @@ public partial class DealOrForceGame
             "State Affairs" => _stateAffairsLayer?.Visible == true,
             "Ledger" => _ledgerLayer?.Visible == true,
             "Wars" => _warLedgerLayer?.Visible == true,
+            "Diplomacy" => _diplomacyLayer?.Visible == true,
+            "Trade" => _tradeScreenLayer?.Visible == true,
+            "Production" => _productionLayer?.Visible == true,
+            "Support" => _supportLayer?.Visible == true,
+            "Research" => _researchLayer?.Visible == true,
             _ => _sidePanel?.Visible == true && _openScreen == screen
         };
         if (!open)
@@ -59,6 +64,11 @@ public partial class DealOrForceGame
         if (screen == "State Affairs") CloseStateAffairs();
         else if (screen == "Ledger") _ledgerLayer.Visible = false;
         else if (screen == "Wars") _warLedgerLayer.Visible = false;
+        else if (screen == "Diplomacy") CloseDiplomacyScreen();
+        else if (screen == "Trade") CloseTradeScreen();
+        else if (screen == "Production") CloseProductionScreen();
+        else if (screen == "Support") CloseSupportScreen();
+        else if (screen == "Research") CloseResearchScreen();
         else CloseSidePanel();
         UpdateScreenButtons();
     }

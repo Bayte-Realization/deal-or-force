@@ -7,12 +7,24 @@
 // a tenth and four times the baseline), times (1 + research_speed from technologies). The United
 // States makes about eight points a week and Mongolia about half of one.
 //
-// A technology costs its cost times (1 - ResearchDiffusion * the share of the world's GDP whose
-// countries already have it).
+// Research costs fall as knowledge spreads globally, across land borders, and through treaties.
+// War, rivalry and embargoes block the local/treaty bonus, not knowledge already worldwide.
+// Universities and labs increase weekly points per million residents; instability reduces them.
+// A newly independent country retains its parent's discoveries according to local literacy,
+// cities, universities, laboratories, relevant facilities and the complexity of each technology.
 {
   "ResearchBasePerWeek": 0.5,
   "ResearchGdpWeight": 0.05,
   "ResearchEducationBaseline": 0.045,
   "ResearchEducationExponent": 0.5,
-  "ResearchDiffusion": 0.5
+  "ResearchDiffusion": 0.5,
+  "ResearchNeighbourDiffusion": 0.10,
+  "ResearchPartnerDiffusion": 0.12,
+  "ResearchMaximumDiscount": 0.70,
+  "ResearchUniversityBonus": 0.035,
+  "ResearchLaboratoryBonus": 0.075,
+  "ResearchInstitutionBonusCap": 0.35,
+  "ResearchInstabilityPenalty": 0.20,
+  "ResearchSecessionProgressShare": 0.55,
+  "ResearchSecessionComplexity": 0.45
 }

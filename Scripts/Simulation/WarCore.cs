@@ -210,8 +210,12 @@ public static partial class Warfare
         var byPair = Pairs;
         byPair.Clear();
         var belligerents = Belligerents;
-        if (belligerents.Length <= campaign.Nations.Count + 8)
-            belligerents = Belligerents = new bool[campaign.Nations.Count + 512];
+        // Map indices are sparse: breakaways start at 1000, and mods may use
+        // still higher values. Country COUNT silently excluded their entire fronts.
+        var largestMapIndex = 0;
+        foreach (var nation in campaign.Nations) largestMapIndex = Math.Max(largestMapIndex, nation.MapIndex);
+        if (belligerents.Length <= largestMapIndex)
+            belligerents = Belligerents = new bool[largestMapIndex + 1];
         Array.Clear(belligerents);
         foreach (var war in campaign.Wars)
         {
@@ -415,6 +419,30 @@ public static partial class FrontPlanner
         index < spearhead ? ArmyOrder.Spearhead :
         index < advance ? ArmyOrder.AdvanceFront :
         index < advance + defend ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
+
+    private static int AdvanceCount(int count, float share, bool attacking) =>
+        Math.Min(count, Math.Max(attacking && share > 0 && count > 0 ? 1 : 0, (int)MathF.Round(count * share)));
+
+    /// <summary>Fill missing roles with a replacement without reordering formations already marching.</summary>
+    internal static void GiveIdleRole(Campaign c, Army army)
+    {
+        var war = c.Wars.Find(w => !w.Ended && w.Id == army.AssignedWarId);
+        var nation = c.NationById(army.NationId);
+        if (war is null || nation is null || nation.IsHuman) return;
+        var profile = AiStrategyCatalog.Resolve(c, war, nation);
+        var peers = c.Armies.Where(a => a.NationId == nation.Id && a.AssignedWarId == war.Id &&
+            a.TemplateId != MilitiaCore.TemplateId).ToArray();
+        var attacking = war.IsAttacking(nation.Id);
+        var share = attacking ? profile.AdvanceShareAttacker : profile.AdvanceShareDefender;
+        var wanted = AdvanceCount(peers.Length, share, attacking);
+        var have = peers.Count(a => a != army && a.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead);
+        if (have >= wanted) return;
+        new SetArmyOrderCommand { IssuerId = nation.Id, ArmyId = army.Id, WarId = war.Id,
+            Order = ArmyOrder.AdvanceFront }.Apply(c);
+        new SetArmyStanceCommand { IssuerId = nation.Id, ArmyId = army.Id, Stance = profile.OffensiveStance }.Apply(c);
+        new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id,
+            Active = army.Planning >= profile.ExecutePlanningThreshold }.Apply(c);
+    }
 
     /// <summary>
     /// Which of a country's divisions serve which of its wars.
@@ -621,9 +649,9 @@ public static partial class FrontPlanner
         armies.Sort((a, b) => b.Power.CompareTo(a.Power));
 
         var advanceShare = attacking ? profile.AdvanceShareAttacker : profile.AdvanceShareDefender;
-        var spearhead = armies.Count == 0 ? 0 : Math.Min((int)MathF.Round(armies.Count * advanceShare),
+        var advance = AdvanceCount(armies.Count, advanceShare, attacking);
+        var spearhead = armies.Count == 0 || profile.SpearheadShare <= 0 ? 0 : Math.Min(advance,
             Math.Max(1, (int)MathF.Round(armies.Count * profile.SpearheadShare)));
-        var advance = (int)MathF.Round(armies.Count * advanceShare);
         var defend = (int)MathF.Round(armies.Count * profile.DefendShare);
         for (var index = 0; index < armies.Count; index++)
         {
@@ -659,7 +687,7 @@ public static partial class FrontPlanner
             // Or when it is being handed to this war from another one the country is fighting.
             if (army.OrderKind != order || (order == ArmyOrder.Spearhead &&
                     army.ObjectiveStateMapIndex != war.ClaimedStateMapIndex) ||
-                (army.AssignedWarId >= 0 && army.AssignedWarId != war.Id))
+                army.AssignedWarId != war.Id)
                 new SetArmyOrderCommand
                 {
                     IssuerId = nationId,

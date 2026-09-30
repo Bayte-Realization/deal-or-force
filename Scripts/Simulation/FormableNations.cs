@@ -140,6 +140,7 @@ public sealed class FormNationCommand : ICampaignCommand
         var limit = StabilityCore.Weights.GovernanceLimit;
         nation.StabilityGovernance = M.Clamp(nation.StabilityGovernance + d.GovernanceGain, -limit, limit);
         nation.Productivity += d.ProductivityGain;
+        campaign.Chronicle.Record(campaign, "state_formed", nation.Id, subject: d.Name);
         // IDs, diplomacy, armies, government and flags remain valid. No territory is granted.
         campaign.MarkStrategicChange();
     }

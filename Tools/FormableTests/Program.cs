@@ -8,8 +8,9 @@ using DealOrForce.Simulation;
 static class Program
 {
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
-    static void Main()
+    static void Main(string[] args)
     {
+        if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
         TerrainCatalog.ResetCatalog();
         var terrainErrors = new List<string>();
         TerrainCatalog.ApplyDirectory(GameDataLoader.DataFolder().TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, terrainErrors);
@@ -26,7 +27,20 @@ static class Program
             TerrainCatalog.ResetCatalog();
         }
         InterfaceSkin.ResetCatalog();
-        Check(CampaignUiCatalog.NavigationItems.Count == 8, "navigation read from game/gui");
+        LayoutWorkbenchTests.Run();
+        OpportunityAtlasTests.Run();
+        StrategicReportsTests.Run();
+        SupplyStressTests.Run();
+        TechnologyTreeTests.Run();
+        ProductionUnitsTests.Run();
+        InterfaceIconTests.Run();
+        ScenarioMapDraftTests.Run();
+        using var navigationDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
+            "gui", "20_campaign_structure.json")), GameDataLoader.ForgivingJson);
+        var declaredNavigation = navigationDocument.RootElement.GetProperty("campaign").GetProperty("navigation")
+            .EnumerateArray().Select(row => row.GetProperty("screen").GetString()).ToArray();
+        Check(declaredNavigation.Length > 0 && CampaignUiCatalog.NavigationItems.Select(row => row.Screen).SequenceEqual(declaredNavigation),
+            "navigation reads every declared destination from game/gui in order");
         Check(CampaignUiCatalog.For("Decisions").Tabs.Any(t => t.Id == "Formables"), "formables tab registered");
         Check(CampaignUiCatalog.For("Decisions").Links.Length == 0, "no spurious decision links");
         var errors = new List<string>();
@@ -147,6 +161,9 @@ static class Program
         Check(entries.Any(e => e.Id == "2024") && entries.Any(e => e.Id == "test"), "library discovers base and independent scenarios");
         var scenario = ScenarioLibrary.Create(entries.Single(e => e.Id == "test"), 123, map.ProvinceCount);
         Check(scenario.Wars.Count == 0 && scenario.Date.Year == 1836, "library loads complete scenario without bootstrap");
+        Check(scenario.Seed == 123 && scenario.Random.State == new SimRandom(123).State &&
+              scenario.Player.Treasury == 7.25f,
+            "chosen seed reseeds an authored scenario without replacing its historical data");
         Loc.ResetCatalog(); Loc.Language = "russian";
         var rus = new Nation { Tag = "RUS", Name = "Russia" };
         Check(rus.DisplayName == "Россия" && rus.MapName == "Россия", "Russian identity and map names use stable keys");

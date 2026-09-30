@@ -10,8 +10,8 @@ public partial class DealOrForceGame
     private Control _eventLayer = null!;
     private Label _eventTitle = null!;
     private Label _eventDescription = null!;
-    private Button _eventOptionA = null!;
-    private Button _eventOptionB = null!;
+    private ScrollContainer _eventOptionsScroll = null!;
+    private VBoxContainer _eventOptions = null!;
     private ColorRect _eventVeil = null!;
     private PanelContainer _eventPanel = null!;
     private PendingCampaignEvent _shownEvent;
@@ -55,10 +55,16 @@ public partial class DealOrForceGame
         _eventDescription = Title("", 16, Ui.Colour("text.body_soft"));
         _eventDescription.SizeFlagsVertical = SizeFlags.ExpandFill;
         rows.AddChild(_eventDescription);
-        _eventOptionA = ActionButton("", () => ResolveShownEvent(0), 520, 54, true);
-        _eventOptionB = ActionButton("", () => ResolveShownEvent(1), 520, 54);
-        rows.AddChild(_eventOptionA);
-        rows.AddChild(_eventOptionB);
+        _eventOptionsScroll = new ScrollContainer
+        {
+            Name = "EventChoicesScroll",
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        rows.AddChild(_eventOptionsScroll);
+        _eventOptions = new VBoxContainer { Name = "EventChoices", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _eventOptions.AddThemeConstantOverride("separation", 8);
+        _eventOptionsScroll.AddChild(_eventOptions);
     }
 
     private void RefreshEventInterface()
@@ -92,10 +98,24 @@ public partial class DealOrForceGame
         // were translated, because Ui.Tip does its own lookup.
         _eventTitle.Text = Loc.Get(pending.Title);
         _eventDescription.Text = Loc.Get(pending.Description);
-        _eventOptionA.Text = Loc.Get(pending.Options[0].Title);
-        _eventOptionA.TooltipText = Ui.Tip(OptionTooltip(pending.Options[0]));
-        _eventOptionB.Text = Loc.Get(pending.Options[1].Title);
-        _eventOptionB.TooltipText = Ui.Tip(OptionTooltip(pending.Options[1]));
+        // Events and mods may offer one, two or many choices; never assume two.
+        foreach (var child in _eventOptions.GetChildren())
+        {
+            _eventOptions.RemoveChild(child);
+            child.QueueFree();
+        }
+        for (var index = 0; index < pending.Options.Length; index++)
+        {
+            var captured = index;
+            var option = pending.Options[index];
+            var button = ActionButton(Loc.Get(option.Title), () => ResolveShownEvent(captured), 0, 54, index == 0);
+            button.Name = $"EventChoice{index}";
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            button.TooltipText = Ui.Tip(OptionTooltip(option));
+            _eventOptions.AddChild(button);
+        }
+        _eventOptionsScroll.CustomMinimumSize = new Vector2(0, Math.Clamp(pending.Options.Length * 62 - 8, 0, 240));
+        _eventOptionsScroll.ScrollVertical = 0;
         _eventLayer.Visible = true;
         _eventLayer.MoveToFront();
         if (newlyShown) PlayStrategicCue("event_alert");

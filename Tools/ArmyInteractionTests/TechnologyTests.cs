@@ -86,5 +86,89 @@ static class TechnologyTests
               back.NationByTag("MNG").CurrentResearch == options[1].Id &&
               MathF.Abs(back.NationByTag("MNG").ResearchProgress.GetValueOrDefault(options[0].Id) - 5f) < 0.0001f,
             "what is known, what is chosen and what is half done all survive a save");
+
+        // --- H: laboratories, stability and relationships are real research inputs ----------
+        var diffusion = Campaign.CreateBootstrap(20260928);
+        diffusion.AttachProvinceTopology(map);
+        diffusion.Defines.ResearchDiffusion = 0f;
+        var france = diffusion.NationByTag("FRA");
+        var germany = diffusion.NationByTag("DEU");
+        Check(CampaignDiplomacy.SharesLandBorder(diffusion, france.MapIndex, germany.MapIndex),
+            "France and Germany are land neighbours in the research fixture");
+        germany.Technologies.Add(root.Id);
+        var acrossBorder = ResearchSystem.DiffusionFor(diffusion, france, root);
+        Check(acrossBorder.World == 0f && acrossBorder.Neighbours > 0f,
+            "known technology diffuses across a border even with global diffusion disabled");
+        var partner = diffusion.NationByTag("USA");
+        partner.Technologies.Add(root.Id);
+        var agreement = CampaignDiplomacy.Get(diffusion, france.Id, partner.Id);
+        agreement.TradeAgreement = true;
+        var withTrade = ResearchSystem.DiffusionFor(diffusion, france, root);
+        Check(withTrade.Partners > 0f && withTrade.EffectiveCost < acrossBorder.EffectiveCost,
+            "a trading partner's discovery lowers the effective cost");
+        if (agreement.A == france.Id) agreement.EmbargoByA = true;
+        else agreement.EmbargoByB = true;
+        Check(ResearchSystem.DiffusionFor(diffusion, france, root).Partners < withTrade.Partners,
+            "an embargo blocks that partner's diffusion without erasing global knowledge");
+        diffusion.Defines.ResearchDiffusion = 1f;
+        diffusion.Defines.ResearchNeighbourDiffusion = 1f;
+        diffusion.Defines.ResearchPartnerDiffusion = 1f;
+        diffusion.Defines.ResearchMaximumDiscount = 0.40f;
+        Check(ResearchSystem.DiffusionFor(diffusion, france, root).EffectiveCost >= root.Cost * 0.60f - 0.001f,
+            "modded diffusion cannot pass the configured cost floor");
+        var beforeLab = ResearchSystem.WeeklyPoints(diffusion, france);
+        var frenchState = diffusion.StatesOf(france).First();
+        frenchState.Buildings[BuildingKind.ResearchLab] = frenchState.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) + 2;
+        var afterLab = ResearchSystem.WeeklyPoints(diffusion, france);
+        france.Stability = 0f;
+        Check(afterLab > beforeLab && ResearchSystem.WeeklyPoints(diffusion, france) < afterLab,
+            "local research labs increase pace and instability reduces it");
+
+        // --- I: secession retains local expertise, not a flat copy of the parent tree -------
+        var parent = new Nation { Population = 10_000_000 };
+        var basic = TechnologyCatalog.Of("industrial_automation");
+        var advanced = TechnologyCatalog.Of("advanced_semiconductors");
+        var project = TechnologyCatalog.Of("digital_education");
+        parent.Technologies.Add(basic.Id);
+        parent.Technologies.Add(advanced.Id);
+        parent.ResearchProgress[project.Id] = 30f;
+        parent.CurrentResearch = project.Id;
+        var richState = new ScenarioState { Population = 2_000_000, Literacy = .95f, Urbanization = .85f, Radicalism = .1f };
+        richState.Buildings[BuildingKind.University] = 2;
+        richState.Buildings[BuildingKind.ResearchLab] = 2;
+        richState.Buildings[BuildingKind.CivilianIndustry] = 5;
+        var richBreakaway = new Nation { Population = richState.Population };
+        SecessionResearch.Inherit(diffusion, parent, richBreakaway, new[] { richState }, parent.Population);
+        Check(richBreakaway.HasTechnology(basic.Id) && richBreakaway.HasTechnology(advanced.Id),
+            "educated industrial regions keep the parent's working technologies");
+        var poorState = new ScenarioState { Population = 2_000_000, Literacy = .2f, Urbanization = .1f, Radicalism = .8f };
+        var poorBreakaway = new Nation { Population = poorState.Population };
+        SecessionResearch.Inherit(diffusion, parent, poorBreakaway, new[] { poorState }, parent.Population);
+        Check(poorBreakaway.HasTechnology(basic.Id) && !poorBreakaway.HasTechnology(advanced.Id) &&
+              poorBreakaway.ResearchProgress.GetValueOrDefault(advanced.Id) > 0f,
+            "less developed regions retain basic knowledge and partial advanced research");
+        Check(poorBreakaway.CurrentResearch == project.Id &&
+              poorBreakaway.ResearchProgress.GetValueOrDefault(project.Id) > 0f &&
+              parent.ResearchProgress[project.Id] == 30f,
+            "an unfinished programme can continue in the new state without deleting the parent's work");
+        var inconsistentParent = new Nation { Population = parent.Population };
+        inconsistentParent.Technologies.Add(advanced.Id);
+        var safeBreakaway = new Nation { Population = richState.Population };
+        SecessionResearch.Inherit(diffusion, inconsistentParent, safeBreakaway,
+            new[] { richState }, inconsistentParent.Population);
+        Check(!safeBreakaway.HasTechnology(advanced.Id) &&
+              safeBreakaway.ResearchProgress.GetValueOrDefault(advanced.Id) > 0f,
+            "a changed mod or old save cannot give a breakaway an orphaned advanced technology");
+        france.Technologies.Add(basic.Id);
+        var departingRegion = diffusion.StatesOf(france)
+            .Where(state => state.Population > 300_000 && !LakeRegions.IsWaterState(state))
+            .OrderByDescending(state => state.Population).First();
+        var actualSecession = SecessionEvents.Force(diffusion, departingRegion);
+        Check(actualSecession?.Seceded.HasTechnology(basic.Id) == true,
+            "the real secession path transfers local research to the new country");
+        var secessionSnapshot = SaveSystem.ExportNetworkSnapshot(diffusion, "");
+        var restoredSecession = SaveSystem.ImportNetworkSnapshot(secessionSnapshot, "").Campaign;
+        Check(restoredSecession?.NationByTag(actualSecession.Seceded.Tag)?.HasTechnology(basic.Id) == true,
+            "a breakaway country's inherited discoveries survive a save");
     }
 }

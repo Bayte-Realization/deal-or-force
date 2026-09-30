@@ -22,7 +22,10 @@ public partial class DealOrForceGame
         if (PlayerHoldsMostOf(_selectedState)) return false;
         ClearDetail();
         _sideTitle.Text = _selectedState.DisplayName;
-        _sideBody.Text = Simulation.Loc.Format("{0}\n\nFog of war — regional population, industry and military intelligence are unavailable.", owner.DisplayName);
+        _sideBody.Text = owner.DisplayName + "\n\n" + Tr("Fog of war hides internal conditions, industry and military intelligence, not public population and GDP estimates.");
+        DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
+        DetailRow("GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, _selectedState)),
+            Tr(RegionalStatistics.GdpExplanation));
         SetRegionalActionsEnabled(false);
         return true;
     }

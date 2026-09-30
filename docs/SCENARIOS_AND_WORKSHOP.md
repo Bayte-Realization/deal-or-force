@@ -125,12 +125,57 @@ To check scenarios, flags and the editor's writing:
 
 ## Limits of the current stage
 
+### Visual interface layout
+
+Choose **UI layout editor** in Scenarios & workshop. It opens your mod's
+`gui/99_editor_layout.json`, or an unsaved draft. The Layout tab also works with any
+`gui` document. Select an existing panel in the list or schematic, drag to move it,
+or drag its lower-right handle to resize. The grid uses 8 reference-screen pixels;
+Shift bypasses it and Escape cancels the current gesture without closing the workshop.
+
+The inspector edits four anchors (0–1) and pixel offsets. Anchor presets keep the panel
+in place at the chosen reference resolution. Test both 1280×720 and 1920×1080. Undo/Redo
+and Ctrl+Z/Ctrl+Y share the JSON editor's history; one gesture is one undo operation.
+Gold list entries belong to this file; grey entries are inherited from the loaded skin.
+The panel search matches localized names and stable IDs case-insensitively. Filtering
+does not change the document or active panel; tooltips include the full name and ID.
+Remove file override removes the entry, not the game's panel. Its preview falls back to
+the **loaded** skin; if that override was already enabled at startup, restart to see its
+removal fully take effect.
+
+Save to my mod writes authored entries only, preserving unrelated JSON fields (not JSON
+comments). Enable Editor workspace and restart to use the result. The preview is a scaled
+schematic, not a rendered copy of the live UI: content minimum sizes and adaptive placement,
+especially outliner height, can affect the final result. Out-of-screen geometry is warned
+about. This tool does not create new widgets, handlers or scripts and does not change the
+active campaign. Raster/province-geometry painting remains future work.
+
+Runtime-verified on 2026-09-23: mouse move/resize, undo/redo, Escape cancellation,
+mod save/reopen, name/ID search and unchanged document during filtering. English,
+Russian and a 1280×720 window were visually checked. The reproduced D3D12 exhaustion
+during combined language/window/projection changes is addressed by glyph/font reuse
+and additional descriptor capacity; see [rendering regression evidence](RENDERING_REGRESSION.md)
+for the bounded stress checks and remaining hardware/mod coverage limitations.
+
+With the schematic focused, arrow keys move the selected panel by one reference-screen
+pixel; Shift + arrows moves it by eight. Each press is undoable (key repeat is ignored).
+Arrows in search fields and the panel list retain their normal behavior. **Fit inside
+screen** recovers an off-screen or inverted panel at the selected preview resolution,
+preserving anchors and shrinking only when necessary. It is disabled when no change is
+needed and supports undo/redo. This modifies the draft, not the running interface or
+other resolutions automatically. These controls were runtime-checked with real key
+events; geometry edge cases are covered by `LayoutWorkbenchTests`.
+
 The interface scripts are in `Scripts/ui`; the editable definitions are in `game`. The
 workshop can already change JSON through the property tree and the text mode, create a
 separate mod with a backup, and save a self-contained scenario. It is not yet a visual
-designer for every window, and not a brush for redrawing provinces.
+designer for every window's contents, and not a brush for redrawing provinces. Placement of
+existing panels can now be edited visually.
 
-The scenario tests and the separate set of offensive-plan tests pass. The full
-`ArmyInteractionTests` set is not considered green yet: the check for movement after a
-retreat in `RecruitmentFogAudit` is still outstanding, and it has nothing to do with drawing
-offensives.
+`FormableTests` and the full `ArmyInteractionTests` suite were checked on 23 September 2026.
+The military subsystem fixtures explicitly use a daily step; covered advances are also
+checked at 1-hour and 24-hour steps. A direct order advances more slowly under cover,
+while an autonomous gap exploit against overwhelming cover is blocked. A trapped defeated
+division is removed; a retreating survivor may march through friendly territory but cannot
+counterattack until recovery ends. These are simulation checks, not automated verification
+of mouse gestures in the interface.

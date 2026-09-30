@@ -15,6 +15,27 @@
       "output": -0.02
     }
   },
+  "war_going_badly": {
+    "name": "The war is going badly",
+    "description": "The front is moving the wrong way and everybody can read a map.",
+    "days": 14,
+    "positive": false,
+    "modifiers": {
+      "war_support_weekly": -0.012,
+      "stability_weekly": -0.002
+    }
+  },
+  "front_collapsing": {
+    "name": "The front is collapsing",
+    "description": "Whole armies are gone and half the country is behind the enemy's lines. The question now is what can be saved.",
+    "days": 14,
+    "positive": false,
+    "modifiers": {
+      "war_support_weekly": -0.03,
+      "stability_weekly": -0.005,
+      "output": -0.04
+    }
+  },
   "exhausted_by_war": {
     "name": "Exhausted by war",
     "description": "Years of it. Nobody remembers what it was for, and everybody knows somebody who did not come back.",

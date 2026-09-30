@@ -26,10 +26,8 @@ public partial class DealOrForceGame
     private Label _stateAffairsSummary = null!;
     private bool _updatingStateAffairs;
 
-    private Label _statePolicyFeedback = null!;
     private Label _stateFiscalFeedback = null!;
     private HBoxContainer _stateBudgetControls = null!;
-    private HBoxContainer _stateTradeControls = null!;
     private HBoxContainer _stateCabinetControls = null!;
     private Label _stateBudgetLine = null!;
     private OptionButton _stateBuildingPicker = null!;
@@ -38,7 +36,6 @@ public partial class DealOrForceGame
     private VBoxContainer _stateConstructionRows = null!;
     private int _stateRegionListNationId = -1;
     private Label _stateGovernanceFeedback = null!;
-    private readonly Dictionary<TradePolicy, Button> _stateTradeButtons = new();
     private readonly Dictionary<GovernmentFocus, Button> _stateFocusButtons = new();
 
     /// <summary>
@@ -219,7 +216,6 @@ public partial class DealOrForceGame
 
         RefreshBuildingPicker();
         _stateBudgetControls.Visible = true;
-        _stateTradeControls.Visible = true;
         _stateCabinetControls.Visible = true;
 
         _updatingStateAffairs = true;
@@ -229,9 +225,6 @@ public partial class DealOrForceGame
         _updatingStateAffairs = false;
 
         RefreshStateBudget(nation);
-        RefreshTradeInstructions();
-        foreach (var (policy, button) in _stateTradeButtons)
-            ApplyLedgerButtonState(button, policy == nation.TradePolicy);
         foreach (var (focus, button) in _stateFocusButtons)
             ApplyLedgerButtonState(button, focus == nation.GovernmentFocus);
         _stateGovernanceFeedback.Text = Simulation.Loc.Format("{0} · welfare {1:P1} · education {2:P1}", GovernmentFocusRules.Name(nation.GovernmentFocus), nation.WelfareSpending, nation.EducationSpending);
@@ -313,32 +306,9 @@ public partial class DealOrForceGame
         BuildPolicyRates(rows);
         BuildPoliticsControls(rows);
 
-        StateSection(rows, "TRADE",
-            "How open the country is to the world market. A change takes effect at the next weekly clearing.");
-        _stateTradeControls = new HBoxContainer
-        {
-            Visible = false,
-            CustomMinimumSize = new Vector2(0, 38),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter
-        };
-        _stateTradeControls.AddThemeConstantOverride("separation", 7);
-        rows.AddChild(_stateTradeControls);
-        var tradeCaption = Title("TRADE POLICY", 12, Ui.Colour("text.caption"));
-        tradeCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-        tradeCaption.CustomMinimumSize = new Vector2(98, 0);
-        tradeCaption.VerticalAlignment = VerticalAlignment.Center;
-        _stateTradeControls.AddChild(tradeCaption);
-        // From the catalogue rather than a list written here: a stance a mod declares in
-        // `common/trade_policies` gets a button, its own name and its own explanation
-        // without this file knowing it exists.
-        foreach (var policy in Simulation.TradePolicyCatalog.All)
-            AddTradePolicyButton(TradePolicyRules.Name(policy), policy,
-                TradePolicyRules.Description(policy));
-        _statePolicyFeedback = Title("", 11, Ui.Colour("text.accent_dim"));
-        _statePolicyFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _stateTradeControls.AddChild(_statePolicyFeedback);
-
-        BuildTradeInstructions(rows);
+        // Trade moved to its own screen: policy, instructions, the market and the partners
+        // belong together, and a country's dealings with the world are not a sub-paragraph
+        // of its dealings with itself. The controls live in TradeScreenUI now.
 
         StateSection(rows, "THE CABINET",
             "What the government is for this year. One priority at a time, each with a weekly cost and a " +
@@ -495,15 +465,6 @@ public partial class DealOrForceGame
                 "actually collected. A further tax on top of these raises less than the first one did.",
                 compliance);
     }
-    private void AddTradePolicyButton(string caption, TradePolicy policy, string tooltip)
-    {
-        var button = ActionButton(caption, () => SetStateTradePolicy(policy), 114, 30,
-            policy == TradePolicy.BalancedTrade);
-        button.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        button.TooltipText = Ui.Tip(tooltip);
-        _stateTradeControls.AddChild(button);
-        _stateTradeButtons[policy] = button;
-    }
     private void AddGovernmentFocusButton(string caption, GovernmentFocus focus)
     {
         var button = ActionButton(caption, () => SetStateGovernmentFocus(focus), 94, 30,
@@ -648,8 +609,10 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null || _campaign.Player?.Id != _campaign.Player.Id) return;
         _campaign.Commands.Enqueue(new SetTradePolicyCommand { IssuerId = _campaign.Player.Id, Policy = policy });
         _campaign.Commands.ApplyAll(_campaign);
-        _statePolicyFeedback.Text = Simulation.Loc.Format("{0} selected · effective at the next market clearing.", TradePolicyRules.Name(policy));
-        RefreshStateAffairs();
+        // The feedback is the trade screen's own, because that is where the buttons are.
+        if (_tradePolicyFeedback is not null)
+            _tradePolicyFeedback.Text = Simulation.Loc.Format("{0} selected · effective at the next market clearing.", TradePolicyRules.Name(policy));
+        RefreshTradeScreen();
     }
     private void SetStateGovernmentFocus(GovernmentFocus focus)
     {

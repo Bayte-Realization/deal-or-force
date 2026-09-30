@@ -31,7 +31,8 @@
 //     humanitarian         its AI never takes up arms: no uprisings, no fighters sent in (a player still may)
 //     nonviolence          uprisings are mass protests: carried by standing, cheap to lose, one militia at most
 //     refugee_camps        cadres recruit twice as fast
-//     for_hire             "Take a contract" for money; recruits at half price; rises only where a region is falling apart, on money rather than support
+//     for_hire             "Take a contract" for money; recruits at half price; no territorial uprisings
+//     territorial_ambition explicitly allows a for_hire company to attempt territorial uprisings (warlord/alternate-history mods)
 //
 // Later files win, key by key: a mod adds a movement with a key of its own and changes one
 // by naming it again with only the fields it changes.
@@ -135,7 +136,7 @@
   "vector_security_group": {
     "tag": "VSG",
     "name": "Vector Security Group",
-    "description": "A private military company registered in Abu Dhabi, with contractors from forty countries and no flag of its own. Fictional. It fights for whoever pays, and it has noticed that a region falling apart is a region somebody could simply take.",
+    "description": "A fictional private military company registered in Abu Dhabi, with contractors from forty countries. It takes paid contracts, but does not claim territory or organise separatist uprisings.",
     "colour": "#5a5a5a",
     "peoples": [],
     "faiths": [],

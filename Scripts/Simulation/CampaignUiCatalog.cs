@@ -17,6 +17,8 @@ public static class CampaignUiCatalog
     public static string[] OutlinerOrder { get; private set; } = Array.Empty<string>();
     public static string[] HiddenOutliner { get; private set; } = Array.Empty<string>();
     private static readonly List<Navigation> NavigationRows = new();
+    private static readonly Dictionary<string, string> Icons = new(StringComparer.Ordinal);
+    public static string Icon(string role, string fallback) => Icons.GetValueOrDefault(role, fallback);
     private static readonly Dictionary<string, Screen> Screens = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, string[]> DetailOrders = new();
     private static readonly Dictionary<string, string[]> HiddenDetails = new();
@@ -26,7 +28,7 @@ public static class CampaignUiCatalog
     public static string DetailLabel(string screen, string field, string fallback) =>
         DetailLabels.TryGetValue(screen, out var labels) ? labels.GetValueOrDefault(field, fallback) : fallback;
     public static readonly HashSet<string> Destinations = new(StringComparer.Ordinal)
-        { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "State Affairs", "Ledger" };
+        { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "State Affairs", "Ledger", "Trade", "Production", "Research", "Support" };
     private static readonly HashSet<string> Actions = new(StringComparer.Ordinal)
         { "government", "ledger", "wars", "diplomacy" };
     private static readonly Dictionary<string, string[]> AllowedTabs = new()
@@ -34,10 +36,11 @@ public static class CampaignUiCatalog
         ["Nation"] = new[] { "Overview", "Government", "Society" },
         ["Economy"] = new[] { "Budget", "Market", "Construction" },
         ["Region"] = new[] { "Overview", "Population", "Province" },
-        ["Decisions"] = new[] { "Decisions", "Formables" }
+        ["Ledger"] = new[] { "Overview", "Economy", "Market", "Population", "Military", "Rankings", "Chronicle", "Vulnerabilities" },
+        ["Decisions"] = new[] { "Decisions", "Formables", "Opportunities" }
     };
     public static Screen For(string screen) => Screens.GetValueOrDefault(screen) ?? new Screen(Array.Empty<Tab>(), Array.Empty<Link>());
-    public static void Reset() { NavigationRows.Clear(); Screens.Clear(); DetailOrders.Clear(); HiddenDetails.Clear(); DetailLabels.Clear(); TopStats = Array.Empty<string>(); OutlinerOrder = Array.Empty<string>(); HiddenOutliner = Array.Empty<string>(); }
+    public static void Reset() { NavigationRows.Clear(); Icons.Clear(); Screens.Clear(); DetailOrders.Clear(); HiddenDetails.Clear(); DetailLabels.Clear(); TopStats = Array.Empty<string>(); OutlinerOrder = Array.Empty<string>(); HiddenOutliner = Array.Empty<string>(); }
     private static string Text(JsonElement e, string key, string fallback = "") =>
         e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : fallback;
     private static string[] Strings(JsonElement e, string key) => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Array
@@ -49,6 +52,16 @@ public static class CampaignUiCatalog
     public static void Merge(JsonElement root, List<string> errors)
     {
         if (root.ValueKind != JsonValueKind.Object) { errors?.Add("campaign: expected object"); return; }
+        if (root.TryGetProperty("icons", out var icons))
+        {
+            if (icons.ValueKind != JsonValueKind.Object) errors?.Add("campaign.icons: expected object");
+            else foreach (var entry in icons.EnumerateObject())
+            {
+                if (entry.Value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(entry.Value.GetString()))
+                { errors?.Add($"campaign.icons.{entry.Name}: expected non-empty sprite name"); continue; }
+                Icons[entry.Name] = entry.Value.GetString().Trim();
+            }
+        }
         if (root.TryGetProperty("top_stats", out _)) TopStats = Strings(root, "top_stats");
         if (root.TryGetProperty("outliner_order", out _)) OutlinerOrder = Strings(root, "outliner_order");
         if (root.TryGetProperty("hidden_outliner", out _)) HiddenOutliner = Strings(root, "hidden_outliner");

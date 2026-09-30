@@ -90,7 +90,10 @@ public static class FrontManager
             Balance(campaign, war);
         }
         foreach (var line in campaign.FrontLines)
+        {
             if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence) BalanceLine(campaign, line);
+            else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
+        }
     }
 
     private static readonly List<Army> Idle = new();
@@ -131,6 +134,7 @@ public static class FrontManager
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
             if (!atWar) continue;
             new SetArmyOrderCommand { IssuerId = nation.Id, ArmyId = army.Id, Order = ArmyOrder.DefendFront }.Apply(campaign);
+            FrontPlanner.GiveIdleRole(campaign, army);
             CalledUp++;
             CalledUpBy[nation.Id] = CalledUpBy.GetValueOrDefault(nation.Id) + 1;
         }

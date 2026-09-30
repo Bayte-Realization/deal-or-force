@@ -1,0 +1,26 @@
+{
+  "metrics": {
+    "research.card_width": 240,
+    "research.card_height": 128,
+    "research.column_gap": 64,
+    "research.row_gap": 28,
+    "research.card_font_size": 14,
+    "research.details_width": 320
+  },
+  "layout": {
+    "modal.research": {
+      "anchors": [
+        0.055,
+        0.1,
+        0.975,
+        0.94
+      ],
+      "offsets": [
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  }
+}

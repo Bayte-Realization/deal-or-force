@@ -119,12 +119,7 @@ public partial class DealOrForceGame
 
         _constructionStatus.Text = queue.Length == 0
             ? Tr("No active construction. Choose a building below.")
-            : string.Join("\n", queue.Take(3).Select((project, index) =>
-            {
-                var target = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == project.StateMapIndex);
-                return $"{index + 1}. {Tr(BuildingCatalog.Get(project.Building).Name)} — " +
-                       $"{target?.DisplayName ?? ""} · {project.Progress:P0}";
-            })) + (queue.Length > 3 ? "\n" + Simulation.Loc.Format("+{0} queued", queue.Length - 3) : "");
+            : Simulation.Loc.Format("Active construction: {0}. Each project can be cancelled separately.", queue.Length);
 
         RefreshEconomyWorkbench();
         ApplyDossierTab();

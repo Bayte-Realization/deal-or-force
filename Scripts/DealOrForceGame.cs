@@ -105,7 +105,7 @@ public partial class DealOrForceGame : Control
         // paused, and a caption squeezed to nothing on a paused screen is still squeezed.
         LayoutAudit.Watch(this, delta);
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
-        if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false };
+        if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
         // The lens and the roll move while a key is held, so the line that reports them
         // has to be written every frame rather than when something is pressed.
         if (_freeCameraMode) RefreshFreeCameraReadout();
@@ -238,6 +238,8 @@ public partial class DealOrForceGame : Control
             }
             return;
         }
+        if (key.Keycode == Key.Escape && _researchLayer is { Visible: true })
+        { CloseResearchScreen(); GetViewport().SetInputAsHandled(); return; }
 
         // The free camera is a demonstration tool, and a demonstration tool that needs a
         // console command typed out first is one nobody reaches for. F10 flies - not F8,
@@ -300,6 +302,12 @@ public partial class DealOrForceGame : Control
             return;
         }
         if (key.Keycode == Key.F5) { QuickSave(); GetViewport().SetInputAsHandled(); return; }
+        if (key.Keycode == Key.F6 && _campaign is not null && _hudLayer is { Visible: true })
+        {
+            ToggleShowcasePan();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.Keycode == Key.F9) { QuickLoad(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode != Key.Space && key.PhysicalKeycode != Key.Space) return;
 
@@ -401,12 +409,19 @@ public partial class DealOrForceGame : Control
         GetViewport().SetInputAsHandled();
     }
 
+    /// <summary>The seed the next new world is built from. The same seed builds the same
+    /// world - every war, every event, every crisis - which is the campaign's whole claim to
+    /// being a simulation anybody can talk about. The picker can change it before a game
+    /// starts; a save carries the seed of the world it came from.</summary>
+    private int _campaignSeed = 20260830;
+
     private void StartCampaign()
     {
+        _pickerScenarioEntry = null;
         if (_campaign is not null)
             _campaign.Changed -= Refresh;
 
-        _campaign = Campaign.CreateBootstrap(20260830);
+        _campaign = Campaign.CreateBootstrap(_campaignSeed);
         ResetTrends();
         _lastAutosaveDay = -1;
         _campaignInProgress = false;
@@ -455,6 +470,7 @@ public partial class DealOrForceGame : Control
         _globe.UnclaimedPicked += OnUnclaimedPicked;
         _globe.ArmyPicked += OnArmyPicked;
         _globe.FleetPicked += OnFleetPicked;
+        _globe.SupportPicked += OnSupportPicked;
         _globe.BattlePicked += ShowBattleDetails;
         _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
         _globe.ProvinceCommanded += OnProvinceCommanded;
@@ -777,6 +793,11 @@ public partial class DealOrForceGame : Control
         BuildLedgerInterface();
         BuildStateAffairsInterface();
         BuildWarLedger();
+        BuildDiplomacyScreen();
+        BuildTradeScreen();
+        BuildProductionScreen();
+        BuildSupportScreen();
+        BuildResearchScreen();
         BuildMapControls();
         BuildStrategicHud();
         Resized += LayoutCampaignShell;
@@ -833,6 +854,8 @@ public partial class DealOrForceGame : Control
 
     private void OpenScreen(string screen)
     {
+        if (_researchLayer is not null) _researchLayer.Visible = false;
+        if (screen == "Research") { OpenResearchScreen(); return; }
         if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
         if (_fleetPanel is not null) _fleetPanel.Visible = false;
         PrepareDossierTabs(screen);
@@ -853,8 +876,41 @@ public partial class DealOrForceGame : Control
             UpdateScreenButtons();
             return;
         }
+        // Diplomacy, trade and production are full pages rather than side dossiers: they
+        // are the three places a player decides something with the whole world in view.
+        if (screen == "Diplomacy")
+        {
+            OpenDiplomacyScreen();
+            UpdateScreenButtons();
+            return;
+        }
+        if (screen == "Trade")
+        {
+            OpenTradeScreen();
+            UpdateScreenButtons();
+            return;
+        }
+        if (screen == "Production")
+        {
+            OpenProductionScreen();
+            UpdateScreenButtons();
+            return;
+        }
+        // The long-range forces: the guns, aircraft and drones that reach into the war
+        // from bases instead of standing in it. A full page for the same reason the
+        // other three are: it is where a player decides something.
+        if (screen == "Support")
+        {
+            OpenSupportScreen();
+            UpdateScreenButtons();
+            return;
+        }
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
+        if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;
+        if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
+        if (_productionLayer is not null) _productionLayer.Visible = false;
+        if (_supportLayer is not null) _supportLayer.Visible = false;
         _openScreen = screen;
         _sidePanel.Visible = true;
         SetArmyPanelVisible(false);
@@ -963,6 +1019,9 @@ public partial class DealOrForceGame : Control
                 break;
 
             case "Diplomacy":
+                // Routed to the full diplomacy screen before the switch is reached; the
+                // case stays so the screen set names a destination the switch can talk
+                // about if the routing above ever changes.
                 ShowCountryInteraction(nation, "Diplomatic overview");
                 break;
 
@@ -1194,6 +1253,11 @@ public partial class DealOrForceGame : Control
         RefreshRecruitment();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
         if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
+        if (_diplomacyLayer is { Visible: true }) RefreshDiplomacyScreen();
+        if (_tradeScreenLayer is { Visible: true }) RefreshTradeScreen();
+        if (_productionLayer is { Visible: true }) RefreshProductionScreen();
+        if (_supportLayer is { Visible: true }) RefreshSupportScreen();
+        if (_researchLayer is { Visible: true }) RefreshResearchScreen();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
         else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions")
             OpenScreen(_openScreen);
@@ -1208,18 +1272,19 @@ public partial class DealOrForceGame : Control
     {
         internal Label Value = null!;
         internal Label Delta = null!;
+        internal Label Caption = null!;
+        internal TextureRect Glyph;
+        internal string CountryCaption = "";
     }
 
 
     /// <summary>
     /// Which symbol stands for a figure on the top bar.
     ///
-    /// Kept beside the bar rather than in the data because the seven names here are the
-    /// seven the code itself switches on a few lines further down - a mod that wants an
-    /// eighth figure is adding a case there too, and a name with no symbol simply keeps its
-    /// caption rather than showing nothing.
+    /// Defaults live here; campaign.icons lets a mod remap roles without replacing art
+    /// shared by other controls. A missing sprite keeps the text caption.
     /// </summary>
-    private static string StatIcon(string caption) => caption switch
+    private static string StatIcon(string caption) => CampaignUiCatalog.Icon("hud." + caption, caption switch
     {
         "TREASURY" => "treasury",
         "BALANCE" => "balance",
@@ -1229,7 +1294,7 @@ public partial class DealOrForceGame : Control
         "STABILITY" => "stability",
         "MANPOWER" => "manpower",
         _ => ""
-    };
+    });
 
     private StatReadout Stat(Container parent, string caption, string tooltip,
         System.Func<Simulation.Breakdown> explain = null)
@@ -1249,12 +1314,15 @@ public partial class DealOrForceGame : Control
         box.AddThemeConstantOverride("separation", 1);
         box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
-        // The symbol where the word was. A stat with no icon declared keeps its caption, so
-        // a mod that adds an eighth figure to `top_stats` is not obliged to draw for it.
+        // Keep a short label beside the symbol: unfamiliar icons must not hide meaning.
+        var heading = new HBoxContainer { Name = "StatHeading", MouseFilter = MouseFilterEnum.Ignore };
+        heading.AddThemeConstantOverride("separation", 5);
+        box.AddChild(heading);
+        TextureRect glyph = null;
         var symbol = StatIcon(caption);
         if (symbol.Length > 0 && SpriteCatalog.Has("icon_" + symbol))
         {
-            var glyph = new TextureRect
+            glyph = new TextureRect
             {
                 Texture = Art("icon_" + symbol, $"res://game/gfx/interface/icons/icon_{symbol}.png"),
                 ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
@@ -1268,18 +1336,22 @@ public partial class DealOrForceGame : Control
                 Modulate = Ui.Colour("text.accent_dim")
             };
             glyph.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
-            box.AddChild(glyph);
+            heading.AddChild(glyph);
         }
-        else
-        {
-            var statCaption = Title(caption, 11, Ui.Colour("text.caption"));
-            statCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-            statCaption.ClipText = true;
-            box.AddChild(statCaption);
-        }
+        var statCaption = Title(caption, 10, Ui.Colour("text.caption"));
+        statCaption.Name = "StatCaption";
+        statCaption.AutowrapMode = TextServer.AutowrapMode.Off;
+        statCaption.ClipText = true;
+        statCaption.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        statCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        statCaption.Visible = InterfaceSkin.Metric("hud.stat_labels", 1) > 0 || glyph is null;
+        heading.AddChild(statCaption);
 
         var readout = new StatReadout
         {
+            Caption = statCaption,
+            Glyph = glyph,
+            CountryCaption = caption,
             Value = Title("—", 17, Ui.Colour("text.bright")),
             Delta = Title("", 11, Ui.Colour("text.faint"))
         };
@@ -1606,6 +1678,11 @@ public partial class DealOrForceGame : Control
             _stateAffairsLayer is { Visible: true } ? "State Affairs" :
             _ledgerLayer is { Visible: true } ? "Ledger" :
             _warLedgerLayer is { Visible: true } ? "Wars" :
+            _supportLayer is { Visible: true } ? "Support" :
+            _productionLayer is { Visible: true } ? "Production" :
+            _researchLayer is { Visible: true } ? "Research" :
+            _tradeScreenLayer is { Visible: true } ? "Trade" :
+            _diplomacyLayer is { Visible: true } ? "Diplomacy" :
             _sidePanel is { Visible: true } ? _openScreen : "";
         foreach (var (screen, button) in _screenButtons)
         {
@@ -1936,6 +2013,7 @@ public partial class DealOrForceGame : Control
     private void RefreshLocalisedText()
     {
         RefreshLocalisedText(this);
+        UpdateMapModeButtons(_activeMapMode);
         _strategicHudFingerprint = int.MinValue;
         RefreshStrategicHud();
 
@@ -1947,6 +2025,11 @@ public partial class DealOrForceGame : Control
         // list is re-filled by whoever owns it.
         RefreshBuildingPicker();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
+        if (_peaceLayer is { Visible: true })
+        {
+            RecaptionSubjectTerms();
+            RefreshPeaceConference();
+        }
         if (_settingsLayer is { Visible: true }) ShowSettingsCategory(_settingsCategory);
         if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
 
@@ -2034,7 +2117,6 @@ public partial class DealOrForceGame : Control
         Simulation.Loc.Language = languages[(index + 1) % languages.Count];
 
         RefreshLocalisedText();
-        _globe?.RefreshCountryNames();
 
         // Written after the sweep, not before: this caption is built from the language's
         // own name rather than from a source string, so the generic refresh cannot

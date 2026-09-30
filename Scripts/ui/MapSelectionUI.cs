@@ -64,7 +64,7 @@ public partial class DealOrForceGame
     {
         if (_countryCard is not null || _hudLayer is null) return;
 
-        // ---- the country, on the left, as tall as what it holds.
+        // ---- the country, on the left; its configurable height contains a scrolling action list.
         _countryCard = TexturedPanel(_hudLayer, PanelSurface.Command);
         _countryCard.Name = "CountryCard";
         Ui.Place(_countryCard, "hud.country_card");
@@ -103,7 +103,8 @@ public partial class DealOrForceGame
         _countryCardLinks.AddThemeConstantOverride("separation", 5);
         rows.AddChild(_countryCardLinks);
 
-        _countryCardActionsHost = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _countryCardActionsHost = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         rows.AddChild(_countryCardActionsHost);
 
         // ---- the region and the province, along the bottom.
@@ -284,6 +285,10 @@ public partial class DealOrForceGame
             Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name));
         ClearChildren(_countryCardRows);
         ClearChildren(_countryCardLinks);
+        CardRow(_countryCardRows, "Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name),
+            Tr(PoliticsCore.GovernmentOf(nation).Description));
+        CardRow(_countryCardRows, "Ideology", Tr(PoliticsCore.IdeologyOf(nation).Name),
+            Tr(PoliticsCore.IdeologyOf(nation).Description));
 
         var divisions = 0f;
         foreach (var army in _campaign.Armies)
@@ -448,17 +453,22 @@ public partial class DealOrForceGame
 
         // ---- the region: the same fog rule as the dossier, so the two never disagree.
         var visible = state is not null && (owner is null || CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
+        if (state is not null)
+        {
+            CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
+            CardRow(_regionCardRegionRows, "GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, state)),
+                Tr(RegionalStatistics.GdpExplanation));
+        }
         if (state is null) { }
         else if (!visible)
             CardRow(_regionCardRegionRows, "Intelligence", Tr("Unknown (fog of war)"),
-                Tr("Fog of war — regional population, industry and military intelligence are unavailable."),
+                Tr("Fog of war hides internal conditions, industry and military intelligence, not public population and GDP estimates."),
                 "text.muted");
         else
         {
-            CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
             CardRow(_regionCardRegionRows, "Stability", Fmt.Percent(state.Stability), null,
                 state.Stability < 0.35f ? "state.negative" : state.Stability < 0.55f ? "state.warning" : "state.positive");
-            CardRow(_regionCardRegionRows, "Radicalism", Fmt.Percent(state.Radicalism), null,
+            CardRow(_regionCardRegionRows, "Radicalism", Fmt.Percent(state.Radicalism), RadicalismTooltip(state),
                 state.Radicalism > 0.45f ? "state.negative" : state.Radicalism > 0.25f ? "state.warning" : "state.positive");
             var cultures = EconomySystem.Cultures(state);
             if (cultures.Count > 0)

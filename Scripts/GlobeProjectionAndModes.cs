@@ -119,6 +119,7 @@ public sealed partial class GlobePresentation
         _flatRoot.Visible = enabled;
         _routeFingerprint = int.MinValue;
         ReprojectWorldDecorations();
+        ReprojectSupportMarkers(true);
         BuildFrontPreview();
         ApplyCamera();
         ProjectionChanged?.Invoke(enabled);
@@ -212,6 +213,7 @@ public sealed partial class GlobePresentation
             var position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
             if (node.Position != position) node.Position = position;
         }
+        ReprojectSupportMarkers();
         foreach (var (node, army) in _armyByMarker)
             if (IsInstanceValid(node))
             {
@@ -241,6 +243,7 @@ public sealed partial class GlobePresentation
             if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
         foreach (var (node, normal) in _fleetMarkers)
             if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
+        ReprojectSupportMarkers();
         foreach (var (node, army) in _armyByMarker)
             if (IsInstanceValid(node)) node.Position = ArmyPresentationPoint(army);
         foreach (var glyph in _countryGlyphs)

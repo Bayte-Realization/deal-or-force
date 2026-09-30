@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace DealOrForce.Simulation;
 
@@ -53,8 +54,8 @@ public static class ScriptedEffects
 
     static ScriptedEffects()
     {
-        NationField("treasury", n => n.Treasury, (n, v) => n.Treasury = v, 0f, float.PositiveInfinity,
-            "National treasury in the campaign's currency unit.");
+        NationField("treasury", n => n.Treasury, (n, v) => n.Treasury = v, float.NegativeInfinity, float.PositiveInfinity,
+            "Signed national treasury; negative values are debt. Percent effects add a share of its absolute value; mult and set are literal.");
         // A movement's own figures (Movements). On a country that is not one they read nought
         // and writing them does nothing, so an event can be written for "all" without asking.
         NationField("movement.cadres", n => n.Movement?.Cadres ?? 0f,
@@ -213,6 +214,7 @@ public static class ScriptedEffects
         public float Value { get; }
     }
 
+    [JsonConverter(typeof(ScriptedEffectSaveConverter))]
     public sealed class Effect
     {
         private readonly List<Entry> _entries = new();
@@ -272,6 +274,9 @@ public static class ScriptedEffects
         {
             var result = operation switch
             {
+                // A cost stays a cost in debt. Explicit _mult remains literal for mods
+                // that deliberately scale outstanding debt rather than grant income/costs.
+                Operation.Percent when field.Name == "treasury" => current + MathF.Abs(current) * value,
                 Operation.Percent => current * (1f + value),
                 Operation.Mult => current * value,
                 Operation.Set => value,
@@ -289,6 +294,65 @@ public static class ScriptedEffects
                 var sign = entry.Value >= 0f ? "+" : "";
                 return $"{entry.Key} {sign}{entry.Value.ToString("0.###", CultureInfo.InvariantCulture)}";
             }));
+        }
+    }
+
+    /// <summary>Pending event options must keep their actual effects in a save. A plain
+    /// deserializer cannot repopulate the private lists behind the read-only views.</summary>
+    public sealed class ScriptedEffectSaveConverter : JsonConverter<Effect>
+    {
+        public override Effect Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using var document = JsonDocument.ParseValue(ref reader);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) throw new JsonException("Expected a scripted effect.");
+            var effect = new Effect();
+            if (root.TryGetProperty("Entries", out var entries) && entries.ValueKind == JsonValueKind.Array)
+                foreach (var entry in entries.EnumerateArray())
+                    if (entry.TryGetProperty("Key", out var key) && entry.TryGetProperty("Value", out var value))
+                        effect.Add(key.GetString() ?? "", value.GetSingle());
+            if (root.TryGetProperty("Grants", out var grants) && grants.ValueKind == JsonValueKind.Array)
+                foreach (var grant in grants.EnumerateArray())
+                {
+                    if (grant.ValueKind != JsonValueKind.Object) continue;
+                    var id = grant.TryGetProperty("Id", out var named) ? named.GetString()
+                        : grant.TryGetProperty("Item1", out var old) ? old.GetString() : "";
+                    var days = grant.TryGetProperty("Days", out var duration) ? duration.GetInt32()
+                        : grant.TryGetProperty("Item2", out var oldDays) ? oldDays.GetInt32() : 0;
+                    if (!string.IsNullOrWhiteSpace(id)) effect.Grant(id, days);
+                }
+            if (root.TryGetProperty("Revokes", out var revokes) && revokes.ValueKind == JsonValueKind.Array)
+                foreach (var revoke in revokes.EnumerateArray())
+                    if (revoke.ValueKind == JsonValueKind.String) effect.Revoke(revoke.GetString() ?? "");
+            return effect;
+        }
+
+        public override void Write(Utf8JsonWriter writer, Effect value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("Entries");
+            writer.WriteStartArray();
+            foreach (var entry in value.Entries)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("Key", entry.Key);
+                writer.WriteNumber("Value", entry.Value);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WritePropertyName("Grants");
+            writer.WriteStartArray();
+            foreach (var (id, days) in value.Grants)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("Id", id);
+                writer.WriteNumber("Days", days);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WritePropertyName("Revokes");
+            JsonSerializer.Serialize(writer, value.Revokes, options);
+            writer.WriteEndObject();
         }
     }
 

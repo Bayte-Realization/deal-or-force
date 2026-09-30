@@ -462,9 +462,11 @@ public static class MarketSystem
         var outputFactor = nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
                            NationalModifiers.Factor(nation, "output");
 
+        var allocation = ProductionProgramme.Allocate(states, nation);
+        ProductionProgramme.MigrateLegacy(nation, allocation);
         // A region the war has wrecked makes less of everything (WarDamage).
         foreach (var state in states)
-            ProductionChains.RunRegion(nation, state, outputFactor * WarDamage.OutputFactor(campaign, nation, state));
+            ProductionChains.RunRegion(nation, state, outputFactor * WarDamage.OutputFactor(campaign, nation, state), allocation);
 
         // Four LINQ scans of four global lists, once per country, with a capturing closure
         // each. That is a thousand closures and half a million list steps every market week,

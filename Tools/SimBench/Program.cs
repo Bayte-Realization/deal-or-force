@@ -114,6 +114,16 @@ public static class Program
             return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
 
         var mapped = AttachMap(campaign);
+        if (Array.IndexOf(args, "--soak-selftest") >= 0) return WorldSoakReport.SelfTest(campaign);
+        if (Array.IndexOf(args, "--soak") >= 0)
+        {
+            if (!mapped) return 2;
+            var outputAt = Array.IndexOf(args, "--out");
+            var output = outputAt >= 0 && outputAt + 1 < args.Length ? args[outputAt + 1] : null;
+            return WorldSoakReport.Run(campaign, days, seed, output);
+        }
+        if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
 
         // `--profile N` plays N days of the world and prints where the time went, by total
         // time rather than by garbage - which pass to make faster, not which one to make
@@ -203,16 +213,16 @@ public static class Program
             BattlesLeaveRuins());
         failures += Check("a country that has taken all of another has won the war",
             AWonWarScoresAsWon());
-        failures += Check("a peace is a border: joined to the winner, with no pocket of the loser cut off",
-            APeaceIsABorder());
-        failures += Check("no war goes on for ever",
-            NoWarGoesOnForEver());
         failures += Check("a movement without land lives, moves, rises and can lose its land again",
             MovementsLiveWithoutLand());
         failures += Check("a fallen country goes into exile, and a movement can come to an end",
             AFallenCountryGoesIntoExile());
         failures += Check("the world deals with a movement: lists it, funds it and throws it out",
             TheWorldDealsWithMovements());
+        failures += Check("a peace is a border: joined to the winner, with no pocket of the loser cut off",
+            APeaceIsABorder());
+        failures += Check("no war goes on for ever",
+            NoWarGoesOnForEver());
         failures += Check("what the enemy stands on makes nothing for its owner",
             OccupationCostsOutput());
         failures += Check("a country short of a good builds what makes it",
@@ -6656,7 +6666,8 @@ public static class Program
             "common/governments", "common/ideologies", "common/countries", "common/units",
             "common/settings", "common/goods", "common/buildings", "common/terrain",
             "common/professions", "common/religions", "common/cultures", "common/decisions",
-            "common/modifiers", "common/opinion_modifiers", "common/trade", "events"
+            "common/modifiers", "common/opinion_modifiers", "common/trade", "common/support",
+            "common/programme", "events"
         };
         foreach (var folder in folders)
         {

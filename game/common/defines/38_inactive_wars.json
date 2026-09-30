@@ -1,0 +1,6 @@
+{
+  // AI-only declarations that never led to a battle or even contested land
+  // dissolve after one year. Set to 0 to disable this safeguard.
+  "AiNoContactPeaceDays": 365,
+  "AiUnreachableWarPeaceDays": 180
+}

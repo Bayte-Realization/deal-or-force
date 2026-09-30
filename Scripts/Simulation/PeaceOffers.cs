@@ -35,11 +35,14 @@ public static class PeaceOffers
         PeaceDemand demand)
     {
         if (campaign is null || war is null || war.Ended || proposer is null || opponent is null) return false;
+        if (!CanAddress(campaign, war, proposer, opponent)) return false;
         if (!opponent.IsHuman) return PeaceConference.Resolve(campaign, war, demand);
         if (war.PendingOffer is not null || war.PendingOfferFromId >= 0) return false;
         if (PeaceConference.BlockReason(campaign, war, demand).Length > 0) return false;
 
-        war.PendingOffer = demand;
+        // Store the same whole-region border that validation priced and acceptance will
+        // transfer. The recipient's map and written summary read this saved offer.
+        war.PendingOffer = PeaceConference.Round(campaign, war, demand);
         war.PendingOfferIsWritten = true;
         war.PendingOfferFromId = proposer.Id;
         war.PendingOfferDay = campaign.ElapsedDays;
@@ -55,6 +58,7 @@ public static class PeaceOffers
         PeaceTerms terms)
     {
         if (campaign is null || war is null || war.Ended || proposer is null || opponent is null) return false;
+        if (!CanAddress(campaign, war, proposer, opponent)) return false;
         if (!opponent.IsHuman)
         {
             PeaceNegotiation.Resolve(campaign, war, proposer.Id, terms);
@@ -77,7 +81,14 @@ public static class PeaceOffers
     /// <summary>Whether this war is waiting on an answer from this country.</summary>
     public static bool AwaitingAnswer(StrategicWar war, int nationId) =>
         war is { Ended: false } && war.PendingOfferFromId >= 0 &&
-        war.Involves(nationId) && war.PendingOfferFromId != nationId;
+        war.Opposes(war.PendingOfferFromId, nationId);
+
+    // The current offer has one recipient, not a multilateral consent ballot.
+    // Do not let AI settle over a human coalition ally's head. Such coalitions
+    // can still be settled manually; a full shared approval UI is separate work.
+    private static bool CanAddress(Campaign campaign, StrategicWar war, Nation proposer, Nation opponent) =>
+        war.Opposes(proposer.Id, opponent.Id) && !campaign.Nations.Any(nation =>
+            nation.IsHuman && war.Involves(nation.Id) && nation.Id != proposer.Id && nation.Id != opponent.Id);
 
     /// <summary>Every offer waiting on this country, in the order they were made.</summary>
     public static List<StrategicWar> AwaitingAnswer(Campaign campaign, int nationId)

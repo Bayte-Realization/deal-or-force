@@ -23,3 +23,11 @@ replace without knowing where the executable had been built from.
 | `war_declared`, `peace_signed` | 2.65 s | priority strategic queue |
 
 Source-file peaks are kept below -6 dBFS for UI and below -4 dBFS targets for alerts before the per-channel Godot gain is applied. This leaves headroom for music and ambience.
+
+The three `interface/support_*.wav` cues were generated for this game with Creative Claw / ElevenLabs Sound Effects v2 (44.1 kHz stereo PCM) and are mixed separately through `02_interface_events.json`:
+
+| Cue | Purpose | Source asset |
+| --- | --- | --- |
+| `support_order` | Queue a long-range formation | https://cdn.creativeclaw.co/u/c8554121/audio/6d8b6115-eb5e-43c9-b733-4c6f9eafa234.pcm |
+| `support_mission` | Change its mission | https://cdn.creativeclaw.co/u/c8554121/audio/fc077033-0f3f-4ceb-87d7-3623801f8b07.pcm |
+| `support_ready` | Training finishes | https://cdn.creativeclaw.co/u/c8554121/audio/1a7b3d30-c07d-416d-b443-08691ddd4ff8.pcm |

@@ -1,0 +1,11 @@
+{
+  "layout.panel.hud.country_card": "Selected country / diplomatic actions",
+  "layout.panel.hud.region_card": "Selected region and province",
+  "Relations and treaties": "Relations and treaties",
+  "Influence and protection": "Influence and protection",
+  "Subject administration": "Subject administration",
+  "War and peace": "War and peace",
+  "Negotiate peace": "Negotiate peace",
+  "White peace": "White peace",
+  "Open negotiations for {0}. Review the terms before proposing peace; opening this window does not end the war.": "Open negotiations for {0}. Review the terms before proposing peace; opening this window does not end the war."
+}

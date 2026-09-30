@@ -26,5 +26,12 @@
   // the giver's treasury, at most once a season between the same two.
   "AidShareOfRecipientGdp": 0.01,
   "AidMaxShareOfTreasury": 0.1,
-  "AidIntervalDays": 90
+  "AidIntervalDays": 90,
+
+  // AI aid is voluntary, limited to friends in war or fiscal trouble. A country keeps a
+  // reserve before helping; these values can be overridden by a later mod defines file.
+  "AiAidFriendshipThreshold": 50,
+  "AiAidReserveOfGdp": 0.06,
+  "AiAidCrisisTreasuryOfGdp": 0.015,
+  "AiEmbargoReconcileOpinion": 0
 }

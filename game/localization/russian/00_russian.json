@@ -881,5 +881,8 @@
   "Brush": "Кисть",
   "Frame": "Рамка",
   "Paint province by province: the left button takes, the right gives back.": "Провинция за провинцией: левая кнопка забирает, правая возвращает.",
-  "Drag a rectangle: the left button takes everything inside it, the right gives it all back.": "Растяните рамку: левая кнопка забирает всё внутри, правая всё возвращает."
+  "Drag a rectangle: the left button takes everything inside it, the right gives it all back.": "Растяните рамку: левая кнопка забирает всё внутри, правая всё возвращает.",
+  "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.": "Автоматическая горизонтальная прокрутка камеры для показов и таймлапсов (F6). Нажмите ещё раз, чтобы остановить.",
+  "PAN": "ОБЗОР",
+  "RANGE": "РАДИУС"
 }

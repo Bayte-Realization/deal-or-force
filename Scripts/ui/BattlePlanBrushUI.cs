@@ -28,13 +28,15 @@ public partial class DealOrForceGame
     private bool _editingStart;
     private readonly List<int> _offensiveStroke = new();
     private DrawnFrontLine _offensiveSource;
+    private readonly List<int> _defensiveStroke = new();
+    private bool _defensiveStrokeValid;
 
     private static string DrawName(FrontLineKind kind) => Simulation.Loc.Get(kind switch
     {
         FrontLineKind.Defence => "front line",
         FrontLineKind.Offensive => "offensive line",
         FrontLineKind.AreaDefence => "area to guard",
-        _ => "fallback line"
+        _ => "defensive line"
     });
 
     /// <summary>Start, switch or finish a stroke. The same button twice puts the brush down.</summary>
@@ -56,6 +58,8 @@ public partial class DealOrForceGame
         _borderDraft = null;
         _editingBorderId = -1;
         _offensiveStroke.Clear();
+        _defensiveStroke.Clear();
+        _defensiveStrokeValid = false;
         if (!wasDrawing)
         {
             _drawnProvinces.Clear();
@@ -63,13 +67,13 @@ public partial class DealOrForceGame
             _globe.ProvincePainted -= OnPlanProvincePainted;
             _globe.ProvincePainted += OnPlanProvincePainted;
         }
-        _globe.PaintMode = kind is not (FrontLineKind.Defence or FrontLineKind.Offensive);
-        _globe.BorderPaintMode = kind is FrontLineKind.Defence or FrontLineKind.Offensive;
-        _globe.ObjectivePaintMode = kind == FrontLineKind.Offensive;
+        _globe.PaintMode = kind == FrontLineKind.AreaDefence;
+        _globe.BorderPaintMode = kind != FrontLineKind.AreaDefence;
+        _globe.ObjectivePaintMode = kind is FrontLineKind.Offensive or FrontLineKind.Fallback;
         _globe.BorderStrokeStarted -= BeginBorderStroke;
         _globe.BorderStrokeMoved -= MoveBorderStroke;
         _globe.BorderStrokeFinished -= CommitDrawnLine;
-        if (kind is FrontLineKind.Defence or FrontLineKind.Offensive)
+        if (kind != FrontLineKind.AreaDefence)
         {
             _drawnProvinces.Clear();
             _globe.BorderStrokeStarted += BeginBorderStroke;
@@ -120,7 +124,8 @@ public partial class DealOrForceGame
         if (_drawingKind is null) return;
         var kind = _drawingKind.Value;
         var armies = SelectedPlayerArmies().Select(army => army.Id).ToList();
-        var provinces = kind == FrontLineKind.Offensive ? _offensiveStroke.ToList() : _drawnProvinces.ToList();
+        var provinces = kind == FrontLineKind.Offensive ? _offensiveStroke.ToList()
+            : kind == FrontLineKind.Fallback ? _defensiveStroke.ToList() : _drawnProvinces.ToList();
         var border = _borderDraft;
         var editId = _editingBorderId;
         EndDrawing();
@@ -147,6 +152,12 @@ public partial class DealOrForceGame
         });
         _campaign.Commands.ApplyAll(_campaign);
         _globe.RefreshBattlePlans();
+        if (kind == FrontLineKind.Fallback && !SelectedPlayerArmies().Any(a =>
+            BattlePlanning.LineFor(_campaign, a) is { Kind: FrontLineKind.Fallback } l && l.DefensiveSequence.SequenceEqual(provinces)))
+        {
+            SetArmyFeedback(Tr("Defensive line rejected: use connected controlled land. Existing orders were kept."));
+            return;
+        }
         if (kind == FrontLineKind.Offensive && !SelectedPlayerArmies().Any(a =>
             BattlePlanning.LineFor(_campaign, a) is { Kind: FrontLineKind.Offensive } l && l.ObjectiveSequence.SequenceEqual(provinces)))
         {
@@ -193,6 +204,7 @@ public partial class DealOrForceGame
         _globe.ObjectivePaintMode = false;
         _offensiveStroke.Clear();
         _offensiveSource = null;
+        _defensiveStroke.Clear();
         _globe.BorderStrokeStarted -= BeginBorderStroke;
         _globe.BorderStrokeMoved -= MoveBorderStroke;
         _globe.BorderStrokeFinished -= CommitDrawnLine;
@@ -220,6 +232,8 @@ public partial class DealOrForceGame
                 ? Simulation.Loc.Format(
                     "Objective: {0:N0} provinces · RMB drag in target country, release to save · Alt+RMB redraw · Esc cancel.",
                     _offensiveStroke.Count)
+            : _drawingKind == FrontLineKind.Fallback
+                ? Simulation.Loc.Format("Defensive line: {0:N0} posts · RMB drag on your land, release to assign · backtrack to shorten · Esc cancel.", _defensiveStroke.Count)
                 : Simulation.Loc.Format("Drawing a {0} — {1:N0} provinces.",
                       DrawName(_drawingKind.Value), _drawnProvinces.Count) + " " +
                   Tr("Click the same button again to commit.");
@@ -230,9 +244,13 @@ public partial class DealOrForceGame
     private string OffensiveStatus()
     {
         var armies = SelectedPlayerArmies().ToArray();
+        var defensive = armies.Length > 0 ? BattlePlanning.LineFor(_campaign, armies[0]) : null;
+        if (defensive is { Kind: FrontLineKind.Fallback } && armies.All(a => a.FrontLineId == defensive.Id))
+            return Simulation.Loc.Format("Defence: {0:N0}/{1:N0} divisions at their posts. Defend + Alt/RMB redraws the line.",
+                armies.Count(a => a.OrderProvinceId > 0 && a.ProvinceId == a.OrderProvinceId), armies.Length);
         var line = OffensivePlanning.Source(_campaign, armies);
         if (line is not { Kind: FrontLineKind.Offensive } || line.Objectives.Count == 0)
-            return Tr("Front: LMB whole border / RMB section. Attack: RMB destination / Alt+RMB redraw.");
+            return Tr("Front: LMB whole border / RMB section. Defend: RMB line on your land. Attack: RMB destination. Alt+RMB redraws.");
         var reached = armies.Count(a => line.Objectives.GetValueOrDefault(a.Id, -1) == a.ProvinceId);
         var executing = armies.Count(a => a.PlanActive);
         var phase = Tr(reached == armies.Length ? "Objective reached"
@@ -245,6 +263,25 @@ public partial class DealOrForceGame
 
     private void BeginBorderStroke(GlobePick pick, bool whole, bool edit)
     {
+        if (_drawingKind == FrontLineKind.Fallback)
+        {
+            _defensiveStroke.Clear(); _drawnProvinces.Clear(); _editingBorderId = -1;
+            _defensiveStrokeValid = false;
+            if (!DefensivePlanning.IsPost(_campaign, _campaign.Player?.Id ?? -1, pick.ProvinceId)) return;
+            if (edit)
+            {
+                var lines = SelectedPlayerArmies().Select(a => BattlePlanning.LineFor(_campaign, a)).ToArray();
+                if (lines.Length == 0 || lines.Any(l => l is null || l.Kind != FrontLineKind.Fallback || l.Id != lines[0].Id))
+                {
+                    SetArmyFeedback(Tr("Select divisions on one defensive line before using Alt+RMB to redraw it."));
+                    return;
+                }
+                _editingBorderId = lines[0].Id;
+            }
+            _defensiveStrokeValid = true;
+            MoveBorderStroke(pick);
+            return;
+        }
         if (_drawingKind == FrontLineKind.Offensive) { BeginOffensiveStroke(pick, edit); return; }
         _drawnProvinces.Clear();
         _borderDraft = null;
@@ -293,6 +330,14 @@ public partial class DealOrForceGame
 
     private void MoveBorderStroke(GlobePick pick)
     {
+        if (_drawingKind == FrontLineKind.Fallback)
+        {
+            if (!_defensiveStrokeValid || !DefensivePlanning.Extend(_campaign, _campaign.Player?.Id ?? -1, _defensiveStroke, pick.ProvinceId)) return;
+            _drawnProvinces.Clear(); _drawnProvinces.UnionWith(_defensiveStroke);
+            _globe.SetDefensivePlanPreview(_defensiveStroke);
+            RefreshDrawingUi();
+            return;
+        }
         if (_drawingKind == FrontLineKind.Offensive) { MoveOffensiveStroke(pick); return; }
         if (_borderDraft is null) return;
         if (_editingStart) { _borderDraft.StartLatitude = pick.Latitude; _borderDraft.StartLongitude = pick.Longitude; }

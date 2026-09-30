@@ -13,9 +13,12 @@ public partial class DealOrForceGame
     private CanvasLayer _authorCanvas;
     private CodeEdit _authorCode;
     private Tree _authorTree;
+    private VisualLayoutEditor _authorLayout;
+    private TabContainer _authorTabs;
     private Label _authorStatus;
     private string _authorSaved = "", _authorRelative = "";
     private bool _authorDirty;
+    private ScenarioEntry _pickerScenarioEntry;
     private string AuthorRoot => ProjectSettings.GlobalizePath("user://mods/editor_workspace");
     private IEnumerable<string> ScenarioRoots => _modLoader.Packages.Select(p => p.PhysicalRoot);
 
@@ -108,7 +111,11 @@ public partial class DealOrForceGame
     private bool AuthorWindowOpen => IsInstanceValid(_authorCanvas);
 
     /// <summary>Escape takes the window's own way out, whichever one that is.</summary>
-    private void EscapeAuthorWindow() => ConfirmAuthorExit(_authorExit ?? (() => CloseAuthorWindow()));
+    private void EscapeAuthorWindow()
+    {
+        if (IsInstanceValid(_authorLayout) && _authorLayout.CancelGesture()) return;
+        ConfirmAuthorExit(_authorExit ?? (() => CloseAuthorWindow()));
+    }
 
     private void ConfirmAuthorExit(Action action)
     {
@@ -198,28 +205,42 @@ public partial class DealOrForceGame
         Choose(entries.FirstOrDefault());
         rows.AddChild(start);
 
-        var actions = new HBoxContainer();
+        var actions = new HFlowContainer();
         rows.AddChild(actions);
         actions.AddChild(ActionButton("Content editor", OpenContentEditor, 220, 42));
+        actions.AddChild(ActionButton("UI layout editor", OpenVisualLayoutEditor, 220, 42));
         var snapshot = ActionButton("Create scenario from this world", CreateScenarioCopy, 320, 42);
         snapshot.Disabled = _campaign.ProvinceMap is null;
         actions.AddChild(snapshot);
+        var mapEditor = ActionButton("Edit current world on map", OpenScenarioMapEditor, 270, 42);
+        mapEditor.Disabled = _campaign.ProvinceMap is null;
+        actions.AddChild(mapEditor);
         rows.AddChild(Title("A copy keeps the current world's figures; changing the date alone does not create a historical scenario.", 13, Ui.Colour("text.caption")));
     }
 
     private async void LoadAuthoredScenario(ScenarioEntry entry)
     {
         if (_isLoading || _networkConnected) return;
-        var success = await RunLoadingOperation("Loading scenario", async () =>
+        if (!await RebuildAuthoredScenarioWithLoading(entry)) return;
+        // The campaign above was loaded and paused on purpose; the picker is what unpauses it.
+        CloseAuthorWindow(restoreClock: false);
+        OpenCountryPicker();
+    }
+
+    private System.Threading.Tasks.Task<bool> RebuildAuthoredScenarioWithLoading(ScenarioEntry entry) =>
+        RunLoadingOperation("Loading scenario", async () =>
         {
             await LoadingPhase("Reading scenario", 15);
-            var next = ScenarioLibrary.Create(entry, 20260830, _campaign.ProvinceMap?.ProvinceCount ?? 0);
+            var next = ScenarioLibrary.Create(entry, _campaignSeed, _campaign.ProvinceMap?.ProvinceCount ?? 0);
             // Only the legacy contemporary bootstrap receives contemporary mod history.
             // A full world snapshot is already complete: never seed it with 2024 defaults.
             if (entry.Id == "2024" && entry.WorldFile.Length == 0) _modLoader.ApplyCampaignData(next);
             await LoadingPhase("Preparing map", 60);
             _campaign.Changed -= Refresh;
             _campaign = next;
+            _pickerScenarioEntry = entry.Id == "2024" && entry.WorldFile.Length == 0 ? null : entry;
+            _campaignSeed = next.Seed;
+            if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();
             _campaign.Changed += Refresh;
             _campaignInProgress = false;
             _lastAutosaveDay = -1;
@@ -235,11 +256,6 @@ public partial class DealOrForceGame
             Refresh();
             await LoadingPhase("Ready", 100);
         }, true);
-        if (!success) return;
-        // The campaign above was loaded and paused on purpose; the picker is what unpauses it.
-        CloseAuthorWindow(restoreClock: false);
-        OpenCountryPicker();
-    }
 
     private void CreateScenarioCopy()
     {
@@ -305,7 +321,7 @@ public partial class DealOrForceGame
         Filter();
         var editing = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         columns.AddChild(editing);
-        var tabs = new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
+        var tabs = _authorTabs = new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         editing.AddChild(tabs);
         var inspector = new VBoxContainer { Name = "Properties" };
         tabs.AddChild(inspector);
@@ -338,7 +354,15 @@ public partial class DealOrForceGame
         _authorCode = new CodeEdit { Name = "JSON", GuttersDrawLineNumbers = true, SizeFlagsVertical = SizeFlags.ExpandFill };
         tabs.AddChild(_authorCode);
         _authorCode.TextChanged += () => { _authorDirty = _authorCode.Text != _authorSaved; };
-        tabs.TabChanged += index => { if (index == 0) RebuildAuthorTree(); };
+        _authorLayout = new VisualLayoutEditor
+        {
+            Name = "Layout", ReadDocument = () => _authorCode.Text,
+            IsLayoutDocument = () => _authorRelative.StartsWith("gui/", StringComparison.OrdinalIgnoreCase),
+            ReplaceDocument = ReplaceAuthorDocument, UndoDocument = () => _authorCode.Undo(), RedoDocument = () => _authorCode.Redo()
+        };
+        tabs.AddChild(_authorLayout);
+        tabs.SetTabTitle(2, Tr("Layout"));
+        tabs.TabChanged += index => { if (index == 0) RebuildAuthorTree(); if (index == 2) _authorLayout.RefreshDocument(); };
         var toolbar = new HBoxContainer();
         rows.AddChild(toolbar);
         toolbar.AddChild(ActionButton("Validate", () => AuthorOperation(false), 130, 38));
@@ -350,6 +374,32 @@ public partial class DealOrForceGame
         _authorStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_authorStatus);
         _authorSaved = _authorRelative = "";
+    }
+
+    private void ReplaceAuthorDocument(string json)
+    {
+        if (json == _authorCode.Text) return;
+        _authorCode.BeginComplexOperation();
+        _authorCode.SelectAll(); _authorCode.InsertTextAtCaret(json);
+        _authorCode.EndComplexOperation();
+        _authorDirty = _authorCode.Text != _authorSaved;
+    }
+
+    private void OpenVisualLayoutEditor()
+    {
+        OpenContentEditor();
+        const string relative = "gui/99_editor_layout.json";
+        var path = Path.Combine(AuthorRoot, relative);
+        if (File.Exists(path)) OpenAuthorFile(relative, path);
+        else
+        {
+            _authorRelative = relative; _authorSaved = "";
+            _authorCode.Text = "{\n  \"layout\": {}\n}\n";
+            _authorCode.ClearUndoHistory(); _authorDirty = true;
+            _authorStatus.Text = relative;
+        }
+        _authorTabs.CurrentTab = 2;
+        _authorLayout.RefreshDocument();
     }
 
     private void NewAuthorDocument()
@@ -371,7 +421,7 @@ public partial class DealOrForceGame
                     if (File.Exists(ScenarioLibrary.SafePath(AuthorRoot, relative)))
                         throw new InvalidDataException(Tr("This document already exists. Open it in the file list."));
                     _authorRelative = relative; _authorSaved = ""; _authorCode.Text = "{\n}\n"; _authorDirty = true;
-                    _authorStatus.Text = relative; RebuildAuthorTree();
+                    _authorStatus.Text = relative; RebuildAuthorTree(); _authorLayout.RefreshDocument();
                 }
                 catch (Exception e) { _authorStatus.Text = e.Message; }
                 dialog.QueueFree();
@@ -392,6 +442,7 @@ public partial class DealOrForceGame
             _authorDirty = false;
             _authorStatus.Text = relative;
             RebuildAuthorTree();
+            _authorLayout.RefreshDocument();
         }
         catch (Exception e) { _authorStatus.Text = e.Message; }
     }

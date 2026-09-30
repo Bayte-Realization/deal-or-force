@@ -12,9 +12,9 @@ config_version=5
 
 config/name="Deal or Force"
 run/main_scene="res://Scenes/MainMenu.tscn"
+config/project_settings_override="user://graphics_override.cfg"
 config/features=PackedStringArray("4.7", "C#", "Forward Plus")
 config/icon="res://icon_small.png"
-config/project_settings_override="user://graphics_override.cfg"
 
 [autoload]
 
@@ -44,5 +44,6 @@ enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
 
 [rendering]
 
+rendering_device/d3d12/max_resource_descriptors=131072.0
 textures/canvas_textures/default_texture_filter=2
 rendering_device/driver.windows="d3d12"

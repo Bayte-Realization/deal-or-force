@@ -294,13 +294,34 @@ public static class AiAdmiralty
         {
             if (army.NationId != nation.Id || army.EmbarkedFleetId >= 0) continue;
             if (army.InBattle || army.ProvinceId <= 0) continue;
-            // Already marching somewhere, and quite possibly here.
-            if (army.Route.Count > 0) return;
-            if (army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead or ArmyOrder.DefendFront) continue;
+            if (army.TemplateId == MilitiaCore.TemplateId || army.FrontLineId >= 0) continue;
+            // Only an existing march to THIS port fulfils the request. An unrelated
+            // column must not prevent every other reserve from boarding.
+            if (army.Route.Count > 0)
+            {
+                if (army.OrderProvinceId == fleet.HomeProvinceId) return;
+                continue;
+            }
+            if (army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead or ArmyOrder.DefendFront)
+            {
+                // A nominal land role in an overseas war with no own sector is not
+                // a reason to leave the only landing troops inland forever.
+                var servesLandFront = false;
+                foreach (var war in campaign.Wars)
+                {
+                    if (war.Ended || war.Id != army.AssignedWarId) continue;
+                    foreach (var post in war.FriendlyFront(nation.Id))
+                        if (campaign.ProvinceController[post] == nation.MapIndex) { servesLandFront = true; break; }
+                    break;
+                }
+                if (servesLandFront) continue;
+            }
             var centre = topology.CenterOf(army.ProvinceId);
             var distance = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude,
                 centre.Latitude, centre.Longitude);
             if (distance >= bestDistance) continue;
+            if (army.ProvinceId != fleet.HomeProvinceId && topology.FindRoute(army.ProvinceId,
+                    fleet.HomeProvinceId, (ushort)nation.MapIndex, campaign.ProvinceController).Length == 0) continue;
             bestDistance = distance;
             chosen = army;
         }

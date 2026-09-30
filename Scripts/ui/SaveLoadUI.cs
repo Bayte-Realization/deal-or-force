@@ -111,7 +111,7 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.save_load");
         var rows = ScrollablePanelRows(panel, 28, 24, 10);
         rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, Ui.Colour("text.accent")));
-        rows.AddChild(Title("As many campaigns as you care to keep · atomic compressed saves · F5 quicksaves, F9 loads it",
+        rows.AddChild(Title("Editable JSON saves by default · F5 quicksave · F9 quickload",
             13, Ui.Colour("text.muted")));
 
         var folderRow = new HBoxContainer();
@@ -212,8 +212,9 @@ public partial class DealOrForceGame
             SaveSystem.QuickSlot => Tr("QUICKSAVE"),
             _ => string.IsNullOrWhiteSpace(save.DisplayName) ? save.Slot : save.DisplayName
         };
+        var seedSuffix = save.Seed > 0 ? Simulation.Loc.Format(" · seed {0}", save.Seed) : "";
         var info = RowLabel(Simulation.Loc.Format("{0}\n{1} · {2} · {3} · {4} KiB",
-            title, save.NationName, save.GameDate,
+            title, save.NationName + seedSuffix, save.GameDate,
             save.SavedUtc.ToLocalTime().ToString("g"),
             (save.CompressedBytes / 1024f).ToString("0")), 13, Ui.Colour("text.body_soft"));
         info.AutowrapMode = TextServer.AutowrapMode.Off;
@@ -353,6 +354,9 @@ public partial class DealOrForceGame
         _loadingCanReturn = false;
         if (_campaign is not null) _campaign.Changed -= Refresh;
         _campaign = result.Campaign;
+        _pickerScenarioEntry = null;
+        _campaignSeed = _campaign.Seed;
+        if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();
         _campaign.Changed += Refresh;
 
         // Everything the interface was pointing at belonged to the campaign that just
@@ -386,6 +390,7 @@ public partial class DealOrForceGame
         _pauseMenuLayer.Visible = false;
         _saveLoadLayer.Visible = false;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
+        if (_researchLayer is not null) _researchLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
         _hudLayer.Visible = true;
         _sidePanel.Visible = false;

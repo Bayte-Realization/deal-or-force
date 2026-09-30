@@ -1,0 +1,10 @@
+// Weekly recovery is a fraction of CURRENT radicalism, not percentage points.
+// At living=0.5: 0.7% of the angry population recovers weekly (half-life ~99 weeks).
+// Existing budget, ideology, minority and inflation modifiers remain additive pressures.
+{
+  "RegionalRadicalismRecoveryPerWeek": 0.004,
+  "RegionalRadicalismLivingRecovery": 0.006,
+  "RegionalRadicalismWarRecovery": 0.65,
+  "RegionalRadicalismOccupation": 0.002,
+  "AiRadicalismConcern": 0.25
+}

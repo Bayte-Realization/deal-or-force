@@ -1,0 +1,17 @@
+{
+  "campaign": {
+    "screens": {
+      "Decisions": {
+        "tabs": [
+          { "id": "Decisions" },
+          { "id": "Formables", "label": "Formable nations" },
+          { "id": "Opportunities", "groups": ["formables", "shortages", "decisions"] }
+        ]
+      }
+    }
+  },
+  "metrics": {
+    "atlas.cards_per_section": 3,
+    "atlas.shortage_threshold": 0.985
+  }
+}

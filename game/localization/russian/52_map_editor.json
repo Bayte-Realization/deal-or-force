@@ -1,0 +1,21 @@
+{
+  "Edit current world on map": "Редактировать текущую карту",
+  "Map & scenario editor": "Редактор карты и сценария",
+  "Back to scenarios": "К сценариям",
+  "Open this editor from Scenarios & workshop after the map loads.": "Откройте редактор из меню сценариев после загрузки карты.",
+  "Political map editor — independent draft. The current campaign is unchanged.": "Политическая карта — отдельный черновик. Текущая партия не изменяется.",
+  "Select province": "Выбор провинции",
+  "Paint ownership": "Кисть владения",
+  "Fit world": "Показать мир",
+  "Focus target country": "К выбранной стране",
+  "Target country": "Страна для кисти",
+  "Find country…": "Поиск страны…",
+  "Target region": "Регион для кисти",
+  "Select a province on the map to inspect it.": "Нажмите на провинцию в режиме выбора, чтобы посмотреть её страну и регион.",
+  "Left drag: paint whole provinces. Wheel: zoom. Middle drag: pan. Borders are visible when zoomed in.": "ЛКМ с перетаскиванием: закрасить провинции. Колесо: масштаб. Средняя кнопка: перемещение. При приближении видны границы провинций.",
+  "This brush does not split provinces or recalculate population, armies or the economy. Review those data in the content editor.": "Кисть не разделяет провинции и не пересчитывает население, армии и экономику. Эти данные проверьте в редакторе содержимого.",
+  "Save scenario to mod": "Сохранить сценарий в мод",
+  "Unsaved draft": "Черновик не сохранён",
+  "No region available for this country.": "У этой страны нет доступного региона.",
+  "Could not save scenario": "Не удалось сохранить сценарий"
+}

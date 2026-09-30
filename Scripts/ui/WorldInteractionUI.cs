@@ -10,7 +10,8 @@ public partial class DealOrForceGame
     private VBoxContainer _countryActions = null!;
     private Label _countryActionFeedback = null!;
     private Button _declareWarButton = null!;
-    private HBoxContainer _subjectActions = null!;
+    private Button _negotiatePeaceButton = null!;
+    private VBoxContainer _subjectActions = null!;
     private Button _integrateButton = null!;
     private Button _allianceButton = null!;
     private Button _guaranteeButton = null!;
@@ -18,36 +19,51 @@ public partial class DealOrForceGame
 
     private void BuildCountryActionControls(VBoxContainer parent)
     {
-        _countryActions = new VBoxContainer { Visible = false };
+        _countryActions = new VBoxContainer { Name = "CountryActions", Visible = false, SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         _countryActions.AddThemeConstantOverride("separation", 6);
         parent.AddChild(_countryActions);
         _countryActions.AddChild(Title("DIPLOMATIC ACTIONS", 12, Ui.Colour("text.caption")));
-        var row = new HBoxContainer();
+        var scroll = new ScrollContainer { Name = "DiplomaticActionScroll",
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, System.Math.Clamp(InterfaceSkin.Metric("diplomacy.actions_min_height", 220), 120, 480)),
+            MouseForcePassScrollEvents = false, FollowFocus = true };
+        _countryActions.AddChild(scroll);
+        var list = new VBoxContainer { Name = "DiplomaticActionList", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        list.AddThemeConstantOverride("separation", 6); scroll.AddChild(list);
+        var row = new VBoxContainer { Name = "RelationsActions" };
         row.AddThemeConstantOverride("separation", 5);
-        _countryActions.AddChild(row);
+        list.AddChild(Title("Relations and treaties", 12, Ui.Colour("text.caption")));
+        list.AddChild(row);
         row.AddChild(ActionButton("Improve", ImproveSelectedRelations, 96, 32, true));
         row.AddChild(ActionButton("Denounce", DenounceSelected, 96, 32));
         row.AddChild(ActionButton("Capital", FocusSelectedCapital, 96, 32));
-        var pacts = new HBoxContainer();
+        var pacts = new VBoxContainer();
         pacts.AddThemeConstantOverride("separation", 5);
-        _countryActions.AddChild(pacts);
+        list.AddChild(pacts);
         _allianceButton = ActionButton("Alliance", ToggleSelectedAlliance, 140, 32);
         _guaranteeButton = ActionButton("Guarantee", ToggleSelectedGuarantee, 140, 32);
         pacts.AddChild(_allianceButton);
         pacts.AddChild(_guaranteeButton);
-        BuildAgreementControls(_countryActions);
-        BuildSubmissionControls(_countryActions);
+        BuildAgreementControls(list);
+        BuildSubmissionControls(list);
 
-        _subjectActions = new HBoxContainer { Visible = false };
+        _subjectActions = new VBoxContainer { Name = "SubjectActions", Visible = false };
         _subjectActions.AddThemeConstantOverride("separation", 5);
-        _countryActions.AddChild(_subjectActions);
+        list.AddChild(_subjectActions);
+        _subjectActions.AddChild(Title("Subject administration", 12, Ui.Colour("text.caption")));
         _subjectActions.AddChild(ActionButton("Release", ReleaseSelectedSubject, 96, 32));
         _integrateButton = ActionButton("Integrate", IntegrateSelectedSubject, 110, 32);
         _subjectActions.AddChild(_integrateButton);
 
         _declareWarButton = ActionButton("Declare war", ConfirmOrDeclareWar, 0, 38);
         _declareWarButton.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _countryActions.AddChild(_declareWarButton);
+        list.AddChild(Title("War and peace", 12, Ui.Colour("text.caption")));
+        _negotiatePeaceButton = ActionButton("Negotiate peace", () => OpenDiplomaticPeace(_selectedNation), 0, 38);
+        _negotiatePeaceButton.Name = "NegotiatePeace";
+        list.AddChild(_negotiatePeaceButton);
+        list.AddChild(_declareWarButton);
         _countryActionFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _countryActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _countryActions.AddChild(_countryActionFeedback);
@@ -360,13 +376,15 @@ public partial class DealOrForceGame
                 : why);
         }
         if (!_countryActions.Visible) return;
+        RefreshDiplomaticPeaceButton(_negotiatePeaceButton, nation);
+        _declareWarButton.Visible = !_negotiatePeaceButton.Visible;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
         _declareWarButton.Disabled = !canDeclare;
         _declareWarButton.TooltipText = Ui.Tip(canDeclare ? "Requires a second click to confirm." : reason);
         _declareWarButton.Text = _pendingWarTarget == nation.Id
             ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
             : Tr("Declare war");
-        if (!canDeclare && string.IsNullOrWhiteSpace(_countryActionFeedback.Text))
+        if (!canDeclare && !_negotiatePeaceButton.Visible && string.IsNullOrWhiteSpace(_countryActionFeedback.Text))
             _countryActionFeedback.Text = reason;
     }
 

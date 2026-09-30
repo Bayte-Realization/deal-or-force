@@ -16,6 +16,7 @@ public partial class DealOrForceGame
     private int _audioObservedNation = -1;
     private string _audioPolitics = "", _audioFormation = "";
     private readonly Dictionary<int, (int State, BuildingKind Building, int Count)> _audioConstruction = new();
+    private readonly HashSet<int> _audioSupportFormations = new();
     private AudioStreamPlayer _musicPlayer;
     private readonly System.Random _musicOrder = new();
 
@@ -210,6 +211,7 @@ public partial class DealOrForceGame
         _knownEndedBattles.Clear();
         _audioObservedNation = -1;
         _audioConstruction.Clear();
+        _audioSupportFormations.Clear();
         foreach (var battle in _campaign.Battles.Where(battle => battle.Ended))
             _knownEndedBattles.Add(battle.Id);
     }
@@ -267,5 +269,15 @@ public partial class DealOrForceGame
         }
         if (!initial && finished) PlayStrategicCue("construction_complete");
         else if (!initial && queued) PlayStrategicCue("construction_queued");
+        var supportReady = false;
+        var supportNow = _campaign.SupportFormations
+            .Where(formation => formation.NationId == nation.Id)
+            .Select(formation => formation.Id)
+            .ToHashSet();
+        if (!initial)
+            supportReady = supportNow.Any(id => !_audioSupportFormations.Contains(id));
+        _audioSupportFormations.Clear();
+        _audioSupportFormations.UnionWith(supportNow);
+        if (supportReady) PlayStrategicCue("support_ready");
     }
 }

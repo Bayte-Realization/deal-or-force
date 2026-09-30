@@ -515,6 +515,7 @@ public static class SecessionEvents
 
         var going = new HashSet<int>();
         foreach (var piece in leaving) going.Add(piece.MapIndex);
+        var departedStates = campaign.States.Where(state => going.Contains(state.MapIndex)).ToArray();
 
         var topology = campaign.ProvinceMap;
         var provinces = new List<int>();
@@ -524,6 +525,7 @@ public static class SecessionEvents
         // Not a conquest. It is standing on the ground it already lived on, and a state born
         // an international pariah for that would be the wrong answer twice over.
         StatePartition.Annex(campaign, provinces, born, asConquest: false);
+        SecessionResearch.Inherit(campaign, parent, born, departedStates, was);
 
         foreach (var piece in leaving)
             foreach (var state in campaign.States)

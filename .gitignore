@@ -36,6 +36,7 @@ perf.log
 /bench*.log
 /Deal or Force Launcher.exe
 /Tools/TerrainCompiler/cache/
+/Tools/CityCompiler/cache/
 
 # Concept art and logo masters. Working material rather than game content - nothing under
 # game/ or Scripts/ reads any of it, and the game's own logo lives in game/gfx/interface/brand.

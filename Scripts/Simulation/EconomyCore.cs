@@ -881,8 +881,8 @@ public static class EconomySystem
                 state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
                 var welfareRadicalism = budget.Radicalism;
                 var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
-                state.Radicalism = M.Clamp01(state.Radicalism +
-                    (0.46f - state.StandardOfLiving) * 0.002f + welfareRadicalism + focusRadicalism);
+                state.Radicalism += RadicalismCore.WeeklyChange(campaign, nation, state,
+                    atWar, welfareRadicalism, focusRadicalism);
                 MinorityPressure(campaign, nation, state);
                 totalPopulation += state.Population;
             }
@@ -1004,7 +1004,7 @@ public static class EconomySystem
         var foreign = ForeignShare(state, nation.Tag);
         if (foreign <= 0.0001f) return;
 
-        state.Radicalism = M.Clamp01(state.Radicalism + foreign * defines.MinorityRadicalismPerWeek);
+        // Minority grievances are counted once, alongside recovery, in RadicalismCore.
 
         // Assimilation. Fast where people are schooled and comfortable, slow where they
         // are angry, and never instant.
@@ -1444,6 +1444,7 @@ public static class ConstructionSystem
         // is the whole of the compromise: the building is allowed, the geography is priced.
         var yield = Waterfront.Yield(campaign, state.MapIndex, project.Building);
         state.Buildings[project.Building] = state.Buildings.GetValueOrDefault(project.Building) + 1;
+        campaign.Chronicle.Record(campaign, "construction_completed", nation.Id, subject: definition.Name, place: state.Name, isPublic: false);
         nation.Gdp += definition.GdpGain * yield;
         nation.ConstructionCapacity += definition.CapacityGain * yield;
         if (project.Building == BuildingKind.University)

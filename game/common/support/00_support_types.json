@@ -1,0 +1,181 @@
+// Long-range formations - what a country reaches with rather than what it stands on.
+//
+// An entry is a KIND of formation: what the world opens with, what a player can raise,
+// and what a mod can add by dropping another file into common/support. Nothing here is
+// compiled in; a field left out is a zero, and a new kind of formation needs no code.
+//
+//   kind             what the formation IS: ground guns, crewed aircraft, drones, or
+//                    missile brigades that never leave home. The kind decides which
+//                    rules apply - a missile brigade covers its own ground whatever it
+//                    was told, everything else works the mission it was given.
+//   range_km         how far from its base the formation projects, in real kilometres.
+//   support_fire     what it adds to friendly attacks in battles inside the radius,
+//                    saturating: the first brigade is a real help, the eleventh a rumour.
+//   air_superiority  what it takes off the ENEMY's long-range fire over the same ground -
+//                    fighters on the sweep, suppressing guns and attack aircraft alike.
+//   interdiction     what it strips from enemy defence in battles inside the radius:
+//                    the barrage that finds the depots and the roads behind the front.
+//   air_defence      the ground's own answer to aircraft: a missile brigade's reach is
+//                    measured from home, and enemy fire over it pays the price.
+//   recon            what the formation can see. Priced in, shown to the player, and the
+//                    reason a cheap drone group is worth more than its fire suggests.
+//   recruitment_cost fraction of the money a division of infantry costs - the same
+//                    budget a country buys its armies with.
+//   build_days       from the order to the formation existing.
+//   personnel        people taken out of the manpower reserve - fewer than a division,
+//                    because a wing is not a regiment of riflemen.
+//   missions         what the formation may be ordered to do. "standby" is always
+//                    available; the rest say what the formation does with its days.
+//
+// The stock game's nine kinds are balanced against a division's fire of about one, so
+// that a country's whole long-range establishment over one battle is worth roughly a
+// third again of the divisions actually standing in it - decisive when it is aimed,
+// never a replacement for holding the ground.
+{
+  "artillery_brigade": {
+    "name": "Artillery brigade",
+    "kind": "ground",
+    "icon": "artillery",
+    "range_km": 45,
+    "support_fire": 6.0,
+    "interdiction": 1.5,
+    "recon": 0.5,
+    "recruitment_cost": 0.50,
+    "build_days": 45,
+    "personnel": 4500,
+    "missions": ["standby", "close_air_support", "interdiction"]
+  },
+
+  // The rocket half of the gun line: half again the reach of a howitzer and the
+  // interdiction to match - a battery that finds a road column empties it.
+  "mlrs_battalion": {
+    "name": "Rocket artillery battalion",
+    "kind": "ground",
+    "icon": "artillery",
+    "range_km": 90,
+    "support_fire": 5.0,
+    "interdiction": 3.5,
+    "recon": 0.8,
+    "recruitment_cost": 0.70,
+    "build_days": 50,
+    "personnel": 3500,
+    "missions": ["standby", "close_air_support", "interdiction"]
+  },
+
+  // The ground's own answer to the air war. No offensive mission at all: a missile
+  // brigade covers its home region's radius whatever it was told, which is the point
+  // of it - the enemy's aircraft pay before the battle is even joined.
+  "sam_brigade": {
+    "name": "Missile brigade",
+    "kind": "air_defence",
+    "icon": "sam",
+    "range_km": 130,
+    "air_defence": 10.0,
+    "recon": 1.0,
+    "recruitment_cost": 0.80,
+    "build_days": 60,
+    "personnel": 3000,
+    "missions": ["standby"]
+  },
+
+  // The sweep: the longest legs in the book and the only formation whose air
+  // superiority is worth the name. Without bombs worth mentioning, but the sky it
+  // clears is what every other aircraft's work depends on.
+  "fighter_wing": {
+    "name": "Fighter wing",
+    "kind": "air",
+    "icon": "air",
+    "range_km": 550,
+    "support_fire": 3.5,
+    "air_superiority": 12.0,
+    "interdiction": 2.0,
+    "recon": 1.5,
+    "recruitment_cost": 1.60,
+    "build_days": 90,
+    "personnel": 2400,
+    "missions": ["standby", "air_superiority", "close_air_support", "interdiction"]
+  },
+
+  // The ground attack wing: what a close support mission is for. Half a fighter's
+  // sweep, four times its fire - and it needs the sweep of something else overhead.
+  "attack_aircraft_wing": {
+    "name": "Attack aircraft wing",
+    "kind": "air",
+    "icon": "air",
+    "range_km": 420,
+    "support_fire": 9.0,
+    "air_superiority": 3.0,
+    "interdiction": 3.0,
+    "recon": 2.0,
+    "recruitment_cost": 1.40,
+    "build_days": 80,
+    "personnel": 2800,
+    "missions": ["standby", "close_air_support", "interdiction"]
+  },
+
+  // The low, slow half of the air war: the shortest reach of any aircraft and the
+  // heaviest fire per kilometre of it. What a country with a small budget flies instead.
+  "attack_helicopter_regiment": {
+    "name": "Attack helicopter regiment",
+    "kind": "air",
+    "icon": "air",
+    "range_km": 180,
+    "support_fire": 8.0,
+    "air_superiority": 1.5,
+    "interdiction": 1.5,
+    "recon": 2.5,
+    "recruitment_cost": 1.00,
+    "build_days": 70,
+    "personnel": 3200,
+    "missions": ["standby", "close_air_support"]
+  },
+
+  // The deep end: the reach to work the whole theatre and the interdiction to shut a
+  // province's roads for a week. Almost no air presence of its own to speak of.
+  "strategic_bomber_regiment": {
+    "name": "Strategic bomber regiment",
+    "kind": "air",
+    "icon": "air",
+    "range_km": 1600,
+    "support_fire": 6.0,
+    "interdiction": 6.0,
+    "recon": 2.0,
+    "recruitment_cost": 2.20,
+    "build_days": 120,
+    "personnel": 4000,
+    "missions": ["standby", "close_air_support", "interdiction"]
+  },
+
+  // The eyes. Almost no fire at all, and no country that owns one regrets it: the
+  // reach of a strategic aircraft at the price of a good battery.
+  "recon_drone_group": {
+    "name": "Reconnaissance drone group",
+    "kind": "drone",
+    "icon": "drone",
+    "range_km": 700,
+    "support_fire": 0.5,
+    "interdiction": 1.0,
+    "recon": 6.0,
+    "recruitment_cost": 0.35,
+    "build_days": 30,
+    "personnel": 400,
+    "missions": ["standby", "interdiction", "close_air_support"]
+  },
+
+  // The modern cheap shot: a quarter of a fighter's cost, most of an attack wing's
+  // work, and nobody aboard to lose. Fragile over a front that is defended - which is
+  // what the suppression of a missile brigade or a fighter sweep means in practice.
+  "strike_drone_group": {
+    "name": "Strike drone group",
+    "kind": "drone",
+    "icon": "drone",
+    "range_km": 400,
+    "support_fire": 4.5,
+    "interdiction": 2.5,
+    "recon": 2.0,
+    "recruitment_cost": 0.50,
+    "build_days": 40,
+    "personnel": 600,
+    "missions": ["standby", "close_air_support", "interdiction"]
+  }
+}

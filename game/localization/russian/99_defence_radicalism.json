@@ -1,0 +1,20 @@
+{
+  "Defend": "Оборона",
+  "Defensive line": "Линия обороны",
+  "defensive line": "оборонительный рубеж",
+  "Defence: {0:N0}/{1:N0} divisions at their posts. Defend + Alt/RMB redraws the line.": "Оборона: {0:N0}/{1:N0} дивизий на позициях. «Оборона» + Alt/ПКМ — перечертить рубеж.",
+  "Front: LMB whole border / RMB section. Defend: RMB line on your land. Attack: RMB destination. Alt+RMB redraws.": "Фронт: ЛКМ — вся граница, ПКМ — участок. Оборона: ПКМ — рубеж на своей территории. Атака: ПКМ — цель. Alt+ПКМ — перечертить.",
+  "Defence: select divisions → Defend → right-drag on controlled land and release. Divisions occupy and hold the line immediately.\nOffensive: Front → Attack → Execute. Prepare stops the advance. Alt + right-drag redraws; Esc cancels drawing.": "Оборона: выделите дивизии → «Оборона» → протяните ПКМ по своей территории и отпустите. Дивизии сразу получают приказ занять и удерживать рубеж.\nНаступление: Фронт → Атака → Выполнять. Подготовка останавливает продвижение. Alt+ПКМ — перечертить; Esc — отменить рисование.",
+  "RMB-drag a connected line on controlled land. Release to distribute divisions evenly and hold immediately, in peace or war. Backtrack to shorten; Alt+RMB redraws the selected line; Esc cancels.": "Протяните ПКМ непрерывный рубеж по своей территории. Отпустите — дивизии равномерно займут позиции и начнут оборону, в мирное или военное время. Движение назад укорачивает линию; Alt+ПКМ — перечертить выбранную; Esc — отмена.",
+  "Defensive line: {0:N0} posts · RMB drag on your land, release to assign · backtrack to shorten · Esc cancel.": "Оборона: {0:N0} позиций · протяните ПКМ по своей территории и отпустите · назад — укоротить · Esc — отмена.",
+  "Defensive line rejected: use connected controlled land. Existing orders were kept.": "Рубеж не принят: нужна связная контролируемая суша, доступная выбранным дивизиям. Прежние приказы сохранены.",
+  "Select divisions on one defensive line before using Alt+RMB to redraw it.": "Для изменения через Alt+ПКМ выберите дивизии одного оборонительного рубежа.",
+  "Radicalism: weekly forecast": "Радикализм: прогноз на неделю",
+  "Living conditions": "Условия жизни",
+  "Budget policy": "Бюджетная политика",
+  "Government and ideology": "Правительство и идеология",
+  "Minority grievances": "Недовольство меньшинств",
+  "Gradual recovery": "Постепенное успокоение",
+  "{0:+0.000;-0.000;0.000} pp/week": "{0:+0.000;-0.000;0.000} п.п./нед.",
+  "Improve living conditions and supply, control inflation, fund welfare or choose Social cohesion. Recovery is gradual; war and occupation slow it. Forecast excludes one-off events and scripted national modifiers.": "Улучшайте условия жизни и снабжение, сдерживайте инфляцию, финансируйте социальные расходы или выберите «Социальное единство». Успокоение постепенное; война и оккупация мешают ему. Прогноз не учитывает разовые события и скриптовые национальные модификаторы."
+}

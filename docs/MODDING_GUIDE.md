@@ -1321,6 +1321,7 @@ each has left, and under **All modifiers** the country's totals and where each p
     "category": "military",
     "cost": 220,
     "requires": ["network_centric_warfare"],
+    "icon": "icon_drone",
     "effects": { "army_attack": 0.04 }
   }
 }
@@ -1343,6 +1344,13 @@ switching keeps what was put into the last choice.
 
 The bench checks the tree: every prerequisite is a technology, every effect is one of the six,
 every category is one of the four, and nothing needs itself through its prerequisites.
+
+Long-range formations live in `common/support/*.json` (see
+`game/common/support/00_support_types.json`). Their `icon` field omits the `icon_` prefix:
+`"icon": "air"` resolves to `icon_air` in the `gfx` catalogue. The same symbol appears
+in the formation list and on the map. Supply a transparent PNG for a custom icon; the map
+also cuts away the opaque black backing of legacy icons. `range_km` drives the actual
+reach and the `RANGE` map view, so a mod's changed distance is visible to the player.
 
 ### Localisation
 
@@ -1678,6 +1686,61 @@ tooltip says what the damage costs and how fast it comes back.
 The base game uses them in the **Reconstruction programme**. It is a decision for a country with a
 region at least 15 % in ruins (the `war_torn` trigger). It gives a spirit that rebuilds twice as
 fast for two years, and the AI takes it mostly at peace.
+
+### Movements
+
+A movement is a country without land: a tag, a treasury, relations, spirits and decisions, and a
+player who can be it - but no ground. It has a headquarters instead, a medallion on the map inside
+somebody else's country; a following among its peoples, region by region; cadres; standing; and a
+host whose patience it spends. They live in `common/movements/*.json` - the header of
+`00_movements.json` lists every field and trait - and later files win key by key, so a mod adds a
+movement with a key of its own and changes one by naming it again with only the fields it changes.
+
+- **What it does.** Moves its headquarters, campaigns, fundraises, recruits, seeks recognition,
+  sends fighters into a region ahead of a rising (days on the road by distance), and rises. A
+  rising that succeeds makes it a country with a capital and militia - out of its cadres, its
+  hidden fighters and its street, one formation per `MovementMilitiaPerSupporters` supporters -
+  and a war with the country it rose against. Losing all of it makes it landless again.
+- **What the world does about it.** Any country - the AI and the player - can recognise it, fund
+  it, list it as a terrorist organisation, crack down on its following, expel its headquarters or
+  offer it asylum. Opinion reasons are in `common/opinion_modifiers/30_movements.json`.
+- **Traits** change its rules: `armed_wing`, `tunnel_network`, `charity_network`,
+  `diaspora_lobby`, `street_patrols`, `hospitallers`, `recognised_sovereign`,
+  `government_in_exile`, `humanitarian` (its AI never takes up arms), `nonviolence`,
+  `refugee_camps`, `for_hire`.
+- **Exile.** A country that loses the last of its ground may go on as a government in exile,
+  made from the entry marked `"template": true` (`government_in_exile`): its peoples, homeland and
+  name are filled in from the country itself. Its host is the friendliest country that did not
+  take its land, and its friends recognise it. The chance is `MovementExileBase` plus stability,
+  friends, size and `MovementExilePlayer` for a player's country.
+- **The end of one.** A movement with nowhere to stand for `MovementDissolveHomelessWeeks`, or
+  with no cadres, money or following left, is dissolved; its armies are disbanded.
+- **Events** carry `"for": "movements"`, `"countries"` or `"all"`; the effects language reads and
+  writes `movement.cadres`, `movement.legitimacy`, `movement.heat` (the host's temper) and
+  `movement.support`.
+- **Flags.** A movement's real flag, when it is the flag of an armed group, is
+  `gfx/flags/flag_<tag>_insignia.png`, shown only with the `movement_flags` setting on.
+- The numbers are defines named `Movement*` (see `Scripts/Simulation/MovementRules.cs`), set from
+  any `common/defines` file.
+
+### Peace, the status quo and war weariness
+
+The AI writes the land of a treaty region by region from its own border outwards
+(`PeaceShape`): every region it asks for touches ground it holds or has just asked for, islands
+excepted, and any part of the loser the treaty would cut off is taken too when it is small or
+given back otherwise. What it wants is what countries say when they take land - our people live
+there, it was ours, it gives us the sea, it keeps them from our capital, it is where the plants
+are - and each war carries one of those arguments as its own.
+
+`StatusQuo` is the peace of a deadlock: each side keeps what it holds securely, each drawn into a
+border of its own, and a five-year truce. A white peace is for a war where nobody holds anything.
+A war whose score has moved less than `WarStalledScore` in half a year is standing still; after
+`PeaceWearinessAfterDays` every year adds `PeaceWearinessPerYear` (up to `PeaceWearinessCap`) to
+what both sides will accept, the
+countries fighting it take the `long_war` and `exhausted_by_war` modifiers
+(`common/modifiers/30_war_weariness.json`), and a war with nobody's player in it that reaches
+`PeaceForcedEndDays` ends in the status quo, or in a white peace when neither side leads by
+`PeaceForcedEndLead`.
 
 ### The console and mod diagnostics
 

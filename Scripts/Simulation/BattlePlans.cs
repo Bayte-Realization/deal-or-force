@@ -84,6 +84,7 @@ public sealed class DrawnFrontLine
     // Offensive intent: the departure front is distinct from the ordered destination stroke.
     public readonly HashSet<int> SourceProvinces = new();
     public readonly List<int> ObjectiveSequence = new();
+    public readonly List<int> DefensiveSequence = new();
     public readonly Dictionary<int, int> Objectives = new();
 
     /// <summary>
@@ -197,6 +198,7 @@ public static class BattlePlanning
     /// </summary>
     public static List<int> Sequence(Campaign campaign, DrawnFrontLine line)
     {
+        if (line.Kind == FrontLineKind.Fallback) return DefensivePlanning.Sequence(campaign, line);
         if (line.Kind == FrontLineKind.Offensive && line.ObjectiveSequence.Count > 0)
             return new List<int>(line.ObjectiveSequence);
         var topology = campaign?.ProvinceMap;
@@ -427,6 +429,9 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
 
         var existing = EditLineId >= 0 ? campaign.FrontLines.Find(x => x.Id == EditLineId && x.NationId == IssuerId) : null;
         if (EditLineId >= 0 && existing is null) return;
+        if (Kind == FrontLineKind.Fallback &&
+            (!DefensivePlanning.CanAssign(campaign, this, existing) ||
+             (existing is not null && existing.Kind != FrontLineKind.Fallback))) return;
         if (Kind == FrontLineKind.Offensive)
         {
             OffensivePlanning.Draw(campaign, this, existing);
@@ -447,25 +452,70 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
         {
             if (line.BorderNationId < 0)
             {
-                // Old callers/AI still supply province hints. Snap those to a real border.
-                var seed = Provinces.FirstOrDefault(p => BorderFronts.ForeignAt(campaign, IssuerId, p) >= 0);
-                if (seed <= 0) return;
-                line.BorderNationId = BorderFronts.ForeignAt(campaign, IssuerId, seed);
-                var first = topology.CenterOf(seed);
-                var last = topology.CenterOf(Provinces.Last());
-                line.StartLatitude = first.Latitude; line.StartLongitude = first.Longitude;
-                line.EndLatitude = last.Latitude; line.EndLongitude = last.Longitude;
+                // Old callers/AI still supply province hints. Snap those to a real border -
+                // to the country most of the drawn line faces, not the country that happens
+                // to sit next door to its first province. A front against a coalition runs
+                // past more than one enemy, and a line drawn along it is a line against
+                // whoever it mostly faces; snapping to the first province's neighbour turned
+                // a ten-province front into the one-province border with whichever minor
+                // power happened to touch its corner, and every formation on the line was
+                // sent to that single province.
+                var votes = new Dictionary<int, int>();
+                foreach (var province in Provinces)
+                {
+                    if (province <= 0) continue;
+                    var neighbour = BorderFronts.ForeignAt(campaign, IssuerId, province);
+                    if (neighbour >= 0) votes[neighbour] = votes.GetValueOrDefault(neighbour) + 1;
+                }
+                var majority = -1;
+                var majorityVotes = 0;
+                foreach (var vote in votes)
+                    if (vote.Value > majorityVotes)
+                    {
+                        majorityVotes = vote.Value;
+                        majority = vote.Key;
+                    }
+                if (majority < 0) return;
+                line.BorderNationId = majority;
+                var lineFrom = topology.CenterOf(Provinces.FirstOrDefault(candidate => candidate > 0));
+                var lineTo = topology.CenterOf(Provinces.LastOrDefault(candidate => candidate > 0));
+                line.StartLatitude = lineFrom.Latitude; line.StartLongitude = lineFrom.Longitude;
+                line.EndLatitude = lineTo.Latitude; line.EndLongitude = lineTo.Longitude;
             }
             BorderFronts.Refresh(campaign, line);
+            // And the border the snap found may not be the line that was drawn. A front
+            // against a coalition runs past more than one of the enemy's countries, and a
+            // line drawn along that front - by a player with a brush, by the AI, by
+            // anything that says where and not whom - is a line about the war, not about
+            // whichever single border nation the snap picked. When the resolved border
+            // covers less than half of what was drawn, what was drawn wins: the line keeps
+            // the drawn provinces and follows no border, because the border it would follow
+            // is one province of a ten-province front, and every formation put on the line
+            // would be sent to that single province while the other nine are held by
+            // nobody.
+            if (Kind == FrontLineKind.Defence && Provinces.Count > 0 && topology is not null)
+            {
+                var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
+                var hints = Provinces.Where(province => province > 0 && province <= topology.ProvinceCount &&
+                                                        controllers[province] == nation.MapIndex).ToList();
+                if (hints.Count > 0 && hints.Count(province => line.Provinces.Contains(province)) * 2 < hints.Count)
+                {
+                    line.BorderNationId = -1;
+                    line.Provinces.Clear();
+                    foreach (var province in hints) line.Provinces.Add(province);
+                    line.BorderRevision = campaign.MapRevision;
+                }
+            }
         }
         else foreach (var province in Provinces)
             if (province > 0 && (topology is null || province <= topology.ProvinceCount)) line.Provinces.Add(province);
         if (line.Provinces.Count == 0) return;
+        if (Kind == FrontLineKind.Fallback) line.DefensiveSequence.AddRange(Provinces);
 
         var assigned = existing is null ? ArmyIds : existing.ArmyIds.ToArray();
         if (existing is not null) campaign.FrontLines.Remove(existing);
 
-        foreach (var id in assigned)
+        foreach (var id in assigned.Distinct())
         {
             var army = campaign.Armies.Find(candidate => candidate.Id == id);
             if (army is null || army.NationId != IssuerId) continue;
@@ -482,7 +532,7 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
         var order = Kind switch
         {
             FrontLineKind.Offensive => ArmyOrder.AdvanceFront,
-            FrontLineKind.Fallback => ArmyOrder.ReserveFront,
+            FrontLineKind.Fallback => ArmyOrder.DefendFront,
             // Guarding the rear is a reserve posture, not a front-line one: these
             // formations are not meant to be drawn into the fighting at the edge.
             FrontLineKind.AreaDefence => ArmyOrder.ReserveFront,

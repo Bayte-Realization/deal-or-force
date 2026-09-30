@@ -49,6 +49,9 @@ public sealed class MovementDefinition
 
     public bool Has(string trait) => Listed(Traits, trait);
 
+    /// <summary>Contract work is not a territorial claim. Warlord-company mods must opt in.</summary>
+    public bool CanStageUprising => !Has("for_hire") || Has("territorial_ambition");
+
     /// <summary>
     /// Whether a list of names holds this one, whatever its case. A loop rather than
     /// Enumerable.Contains, which with a comparer boxes an enumerator on every call - and this

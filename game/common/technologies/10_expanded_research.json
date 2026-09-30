@@ -1,0 +1,313 @@
+{
+  "precision_agriculture": {
+    "name": "Precision agriculture",
+    "description": "Sensors and targeted inputs reduce losses across agricultural production.",
+    "category": "industry",
+    "cost": 160,
+    "requires": [
+      "industrial_automation"
+    ],
+    "effects": {
+      "output": 0.015
+    }
+  },
+  "grid_storage": {
+    "name": "Grid-scale storage",
+    "description": "Large storage systems smooth intermittent generation and keep factories supplied.",
+    "category": "industry",
+    "cost": 240,
+    "requires": [
+      "energy_transition"
+    ],
+    "effects": {
+      "output": 0.02
+    }
+  },
+  "circular_manufacturing": {
+    "name": "Circular manufacturing",
+    "description": "Recover valuable materials from industrial waste and return them to production.",
+    "category": "industry",
+    "cost": 260,
+    "requires": [
+      "industrial_automation"
+    ],
+    "effects": {
+      "output": 0.02
+    }
+  },
+  "additive_manufacturing": {
+    "name": "Advanced additive manufacturing",
+    "description": "Print complex parts close to where they are needed, shortening manufacturing chains.",
+    "category": "industry",
+    "cost": 320,
+    "requires": [
+      "advanced_semiconductors"
+    ],
+    "effects": {
+      "output": 0.02,
+      "supply": 0.015
+    }
+  },
+  "industrial_digital_twins": {
+    "name": "Industrial digital twins",
+    "description": "Simulate industrial processes before committing materials and machine time.",
+    "category": "industry",
+    "cost": 460,
+    "requires": [
+      "artificial_intelligence",
+      "additive_manufacturing"
+    ],
+    "effects": {
+      "output": 0.025
+    }
+  },
+  "superconducting_grids": {
+    "name": "Superconducting grids",
+    "description": "Deploy low-loss transmission in high-demand industrial corridors.",
+    "category": "industry",
+    "cost": 560,
+    "requires": [
+      "grid_storage",
+      "advanced_semiconductors"
+    ],
+    "effects": {
+      "output": 0.025
+    }
+  },
+  "open_science": {
+    "name": "Open science infrastructure",
+    "description": "Shared repositories and reproducible experiments make discoveries easier to build upon.",
+    "category": "society",
+    "cost": 140,
+    "requires": [
+      "digital_education"
+    ],
+    "effects": {
+      "research_speed": 0.04
+    }
+  },
+  "research_networks": {
+    "name": "National research networks",
+    "description": "Connect universities and laboratories with shared instruments and data services.",
+    "category": "society",
+    "cost": 230,
+    "requires": [
+      "open_science"
+    ],
+    "effects": {
+      "research_speed": 0.05
+    }
+  },
+  "health_informatics": {
+    "name": "Health informatics",
+    "description": "Coordinated medical records and planning reduce avoidable disruption to working lives.",
+    "category": "society",
+    "cost": 220,
+    "requires": [
+      "digital_government"
+    ],
+    "effects": {
+      "output": 0.015
+    }
+  },
+  "simulation_research": {
+    "name": "Simulation-led research",
+    "description": "Use high-performance simulation to narrow the search before costly experiments.",
+    "category": "society",
+    "cost": 380,
+    "requires": [
+      "research_networks",
+      "advanced_semiconductors"
+    ],
+    "effects": {
+      "research_speed": 0.06
+    }
+  },
+  "personalized_medicine": {
+    "name": "Personalized medicine",
+    "description": "Tailor treatment to individual biological profiles and improve recovery.",
+    "category": "society",
+    "cost": 480,
+    "requires": [
+      "genomic_medicine",
+      "health_informatics"
+    ],
+    "effects": {
+      "output": 0.02
+    }
+  },
+  "automated_laboratories": {
+    "name": "Automated laboratories",
+    "description": "Robotic laboratories run repeatable experiments around the clock.",
+    "category": "society",
+    "cost": 520,
+    "requires": [
+      "simulation_research",
+      "artificial_intelligence"
+    ],
+    "effects": {
+      "research_speed": 0.07
+    }
+  },
+  "secure_tactical_comms": {
+    "name": "Secure tactical communications",
+    "description": "Resilient communications preserve coordination under interference.",
+    "category": "military",
+    "cost": 180,
+    "requires": [
+      "network_centric_warfare"
+    ],
+    "effects": {
+      "army_defense": 0.015,
+      "army_attack": 0.01
+    }
+  },
+  "counter_drone_systems": {
+    "name": "Counter-drone systems",
+    "description": "Integrate detection, electronic protection and interception against small aerial threats.",
+    "category": "military",
+    "cost": 260,
+    "requires": [
+      "drone_warfare"
+    ],
+    "effects": {
+      "army_defense": 0.025
+    }
+  },
+  "adaptive_defence": {
+    "name": "Adaptive defence networks",
+    "description": "Distributed sensors and protected command posts let defensive units respond together.",
+    "category": "military",
+    "cost": 380,
+    "requires": [
+      "active_protection",
+      "secure_tactical_comms"
+    ],
+    "effects": {
+      "army_defense": 0.03
+    }
+  },
+  "combined_arms_simulation": {
+    "name": "Combined-arms simulation",
+    "description": "Shared training environments improve cooperation between different arms.",
+    "category": "military",
+    "cost": 300,
+    "requires": [
+      "secure_tactical_comms",
+      "digital_education"
+    ],
+    "effects": {
+      "army_attack": 0.02,
+      "army_defense": 0.01
+    }
+  },
+  "uncrewed_reconnaissance": {
+    "name": "Uncrewed reconnaissance networks",
+    "description": "Persistent reconnaissance helps units select routes and coordinate engagements.",
+    "category": "military",
+    "cost": 360,
+    "requires": [
+      "drone_warfare",
+      "secure_tactical_comms"
+    ],
+    "effects": {
+      "army_attack": 0.02,
+      "army_speed": 0.015
+    }
+  },
+  "distributed_command": {
+    "name": "Distributed command systems",
+    "description": "Redundant command nodes maintain cohesion when individual headquarters are disrupted.",
+    "category": "military",
+    "cost": 520,
+    "requires": [
+      "adaptive_defence",
+      "artificial_intelligence"
+    ],
+    "effects": {
+      "army_defense": 0.02,
+      "army_attack": 0.015
+    }
+  },
+  "intermodal_freight": {
+    "name": "Intermodal freight hubs",
+    "description": "Standardized transfers link rail, road and ports into a continuous freight network.",
+    "category": "logistics",
+    "cost": 160,
+    "requires": [
+      "predictive_logistics"
+    ],
+    "effects": {
+      "supply": 0.02,
+      "output": 0.01
+    }
+  },
+  "smart_warehouses": {
+    "name": "Smart warehouses",
+    "description": "Automated sorting and accurate inventories reduce delays in distribution.",
+    "category": "logistics",
+    "cost": 240,
+    "requires": [
+      "intermodal_freight",
+      "industrial_automation"
+    ],
+    "effects": {
+      "supply": 0.025
+    }
+  },
+  "field_repair_networks": {
+    "name": "Distributed repair networks",
+    "description": "Local repair teams and spare-part production return equipment to service sooner.",
+    "category": "logistics",
+    "cost": 280,
+    "requires": [
+      "intermodal_freight",
+      "additive_manufacturing"
+    ],
+    "effects": {
+      "supply": 0.025,
+      "army_speed": 0.015
+    }
+  },
+  "resilient_supply_networks": {
+    "name": "Resilient supply networks",
+    "description": "Alternate depots and routing plans keep deliveries moving through disruption.",
+    "category": "logistics",
+    "cost": 360,
+    "requires": [
+      "smart_warehouses",
+      "predictive_logistics"
+    ],
+    "effects": {
+      "supply": 0.035
+    }
+  },
+  "dynamic_route_planning": {
+    "name": "Dynamic route planning",
+    "description": "Continuously recompute routes as demand, traffic and infrastructure change.",
+    "category": "logistics",
+    "cost": 420,
+    "requires": [
+      "artificial_intelligence",
+      "high_speed_rail"
+    ],
+    "effects": {
+      "army_speed": 0.035,
+      "supply": 0.015
+    }
+  },
+  "autonomous_distribution": {
+    "name": "Autonomous distribution networks",
+    "description": "Coordinate autonomous delivery fleets with resilient hubs and reserve depots.",
+    "category": "logistics",
+    "cost": 560,
+    "requires": [
+      "autonomous_convoys",
+      "resilient_supply_networks"
+    ],
+    "effects": {
+      "supply": 0.03,
+      "output": 0.01
+    }
+  }
+}

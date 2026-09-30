@@ -306,9 +306,9 @@ public sealed partial class Nation
     /// refilled each economic week rather than rebuilt - a country is not allowed to make
     /// garbage just to explain itself.
     /// </summary>
-    public readonly Breakdown Budget = new();
-    public readonly Breakdown StabilityDrivers = new();
-    public readonly Breakdown WarSupportDrivers = new();
+    public Breakdown Budget = new();
+    public Breakdown StabilityDrivers = new();
+    public Breakdown WarSupportDrivers = new();
 
     /// <summary>
     /// How fast prices are rising here, as an annual rate. 0.03 is three per cent.
@@ -319,7 +319,7 @@ public sealed partial class Nation
     /// </summary>
     public float Inflation = 0.02f;
 
-    public readonly Breakdown InflationDrivers = new();
+    public Breakdown InflationDrivers = new();
     public float Productivity = 1f;
 
     /// <summary>
@@ -655,6 +655,11 @@ public sealed partial class Campaign
 
         Commands.ApplyAll(this);
 
+        // The long-range reach index, rebuilt fresh from the orders the step has just
+        // applied: the fighting below asks it who reaches into each battle, and a client
+        // restored from a snapshot must hold the same answer a host does at the same hour.
+        SupportCore.IndexReach(this);
+
         // What the step covers, and how many whole days it crosses. A day boundary is what
         // the day pass is for; the hours are what everything that accumulates gets.
         var hours = TickHours;
@@ -697,6 +702,7 @@ public sealed partial class Campaign
         for (var day = 0; day < daysCrossed; day++)
         {
             RecruitmentSystem.Tick(this);
+            SupportCore.Tick(this);
             using (SimProfiler.Measure("militia")) MilitiaCore.Tick(this);
             using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
@@ -967,6 +973,10 @@ public sealed partial class Campaign
             StrategicDeploymentPlanner.Deploy(this);
             InitialDeploymentCompleted = true;
             FrontPlanner.AssignAi(this);
+            // The long-range forces the world opens with: the artillery that exists, the
+            // air wings that exist, before anybody has built anything. A loaded save has
+            // its own - this block runs for a new world only.
+            SupportCore.EnsureInitial(this);
         }
         Changed?.Invoke();
     }

@@ -1,0 +1,35 @@
+// What a government can tell its industry to make.
+//
+// Hearts of Iron asks the player "what do your factories build", and the question is the
+// whole point of a war economy: a country makes a decision about arms against everything
+// else, and lives with it. This file declares the same question for this economy, as data
+// rather than as code, so a mod can retune the answer.
+//
+//   "conversion"  how good a converted civilian plant is at being an arms plant. 0.35 is
+//                 deliberately worse than the real thing: conversion is how you survive
+//                 without an arms industry, not how you never build one.
+//   "units_per_factory" whole assignable units provided by each factory of either kind.
+//   "lines"       each good chooses a civilian or military pool. Its output recipes must
+//                 actually use CivilianIndustry or ArmsIndustry respectively. Dedicated
+//                 plants and household production remain outside these general pools.
+//
+// Later files win, by good name, and a mod that declares one lineable good inherits the rest.
+
+{
+  "units_per_factory": 10,
+  "conversion": {
+    "efficiency": 0.35
+  },
+
+  "lines": {
+    "Arms": { "pool": "military" },
+    "ConsumerGoods": { "pool": "civilian" },
+    "IndustrialMaterials": { "pool": "civilian" },
+    "Machinery": { "pool": "civilian" },
+    "Aluminium": { "pool": "civilian" },
+    "Chemicals": { "pool": "civilian" },
+    "Electronics": { "pool": "civilian" },
+    "Textiles": { "pool": "civilian" },
+    "Pharmaceuticals": { "pool": "civilian" }
+  }
+}

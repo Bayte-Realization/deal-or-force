@@ -1,0 +1,740 @@
+{
+  "Seed": 20260830,
+  "RequestedDays": 1825,
+  "HoursPerTick": 24,
+  "CompletedDays": 1825,
+  "Checkpoints": [
+    {
+      "Day": 0,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 1,
+      "OldestWarDays": 0,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.000529875761392107,
+      "WorldGdp": 88316.5519370595,
+      "CountriesWithSevereDeficits": 0,
+      "CountriesWithHighInflation": 0,
+      "MeanStability": 0.7324416637420654,
+      "MillisecondsPerDay": 0,
+      "AllocatedKilobytesPerDay": 0,
+      "OldestWars": [
+        "RUS-\u003EUKR age=0 score=0.0 losses=0.000"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "IDN 100 % of start",
+        "MYS 100 % of start",
+        "CHL 100 % of start",
+        "BOL 100 % of start",
+        "PER 100 % of start"
+      ]
+    },
+    {
+      "Day": 90,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 1,
+      "OldestWarDays": 90,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.003530708734805337,
+      "WorldGdp": 88516.46233161539,
+      "CountriesWithSevereDeficits": 21,
+      "CountriesWithHighInflation": 0,
+      "MeanStability": 0.729328989982605,
+      "MillisecondsPerDay": 38.96259444444444,
+      "AllocatedKilobytesPerDay": 500.134375,
+      "OldestWars": [
+        "RUS-\u003EUKR age=90 score=-10.8 losses=384301.100"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CYP 76 % of start",
+        "UKR 86 % of start",
+        "ISR 99 % of start",
+        "COL 99 % of start",
+        "HUN 99 % of start"
+      ]
+    },
+    {
+      "Day": 180,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 6,
+      "OldestWarDays": 180,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.0065945624871652795,
+      "WorldGdp": 89268.28089784831,
+      "CountriesWithSevereDeficits": 25,
+      "CountriesWithHighInflation": 0,
+      "MeanStability": 0.727385401725769,
+      "MillisecondsPerDay": 25.46702888888889,
+      "AllocatedKilobytesPerDay": 404.85225694444443,
+      "OldestWars": [
+        "RUS-\u003EUKR age=180 score=-11.5 losses=968077.600",
+        "COL-\u003EPAN age=75 score=-17.3 losses=37271.590",
+        "DEU-\u003ECHE age=64 score=9.4 losses=21931.620",
+        "PAK-\u003EKAS age=35 score=4.0 losses=0.000",
+        "IDN-\u003ETLS age=15 score=-4.1 losses=0.000"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CYP 74 % of start",
+        "UKR 82 % of start",
+        "USA 99 % of start",
+        "DEU 99 % of start",
+        "CHN 100 % of start"
+      ]
+    },
+    {
+      "Day": 270,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 9,
+      "OldestWarDays": 270,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.011137320953019635,
+      "WorldGdp": 91246.5119982725,
+      "CountriesWithSevereDeficits": 23,
+      "CountriesWithHighInflation": 0,
+      "MeanStability": 0.722135603427887,
+      "MillisecondsPerDay": 22.924373333333335,
+      "AllocatedKilobytesPerDay": 408.10199652777777,
+      "OldestWars": [
+        "RUS-\u003EUKR age=270 score=-8.7 losses=1589024.000",
+        "COL-\u003EPAN age=165 score=-17.5 losses=144903.900",
+        "DEU-\u003ECHE age=154 score=16.1 losses=75065.690",
+        "PAK-\u003EKAS age=125 score=59.2 losses=0.000",
+        "IDN-\u003ETLS age=105 score=-9.5 losses=0.000"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CYP 74 % of start",
+        "UKR 82 % of start",
+        "CHE 95 % of start",
+        "USA 99 % of start",
+        "DEU 100 % of start"
+      ]
+    },
+    {
+      "Day": 360,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 10,
+      "OldestWarDays": 360,
+      "QuietWarsOverSixMonths": 3,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.014026443665935553,
+      "WorldGdp": 93521.7254410144,
+      "CountriesWithSevereDeficits": 22,
+      "CountriesWithHighInflation": 0,
+      "MeanStability": 0.7165070176124573,
+      "MillisecondsPerDay": 22.59982,
+      "AllocatedKilobytesPerDay": 429.37491319444445,
+      "OldestWars": [
+        "RUS-\u003EUKR age=360 score=-2.8 losses=2100732.000",
+        "COL-\u003EPAN age=255 score=-20.5 losses=328378.400",
+        "PAK-\u003EKAS age=215 score=66.0 losses=0.000",
+        "IDN-\u003ETLS age=195 score=29.2 losses=0.000",
+        "EGY-\u003EBRT age=180 score=100.0 losses=0.000"
+      ],
+      "QuietWars": [
+        "PAK-\u003EKAS id=3 age=215 score=66.0 fronts=0/0 armies=54/0 assigned=53 moving=0 landless=False/False controlChanged=1 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027",
+        "IDN-\u003ETLS id=4 age=195 score=29.2 fronts=2/2 armies=35/4 assigned=35 moving=0 landless=False/False controlChanged=2 ready=True proposal=-1 pending=-1 negotiation=\u0027\u0027",
+        "EGY-\u003EBRT id=5 age=180 score=100.0 fronts=0/0 armies=43/0 assigned=40 moving=0 landless=False/False controlChanged=1 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "CYP 74 % of start",
+        "UKR 81 % of start",
+        "DEU 98 % of start",
+        "MEX 99 % of start",
+        "IDN 99 % of start"
+      ]
+    },
+    {
+      "Day": 450,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 9,
+      "OldestWarDays": 450,
+      "QuietWarsOverSixMonths": 1,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.01814812929372273,
+      "WorldGdp": 94494.06622378528,
+      "CountriesWithSevereDeficits": 21,
+      "CountriesWithHighInflation": 0,
+      "MeanStability": 0.7162176966667175,
+      "MillisecondsPerDay": 22.957986666666667,
+      "AllocatedKilobytesPerDay": 608.8965277777778,
+      "OldestWars": [
+        "RUS-\u003EUKR age=450 score=-1.1 losses=2739772.000",
+        "COL-\u003EPAN age=345 score=-29.0 losses=496410.200",
+        "IRN-\u003EAZE age=267 score=-8.3 losses=568009.000",
+        "TUR-\u003EAZE age=207 score=-7.0 losses=0.000",
+        "CHN-\u003EKAS age=151 score=3.6 losses=10626.000"
+      ],
+      "QuietWars": [
+        "TUR-\u003EAZE id=8 age=207 score=-7.0 fronts=0/0 armies=38/12 assigned=38 moving=0 landless=False/False controlChanged=0 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "CYP 74 % of start",
+        "BLZ 75 % of start",
+        "CHE 79 % of start",
+        "UKR 79 % of start",
+        "CHN 98 % of start"
+      ]
+    },
+    {
+      "Day": 540,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 11,
+      "OldestWarDays": 540,
+      "QuietWarsOverSixMonths": 1,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.019456591209547094,
+      "WorldGdp": 96390.01476812642,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 1,
+      "MeanStability": 0.7171586155891418,
+      "MillisecondsPerDay": 23.179292222222223,
+      "AllocatedKilobytesPerDay": 438.62786458333335,
+      "OldestWars": [
+        "RUS-\u003EUKR age=540 score=1.8 losses=3300478.000",
+        "IRN-\u003EAZE age=357 score=-8.5 losses=674720.100",
+        "TUR-\u003EAZE age=297 score=-8.6 losses=0.000",
+        "CHN-\u003EKAS age=241 score=1.6 losses=10626.000",
+        "FRA-\u003ECHE age=220 score=-3.1 losses=127513.000"
+      ],
+      "QuietWars": [
+        "TUR-\u003EAZE id=8 age=297 score=-8.6 fronts=0/0 armies=42/10 assigned=42 moving=0 landless=False/False controlChanged=0 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "BLZ 19 % of start",
+        "CHE 70 % of start",
+        "CYP 74 % of start",
+        "UKR 77 % of start",
+        "CHN 96 % of start"
+      ]
+    },
+    {
+      "Day": 630,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 11,
+      "OldestWarDays": 630,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.023242241858900795,
+      "WorldGdp": 97680.59756722022,
+      "CountriesWithSevereDeficits": 19,
+      "CountriesWithHighInflation": 1,
+      "MeanStability": 0.713222086429596,
+      "MillisecondsPerDay": 22.652253333333334,
+      "AllocatedKilobytesPerDay": 454.6853298611111,
+      "OldestWars": [
+        "RUS-\u003EUKR age=630 score=29.1 losses=3858692.000",
+        "IRN-\u003EAZE age=447 score=-5.9 losses=684381.600",
+        "CHN-\u003EKAS age=331 score=-1.5 losses=10626.000",
+        "FRA-\u003ECHE age=310 score=-4.3 losses=138202.000",
+        "PRK-\u003EKOR age=204 score=-26.3 losses=545299.000"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "BLZ 5 % of start",
+        "SUR 66 % of start",
+        "CHE 68 % of start",
+        "CYP 74 % of start",
+        "UKR 74 % of start"
+      ]
+    },
+    {
+      "Day": 720,
+      "Nations": 267,
+      "Regions": 1850,
+      "ActiveWars": 14,
+      "OldestWarDays": 720,
+      "QuietWarsOverSixMonths": 1,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.025450603074239356,
+      "WorldGdp": 98923.91851395462,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 1,
+      "MeanStability": 0.7073407173156738,
+      "MillisecondsPerDay": 22.16779,
+      "AllocatedKilobytesPerDay": 429.5302951388889,
+      "OldestWars": [
+        "RUS-\u003EUKR age=720 score=61.3 losses=4227516.000",
+        "IRN-\u003EAZE age=537 score=-5.4 losses=684381.600",
+        "CHN-\u003EKAS age=421 score=-4.5 losses=10626.000",
+        "FRA-\u003ECHE age=400 score=-1.9 losses=138202.000",
+        "PRK-\u003EKOR age=294 score=-32.6 losses=651580.300"
+      ],
+      "QuietWars": [
+        "ESP-\u003EGIB id=14 age=214 score=100.0 fronts=0/0 armies=15/0 assigned=14 moving=0 landless=False/False controlChanged=1 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "BLZ 1 % of start",
+        "SUR 19 % of start",
+        "JOR 64 % of start",
+        "CHE 68 % of start",
+        "UKR 69 % of start"
+      ]
+    },
+    {
+      "Day": 810,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 13,
+      "OldestWarDays": 627,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.027124015443275622,
+      "WorldGdp": 100161.40835229866,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 3,
+      "MeanStability": 0.7065728902816772,
+      "MillisecondsPerDay": 24.96514222222222,
+      "AllocatedKilobytesPerDay": 568.4739583333334,
+      "OldestWars": [
+        "IRN-\u003EAZE age=627 score=-5.4 losses=684381.600",
+        "CHN-\u003EKAS age=511 score=-7.6 losses=10626.000",
+        "FRA-\u003ECHE age=490 score=-0.3 losses=138202.000",
+        "PRK-\u003EKOR age=384 score=-38.4 losses=651580.300",
+        "ISR-\u003EJOR age=380 score=-6.3 losses=241226.900"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "BLZ 1 % of start",
+        "SUR 5 % of start",
+        "GIB 37 % of start",
+        "UKR 56 % of start",
+        "JOR 58 % of start"
+      ]
+    },
+    {
+      "Day": 900,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 12,
+      "OldestWarDays": 717,
+      "QuietWarsOverSixMonths": 1,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.029069092159768002,
+      "WorldGdp": 99964.13576605916,
+      "CountriesWithSevereDeficits": 19,
+      "CountriesWithHighInflation": 3,
+      "MeanStability": 0.7058727145195007,
+      "MillisecondsPerDay": 23.008177777777778,
+      "AllocatedKilobytesPerDay": 494.08289930555554,
+      "OldestWars": [
+        "IRN-\u003EAZE age=717 score=-5.4 losses=684381.600",
+        "CHN-\u003EKAS age=601 score=-10.7 losses=10626.000",
+        "FRA-\u003ECHE age=580 score=-0.2 losses=138202.000",
+        "PRK-\u003EKOR age=474 score=-43.1 losses=651580.300",
+        "ISR-\u003EJOR age=470 score=6.1 losses=268877.500"
+      ],
+      "QuietWars": [
+        "EGY-\u003EPSE id=20 age=236 score=-13.2 fronts=1/1 armies=44/4 assigned=42 moving=0 landless=False/False controlChanged=0 ready=True proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "BLZ 1 % of start",
+        "SUR 1 % of start",
+        "GIB 9 % of start",
+        "UKR 48 % of start",
+        "JOR 56 % of start"
+      ]
+    },
+    {
+      "Day": 990,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 11,
+      "OldestWarDays": 691,
+      "QuietWarsOverSixMonths": 1,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.03062607260903625,
+      "WorldGdp": 100112.66043419298,
+      "CountriesWithSevereDeficits": 21,
+      "CountriesWithHighInflation": 4,
+      "MeanStability": 0.7052903771400452,
+      "MillisecondsPerDay": 39.362186666666666,
+      "AllocatedKilobytesPerDay": 541.9994791666667,
+      "OldestWars": [
+        "CHN-\u003EKAS age=691 score=-13.7 losses=10626.000",
+        "FRA-\u003ECHE age=670 score=-0.2 losses=138202.000",
+        "PRK-\u003EKOR age=564 score=-47.2 losses=651580.300",
+        "ISR-\u003EJOR age=560 score=-16.3 losses=305353.100",
+        "IDN-\u003ESGP age=407 score=-34.7 losses=165727.900"
+      ],
+      "QuietWars": [
+        "EGY-\u003EPSE id=20 age=326 score=-16.1 fronts=1/1 armies=45/4 assigned=42 moving=0 landless=False/False controlChanged=0 ready=True proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "SUR 0 % of start",
+        "BLZ 1 % of start",
+        "GIB 2 % of start",
+        "LIE 20 % of start",
+        "JOR 26 % of start"
+      ]
+    },
+    {
+      "Day": 1080,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 9,
+      "OldestWarDays": 654,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.03249225198035221,
+      "WorldGdp": 99941.35419278964,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 6,
+      "MeanStability": 0.7027199268341064,
+      "MillisecondsPerDay": 40.41471333333333,
+      "AllocatedKilobytesPerDay": 571.3434027777778,
+      "OldestWars": [
+        "PRK-\u003EKOR age=654 score=-49.2 losses=651580.300",
+        "ISR-\u003EJOR age=650 score=-20.5 losses=333548.900",
+        "IDN-\u003ESGP age=497 score=-39.8 losses=202131.800",
+        "IND-\u003ENPL age=483 score=8.2 losses=920397.900",
+        "TUR-\u003EGEO age=386 score=-10.8 losses=363015.200"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "SUR 0 % of start",
+        "BLZ 1 % of start",
+        "GIB 1 % of start",
+        "LIE 5 % of start",
+        "CHE 11 % of start"
+      ]
+    },
+    {
+      "Day": 1170,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 7,
+      "OldestWarDays": 744,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.03450844629827195,
+      "WorldGdp": 99155.80066842493,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 7,
+      "MeanStability": 0.7005210518836975,
+      "MillisecondsPerDay": 40.96389,
+      "AllocatedKilobytesPerDay": 538.1965277777778,
+      "OldestWars": [
+        "PRK-\u003EKOR age=744 score=-49.2 losses=651580.300",
+        "ISR-\u003EJOR age=740 score=-24.6 losses=366394.900",
+        "IDN-\u003ESGP age=587 score=-45.3 losses=236498.700",
+        "IND-\u003ENPL age=573 score=8.1 losses=1054027.000",
+        "TUR-\u003EGEO age=476 score=-14.0 losses=506975.900"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "SUR 0 % of start",
+        "GIB 0 % of start",
+        "BLZ 1 % of start",
+        "LIE 1 % of start"
+      ]
+    },
+    {
+      "Day": 1260,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 10,
+      "OldestWarDays": 834,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.036517227032379744,
+      "WorldGdp": 99418.8359525036,
+      "CountriesWithSevereDeficits": 19,
+      "CountriesWithHighInflation": 7,
+      "MeanStability": 0.6953149437904358,
+      "MillisecondsPerDay": 49.251291111111115,
+      "AllocatedKilobytesPerDay": 476.2970486111111,
+      "OldestWars": [
+        "PRK-\u003EKOR age=834 score=-48.9 losses=651580.300",
+        "ISR-\u003EJOR age=830 score=-28.6 losses=398880.700",
+        "IDN-\u003ESGP age=677 score=-49.7 losses=272902.700",
+        "IND-\u003ENPL age=663 score=8.0 losses=1195711.000",
+        "TUR-\u003EGEO age=566 score=-16.9 losses=506975.900"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "SUR 0 % of start",
+        "LIE 0 % of start",
+        "GIB 0 % of start",
+        "BLZ 1 % of start"
+      ]
+    },
+    {
+      "Day": 1350,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 7,
+      "OldestWarDays": 924,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.03803711619104515,
+      "WorldGdp": 99784.33337270655,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 11,
+      "MeanStability": 0.6928393244743347,
+      "MillisecondsPerDay": 48.57461555555555,
+      "AllocatedKilobytesPerDay": 539.8222222222222,
+      "OldestWars": [
+        "PRK-\u003EKOR age=924 score=-48.5 losses=651580.300",
+        "ISR-\u003EJOR age=920 score=-33.3 losses=430569.500",
+        "TUR-\u003EGEO age=656 score=-18.8 losses=506975.900",
+        "IRQ-\u003EKWT age=559 score=-15.9 losses=181629.800",
+        "ITA-\u003EVAT age=153 score=38.1 losses=0.000"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "LIE 0 % of start",
+        "SUR 0 % of start",
+        "GIB 0 % of start",
+        "BLZ 1 % of start"
+      ]
+    },
+    {
+      "Day": 1440,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 5,
+      "OldestWarDays": 1014,
+      "QuietWarsOverSixMonths": 1,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.03948098226459772,
+      "WorldGdp": 100126.21033560485,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 11,
+      "MeanStability": 0.6897687315940857,
+      "MillisecondsPerDay": 52.06414888888889,
+      "AllocatedKilobytesPerDay": 507.54435763888887,
+      "OldestWars": [
+        "PRK-\u003EKOR age=1014 score=-48.2 losses=651580.300",
+        "ISR-\u003EJOR age=1010 score=-35.3 losses=461906.400",
+        "IRQ-\u003EKWT age=649 score=-15.9 losses=181629.800",
+        "IRN-\u003EIRQ age=223 score=7.5 losses=256753.100",
+        "FRA-\u003EAND age=218 score=100.0 losses=0.000"
+      ],
+      "QuietWars": [
+        "FRA-\u003EAND id=28 age=218 score=100.0 fronts=0/0 armies=23/0 assigned=21 moving=0 landless=False/False controlChanged=1 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "LIE 0 % of start",
+        "GUY 0 % of start",
+        "SUR 0 % of start",
+        "GEO 0 % of start"
+      ]
+    },
+    {
+      "Day": 1530,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 5,
+      "OldestWarDays": 1104,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.041087728550491115,
+      "WorldGdp": 100995.72395665385,
+      "CountriesWithSevereDeficits": 18,
+      "CountriesWithHighInflation": 11,
+      "MeanStability": 0.6895835995674133,
+      "MillisecondsPerDay": 44.82424444444444,
+      "AllocatedKilobytesPerDay": 596.8973090277777,
+      "OldestWars": [
+        "PRK-\u003EKOR age=1104 score=-47.8 losses=651580.300",
+        "DEU-\u003EAUT age=83 score=-20.4 losses=79773.060",
+        "EGY-\u003EISR age=63 score=-20.8 losses=215025.700",
+        "RUS-\u003EKOR age=37 score=-12.7 losses=0.000",
+        "CHN-\u003ENPL age=21 score=-11.7 losses=0.000"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "GEO 0 % of start",
+        "LIE 0 % of start",
+        "GUY 0 % of start",
+        "SUR 0 % of start"
+      ]
+    },
+    {
+      "Day": 1620,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 6,
+      "OldestWarDays": 1194,
+      "QuietWarsOverSixMonths": 0,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.045038717040102705,
+      "WorldGdp": 100701.89798349049,
+      "CountriesWithSevereDeficits": 20,
+      "CountriesWithHighInflation": 13,
+      "MeanStability": 0.6889206171035767,
+      "MillisecondsPerDay": 44.17929888888889,
+      "AllocatedKilobytesPerDay": 482.2252604166667,
+      "OldestWars": [
+        "PRK-\u003EKOR age=1194 score=-47.5 losses=651580.300",
+        "DEU-\u003EAUT age=173 score=-20.7 losses=160396.000",
+        "EGY-\u003EISR age=153 score=-26.5 losses=367565.300",
+        "RUS-\u003EKOR age=127 score=-11.5 losses=0.000",
+        "CHN-\u003ENPL age=111 score=-22.5 losses=26487.100"
+      ],
+      "QuietWars": [],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "GEO 0 % of start",
+        "LIE 0 % of start",
+        "GUY 0 % of start",
+        "SUR 0 % of start"
+      ]
+    },
+    {
+      "Day": 1710,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 6,
+      "OldestWarDays": 1284,
+      "QuietWarsOverSixMonths": 1,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.04687588692787559,
+      "WorldGdp": 100775.30184452143,
+      "CountriesWithSevereDeficits": 22,
+      "CountriesWithHighInflation": 13,
+      "MeanStability": 0.6849561333656311,
+      "MillisecondsPerDay": 44.40913666666666,
+      "AllocatedKilobytesPerDay": 486.29253472222223,
+      "OldestWars": [
+        "PRK-\u003EKOR age=1284 score=-47.6 losses=651580.300",
+        "DEU-\u003EAUT age=263 score=-22.3 losses=254752.600",
+        "EGY-\u003EISR age=243 score=-26.6 losses=403077.700",
+        "RUS-\u003EKOR age=217 score=-12.5 losses=0.000",
+        "CHN-\u003ENPL age=201 score=-24.4 losses=390432.800"
+      ],
+      "QuietWars": [
+        "RUS-\u003EKOR id=31 age=217 score=-12.5 fronts=0/0 armies=79/47 assigned=78 moving=1 landless=False/False controlChanged=0 ready=True proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "KWT 0 % of start",
+        "GEO 0 % of start",
+        "LIE 0 % of start",
+        "GUY 0 % of start"
+      ]
+    },
+    {
+      "Day": 1800,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 6,
+      "OldestWarDays": 1374,
+      "QuietWarsOverSixMonths": 2,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.048773522091117266,
+      "WorldGdp": 101139.12401796784,
+      "CountriesWithSevereDeficits": 24,
+      "CountriesWithHighInflation": 15,
+      "MeanStability": 0.6812204718589783,
+      "MillisecondsPerDay": 45.214145555555554,
+      "AllocatedKilobytesPerDay": 516.3352430555556,
+      "OldestWars": [
+        "PRK-\u003EKOR age=1374 score=-47.6 losses=651580.300",
+        "DEU-\u003EAUT age=353 score=-17.0 losses=274840.800",
+        "EGY-\u003EISR age=333 score=-28.7 losses=446255.900",
+        "RUS-\u003EKOR age=307 score=-10.8 losses=0.000",
+        "CHN-\u003ENPL age=291 score=-31.3 losses=1068898.000"
+      ],
+      "QuietWars": [
+        "RUS-\u003EKOR id=31 age=307 score=-10.8 fronts=0/0 armies=83/50 assigned=82 moving=1 landless=False/False controlChanged=1 ready=True proposal=-1 pending=-1 negotiation=\u0027\u0027",
+        "ITA-\u003ESMR id=33 age=207 score=100.0 fronts=0/0 armies=21/0 assigned=21 moving=0 landless=False/False controlChanged=1 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "KWT 0 % of start",
+        "GEO 0 % of start",
+        "LIE 0 % of start",
+        "GUY 0 % of start"
+      ]
+    },
+    {
+      "Day": 1825,
+      "Nations": 267,
+      "Regions": 1849,
+      "ActiveWars": 6,
+      "OldestWarDays": 1399,
+      "QuietWarsOverSixMonths": 2,
+      "SaturatedRegions": 0,
+      "RecoveringRegions": 0,
+      "PopulationWeightedRadicalism": 0.04900296489971152,
+      "WorldGdp": 101201.28064563684,
+      "CountriesWithSevereDeficits": 24,
+      "CountriesWithHighInflation": 15,
+      "MeanStability": 0.6803490519523621,
+      "MillisecondsPerDay": 43.856976,
+      "AllocatedKilobytesPerDay": 496.04625,
+      "OldestWars": [
+        "PRK-\u003EKOR age=1399 score=-47.5 losses=651580.300",
+        "DEU-\u003EAUT age=378 score=-16.0 losses=276787.700",
+        "EGY-\u003EISR age=358 score=-29.5 losses=458549.700",
+        "RUS-\u003EKOR age=332 score=-10.7 losses=0.000",
+        "CHN-\u003ENPL age=316 score=-33.4 losses=1198167.000"
+      ],
+      "QuietWars": [
+        "RUS-\u003EKOR id=31 age=332 score=-10.7 fronts=0/0 armies=84/50 assigned=83 moving=1 landless=False/False controlChanged=1 ready=True proposal=-1 pending=-1 negotiation=\u0027\u0027",
+        "ITA-\u003ESMR id=33 age=232 score=100.0 fronts=0/0 armies=21/0 assigned=21 moving=0 landless=False/False controlChanged=1 ready=False proposal=-1 pending=-1 negotiation=\u0027\u0027"
+      ],
+      "LargestGdpDeclines": [
+        "CHE 0 % of start",
+        "KWT 0 % of start",
+        "GEO 0 % of start",
+        "LIE 0 % of start",
+        "GUY 0 % of start"
+      ]
+    }
+  ],
+  "Failures": [],
+  "Alerts": [
+    "war 3: no fighting after 215 days (PAK-\u003EKAS)",
+    "war 4: no fighting after 195 days (IDN-\u003ETLS)",
+    "war 5: no fighting after 180 days (EGY-\u003EBRT)",
+    "war 8: no fighting after 207 days (TUR-\u003EAZE)",
+    "war 14: no fighting after 214 days (ESP-\u003EGIB)",
+    "war 20: no fighting after 236 days (EGY-\u003EPSE)",
+    "war 28: no fighting after 218 days (FRA-\u003EAND)",
+    "war 31: no fighting after 217 days (RUS-\u003EKOR)",
+    "war 33: no fighting after 207 days (ITA-\u003ESMR)"
+  ]
+}

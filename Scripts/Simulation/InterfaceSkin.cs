@@ -58,6 +58,22 @@ public static class InterfaceSkin
         // state.negative is genuinely bad news for the player.
         ("state.positive",      "#4fb477"),
         ("state.negative",      "#c94f55"),
+
+        // The production page's own palette: the card its lines sit on, the two economies
+        // the war-industry slider moves between, and the states a factory cell can be in.
+        // Mirrors game/gui/28_production_units.json, which ships the same values.
+        ("production.card",           "#172630"),
+        ("production.border",         "#374a54"),
+        ("production.inset",          "#0c151b"),
+        ("production.empty_border",  "#4d626b"),
+        ("production.empty_icon",    "#37454c"),
+        ("production.blocked",        "#252e34"),
+        ("production.civilian",       "#a5c588"),
+        ("production.civilian_fill",  "#293b2f"),
+        ("production.military",       "#dac082"),
+        ("production.military_fill",  "#443b26"),
+        ("production.hover",          "#394749"),
+        ("production.focus",          "#f5dfa2"),
         ("state.warning",       "#e7b058"),
         ("state.info",          "#77c9e8"),
         ("state.critical",      "#ef8c62"),
@@ -209,7 +225,7 @@ public static class InterfaceSkin
         ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,       8f, 6f, -8f, 80f)),
         ("hud.navigation",     new PanelRect(0f, 0f, 0f, 1f,       8f, 90f, 74f, -60f)),
         ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 526f, -60f)),
-        ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -564f, -52f, -8f, -8f)),
+        ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -620f, -52f, -8f, -8f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
         ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -300f, 90f, -8f, 620f)),
         ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 590f, -60f)),
@@ -218,7 +234,7 @@ public static class InterfaceSkin
         ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 610f)),
         // What a left click on the map selects: the country, as tall as what it holds, and
         // its region and province along the bottom, clear of the map controls.
-        ("hud.country_card",   new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 90f)),
+        ("hud.country_card",   new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 760f)),
         ("hud.region_card",    new PanelRect(0f, 1f, 0f, 1f,     530f, -262f, 1350f, -8f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
         ("hud.hotseat",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 365f, -6f)),
@@ -228,7 +244,7 @@ public static class InterfaceSkin
         ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -270f, -400f, 270f, 400f)),
         ("picker.heading",     new PanelRect(0f, 0f, 0f, 0f,      18f, 18f, 455f, 106f)),
         ("picker.country",     new PanelRect(1f, 0.5f, 1f, 0.5f, -420f, -338f, -18f, 338f)),
-        ("picker.actions",     new PanelRect(0f, 1f, 0f, 1f,      18f, -82f, 486f, -18f)),
+        ("picker.actions",     new PanelRect(0f, 1f, 0f, 1f,      18f, -126f, 638f, -18f)),
         ("modal.pause",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -210f, -245f, 210f, 245f)),
         ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -225f, 310f, 225f)),
         ("modal.peace_offer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -330f, -200f, 330f, 200f)),
@@ -238,6 +254,19 @@ public static class InterfaceSkin
         ("modal.multiplayer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -285f, -340f, 285f, 340f)),
         ("modal.ledger",       new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
         ("modal.war_ledger",   new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+
+        // The three full pages of the campaign - diplomacy, trade and production - take
+        // the same rectangle the ledger and the war ledger take: most of the screen, with
+        // the map still visible behind the shade and the top bar still readable above it.
+        ("modal.diplomacy",    new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("modal.trade",        new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        // The production page's own file (game/gui/28_production_units.json) ships the panel it
+        // finished at: wider than the other three pages, and sitting higher. Mirrored here,
+        // which is the invariant the bench holds - a default a modder cannot reproduce is a
+        // default that does not exist.
+        ("modal.production",   new PanelRect(0.044f, 0.084f, 0.044f, 0.944f, 0f, 0f, 850f, 0f)),
+        ("modal.support",      new PanelRect(0.045f, 0.115f, 0.795f, 0.73f, 0f, 0f, 0f, 0f)),
+        ("modal.research",     new PanelRect(0.055f, 0.10f, 0.975f, 0.94f, 0f, 0f, 0f, 0f)),
 
         // The lobby and the workshop. These three were laid out in game/gui only - named in
         // 22_multiplayer.json and 24_workshop.json and never given a compiled default - so

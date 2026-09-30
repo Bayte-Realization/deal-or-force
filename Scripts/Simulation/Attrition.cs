@@ -264,7 +264,11 @@ public static class Attrition
                 continue;
             }
 
-            if ((campaign.ElapsedDays + nation.Id) % defines.ArmyRebuildIntervalDays != 0) continue;
+            // A country being overrun rebuilds three times as often, and on credit (WarWeariness):
+            // the money a country is short of is not a reason to stop defending it.
+            var overrun = WarWeariness.Overrun(campaign, nation);
+            var interval = overrun ? Math.Max(1, defines.ArmyRebuildIntervalDays / 3) : defines.ArmyRebuildIntervalDays;
+            if ((campaign.ElapsedDays + nation.Id) % interval != 0) continue;
 
             // A player who has taken the army's size into their own hands is left to it: no
             // formation raised on their treasury, none stood down from under them.
@@ -289,7 +293,8 @@ public static class Attrition
             }
 
             if (strength >= nation.EstablishedDivisions * defines.ArmyRebuildCeiling) continue;
-            if (nation.Treasury < defines.ArmyRebuildCost) continue;
+            if (nation.Treasury < defines.ArmyRebuildCost &&
+                !(overrun && nation.Treasury > -nation.Gdp * defines.WarDebtLimitShare)) continue;
             if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) continue;
 
             var home = HomeState(campaign, nation);

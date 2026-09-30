@@ -29,6 +29,23 @@ public sealed partial class Defines
     /// country to build something has the first one's to look at.
     /// </summary>
     public float ResearchDiffusion { get; set; } = 0.5f;
+    /// <summary>Extra discount when countries across a land border already know the technology.</summary>
+    public float ResearchNeighbourDiffusion { get; set; } = 0.10f;
+    /// <summary>Extra discount from allies and active trade/non-aggression partners who know it.</summary>
+    public float ResearchPartnerDiffusion { get; set; } = 0.12f;
+    /// <summary>Floor on effective research cost, including every diffusion source.</summary>
+    public float ResearchMaximumDiscount { get; set; } = 0.70f;
+    /// <summary>Bonus per university per million residents; laboratories count separately.</summary>
+    public float ResearchUniversityBonus { get; set; } = 0.035f;
+    public float ResearchLaboratoryBonus { get; set; } = 0.075f;
+    public float ResearchInstitutionBonusCap { get; set; } = 0.35f;
+    /// <summary>Fraction of research pace lost when national stability reaches zero.</summary>
+    public float ResearchInstabilityPenalty { get; set; } = 0.20f;
+
+    /// <summary>How much of an unfinished project a seceding research ministry can carry away.</summary>
+    public float ResearchSecessionProgressShare { get; set; } = 0.55f;
+    /// <summary>Extra difficulty of retaining advanced parent technologies after secession.</summary>
+    public float ResearchSecessionComplexity { get; set; } = 0.45f;
 }
 
 /// <summary>One technology: what it costs, what it needs first and what it does.</summary>
@@ -39,6 +56,9 @@ public sealed class TechnologyDefinition
     public string Description { get; set; } = "";
     public string Category { get; set; } = "industry";
     public float Cost { get; set; } = 100f;
+    public string Icon { get; set; } = "icon_research";
+    public int? TreeColumn { get; set; }
+    public int? TreeRow { get; set; }
     public List<string> Requires { get; } = new();
     public Dictionary<string, float> Effects { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -63,6 +83,7 @@ public static class TechnologyCatalog
     static TechnologyCatalog() => ResetCatalog();
 
     public static IReadOnlyList<TechnologyDefinition> All => _ordered;
+    public static int Revision { get; private set; }
 
     public static TechnologyDefinition Of(string id) =>
         id is not null && ById.TryGetValue(id, out var definition) ? definition : null;
@@ -90,7 +111,16 @@ public static class TechnologyCatalog
                 technology.Description = about.GetString() ?? "";
             if (value.TryGetProperty("category", out var category) && category.ValueKind == JsonValueKind.String)
                 technology.Category = (category.GetString() ?? technology.Category).Trim().ToLowerInvariant();
-            if (value.TryGetProperty("cost", out var cost) && cost.TryGetSingle(out var points)) technology.Cost = MathF.Max(1f, points);
+            if (value.TryGetProperty("cost", out var cost))
+            {
+                if (cost.ValueKind == JsonValueKind.Number && cost.TryGetSingle(out var points) && float.IsFinite(points) && points >= 1)
+                    technology.Cost = points;
+                else errors?.Add($"technologies/{entry.Name}: cost must be a finite number >= 1.");
+            }
+            if (value.TryGetProperty("icon", out var icon) && icon.ValueKind == JsonValueKind.String)
+                technology.Icon = icon.GetString() ?? "icon_research";
+            technology.TreeColumn = ReadCoordinate(value, "tree_column", technology.TreeColumn, entry.Name, errors);
+            technology.TreeRow = ReadCoordinate(value, "tree_row", technology.TreeRow, entry.Name, errors);
             if (value.TryGetProperty("requires", out var requires) && requires.ValueKind == JsonValueKind.Array)
             {
                 technology.Requires.Clear();
@@ -103,7 +133,7 @@ public static class TechnologyCatalog
                 technology.Effects.Clear();
                 foreach (var effect in effects.EnumerateObject())
                 {
-                    if (!effect.Value.TryGetSingle(out var share))
+                    if (effect.Value.ValueKind != JsonValueKind.Number || !effect.Value.TryGetSingle(out var share) || !float.IsFinite(share))
                     {
                         errors?.Add($"technologies/{entry.Name}: effect '{effect.Name}' must be a number.");
                         continue;
@@ -116,12 +146,24 @@ public static class TechnologyCatalog
     }
 
     /// <summary>In the order a screen lists them: category, then cost, then id.</summary>
-    private static void Settle() =>
+    private static int? ReadCoordinate(JsonElement value, string key, int? previous, string id, List<string> errors)
+    {
+        if (!value.TryGetProperty(key, out var coordinate)) return previous;
+        if (coordinate.ValueKind == JsonValueKind.Null) return null;
+        if (coordinate.ValueKind == JsonValueKind.Number && coordinate.TryGetInt32(out var number) && number >= 0 && number <= 128) return number;
+        errors?.Add($"technologies/{id}: {key} must be null or an integer from 0 to 128.");
+        return previous;
+    }
+
+    private static void Settle()
+    {
+        Revision++;
         _ordered = ById.Values
             .OrderBy(technology => CategoryOrder(technology.Category))
             .ThenBy(technology => technology.Cost)
             .ThenBy(technology => technology.Id, StringComparer.Ordinal)
             .ToList();
+    }
 
     private static int CategoryOrder(string category)
     {
@@ -142,8 +184,8 @@ public static class TechnologyCatalog
             foreach (var effect in technology.Effects.Keys)
                 if (!EffectNames.Contains(effect, StringComparer.OrdinalIgnoreCase))
                     problems.Add($"{technology.Id}: '{effect}' is not an effect ({string.Join(", ", EffectNames)})");
-            if (!Categories.Contains(technology.Category))
-                problems.Add($"{technology.Id}: category '{technology.Category}' is not one of {string.Join(", ", Categories)}");
+            if (string.IsNullOrWhiteSpace(technology.Category))
+                problems.Add($"{technology.Id}: category must not be empty");
         }
         // A loop is a technology nobody can ever research.
         var state = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -182,6 +224,7 @@ public sealed partial class Nation
 
     [JsonIgnore] internal Dictionary<string, float> TechnologyBonuses;
     [JsonIgnore] internal int TechnologyBonusesFor = -1;
+    [JsonIgnore] internal int TechnologyBonusesRevision = -1;
 
     public bool HasTechnology(string id)
     {
@@ -197,16 +240,18 @@ public sealed partial class Nation
 /// simulation already works out - output, research itself, attack, defence, marching and supply.
 ///
 /// A country nobody plays chooses for itself; so does a player's ministry when the player has
-/// not, so a week's research is never thrown away. Diffusion is what keeps the world one world:
-/// a technology half the world's economy already has costs a quarter less to the next country.
+/// not, so a week's research is never thrown away. Diffusion keeps the world connected:
+/// global adoption, neighbours and formal partners each lower a discovery's remaining cost.
 /// </summary>
 public static class ResearchSystem
 {
+    public readonly record struct DiffusionBreakdown(float World, float Neighbours, float Partners, float Total, float EffectiveCost);
+
     /// <summary>What a country's technologies add to one effect, summed. Cached until it learns another.</summary>
     public static float Bonus(Nation nation, string effect)
     {
         if (nation is null || nation.Technologies.Count == 0) return 0f;
-        if (nation.TechnologyBonuses is null || nation.TechnologyBonusesFor != nation.Technologies.Count)
+        if (nation.TechnologyBonuses is null || nation.TechnologyBonusesFor != nation.Technologies.Count || nation.TechnologyBonusesRevision != TechnologyCatalog.Revision)
         {
             var bonuses = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foreach (var id in nation.Technologies)
@@ -215,6 +260,7 @@ public static class ResearchSystem
                         bonuses[name] = bonuses.GetValueOrDefault(name) + share;
             nation.TechnologyBonuses = bonuses;
             nation.TechnologyBonusesFor = nation.Technologies.Count;
+            nation.TechnologyBonusesRevision = TechnologyCatalog.Revision;
         }
         return nation.TechnologyBonuses.GetValueOrDefault(effect);
     }
@@ -234,29 +280,70 @@ public static class ResearchSystem
         var economy = defines.ResearchGdpWeight * MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * M.Clamp01(nation.HumanCapital);
         var schools = MathF.Pow(M.Clamp(nation.EducationSpending / MathF.Max(0.0001f, defines.ResearchEducationBaseline),
             0.1f, 4f), defines.ResearchEducationExponent);
-        return (defines.ResearchBasePerWeek + economy * schools) * NationalModifiers.Factor(nation, "research_speed");
+        var residents = MathF.Max(0.1f, nation.Population / 1_000_000f);
+        var institutions = 0f;
+        foreach (var state in campaign.StatesOf(nation))
+            institutions += state.Buildings.GetValueOrDefault(BuildingKind.University) * MathF.Max(0f, defines.ResearchUniversityBonus)
+                + state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * MathF.Max(0f, defines.ResearchLaboratoryBonus);
+        var institutionFactor = 1f + MathF.Min(MathF.Max(0f, defines.ResearchInstitutionBonusCap), institutions / residents);
+        var stabilityFactor = 1f - M.Clamp01(defines.ResearchInstabilityPenalty) * (1f - M.Clamp01(nation.Stability));
+        return (defines.ResearchBasePerWeek + economy * schools) * institutionFactor * stabilityFactor *
+            NationalModifiers.Factor(nation, "research_speed");
     }
 
-    /// <summary>What this country pays for it: its cost, less what the world having it already gives away.</summary>
-    public static float CostFor(Campaign campaign, Nation nation, TechnologyDefinition technology)
+    /// <summary>Knowledge arrives through the world, across borders, and through formal partners.</summary>
+    public static DiffusionBreakdown DiffusionFor(Campaign campaign, Nation nation, TechnologyDefinition technology)
     {
-        if (technology is null) return 0f;
+        if (campaign is null || nation is null || technology is null) return default;
         var world = 0f;
         var having = 0f;
+        var neighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex);
+        var borderCount = 0;
+        var borderHaving = 0;
+        var partnerWeight = 0f;
+        var partnerHaving = 0f;
         foreach (var other in campaign.Nations)
         {
-            if (other.Gdp <= 0f) continue;
-            world += other.Gdp;
-            if (other != nation && other.HasTechnology(technology.Id)) having += other.Gdp;
+            var knows = other != nation && other.HasTechnology(technology.Id);
+            if (other.Gdp > 0f)
+            {
+                world += other.Gdp;
+                if (knows) having += other.Gdp;
+            }
+            if (other == nation || other.Population <= 0 || other.Landless) continue;
+            var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
+            var isolated = relation is { Stance: DiplomaticStance.AtWar or DiplomaticStance.Rival } ||
+                relation?.EmbargoBy(nation.Id) == true || relation?.EmbargoBy(other.Id) == true;
+            if (isolated) continue;
+            if (neighbours.Contains(other.MapIndex))
+            {
+                borderCount++;
+                if (knows) borderHaving++;
+            }
+            var weight = relation is { Stance: DiplomaticStance.Allied } ? 2f
+                : relation?.TradeAgreement == true ? 1f
+                : relation?.NonAggressionPact == true ? 0.5f : 0f;
+            partnerWeight += weight;
+            if (knows) partnerHaving += weight;
         }
-        var share = world <= 0f ? 0f : having / world;
-        return technology.Cost * (1f - M.Clamp01(campaign.Defines.ResearchDiffusion) * share);
+        var defines = campaign.Defines;
+        var global = M.Clamp01(defines.ResearchDiffusion) * (world <= 0f ? 0f : having / world);
+        var border = M.Clamp01(defines.ResearchNeighbourDiffusion) * (borderCount == 0 ? 0f : borderHaving / (float)borderCount);
+        var partners = M.Clamp01(defines.ResearchPartnerDiffusion) * (partnerWeight <= 0f ? 0f : partnerHaving / partnerWeight);
+        var discount = MathF.Min(M.Clamp01(defines.ResearchMaximumDiscount), global + border + partners);
+        return new DiffusionBreakdown(global, border, partners, discount, technology.Cost * (1f - discount));
     }
+
+    /// <summary>What this country pays for it after knowledge diffusion.</summary>
+    public static float CostFor(Campaign campaign, Nation nation, TechnologyDefinition technology) =>
+        DiffusionFor(campaign, nation, technology).EffectiveCost;
 
     /// <summary>Weeks left at this week's pace, or -1 for never.</summary>
     public static int WeeksLeft(Campaign campaign, Nation nation, TechnologyDefinition technology)
     {
-        var pace = nation.ResearchPerWeek > 0f ? nation.ResearchPerWeek : WeeklyPoints(campaign, nation);
+        // Facilities, stability and spending can change between weekly ticks. Forecast
+        // from today's conditions rather than last week's cached display number.
+        var pace = WeeklyPoints(campaign, nation);
         if (pace <= 0f || technology is null) return -1;
         var left = CostFor(campaign, nation, technology) - nation.ResearchProgress.GetValueOrDefault(technology.Id);
         return (int)MathF.Ceiling(MathF.Max(0f, left) / pace);

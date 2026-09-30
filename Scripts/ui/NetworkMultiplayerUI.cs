@@ -434,6 +434,9 @@ public partial class DealOrForceGame
     {
         if (_campaign is not null) _campaign.Changed -= Refresh;
         _campaign = campaign;
+        _campaignSeed = campaign.Seed;
+        _pickerScenarioEntry = null;
+        if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();
         var local = _campaign.NationById(_networkLocalNationId) ?? _campaign.Player;
         _campaign.SetPlayer(local.Id);
         _campaign.Changed += Refresh;

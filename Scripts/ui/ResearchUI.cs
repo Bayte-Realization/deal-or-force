@@ -31,31 +31,14 @@ public partial class DealOrForceGame
         else
             CardRow(rows, "Researching", Tr("nothing yet - it starts with the week"), null, "text.muted");
 
-        var pace = nation.ResearchPerWeek > 0f ? nation.ResearchPerWeek : ResearchSystem.WeeklyPoints(_campaign, nation);
+        var pace = ResearchSystem.WeeklyPoints(_campaign, nation);
         CardRow(rows, "Research a week", pace.ToString("0.0"),
-            Tr("From the economy, literacy and what is spent on education, and from what research has already given research."));
+            Tr("Research pace depends on the economy, literacy, education, universities, laboratories, stability and previous discoveries."));
         var known = nation.Technologies.Select(id => TechnologyCatalog.Of(id)).Where(technology => technology is not null).ToList();
         CardRow(rows, "Technologies", Simulation.Loc.Format("{0} of {1} known", known.Count, TechnologyCatalog.All.Count),
             known.Count == 0 ? Tr("None yet.") : string.Join("\n", known.Select(technology => Tr(technology.Name))));
 
-        // What can be started next, the one being researched marked. Pressing another keeps what
-        // was put into this one: switching costs nothing but time.
-        var choices = new HFlowContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        choices.AddThemeConstantOverride("h_separation", 4);
-        choices.AddThemeConstantOverride("v_separation", 4);
-        rows.AddChild(choices);
-        foreach (var technology in ResearchSystem.AvailableTo(nation))
-        {
-            var weeks = ResearchSystem.WeeksLeft(_campaign, nation, technology);
-            var caption = weeks < 0
-                ? Tr(technology.Name)
-                : Simulation.Loc.Format("{0} ({1} wk)", Tr(technology.Name), weeks);
-            var captured = technology.Id;
-            var button = ActionButton(caption, () => ChooseResearch(captured), 0, 26,
-                technology.Id == nation.CurrentResearch);
-            button.TooltipText = Ui.Tip(TechnologyTooltip(technology, weeks));
-            choices.AddChild(button);
-        }
+        rows.AddChild(ActionButton("Open technology tree", () => OpenScreen("Research"), 0, 32));
     }
 
     private void ChooseResearch(string technologyId)
@@ -65,22 +48,30 @@ public partial class DealOrForceGame
         _campaign.Commands.Enqueue(choose);
         _campaign.Commands.ApplyAll(_campaign);
         if (MapSelectionShowing) ShowMapSelectionContent();
+        RefreshResearchScreen();
     }
 
     /// <summary>A technology, the way a tooltip reads it: what it is, what it does, what it costs.</summary>
     private string TechnologyTooltip(TechnologyDefinition technology, int weeks)
     {
-        var effects = technology.Effects
-            .Select(effect => $"{Tr(EffectCaption(effect.Key))} {effect.Value * 100f:+0.#;-0.#}%");
+        var effects = NationalModifiers.Lines(technology.Effects);
         var needs = technology.Requires.Count == 0
             ? ""
             : "\n" + Simulation.Loc.Format("Requires: {0}", string.Join(", ",
                 technology.Requires.Select(id => Tr(TechnologyCatalog.Of(id)?.Name ?? id))));
         var time = weeks < 0 ? "" : "\n" + Simulation.Loc.Format("About {0} week(s) at this pace.", weeks);
         return $"{Tr(technology.Name)}\n{Tr(technology.Description)}\n\n{string.Join("\n", effects)}" +
-               "\n" + Simulation.Loc.Format("Costs {0} points, less for every country that already has it.",
+               "\n" + Simulation.Loc.Format("Effective cost: {0} research points.",
                    ResearchSystem.CostFor(_campaign, _campaign.Player, technology).ToString("0")) +
-               needs + time;
+               "\n" + ResearchDiffusionText(technology) + needs + time;
+    }
+
+    private string ResearchDiffusionText(TechnologyDefinition technology)
+    {
+        var diffusion = ResearchSystem.DiffusionFor(_campaign, _campaign.Player, technology);
+        return Simulation.Loc.Format("Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.",
+            Fmt.Percent(diffusion.World), Fmt.Percent(diffusion.Neighbours),
+            Fmt.Percent(diffusion.Partners), Fmt.Percent(diffusion.Total));
     }
 
     private static string EffectCaption(string effect) => effect switch

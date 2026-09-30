@@ -45,6 +45,7 @@ virtual LAN normally needs a forwarded port.
 | pause / resume time | `Space` (this key does not confirm buttons and does nothing else) |
 | close the top window / open the pause menu | `Esc` |
 | quick save / load | `F5` / `F9` |
+| smooth horizontal map pan for showcases | `F6` or `PAN` on the map toolbar; press again to stop |
 
 Close in, the internal provincial borders are visible; far out, the map keeps only the
 strategically meaningful labels and markers.
@@ -75,8 +76,8 @@ the player's country, the game date, the time it was written and the compressed 
 - `F5` atomically updates the quicksave; `F9` loads it from anywhere in the campaign.
 - Autosave fires on an interval of game days set in defines and never overwrites a manual
   slot.
-- The game writes a temporary file first, verifies its checksum and only then replaces the
-  old slot. An interrupted write therefore does not destroy a good save.
+- The game writes a temporary file first and only then replaces the old slot. An
+  interrupted write therefore does not destroy a good save.
 - The header holds the format version, the map topology version, the province count and a
   fingerprint of the mod set. If the mods differ, loading warns you; if the file is damaged
   or the map incompatible, it refuses to replace a live campaign.
@@ -85,8 +86,9 @@ the player's country, the game date, the time it was written and the compressed 
   control and occupation progress, diplomacy, events, the Ledger's history and the state of
   the deterministic generator all come back together.
 
-The files live in `user://save_games`. Beside each compressed `.bdfsave` sits a readable
-`.meta.json`; delete or move the pair together.
+Files live in `user://save_games`. Each new slot is one `.bdfsave`: readable JSON by
+default, or optional gzip. The game detects which it is from the file contents. Old
+slots with a separate `.meta.json` still load.
 
 ## Time, economy and construction
 
@@ -560,6 +562,8 @@ with one JSON file per language, so a translation mod needs no code and no rebui
 are in the modding guide.
 
 ## Free camera
+
+For a level globe rotation or flat-map pan during a showcase, press **F6** or **PAN**. One horizontal turn takes about 90 seconds; press again to stop. For a HUD-free fly camera, use **F10**, then **T** for its own automatic orbit.
 
 **F10** takes the camera off its orbital mount and it starts to fly. The mouse looks, **WASD**
 moves where you are looking, **Space** and **Ctrl** rise and fall, **Shift** speeds up 4.5×,

@@ -334,8 +334,8 @@ public static class InflationCore
             nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + excess * weights.Living);
             if (weights.Stability != 0f)
                 nation.Stability = M.Clamp01(nation.Stability + felt * weights.Stability);
-            foreach (var state in campaign.StatesOf(nation))
-                state.Radicalism = M.Clamp01(state.Radicalism + felt * weights.Radicalism);
+            // Regional anger is applied once by RadicalismCore, with the week's other
+            // pressures and recovery, so UI forecasts use the same arithmetic as the tick.
         }
         else if (nation.Inflation < 0f)
         {

@@ -1,0 +1,11 @@
+{
+  "layout.panel.hud.country_card": "Выбранная страна / дипломатические действия",
+  "layout.panel.hud.region_card": "Выбранный регион и провинция",
+  "Relations and treaties": "Отношения и договоры",
+  "Influence and protection": "Влияние и покровительство",
+  "Subject administration": "Управление зависимой страной",
+  "War and peace": "Война и мир",
+  "Negotiate peace": "Заключить мир",
+  "White peace": "Белый мир",
+  "Open negotiations for {0}. Review the terms before proposing peace; opening this window does not end the war.": "Открыть переговоры: {0}. Проверьте условия перед предложением мира. Открытие окна не завершает войну."
+}

@@ -1,0 +1,4 @@
+{
+  "Active construction: {0}. Each project can be cancelled separately.": "Строек: {0}. Каждый проект можно отменить отдельно.",
+  "Cancel only this project. Spent: {0} (not refunded). Remaining: {1} (will not be charged).": "Отменить только этот проект. Потрачено: {0} (не возвращается). Осталось: {1} (не будет списано)."
+}

@@ -22,6 +22,9 @@ public partial class DealOrForceGame
     private Control _pickerFlag = null!;
     private Nation _pickerNation;
     private bool _pickerHotseatMode;
+    private LineEdit _pickerSeed = null!;
+    private Button _pickerSeedApply = null!;
+    private Label _pickerSeedNote = null!;
 
     private HFlowContainer _pickerMovements;
 
@@ -102,9 +105,14 @@ public partial class DealOrForceGame
         var actions = TexturedPanel(_pickerLayer);
         Ui.Place(actions, "picker.actions");
         var actionMargin = Margin(actions, 10, 8);
+        // A MarginContainer gives its one child the whole rectangle, so the rows stack in a
+        // box of their own inside it: the buttons, and the seed row underneath them.
+        var actionStack = new VBoxContainer();
+        actionStack.AddThemeConstantOverride("separation", 8);
+        actionMargin.AddChild(actionStack);
         var actionRow = new HBoxContainer();
         actionRow.AddThemeConstantOverride("separation", 8);
-        actionMargin.AddChild(actionRow);
+        actionStack.AddChild(actionRow);
         actionRow.AddChild(ActionButton("Back", ShowMainMenu, 100, 38));
         actionRow.AddChild(ActionButton("Random nation", PickRandomNation, 150, 38));
         actionRow.AddChild(ActionButton("Scenarios / editor", OpenScenarioLibrary, 170, 38));
@@ -112,6 +120,94 @@ public partial class DealOrForceGame
         // BEFORE they pick a country, and until now the only door to them was the pause
         // menu, which does not exist until a campaign is running.
         actionRow.AddChild(ActionButton("Settings", ShowSettings, 120, 38));
+
+        // The seed the next world is built from. The same seed builds the same world to the
+        // digit - which is what a bug report is made of - and a different seed builds a
+        // different one out of the same scenario. Changing it asks for a rebuild rather
+        // than doing one behind the field: a world is not a small thing to replace.
+        var seedRow = new HBoxContainer();
+        seedRow.AddThemeConstantOverride("separation", 8);
+        actionStack.AddChild(seedRow);
+        var seedCaption = Title("WORLD SEED", 12, Ui.Colour("text.caption"));
+        seedCaption.AutowrapMode = TextServer.AutowrapMode.Off;
+        seedCaption.CustomMinimumSize = new Vector2(92, 0);
+        seedRow.AddChild(seedCaption);
+        _pickerSeed = new LineEdit { CustomMinimumSize = new Vector2(150, 34) };
+        _pickerSeed.MaxLength = 10;
+        _pickerSeed.Text = _campaignSeed.ToString();
+        Placeholder(_pickerSeed, "Any number");
+        _pickerSeed.TextChanged += _ => OnPickerSeedChanged();
+        _pickerSeed.TextSubmitted += _ => ApplyPickerSeed();
+        seedRow.AddChild(_pickerSeed);
+        seedRow.AddChild(ActionButton("Random seed", RollPickerSeed, 128, 34));
+        _pickerSeedApply = ActionButton("Rebuild the world", ApplyPickerSeed, 160, 34, true);
+        _pickerSeedApply.Visible = false;
+        seedRow.AddChild(_pickerSeedApply);
+        _pickerSeedNote = Title("", 11, Ui.Colour("text.caption"));
+        _pickerSeedNote.AutowrapMode = TextServer.AutowrapMode.Off;
+        _pickerSeedNote.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _pickerSeedNote.ClipText = true;
+        seedRow.AddChild(_pickerSeedNote);
+        RefreshPickerSeedNote();
+    }
+
+    /// <summary>What the seed field says, if it says a number at all.</summary>
+    private bool PickerSeedParsed(out int seed)
+    {
+        return CampaignSeedSelection.TryParse(_pickerSeed.Text, out seed);
+    }
+
+    private void OnPickerSeedChanged()
+    {
+        RefreshPickerSeedNote();
+    }
+
+    private void RefreshPickerSeedNote()
+    {
+        if (_campaign is null) return;
+        if (!PickerSeedParsed(out var seed))
+        {
+            _pickerSeedApply.Visible = false;
+            _pickerSeedNote.Text = Tr("A seed is any whole number.");
+            return;
+        }
+        var stale = seed != _campaign.Seed;
+        _pickerSeedApply.Visible = stale;
+        // Nothing to explain when the field already names the world on screen: the note
+        // exists for the moment the two stop agreeing, which is when a decision is needed.
+        _pickerSeedNote.Text = stale ? Tr("A new seed builds a new world.") : "";
+    }
+
+    private void RollPickerSeed()
+    {
+        // Not the campaign's own generator: that one exists to make worlds reproducible,
+        // and a dice that rolled the same world every time would be a strange dice.
+        var rolled = CampaignSeedSelection.Roll();
+        _pickerSeed.Text = rolled.ToString();
+        RefreshPickerSeedNote();
+    }
+
+    private async void ApplyPickerSeed()
+    {
+        if (_isLoading || !PickerSeedParsed(out var seed) || seed == _campaign.Seed) return;
+        var previousSeed = _campaignSeed;
+        _campaignSeed = seed;
+        var rebuilt = _pickerScenarioEntry is null
+            ? await RebuildCampaignWithLoading()
+            : await RebuildAuthoredScenarioWithLoading(_pickerScenarioEntry);
+        if (!rebuilt)
+        {
+            _campaignSeed = _campaign.Seed == seed ? seed : previousSeed;
+            RefreshPickerSeedNote();
+            return;
+        }
+        // The old world's countries are gone with it, and the one the player had highlighted
+        // was one of them.
+        _pickerNation = null;
+        _pickerSubheading.Text = $"{_campaign.Date.Display()} · {Tr("Click the map or search")}";
+        SetPickerNation(_campaign.Player, true);
+        RebuildPickerResults();
+        RefreshPickerSeedNote();
     }
 
     private async void OpenCountryPicker()
@@ -141,6 +237,7 @@ public partial class DealOrForceGame
         _pickerSeats.Visible = false;
         _pickerSeatToggle.Visible = false;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
+        RefreshPickerSeedNote();
         _pickerSearch.GrabFocus();
     }
 

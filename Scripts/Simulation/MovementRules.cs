@@ -362,7 +362,7 @@ public static class MovementRules
     {
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        if (state is null || definition is null || region is null) return 0f;
+        if (state is null || definition is null || region is null || !definition.CanStageUprising) return 0f;
         var support = state.Support.GetValueOrDefault(region.MapIndex);
         var own = PeopleOf(region, definition, out _);
         var share = region.Population > 0 ? own / (float)region.Population : 0f;
@@ -399,6 +399,7 @@ public static class MovementRules
     {
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
+        if (state is null || definition is null || region is null || !definition.CanStageUprising) return false;
         var defines = campaign.Defines;
         var chance = UprisingChance(campaign, nation, region);
         var roll = Roll(campaign.Seed, nation.Id, campaign.ElapsedDays, region.MapIndex);
@@ -430,11 +431,36 @@ public static class MovementRules
         var definition = Movements.DefinitionOf(nation);
         var defines = campaign.Defines;
         var topology = campaign.ProvinceMap;
+        // Record the region's real economy before ownership changes. A movement's
+        // donations GDP and zero population are not the tax base of its new country.
+        var wasLandless = nation.Landless;
+        var regionalGdp = RegionalStatistics.EstimatedGdp(campaign, region);
+        var previousGdp = wasLandless ? 0f : nation.Gdp;
+        var incomingScale = owner?.OutputScale ?? nation.OutputScale;
         var provinces = new List<int>();
         for (var province = 1; province <= topology.ProvinceCount; province++)
             if (topology.ProvinceToState[province] == region.MapIndex) provinces.Add(province);
 
         StatePartition.Annex(campaign, provinces, nation, asConquest: false);
+        var heldStates = campaign.StatesOf(nation);
+        nation.Population = heldStates.Sum(s => s.Population);
+        nation.Gdp = MathF.Max(.01f, previousGdp + regionalGdp);
+        // Blend calibration for successive acquisitions, preserving the inherited
+        // production value instead of converging from a fictitious tiny economy.
+        var rawAnnual = previousGdp / MathF.Max(.0001f, nation.OutputScale) +
+                        regionalGdp / MathF.Max(.0001f, incomingScale);
+        if (rawAnnual > .0001f) nation.OutputScale = nation.Gdp / rawAnnual;
+        if (wasLandless && owner is not null) nation.Productivity = owner.Productivity;
+        if (nation.Population > 0)
+        {
+            nation.StandardOfLiving = (float)(heldStates.Sum(s => s.StandardOfLiving * (double)s.Population) / nation.Population);
+            nation.Literacy = (float)(heldStates.Sum(s => s.Literacy * (double)s.Population) / nation.Population);
+        }
+        if (owner is not null && owner != nation)
+        {
+            owner.Gdp = MathF.Max(.01f, owner.Gdp - regionalGdp);
+            owner.Population = campaign.StatesOf(owner).Sum(s => s.Population);
+        }
         state.Landless = false;
         if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
         if (!string.IsNullOrWhiteSpace(definition.StateName)) nation.Name = definition.StateName;

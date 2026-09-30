@@ -1,0 +1,7 @@
+{
+  // Overseas treaty roots require an occupied coastal province secured to
+  // OccupationSecureThreshold, and this fraction of its region held by the winner.
+  "PeaceShapeAllowCoastalBridgeheads": true,
+  "PeaceShapeOccupiedShare": 0.25,
+  "PeaceShapePocketShare": 0.30
+}

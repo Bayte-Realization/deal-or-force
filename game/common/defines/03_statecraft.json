@@ -59,6 +59,8 @@
   "AiWartimeMilitarySpending": 0.16,
   "AiTenseMilitarySpending": 0.09,
   "AiPeacetimeMilitarySpending": 0.045,
+  "AiWartimeArmsFocus": 0.40,
+  "AiPeacetimeArmsFocus": 0.04,
   "AiStabilityConcern": 0.52,
   "AiSocialStep": 0.006,
   "AiBuildTreasuryFloor": 0.03,

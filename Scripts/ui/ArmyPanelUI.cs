@@ -179,8 +179,8 @@ public partial class DealOrForceGame
             "Draw the line to hold. The selection spreads along its length and digs in.");
         AddDrawButton(draw, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive line",
             "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Alt+RMB redraws it. Prepare holds the departure front; Execute advances to the objective and stops.");
-        AddDrawButton(draw, "Fall back", "plan_fallback", FrontLineKind.Fallback, "Fallback line",
-            "Draw the line to hold if the one in front gives way.");
+        AddDrawButton(draw, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
+            "RMB-drag a connected line on controlled land. Release to distribute divisions evenly and hold immediately, in peace or war. Backtrack to shorten; Alt+RMB redraws the selected line; Esc cancels.");
         var dropLine = ActionButton("Erase", ClearDrawnLine, 82, 30, false, Icon("plan_erase"));
         dropLine.TooltipText = Ui.Tip(Tr("Take the selection off its drawn line and return it to the war's own front."));
         draw.AddChild(dropLine);
@@ -189,7 +189,7 @@ public partial class DealOrForceGame
             11, Ui.Colour("text.muted"));
         _drawFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         plansPage.AddChild(_drawFeedback);
-        var steps = Title("1. Select divisions → Front: choose a border.\n2. Attack: right-drag the objective in the target country.\n3. Execute: advance. Prepare: stop. Alt + right-drag: redraw.",
+        var steps = Title("Defence: select divisions → Defend → right-drag on controlled land and release. Divisions occupy and hold the line immediately.\nOffensive: Front → Attack → Execute. Prepare stops the advance. Alt + right-drag redraws; Esc cancels drawing.",
             12, Ui.Colour("text.caption"));
         steps.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         plansPage.AddChild(steps);
@@ -251,8 +251,8 @@ public partial class DealOrForceGame
         var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 104, 30, false, Icon("drop_lead"));
         dropLead.TooltipText = Ui.Tip(Tr("Remove the lead division from the selection without moving or disbanding it."));
         selection.AddChild(dropLead);
-        var region = ActionButton("Region", ShowSelectedArmyRegion, 96, 30, false, Icon("region"));
-        region.TooltipText = Ui.Tip(Tr("Open the demographic and economic inspector for the ground this division is on."));
+        var region = ActionButton("Region info", ShowSelectedArmyRegion, 102, 30, false, Icon("region"));
+        region.TooltipText = Ui.Tip(Tr("Open the region dossier for the lead division's position. Click the division on the map to return to its orders."));
         selection.AddChild(region);
 
         _armyCommandFeedback = Title("Right-click to march or attack · Shift+right-click queues a waypoint",
