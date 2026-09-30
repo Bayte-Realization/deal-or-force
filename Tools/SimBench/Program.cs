@@ -5116,9 +5116,12 @@ public static class Program
         if (arrived == 0)
             return "not one division reached the post it was sent to in three years";
         var perArrival = churn / (float)arrived;
-        // 1.25 as it stands, against 1.98 before a division was allowed to keep its post
-        // across a change of job. 1.8 is loose enough not to fail on the ordinary noise of
-        // a war and tight enough to catch a return to the old behaviour.
+        // 1.49 on average over sixteen seeds (1.28-1.74), against 1.99 on the same seeds before
+        // a division whose post had left the line took the nearest open one instead of a rank
+        // slot anywhere on it - and 1.98 before a division was allowed to keep its post across
+        // a change of job. The one seed run here is as chaotic as the war: the same code gave
+        // 1.57-2.50 across seeds before. 1.8 is loose enough not to fail on the ordinary noise
+        // of a war and tight enough to catch a return to the old behaviour.
         if (perArrival > 1.8f)
             return $"divisions were sent somewhere new {perArrival:0.00} times for every one that " +
                    $"arrived ({churn:N0} against {arrived:N0}), which is not an army anybody is commanding";

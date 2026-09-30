@@ -855,6 +855,58 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         return line[Math.Clamp(slot, 0, line.Count - 1)];
     }
 
+    /// <summary>
+    /// A new post for a division that had one: its post has left the line, or has more on it
+    /// than its share. The nearest province of the line to that post that is not already
+    /// carrying its share of divisions with the same duty - a step along the line, or forward,
+    /// or back.
+    ///
+    /// These used to go through <see cref="PostOnTheLine"/>, whose slots are ranks in a list
+    /// sorted by province number: a place in the order of battle, but anywhere at all on the
+    /// ground. A front that moved one province sent the division whose post it took to some
+    /// other end of the line, and it was sent somewhere else again before it got there. Measured
+    /// over three years of the 2024 world, that was three quarters of every re-task - reserves
+    /// and defenders swapping duty were the most of it - and the reason divisions were sent
+    /// somewhere new about twice for every time one arrived anywhere.
+    ///
+    /// A fresh division still takes a rank slot: spreading an army that has no posts yet
+    /// across the whole line is what the slots are for.
+    /// </summary>
+    private static int PostNear(Campaign campaign, Army army, ArmyOrder order, List<int> line, int warId, int heldPost)
+    {
+        if (line.Count == 0) return -1;
+        var map = campaign.ProvinceMap;
+        var load = new Dictionary<int, int>();
+        var peers = 1;
+        foreach (var other in campaign.Armies)
+        {
+            if (other.Id == army.Id || other.NationId != army.NationId || other.OrderKind != order) continue;
+            if (other.AssignedWarId != warId || other.TemplateId == MilitiaCore.TemplateId) continue;
+            peers++;
+            if (other.OrderProvinceId > 0) load[other.OrderProvinceId] = load.GetValueOrDefault(other.OrderProvinceId) + 1;
+        }
+        // An even spread's worth of divisions per province; one more than that costs as much as
+        // walking one province further (a province is about half a degree across).
+        var share = MathF.Max(1f, peers / (float)line.Count);
+        const float CrowdCost = 0.6f;
+        var from = map.CenterOf(heldPost);
+        var best = -1;
+        var bestScore = float.MaxValue;
+        foreach (var province in line)
+        {
+            var there = map.CenterOf(province);
+            var score = NavalOperations.Distance(from.Latitude, from.Longitude, there.Latitude, there.Longitude);
+            var over = load.GetValueOrDefault(province) + 1 - share;
+            if (over > 0f) score += over * CrowdCost;
+            if (score < bestScore || (score == bestScore && province < best))
+            {
+                bestScore = score;
+                best = province;
+            }
+        }
+        return best;
+    }
+
     public int IssuerId { get; init; }
     public int ArmyId { get; init; }
     public ArmyOrder Order { get; init; }
@@ -964,7 +1016,9 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                 ? heldPost
                 : drawn is not null
                     ? BattlePlanning.PostFor(drawn, army, orderedFront)
-                    : PostOnTheLine(campaign, army, Order, orderedFront, war.Id);
+                    : heldPost > 0
+                        ? PostNear(campaign, army, Order, orderedFront, war.Id, heldPost)
+                        : PostOnTheLine(campaign, army, Order, orderedFront, war.Id);
         var enemyId = war.EnemyLeaderOf(army.NationId);
         var enemy = campaign.NationById(enemyId);
         var targetIsHostile = target > 0 && enemy is not null && controllers[target] == enemy.MapIndex;
