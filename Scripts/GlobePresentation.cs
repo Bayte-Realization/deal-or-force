@@ -64,7 +64,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// They stay at their normal size until the camera is nearly on the ground, and grow a
     /// third from there.
     /// </summary>
-    private const float CounterPlatePixelSize = 0.000115f;
+    private const float CounterPlatePixelSize = 0.00016f;
     private const float CounterTextPixelSize = 0.00025f;
     private const int CounterOutlineSize = 6;
     private const float CounterCloseScale = 1.35f;
@@ -72,6 +72,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// <summary>Above this the counters are simply their normal size.</summary>
     private const float CounterGrowthDistance = 6.6f;
     private const float CounterGrowthFlatZoom = 1.6f;
+
+    /// <summary>
+    /// The flat map's counters hold their working size - a third again larger than they
+    /// used to be, because a counter one reads is worth more than the map it covers - down
+    /// to this zoom, and only in the strategic range below it do they shrink toward the
+    /// compact chip. Growing at 1.6 put the shrink inside the range a country is actually
+    /// commanded at, which was exactly backwards.
+    /// </summary>
+    private const float CounterShrinkFlatZoom = 0.7f;
 
     private readonly Dictionary<int, uint> _colorByMapIndex = new();
     private readonly Dictionary<int, Simulation.Nation> _nationByMapIndex = new();
@@ -887,7 +896,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _counterFlatFar = 1f;
 
     /// <summary>Below this far-scale the card draws its symbol, not its digits.</summary>
-    private const float CounterCompactBelow = 0.92f;
+    private const float CounterCompactBelow = 0.5f;
     public bool MilitaryMarkersEnabled { get; set; } = true;
     private bool _showcasePan;
     public bool ShowcasePan => _showcasePan;
@@ -984,10 +993,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // below and beyond the frame they belong to. A label at its own origin, with the
         // card's pixels carrying the layout, has no offset that could drift - at any
         // distance, on any map.
-        var platePixel = _flatMap ? 52f / 176f : CounterPlatePixelSize * _counterScale;
+        var platePixel = _flatMap ? 72f / 176f : CounterPlatePixelSize * _counterScale;
         marker.Plate.PixelSize = platePixel;
         if (marker.Glow is not null) marker.Glow.PixelSize = platePixel;
-        marker.Count.PixelSize = platePixel * 1.35f;
+        marker.Count.PixelSize = platePixel * 1.45f;
         marker.Count.OutlineSize = _flatMap ? 2 : Mathf.Max(1, Mathf.RoundToInt(4 * _counterScale));
         marker.Count.Position = new Vector3(0f, 0f, _flatMap ? 4f : .004f);
         // Measured against a crosshair at the card texture's centre: the fixed-size globe
@@ -1018,8 +1027,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // keeping their operational size over a world-scale map. One metric owns the curve,
         // so a mod can keep the old behaviour with a value of one.
         var flatFar = _flatMap
-            ? Mathf.Lerp(1f, Simulation.InterfaceSkin.Metric("map.counter_far_scale", 0.45f),
-                Mathf.InverseLerp(CounterGrowthFlatZoom, MinimumFlatZoom, _flatZoom))
+            ? Mathf.Lerp(1f, Simulation.InterfaceSkin.Metric("map.counter_far_scale", 0.55f),
+                Mathf.InverseLerp(CounterShrinkFlatZoom, MinimumFlatZoom, _flatZoom))
             : 1f;
         var worldPixel = _flatMap ? _camera.Size / Math.Max(1f, _camera.GetViewport().GetVisibleRect().Size.Y) : 0f;
         if (Mathf.Abs(wanted - _counterScale) < 0.03f &&
@@ -1055,7 +1064,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (!MilitaryMarkersEnabled || (!_flatMap && _distance > 13.5f) || !IsInstanceValid(_camera)) return false;
         // A bigger counter is a bigger target: the radius that finds it follows the size
         // it is actually drawn at, or clicking a close-up counter near its edge misses.
-        var reach = _flatMap ? 26f : 28f * _counterScale;
+        var reach = _flatMap ? 36f * _counterFlatFar : 28f * _counterScale;
         var bestDistance = reach * reach;
         var expandedHit = false;
         foreach (var marker in _armyStacks.Values)
