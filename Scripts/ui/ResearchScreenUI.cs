@@ -121,6 +121,9 @@ public partial class DealOrForceGame
         var cost = current is null ? 0 : ResearchSystem.CostFor(_campaign, nation, current);
         var points = current is null ? 0 : nation.ResearchProgress.GetValueOrDefault(current.Id);
         _researchProgress.Value = cost > 0 ? Math.Clamp(points / cost * 100, 0, 100) : 0;
+        // Nothing chosen, nothing to be a share of: an empty bar reading "0%" under "Choose a
+        // research project" looked like a project stuck at the start.
+        _researchProgress.Visible = current is not null;
         _researchSummary.Text = current is null
             ? Tr("Choose a research project")
             : $"{Tr(current.Name)} · {points:0.0} / {cost:0.0} · " + Simulation.Loc.Format("About {0} week(s) at this pace.", ResearchSystem.WeeksLeft(_campaign, nation, current));

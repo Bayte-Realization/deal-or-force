@@ -541,7 +541,7 @@ public partial class DealOrForceGame
                 row.AddChild(figure);
             }
             OwnRow(Tr("GDP"), Fmt.Money(player.Gdp));
-            OwnRow(Tr("Divisions"), ownDivisions.GetValueOrDefault(player.Id).ToString("0.0"));
+            OwnRow(Tr("Divisions"), ownDivisions.GetValueOrDefault(player.Id).ToString("0.#"));
             OwnRow(Tr("Population"), Fmt.People(player.Population));
             OwnRow(Tr("Stability"), Fmt.Percent(player.Stability));
             return;
@@ -584,7 +584,7 @@ public partial class DealOrForceGame
         CompareRow(Tr("GDP"), player.Gdp, nation.Gdp, Fmt.Money(player.Gdp),
             canSee ? Fmt.Money(nation.Gdp) : "?");
         CompareRow(Tr("Divisions"), divisions.GetValueOrDefault(player.Id), divisions.GetValueOrDefault(nation.Id),
-            divisions.GetValueOrDefault(player.Id).ToString("0.0"), canSee ? divisions.GetValueOrDefault(nation.Id).ToString("0.0") : "?");
+            divisions.GetValueOrDefault(player.Id).ToString("0.#"), canSee ? divisions.GetValueOrDefault(nation.Id).ToString("0.#") : "?");
         CompareRow(Tr("Population"), player.Population, nation.Population,
             Fmt.People(player.Population), canSee ? Fmt.People(nation.Population) : "?");
         CompareRow(Tr("Stability"), player.Stability, nation.Stability,

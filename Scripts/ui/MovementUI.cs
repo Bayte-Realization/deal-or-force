@@ -56,6 +56,9 @@ public partial class DealOrForceGame
         scroll.AddChild(_movementRows);
 
         _globe.MovementPicked += ShowMovement;
+        // Not behind the main menu; on the country picker they stay, because a movement is
+        // one of the things that can be picked there and its headquarters is where it is.
+        _globe.CampaignInView = () => _campaign is not null && _menuLayer is not { Visible: true };
         AddChild(new MovementPanelDriver(this));
     }
 

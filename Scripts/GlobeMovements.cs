@@ -25,6 +25,13 @@ public sealed partial class GlobePresentation
     /// <summary>A headquarters was clicked.</summary>
     public event Action<Simulation.Nation> MovementPicked;
 
+    /// <summary>
+    /// Whether a campaign is what the map is showing - asked of the game, which knows whether the
+    /// main menu is up. The headquarters are part of a campaign's map; over the menu's backdrop
+    /// globe they were names floating in front of the title. Unset, they show.
+    /// </summary>
+    public Func<bool> CampaignInView;
+
     private MovementLayer _movementLayer;
 
     private void BuildMovementLayer(Node3D world)
@@ -70,7 +77,13 @@ public sealed partial class GlobePresentation
         public override void _Process(double delta)
         {
             var campaign = _globe?._campaign;
-            if (campaign is null) { Visible = false; return; }
+            if (campaign is null || _globe.CampaignInView?.Invoke() == false)
+            {
+                Visible = false;
+                _placed.Clear();
+                _medallions.Clear();
+                return;
+            }
             Visible = true;
             var insignia = SettingsCatalog.Flag("movement_flags");
             if (!ReferenceEquals(campaign, _campaign) || campaign.MovementRevision != _revision || insignia != _insignia)

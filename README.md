@@ -4,7 +4,7 @@
 
 A grand strategy game about the whole world, in Godot 4.7 and .NET 8.
 
-It opens on 1 January 2024 with 261 countries, 1 826 regions and 37 909 provinces, and
+It opens on 1 January 2024 with 261 countries, 1 850 regions and 38 018 provinces, and
 after that nothing is scripted. Prices come out of what is produced and shipped. A war moves
 a front province by province and has to be supplied along it. A country that governs badly
 loses regions to people who would rather leave. You can play any country on the map.
@@ -25,9 +25,23 @@ because they were.
 
 Regions secede when nobody is governing them. Governments fall and are replaced. Armies grow
 when a country has reason to arm and are sent home when it does not, instead of staying the
-size they started.
+size they started. A threatened region raises its own militia, in its largest town and under
+that town's name.
 
-And everyone flies the right flag: 807 of them, chosen by what a country has become — its
+A war is fought from the air as well as on the ground. Artillery, rocket batteries, aircraft,
+drones and air defence are formations of their own, based in regions and sent on missions from
+a panel beside the map; they reach into the battles within their range and pay for every day
+they fly over a defended front. Seventy-one technologies spread from the countries that know
+them to their neighbours and partners.
+
+The map reads like an atlas: five and a half thousand cities that never print over each other,
+relief lit from the north-west, a sea with shelves and a floor, and coasts and borders drawn as
+the lines they were digitised from rather than as the texel staircase they are stored as.
+
+Saves are text a person can open and edit, and a campaign started from a chosen seed rebuilds
+the same world.
+
+And everyone flies the right flag: about a thousand of them, chosen by what a country has become — its
 people, its ideology, its form of government, whether it answers to somebody else — and
 declared by nothing but the file name.
 
@@ -152,15 +166,22 @@ pass on its source under the same licence.
 `addons/` is excluded from the repository and each plugin there carries its own licence.
 Godot itself is MIT, which GPL accepts.
 
-The flags in `game/gfx/flags` come from Wikimedia Commons, and every one of them is credited
-with its source, licence and author in [`game/gfx/CREDITS.md`](game/gfx/CREDITS.md). A flag
+The flags in `game/gfx/flags` come from Wikimedia Commons. [`game/gfx/CREDITS.md`](game/gfx/CREDITS.md)
+lists 632 of them file by file with their source, licence and author; the national flags, which
+were rendered from the public-domain drawings Wikipedia uses, are not listed one by one yet, and
+21 variants have no source recorded - [`LICENSE-ASSETS.md`](LICENSE-ASSETS.md) says which. A flag
 as a symbol is usually public domain; a particular drawing of it need not be, which is why
 the file exists.
 
+The map is built from open data: land cover from ESA GlobCover, relief and the sea floor from
+NASA Earth Observatory's topography and bathymetry (GEBCO data), rivers, lakes and cities from
+Natural Earth. `LICENSE-ASSETS.md` gives each with its terms.
+
 **Code and art are not under the same terms**, and the split is written down in
 [`LICENSE-ASSETS.md`](LICENSE-ASSETS.md): the code is GPL, the original artwork and audio
-are not. The flags keep whichever Creative Commons or public-domain terms they arrived
-with — 101 of them are share-alike and can never be closed, which is exactly why the
+are not - the soundtrack and the interface sounds were generated for the game and are its
+own. The flags keep whichever Creative Commons or public-domain terms they arrived
+with — 128 of them are share-alike and can never be closed, which is exactly why the
 credits file exists.
 
 **Steam.** GPLv3 and the proprietary Steamworks SDK cannot both be satisfied at once, so an

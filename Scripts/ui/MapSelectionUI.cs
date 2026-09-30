@@ -307,7 +307,7 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability), null,
                 nation.Stability < 0.35f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "text.bright");
             CardRow(_countryCardRows, "War support", Fmt.Percent(nation.WarSupport));
-            CardRow(_countryCardRows, "Divisions", divisions.ToString("0.0"));
+            CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             var wars = _campaign.Wars.Count(war => !war.Ended && war.Involves(nation.Id));
             if (wars > 0) CardRow(_countryCardRows, "Wars", wars.ToString("N0"), null, "state.negative");
             AddResearchRows(_countryCardRows);
@@ -343,7 +343,7 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));
             CardRow(_countryCardRows, "Population", Fmt.People(nation.Population));
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability));
-            CardRow(_countryCardRows, "Divisions", divisions.ToString("0.0"));
+            CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             if (TechnologyCatalog.All.Count > 0)
                 CardRow(_countryCardRows, "Technologies",
                     Simulation.Loc.Format("{0} of {1} known", nation.Technologies.Count, TechnologyCatalog.All.Count),

@@ -134,7 +134,14 @@ public sealed partial class GlobePresentation
         if (language != _citySeenLanguage) { _citySeenLanguage = language; InvalidateCities(); }
         // Fixed-size pins on the globe, pixel-scaled ones on the flat map: a switch redoes them all.
         if (_citySeenFlat != _flatMap) InvalidateCities();
-        if (!_cityDirty && (!moved || _cityClock < 0.1)) return;
+        if (!_cityDirty && (!moved || _cityClock < 0.1))
+        {
+            // Between placements the pins turn with the view, and a name carried over the limb
+            // would go on being drawn - in front of space or of the globe, since names are drawn
+            // above everything. Nothing but the horizon is redone here; that is cheap.
+            if (moved && !_flatMap) HideCitiesPastHorizon();
+            return;
+        }
         _cityClock = 0;
         _cityDirty = false;
         _citySeenCamera = cameraTransform;
@@ -160,7 +167,7 @@ public sealed partial class GlobePresentation
         var flatPixel = _camera.Size / Math.Max(1, viewport.Y);
         var cameraNormal = _flatMap ? Vector3.Zero : _camera.GlobalPosition.Normalized();
         var rootBasis = _cityRoot.GlobalTransform.Basis;
-        var horizon = distance > 11f ? 0.55f : distance > 8f ? 0.42f : 0.30f;
+        var horizon = CityHorizon();
 
         _cityTaken.Clear();
         _movementLayer?.AddOccupied(_cityTaken);
@@ -260,12 +267,40 @@ public sealed partial class GlobePresentation
             : city.Capital == "regional" ? _cityRegionalTexture : _cityDotTexture;
     }
 
+    /// <summary>
+    /// How far round the globe from the camera a city may be and still be named, as the cosine
+    /// of the angle. The limb itself is where that cosine is the globe's radius over the camera's
+    /// distance; a fixed number stood in for it and, closer than about eleven units - or with a
+    /// free camera's wider lens - let through cities already behind the globe. A little short of
+    /// the limb, too, because the ground there is seen edge-on and its names pile up.
+    /// </summary>
+    private float CityHorizon()
+    {
+        var distance = ViewDistance;
+        var chosen = distance > 11f ? 0.55f : distance > 8f ? 0.42f : 0.30f;
+        var limb = SurfaceMarkerRadius / Math.Max(SurfaceMarkerRadius, _camera.GlobalPosition.Length());
+        return Math.Max(chosen, limb + 0.06f);
+    }
+
+    private void HideCitiesPastHorizon()
+    {
+        var cameraNormal = _camera.GlobalPosition.Normalized();
+        var rootBasis = _cityRoot.GlobalTransform.Basis;
+        var horizon = CityHorizon();
+        foreach (var pin in _cityPins)
+            if (pin.Node.Visible && pin.City >= 0 && pin.City < _cityNormals.Length &&
+                (rootBasis * _cityNormals[pin.City]).Dot(cameraNormal) < horizon)
+                pin.Node.Visible = false;
+    }
+
     /// <summary>A capital's own star already marks this city: its dot would sit under it.</summary>
     private bool NearCapitalMarker(int index)
     {
         var normal = _cityNormals[index];
+        // Drawn, not merely switched on: the stars go as a group farther out than the capitals'
+        // names do, and a dot hidden under a star nobody can see left the capital unmarked.
         foreach (var (node, markerNormal) in _capitalMarkers)
-            if (IsInstanceValid(node) && node.Visible && markerNormal.Dot(normal) > 0.99995f) return true;
+            if (IsInstanceValid(node) && node.IsVisibleInTree() && markerNormal.Dot(normal) > 0.99995f) return true;
         return false;
     }
 

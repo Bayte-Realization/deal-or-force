@@ -609,15 +609,16 @@ public static class SecessionEvents
                 (seat is null || piece.Population > seat.Population)) seat = piece;
         seat ??= leaving[0];
         var seatState = campaign.States.Find(state => state.MapIndex == seat.MapIndex);
+        var theirs = NamedForItsPeople(campaign, culture, leaving);
 
         var born = campaign.AddNation(new Nation
         {
             Tag = tag,
             Iso = tag,
-            Name = NameFor(culture, seat.Name, parent),
+            Name = NameFor(theirs ? culture : "", seat.Name, parent),
             Continent = parent.Continent,
             Region = parent.Region,
-            Color = ColourFor(culture, parent),
+            Color = ColourFor(theirs ? culture : "", parent),
             MapIndex = mapIndex,
             CapitalName = seat.Name,
             Population = people,
@@ -711,6 +712,41 @@ public static class SecessionEvents
         born.FoundedCultures.Clear();
         born.FoundedCultures.AddRange(peoples);
         DemographyCatalog.Declare(born.Tag, peoples);
+    }
+
+    /// <summary>
+    /// Whether a new country takes its people's name and colour - Kurdistan, Catalonia - or its
+    /// seat region's, as Transnistria and Somaliland did.
+    ///
+    /// A people's name says whose state it is, and that is only true when they are the largest
+    /// people on the ground leaving with them. The regions that came along for their own reasons
+    /// can outnumber the core many times over: refugees from a war next door became the largest
+    /// people of one border region of Egypt, four discontented provinces joined them, and the
+    /// country that came out was "Palestine" - twenty-seven million Egyptians under another
+    /// people's flag. A secession with nobody along for the ride - one region, or a scripted one
+    /// that names its people - keeps the people's name, because there the claim is the point.
+    /// </summary>
+    public static bool NamedForItsPeople(Campaign campaign, string culture, IReadOnlyList<SecessionPiece> leaving) =>
+        !string.IsNullOrWhiteSpace(culture) &&
+        (!leaving.Any(piece => piece.Cause == SecessionCause.Discontent) || LeadsTheGround(campaign, culture, leaving));
+
+    /// <summary>Whether this people is the largest on the ground that is leaving, counted region by region.</summary>
+    public static bool LeadsTheGround(Campaign campaign, string culture, IReadOnlyList<SecessionPiece> leaving)
+    {
+        if (campaign is null || string.IsNullOrWhiteSpace(culture) || leaving is null) return false;
+        var tally = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var piece in leaving)
+        {
+            var state = campaign.States.Find(candidate => candidate.MapIndex == piece.MapIndex);
+            if (state is null) continue;
+            foreach (var (people, size) in EconomySystem.Cultures(state))
+                tally[people] = tally.GetValueOrDefault(people) + size;
+        }
+        var theirs = tally.GetValueOrDefault(culture);
+        if (theirs <= 0) return false;
+        foreach (var (_, size) in tally)
+            if (size > theirs) return false;
+        return true;
     }
 
     /// <summary>Where the middle of the new country's largest region is.</summary>

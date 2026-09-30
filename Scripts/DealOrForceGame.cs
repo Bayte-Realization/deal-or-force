@@ -404,6 +404,14 @@ public partial class DealOrForceGame : Control
             CloseLedger();
         else if (_warLedgerLayer is { Visible: true })
             CloseWarLedger();
+        // The full-screen pages the other screens open over the map: Escape closes them the
+        // way it closes the ledger, rather than opening the pause menu over the top of them.
+        else if (_diplomacyLayer is { Visible: true })
+            CloseDiplomacyScreen();
+        else if (_tradeScreenLayer is { Visible: true })
+            CloseTradeScreen();
+        else if (_productionLayer is { Visible: true })
+            CloseProductionScreen();
         else if (_sidePanel.Visible && _dossierReturnArmyIds is not null)
             ReturnToArmyOrders();
         else if (_sidePanel.Visible)
@@ -992,7 +1000,7 @@ public partial class DealOrForceGame : Control
 
                 DetailHeading("FORCES");
                 _sideDetail.AddChild(ActionButton("Recruit & deploy", () => OpenRecruitment(), 180, 38, true));
-                DetailRow("Divisions", divisions.ToString("0.0"),
+                DetailRow("Divisions", divisions.ToString("0.#"),
                     "Independent formations under your flag. Each takes frontage in a battle, so more of " +
                     "them is not the same as more strength in one province.");
                 DetailRow("Field armies", armies.Length.ToString("N0"),
