@@ -28,10 +28,10 @@ public static class MovementAi
         foreach (var nation in campaign.Nations.ToList())
         {
             if (nation.Movement is not { Dissolved: false } || nation.IsHuman) continue;
-            Think(campaign, nation);
+            using (SimProfiler.Measure("    mov:think")) Think(campaign, nation);
         }
         // And what the countries do about them.
-        MovementDealings.Ai(campaign);
+        using (SimProfiler.Measure("    mov:dealings")) MovementDealings.Ai(campaign);
     }
 
     private static void Think(Campaign campaign, Nation nation)

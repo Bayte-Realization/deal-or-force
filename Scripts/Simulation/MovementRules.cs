@@ -68,13 +68,13 @@ public static class MovementRules
     {
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
         Owners(campaign, rebuild: true);
-        MovementFall.RememberHomelands(campaign);
-        MovementFall.Decide(campaign);
+        using (SimProfiler.Measure("    mov:homelands")) MovementFall.RememberHomelands(campaign);
+        using (SimProfiler.Measure("    mov:fall")) MovementFall.Decide(campaign);
         foreach (var nation in campaign.Nations.ToList())
         {
             if (nation.Movement is not { Dissolved: false }) continue;
-            Week(campaign, nation);
-            MovementFall.Endure(campaign, nation);
+            using (SimProfiler.Measure("    mov:week")) Week(campaign, nation);
+            using (SimProfiler.Measure("    mov:endure")) MovementFall.Endure(campaign, nation);
         }
     }
 
@@ -261,28 +261,83 @@ public static class MovementRules
     private static int _peopleDay = -1;
     private static int _peopleMapRevision = -1;
     private static int _peopleStates = -1;
-    private static readonly Dictionary<(MovementDefinition, ScenarioState), (long Own, long Faithful)> PeopleToday = new();
+    private static readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeopleToday = new();
+    private static readonly Dictionary<string, List<PopulationGroupAt>> ByCulture = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, List<PopulationGroupAt>> ByReligion = new(StringComparer.OrdinalIgnoreCase);
+    private static bool _indexed;
 
-    /// <summary><see cref="PeopleOf(ScenarioState, MovementDefinition, out long)"/>, remembered for the day.</summary>
+    private readonly record struct PopulationGroupAt(ScenarioState Region, PopulationGroup Group);
+
+    /// <summary>
+    /// <see cref="PeopleOf(ScenarioState, MovementDefinition, out long)"/>, remembered for the day.
+    ///
+    /// Answered from an index of who lives where rather than by reading every group of the
+    /// region. A movement's week asks this of all eighteen hundred regions, and every
+    /// movement asks it - seventeen walks of every population group in the world, a week's
+    /// single largest frame thirty-six years in. The index is one walk; each movement then
+    /// reads only the groups of its own peoples and faiths. The same sums in the same
+    /// integers, so the answer is the one the walk gave.
+    /// </summary>
     internal static long PeopleOf(Campaign campaign, ScenarioState region, MovementDefinition definition, out long faithful)
     {
         if (!ReferenceEquals(_peopleCampaign, campaign) || _peopleDay != campaign.ElapsedDays ||
             _peopleMapRevision != campaign.MapRevision || _peopleStates != campaign.States.Count)
         {
             PeopleToday.Clear();
+            _indexed = false;
             _peopleCampaign = campaign;
             _peopleDay = campaign.ElapsedDays;
             _peopleMapRevision = campaign.MapRevision;
             _peopleStates = campaign.States.Count;
         }
-        if (PeopleToday.TryGetValue((definition, region), out var known))
+        if (!PeopleToday.TryGetValue(definition, out var regions))
+            PeopleToday[definition] = regions = CountPeople(campaign, definition);
+        if (regions.TryGetValue(region, out var known))
         {
             faithful = known.Faithful;
             return known.Own;
         }
-        var own = PeopleOf(region, definition, out faithful);
-        PeopleToday[(definition, region)] = (own, faithful);
-        return own;
+        faithful = 0;
+        return 0;
+    }
+
+    /// <summary>Every region with any of a movement's peoples or believers in it, and how many.</summary>
+    private static Dictionary<ScenarioState, (long Own, long Faithful)> CountPeople(Campaign campaign, MovementDefinition definition)
+    {
+        if (!_indexed)
+        {
+            foreach (var list in ByCulture.Values) list.Clear();
+            foreach (var list in ByReligion.Values) list.Clear();
+            foreach (var region in campaign.States)
+                foreach (var group in region.PopulationGroups)
+                {
+                    if (group.Size <= 0) continue;
+                    if (!ByCulture.TryGetValue(group.Culture ?? "", out var cultured)) ByCulture[group.Culture ?? ""] = cultured = new List<PopulationGroupAt>();
+                    cultured.Add(new PopulationGroupAt(region, group));
+                    if (!ByReligion.TryGetValue(group.Religion ?? "", out var believing)) ByReligion[group.Religion ?? ""] = believing = new List<PopulationGroupAt>();
+                    believing.Add(new PopulationGroupAt(region, group));
+                }
+            _indexed = true;
+        }
+        var counted = new Dictionary<ScenarioState, (long Own, long Faithful)>();
+        // Each people once, however the data spells it twice: the walk counted a group once.
+        foreach (var people in definition.Peoples.Distinct(StringComparer.OrdinalIgnoreCase))
+            if (ByCulture.TryGetValue(people, out var groups))
+                foreach (var (region, group) in groups)
+                {
+                    var known = counted.GetValueOrDefault(region);
+                    counted[region] = (known.Own + group.Size, known.Faithful);
+                }
+        // A believer who is not one of its peoples - the walk's `else`.
+        foreach (var faith in definition.Faiths.Distinct(StringComparer.OrdinalIgnoreCase))
+            if (ByReligion.TryGetValue(faith, out var groups))
+                foreach (var (region, group) in groups)
+                {
+                    if (MovementDefinition.Listed(definition.Peoples, group.Culture)) continue;
+                    var known = counted.GetValueOrDefault(region);
+                    counted[region] = (known.Own, known.Faithful + group.Size);
+                }
+        return counted;
     }
 
     internal static long PeopleOf(ScenarioState region, MovementDefinition definition, out long faithful)

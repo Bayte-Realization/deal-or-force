@@ -419,9 +419,33 @@ public static partial class Movements
         return state is null ? null : campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
     }
 
-    internal static ScenarioState StateById(Campaign campaign, string id) =>
-        string.IsNullOrWhiteSpace(id) ? null :
-            campaign.States.Find(state => string.Equals(state.Id, id, StringComparison.OrdinalIgnoreCase));
+    private static readonly Dictionary<string, ScenarioState> StatesById = new(StringComparer.OrdinalIgnoreCase);
+    private static List<ScenarioState> _statesByIdList;
+    private static int _statesByIdCount = -1;
+
+    /// <summary>
+    /// A region by its id, the first in the list with it - which is what a search of the list
+    /// gave. From an index now: the countries' weekly look at every movement asked this for
+    /// every region every movement claims, for every pair of country and movement, twice -
+    /// tens of millions of string comparisons a week, the week's largest frame. A hit is
+    /// checked against the region's id as it is now, and a miss searches the list as before,
+    /// so a region renamed or added since the index was built is still found.
+    /// </summary>
+    internal static ScenarioState StateById(Campaign campaign, string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        var states = campaign.States;
+        if (!ReferenceEquals(_statesByIdList, states) || _statesByIdCount != states.Count)
+        {
+            StatesById.Clear();
+            foreach (var state in states) StatesById.TryAdd(state.Id ?? "", state);
+            _statesByIdList = states;
+            _statesByIdCount = states.Count;
+        }
+        if (StatesById.TryGetValue(id, out var found) && string.Equals(found.Id, id, StringComparison.OrdinalIgnoreCase))
+            return found;
+        return states.Find(state => string.Equals(state.Id, id, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>The province a headquarters in this region stands on: the host's capital if it is here, else the one nearest the middle.</summary>
     internal static int SeatOf(Campaign campaign, ScenarioState region)

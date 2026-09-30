@@ -711,8 +711,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
             using (SimProfiler.Measure("movements"))
             {
-                MovementRules.Tick(this);
-                MovementAi.Tick(this);
+                using (SimProfiler.Measure("  mov:rules")) MovementRules.Tick(this);
+                using (SimProfiler.Measure("  mov:ai")) MovementAi.Tick(this);
             }
             using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
             using (SimProfiler.Measure("shipbuilding")) Shipbuilding.Tick(this);
