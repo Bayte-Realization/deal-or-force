@@ -1,0 +1,11 @@
+{
+  "id": "example_private_military_company",
+  "name": "Example: a private military company",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 140,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

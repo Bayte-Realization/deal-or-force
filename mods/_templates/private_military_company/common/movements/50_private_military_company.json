@@ -1,0 +1,22 @@
+// A private military company: a movement - a country without land - that works for money.
+// Every field and trait is described at the top of the base game's
+// common/movements/00_movements.json. This one is fictional, which is why the base game,
+// whose world is otherwise real, does not ship it.
+{
+  "vector_security_group": {
+    "tag": "VSG",
+    "name": "Vector Security Group",
+    "description": "A fictional private military company registered in Abu Dhabi, with contractors from forty countries. It takes paid contracts, but does not claim territory or organise separatist uprisings.",
+    "colour": "#5a5a5a",
+    "peoples": [],
+    "faiths": [],
+    "headquarters": "ae_az",
+    "homeland": [],
+    "treasury": 1.2,
+    "cadres": 6000,
+    "legitimacy": 0.1,
+    "government": "military_junta",
+    "ideology": "libertarianism",
+    "traits": ["for_hire", "armed_wing"]
+  }
+}

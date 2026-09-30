@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using DealOrForce.Simulation;
 
 static class Movement82Tests
@@ -11,7 +14,23 @@ static class Movement82Tests
             Console.WriteLine((ok ? "PASS " : "FAIL ") + label);
             if (!ok) throw new Exception(label);
         }
+        // The base game's world is the real one, and no company in it would be: it ships none.
+        Check(c.NationByTag("VSG") is null && MovementCatalog.All.All(m => !m.Has("for_hire")),
+            "the base game founds no private military company");
+        // The one in mods/_templates, loaded the way a mod is: its movement merged into the
+        // catalogue, then founded on a campaign that has not started.
+        var file = Path.Combine(Templates(), "private_military_company", "common", "movements",
+            "50_private_military_company.json");
+        using (var document = JsonDocument.Parse(File.ReadAllText(file),
+                   new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true }))
+        {
+            var errors = new List<string>();
+            MovementCatalog.Merge(document.RootElement, errors);
+            Check(errors.Count == 0, "the template's company reads without complaint " + string.Join("; ", errors));
+        }
+        Movements.Found(c);
         var company = c.NationByTag("VSG");
+        Check(company?.Movement is not null, "and a new campaign founds it");
         var target = c.States.First(s => s.Id == "ua_14");
         company.Treasury = 100;
         company.Movement.Cadres = 100000;
@@ -52,5 +71,20 @@ static class Movement82Tests
         finally { definition.Traits.Remove("territorial_ambition"); }
         var exile = c.NationByTag("CTA");
         Check(MovementActions.For(exile).Any(action => action.Id == "rise"), "government in exile retains political uprising");
+        MovementCatalog.ResetCatalog();
+    }
+
+    /// <summary>The mod templates, wherever the tests were started from.</summary>
+    static string Templates()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var depth = 0; depth < 8 && directory is not null; depth++, directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "mods", "_templates");
+            if (Directory.Exists(candidate)) return candidate;
+        }
+        var here = Path.Combine(Directory.GetCurrentDirectory(), "mods", "_templates");
+        if (Directory.Exists(here)) return here;
+        throw new Exception("mods/_templates not found");
     }
 }

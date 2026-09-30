@@ -1708,7 +1708,11 @@ movement with a key of its own and changes one by naming it again with only the 
 - **Traits** change its rules: `armed_wing`, `tunnel_network`, `charity_network`,
   `diaspora_lobby`, `street_patrols`, `hospitallers`, `recognised_sovereign`,
   `government_in_exile`, `humanitarian` (its AI never takes up arms), `nonviolence`,
-  `refugee_camps`, `for_hire`.
+  `refugee_camps`, `for_hire` (a company that takes contracts, not territory - add
+  `territorial_ambition` for one that means to carve out a country).
+- **A private military company** is a worked example in
+  `mods/_templates/private_military_company`: the base game ships none, because its world is
+  the real one of 2024 and any company in it would be invented.
 - **Exile.** A country that loses the last of its ground may go on as a government in exile,
   made from the entry marked `"template": true` (`government_in_exile`): its peoples, homeland and
   name are filled in from the country itself. Its host is the friendliest country that did not

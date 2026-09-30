@@ -1338,7 +1338,11 @@ Natural Earth, общественное достояние, распределё
 - **Черты** меняют его правила: `armed_wing`, `tunnel_network`, `charity_network`,
   `diaspora_lobby`, `street_patrols`, `hospitallers`, `recognised_sovereign`,
   `government_in_exile`, `humanitarian` (его ИИ никогда не берётся за оружие), `nonviolence`,
-  `refugee_camps`, `for_hire`.
+  `refugee_camps`, `for_hire` (компания работает по контрактам и не берёт территорий; с
+  `territorial_ambition` — та, что хочет выкроить себе страну).
+- **Частная военная компания** — готовый пример в `mods/_templates/private_military_company`.
+  В самой игре её нет: мир игры — настоящий мир 2024 года, и любая компания в нём была бы
+  выдуманной.
 - **Изгнание.** Страна, потерявшая последнюю землю, может продолжить жить правительством в изгнании
   по записи с `"template": true` (`government_in_exile`): народы, родина и имя берутся у самой
   страны. Хозяин — самая дружественная страна, не бравшая её землю, а друзья её признают. Шанс —
