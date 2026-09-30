@@ -1,0 +1,13 @@
+// The air war and the home front (item 74): what a country learns about keeping its aircraft,
+// drones and guns alive over a defended front, and about raising its people to defend their own
+// towns. The effects are modifier keys the simulation reads - support_losses and support_recovery
+// in the long-range war, militia_readiness where a threatened region raises its militia - so a
+// mod can hand the same keys out through a spirit, a government or a decision.
+{
+  "electronic_warfare_suites": {"name":"Electronic warfare suites","description":"Jam and deceive the radars that find aircraft and drones before the missiles do.","category":"military","cost":300,"requires":["electronic_protection"],"icon":"icon_drone","effects":{"support_losses":-0.12}},
+  "suppression_of_air_defences": {"name":"Suppression of enemy air defences","description":"Hunt the radars and launchers first, so the rest of the force flies into an emptier sky.","category":"military","cost":460,"requires":["electronic_warfare_suites","joint_air_ground_control"],"icon":"icon_sam","effects":{"support_losses":-0.15,"army_attack":0.01}},
+  "rapid_sortie_regeneration": {"name":"Rapid sortie regeneration","description":"Rearm, refuel and repair a returning formation in hours rather than days.","category":"logistics","cost":320,"requires":["mobile_maintenance"],"icon":"icon_air","effects":{"support_recovery":0.25}},
+  "dispersed_airbases": {"name":"Dispersed airbases","description":"Spread aircraft over road strips and hardened shelters, so no single strike grounds a wing.","category":"military","cost":520,"requires":["rapid_sortie_regeneration","distributed_air_defence"],"icon":"icon_air","effects":{"support_losses":-0.08,"support_recovery":0.12}},
+  "territorial_defence_forces": {"name":"Territorial defence forces","description":"Register, train and arm local volunteers before a war, so a threatened town fields its militia in days.","category":"military","cost":240,"requires":["secure_tactical_comms"],"icon":"icon_army_defend","effects":{"militia_readiness":0.25}},
+  "civil_defence_networks": {"name":"Civil defence networks","description":"Shelters, warning systems and local command posts that keep a town standing and its defenders supplied.","category":"society","cost":380,"requires":["territorial_defence_forces","civil_emergency_coordination"],"icon":"icon_stability","effects":{"militia_readiness":0.2,"supply":0.008}}
+}

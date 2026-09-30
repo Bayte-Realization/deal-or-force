@@ -267,6 +267,8 @@ public partial class DealOrForceGame
             quiet.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _outlinerRows.AddChild(quiet);
         }
+        // Once the rows have been laid out and know how tall they are.
+        Callable.From(FitOutliner).CallDeferred();
     }
 
     private float PlayerWarSupport(StrategicWar war) =>

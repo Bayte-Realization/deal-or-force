@@ -48,6 +48,9 @@ public static class NationalModifiers
         new("reinforcement_rate", "Reinforcement rate", "Replacements a day: men and equipment sent to divisions under strength."),
         new("recruitment_speed", "Training speed", "How fast new divisions are trained: the training time is divided by one plus this."),
         new("recruitment_cost", "Training cost", "What a new division costs to raise.", HigherIsBetter: false),
+        new("support_losses", "Long-range losses", "Strength long-range formations lose over a defended front.", HigherIsBetter: false),
+        new("support_recovery", "Long-range recovery", "How fast worn long-range formations are brought back to strength."),
+        new("militia_readiness", "Militia readiness", "How quickly a threatened region raises its own militia."),
         // The navy.
         new("naval_speed", "Fleet speed", "How fast a fleet sails."),
         new("shipbuilding_speed", "Shipbuilding speed", "How fast the yards lay down and finish hulls."),
