@@ -10,6 +10,9 @@ static class MaritimePeaceTests
         var map = c.ProvinceMap;
         var winner = c.NationByTag("JPN");
         var loser = c.NationByTag("CHN");
+        // How a landing anchors a treaty, not how far away it may be: the fixture's beach is
+        // wherever China's smallest coastal region is. AllyGroundTests holds the reach.
+        c.Defines.PeaceShapeBridgeheadKm = 0f;
         var war = new StrategicWar { Id = 990, AttackerId = winner.Id, DefenderId = loser.Id, WarScore = 100 };
         var coast = SeaLanes.CoastalProvinces(map).ToHashSet();
         var provinces = Enumerable.Range(1, map.ProvinceCount).Where(p => map.ProvinceToNation[p] == loser.MapIndex).ToList();

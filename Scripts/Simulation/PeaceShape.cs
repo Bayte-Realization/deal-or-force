@@ -12,6 +12,8 @@ public sealed partial class Defines
     public float PeaceShapePocketShare { get; set; } = 0.3f;
     /// <summary>Secured occupied coasts can anchor overseas settlements without a land border.</summary>
     public bool PeaceShapeAllowCoastalBridgeheads { get; set; } = true;
+    /// <summary>How far across the sea from the winner's own coast such a landing may be, in km; 0 for any distance.</summary>
+    public float PeaceShapeBridgeheadKm { get; set; } = 600f;
 }
 
 /// <summary>
@@ -103,14 +105,119 @@ public static class PeaceShape
             if (campaign.ProvinceController[province] == winner.MapIndex &&
                 campaign.ProvinceOccupation[province] >= campaign.Defines.OccupationSecureThreshold)
                 occupiedCoasts.Add(map.ProvinceToState[province]);
+        // Across a strait or a narrow sea, not an ocean. Any secured beach used to anchor a
+        // treaty wherever it was, and the treaty then walked inland from it region by region:
+        // a Brazilian landing on the far side of the Atlantic was a new Brazilian province, and
+        // the next war's treaty grew from that. A country takes land a short crossing from
+        // its own shore - Taiwan, Cyprus, the Channel - or it takes none by sea at all.
+        var reach = campaign.Defines.PeaceShapeBridgeheadKm;
+        var shores = reach > 0f && occupiedCoasts.Count > 0 ? Shores(map, graph, winner) : null;
+        var nearest = reach > 0f ? MathF.Cos(reach / EarthRadiusKm) : -2f;
         foreach (var region in occupiedCoasts)
         {
             if (!graph.Provinces.TryGetValue(region, out var provinces)) continue;
             var held = provinces.Count(province => campaign.ProvinceController[province] == winner.MapIndex);
-            if (held / (float)provinces.Count >= M.Clamp01(campaign.Defines.PeaceShapeOccupiedShare))
-                anchors.Add(region);
+            if (held / (float)provinces.Count < M.Clamp01(campaign.Defines.PeaceShapeOccupiedShare)) continue;
+            if (shores is not null && !provinces.Any(province => Within(map, province, shores, nearest))) continue;
+            anchors.Add(region);
         }
         return anchors;
+    }
+
+    /// <summary>Whether a treaty may grow from this region for this winner today: next to its land, or a landing it holds across a narrow sea.</summary>
+    internal static bool CanAnchor(Campaign campaign, Nation winner, int region)
+    {
+        if (campaign.ProvinceMap is null || winner is null) return false;
+        var winnerRegions = campaign.States.Where(state => state.NationMapIndex == winner.MapIndex).Select(state => state.MapIndex).ToHashSet();
+        return Anchors(campaign, Graph(campaign), winner, winnerRegions).Contains(region);
+    }
+
+    private static readonly Dictionary<long, (int Revision, bool Near)> NearCache = new();
+
+    /// <summary>
+    /// Whether a whole country is within reach of another: ground the two own side by side,
+    /// or - across the sea - both the other's capital and a stretch of its coast within
+    /// <see cref="Defines.PeaceShapeBridgeheadKm"/> of this one's coast.
+    ///
+    /// The capital, because a country is taken in whole: Indonesia is a strait from the Torres
+    /// Strait islands and a continent from Canberra. And the coast, because the reach is a sea
+    /// crossing and not a line drawn over somebody else's country: Prague is within that
+    /// distance of the Italian Adriatic, and Czechia has no shore to cross to - a country with
+    /// no coast is taken in by a neighbour or not at all. Kept until the map changes - asked
+    /// daily of every dependency.
+    /// </summary>
+    public static bool Near(Campaign campaign, Nation from, Nation other)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || from is null || other is null) return false;
+        var reach = campaign.Defines.PeaceShapeBridgeheadKm;
+        if (reach <= 0f) return true;
+        var key = ((long)from.Id << 32) | (uint)other.Id;
+        if (NearCache.TryGetValue(key, out var known) && known.Revision == campaign.MapRevision) return known.Near;
+        // By who owns the ground, not by whose troops stand on it: the border table the AI
+        // reads is drawn from control, and an army on a beach is not a border.
+        var ownerFrom = (ushort)from.MapIndex;
+        var ownerOther = (ushort)other.MapIndex;
+        var near = false;
+        for (var province = 1; province <= map.ProvinceCount && !near; province++)
+        {
+            if (map.ProvinceToNation[province] != ownerOther) continue;
+            foreach (var neighbour in map.Neighbors[province])
+                if (map.ProvinceToNation[neighbour] == ownerFrom) { near = true; break; }
+        }
+        if (!near)
+        {
+            var shores = new List<(float X, float Y, float Z)>();
+            foreach (var province in SeaLanes.CoastalProvinces(map))
+                if (province > 0 && province <= map.ProvinceCount && map.ProvinceToNation[province] == ownerFrom)
+                    shores.Add(OnSphere(map, province));
+            var nearest = MathF.Cos(reach / EarthRadiusKm);
+            var (x, y, z) = OnSphere(other.CapitalLatitude, other.CapitalLongitude);
+            foreach (var shore in shores)
+                if (x * shore.X + y * shore.Y + z * shore.Z >= nearest) { near = true; break; }
+            if (near)
+            {
+                near = false;
+                foreach (var province in SeaLanes.CoastalProvinces(map))
+                    if (province > 0 && province <= map.ProvinceCount && map.ProvinceToNation[province] == ownerOther &&
+                        Within(map, province, shores, nearest)) { near = true; break; }
+            }
+        }
+        NearCache[key] = (campaign.MapRevision, near);
+        return near;
+    }
+
+    private const float EarthRadiusKm = 6371f;
+
+    /// <summary>Where the winner's own coast is, as points on a unit sphere.</summary>
+    private static List<(float X, float Y, float Z)> Shores(ProvinceTopology map, Regions graph, Nation winner)
+    {
+        var shores = new List<(float, float, float)>();
+        foreach (var province in graph.CoastalProvinces)
+            if (map.ProvinceToNation[province] == winner.MapIndex) shores.Add(OnSphere(map, province));
+        return shores;
+    }
+
+    /// <summary>Whether a province is within the crossing of any of those shores (a cosine of the angle apart).</summary>
+    private static bool Within(ProvinceTopology map, int province, List<(float X, float Y, float Z)> shores, float nearest)
+    {
+        var (x, y, z) = OnSphere(map, province);
+        foreach (var shore in shores)
+            if (x * shore.X + y * shore.Y + z * shore.Z >= nearest) return true;
+        return false;
+    }
+
+    private static (float X, float Y, float Z) OnSphere(ProvinceTopology map, int province)
+    {
+        var (latitude, longitude) = map.CenterOf(province);
+        return OnSphere(latitude, longitude);
+    }
+
+    private static (float X, float Y, float Z) OnSphere(float latitude, float longitude)
+    {
+        var phi = latitude * MathF.PI / 180f;
+        var lambda = longitude * MathF.PI / 180f;
+        return (MathF.Cos(phi) * MathF.Cos(lambda), MathF.Cos(phi) * MathF.Sin(lambda), MathF.Sin(phi));
     }
 
     // ------------------------------------------------------------------ writing a demand ----
@@ -377,8 +484,11 @@ public static class PeaceShape
             .Select(nation => nation.MapIndex).ToHashSet();
         var chosen = list.Select(province => (int)topology.ProvinceToState[province]).Where(region => region != 0).ToHashSet();
         Settle(campaign, war, chosen, winner, losers);
+        // The loser's ground and nobody else's. Rounding a region up could reach a province of
+        // it that a third country owns - the winner's own ally, as often as not - and the list
+        // of what was held used to wave that through as well.
         return chosen.SelectMany(region => graph.Provinces.TryGetValue(region, out var all) ? all : new List<int>())
-            .Where(province => losers.Contains(topology.ProvinceToNation[province]) || list.Contains(province))
+            .Where(province => losers.Contains(topology.ProvinceToNation[province]))
             .Distinct()
             .ToList();
     }

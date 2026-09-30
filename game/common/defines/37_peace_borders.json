@@ -2,6 +2,9 @@
   // Overseas treaty roots require an occupied coastal province secured to
   // OccupationSecureThreshold, and this fraction of its region held by the winner.
   "PeaceShapeAllowCoastalBridgeheads": true,
+  // And only this far across the sea from the winner's own coast, in km: a strait or a
+  // narrow sea (Taiwan, Cyprus, the Channel), never an ocean. 0 lifts the limit.
+  "PeaceShapeBridgeheadKm": 600,
   "PeaceShapeOccupiedShare": 0.25,
   "PeaceShapePocketShare": 0.30
 }

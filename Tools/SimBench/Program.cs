@@ -124,6 +124,9 @@ public static class Program
         }
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
+        // `--land` watches the map change hands: land taken far from the taker, land taken
+        // from an ally, and occupations nobody is at war over (LandReport).
+        if (Array.IndexOf(args, "--land") >= 0) return mapped ? LandReport.Run(campaign, days) : 2;
 
         // `--profile N` plays N days of the world and prints where the time went, by total
         // time rather than by garbage - which pass to make faster, not which one to make
@@ -4415,6 +4418,12 @@ public static class Program
         // the owner are meant to differ: the raster still paints Antarctica as a country. There
         // the answer is nobody - and it has to be nobody, in every province of the region.
         var unclaimed = campaign.States.Where(ColonisationCore.IsUnclaimed).Select(state => state.MapIndex).ToHashSet();
+        // And regions the 2024 bookmark hands to the country holding them rather than the one
+        // whose ground the raster paints them as - written by region id, because province ids
+        // move at every recut. The Gaza Strip is Israel's (history/provinces/ownership.csv).
+        var handedOver = new Dictionary<string, string> { ["ps_gza"] = "ISR" };
+        var deliberate = campaign.States.Where(state => handedOver.ContainsKey(state.Id))
+            .ToDictionary(state => state.MapIndex, state => campaign.NationByTag(handedOver[state.Id])?.MapIndex ?? -1);
         var nobodys = 0;
         var checkedProvinces = 0;
         var wrong = new List<string>();
@@ -4436,6 +4445,7 @@ public static class Program
             if (ground == 0) continue;
             checkedProvinces++;
             if (owner == ground) continue;
+            if (deliberate.TryGetValue(topology.ProvinceToState[province], out var handed) && owner == handed) continue;
             wrong.Add(wrong.Count < 4 ? $"province {province:N0} stands on {Tag(ground)} ground and belongs to {Tag(owner)}" : "");
         }
 

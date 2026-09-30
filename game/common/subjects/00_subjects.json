@@ -25,7 +25,10 @@
 //     liberty_desire     how much it wants out, before circumstances are counted
 //     grace_days         how long after being made a subject before it starts wanting out
 //     demand_cost        what imposing it costs at a peace conference, in war score
-//     annex_after_days   how long before the overlord may absorb it outright, -1 never
+//     annex_after_days   how long before the overlord may absorb it outright, -1 never;
+//                        and only a neighbour, or one whose capital and coast are within
+//                        PeaceShapeBridgeheadKm across the sea - a dependency across an
+//                        ocean, or with no coast behind another country, stays one
 //     annex_below_liberty  and how contented it has to be to go quietly
 //
 // `liberty_desire` is the base, not the answer. What a subject actually feels is worked out

@@ -324,6 +324,17 @@ public static class SubjectSystem
                       $"{type.AnnexBelowLiberty:P0} is as much as goes quietly";
             return false;
         }
+        // A neighbour, or a country whose capital and coast are a strait away - the reach a
+        // peace treaty has (PeaceShapeBridgeheadKm). Greece absorbed Latvia, Brazil Austria,
+        // Indonesia Australia, Italy Czechia: a dependency anywhere became a province of its
+        // overlord the day the years ran out. One across an ocean, or behind somebody else's
+        // country with no coast to cross to, stays what it is.
+        if (!PeaceShape.Near(campaign, overlord, subject))
+        {
+            refusal = $"{subject.Tag} is too far from {overlord.Tag} to be taken in: no border, and no crossing of " +
+                      $"{campaign.Defines.PeaceShapeBridgeheadKm:0} km or less from its coast to its capital";
+            return false;
+        }
         return true;
     }
 

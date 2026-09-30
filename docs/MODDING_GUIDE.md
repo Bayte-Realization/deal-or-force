@@ -1554,7 +1554,7 @@ names exactly one region:
 | `literacy`, `standard_of_living`, `radicalism` | Optional, 0 to 1. Left out, the region takes its country's figure with a spread of its own. |
 | `war_damage` | Optional, 0 to 1: how much of the region a war has already wrecked on the first day - see *War damage*. |
 | `owner` | Only `"none"` - see *Land that belongs to nobody*. |
-| `controller` | Optional: the tag of a country that holds the region on the first day without owning it - Israel in the Gaza Strip. Every province of the region opens occupied by it, striped on the map, and from then on who holds it is the war's business. Written by region because province ids change whenever the map is recut. |
+| `controller` | Optional: the tag of a country that holds the region on the first day without owning it. Every province of the region opens occupied by it, striped on the map, and from then on who holds it is the war's business. Any other occupation with no war behind it is lifted the next day (a province held by a country not at war with its owner goes back to the owner); one written here stands until a war changes it. The base game writes none: the Gaza Strip, the one it had, is Israel's own in the 2024 bookmark (`history/provinces/ownership.csv`). Written by region because province ids change whenever the map is recut. |
 
 **What is written is what the region has.** A building or a deposit left out of a region's record
 is not there. A field left out altogether is worked out from the country: the peoples as its
@@ -1731,14 +1731,17 @@ movement with a key of its own and changes one by naming it again with only the 
 ### Peace, the status quo and war weariness
 
 The AI writes the land of a treaty region by region from its own border outwards
-(`PeaceShape`): every region it asks for touches ground it holds or has just asked for, islands
-excepted, and any part of the loser the treaty would cut off is taken too when it is small or
+(`PeaceShape`): every region it asks for touches ground it holds or has just asked for, or a
+landing it holds securely no further than `PeaceShapeBridgeheadKm` (600 km) across the sea from its
+own coast - a strait, not an ocean - and any part of the loser the treaty would cut off is taken too when it is small or
 given back otherwise. What it wants is what countries say when they take land - our people live
 there, it was ours, it gives us the sea, it keeps them from our capital, it is where the plants
 are - and each war carries one of those arguments as its own.
 
 `StatusQuo` is the peace of a deadlock: each side keeps what it holds securely, each drawn into a
-border of its own, and a five-year truce. A white peace is for a war where nobody holds anything.
+border of its own, and a five-year truce. Whatever the terms, a peace hands a country only its
+enemies' ground: a province an army retakes for a country it is not at war with - an ally overrun
+by the enemy - goes back to that country the day it is freed, and is never the liberator's to keep. A white peace is for a war where nobody holds anything.
 A war whose score has moved less than `WarStalledScore` in half a year is standing still; after
 `PeaceWearinessAfterDays` every year adds `PeaceWearinessPerYear` (up to `PeaceWearinessCap`) to
 what both sides will accept, the

@@ -184,6 +184,21 @@ public static class PeaceNegotiation
         return "";
     }
 
+    /// <summary>
+    /// Whether a province belongs to somebody this country fought in this war - the only
+    /// ground a peace can hand it.
+    ///
+    /// A treaty that lets each side keep what it holds let it keep whatever it held,
+    /// including its own allies' land: a province retaken from the enemy by a friend's army
+    /// was that friend's to keep. That is how Brazil came out of a war fought beside Austria
+    /// owning Lower Austria. What a country holds of a friend's goes back to the friend.
+    /// </summary>
+    internal static bool EnemyGround(Campaign campaign, StrategicWar war, int province, int nationId)
+    {
+        var owner = NavalOperations.NationAt(campaign, campaign.ProvinceMap.ProvinceToNation[province]);
+        return owner is not null && war.Opposes(nationId, owner.Id);
+    }
+
     public static void Resolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)
     {
         var block = BlockReason(campaign, war, proposerId, terms);
@@ -251,7 +266,7 @@ public static class PeaceNegotiation
                 var inGoal = terms != PeaceTerms.EnforceWarGoal ||
                              campaign.ProvinceMap?.ProvinceToState[pair.Key] == war.ClaimedStateMapIndex;
                 var held = campaign.ProvinceController[pair.Key] == (ushort)(winner?.MapIndex ?? -1);
-                if (secured && inGoal && held) kept.Add(pair.Key);
+                if (secured && inGoal && held && EnemyGround(campaign, war, pair.Key, winnerId)) kept.Add(pair.Key);
                 else campaign.SetProvinceController(pair.Key, pair.Value);
             }
 
@@ -282,7 +297,11 @@ public static class PeaceNegotiation
             {
                 var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
                 var holder = campaign.Nations.Find(nation => nation.MapIndex == campaign.ProvinceController[pair.Key]);
-                if (!secured || holder is null || !war.Involves(holder.Id)) { campaign.SetProvinceController(pair.Key, pair.Value); continue; }
+                if (!secured || holder is null || !war.Involves(holder.Id) || !EnemyGround(campaign, war, pair.Key, holder.Id))
+                {
+                    campaign.SetProvinceController(pair.Key, pair.Value);
+                    continue;
+                }
                 if (!heldBy.TryGetValue(holder.Id, out var list)) heldBy[holder.Id] = list = new List<int>();
                 list.Add(pair.Key);
             }

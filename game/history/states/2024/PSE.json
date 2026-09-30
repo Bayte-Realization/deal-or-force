@@ -1,4 +1,4 @@
-// Palestine (PSE) on 1 January 2024: 1 region, 4,685,306 people.
+// Palestine (PSE) on 1 January 2024: 1 region, 2,585,306 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -11,7 +11,7 @@
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
 {
-  // West Bank. Palestine's people are split between its two regions; the total is unchanged.
+  // West Bank.
   "ps_wbk": {
     "population": 2585306,
     "urbanization": 0.784,
@@ -19,8 +19,10 @@
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.405, "Coal": 0.097, "Oil": 0.182, "IronOre": 0.111, "RareEarths": 0.038, "NaturalGas": 0.201, "Timber": 1.18, "Bauxite": 0.023, "Uranium": 0.006 }
   },
-  // The Gaza Strip. Israeli troops hold it on the first day. Almost all of it town; the Gaza
-  // Marine gas field lies off its coast.
+  // The Gaza Strip - Israel's in this bookmark, not Palestine's: it is written here because
+  // it is Palestinian ground, but ownership.csv gives its province to Israel, the way the
+  // Russian-held regions of Ukraine are Russia's. A stopgap until the game can say what
+  // the Strip actually is. Almost all of it town; the Gaza Marine gas field lies off its coast.
   //
   // No "war_damage" here, though there is every reason for one: a wrecked region sends its
   // people to its neighbours at peace, Egypt is by far the largest of them, and fifteen years
@@ -28,7 +30,6 @@
   // Egyptian regions and twenty-seven million Egyptians. Until a secession asks who the people
   // of a region mostly are, the damage stays out.
   "ps_gza": {
-    "controller": "ISR",
     "population": 2100000,
     "urbanization": 0.82,
     "cultures": { "palestinian": 0.995, "arab_levantine": 0.005 },

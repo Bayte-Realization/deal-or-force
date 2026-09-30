@@ -879,6 +879,28 @@ public static partial class Warfare
         }
     }
 
+    /// <summary>
+    /// Who a province taken in battle is handed to: the winner, unless it is winning back
+    /// somebody else's ground.
+    ///
+    /// A province retaken from the enemy used to become the property of whoever's division
+    /// walked in. Brazil fighting beside Austria against an army that had overrun it ended
+    /// the war holding Lower Austria, and a status-quo peace - each side keeps what it holds -
+    /// then made that permanent: Brazil owned Vienna, Italy owned Bohemia, South Korea owned
+    /// Mongolia, every one of them land its own ally had been fighting to keep. Ground that
+    /// belongs to a country the winner is not at war with goes back to that country the day
+    /// it is freed; the winner's own troops still stand on it, as guests.
+    /// </summary>
+    internal static ushort Liberator(Campaign campaign, int provinceId, Nation winner)
+    {
+        var owner = campaign.ProvinceMap.ProvinceToNation[provinceId];
+        if (owner == 0 || owner == winner.MapIndex) return (ushort)winner.MapIndex;
+        var owning = NavalOperations.NationAt(campaign, owner);
+        if (owning is null || owning.Population <= 0 || CampaignDiplomacy.AtWar(campaign, winner.Id, owning.Id))
+            return (ushort)winner.MapIndex;
+        return owner;
+    }
+
     private static bool Capture(Campaign campaign, StrategicWar war, int provinceId, int winnerId,
         IReadOnlyCollection<Army> advancing, IReadOnlyCollection<Army> retreating, string how)
     {
@@ -894,7 +916,7 @@ public static partial class Warfare
         {
             Tally(war.Id, "capture: " + how);
             war.OriginalController.TryAdd(provinceId, controllers[provinceId]);
-            if (!campaign.SetProvinceController(provinceId, (ushort)winner.MapIndex)) return false;
+            if (!campaign.SetProvinceController(provinceId, Liberator(campaign, provinceId, winner))) return false;
             war.FrontDirty = true;
         }
         war.UnopposedProgress.Remove(provinceId);
