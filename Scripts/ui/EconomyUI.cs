@@ -128,5 +128,5 @@ public partial class DealOrForceGame
     private static long GroupSize(ScenarioState state, SocialClass socialClass) =>
         state.PopulationGroups.Where(group => group.Class == socialClass).Sum(group => group.Size);
 
-    private static string SignedMoney(float value) => (value >= 0f ? "+" : "-") + Fmt.Money(Math.Abs(value));
+    private static string SignedMoney(float value) => (value >= 0f ? "+" : "−") + Fmt.Money(Math.Abs(value));
 }

@@ -147,7 +147,8 @@ public sealed partial class StrategicLineChart : Control
 
     internal static string Format(float value, StrategicChartFormat format) => format switch
     {
-        StrategicChartFormat.MoneyBillions => $"${value:0.##}B",
+        // A debt reads −$0.34B, as it does everywhere else (Fmt.Money), not $-0.34B.
+        StrategicChartFormat.MoneyBillions => $"{(value < 0f ? "−" : "")}${MathF.Abs(value):0.##}B",
         StrategicChartFormat.Millions => $"{value:0.##}M",
         StrategicChartFormat.Percent => $"{value * 100f:0.#}%",
         StrategicChartFormat.Index => $"{value:0.#}",

@@ -221,7 +221,7 @@ public static class CapitalCatalog
 		[ "TUV" ] = new( "Funafuti", -8.6314877f, 179.089567f ),
 		[ "TZA" ] = new( "Dodoma", -6.17486f, 35.7382f ),
 		[ "UGA" ] = new( "Kampala", 0.314269f, 32.5729f ),
-		[ "UKR" ] = new( "Kiev", 50.4536f, 30.5038f ),
+		[ "UKR" ] = new( "Kyiv", 50.4536f, 30.5038f ),
 		[ "URY" ] = new( "Montevideo", -34.8941f, -56.0675f ),
 		[ "USA" ] = new( "Washington D.C.", 38.8895f, -77.032f ),
 		[ "UZB" ] = new( "Tashkent", 41.3052f, 69.269f ),

@@ -179,11 +179,11 @@ public partial class DealOrForceGame
         {
             var enemyId = battle.AttackerId == player.Id ? battle.DefenderId : battle.AttackerId;
             var enemy = _campaign.NationById(enemyId);
-            // Where the fight is, in words: a province number is a coordinate, and the
-            // region it belongs to is the name the player actually knows the place by -
-            // the same words the war dossier and the map tooltip use for it.
+            // Where the fight is, in words: a province number is a coordinate, and a place
+            // is the town it is at - four battles in one region used to read as the same
+            // line four times - or the region when no town of it is near.
             AddOutlinerButton(Simulation.Loc.Format("⚔ {0} · {1}",
-                    StateNameOfProvince(battle.ProvinceId), enemy?.Tag ?? "?"),
+                    BattlePlaceName(battle.ProvinceId), enemy?.Tag ?? "?"),
                 () => ShowBattleDetails(battle), "Open the battle report and focus the engagement.");
         }
 

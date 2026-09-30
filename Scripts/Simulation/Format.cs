@@ -21,6 +21,9 @@ public static class Fmt
     {
         // Three or four significant figures at every scale: $21.43T and $176.8B carry the
         // same amount of information, and $176.76B carries two digits nobody reads.
+        // A debt reads as one: −$1.29B, signed the way MoneyDelta signs a loss, not $-1.29B -
+        // the treasury said the second while the weekly balance beside it said the first.
+        if (billions < -0.0000005f) return "−" + Money(-billions);
         var magnitude = MathF.Abs(billions);
         if (magnitude >= 1000f) return "$" + (billions / 1000f).ToString("0.##", Invariant) + "T";
         if (magnitude >= 100f) return "$" + billions.ToString("0.#", Invariant) + "B";
@@ -33,7 +36,7 @@ public static class Fmt
 
     /// <summary>The same sum written out in full, for a tooltip or a ledger row.</summary>
     public static string MoneyExact(float billions) =>
-        "$" + billions.ToString("N2", CultureInfo.CurrentCulture) + "B";
+        (billions < 0f ? "−$" : "$") + MathF.Abs(billions).ToString("N2", CultureInfo.CurrentCulture) + "B";
 
     /// <summary>A head count, at the largest unit that keeps it short.</summary>
     public static string People(double count)

@@ -44,6 +44,17 @@ public partial class DealOrForceGame
         _researchSummary.Name = "ResearchSummary";
         rows.AddChild(_researchSummary);
         _researchProgress = new ProgressBar { Name = "ActiveResearchProgress", CustomMinimumSize = new(0, 18), ShowPercentage = true };
+        // A track and a fill that read as a bar: the engine's own grey fill on no track at all
+        // was a short grey smudge with "12%" floating in the middle of the screen.
+        _researchProgress.AddThemeStyleboxOverride("background", new StyleBoxFlat
+        {
+            BgColor = new Color("0c1720"), BorderColor = Ui.Colour("text.muted") with { A = 0.35f },
+            BorderWidthLeft = 1, BorderWidthTop = 1, BorderWidthRight = 1, BorderWidthBottom = 1
+        });
+        _researchProgress.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = Ui.Colour("text.accent") with { A = 0.85f } });
+        _researchProgress.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
+        _researchProgress.AddThemeColorOverride("font_outline_color", new Color("0c1720"));
+        _researchProgress.AddThemeConstantOverride("outline_size", 4);
         rows.AddChild(_researchProgress);
         _researchCategories = new HFlowContainer();
         rows.AddChild(_researchCategories);

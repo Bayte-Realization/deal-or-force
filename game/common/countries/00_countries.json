@@ -252,7 +252,7 @@
   "TWN": { "name": "Taiwan", "color": "#c97627" },
   "TZA": { "name": "United Republic of Tanzania", "color": "#c97627", "capital_name": "Dodoma" },
   "UGA": { "name": "Uganda", "color": "#8e9136", "capital_name": "Kampala" },
-  "UKR": { "name": "Ukraine", "color": "#d4c034", "capital_name": "Kiev" },
+  "UKR": { "name": "Ukraine", "color": "#d4c034", "capital_name": "Kyiv" },
   "UMI": { "name": "United States Minor Outlying Islands", "color": "#ce3a2c" },
   "URY": { "name": "Uruguay", "color": "#7063ba", "capital_name": "Montevideo" },
   "USA": { "name": "United States of America", "color": "#4c7fb3", "capital_name": "Washington D.C." },

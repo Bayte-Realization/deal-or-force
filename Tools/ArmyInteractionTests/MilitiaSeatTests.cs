@@ -35,6 +35,14 @@ static class MilitiaSeatTests
         var (seat, town) = MilitiaCore.Seat(topology, control, flag, region);
         Check(town?.Name == "Kharkiv", $"the Kharkiv region's militia forms up in Kharkiv ({town?.Name ?? "no town"})");
         Check(seat > 0 && topology.ProvinceToState[seat] == region, "in a province of its own region");
+        // The same towns name the places a war is fought at: a battle in Kharkiv's own province
+        // is at Kharkiv, not "in the Kharkiv region" like every other one there.
+        Check(CityCatalog.NearestTown(topology, seat)?.Name == "Kharkiv",
+            $"a battle there is at Kharkiv ({CityCatalog.NearestTown(topology, seat)?.Name ?? "no town"})");
+        var elsewhere = provinces.FirstOrDefault(province => province != seat &&
+            CityCatalog.NearestTown(topology, province) is { } near && near.Name != "Kharkiv");
+        Check(elsewhere > 0, "and another of the region's provinces is at a town of its own " +
+            $"({(elsewhere > 0 ? CityCatalog.NearestTown(topology, elsewhere)?.Name : "none")})");
 
         control[seat] = (ushort)russia.MapIndex;
         var (fallback, next) = MilitiaCore.Seat(topology, control, flag, region);

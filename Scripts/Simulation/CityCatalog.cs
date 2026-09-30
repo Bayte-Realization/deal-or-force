@@ -53,7 +53,70 @@ public static class CityCatalog
 
     public static void Reset()
     {
-        lock (Gate) _all = null;
+        lock (Gate)
+        {
+            _all = null;
+            _provinces = null;
+        }
+    }
+
+    private static int[] _provinces;
+    private static ProvinceTopology _provincesOf;
+
+    /// <summary>
+    /// The town a place on the map is known by: the nearest city of the same region to a
+    /// province, no further off than a region's width usually is, or null. Four battles in the
+    /// Kherson region read "Kherson · RUS" four times over; they are at Kherson, Nova Kakhovka,
+    /// Beryslav and Henichesk.
+    /// </summary>
+    public static CityDefinition NearestTown(ProvinceTopology topology, int province, float withinDegrees = 1.2f)
+    {
+        if (topology is null || province <= 0 || province > topology.ProvinceCount) return null;
+        var cities = All;
+        int[] provinces;
+        lock (Gate)
+        {
+            if (_provinces is null || !ReferenceEquals(_provincesOf, topology) || _provinces.Length != cities.Count)
+            {
+                _provinces = new int[cities.Count];
+                for (var index = 0; index < cities.Count; index++)
+                    _provinces[index] = ProvinceUnder(topology, cities[index].Latitude, cities[index].Longitude);
+                _provincesOf = topology;
+            }
+            provinces = _provinces;
+        }
+        var region = topology.ProvinceToState[province];
+        var (latitude, longitude) = topology.CenterOf(province);
+        var scale = MathF.Cos(latitude * MathF.PI / 180f);
+        CityDefinition best = null;
+        var bestDistance = withinDegrees * withinDegrees;
+        for (var index = 0; index < cities.Count; index++)
+        {
+            var under = provinces[index];
+            if (under <= 0 || topology.ProvinceToState[under] != region) continue;
+            var city = cities[index];
+            var east = MathF.Abs(city.Longitude - longitude);
+            if (east > 180f) east = 360f - east;
+            east *= scale;
+            var north = city.Latitude - latitude;
+            var distance = east * east + north * north;
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = city;
+        }
+        return best;
+    }
+
+    /// <summary>The province under a point of the globe, or 0 for none.</summary>
+    private static int ProvinceUnder(ProvinceTopology topology, float latitude, float longitude)
+    {
+        if (topology.Width <= 0 || topology.Height <= 0) return 0;
+        var x = (int)MathF.Floor((longitude + 180f) / 360f * topology.Width);
+        var y = (int)MathF.Floor((90f - latitude) / 180f * topology.Height);
+        x = ((x % topology.Width) + topology.Width) % topology.Width;
+        y = Math.Clamp(y, 0, topology.Height - 1);
+        var province = topology.CellToProvince[y * topology.Width + x];
+        return province > 0 && province <= topology.ProvinceCount && !topology.IsWater(province) ? province : 0;
     }
 
     public static List<CityDefinition> Parse(IEnumerable<JsonDocument> documents)

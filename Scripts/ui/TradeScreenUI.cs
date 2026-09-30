@@ -58,10 +58,18 @@ public partial class DealOrForceGame
         public Button Select;
         public Control Flag;
         public Label Name;
+        public Label Sold;
+        public Label Bought;
         public Label Value;
-        public Label Flow;
         public Nation Nation;
     }
+
+    // The partner list's columns, shared by its captions and its rows so that each figure
+    // stands under its heading: the heading row and the rows used to be laid out differently,
+    // and "SOLD TO THEM" stood over a signed total with the two flows off to the right.
+    private const int PartnerSoldWidth = 110;
+    private const int PartnerBoughtWidth = 130;
+    private const int PartnerBalanceWidth = 100;
 
     private readonly List<TradeScreenRow> _tradeScreenRows = new();
     private readonly List<TradePartnerRow> _tradePartnerRowList = new();
@@ -193,18 +201,21 @@ public partial class DealOrForceGame
         var partnerCaptions = new HBoxContainer();
         partnerCaptions.AddThemeConstantOverride("separation", 8);
         partners.AddChild(partnerCaptions);
-        var whoCaption = RowLabel(Tr("COUNTRY"), 11, Ui.Colour("text.caption"), 230);
+        var whoCaption = RowLabel(Tr("COUNTRY"), 11, Ui.Colour("text.caption"), 0);
+        whoCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         partnerCaptions.AddChild(whoCaption);
-        var boughtCaption = RowLabel(Tr("SOLD TO THEM"), 11, Ui.Colour("text.caption"), 120);
-        boughtCaption.HorizontalAlignment = HorizontalAlignment.Right;
-        partnerCaptions.AddChild(boughtCaption);
-        var soldCaption = RowLabel(Tr("BOUGHT FROM THEM"), 11, Ui.Colour("text.caption"), 140);
-        soldCaption.HorizontalAlignment = HorizontalAlignment.Right;
-        partnerCaptions.AddChild(soldCaption);
-        _tradePartnersShown = RowLabel("", 11, Ui.Colour("text.caption"), 150);
-        _tradePartnersShown.HorizontalAlignment = HorizontalAlignment.Right;
-        _tradePartnersShown.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        partnerCaptions.AddChild(_tradePartnersShown);
+        foreach (var (caption, width) in new[]
+                 {
+                     ("SOLD TO THEM", PartnerSoldWidth), ("BOUGHT FROM THEM", PartnerBoughtWidth),
+                     ("BALANCE", PartnerBalanceWidth)
+                 })
+        {
+            var label = RowLabel(Tr(caption), 11, Ui.Colour("text.caption"), width);
+            label.HorizontalAlignment = HorizontalAlignment.Right;
+            partnerCaptions.AddChild(label);
+        }
+        // The rows are inset by their own padding and by the list's scroll bar.
+        partnerCaptions.AddChild(new Control { CustomMinimumSize = new Vector2(21, 0) });
         var partnerScroll = new ScrollContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -216,6 +227,9 @@ public partial class DealOrForceGame
         _tradePartnerRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _tradePartnerRows.AddThemeConstantOverride("separation", 2);
         partnerScroll.AddChild(_tradePartnerRows);
+        _tradePartnersShown = RowLabel("", 11, Ui.Colour("text.caption"), 0);
+        _tradePartnersShown.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        partners.AddChild(_tradePartnersShown);
 
         // ---- the instructions, whole, on the right: they are the controls this screen reads.
         var instructionsScroll = new ScrollContainer
@@ -265,7 +279,7 @@ public partial class DealOrForceGame
             (settled
                 ? " · " + Simulation.Loc.Format("bought in {0} · sold {1} · balance {2} · market access {3:P0}",
                     Fmt.Money(player.ImportValue), Fmt.Money(player.ExportValue),
-                    player.WeeklyTradeBalance >= 0 ? "+" + Fmt.Money(player.WeeklyTradeBalance) : "-" + Fmt.Money(-player.WeeklyTradeBalance),
+                    player.WeeklyTradeBalance >= 0 ? "+" + Fmt.Money(player.WeeklyTradeBalance) : "−" + Fmt.Money(-player.WeeklyTradeBalance),
                     player.MarketAccess)
                 : " · " + Tr("The first economic week has not closed yet."));
 
@@ -484,19 +498,25 @@ public partial class DealOrForceGame
             var bought = boughtFrom.GetValueOrDefault(partner.Id);
             if (fromTotals)
             {
+                // Only the week's total is saved, not which way it went.
                 var saved = player.TradePartners.GetValueOrDefault(partner.Id);
+                row.Sold.Text = "";
+                row.Bought.Text = "";
                 row.Value.Text = Fmt.Money(saved);
                 row.Value.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
-                row.Flow.Text = Tr("totals of the last closed week");
             }
             else
             {
-                row.Value.Text = sold >= bought
-                    ? Simulation.Loc.Format("+{0}", Fmt.Money(sold))
-                    : "-" + Fmt.Money(bought);
+                // What went each way, and what that comes to: the balance was the larger of the
+                // two flows with a sign on it, which for Germany read -$584M on a week of $47M
+                // sold and $584M bought.
+                row.Sold.Text = Fmt.Money(sold);
+                row.Bought.Text = Fmt.Money(bought);
+                var balance = sold - bought;
+                row.Value.Text = MathF.Abs(balance) < 0.0000005f ? "—"
+                    : balance > 0f ? "+" + Fmt.Money(balance) : Fmt.Money(balance);
                 row.Value.AddThemeColorOverride("font_color",
-                    sold >= bought ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
-                row.Flow.Text = Simulation.Loc.Format("{0} · {1}", Fmt.Money(sold), Fmt.Money(bought));
+                    balance >= 0f ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
             }
             var routes = byGood.GetValueOrDefault(partner.Id);
             row.Select.TooltipText = Ui.Tip(routes is null || routes.Count == 0
@@ -510,7 +530,8 @@ public partial class DealOrForceGame
         }
 
         var total = player.TradePartners.Count;
-        _tradePartnersShown.Text = Simulation.Loc.Format("{0:N0} of {1:N0} partners shown", (float)partnerIds.Length, (float)total);
+        _tradePartnersShown.Text = Simulation.Loc.Format("{0:N0} of {1:N0} partners shown", (float)partnerIds.Length, (float)total) +
+                                   (fromTotals ? " · " + Tr("totals of the last closed week") : "");
     }
 
     private static void AddPartnerRoute(Dictionary<int, List<TradeRoute>> table, int partnerId, TradeRoute route)
@@ -551,17 +572,18 @@ public partial class DealOrForceGame
         row.Name.ClipText = true;
         row.Name.AutowrapMode = TextServer.AutowrapMode.Off;
         inner.AddChild(row.Name);
+        row.Sold = Title("", 12, Ui.Colour("text.body"));
+        Fixed(row.Sold, PartnerSoldWidth);
+        row.Sold.HorizontalAlignment = HorizontalAlignment.Right;
+        inner.AddChild(row.Sold);
+        row.Bought = Title("", 12, Ui.Colour("text.body"));
+        Fixed(row.Bought, PartnerBoughtWidth);
+        row.Bought.HorizontalAlignment = HorizontalAlignment.Right;
+        inner.AddChild(row.Bought);
         row.Value = Title("", 12, Ui.Colour("text.bright"));
-        Fixed(row.Value, 100);
+        Fixed(row.Value, PartnerBalanceWidth);
         row.Value.HorizontalAlignment = HorizontalAlignment.Right;
         inner.AddChild(row.Value);
-        row.Flow = Title("", 11, Ui.Colour("text.caption"));
-        Fixed(row.Flow, 0);
-        row.Flow.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        row.Flow.HorizontalAlignment = HorizontalAlignment.Right;
-        row.Flow.ClipText = true;
-        row.Flow.AutowrapMode = TextServer.AutowrapMode.Off;
-        inner.AddChild(row.Flow);
 
         // Attached once, at construction: the list repaints its figures on every refresh,
         // and a handler re-attached per repaint is a handler that fires twice, then three

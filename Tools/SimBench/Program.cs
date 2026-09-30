@@ -1344,7 +1344,9 @@ public static class Program
             (0.5f, "$500M"),
             (0.0004f, "$400k"),
             (0f, "$0"),
-            (-1200f, "$-1.2T"),
+            (-1200f, "−$1.2T"),
+            (-1.29f, "−$1.29B"),
+            (-0.0000001f, "$0"),
         };
         foreach (var (billions, expected) in cases)
         {

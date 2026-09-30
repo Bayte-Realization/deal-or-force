@@ -675,4 +675,12 @@ public partial class DealOrForceGame
         var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == stateIndex);
         return state?.DisplayName ?? Simulation.Loc.Format("province {0}", provinceId.ToString("N0"));
     }
+
+    /// <summary>
+    /// Where a fight is, as a place: the town it is at when one of the region's towns is near,
+    /// and the region when none is. Several battles in one region are then several places.
+    /// </summary>
+    private string BattlePlaceName(int provinceId) =>
+        Simulation.CityCatalog.NearestTown(_campaign.ProvinceMap, provinceId)?.DisplayName ??
+        StateNameOfProvince(provinceId);
 }
