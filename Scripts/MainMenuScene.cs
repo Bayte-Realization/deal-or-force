@@ -802,8 +802,14 @@ public partial class AtlasBackdrop : Control
             if (squash < 0f) continue; // far side
             var width = radius * Mathf.Abs(squash);
             if (width < 2f) continue;
-            DrawArc(centre, width, phase > Mathf.Pi ? 0f : Mathf.Pi, Mathf.Tau, 64,
+            // A meridian's projection is a full ellipse, tall as the globe and squeezed to
+            // the squash - not the half-circle DrawArc alone can give, which read as arcs
+            // cropped by an unseen edge the moment the menu opened. A transform squeezes a
+            // drawn circle into that ellipse; reset it before anything else draws.
+            DrawSetTransform(centre, 0f, new Vector2(width / radius, 1f));
+            DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 64,
                 new Color(line, 0.05f + 0.07f * squash), 1f, false);
+            DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
         }
         for (var parallel = 1; parallel <= 4; parallel++)
         {
