@@ -90,6 +90,14 @@ public partial class MainMenuScene : Control
         var chosen = SettingsCatalog.Chosen("language");
         if (chosen.Length > 0) Loc.Language = chosen;
 
+        // And the music, which this screen had none of: the player for it used to live in the
+        // campaign scene, so the menu theme only began once a world had been built. It lives
+        // above the scenes now and carries on across them (MusicDirector). The catalogue is read
+        // once - a campaign that has loaded mods has read it with their tracks, and coming back
+        // here should not forget them.
+        if (MusicCatalog.Count == 0) MusicCatalog.Load();
+        MusicDirector.Ensure(this).FollowScene(this, () => MusicCatalog.Moment.Menu);
+
         AddChild(new AtlasBackdrop { MouseFilter = MouseFilterEnum.Ignore });
 
         var panel = new PanelContainer();
@@ -528,6 +536,12 @@ public partial class MainMenuScene : Control
 
             case "tooltip_width":
                 Ui.TooltipMeasure = Math.Clamp((int)MathF.Round(SettingsCatalog.Number("tooltip_width")), 32, 200);
+                break;
+
+            // The menu has music now, so its sliders are heard from here.
+            case "volume_master":
+            case "volume_music":
+                MusicDirector.Ensure(this).RefreshVolume();
                 break;
         }
     }

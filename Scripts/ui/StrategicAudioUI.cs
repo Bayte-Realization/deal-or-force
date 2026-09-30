@@ -17,8 +17,6 @@ public partial class DealOrForceGame
     private string _audioPolitics = "", _audioFormation = "";
     private readonly Dictionary<int, (int State, BuildingKind Building, int Count)> _audioConstruction = new();
     private readonly HashSet<int> _audioSupportFormations = new();
-    private AudioStreamPlayer _musicPlayer;
-    private readonly System.Random _musicOrder = new();
 
     /// <summary>
     /// Put the player's three volumes onto the players.
@@ -35,7 +33,6 @@ public partial class DealOrForceGame
     private void ApplyVolumes()
     {
         var master = SettingsCatalog.Number("volume_master");
-        var music = SettingsCatalog.Number("volume_music");
         var effects = SettingsCatalog.Number("volume_effects");
 
         static float Decibels(float share) =>
@@ -48,8 +45,8 @@ public partial class DealOrForceGame
             player.VolumeDb = channel.VolumeDb + _channelCueTrim.GetValueOrDefault(name) + Decibels(master * effects);
             if (master * effects <= 0.0005f) player.Stop();
         }
-        if (GodotObject.IsInstanceValid(_musicPlayer))
-            _musicPlayer.VolumeDb = SoundCatalog.GetChannel("music").VolumeDb + Decibels(master * music);
+        // The music's own level, which the director puts on the player it keeps across scenes.
+        MusicDirector.Ensure(this).RefreshVolume();
     }
 
     /// <summary>
@@ -73,10 +70,12 @@ public partial class DealOrForceGame
             if (!channel.Independent) player.Finished += PlayNextStrategicCue;
         }
 
-        _musicPlayer = new AudioStreamPlayer { Name = "Music", VolumeDb = SoundCatalog.GetChannel("music").VolumeDb };
-        AddChild(_musicPlayer);
-        _musicPlayer.Finished += PlayNextTrack;
-        PlayNextTrack();
+        // The music is not this scene's: it plays over the main menu too, and carries on across
+        // the change between them (MusicDirector). This scene says which moment it is - the
+        // campaign while its interface is up, the menu while it is not.
+        MusicDirector.Ensure(this).FollowScene(this, () => _hudLayer is { Visible: true }
+            ? MusicCatalog.Moment.Campaign
+            : MusicCatalog.Moment.Menu);
 
         foreach (var cue in SoundCatalog.All)
         {
@@ -167,40 +166,6 @@ public partial class DealOrForceGame
         if (!_audioChannels.TryGetValue(cue.Channel, out var player)) return;
         _lastCueAt[name] = Time.GetTicksMsec();
         Speak(player, cue, stream);
-    }
-
-    /// <summary>
-    /// The next track, weighted, from whatever is declared for where the player is.
-    ///
-    /// The base game declares nothing, so this does nothing - which is the point. A game
-    /// that only plays music its own code names is a game no mod can score, and the whole
-    /// `music/` folder exists so that the list is somebody else's to write.
-    /// </summary>
-    private void PlayNextTrack()
-    {
-        if (_musicPlayer is null) return;
-        var moment = _hudLayer is not null && _hudLayer.Visible
-            ? MusicCatalog.Moment.Campaign
-            : MusicCatalog.Moment.Menu;
-        var tracks = MusicCatalog.For(moment);
-        if (tracks.Count == 0) return;
-
-        var total = 0f;
-        foreach (var track in tracks) total += track.Weight;
-        var roll = (float)_musicOrder.NextDouble() * total;
-        foreach (var track in tracks)
-        {
-            roll -= track.Weight;
-            if (roll > 0f) continue;
-            if (!ResourceLoader.Exists(track.File))
-            {
-                GD.PushWarning($"[dof] music track '{track.Name}' points at {track.File}, which is not there");
-                return;
-            }
-            _musicPlayer.Stream = GD.Load<AudioStream>(track.File);
-            _musicPlayer.Play();
-            return;
-        }
     }
 
     private void ResetStrategicAudioState()
