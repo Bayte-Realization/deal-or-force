@@ -66,6 +66,7 @@ static class Program
         c.AttachProvinceTopology(map);
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
+        if (args.Contains("--gaza-only")) { HeldGroundTests.Run(c); return; }
         if (args.Contains("--ai-diplomacy-only")) { AiDiplomacyTests.Run(c); return; }
         if (args.Contains("--save-seed-mature-only"))
         {

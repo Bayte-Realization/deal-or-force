@@ -353,6 +353,14 @@ public static class HistoryDataLoader
             }
             // A scenario may open on a region already in ruins (WarDamage).
             SetFloat(value, "war_damage", number => state.WarDamage = M.Clamp01(number));
+            // Who holds it on the first day when that is not its owner (HeldGround): Gaza.
+            if (value.TryGetProperty("controller", out var controller))
+            {
+                var tag = controller.ValueKind == JsonValueKind.String ? controller.GetString() ?? "" : null;
+                if (tag is not null && (tag.Length == 0 || campaign.NationByTag(tag) is not null))
+                    state.StartController = tag;
+                else errors?.Add($"State '{entry.Name}': \"controller\" must name a country by its tag.");
+            }
             if (value.TryGetProperty("buildings", out var buildings) && buildings.ValueKind == JsonValueKind.Object)
                 foreach (var building in buildings.EnumerateObject())
                     if (BuildingCatalog.TryParse(building.Name, out var kind) && building.Value.TryGetInt32(out var level))

@@ -890,6 +890,8 @@ public sealed partial class Campaign
         // painted there. Before the region list is reconciled with the ground below, which
         // would otherwise hand the region straight back to the raster's owner.
         UnclaimedLand.ApplyToGround(this, topology, ProvinceController);
+        // And where history says somebody else's troops hold a region, they do (Gaza).
+        HeldGround.ApplyToGround(this, topology, ProvinceController);
         ProvinceOccupation = new float[topology.ProvinceCount + 1];
 
         // A fleet's home port is a province, and provinces only exist once the map is

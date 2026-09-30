@@ -182,6 +182,42 @@
         [44.7, 39.85]
       ],
       "seed_points": [[45.71875, 39.53125, 1], [45.90625, 39.28125, 1]]
+    },
+    {
+      // The Gaza Strip. Palestinian ground: its northern half used to be drawn inside an
+      // Israeli province together with Beersheba and its southern half inside the West Bank,
+      // which is neither. Israel holds it on the first day: "controller" in its region
+      // history, history/states/2024/PSE.json.
+      "map_index": 1740,
+      "nation": "PSE",
+      "source_nation": "ISR",
+      "name": "Gaza Strip",
+      "iso": "PS-GZA",
+      "kind": "Territory",
+      "donor_iso": "PS-WBK",
+      "population": 2100000,
+      "min_longitude": 34.15,
+      "max_longitude": 34.62,
+      "min_latitude": 31.19,
+      "max_latitude": 31.64,
+      "boundary_source": "1949 armistice line (the Gaza-Israel border) and the Egypt border at Rafah, simplified to source-raster resolution",
+      "polygon": [
+        [34.2166, 31.3232],
+        [34.2677, 31.2197],
+        [34.3063, 31.2508],
+        [34.3483, 31.2946],
+        [34.3810, 31.3310],
+        [34.3790, 31.3688],
+        [34.4262, 31.4148],
+        [34.4757, 31.4585],
+        [34.5035, 31.4995],
+        [34.5670, 31.5540],
+        [34.5390, 31.5700],
+        [34.4900, 31.5960],
+        [34.4500, 31.6300],
+        [34.1600, 31.3500],
+        [34.2166, 31.3232]
+      ]
     }
 
   ],

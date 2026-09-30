@@ -1554,6 +1554,7 @@ names exactly one region:
 | `literacy`, `standard_of_living`, `radicalism` | Optional, 0 to 1. Left out, the region takes its country's figure with a spread of its own. |
 | `war_damage` | Optional, 0 to 1: how much of the region a war has already wrecked on the first day - see *War damage*. |
 | `owner` | Only `"none"` - see *Land that belongs to nobody*. |
+| `controller` | Optional: the tag of a country that holds the region on the first day without owning it - Israel in the Gaza Strip. Every province of the region opens occupied by it, striped on the map, and from then on who holds it is the war's business. Written by region because province ids change whenever the map is recut. |
 
 **What is written is what the region has.** A building or a deposit left out of a region's record
 is not there. A field left out altogether is worked out from the country: the peoples as its

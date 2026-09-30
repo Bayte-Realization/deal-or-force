@@ -2237,7 +2237,13 @@ void fragment() {
     // says which of the two a colour is: a full byte replaces the province outright, which
     // is the treaty being drafted, and anything less is an occupation drawn over an owner
     // who has not signed anything away yet.
-    float hatch = (UV.x * 2.0 + UV.y) * 190.0;
+    // A stripe every fifteen texels or so from orbit, where fronts are hundreds of kilometres
+    // long - and tighter as the camera closes in, to a stripe and a half, because an
+    // occupation of ground a texel or two wide (the Gaza Strip, a border town) otherwise sits
+    // inside one pale band and reads as nobody's. Driven by the zoom rather than by the pixel's
+    // own footprint: that changes at every triangle edge of the globe and would break the
+    // stripes along them.
+    float hatch = (UV.x * 2.0 + UV.y) * 190.0 * mix(1.0, 10.0, province_detail);
     float hatch_width = clamp(fwidth(hatch), 0.0005, 0.45);
     float stripe = smoothstep(0.5 - hatch_width, 0.5 + hatch_width, fract(hatch));
     // Zoomed far enough out that one stripe is thinner than one pixel, stripes are moire and

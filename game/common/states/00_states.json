@@ -36,6 +36,7 @@
   "cn_xz": { "name": "Tibet", "kind": "Autonomous Region" },
   "il_d": { "name": "Southern", "kind": "District" },
   "ps_wbk": { "name": "West Bank", "kind": "Region" },
+  "ps_gza": { "name": "Gaza Strip", "kind": "Territory" },
   "et_sn": { "name": "Southern Nations", "kind": "Administrative State" },
   "ss_ee": { "name": "Eastern Equatoria", "kind": "State" },
   "et_so": { "name": "Somali", "kind": "Administrative State" },

@@ -11,12 +11,28 @@
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
 {
-  // West Bank
+  // West Bank. Palestine's people are split between its two regions; the total is unchanged.
   "ps_wbk": {
-    "population": 4685306,
+    "population": 2585306,
     "urbanization": 0.784,
     "cultures": { "palestinian": 0.96, "bedouin": 0.025, "israeli_jew": 0.01, "armenian": 0.003, "assyrian": 0.002 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.405, "Coal": 0.097, "Oil": 0.182, "IronOre": 0.111, "RareEarths": 0.038, "NaturalGas": 0.201, "Timber": 1.18, "Bauxite": 0.023, "Uranium": 0.006 }
+  },
+  // The Gaza Strip. Israeli troops hold it on the first day. Almost all of it town; the Gaza
+  // Marine gas field lies off its coast.
+  //
+  // No "war_damage" here, though there is every reason for one: a wrecked region sends its
+  // people to its neighbours at peace, Egypt is by far the largest of them, and fifteen years
+  // of refugees in the Nile valley made the secession rules raise a "Palestine" out of five
+  // Egyptian regions and twenty-seven million Egyptians. Until a secession asks who the people
+  // of a region mostly are, the damage stays out.
+  "ps_gza": {
+    "controller": "ISR",
+    "population": 2100000,
+    "urbanization": 0.82,
+    "cultures": { "palestinian": 0.995, "arab_levantine": 0.005 },
+    "buildings": { "Infrastructure": 1 },
+    "resources": { "Food": 0.35, "NaturalGas": 0.6 }
   }
 }
