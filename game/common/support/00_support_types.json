@@ -2,7 +2,10 @@
 //
 // An entry is a KIND of formation: what the world opens with, what a player can raise,
 // and what a mod can add by dropping another file into common/support. Nothing here is
-// compiled in; a field left out is a zero, and a new kind of formation needs no code.
+// compiled in; a field left out of a new kind is a zero, and a new kind of formation needs no
+// code. A later file naming a kind that already exists changes only the fields it names:
+// { "mlrs_battalion": { "range_km": 120 } } is longer-legged rocket artillery and nothing else.
+// mods/_templates/long_range_forces does both.
 //
 //   kind             what the formation IS: ground guns, crewed aircraft, drones, or
 //                    missile brigades that never leave home. The kind decides which

@@ -6,13 +6,18 @@ using Godot;
 
 namespace DealOrForce;
 
-// The long-range forces screen: what a country reaches with rather than stands on.
+// The long-range forces panel (item 87): the artillery, aircraft, drones and missile brigades a
+// country reaches into the war with.
 //
-// HOI4 taught this page its shape. The left column is the establishment itself - every
-// formation the country owns, grouped by the region it is based in, each with its
-// readiness, its mission and the reach of its type. The right column is where the next
-// one comes from: raise a formation into a region with a post free, watch it train, and
-// when the war moves, rebase the ones whose ground was taken.
+// It was a page laid over the map, and the one thing a player needs while giving these forces
+// orders is the map: where the bases are, what they reach, where the battles are. So it is a
+// panel docked beside the map instead, the way Hearts of Iron keeps its air wings, and the map
+// answers it - every base shown from further out, every formation's reach drawn in the colour of
+// its arm, the selected ones filled. Formations are chosen in the list (a click adds or removes
+// one, "all" takes a base's whole establishment) and given a mission with one button for all of
+// them; they are rebased by clicking a region of the country on the map. A new formation is
+// raised into the region last clicked on the map, so where it goes is a decision taken looking at
+// the front rather than at a list of names.
 public partial class DealOrForceGame
 {
     private Control _supportLayer = null!;
@@ -20,36 +25,51 @@ public partial class DealOrForceGame
     private ScrollContainer _supportScroll = null!;
     private VBoxContainer _supportRows = null!;
     private Label _supportFeedback = null!;
-    private OptionButton _supportTypePicker = null!;
-    private OptionButton _supportRegionPicker = null!;
-    private Label _supportCostReadout = null!;
+    private Control _supportSelectionBar = null!;
+    private Label _supportSelectionCaption = null!;
+    private HBoxContainer _supportSelectionMissions = null!;
+    private Button _supportRebaseButton = null!;
+    private Label _supportRebaseBanner = null!;
+    private Button _supportRaiseToggle = null!;
+    private VBoxContainer _supportRaiseBody = null!;
+    private GridContainer _supportTypeGrid = null!;
     private Label _supportTypeDetail = null!;
+    private Label _supportCostReadout = null!;
+    private OptionButton _supportRegionPicker = null!;
     private VBoxContainer _supportTrainingRows = null!;
-    private VBoxContainer _supportRebaseBox = null!;
-    private Label _supportRebaseHint = null!;
-    private ScrollContainer _supportRebaseScroll = null!;
-    private VBoxContainer _supportRebaseRows = null!;
-    private bool _supportRowsBuilt;
-
-    /// <summary>The formation being moved, or -1. Rebase is a two-click thought: pick the
-    /// formation, then pick the ground - and the ground is a list, because the map is not
-    /// where a player's eyes are when they are on this page.</summary>
-    private int _supportRebasingId = -1;
+    private Label _supportTrainingCaption = null!;
+    private string _supportFilter = "all";
+    private string _supportRaiseType = "";
+    private bool _supportRebaseArmed;
+    private bool _supportRaiseOpen;
+    private readonly HashSet<int> _supportSelected = new();
+    private readonly Dictionary<string, Button> _supportFilterButtons = new();
+    private readonly Dictionary<string, Button> _supportTypeButtons = new();
+    private readonly Dictionary<int, SupportRow> _supportRowMap = new();
+    private readonly Dictionary<int, SupportTrainingRow> _supportTrainingMap = new();
+    private readonly Dictionary<int, SupportSection> _supportRegionSections = new();
 
     private sealed class SupportRow
     {
         public Button Row;
         public TextureRect Icon;
         public Label Name;
+        public Label Loss;
         public ColorRect StrengthFill;
         public Label Strength;
-        public Label Range;
-        public OptionButton Mission;
-        public Button View;
-        public Button Move;
+        public HBoxContainer Missions;
+        public readonly Dictionary<string, Button> MissionButtons = new();
         public Label Displaced;
         public SupportFormation Formation;
-        public bool MissionBuilt;
+        public string MissionSet = "";
+    }
+
+    private sealed class SupportSection
+    {
+        public VBoxContainer Box;
+        public Button Caption;
+        public Button SelectAll;
+        public VBoxContainer Formations;
     }
 
     private sealed class SupportTrainingRow
@@ -61,68 +81,62 @@ public partial class DealOrForceGame
         public SupportOrder Order;
     }
 
-    private readonly Dictionary<int, SupportRow> _supportRowMap = new();
-    private readonly Dictionary<int, SupportTrainingRow> _supportTrainingMap = new();
-    private readonly Dictionary<int, VBoxContainer> _supportRegionSections = new();
-    private readonly List<Control> _supportRebaseButtons = new();
+    /// <summary>The filters above the list: what arm of the long-range forces is shown.</summary>
+    private static readonly (string Id, string Label, SupportKind? Kind)[] SupportFilters =
+    {
+        ("all", "All", null),
+        ("air", "Aircraft", SupportKind.Air),
+        ("drone", "Drones", SupportKind.Drone),
+        ("ground", "Artillery", SupportKind.Ground),
+        ("air_defence", "Air defence", SupportKind.AirDefence)
+    };
 
     // ------------------------------------------------------------------ build
 
     private void BuildSupportScreen()
     {
+        // No shade: the map stays live behind the panel, and clicks on it reach the globe.
         _supportLayer = FullLayer("Support");
         _supportLayer.Visible = false;
+        _supportLayer.MouseFilter = MouseFilterEnum.Ignore;
         _hudLayer.AddChild(_supportLayer);
 
-        var shade = new ColorRect
-        {
-            Color = new Color(0.015f, 0.026f, 0.041f, 0.48f),
-            MouseFilter = MouseFilterEnum.Stop
-        };
-        shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        _supportLayer.AddChild(shade);
-
         var panel = TexturedPanel(_supportLayer);
-        Ui.Place(panel, "modal.support");
-
-        var rows = PanelRows(panel, 22, 16, 9);
+        Ui.Place(panel, "hud.support_panel");
+        var rows = PanelRows(panel, 16, 12, 7);
 
         var header = new HBoxContainer();
         header.AddThemeConstantOverride("separation", 8);
         rows.AddChild(header);
-        var title = Title("SUPPORT", 25, Ui.Colour("text.accent"));
+        var title = Title("LONG-RANGE FORCES", 21, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
-        header.AddChild(ActionButton("×", CloseSupportScreen, 38, 32));
+        header.AddChild(ActionButton("×", CloseSupportScreen, 34, 30));
 
-        _supportSummary = Title("", 13, Ui.Colour("text.body_soft"));
-        _supportSummary.CustomMinimumSize = new Vector2(0, 22);
-        _supportSummary.AutowrapMode = TextServer.AutowrapMode.Off;
-        _supportSummary.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _supportSummary = Title("", 12, Ui.Colour("text.body_soft"));
+        _supportSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _supportSummary.CustomMinimumSize = new Vector2(1, 18);
         rows.AddChild(_supportSummary);
 
-        var body = new HBoxContainer
+        // What arm of the forces the list shows.
+        var filters = new HBoxContainer();
+        filters.AddThemeConstantOverride("separation", 4);
+        rows.AddChild(filters);
+        foreach (var (id, label, _) in SupportFilters)
         {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill
-        };
-        body.AddThemeConstantOverride("separation", 14);
-        rows.AddChild(body);
+            var captured = id;
+            var chip = ActionButton(label, () => SetSupportFilter(captured), 0, 26);
+            chip.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            chip.ToggleMode = true;
+            filters.AddChild(chip);
+            _supportFilterButtons[id] = chip;
+        }
 
-        // ---- the establishment, on the left.
-        var establishment = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill
-        };
-        establishment.AddThemeConstantOverride("separation", 6);
-        body.AddChild(establishment);
-
-        StateSection(establishment, "THE LONG-RANGE ESTABLISHMENT",
-            "Every formation the country owns, by the region it is based in. The reach is in real " +
-            "kilometres from its base province, so where a formation stands decides what it can " +
-            "touch. A region hosts two formations, and two more per barracks in it. Lose the " +
-            "region and the formation goes silent until it is moved.");
+        _supportRebaseBanner = Title("", 12, Ui.Colour("text.accent"));
+        _supportRebaseBanner.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _supportRebaseBanner.CustomMinimumSize = new Vector2(1, 18);
+        _supportRebaseBanner.Visible = false;
+        rows.AddChild(_supportRebaseBanner);
 
         _supportScroll = new ScrollContainer
         {
@@ -132,140 +146,90 @@ public partial class DealOrForceGame
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
             FollowFocus = true
         };
-        establishment.AddChild(_supportScroll);
+        rows.AddChild(_supportScroll);
         _supportRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _supportRows.AddThemeConstantOverride("separation", 3);
+        _supportRows.AddThemeConstantOverride("separation", 6);
         _supportScroll.AddChild(_supportRows);
 
-        // ---- the right column: raising, training, and where a rebasing formation goes.
-        var side = new VBoxContainer
-        {
-            CustomMinimumSize = new Vector2(360, 0),
-            SizeFlagsVertical = SizeFlags.ExpandFill
-        };
-        side.AddThemeConstantOverride("separation", 10);
-        body.AddChild(side);
+        // ---- what to do with the selected formations, always in reach under the list.
+        var selection = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
+        selection.AddThemeConstantOverride("separation", 5);
+        rows.AddChild(selection);
+        _supportSelectionBar = selection;
+        var selectionHeader = new HBoxContainer();
+        selectionHeader.AddThemeConstantOverride("separation", 6);
+        selection.AddChild(selectionHeader);
+        _supportSelectionCaption = Title("", 12, Ui.Colour("text.caption"));
+        _supportSelectionCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _supportSelectionCaption.VerticalAlignment = VerticalAlignment.Center;
+        selectionHeader.AddChild(_supportSelectionCaption);
+        var reach = ActionButton("SHOW REACH", FocusSupportSelection, 110, 26);
+        Tip(reach, Tr("Centre the map on the selected formations and their reach."));
+        selectionHeader.AddChild(reach);
+        _supportRebaseButton = ActionButton("REBASE ON MAP", ToggleSupportRebase, 130, 26);
+        _supportRebaseButton.ToggleMode = true;
+        Tip(_supportRebaseButton, Tr("Then click a region of the country on the map: the selected formations are based there, if it has posts free."));
+        selectionHeader.AddChild(_supportRebaseButton);
+        selectionHeader.AddChild(ActionButton("CLEAR", ClearSupportSelection, 64, 26));
+        _supportSelectionMissions = new HBoxContainer();
+        _supportSelectionMissions.AddThemeConstantOverride("separation", 4);
+        selection.AddChild(_supportSelectionMissions);
 
-        _supportRebaseBox = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            Visible = false
-        };
-        _supportRebaseBox.AddThemeConstantOverride("separation", 6);
-        side.AddChild(_supportRebaseBox);
-        var rebaseHeader = new HBoxContainer();
-        rebaseHeader.AddThemeConstantOverride("separation", 6);
-        _supportRebaseBox.AddChild(rebaseHeader);
-        var rebaseTitle = Title("REBASE THE FORMATION", 12, Ui.Colour("text.caption"));
-        rebaseTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        rebaseHeader.AddChild(rebaseTitle);
-        rebaseHeader.AddChild(ActionButton("×", CancelSupportRebase, 30, 24));
-        _supportRebaseHint = Title("", 11, Ui.Colour("text.body_soft"));
-        _supportRebaseHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _supportRebaseHint.CustomMinimumSize = new Vector2(1, 18);
-        _supportRebaseBox.AddChild(_supportRebaseHint);
-        _supportRebaseScroll = new ScrollContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto
-        };
-        _supportRebaseBox.AddChild(_supportRebaseScroll);
-        _supportRebaseRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _supportRebaseRows.AddThemeConstantOverride("separation", 2);
-        _supportRebaseScroll.AddChild(_supportRebaseRows);
+        _supportFeedback = Title("", 11, Ui.Colour("state.negative"));
+        _supportFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _supportFeedback.CustomMinimumSize = new Vector2(1, 16);
+        rows.AddChild(_supportFeedback);
 
-        var raiseBox = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        raiseBox.AddThemeConstantOverride("separation", 6);
-        _raiseBox = raiseBox;
-        side.AddChild(raiseBox);
+        // ---- raising a new formation, folded away until it is wanted.
+        _supportRaiseToggle = ActionButton("▸ RAISE A FORMATION", ToggleSupportRaise, 0, 28);
+        _supportRaiseToggle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _supportRaiseToggle.Alignment = HorizontalAlignment.Left;
+        rows.AddChild(_supportRaiseToggle);
+        _supportRaiseBody = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
+        _supportRaiseBody.AddThemeConstantOverride("separation", 6);
+        rows.AddChild(_supportRaiseBody);
 
-        StateSection(raiseBox, "RAISE A FORMATION",
-            "A new formation is ordered into a region the country holds, costs money and " +
-            "manpower up front like a division, and trains for the days its type states " +
-            "before it exists.");
-
-        var raiseGrid = new GridContainer
-        {
-            Columns = 2,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        raiseGrid.AddThemeConstantOverride("h_separation", 8);
-        raiseGrid.AddThemeConstantOverride("v_separation", 5);
-        raiseBox.AddChild(raiseGrid);
-
-        Label Field(string text)
-        {
-            var label = RowLabel(text, 11, Ui.Colour("text.caption"), 96);
-            label.VerticalAlignment = VerticalAlignment.Center;
-            label.AutowrapMode = TextServer.AutowrapMode.Off;
-            return label;
-        }
-
-        raiseGrid.AddChild(Field(Tr("FORMATION")));
-        _supportTypePicker = new OptionButton
-        {
-            CustomMinimumSize = new Vector2(230, 28),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            FitToLongestItem = false
-        };
-        raiseGrid.AddChild(_supportTypePicker);
-        _supportTypePicker.ItemSelected += OnSupportTypePicked;
-
-        raiseGrid.AddChild(Field(Tr("REGION")));
-        _supportRegionPicker = new OptionButton
-        {
-            CustomMinimumSize = new Vector2(230, 28),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            FitToLongestItem = false
-        };
-        raiseGrid.AddChild(_supportRegionPicker);
-        _supportRegionPicker.ItemSelected += _ => RefreshSupportRaiseReadout();
+        _supportTypeGrid = new GridContainer { Columns = 3, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _supportTypeGrid.AddThemeConstantOverride("h_separation", 4);
+        _supportTypeGrid.AddThemeConstantOverride("v_separation", 4);
+        _supportRaiseBody.AddChild(_supportTypeGrid);
 
         _supportTypeDetail = Title("", 11, Ui.Colour("text.body_soft"));
         _supportTypeDetail.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _supportTypeDetail.CustomMinimumSize = new Vector2(1, 16);
-        raiseBox.AddChild(_supportTypeDetail);
+        _supportRaiseBody.AddChild(_supportTypeDetail);
 
-        _supportCostReadout = Title("", 12, Ui.Colour("text.accent_dim"));
-        _supportCostReadout.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _supportCostReadout.CustomMinimumSize = new Vector2(1, 16);
-        raiseBox.AddChild(_supportCostReadout);
+        var regionRow = new HBoxContainer();
+        regionRow.AddThemeConstantOverride("separation", 6);
+        _supportRaiseBody.AddChild(regionRow);
+        var regionCaption = RowLabel(Tr("BASE"), 11, Ui.Colour("text.caption"), 48);
+        regionCaption.VerticalAlignment = VerticalAlignment.Center;
+        regionRow.AddChild(regionCaption);
+        _supportRegionPicker = new OptionButton
+        {
+            CustomMinimumSize = new Vector2(200, 28),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            FitToLongestItem = false
+        };
+        _supportRegionPicker.TooltipText = Ui.Tip("Or click a region of the country on the map.");
+        _supportRegionPicker.ItemSelected += _ => RefreshSupportRaiseReadout();
+        regionRow.AddChild(_supportRegionPicker);
 
         var raiseActions = new HBoxContainer();
         raiseActions.AddThemeConstantOverride("separation", 7);
-        raiseBox.AddChild(raiseActions);
-        var raiseButton = ActionButton("RAISE FORMATION", RaiseSupportFormation, 150, 30);
-        raiseActions.AddChild(raiseButton);
-        _supportFeedback = Title("", 11, Ui.Colour("state.negative"));
-        _supportFeedback.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _supportFeedback.VerticalAlignment = VerticalAlignment.Center;
-        _supportFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _supportFeedback.CustomMinimumSize = new Vector2(1, 18);
-        raiseActions.AddChild(_supportFeedback);
+        _supportRaiseBody.AddChild(raiseActions);
+        _supportCostReadout = Title("", 12, Ui.Colour("text.accent_dim"));
+        _supportCostReadout.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _supportCostReadout.VerticalAlignment = VerticalAlignment.Center;
+        raiseActions.AddChild(_supportCostReadout);
+        raiseActions.AddChild(ActionButton("RAISE", RaiseSupportFormation, 96, 30, true));
 
-        var trainingBox = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ExpandFill
-        };
-        trainingBox.AddThemeConstantOverride("separation", 6);
-        side.AddChild(trainingBox);
-        _supportTrainingBox = trainingBox;
-        StateSection(trainingBox, "IN TRAINING",
-            "Formations on order. Cancel returns most of what is left of the money and all " +
-            "of the men.");
+        _supportTrainingCaption = Title("", 11, Ui.Colour("text.caption"));
+        _supportRaiseBody.AddChild(_supportTrainingCaption);
         _supportTrainingRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _supportTrainingRows.AddThemeConstantOverride("separation", 3);
-        trainingBox.AddChild(_supportTrainingRows);
+        _supportRaiseBody.AddChild(_supportTrainingRows);
     }
-
-    private Control _raiseBox = null!;
-    private Control _supportTrainingBox = null!;
 
     // ------------------------------------------------------------------ open, close, refresh
 
@@ -273,6 +237,8 @@ public partial class DealOrForceGame
     {
         _openScreen = "Support";
         _sidePanel.Visible = false;
+        SetArmyPanelVisible(false);
+        HideMapSelection(true);
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
         if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
@@ -281,6 +247,8 @@ public partial class DealOrForceGame
         if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
         _supportLayer.Visible = true;
         _supportLayer.MoveToFront();
+        _globe.SupportOverlay = true;
+        _globe.SelectSupportFormations(_supportSelected);
         RefreshSupportScreen();
         UpdateScreenButtons();
     }
@@ -288,18 +256,41 @@ public partial class DealOrForceGame
     private void CloseSupportScreen()
     {
         _supportLayer.Visible = false;
-        _supportRebasingId = -1;
+        _supportRebaseArmed = false;
+        _globe.SupportOverlay = false;
         if (_openScreen == "Support") _openScreen = "";
         UpdateScreenButtons();
     }
 
+    /// <summary>A formation clicked on the map: the panel opens with it selected.</summary>
     private void OnSupportPicked(SupportFormation formation)
     {
         if (_campaign?.Player is null || formation.NationId != _campaign.Player.Id) return;
-        _globe.SelectSupportFormation(formation.Id);
+        if (!_supportLayer.Visible) _supportSelected.Clear();
+        _supportSelected.Add(formation.Id);
         OpenSupportScreen();
         if (_supportRowMap.TryGetValue(formation.Id, out var row))
             _supportScroll.EnsureControlVisible(row.Row);
+    }
+
+    /// <summary>
+    /// A click on the map while the panel is open. With a rebase armed it is where the selected
+    /// formations go; otherwise it chooses the base a new formation is raised into. True when the
+    /// click was the panel's, so the country card does not open over it.
+    /// </summary>
+    private bool TrySupportMapPick(GlobePick pick)
+    {
+        if (_supportLayer is not { Visible: true } || _campaign?.Player is null || pick.State is null) return false;
+        var player = _campaign.Player;
+        if (_supportRebaseArmed)
+        {
+            RebaseSupportSelection(pick.State);
+            return true;
+        }
+        if (pick.State.NationMapIndex != player.MapIndex) return false;
+        SelectSupportRaiseRegion(pick.State.MapIndex);
+        if (!_supportRaiseOpen) ToggleSupportRaise();
+        return true;
     }
 
     private void RefreshSupportScreen()
@@ -308,71 +299,91 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var owned = _campaign.SupportFormations.Where(f => f.NationId == player.Id).ToList();
         var training = _campaign.SupportOrders.Where(o => o.NationId == player.Id).ToList();
+        _supportSelected.RemoveWhere(id => owned.All(f => f.Id != id));
 
-        _supportSummary.Text = Loc.Format("{0} · {1} · {2}",
-            player.DisplayName,
-            Loc.Format(Simulation.Plural.Key("{0} formation", owned.Count), owned.Count),
-            Loc.Format(Simulation.Plural.Key("{0} in training", training.Count), training.Count));
+        var working = owned.Count(f => f.Mission != SupportCore.MissionStandby);
+        var hurt = owned.Count(f => _campaign.SupportLossesToday.ContainsKey(f.Id));
+        var readiness = owned.Count == 0 ? 0f : owned.Average(f => f.Strength);
+        _supportSummary.Text = Loc.Format("{0} · {1} · {2} · readiness {3:P0}",
+            Loc.Format(Plural.Key("{0} formation", owned.Count), owned.Count),
+            Loc.Format("{0} on missions", working),
+            Loc.Format(Plural.Key("{0} in training", training.Count), training.Count),
+            readiness) +
+            (hurt > 0 ? " · " + Loc.Format("{0} took losses yesterday", hurt) : "");
+
+        foreach (var (id, chip) in _supportFilterButtons)
+            chip.SetPressedNoSignal(id == _supportFilter);
 
         RefreshSupportEstablishment(player, owned);
+        RefreshSupportSelection(owned);
         RefreshSupportTraining(training);
-        RefreshSupportRebase(player);
         RefreshSupportRaise(player);
     }
 
     // ------------------------------------------------------------------ the establishment
 
+    private bool SupportFilterAdmits(SupportTypeDefinition type)
+    {
+        foreach (var (id, _, kind) in SupportFilters)
+            if (id == _supportFilter) return kind is null || type.Kind == kind;
+        return true;
+    }
+
+    private void SetSupportFilter(string filter)
+    {
+        _supportFilter = filter;
+        RefreshSupportScreen();
+    }
+
     private void RefreshSupportEstablishment(Nation player, List<SupportFormation> owned)
     {
-        // The rows are kept across refreshes and repainted, the way the trade matrix is:
-        // a list a player is reading should not be torn out from under their eyes every
-        // day the campaign steps.
-        //
-        // A section exists for every region that hosts formations of this country - the
-        // held ones in name order, and after them the regions the war has taken, because a
-        // formation standing on lost ground is exactly the one the player most needs to
-        // find and move.
-        var byState = owned.GroupBy(f => f.StateMapIndex)
-            .Select(group => (MapIndex: group.Key,
-                State: _campaign.States.Find(s => s.MapIndex == group.Key),
-                Formations: group.ToList()))
+        // Rows are kept across refreshes and repainted: a list a player is reading should not
+        // be torn out from under their eyes every day the campaign steps. Sections are the bases
+        // the country holds, by name, and after them the ones the war has taken - a formation
+        // standing on lost ground is the one the player most needs to find and move.
+        var shown = owned.Where(f => SupportTypeCatalog.TryGet(f.TypeId, out var type) && SupportFilterAdmits(type)).ToList();
+        var byState = shown.GroupBy(f => f.StateMapIndex)
+            .Select(group => (State: _campaign.States.Find(s => s.MapIndex == group.Key), Formations: group.ToList()))
             .Where(entry => entry.State is not null)
             .OrderByDescending(entry => entry.State.NationMapIndex == player.MapIndex)
-            .ThenBy(entry => Loc.Get(entry.State.Name))
+            .ThenBy(entry => entry.State.DisplayName)
             .ToList();
 
-        // Region sections in the order the player reads them, with the formations inside
-        // each. Sections for regions that no longer exist are dropped; the rows inside keep
-        // their scroll and their tooltips.
         var wanted = new HashSet<int>();
-        foreach (var entry in byState)
+        var order = 0;
+        foreach (var (state, formations) in byState)
         {
-            var state = entry.State;
-            var formations = entry.Formations;
             wanted.Add(state.MapIndex);
             if (!_supportRegionSections.TryGetValue(state.MapIndex, out var section))
             {
-                section = BuildSupportRegionSection();
+                section = BuildSupportSection(state.MapIndex);
                 _supportRegionSections[state.MapIndex] = section;
-                _supportRows.AddChild(section);
+                _supportRows.AddChild(section.Box);
             }
-            section.GetNode<Label>("Caption").Text =
-                $"{Loc.Get(state.Name)} · {Loc.Format("posts {0}/{1}",
-                    SupportCore.PostsUsed(_campaign, state.MapIndex), SupportCore.CapacityOf(_campaign, state))}";
-            var rowList = section.GetNode<VBoxContainer>("Formations");
+            _supportRows.MoveChild(section.Box, order++);
+            var lost = state.NationMapIndex != player.MapIndex;
+            section.Caption.Text = $"{state.DisplayName} · " + (lost
+                ? Tr("BASE LOST")
+                : Loc.Format("posts {0}/{1}", SupportCore.PostsUsed(_campaign, state.MapIndex), SupportCore.CapacityOf(_campaign, state)));
+            section.Caption.AddThemeColorOverride("font_color", Ui.Colour(lost ? "state.negative" : "text.caption"));
+            var allSelected = formations.All(f => _supportSelected.Contains(f.Id));
+            section.SelectAll.Text = allSelected ? Tr("NONE") : Tr("ALL");
+            section.SelectAll.SetMeta("ids", string.Join(",", formations.Select(f => f.Id)));
+
+            var index = 0;
             foreach (var formation in formations)
             {
                 if (!_supportRowMap.TryGetValue(formation.Id, out var row))
                 {
-                    row = BuildSupportRow(player, formation);
+                    row = BuildSupportRow(formation);
                     _supportRowMap[formation.Id] = row;
                 }
-                // A rebased formation belongs to a new section; its row travels with it.
-                if (row.Row.GetParent() != rowList)
+                if (row.Row.GetParent() != section.Formations)
                 {
                     row.Row.GetParent()?.RemoveChild(row.Row);
-                    rowList.AddChild(row.Row);
+                    section.Formations.AddChild(row.Row);
                 }
+                section.Formations.MoveChild(row.Row, index++);
                 PaintSupportRow(row, formation, state);
             }
         }
@@ -380,154 +391,154 @@ public partial class DealOrForceGame
         {
             if (wanted.Contains(mapIndex)) continue;
             _supportRegionSections.Remove(mapIndex);
-            section.QueueFree();
+            // Rows in a section going away are kept if their formation is still shown elsewhere.
+            foreach (var child in section.Formations.GetChildren().OfType<Button>().ToArray())
+                section.Formations.RemoveChild(child);
+            section.Box.QueueFree();
         }
         foreach (var (id, row) in _supportRowMap.ToArray())
         {
-            var formation = owned.Find(f => f.Id == id);
-            // Gone from the country, or freed with a section whose region has stopped
-            // existing - both leave a row that would never be painted again.
-            if (formation is null || row.Row.GetParent() is null || !wanted.Contains(formation.StateMapIndex))
-            {
-                _supportRowMap.Remove(id);
-                row.Row.QueueFree();
-            }
+            if (row.Row.GetParent() is not null && shown.Any(f => f.Id == id)) continue;
+            _supportRowMap.Remove(id);
+            row.Row.QueueFree();
         }
+
+        if (byState.Count == 0 && _supportRows.GetNodeOrNull("Empty") is null)
+        {
+            var empty = Title(owned.Count == 0
+                ? Tr("The country has no long-range forces yet. Raise a formation below - then click a region on the map to base it.")
+                : Tr("No formations of this kind."), 12, Ui.Colour("text.body_soft"));
+            empty.Name = "Empty";
+            empty.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            _supportRows.AddChild(empty);
+        }
+        else if (byState.Count > 0) _supportRows.GetNodeOrNull("Empty")?.QueueFree();
     }
 
-    private VBoxContainer BuildSupportRegionSection()
+    private SupportSection BuildSupportSection(int stateMapIndex)
     {
-        var section = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        section.AddThemeConstantOverride("separation", 2);
-        section.Name = "Section";
-        var caption = Title("", 12, Ui.Colour("text.caption"));
-        caption.Name = "Caption";
-        caption.AutowrapMode = TextServer.AutowrapMode.Off;
-        caption.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        caption.CustomMinimumSize = new Vector2(1, 18);
-        section.AddChild(caption);
-        var formations = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        formations.Name = "Formations";
-        formations.AddThemeConstantOverride("separation", 3);
-        section.AddChild(formations);
+        var section = new SupportSection { Box = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill } };
+        section.Box.AddThemeConstantOverride("separation", 3);
+        var header = new HBoxContainer();
+        header.AddThemeConstantOverride("separation", 6);
+        section.Box.AddChild(header);
+        // The base's name is a way to it: a click centres the map on the base.
+        section.Caption = new Button
+        {
+            Flat = true,
+            Alignment = HorizontalAlignment.Left,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            FocusMode = FocusModeEnum.None,
+            ClipText = true
+        };
+        section.Caption.AddThemeFontSizeOverride("font_size", 12);
+        section.Caption.Pressed += () => FocusSupportBase(stateMapIndex);
+        section.Caption.TooltipText = Ui.Tip("Show this base on the map.");
+        header.AddChild(section.Caption);
+        section.SelectAll = ActionButton("ALL", () => ToggleSupportSection(section), 58, 22);
+        section.SelectAll.TooltipText = Ui.Tip("Select or deselect every formation at this base.");
+        header.AddChild(section.SelectAll);
+        section.Formations = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        section.Formations.AddThemeConstantOverride("separation", 3);
+        section.Box.AddChild(section.Formations);
         return section;
     }
 
-    private SupportRow BuildSupportRow(Nation player, SupportFormation formation)
+    private void ToggleSupportSection(SupportSection section)
+    {
+        var ids = section.SelectAll.GetMeta("ids", "").AsString()
+            .Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToList();
+        if (ids.Count == 0) return;
+        var all = ids.All(_supportSelected.Contains);
+        foreach (var id in ids)
+            if (all) _supportSelected.Remove(id); else _supportSelected.Add(id);
+        SupportSelectionChanged();
+    }
+
+    private static StyleBoxFlat SupportRowStyle(bool selected, bool hover)
+    {
+        var style = ShellRowStyle(hover);
+        if (selected)
+        {
+            style.BgColor = style.BgColor.Lerp(Ui.Colour("text.accent"), 0.10f);
+            style.BorderColor = Ui.Colour("text.accent");
+            style.BorderWidthLeft = 3;
+            style.BorderWidthTop = style.BorderWidthRight = style.BorderWidthBottom = 1;
+        }
+        return style;
+    }
+
+    private SupportRow BuildSupportRow(SupportFormation formation)
     {
         var row = new SupportRow { Formation = formation };
-
-        // A Button is not a container: the row's contents need anchors of their own, or
-        // they collapse to nothing - the same lesson every row in this shell has taught.
         var button = new Button
         {
-            CustomMinimumSize = new Vector2(0, 40),
+            CustomMinimumSize = new Vector2(0, 62),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             FocusMode = FocusModeEnum.None,
             ActionMode = BaseButton.ActionModeEnum.Press
         };
-        button.AddThemeStyleboxOverride("normal", ShellRowStyle(false));
-        button.AddThemeStyleboxOverride("hover", ShellRowStyle(true));
-        button.AddThemeStyleboxOverride("pressed", ShellRowStyle(false));
-        button.AddThemeStyleboxOverride("disabled", ShellRowStyle(false));
-        button.MouseFilter = MouseFilterEnum.Ignore;
+        button.Pressed += () => ToggleSupportRow(row.Formation.Id);
         row.Row = button;
 
-        var inner = new HBoxContainer();
+        var inner = new VBoxContainer();
         inner.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         inner.OffsetLeft = 9;
-        inner.OffsetTop = 3;
-        inner.OffsetRight = -9;
-        inner.OffsetBottom = -3;
-        inner.AddThemeConstantOverride("separation", 8);
+        inner.OffsetTop = 4;
+        inner.OffsetRight = -8;
+        inner.OffsetBottom = -4;
+        inner.AddThemeConstantOverride("separation", 3);
+        inner.MouseFilter = MouseFilterEnum.Ignore;
         button.AddChild(inner);
 
+        var top = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        top.AddThemeConstantOverride("separation", 7);
+        inner.AddChild(top);
         row.Icon = new TextureRect
         {
-            CustomMinimumSize = new Vector2(26, 26),
-            ExpandMode = Godot.TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = Godot.TextureRect.StretchModeEnum.KeepAspectCentered
+            CustomMinimumSize = new Vector2(22, 22),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            MouseFilter = MouseFilterEnum.Ignore
         };
-        row.Icon.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        inner.AddChild(row.Icon);
-
-        var nameBox = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsVertical = SizeFlags.ShrinkCenter
-        };
-        nameBox.AddThemeConstantOverride("separation", 0);
-        inner.AddChild(nameBox);
-
+        top.AddChild(row.Icon);
         row.Name = Title("", 12, Ui.Colour("text.bright"));
+        row.Name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         row.Name.AutowrapMode = TextServer.AutowrapMode.Off;
         row.Name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        row.Name.CustomMinimumSize = new Vector2(1, 16);
-        nameBox.AddChild(row.Name);
+        row.Name.MouseFilter = MouseFilterEnum.Ignore;
+        top.AddChild(row.Name);
+        row.Loss = Title("", 10, Ui.Colour("state.negative"));
+        row.Loss.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.Loss.MouseFilter = MouseFilterEnum.Ignore;
+        top.AddChild(row.Loss);
+        var strengthBox = new VBoxContainer { CustomMinimumSize = new Vector2(92, 0), MouseFilter = MouseFilterEnum.Ignore };
+        strengthBox.AddThemeConstantOverride("separation", 1);
+        top.AddChild(strengthBox);
+        var track = new ColorRect { Color = new Color(1, 1, 1, 0.08f), CustomMinimumSize = new Vector2(92, 5), MouseFilter = MouseFilterEnum.Ignore };
+        strengthBox.AddChild(track);
+        row.StrengthFill = new ColorRect { Color = Ui.Colour("state.positive"), MouseFilter = MouseFilterEnum.Ignore };
+        row.StrengthFill.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        track.AddChild(row.StrengthFill);
+        row.Strength = Title("", 10, Ui.Colour("text.body_soft"));
+        row.Strength.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.Strength.MouseFilter = MouseFilterEnum.Ignore;
+        strengthBox.AddChild(row.Strength);
 
+        var bottom = new HBoxContainer();
+        bottom.AddThemeConstantOverride("separation", 4);
+        bottom.MouseFilter = MouseFilterEnum.Ignore;
+        inner.AddChild(bottom);
+        row.Missions = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        row.Missions.AddThemeConstantOverride("separation", 3);
+        bottom.AddChild(row.Missions);
         row.Displaced = Title("", 10, Ui.Colour("state.negative"));
         row.Displaced.AutowrapMode = TextServer.AutowrapMode.Off;
-        row.Displaced.CustomMinimumSize = new Vector2(1, 12);
-        row.Displaced.Visible = false;
-        nameBox.AddChild(row.Displaced);
-
-        // The readiness bar: what share of the formation is crews, airframes and barrels
-        // that work. Arms on the national market decide how fast it climbs back.
-        var strengthBox = new VBoxContainer
-        {
-            CustomMinimumSize = new Vector2(78, 0),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter
-        };
-        inner.AddChild(strengthBox);
-        var bar = new ColorRect
-        {
-            Color = Ui.Colour("state.negative"),
-            CustomMinimumSize = new Vector2(78, 5)
-        };
-        strengthBox.AddChild(bar);
-        var strength = Title("", 10, Ui.Colour("text.body_soft"));
-        strength.AutowrapMode = TextServer.AutowrapMode.Off;
-        strength.CustomMinimumSize = new Vector2(78, 12);
-        strengthBox.AddChild(strength);
-        row.Strength = strength;
-        row.StrengthFill = bar;
-
-        row.Range = Title("", 10, Ui.Colour("text.body_soft"));
-        row.Range.AutowrapMode = TextServer.AutowrapMode.Off;
-        row.Range.CustomMinimumSize = new Vector2(64, 14);
-        row.Range.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        inner.AddChild(row.Range);
-
-        row.Mission = new OptionButton
-        {
-            CustomMinimumSize = new Vector2(132, 26),
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            FitToLongestItem = false
-        };
-        inner.AddChild(row.Mission);
-        row.Mission.ItemSelected += index =>
-        {
-            var mission = row.Mission.GetItemMetadata((int)index).AsString();
-            if (row.Formation is not { } current) return;
-            _campaign.Commands.Enqueue(new SetSupportMissionCommand
-            {
-                IssuerId = _campaign.Player.Id,
-                FormationId = current.Id,
-                Mission = mission
-            });
-            PlayStrategicCue("support_mission");
-        };
-
-        row.View = ActionButton("RANGE", () => ShowSupportRange(row.Formation.Id), 70, 26);
-        row.View.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        row.View.TooltipText = Ui.Tip("Show this formation and its operational reach on the map.");
-        inner.AddChild(row.View);
-
-        row.Move = ActionButton("MOVE", () => BeginSupportRebase(row.Formation.Id), 62, 26);
-        row.Move.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-        inner.AddChild(row.Move);
-
-        button.TooltipText = "";
+        row.Displaced.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        row.Displaced.HorizontalAlignment = HorizontalAlignment.Right;
+        row.Displaced.VerticalAlignment = VerticalAlignment.Center;
+        row.Displaced.MouseFilter = MouseFilterEnum.Ignore;
+        bottom.AddChild(row.Displaced);
         return row;
     }
 
@@ -535,118 +546,279 @@ public partial class DealOrForceGame
     {
         if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) return;
         row.Formation = formation;
-        row.View.Text = _globe.SelectedSupportId == formation.Id ? "VIEWING" : "RANGE";
+        var selected = _supportSelected.Contains(formation.Id);
+        row.Row.AddThemeStyleboxOverride("normal", SupportRowStyle(selected, false));
+        row.Row.AddThemeStyleboxOverride("hover", SupportRowStyle(selected, true));
+        row.Row.AddThemeStyleboxOverride("pressed", SupportRowStyle(selected, true));
 
         var nth = _campaign.SupportFormations
             .Count(f => f.NationId == formation.NationId && f.TypeId == formation.TypeId && f.Id <= formation.Id);
         row.Name.Text = $"{Loc.Get(type.Name)} {ToRomanOrNumber(nth)}";
-        row.Icon.Texture = Art($"icon_{type.Icon}",
-            $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
+        row.Icon.Texture = Art($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
 
         row.StrengthFill.AnchorRight = M.Clamp01(formation.Strength);
-        row.StrengthFill.Color = Ui.Colour(
-            formation.Strength > 0.75f ? "state.positive" :
+        row.StrengthFill.OffsetRight = 0;
+        row.StrengthFill.Color = Ui.Colour(formation.Strength > 0.75f ? "state.positive" :
             formation.Strength > 0.35f ? "state.warning" : "state.negative");
-        row.Strength.Text = $"{Loc.Get("strength")} {formation.Strength:P0} · {Loc.Get("experience")} {formation.Experience:P0}";
-        row.Range.Text = Loc.Format("{0} km", type.RangeKm);
+        row.Strength.Text = Loc.Format("{0:P0} · {1:0} km", formation.Strength, type.RangeKm);
+        row.Loss.Text = _campaign.SupportLossesToday.TryGetValue(formation.Id, out var loss) && loss > 0.0005f
+            ? Loc.Format("−{0:0.0}%", loss * 100f) : "";
+        row.Loss.TooltipText = Ui.Tip("Strength lost over the front yesterday: the enemy's fighters, missile brigades and guns.");
 
         var displaced = SupportCore.Displaced(_campaign, formation);
-        row.Displaced.Visible = displaced;
-        row.Displaced.Text = Loc.Get("BASE LOST — MOVE IT OR IT STANDS SILENT");
+        row.Displaced.Text = displaced ? Tr("BASE LOST — REBASE IT") : "";
 
-        if (!row.MissionBuilt)
+        var missionSet = string.Join(",", type.Missions);
+        if (row.MissionSet != missionSet)
         {
-            row.MissionBuilt = true;
-            var written = new HashSet<string>();
-            foreach (var mission in type.Missions)
+            row.MissionSet = missionSet;
+            foreach (var child in row.Missions.GetChildren()) child.QueueFree();
+            row.MissionButtons.Clear();
+            foreach (var mission in type.Missions.Distinct())
             {
-                if (!written.Add(mission)) continue;
-                var index = row.Mission.ItemCount;
-                row.Mission.AddItem(Loc.Get(SupportMissionName(mission)));
-                row.Mission.SetItemMetadata(index, mission);
+                var captured = mission;
+                var button = ActionButton(SupportMissionShort(mission), () => SetSupportMission(new[] { row.Formation.Id }, captured), 0, 22);
+                button.ToggleMode = true;
+                button.CustomMinimumSize = new Vector2(Math.Max(58, SupportMissionShort(mission).Length * 8 + 16), 22);
+                button.AddThemeFontSizeOverride("font_size", 11);
+                button.TooltipText = Ui.Tip(SupportMissionHelp(mission));
+                row.Missions.AddChild(button);
+                row.MissionButtons[mission] = button;
             }
         }
-        // Metadata holds the mission ID itself, so modded catalogue rows are never
-        // misread as a built-in mission merely because their index was unknown.
-        var current = 0;
-        for (var index = 0; index < row.Mission.ItemCount; index++)
-            if (row.Mission.GetItemMetadata(index).AsString() == formation.Mission)
-                current = index;
-        row.Mission.Select(current);
+        foreach (var (mission, button) in row.MissionButtons)
+            button.SetPressedNoSignal(mission == formation.Mission);
 
         row.Row.TooltipText = Ui.Tip(
             $"{Loc.Get(type.Name)}\n" +
-            Loc.Format("reach {0} km from {1}", type.RangeKm, Loc.Get(state.Name)) + "\n" +
+            Loc.Format("reach {0} km from {1}", type.RangeKm, state.DisplayName) + "\n" +
             Loc.Format("fire {0:0.#} · air superiority {1:0.#} · interdiction {2:0.#} · air defence {3:0.#} · recon {4:0.#}",
-                type.SupportFire, type.AirSuperiority, type.Interdiction, type.AirDefence, type.Recon));
+                type.SupportFire, type.AirSuperiority, type.Interdiction, type.AirDefence, type.Recon) + "\n" +
+            Loc.Format("experience {0:P0}", formation.Experience) + "\n" +
+            Tr("Click to select; selected formations share their orders and are drawn on the map."));
     }
 
-    private static string SupportMissionName(string mission) => mission switch
+    /// <summary>A mission as a button says it: one word.</summary>
+    private static string SupportMissionShort(string mission) => mission switch
     {
-        SupportCore.MissionStandby => "Standby",
-        SupportCore.MissionCloseAirSupport => "Close support",
-        SupportCore.MissionAirSuperiority => "Air superiority",
-        SupportCore.MissionInterdiction => "Interdiction",
+        SupportCore.MissionStandby => "Rest",
+        SupportCore.MissionCloseAirSupport => "Support",
+        SupportCore.MissionAirSuperiority => "Sky",
+        SupportCore.MissionInterdiction => "Strike",
         _ => mission
     };
 
-    private void ShowSupportRange(int formationId)
+    private static string SupportMissionHelp(string mission) => mission switch
     {
-        _globe.FocusSupportFormation(formationId);
-        CloseSupportScreen();
-    }
+        SupportCore.MissionStandby => "Rest: fly nothing, repair and recover twice as fast. Missile brigades defend their ground whatever they are told.",
+        SupportCore.MissionCloseAirSupport => "Support: add fire to every battle of ours inside the reach.",
+        SupportCore.MissionAirSuperiority => "Sky: sweep the enemy's aircraft from over our battles - their support fire suffers, and our own aircraft lose less.",
+        SupportCore.MissionInterdiction => "Strike: hit what is behind the enemy's line, stripping the defence of every battle inside the reach.",
+        _ => mission
+    };
 
     private static string ToRomanOrNumber(int n) => n switch
     {
         1 => "I", 2 => "II", 3 => "III", 4 => "IV", 5 => "V", 6 => "VI", 7 => "VII", 8 => "VIII",
-        _ => n.ToString()
+        9 => "IX", 10 => "X", _ => n.ToString()
     };
+
+    // ------------------------------------------------------------------ selection and orders
+
+    private void ToggleSupportRow(int formationId)
+    {
+        if (!_supportSelected.Remove(formationId)) _supportSelected.Add(formationId);
+        SupportSelectionChanged();
+    }
+
+    private void ClearSupportSelection()
+    {
+        _supportSelected.Clear();
+        _supportRebaseArmed = false;
+        SupportSelectionChanged();
+    }
+
+    private void SupportSelectionChanged()
+    {
+        _globe.SelectSupportFormations(_supportSelected);
+        _supportFeedback.Text = "";
+        RefreshSupportScreen();
+    }
+
+    private void RefreshSupportSelection(List<SupportFormation> owned)
+    {
+        var selected = owned.Where(f => _supportSelected.Contains(f.Id)).ToList();
+        _supportSelectionBar.Visible = selected.Count > 0;
+        if (selected.Count == 0) _supportRebaseArmed = false;
+        _supportRebaseButton.SetPressedNoSignal(_supportRebaseArmed);
+        _supportRebaseBanner.Visible = _supportRebaseArmed;
+        _supportRebaseBanner.Text = Loc.Format(
+            "Click a region of the country on the map to base the {0} selected formation(s) there. Esc cancels.",
+            selected.Count);
+        if (selected.Count == 0) return;
+        _supportSelectionCaption.Text = Loc.Format("{0} selected", selected.Count);
+
+        // The missions any of them can fly, in the order the catalogue gives them.
+        var missions = new List<string>();
+        foreach (var formation in selected)
+            if (SupportTypeCatalog.TryGet(formation.TypeId, out var type))
+                foreach (var mission in type.Missions)
+                    if (!missions.Contains(mission)) missions.Add(mission);
+        var existing = _supportSelectionMissions.GetChildren().OfType<Button>().Select(b => b.GetMeta("mission", "").AsString()).ToList();
+        if (!existing.SequenceEqual(missions))
+        {
+            foreach (var child in _supportSelectionMissions.GetChildren()) child.QueueFree();
+            foreach (var mission in missions)
+            {
+                var captured = mission;
+                var button = ActionButton(SupportMissionShort(mission),
+                    () => SetSupportMission(_supportSelected.ToArray(), captured), 0, 26);
+                button.SetMeta("mission", mission);
+                button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                button.TooltipText = Ui.Tip(SupportMissionHelp(mission) + "\n" +
+                    Tr("Given to every selected formation that can fly it."));
+                _supportSelectionMissions.AddChild(button);
+            }
+        }
+    }
+
+    private void SetSupportMission(IEnumerable<int> formationIds, string mission)
+    {
+        if (_campaign?.Player is null) return;
+        var given = 0;
+        foreach (var id in formationIds)
+        {
+            var formation = _campaign.SupportFormations.Find(f => f.Id == id && f.NationId == _campaign.Player.Id);
+            if (formation is null || !SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !type.Missions.Contains(mission)) continue;
+            _campaign.Commands.Enqueue(new SetSupportMissionCommand
+            {
+                IssuerId = _campaign.Player.Id, FormationId = id, Mission = mission
+            });
+            given++;
+        }
+        if (given == 0) return;
+        _campaign.Commands.ApplyAll(_campaign);
+        PlayStrategicCue("support_mission");
+        _globe.SelectSupportFormations(_supportSelected);
+        RefreshSupportScreen();
+    }
+
+    private void FocusSupportSelection()
+    {
+        var first = _campaign?.SupportFormations.FirstOrDefault(f => _supportSelected.Contains(f.Id) && f.BaseProvinceId > 0);
+        if (first is null || _campaign.ProvinceMap is null) return;
+        // The middle of the selection's bases, far enough out to see their reach.
+        var bases = _campaign.SupportFormations.Where(f => _supportSelected.Contains(f.Id) && f.BaseProvinceId > 0)
+            .Select(f => _campaign.ProvinceMap.CenterOf(f.BaseProvinceId)).ToList();
+        var reach = _campaign.SupportFormations.Where(f => _supportSelected.Contains(f.Id))
+            .Select(f => SupportTypeCatalog.Get(f.TypeId)?.RangeKm ?? 100f).DefaultIfEmpty(100f).Max();
+        var latitude = bases.Average(b => b.Latitude);
+        var longitude = bases.Average(b => b.Longitude);
+        var distance = Mathf.Clamp(6.2f + reach / 260f, 6.2f, 13f);
+        _globe.FocusOn(latitude, longitude, distance);
+    }
+
+    private void FocusSupportBase(int stateMapIndex)
+    {
+        var formation = _campaign?.SupportFormations.FirstOrDefault(f => f.StateMapIndex == stateMapIndex && f.BaseProvinceId > 0);
+        if (formation is null || _campaign.ProvinceMap is null) return;
+        var centre = _campaign.ProvinceMap.CenterOf(formation.BaseProvinceId);
+        _globe.FocusOn(centre.Latitude, centre.Longitude, 8.2f);
+    }
+
+    private void ToggleSupportRebase()
+    {
+        _supportRebaseArmed = !_supportRebaseArmed && _supportSelected.Count > 0;
+        _supportFeedback.Text = "";
+        RefreshSupportScreen();
+    }
+
+    private void CancelSupportRebase()
+    {
+        _supportRebaseArmed = false;
+        RefreshSupportScreen();
+    }
+
+    private void RebaseSupportSelection(ScenarioState target)
+    {
+        var player = _campaign.Player;
+        _supportRebaseArmed = false;
+        if (target.NationMapIndex != player.MapIndex)
+        {
+            _supportFeedback.Text = Tr("Choose a region the country holds.");
+            RefreshSupportScreen();
+            return;
+        }
+        var moving = _campaign.SupportFormations
+            .Where(f => _supportSelected.Contains(f.Id) && f.NationId == player.Id && f.StateMapIndex != target.MapIndex)
+            .ToList();
+        var free = SupportCore.CapacityOf(_campaign, target) - SupportCore.PostsUsed(_campaign, target.MapIndex);
+        if (moving.Count == 0)
+        {
+            _supportFeedback.Text = Loc.Format("The selected formations are already based in {0}.", target.DisplayName);
+            RefreshSupportScreen();
+            return;
+        }
+        var moved = 0;
+        foreach (var formation in moving.Take(Math.Max(0, free)))
+        {
+            _campaign.Commands.Enqueue(new RebaseSupportCommand
+            {
+                IssuerId = player.Id, FormationId = formation.Id, StateMapIndex = target.MapIndex
+            });
+            moved++;
+        }
+        _campaign.Commands.ApplyAll(_campaign);
+        var stayed = moving.Count - moved;
+        _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour(stayed > 0 ? "state.warning" : "state.positive"));
+        _supportFeedback.Text = stayed > 0
+            ? Loc.Format("{0} based in {1}; {2} did not fit - it has {3} post(s). Barracks add two each.", moved, target.DisplayName, stayed, SupportCore.CapacityOf(_campaign, target))
+            : Loc.Format("{0} formation(s) based in {1}.", moved, target.DisplayName);
+        if (moved > 0) PlayStrategicCue("support_order");
+        _globe.SelectSupportFormations(_supportSelected);
+        RefreshSupportScreen();
+    }
 
     // ------------------------------------------------------------------ in training
 
     private void RefreshSupportTraining(List<SupportOrder> training)
     {
+        _supportTrainingCaption.Text = training.Count == 0 ? "" : Loc.Format("IN TRAINING · {0}", training.Count);
         foreach (var order in training)
         {
             if (!_supportTrainingMap.TryGetValue(order.Id, out var row))
             {
-                var box = new HBoxContainer
-                {
-                    SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                    CustomMinimumSize = new Vector2(0, 26)
-                };
+                var box = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 24) };
                 box.AddThemeConstantOverride("separation", 7);
                 var name = Title("", 11, Ui.Colour("text.bright"));
                 name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 name.AutowrapMode = TextServer.AutowrapMode.Off;
                 name.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
                 box.AddChild(name);
-                var progress = new ColorRect
-                {
-                    Color = Ui.Colour("state.positive"),
-                    CustomMinimumSize = new Vector2(74, 5)
-                };
-                box.AddChild(progress);
+                var track = new ColorRect { Color = new Color(1, 1, 1, 0.08f), CustomMinimumSize = new Vector2(74, 5), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+                box.AddChild(track);
+                var progress = new ColorRect { Color = Ui.Colour("state.positive") };
+                progress.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+                track.AddChild(progress);
                 var percent = Title("", 10, Ui.Colour("text.body_soft"));
                 percent.AutowrapMode = TextServer.AutowrapMode.Off;
                 percent.CustomMinimumSize = new Vector2(38, 14);
                 percent.SizeFlagsVertical = SizeFlags.ShrinkCenter;
                 box.AddChild(percent);
-                var cancel = ActionButton("×", () => CancelSupportOrder(order.Id), 26, 24);
+                var captured = order.Id;
+                var cancel = ActionButton("×", () => CancelSupportOrder(captured), 26, 22);
+                cancel.TooltipText = Ui.Tip("Cancel: most of what is left of the money comes back, and all of the men.");
                 box.AddChild(cancel);
                 _supportTrainingRows.AddChild(box);
-                row = new SupportTrainingRow
-                {
-                    Name = name, ProgressFill = progress, Progress = percent, Cancel = cancel, Order = order
-                };
+                row = new SupportTrainingRow { Name = name, ProgressFill = progress, Progress = percent, Cancel = cancel, Order = order };
                 _supportTrainingMap[order.Id] = row;
             }
             var state = _campaign.States.Find(s => s.MapIndex == order.StateMapIndex);
             var type = SupportTypeCatalog.Get(order.TypeId);
-            row.Name.Text = $"{Loc.Get(type?.Name ?? order.TypeId)} · {Loc.Get(state?.Name ?? "")}";
+            row.Name.Text = $"{Loc.Get(type?.Name ?? order.TypeId)} · {state?.DisplayName ?? ""}";
             var fraction = M.Clamp01(order.TrainedDays / (float)Math.Max(1, order.DurationDays));
             row.ProgressFill.AnchorRight = fraction;
-            row.ProgressFill.Color = Ui.Colour("state.positive");
+            row.ProgressFill.OffsetRight = 0;
             row.Progress.Text = $"{fraction:P0}";
             row.Order = order;
         }
@@ -661,166 +833,126 @@ public partial class DealOrForceGame
     private void CancelSupportOrder(int orderId)
     {
         if (_campaign?.Player is null) return;
-        _campaign.Commands.Enqueue(new CancelSupportOrderCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            OrderId = orderId
-        });
+        _campaign.Commands.Enqueue(new CancelSupportOrderCommand { IssuerId = _campaign.Player.Id, OrderId = orderId });
+        _campaign.Commands.ApplyAll(_campaign);
         _supportFeedback.Text = "";
+        RefreshSupportScreen();
     }
 
     // ------------------------------------------------------------------ raising
 
+    private void ToggleSupportRaise()
+    {
+        _supportRaiseOpen = !_supportRaiseOpen;
+        _supportRaiseBody.Visible = _supportRaiseOpen;
+        _supportRaiseToggle.Text = Tr(_supportRaiseOpen ? "▾ RAISE A FORMATION" : "▸ RAISE A FORMATION");
+        RefreshSupportScreen();
+    }
+
     private void RefreshSupportRaise(Nation player)
     {
-        if (!_supportRowsBuilt)
+        if (_supportTypeButtons.Count == 0)
         {
-            _supportRowsBuilt = true;
-            _supportTypePicker.Clear();
-            foreach (var type in SupportTypeCatalog.All.OrderBy(t => t.Kind).ThenBy(t => Loc.Get(t.Name)))
+            foreach (var type in SupportTypeCatalog.All.OrderBy(t => t.Kind).ThenBy(t => t.RangeKm))
             {
-                var index = _supportTypePicker.ItemCount;
-                _supportTypePicker.AddItem(Loc.Get(type.Name));
-                _supportTypePicker.SetItemMetadata(index, type.Id);
+                var captured = type.Id;
+                var button = ActionButton(Loc.Get(type.Name), () => PickSupportType(captured), 0, 40, false,
+                    SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png"));
+                button.ToggleMode = true;
+                button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                button.ClipText = true;
+                button.AddThemeFontSizeOverride("font_size", 11);
+                button.ExpandIcon = false;
+                button.AddThemeConstantOverride("icon_max_width", 22);
+                _supportTypeGrid.AddChild(button);
+                _supportTypeButtons[type.Id] = button;
             }
-            if (_supportTypePicker.ItemCount > 0) _supportTypePicker.Select(0);
+            if (_supportRaiseType.Length == 0) _supportRaiseType = SupportTypeCatalog.All.FirstOrDefault()?.Id ?? "";
         }
+        foreach (var (id, button) in _supportTypeButtons) button.SetPressedNoSignal(id == _supportRaiseType);
 
-        // The region picker follows the map: regions are gained and lost, and a picker
-        // that offered a region the country no longer holds would be a promise the
-        // campaign refuses at the door.
-        var selected = _supportRegionPicker.Selected >= 0
+        // The base picker follows the map: regions are gained and lost, and one that offered a
+        // region the country no longer holds would be a promise the campaign refuses at the door.
+        var selected = _supportRegionPicker.Selected >= 0 &&
+                       _supportRegionPicker.GetItemMetadata(_supportRegionPicker.Selected).VariantType == Variant.Type.Int
             ? _supportRegionPicker.GetItemMetadata(_supportRegionPicker.Selected).AsInt32() : -1;
         _supportRegionPicker.Clear();
         var option = 0;
-        foreach (var state in _campaign.States
-                     .Where(s => s.NationMapIndex == player.MapIndex)
-                     .OrderBy(s => Loc.Get(s.Name)))
+        foreach (var state in _campaign.States.Where(s => s.NationMapIndex == player.MapIndex).OrderBy(s => s.DisplayName))
         {
-            var free = SupportCore.CapacityOf(_campaign, state) -
-                        SupportCore.PostsUsed(_campaign, state.MapIndex) -
-                        _campaign.SupportOrders.Count(o => o.NationId == player.Id && o.StateMapIndex == state.MapIndex);
-            _supportRegionPicker.AddItem($"{Loc.Get(state.Name)} ({free})");
+            var free = SupportCore.CapacityOf(_campaign, state) - SupportCore.PostsUsed(_campaign, state.MapIndex) -
+                       _campaign.SupportOrders.Count(o => o.NationId == player.Id && o.StateMapIndex == state.MapIndex);
+            _supportRegionPicker.AddItem(Loc.Format("{0} · {1} free", state.DisplayName, Math.Max(0, free)));
             _supportRegionPicker.SetItemMetadata(option, state.MapIndex);
             if (state.MapIndex == selected) _supportRegionPicker.Select(option);
             option++;
         }
         if (_supportRegionPicker.Selected < 0 && _supportRegionPicker.ItemCount > 0) _supportRegionPicker.Select(0);
-        if (_supportRegionPicker.ItemCount == 0) _supportRegionPicker.AddItem(Loc.Get("No regions held"));
-
+        if (_supportRegionPicker.ItemCount == 0) _supportRegionPicker.AddItem(Tr("No regions held"));
         RefreshSupportRaiseReadout();
     }
 
-    private void OnSupportTypePicked(long _) => RefreshSupportRaiseReadout();
-
-    private (string TypeId, int StateMapIndex) SupportRaiseChoice()
+    private void SelectSupportRaiseRegion(int stateMapIndex)
     {
-        var typeId = _supportTypePicker.Selected >= 0 &&
-                      _supportTypePicker.GetItemMetadata(_supportTypePicker.Selected).VariantType == Variant.Type.String
-            ? _supportTypePicker.GetItemMetadata(_supportTypePicker.Selected).AsString() : "";
-        // The "No regions held" placeholder carries no metadata, and a NIL variant would
-        // read as region zero - which is a real region somebody owns.
-        var stateMapIndex = _supportRegionPicker.Selected >= 0 &&
-                            _supportRegionPicker.GetItemMetadata(_supportRegionPicker.Selected).VariantType == Variant.Type.Int
-            ? _supportRegionPicker.GetItemMetadata(_supportRegionPicker.Selected).AsInt32() : -1;
-        return (typeId, stateMapIndex);
+        for (var index = 0; index < _supportRegionPicker.ItemCount; index++)
+            if (_supportRegionPicker.GetItemMetadata(index).VariantType == Variant.Type.Int &&
+                _supportRegionPicker.GetItemMetadata(index).AsInt32() == stateMapIndex)
+            {
+                _supportRegionPicker.Select(index);
+                break;
+            }
+        RefreshSupportRaiseReadout();
     }
+
+    private void PickSupportType(string typeId)
+    {
+        _supportRaiseType = typeId;
+        foreach (var (id, button) in _supportTypeButtons) button.SetPressedNoSignal(id == typeId);
+        RefreshSupportRaiseReadout();
+    }
+
+    private int SupportRaiseRegion() =>
+        _supportRegionPicker.Selected >= 0 &&
+        _supportRegionPicker.GetItemMetadata(_supportRegionPicker.Selected).VariantType == Variant.Type.Int
+            ? _supportRegionPicker.GetItemMetadata(_supportRegionPicker.Selected).AsInt32() : -1;
 
     private void RefreshSupportRaiseReadout()
     {
-        if (_campaign?.Player is null) return;
+        if (_campaign?.Player is null || !SupportTypeCatalog.TryGet(_supportRaiseType, out var type)) return;
         var player = _campaign.Player;
-        var (typeId, _) = SupportRaiseChoice();
-        if (!SupportTypeCatalog.TryGet(typeId, out var type)) return;
-
+        var missions = string.Join(", ", type.Missions.Where(m => m != SupportCore.MissionStandby).Select(m => Tr(SupportMissionShort(m))));
         _supportTypeDetail.Text =
-            Loc.Format("fire {0:0.#} · reach {1:0} km · recon {2:0.#}",
-                type.SupportFire, type.RangeKm, type.Recon) +
+            Loc.Format("reach {0:0} km · fire {1:0.#}", type.RangeKm, type.SupportFire) +
             (type.AirSuperiority > 0 ? " · " + Loc.Format("air superiority {0:0.#}", type.AirSuperiority) : "") +
             (type.Interdiction > 0 ? " · " + Loc.Format("interdiction {0:0.#}", type.Interdiction) : "") +
-            (type.AirDefence > 0 ? " · " + Loc.Format("air defence {0:0.#}", type.AirDefence) : "");
-
+            (type.AirDefence > 0 ? " · " + Loc.Format("air defence {0:0.#}", type.AirDefence) : "") +
+            (missions.Length > 0 ? "\n" + Loc.Format("Missions: {0}", missions) : "");
         var cost = SupportCore.CostOf(player, type);
         var days = SupportCore.BuildDaysOf(player, type);
-        var affordable = player.Treasury >= cost && player.ManpowerReserve >= type.Personnel;
-        _supportCostReadout.Text = Loc.Format("{0} · {1} · {2} days",
-            Fmt.Money(cost), Fmt.People(type.Personnel), days);
-        _supportCostReadout.AddThemeColorOverride("font_color",
-            Ui.Colour(affordable ? "text.accent_dim" : "state.negative"));
+        var refusal = SupportCore.Validate(_campaign, player.Id, SupportRaiseRegion(), type.Id);
+        _supportCostReadout.Text = Loc.Format("{0} · {1} · {2} days", Fmt.Money(cost), Fmt.People(type.Personnel), days) +
+                                   (refusal.Length > 0 ? " · " + Tr(refusal) : "");
+        _supportCostReadout.AddThemeColorOverride("font_color", Ui.Colour(refusal.Length == 0 ? "text.accent_dim" : "state.negative"));
     }
 
     private void RaiseSupportFormation()
     {
         if (_campaign?.Player is null) return;
-        var (typeId, stateMapIndex) = SupportRaiseChoice();
         var command = new RaiseSupportCommand
         {
             IssuerId = _campaign.Player.Id,
-            StateMapIndex = stateMapIndex,
-            TypeId = typeId
+            StateMapIndex = SupportRaiseRegion(),
+            TypeId = _supportRaiseType
         };
-        // Validate before the wire: a refusal the player can read now beats one that
-        // arrives with the next campaign step.
-        var refusal = SupportCore.Validate(_campaign, command.IssuerId, stateMapIndex, typeId);
-        _supportFeedback.Text = refusal.Length > 0 ? Loc.Get(refusal) : "";
+        // Validate before the wire: a refusal the player can read now beats one that arrives
+        // with the next campaign step.
+        var refusal = SupportCore.Validate(_campaign, command.IssuerId, command.StateMapIndex, command.TypeId);
+        _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour("state.negative"));
+        _supportFeedback.Text = refusal.Length > 0 ? Tr(refusal) : "";
         if (refusal.Length > 0) return;
         _campaign.Commands.Enqueue(command);
+        _campaign.Commands.ApplyAll(_campaign);
         PlayStrategicCue("support_order");
-    }
-
-    // ------------------------------------------------------------------ rebasing
-
-    private void BeginSupportRebase(int formationId)
-    {
-        _supportRebasingId = formationId;
         RefreshSupportScreen();
-    }
-
-    private void CancelSupportRebase()
-    {
-        _supportRebasingId = -1;
-        RefreshSupportScreen();
-    }
-
-    private void RefreshSupportRebase(Nation player)
-    {
-        var formation = _campaign.SupportFormations.Find(f => f.Id == _supportRebasingId && f.NationId == player.Id);
-        _supportRebaseBox.Visible = formation is not null;
-        _raiseBox.Visible = formation is null;
-        _supportTrainingBox.Visible = formation is null;
-        if (formation is null) return;
-
-        var type = SupportTypeCatalog.Get(formation.TypeId);
-        _supportRebaseHint.Text = Loc.Format("{0} · reach {1:0} km from its base", Loc.Get(type?.Name ?? ""), type?.RangeKm ?? 0);
-
-        foreach (var button in _supportRebaseButtons) button.QueueFree();
-        _supportRebaseButtons.Clear();
-        foreach (var state in _campaign.States
-                     .Where(s => s.NationMapIndex == player.MapIndex)
-                     .OrderBy(s => Loc.Get(s.Name)))
-        {
-            var free = SupportCore.CapacityOf(_campaign, state) -
-                        SupportCore.PostsUsed(_campaign, state.MapIndex, formation.Id);
-            var captured = state.MapIndex;
-            var button = ActionButton(
-                $"{Loc.Get(state.Name)} · {Loc.Format("posts {0}/{1}", SupportCore.PostsUsed(_campaign, state.MapIndex, formation.Id), SupportCore.CapacityOf(_campaign, state))}",
-                () => MoveSupportFormation(captured), 0, 26);
-            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            button.Disabled = free <= 0 && state.MapIndex != formation.StateMapIndex;
-            _supportRebaseRows.AddChild(button);
-            _supportRebaseButtons.Add(button);
-        }
-    }
-
-    private void MoveSupportFormation(int stateMapIndex)
-    {
-        if (_campaign?.Player is null) return;
-        _campaign.Commands.Enqueue(new RebaseSupportCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            FormationId = _supportRebasingId,
-            StateMapIndex = stateMapIndex
-        });
-        _supportRebasingId = -1;
     }
 }

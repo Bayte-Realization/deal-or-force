@@ -897,6 +897,12 @@ public sealed partial class Defines
 	public float AirSuppressionPerPoint { get; set; } = 0.02f;
 	/// <summary>Readiness a long-range formation recovers per day, with a supplied arms market.</summary>
 	public float SupportRegenPerDay { get; set; } = 0.005f;
+	/// <summary>Strength a formation loses in a day over the worst sky there is (the air war).</summary>
+	public float SupportAttritionPerDay { get; set; } = 0.03f;
+	/// <summary>Threat - enemy fighters, missile brigades, counter-battery fire - at which the loss is half that.</summary>
+	public float SupportAttritionSaturation { get; set; } = 20f;
+	/// <summary>Attrition never takes a formation below this: what is left is pulled back, not shot down.</summary>
+	public float SupportAttritionFloor { get; set; } = 0.15f;
 	/// <summary>Attacker power retained while crossing an ordinary river.</summary>
 	public float RiverAttackMultiplier { get; set; } = 0.82f;
 	/// <summary>Attacker power retained while crossing a major river.</summary>

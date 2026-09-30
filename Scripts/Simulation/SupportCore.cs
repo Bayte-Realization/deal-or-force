@@ -85,6 +85,12 @@ public sealed partial class Campaign
     /// rather than a walk of the world's whole establishment.</summary>
     public readonly Dictionary<int, List<SupportFormation>> SupportByNation = new();
     public int NextSupportId = 1;
+    /// <summary>What each formation flew into today, by id: the worst sky over any battle it
+    /// worked. Filled by the battles, spent by the day pass, which runs later in the same step -
+    /// so it never has to survive a save.</summary>
+    public readonly Dictionary<int, float> SupportExposure = new();
+    /// <summary>What the long-range forces lost yesterday, for the page that shows them.</summary>
+    public readonly Dictionary<int, float> SupportLossesToday = new();
 }
 
 /// <summary>One entry of common/support, in the shape its file states it in.</summary>
@@ -126,7 +132,11 @@ public static class SupportTypeCatalog
         foreach (var property in root.EnumerateObject())
         {
             if (property.Value.ValueKind != JsonValueKind.Object) continue;
-            var next = Read(property.Name, property.Value);
+            // Key by key, like every other catalogue: a mod that wants longer-legged rocket
+            // artillery writes { "mlrs_battalion": { "range_km": 120 } } and keeps the rest.
+            // Replacing the whole entry made that one line a rocket battery with no fire.
+            Definitions.TryGetValue(property.Name, out var earlier);
+            var next = Read(property.Name, property.Value, earlier);
             if (next is not null) Definitions[property.Name] = next;
         }
     }
@@ -144,22 +154,22 @@ public static class SupportTypeCatalog
 
     public static IEnumerable<SupportTypeDefinition> All => Definitions.Values;
 
-    private static SupportTypeDefinition Read(string id, JsonElement value)
+    private static SupportTypeDefinition Read(string id, JsonElement value, SupportTypeDefinition earlier = null)
     {
         var name = value.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String
-            ? nameElement.GetString() : id;
+            ? nameElement.GetString() : earlier?.Name ?? id;
         var kind = value.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String &&
                    Enum.TryParse<SupportKind>(kindElement.GetString(), true, out var parsed)
-            ? parsed : SupportKind.Ground;
+            ? parsed : earlier?.Kind ?? SupportKind.Ground;
         var icon = value.TryGetProperty("icon", out var iconElement) && iconElement.ValueKind == JsonValueKind.String
-            ? iconElement.GetString() : "artillery";
+            ? iconElement.GetString() : earlier?.Icon ?? "artillery";
         float Number(string key, float fallback = 0f) =>
             value.TryGetProperty(key, out var element) && element.ValueKind == JsonValueKind.Number &&
             element.TryGetSingle(out var figure) ? figure : fallback;
         int Whole(string key, int fallback = 0) =>
             value.TryGetProperty(key, out var element) && element.ValueKind == JsonValueKind.Number &&
             element.TryGetInt32(out var figure) ? figure : fallback;
-        var missions = new List<string> { "standby" };
+        var missions = earlier is not null ? new List<string>(earlier.Missions) : new List<string> { "standby" };
         if (value.TryGetProperty("missions", out var missionElement) && missionElement.ValueKind == JsonValueKind.Array)
         {
             missions = missionElement.EnumerateArray()
@@ -172,15 +182,15 @@ public static class SupportTypeCatalog
         }
         var definition = new SupportTypeDefinition(
             id, name, kind, icon,
-            MathF.Max(1f, Number("range_km", 45f)),
-            MathF.Max(0f, Number("support_fire")),
-            MathF.Max(0f, Number("air_superiority")),
-            MathF.Max(0f, Number("interdiction")),
-            MathF.Max(0f, Number("air_defence")),
-            MathF.Max(0f, Number("recon")),
-            MathF.Max(0.05f, Number("recruitment_cost", 0.5f)),
-            Math.Max(7, Whole("build_days", 45)),
-            Math.Max(100, Whole("personnel", 4500)))
+            MathF.Max(1f, Number("range_km", earlier?.RangeKm ?? 45f)),
+            MathF.Max(0f, Number("support_fire", earlier?.SupportFire ?? 0f)),
+            MathF.Max(0f, Number("air_superiority", earlier?.AirSuperiority ?? 0f)),
+            MathF.Max(0f, Number("interdiction", earlier?.Interdiction ?? 0f)),
+            MathF.Max(0f, Number("air_defence", earlier?.AirDefence ?? 0f)),
+            MathF.Max(0f, Number("recon", earlier?.Recon ?? 0f)),
+            MathF.Max(0.05f, Number("recruitment_cost", earlier?.RecruitmentCost ?? 0.5f)),
+            Math.Max(7, Whole("build_days", earlier?.BuildDays ?? 45)),
+            Math.Max(100, Whole("personnel", earlier?.Personnel ?? 4500)))
         { Missions = missions };
         return definition;
     }
@@ -226,8 +236,62 @@ public static class SupportCore
     public static void Tick(Campaign campaign)
     {
         Train(campaign);
+        Attrition(campaign);
         Recover(campaign);
         CommandByAir(campaign);
+    }
+
+    // ------------------------------------------------------------------ the air war
+
+    /// <summary>
+    /// What a day over the front cost. Every formation that worked a battle has the worst sky
+    /// it met there on its account - the enemy's fighters and missile brigades for anything
+    /// that flies, their guns and strikes for the guns - and pays a share of its strength for
+    /// it, saturating, so a wing thrown at a defended front melts over weeks and a wing the
+    /// sky has been cleared for does not. It is what makes air superiority worth flying: the
+    /// fighters overhead are what the attack aircraft are not losing.
+    /// </summary>
+    private static void Attrition(Campaign campaign)
+    {
+        campaign.SupportLossesToday.Clear();
+        if (campaign.SupportExposure.Count == 0) return;
+        var defines = campaign.Defines;
+        foreach (var formation in campaign.SupportFormations)
+        {
+            if (!campaign.SupportExposure.TryGetValue(formation.Id, out var threat) || threat <= 0f) continue;
+            var loss = defines.SupportAttritionPerDay * threat / (threat + defines.SupportAttritionSaturation) *
+                       NationalModifiers.Factor(campaign.NationById(formation.NationId), "support_losses");
+            loss = MathF.Min(loss, MathF.Max(0f, formation.Strength - defines.SupportAttritionFloor));
+            if (loss <= 0f) continue;
+            formation.Strength -= loss;
+            campaign.SupportLossesToday[formation.Id] = loss;
+            // Crews that come back have learned something.
+            formation.Experience = M.Clamp01(formation.Experience + loss * 0.08f);
+        }
+        campaign.SupportExposure.Clear();
+    }
+
+    /// <summary>
+    /// The sky one formation meets over a battle: for aircraft and drones the enemy's fighters and
+    /// missile brigades, thinned by its own side's fighters; for guns the enemy's counter-battery
+    /// fire and strikes; for a missile brigade, the strikes flown at it.
+    /// </summary>
+    private static float ThreatTo(SupportTypeDefinition type, string mission, SideReach own, SideReach enemy)
+    {
+        switch (type.Kind)
+        {
+            case SupportKind.Air:
+            case SupportKind.Drone:
+                var sky = enemy.AirSuperiority + enemy.AirDefence * 1.3f;
+                // A fighter on a sweep is the one doing the thinning; everyone else is covered by it.
+                var cover = mission == MissionAirSuperiority ? 0f : own.AirSuperiority;
+                var fragile = type.Kind == SupportKind.Drone ? 1.35f : 1f;
+                return sky * fragile / (1f + 0.04f * cover);
+            case SupportKind.AirDefence:
+                return enemy.Interdiction * 0.6f;
+            default:
+                return enemy.Fire * 0.35f + enemy.Interdiction * 0.5f;
+        }
     }
 
     // ------------------------------------------------------------------ training
@@ -332,7 +396,8 @@ public static class SupportCore
             // formation resting does not, and the difference is a decision worth having.
             var resting = formation.Mission == MissionStandby ? 1.6f : 1f;
             formation.Strength = M.Clamp01(formation.Strength +
-                campaign.Defines.SupportRegenPerDay * equipment * resting * (formation.Strength < 1f ? 1f : 0f));
+                campaign.Defines.SupportRegenPerDay * equipment * resting * NationalModifiers.Factor(nation, "support_recovery") *
+                (formation.Strength < 1f ? 1f : 0f));
             // Experience drifts toward what the formation is doing, slowly, the way it does.
             var target = formation.Mission == MissionStandby ? 0.15f : 0.45f;
             formation.Experience = M.Lerp(formation.Experience, target, 0.002f);
@@ -362,7 +427,11 @@ public static class SupportCore
             if (Displaced(campaign, formation))
                 Rebase(campaign, formation, HomeStateOf(campaign, formation.NationId));
             var atWar = wars.ContainsKey(formation.NationId);
-            formation.Mission = !atWar || type.Kind == SupportKind.AirDefence || formation.BaseProvinceId <= 0
+            // A wing worn down over the front is pulled out to recover, and goes back when it has
+            // - with room between the two, so it does not flicker in and out every month.
+            var resting = formation.Mission == MissionStandby;
+            var fit = formation.Strength >= (resting ? 0.75f : 0.45f);
+            formation.Mission = !atWar || !fit || type.Kind == SupportKind.AirDefence || formation.BaseProvinceId <= 0
                 ? MissionStandby
                 : type.Missions.Contains(MissionCloseAirSupport) ? MissionCloseAirSupport
                 : type.Missions.Contains(MissionInterdiction) ? MissionInterdiction
@@ -502,6 +571,7 @@ public static class SupportCore
         // for it is a price the front cannot pay twice a day, let alone twice a pass.
         var attacker = new SideReach();
         var defender = new SideReach();
+        var present = new List<(SupportFormation Formation, SupportTypeDefinition Type, bool Attacker)>();
         var attackerSet = attackerNations as HashSet<int> ?? new HashSet<int>(attackerNations);
         var defenderSet = defenderNations as HashSet<int> ?? new HashSet<int>(defenderNations);
         foreach (var (nationId, formations) in campaign.SupportByNation)
@@ -518,6 +588,7 @@ public static class SupportCore
                 if (!InRange(campaign, formation, type, province)) continue;
                 var weight = formation.Strength * (1f + formation.Experience * 0.35f);
                 var side = forAttacker ? attacker : defender;
+                present.Add((formation, type, forAttacker));
                 if (passive)
                     side.AirDefence += type.AirDefence * weight;
                 else
@@ -529,6 +600,15 @@ public static class SupportCore
             }
         }
         var defines = campaign.Defines;
+
+        // The price of being there: each formation is charged the worst sky it met today.
+        foreach (var (formation, type, onAttack) in present)
+        {
+            var threat = ThreatTo(type, formation.Mission, onAttack ? attacker : defender, onAttack ? defender : attacker);
+            if (threat <= 0f) continue;
+            if (!campaign.SupportExposure.TryGetValue(formation.Id, out var worst) || threat > worst)
+                campaign.SupportExposure[formation.Id] = threat;
+        }
 
         float FireBonus(SideReach side, SideReach enemy) =>
             1f + defines.MaxSupportFireBonus * side.Fire / (side.Fire + defines.SupportFireSaturation) *

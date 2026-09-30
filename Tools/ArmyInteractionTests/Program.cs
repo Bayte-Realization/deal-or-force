@@ -65,6 +65,7 @@ static class Program
             Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
+        if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
         if (args.Contains("--ai-diplomacy-only")) { AiDiplomacyTests.Run(c); return; }
         if (args.Contains("--save-seed-mature-only"))
         {

@@ -240,6 +240,13 @@ public partial class DealOrForceGame : Control
         }
         if (key.Keycode == Key.Escape && _researchLayer is { Visible: true })
         { CloseResearchScreen(); GetViewport().SetInputAsHandled(); return; }
+        // Escape takes back a rebase that is waiting for its region first, then the panel.
+        if (key.Keycode == Key.Escape && _supportLayer is { Visible: true })
+        {
+            if (_supportRebaseArmed) CancelSupportRebase(); else CloseSupportScreen();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
 
         // The free camera is a demonstration tool, and a demonstration tool that needs a
         // console command typed out first is one nobody reaches for. F10 flies - not F8,
@@ -1061,6 +1068,9 @@ public partial class DealOrForceGame : Control
             return;
         }
         if (!_hudLayer.Visible) return;
+        // The long-range forces panel takes a click on the map for itself: where the selected
+        // formations are rebased, or the base a new one is raised into.
+        if (TrySupportMapPick(pick)) return;
         // The diplomatic and war layers now answer for the country that was picked.
         _globe.SetMapModeSubject(pick.Nation);
 

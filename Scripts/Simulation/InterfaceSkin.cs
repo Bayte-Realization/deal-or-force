@@ -269,6 +269,9 @@ public static class InterfaceSkin
         // default that does not exist.
         ("modal.production",   new PanelRect(0.044f, 0.084f, 0.044f, 0.944f, 0f, 0f, 850f, 0f)),
         ("modal.support",      new PanelRect(0.045f, 0.115f, 0.795f, 0.73f, 0f, 0f, 0f, 0f)),
+        // The long-range forces panel docks beside the map, the way the army panel does: its
+        // orders are given looking at the bases and their reach, so the map stays in view.
+        ("hud.support_panel",  new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 690f, -60f)),
         ("modal.research",     new PanelRect(0.055f, 0.10f, 0.975f, 0.94f, 0f, 0f, 0f, 0f)),
 
         // The lobby and the workshop. These three were laid out in game/gui only - named in

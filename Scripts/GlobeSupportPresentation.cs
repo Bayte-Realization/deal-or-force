@@ -34,11 +34,51 @@ public sealed partial class GlobePresentation
     private Campaign _supportMarkedCampaign;
     private int _supportRosterFingerprint = int.MinValue;
     private int _selectedSupportId = -1;
+    private readonly HashSet<int> _selectedSupportIds = new();
+    private bool _supportOverlay;
     private double _supportPresentationDelay;
     private float _supportRangeFlatX = float.NaN;
     private bool _supportRangeProjection;
 
     public int SelectedSupportId => _selectedSupportId;
+    public IReadOnlyCollection<int> SelectedSupportIds => _selectedSupportIds;
+
+    /// <summary>
+    /// The long-range forces panel is open: every base is shown from further out, and every
+    /// formation's reach is drawn faintly in the colour of its arm, so the player sees what
+    /// the country covers before choosing what to change.
+    /// </summary>
+    public bool SupportOverlay
+    {
+        get => _supportOverlay;
+        set
+        {
+            if (_supportOverlay == value) return;
+            _supportOverlay = value;
+            _supportRangeFlatX = float.NaN;
+            BuildSupportRange();
+        }
+    }
+
+    /// <summary>Several formations selected at once - the panel's selection, mirrored on the map.</summary>
+    public void SelectSupportFormations(IEnumerable<int> ids)
+    {
+        _selectedSupportIds.Clear();
+        foreach (var id in ids) _selectedSupportIds.Add(id);
+        _selectedSupportId = _selectedSupportIds.Count == 1 ? _selectedSupportIds.First() : _selectedSupportIds.Count > 0 ? _selectedSupportIds.Min() : -1;
+        _supportRangeFlatX = float.NaN;
+        BuildSupportRange();
+        RefreshSupportMarkerSelection();
+    }
+
+    /// <summary>The colour of an arm: sky blue aircraft, teal drones, amber guns, red missile brigades.</summary>
+    private static Color SupportArmColour(SupportKind kind) => kind switch
+    {
+        SupportKind.Air => new Color(.46f, .74f, 1f),
+        SupportKind.Drone => new Color(.38f, .90f, .80f),
+        SupportKind.AirDefence => new Color(1f, .46f, .42f),
+        _ => new Color(1f, .78f, .36f)
+    };
 
     private void CreateSupportPresentation(Node3D world)
     {
@@ -66,6 +106,8 @@ public sealed partial class GlobePresentation
     public void SelectSupportFormation(int formationId)
     {
         _selectedSupportId = formationId;
+        _selectedSupportIds.Clear();
+        if (formationId >= 0) _selectedSupportIds.Add(formationId);
         _supportRangeFlatX = float.NaN;
         BuildSupportRange();
         RefreshSupportMarkerSelection();
@@ -84,9 +126,11 @@ public sealed partial class GlobePresentation
     private void UpdateSupportPresentation(double delta)
     {
         if (!IsInstanceValid(_supportMarkerRoot)) return;
-        var show = MilitaryMarkersEnabled && _campaign?.Player is not null && ViewDistance <= 9.2f;
+        var show = MilitaryMarkersEnabled && _campaign?.Player is not null &&
+                   ViewDistance <= (_supportOverlay ? 17f : 9.2f);
         _supportMarkerRoot.Visible = show;
-        _supportRangeNode.Visible = show && _selectedSupportId >= 0 && _supportRangeMesh.GetSurfaceCount() > 0;
+        _supportRangeNode.Visible = show && (_selectedSupportIds.Count > 0 || _supportOverlay) &&
+                                    _supportRangeMesh.GetSurfaceCount() > 0;
         if (!show || _campaign?.ProvinceMap is null) return;
         _supportPresentationDelay += delta;
         if (_supportPresentationDelay >= .35 || !ReferenceEquals(_supportMarkedCampaign, _campaign))
@@ -183,9 +227,13 @@ public sealed partial class GlobePresentation
             PaintSupportMarker(marker, formation);
         }
         if (!_supportMapMarkers.ContainsKey(_selectedSupportId)) _selectedSupportId = -1;
+        _selectedSupportIds.RemoveWhere(id => !_supportMapMarkers.ContainsKey(id));
         RefreshSupportMarkerSelection();
         BuildSupportRange();
     }
+
+    /// <summary>How much of the plate's 64x48 pixels the symbol may span, whatever it was cut to.</summary>
+    private const float SupportIconSlotPixels = 19f;
 
     private void PlaceSupportMarker(SupportMapMarker marker)
     {
@@ -197,11 +245,20 @@ public sealed partial class GlobePresentation
         marker.Plate.FixedSize = !_flatMap;
         marker.Icon.FixedSize = !_flatMap;
         marker.Readiness.FixedSize = !_flatMap;
-        marker.Plate.PixelSize = _flatMap ? .72f : .00027f * _counterScale;
-        marker.Icon.PixelSize = _flatMap ? .24f : .000085f * _counterScale;
-        marker.Readiness.PixelSize = _flatMap ? .50f : .00022f * _counterScale;
-        marker.Icon.Position = _flatMap ? new Vector3(-8, 2, 2) : new Vector3(-.0045f, .001f, .003f);
-        marker.Readiness.Position = _flatMap ? new Vector3(10, -5, 3) : new Vector3(.005f, -.003f, .004f);
+        // Everything below is laid out in the plate's own pixels (64x48), so the flat map
+        // and the globe draw the same marker and one tuning moves both. The symbol is
+        // fitted to one slot inside the frame whatever its cut-out bounds came to: a wide
+        // plane and a compact drone share a footprint, and none of them spills over the
+        // frame any more - the icon used to keep its canvas size, so the largest drawing
+        // in the catalogue was wider than the plate it sat on.
+        var platePixel = _flatMap ? .72f : .00027f * _counterScale;
+        marker.Plate.PixelSize = platePixel;
+        var iconSize = marker.Icon.Texture.GetSize();
+        var span = MathF.Max(iconSize.X, iconSize.Y);
+        marker.Icon.PixelSize = span > 1f ? platePixel * SupportIconSlotPixels / span : platePixel * .3f;
+        marker.Readiness.PixelSize = platePixel * .70f;
+        marker.Icon.Position = new Vector3(-11f * platePixel, 3f * platePixel, _flatMap ? 2f : .003f);
+        marker.Readiness.Position = new Vector3(13f * platePixel, -7f * platePixel, _flatMap ? 3f : .004f);
     }
 
     private void PaintSupportMarker(SupportMapMarker marker, SupportFormation formation)
@@ -222,7 +279,7 @@ public sealed partial class GlobePresentation
     {
         foreach (var (id, marker) in _supportMapMarkers)
         {
-            var selected = id == _selectedSupportId;
+            var selected = _selectedSupportIds.Contains(id);
             marker.Plate.Scale = Vector3.One * (selected ? 1.22f : 1f);
             marker.Icon.Scale = marker.Plate.Scale;
             marker.Readiness.Scale = marker.Plate.Scale;
@@ -268,43 +325,109 @@ public sealed partial class GlobePresentation
     {
         if (!IsInstanceValid(_supportRangeNode) || _campaign?.ProvinceMap is null) return;
         _supportRangeMesh.ClearSurfaces();
-        var formation = _campaign.SupportFormations.Find(f => f.Id == _selectedSupportId && f.NationId == _campaign.Player?.Id);
-        if (formation is null || !SupportTypeCatalog.TryGet(formation.TypeId, out var type) || formation.BaseProvinceId <= 0)
+        var player = _campaign.Player;
+        var rings = new List<(SupportFormation Formation, SupportTypeDefinition Type, bool Selected)>();
+        foreach (var candidate in _campaign.SupportFormations)
+        {
+            if (candidate.NationId != player?.Id || candidate.BaseProvinceId <= 0) continue;
+            var selected = _selectedSupportIds.Contains(candidate.Id);
+            if (!selected && !_supportOverlay) continue;
+            if (!SupportTypeCatalog.TryGet(candidate.TypeId, out var candidateType)) continue;
+            rings.Add((candidate, candidateType, selected));
+        }
+        _supportRangeProjection = _flatMap;
+        _supportRangeFlatX = _flatX;
+        if (rings.Count == 0)
         {
             _supportRangeNode.Visible = false;
             return;
         }
-        var center = _campaign.ProvinceMap.CenterOf(formation.BaseProvinceId);
-        var latitude = Mathf.DegToRad(center.Latitude);
-        var longitude = Mathf.DegToRad(center.Longitude);
-        var angularReach = Math.Clamp(type.RangeKm / 6371f, .002f, MathF.PI);
-        _supportRangeMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
         const int steps = 120;
-        var colour = formation.Mission == SupportCore.MissionStandby
-            ? new Color(.65f, .81f, .87f, .72f) : new Color(1f, .81f, .38f, .88f);
-        for (var segment = 0; segment < steps; segment++)
+        const int bands = 6;
+        float latitude = 0f, longitude = 0f, angularReach = 0f;
+
+        // What the selected formations touch, filled faintly so it reads as ground rather than
+        // as a line. Bands from the base outwards along great circles, so the fill follows the
+        // globe instead of cutting under it the way a flat fan would for a bomber's reach.
+        var anyFill = false;
+        foreach (var (formation, type, selected) in rings)
         {
-            var start = Destination(segment);
-            var end = Destination(segment + 1);
-            if (_flatMap && MathF.Abs(start.X - end.X) > FlatMapWidth * .5f) continue;
-            _supportRangeMesh.SurfaceSetColor(colour);
-            _supportRangeMesh.SurfaceAddVertex(start);
-            _supportRangeMesh.SurfaceSetColor(colour);
-            _supportRangeMesh.SurfaceAddVertex(end);
+            if (!selected || SupportCore.Displaced(_campaign, formation)) continue;
+            if (!anyFill) { _supportRangeMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles); anyFill = true; }
+            Aim(formation, type);
+            var fill = SupportArmColour(type.Kind) with { A = .07f };
+            for (var band = 0; band < bands; band++)
+            {
+                var inner = band / (float)bands;
+                var outer = (band + 1) / (float)bands;
+                for (var segment = 0; segment < steps; segment++)
+                {
+                    var a = Destination(segment, inner);
+                    var b = Destination(segment + 1, inner);
+                    var c = Destination(segment, outer);
+                    var d = Destination(segment + 1, outer);
+                    if (_flatMap && (Wraps(a, b) || Wraps(a, c) || Wraps(c, d))) continue;
+                    Triangle(a, c, d, fill);
+                    if (band > 0) Triangle(a, d, b, fill);
+                }
+            }
+        }
+        if (anyFill) _supportRangeMesh.SurfaceEnd();
+
+        _supportRangeMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
+        foreach (var (formation, type, selected) in rings)
+        {
+            Aim(formation, type);
+            var arm = SupportArmColour(type.Kind);
+            var resting = formation.Mission == SupportCore.MissionStandby;
+            var colour = SupportCore.Displaced(_campaign, formation) ? new Color(.85f, .35f, .33f, selected ? .9f : .35f)
+                : selected ? arm with { A = resting ? .72f : .95f }
+                : arm with { A = resting ? .16f : .34f };
+            for (var segment = 0; segment < steps; segment++)
+            {
+                // A resting formation's ring is dashed: it reaches there, but it is not flying.
+                if (resting && segment % 4 >= 2) continue;
+                var start = Destination(segment, 1f);
+                var end = Destination(segment + 1, 1f);
+                if (_flatMap && Wraps(start, end)) continue;
+                _supportRangeMesh.SurfaceSetColor(colour);
+                _supportRangeMesh.SurfaceAddVertex(start);
+                _supportRangeMesh.SurfaceSetColor(colour);
+                _supportRangeMesh.SurfaceAddVertex(end);
+            }
         }
         _supportRangeMesh.SurfaceEnd();
-        _supportRangeProjection = _flatMap;
-        _supportRangeFlatX = _flatX;
-        _supportRangeNode.Visible = MilitaryMarkersEnabled && ViewDistance <= 9.2f;
+        _supportRangeNode.Visible = MilitaryMarkersEnabled && ViewDistance <= (_supportOverlay ? 17f : 9.2f);
 
-        Vector3 Destination(int step)
+        void Aim(SupportFormation formation, SupportTypeDefinition type)
         {
+            var center = _campaign.ProvinceMap.CenterOf(formation.BaseProvinceId);
+            latitude = Mathf.DegToRad(center.Latitude);
+            longitude = Mathf.DegToRad(center.Longitude);
+            angularReach = Math.Clamp(type.RangeKm / 6371f, .002f, MathF.PI);
+        }
+
+        void Triangle(Vector3 p, Vector3 q, Vector3 r, Color colour)
+        {
+            _supportRangeMesh.SurfaceSetColor(colour);
+            _supportRangeMesh.SurfaceAddVertex(p);
+            _supportRangeMesh.SurfaceSetColor(colour);
+            _supportRangeMesh.SurfaceAddVertex(q);
+            _supportRangeMesh.SurfaceSetColor(colour);
+            _supportRangeMesh.SurfaceAddVertex(r);
+        }
+
+        static bool Wraps(Vector3 p, Vector3 q) => MathF.Abs(p.X - q.X) > FlatMapWidth * .5f;
+
+        Vector3 Destination(int step, float fraction)
+        {
+            var reach = angularReach * fraction;
             var bearing = MathF.Tau * step / steps;
-            var targetLatitude = MathF.Asin(MathF.Sin(latitude) * MathF.Cos(angularReach) +
-                MathF.Cos(latitude) * MathF.Sin(angularReach) * MathF.Cos(bearing));
+            var targetLatitude = MathF.Asin(MathF.Sin(latitude) * MathF.Cos(reach) +
+                MathF.Cos(latitude) * MathF.Sin(reach) * MathF.Cos(bearing));
             var targetLongitude = longitude + MathF.Atan2(
-                MathF.Sin(bearing) * MathF.Sin(angularReach) * MathF.Cos(latitude),
-                MathF.Cos(angularReach) - MathF.Sin(latitude) * MathF.Sin(targetLatitude));
+                MathF.Sin(bearing) * MathF.Sin(reach) * MathF.Cos(latitude),
+                MathF.Cos(reach) - MathF.Sin(latitude) * MathF.Sin(targetLatitude));
             var lat = Mathf.RadToDeg(targetLatitude);
             var lon = Mathf.RadToDeg(targetLongitude);
             return _flatMap ? FlatPoint(lat, lon, FlatLineZ + .001f) :
@@ -350,6 +473,25 @@ public sealed partial class GlobePresentation
                 if (brightness < .12f)
                     image.SetPixel(x, y, new Color(color.R, color.G, color.B, 0));
             }
+        // Cut to the symbol's own bounds. The tiles are square canvases with the drawing
+        // at whatever size suited it, so fitting by canvas alone let a wide plane stride
+        // across the frame while a compact bomb sat small in a corner. Cut to the symbol,
+        // every icon arrives with the same kind of bounds to be fitted into the slot.
+        var width = image.GetWidth();
+        var height = image.GetHeight();
+        var left = width; var top = height; var right = -1; var bottom = -1;
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            if (image.GetPixel(x, y).A < 0.03f) continue;
+            if (x < left) left = x;
+            if (x > right) right = x;
+            if (y < top) top = y;
+            if (y > bottom) bottom = y;
+        }
+        if (right >= left && bottom >= top &&
+            (left > 0 || top > 0 || right < width - 1 || bottom < height - 1))
+            image = image.GetRegion(new Rect2I(left, top, right - left + 1, bottom - top + 1));
         return _supportCutoutIcons[path] = ImageTexture.CreateFromImage(image);
     }
 }
