@@ -10,6 +10,21 @@ using System.Text.Json.Serialization;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>
+    /// The least real time between two autosaves, in seconds, whatever the calendar says.
+    ///
+    /// An autosave came due every thirty campaign days, and at the top speed thirty days is a
+    /// second and a half. Thirty-six years in, a save costs a third of a second on the frame
+    /// and half a gigabyte of garbage, so the fastest speed was a stutter every second and a
+    /// half - the single largest stall in the running game. An autosave is insurance against
+    /// losing real time, so it is paced by real time: at the slow speeds the month still
+    /// decides, at the fast ones this does.
+    /// </summary>
+    public float AutosaveMinimumSeconds { get; set; } = 120f;
+}
+
 public sealed class SaveMetadata
 {
     public int FormatVersion { get; set; } = SaveSystem.FormatVersion;

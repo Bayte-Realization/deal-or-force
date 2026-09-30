@@ -114,6 +114,14 @@ public static class Program
             return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
 
         var mapped = AttachMap(campaign);
+        // `--profile-save <file.bdfsave> N` loads a save and profiles N days of it. The world
+        // a fresh bench plays is the first morning; the one players complain about is thirty
+        // years on, with a hundred countries that were not there in 2024 and a history the
+        // size of a novel, and that one can only be had from a save.
+        var profileSaveAt = Array.IndexOf(args, "--profile-save");
+        if (profileSaveAt >= 0 && profileSaveAt + 1 < args.Length)
+            return ProfileSave(campaign, args[profileSaveAt + 1],
+                profileSaveAt + 2 < args.Length && int.TryParse(args[profileSaveAt + 2], out var savedDays) ? savedDays : 60);
         if (Array.IndexOf(args, "--soak-selftest") >= 0) return WorldSoakReport.SelfTest(campaign);
         if (Array.IndexOf(args, "--soak") >= 0)
         {
@@ -500,6 +508,21 @@ public static class Program
     /// run every hour and a dear one run every month look the same in a mean and nothing
     /// alike in a total.
     /// </summary>
+    private static int ProfileSave(Campaign fresh, string path, int days)
+    {
+        if (fresh.ProvinceMap is null) { Console.WriteLine("  province map unavailable"); return 2; }
+        var watch = Stopwatch.StartNew();
+        var loaded = SaveSystem.Load(Path.GetDirectoryName(Path.GetFullPath(path))!, Path.GetFileNameWithoutExtension(path), "");
+        if (!loaded.Success || loaded.Campaign is null) { Console.WriteLine($"  could not load {path}: {loaded.Warning}"); return 2; }
+        var campaign = loaded.Campaign;
+        // The topology the fresh campaign built, handed over the way the game hands it from one
+        // campaign to the next; the save lays its own borders back over it.
+        campaign.AttachProvinceTopology(fresh.ProvinceMap);
+        Console.WriteLine($"Loaded {path} in {watch.ElapsedMilliseconds:N0} ms: {campaign.Date}, day {campaign.ElapsedDays:N0}, " +
+                          $"{campaign.Nations.Count(n => n.Population > 0)} countries with people, {campaign.Wars.Count(w => !w.Ended)} war(s).");
+        return Profile(campaign, days);
+    }
+
     private static int Profile(Campaign campaign, int days)
     {
         campaign.IsPaused = false;
@@ -2807,7 +2830,7 @@ public static class Program
         var onceADay = new[]
         {
             "economy", "opinion", "modifiers", "militia", "diplomacy", "subjects",
-            "statecraft", "events", "history", "secession", "governance"
+            "statecraft", "events", "history", "secession", "governance", "occupations"
         };
         var daily = 0;
         foreach (var name in onceADay)

@@ -417,12 +417,28 @@ public partial class DealOrForceGame
         LoadFromSlot(latest.Slot);
     }
 
+    private ulong _lastAutosaveMsec;
+
+    /// <summary>
+    /// Save when the calendar says so, but never twice inside
+    /// <see cref="Defines.AutosaveMinimumSeconds"/> of real time. The first one of a session
+    /// falls on the calendar's own day - the thirtieth, the sixtieth; after that it is the
+    /// interval since the last one, so a save the clock held back is taken as soon as it may
+    /// be rather than skipped until the calendar comes round again.
+    /// </summary>
     private void MaybeAutosave()
     {
-        if (_campaign?.Defines.AutosaveIntervalDays is not > 0 || _campaign.ElapsedDays <= 0 ||
-            _campaign.ElapsedDays == _lastAutosaveDay || _campaign.ElapsedDays % _campaign.Defines.AutosaveIntervalDays != 0)
-            return;
+        var interval = _campaign?.Defines.AutosaveIntervalDays ?? 0;
+        if (interval <= 0 || _campaign.ElapsedDays <= 0 || _campaign.ElapsedDays == _lastAutosaveDay) return;
+        var due = _lastAutosaveDay < 0
+            ? _campaign.ElapsedDays % interval == 0
+            : _campaign.ElapsedDays - _lastAutosaveDay >= interval;
+        if (!due) return;
+        var now = Time.GetTicksMsec();
+        var gap = (ulong)(Math.Max(0f, _campaign.Defines.AutosaveMinimumSeconds) * 1000f);
+        if (_lastAutosaveMsec > 0 && now - _lastAutosaveMsec < gap) return;
         _lastAutosaveDay = _campaign.ElapsedDays;
+        _lastAutosaveMsec = now;
         SaveToSlot(SaveSystem.AutoSlot, true);
     }
 }

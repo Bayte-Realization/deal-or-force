@@ -31,6 +31,9 @@
   "EconomyTickDays": 7,
   "PopulationTickDays": 30,
   "AutosaveIntervalDays": 30,
+  // Never two autosaves inside this many real seconds, whatever the calendar says: at the
+  // top speed thirty days is a second and a half.
+  "AutosaveMinimumSeconds": 120,
   "SaveTextFormat": true,
   "SecondsPerDay": 5,
   "GlobeRadius": 2600,

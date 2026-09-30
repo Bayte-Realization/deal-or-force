@@ -261,8 +261,8 @@ public static partial class Warfare
             foreach (var war in campaign.Wars)
             {
                 if (war.Ended) continue;
-                FrontPlanner.UpdateAiExecution(campaign, war, In(ByWar, war.Id));
-                ResolveAdvances(campaign, war);
+                using (SimProfiler.Measure("    adv:execution")) FrontPlanner.UpdateAiExecution(campaign, war, In(ByWar, war.Id));
+                using (SimProfiler.Measure("    adv:resolve")) ResolveAdvances(campaign, war);
             }
 
         // A round is a DAY of fighting - it carries a date, a note and a line in the battle
@@ -323,7 +323,9 @@ public static partial class Warfare
             var enemyId = war.EnemyLeaderOf(army.NationId);
             var enemy = campaign.NationById(enemyId);
             if (enemy is null || army.ProvinceId <= 0) continue;
-            if (PrepareOperationalRoute(campaign, war, army, controllers)) continue;
+            bool routed;
+            using (SimProfiler.Measure("      adv:route")) routed = PrepareOperationalRoute(campaign, war, army, controllers);
+            if (routed) continue;
             Candidates.Clear();
             foreach (var province in topology.Neighbors[army.ProvinceId])
                 if (enemyMaps.Contains(controllers[province])) Candidates.Add(province);
@@ -512,6 +514,9 @@ public static partial class Warfare
     /// Keeps the attack corridor executable as control changes. Returns true when the army
     /// has first been assigned a friendly staging leg and therefore should not attack today.
     /// </summary>
+    private static readonly Dictionary<int, (int From, int To, ushort Friendly, ushort Hostile, int Revision)> NoRoute = new();
+    private static Campaign _noRouteCampaign;
+
     private static bool PrepareOperationalRoute(Campaign campaign, StrategicWar war, Army army,
         ushort[] controllers)
     {
@@ -547,8 +552,20 @@ public static partial class Warfare
             (controllers[army.PlannedRoute[0]] != nation.MapIndex && controllers[army.PlannedRoute[0]] != enemy.MapIndex))
         {
             army.PlannedRoute.Clear();
-            army.PlannedRoute.AddRange(topology.FindOperationalRoute(army.ProvinceId, army.OrderProvinceId,
-                (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers));
+            var search = (army.ProvinceId, army.OrderProvinceId, (ushort)nation.MapIndex, (ushort)enemy.MapIndex, campaign.MapRevision);
+            if (!ReferenceEquals(_noRouteCampaign, campaign)) { NoRoute.Clear(); _noRouteCampaign = campaign; }
+            // The same search on the same map finds the same nothing. A division whose objective
+            // it cannot reach - or is already standing on - asked again every hour, flooding its
+            // side's whole territory each time: a hundred and twenty such searches a step, half
+            // of a day's simulation thirty-six years in. A failed search is remembered until
+            // the division moves, its objective changes, or any province changes hands.
+            if (!NoRoute.TryGetValue(army.Id, out var failed) || failed != search)
+            {
+                army.PlannedRoute.AddRange(topology.FindOperationalRoute(army.ProvinceId, army.OrderProvinceId,
+                    (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers));
+                if (army.PlannedRoute.Count == 0) NoRoute[army.Id] = search;
+                else NoRoute.Remove(army.Id);
+            }
             army.OrderRouteSteps = Math.Max(army.OrderStepsCompleted + army.PlannedRoute.Count,
                 army.OrderRouteSteps);
         }
