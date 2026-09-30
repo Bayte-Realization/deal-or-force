@@ -156,6 +156,9 @@ public static class Program
         // `--orders` runs the one check that measures whether divisions get where they are sent.
         if (Array.IndexOf(args, "--orders") >= 0)
             return Check("an army sent somewhere gets there more often than it is sent elsewhere", OrdersHoldLongEnoughToBeObeyed());
+        // `--militia` runs the one check of who rises, where, and whether it goes home again.
+        if (Array.IndexOf(args, "--militia") >= 0)
+            return Check("people take up arms for a country they think is theirs", MilitiaRisesWhereItIsWanted());
 
         var frontsAt = Array.IndexOf(args, "--fronts");
         if (frontsAt >= 0) return FrontsReport(campaign,
@@ -6212,14 +6215,27 @@ public static class Program
             return "nobody rose in any region that is mostly the country's own people";
 
         // And it goes home. Nothing has threatened a country at peace, so its militia
-        // should not be standing a year later.
+        // should not be standing a year later - though it may for the month it takes to stand
+        // down (StandDownDays) after a war that has only just ended. Asked of any country at
+        // peace, that month used to fail the check whenever a war happened to end in the
+        // last weeks of the run.
+        int LastWarEnded(Nation nation)
+        {
+            var ended = -1_000_000; // never: long before any stand-down
+            foreach (var war in campaign.Wars)
+                if (war.Ended && war.Involves(nation.Id)) ended = Math.Max(ended, war.EndedDay);
+            return ended;
+        }
+        var standingDown = MilitiaCore.Weights.StandDownDays + 7;
         var peaceful = campaign.Nations.FirstOrDefault(nation =>
             nation.Id != ukraine.Id &&
             campaign.Armies.Any(army => army.TemplateId == MilitiaCore.TemplateId &&
                                         army.NationId == nation.Id) &&
-            !campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)));
+            !campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)) &&
+            campaign.ElapsedDays - LastWarEnded(nation) > standingDown);
         if (peaceful is not null)
-            return $"{peaceful.Tag} is at peace and still has militia standing";
+            return $"{peaceful.Tag} is at peace and still has militia standing " +
+                   $"{campaign.ElapsedDays - LastWarEnded(peaceful):N0} day(s) after its last war";
 
         Console.WriteLine($"  militia: {risen.Count:N0} formation(s) stood up in 200 days, " +
                           $"{defending:N0} of them in UKR; {willing:N0} in regions that are mostly " +

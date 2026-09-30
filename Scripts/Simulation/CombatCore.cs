@@ -422,7 +422,7 @@ public static partial class Warfare
                 // exploiting gaps with nobody playing, so leaving it in force for exactly
                 // that case keeps what it bought.
                 var ordered = army.DirectOrder;
-                if (!ordered && coveringPower > army.Power * campaign.Defines.GapExploitAdvantage) continue;
+                if (!ordered && coveringPower > PushingOn(campaign, topology, army, target) * campaign.Defines.GapExploitAdvantage) continue;
                 var contested = 1f / (1f + covering * campaign.Defines.ZoneOfControlResistance);
                 // Covered ground still costs: an ordered advance into a fully covered gap runs
                 // at a fraction of the pace of one into open country, and the floor is what
@@ -482,6 +482,30 @@ public static partial class Warfare
             }
             Join(battle, army, true);
         }
+    }
+
+    /// <summary>
+    /// The force pushing on a gap: every ready advancing division of the country standing beside
+    /// it, not the one division asking. Cover is a wall to a force smaller than what covers the
+    /// gap - and the force was taken to be each division alone, so a whole front of them stood
+    /// in front of a thinly covered line indefinitely, every one of them outmatched on its own:
+    /// thirty-two Colombian divisions spent two years at their posts on the Panamanian border
+    /// against one. Counting them together halved the advancing divisions that stood at their
+    /// posts all war (343 to 159 over sixteen seeds) and did not move the Ukrainian front
+    /// (24 seeds, z -0.2): a real line is covered by more than the divisions facing each gap.
+    /// </summary>
+    private static float PushingOn(Campaign campaign, ProvinceTopology topology, Army army, int target)
+    {
+        var power = 0f;
+        foreach (var province in topology.Neighbors[target])
+            foreach (var other in InProvince(province))
+            {
+                if (other.NationId != army.NationId || other.InBattle || other.IsMoving || !other.PlanActive) continue;
+                if (other.OrderKind is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)) continue;
+                if (other.ReadyDay > campaign.ElapsedDays) continue;
+                power += other.Power;
+            }
+        return MathF.Max(power, army.Power);
     }
 
     /// <summary>

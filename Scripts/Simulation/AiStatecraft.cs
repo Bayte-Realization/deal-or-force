@@ -684,6 +684,26 @@ public static partial class AiStatecraft
     internal static void Negotiate(Campaign campaign, Nation nation, StrategicWar war)
     {
         var defines = campaign.Defines;
+        // Overrun: one side's leader has lost all its ground in this war and nobody on that side
+        // has a formation left. There is nothing to fight with or bargain with, so it is decided,
+        // lock or no lock, and it is settled from whichever side sits down first - the beaten
+        // country may have no people left in its hands, and a country with none never
+        // negotiates. Such wars used to go on for years with the winner's army standing about on
+        // a front that no longer existed: India held the whole of Siachen for two years with a
+        // hundred and twenty divisions assigned to it, Germany all of Liechtenstein, Italy San
+        // Marino. One province was not war score enough to write a treaty with, and the white
+        // peace the beaten side could offer would have handed it back.
+        if (war.PendingOfferFromId < 0 &&
+            campaign.ElapsedDays - war.LastPeaceProposalDay >= defines.AiPeaceProposalInterval)
+            foreach (var attackers in new[] { true, false })
+            {
+                if (!SideOverrun(campaign, war, attackers)) continue;
+                var beaten = campaign.NationById(attackers ? war.AttackerId : war.DefenderId);
+                var victor = campaign.NationById(attackers ? war.DefenderId : war.AttackerId);
+                if (beaten is null || victor is null) break;
+                PeaceOffers.Put(campaign, war, beaten, victor, PeaceTerms.Capitulate);
+                return;
+            }
         // A decided war is negotiated whatever the scenario's opening lock says: the lock keeps the
         // wars on the map from ending in their first weeks, not a beaten country from surrendering.
         if (campaign.ElapsedDays < war.AiNegotiationUnlockDay && MathF.Abs(war.WarScore) < defines.AiDecisiveWarScore) return;
@@ -738,6 +758,29 @@ public static partial class AiStatecraft
         }
 
         PeaceOffers.Put(campaign, war, nation, opponent, demand);
+    }
+
+    /// <summary>
+    /// Whether one side of a war has been overrun: its leader lost ground in this war and holds
+    /// none of its own anywhere, and no country on that side has a formation left. A government
+    /// in exile with an army, or an ally still in the field, is fighting on and is not this.
+    /// </summary>
+    internal static bool SideOverrun(Campaign campaign, StrategicWar war, bool attackers)
+    {
+        var control = campaign.ProvinceController;
+        var leader = campaign.NationById(attackers ? war.AttackerId : war.DefenderId);
+        if (control is null || leader is null) return false;
+        var own = (ushort)leader.MapIndex;
+        var lostHere = false;
+        foreach (var (_, was) in war.OriginalController)
+            if (was == own) { lostHere = true; break; }
+        if (!lostHere) return false;
+        var side = new HashSet<int>(war.Side(attackers));
+        foreach (var army in campaign.Armies)
+            if (side.Contains(army.NationId)) return false;
+        for (var province = 1; province < control.Length; province++)
+            if (control[province] == own) return false;
+        return true;
     }
 
     /// <summary>

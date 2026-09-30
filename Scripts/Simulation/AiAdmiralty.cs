@@ -66,6 +66,7 @@ public static class AiAdmiralty
         // Each fleet thinks on its own day (below), so this pass has nothing to do on a step
         // that is not the start of one.
         if (!campaign.StepOpensNewDay) return;
+        ForgetGround();
 
         foreach (var fleet in campaign.Fleets)
         {
@@ -117,7 +118,7 @@ public static class AiAdmiralty
             //
             // Unless the enemy's navy is so much the stronger that a convoy would never
             // arrive, in which case the fleet fights for the sea first.
-            if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, enemy.MapIndex) &&
+            if (!WalkedTo(campaign, nation, enemy, war) &&
                 KnownNavy(campaign, enemy, nation) <= OwnNavy(campaign, nation) * campaign.Defines.AiInvasionNavalOdds)
             {
                 if (fleet.Mission != FleetMission.Anchored) { SendHome(campaign, fleet); continue; }
@@ -162,7 +163,7 @@ public static class AiAdmiralty
             var enemyId = war.EnemyLeaderOf(nation.Id);
             var enemy = campaign.NationById(enemyId);
             if (enemy is null) continue;
-            if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, enemy.MapIndex)) return war;
+            if (!WalkedTo(campaign, nation, enemy, war)) return war;
             landward ??= war;
         }
         return landward;
@@ -306,15 +307,11 @@ public static class AiAdmiralty
             {
                 // A nominal land role in an overseas war with no own sector is not
                 // a reason to leave the only landing troops inland forever.
-                var servesLandFront = false;
-                foreach (var war in campaign.Wars)
-                {
-                    if (war.Ended || war.Id != army.AssignedWarId) continue;
-                    foreach (var post in war.FriendlyFront(nation.Id))
-                        if (campaign.ProvinceController[post] == nation.MapIndex) { servesLandFront = true; break; }
-                    break;
-                }
-                if (servesLandFront) continue;
+                //
+                // Nor is a sector the division cannot walk to. Holding one post of the front
+                // anywhere used to count for the whole army, so a country whose front is
+                // across the sea from most of it summoned nobody.
+                if (WalksToFront(campaign, nation, army.AssignedWarId).Contains(army.ProvinceId)) continue;
             }
             var centre = topology.CenterOf(army.ProvinceId);
             var distance = NavalOperations.Distance(fleet.HomeLatitude, fleet.HomeLongitude,
@@ -331,6 +328,68 @@ public static class AiAdmiralty
         {
             IssuerId = nation.Id, ArmyId = chosen.Id, TargetProvinceId = fleet.HomeProvinceId
         }.Apply(campaign);
+    }
+
+    /// <summary>
+    /// Whether this war is fought on foot: whether the country's capital can walk to its own
+    /// posts on the front. Sharing a border with the enemy somewhere is not the same thing -
+    /// America borders Cuba at Guantanamo, and the rest of its army cannot walk there.
+    /// A capital that is not in its own hands says nothing, and nor does a war whose fronts have
+    /// not been drawn yet - its first day - so then the border is asked.
+    /// </summary>
+    private static bool WalkedTo(Campaign campaign, Nation nation, Nation enemy, StrategicWar war)
+    {
+        var capital = nation.CapitalProvinceId;
+        if (capital <= 0 || capital >= campaign.ProvinceController.Length ||
+            campaign.ProvinceController[capital] != nation.MapIndex ||
+            (war.AttackerFront.Count == 0 && war.DefenderFront.Count == 0))
+            return CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, enemy.MapIndex);
+        return WalksToFront(campaign, nation, war.Id).Contains(capital);
+    }
+
+    // Kept for one pass of the admiralty (Tick clears it): the ground does not change while it
+    // thinks, and it does between one pass and the next. The sets are handed back rather than
+    // dropped - a country's ground is thousands of provinces, every day.
+    private static readonly Dictionary<(int Nation, int War), HashSet<int>> Walkable = new();
+    private static readonly Stack<HashSet<int>> SpareGround = new();
+    private static readonly Queue<int> Flood = new();
+
+    private static void ForgetGround()
+    {
+        foreach (var reached in Walkable.Values)
+        {
+            reached.Clear();
+            SpareGround.Push(reached);
+        }
+        Walkable.Clear();
+    }
+
+    /// <summary>
+    /// The ground from which a country's divisions can walk to its own posts on one war's front:
+    /// flooded out from the posts over what it holds, which is the ground its routes may cross.
+    /// Once per country and war per pass, rather than a route search for every division asked.
+    /// </summary>
+    private static HashSet<int> WalksToFront(Campaign campaign, Nation nation, int warId)
+    {
+        if (Walkable.TryGetValue((nation.Id, warId), out var reached)) return reached;
+        Walkable[(nation.Id, warId)] = reached = SpareGround.Count > 0 ? SpareGround.Pop() : new HashSet<int>();
+        var topology = campaign.ProvinceMap;
+        var control = campaign.ProvinceController;
+        StrategicWar war = null;
+        foreach (var candidate in campaign.Wars)
+            if (!candidate.Ended && candidate.Id == warId) { war = candidate; break; }
+        if (war is null || topology is null || control is null) return reached;
+        var own = (ushort)nation.MapIndex;
+        Flood.Clear();
+        foreach (var post in war.FriendlyFront(nation.Id))
+            if (control[post] == own && reached.Add(post)) Flood.Enqueue(post);
+        while (Flood.Count > 0)
+        {
+            var province = Flood.Dequeue();
+            foreach (var next in topology.Neighbors[province])
+                if (control[next] == own && reached.Add(next)) Flood.Enqueue(next);
+        }
+        return reached;
     }
 
     private static void LaunchIfPossible(Campaign campaign, Fleet fleet, Nation nation, Nation enemy)
