@@ -2389,8 +2389,6 @@ void fragment() {
     vec3 inland_water = vec3(0.018, 0.17, 0.25);
     base = mix(base, inland_water, lake_water * 0.94);
     base = mix(base, vec3(0.025, 0.24, 0.34), river_water * mix(0.42, 0.88, detail_mix));
-    float region_selected = (abs(region - selected_region_id) < 0.5 ? 1.0 : 0.0) * selection_active * political.a;
-    float province_selected = (abs(province - selected_province_id) < 0.5 ? 1.0 : 0.0) * selection_active * political.a;
     // The region line, the last one still drawn by asking four neighbours whether they
     // differ - which is one texel wide, on or off, and a staircase. Off the same coverage
     // field as the province and country lines.
@@ -2415,6 +2413,17 @@ void fragment() {
     province_edge *= step(0.5, abs(near_province - other_province_id));
     float province_halo = (1.0 - smoothstep(province_width, province_width + 1.0, province_distance)) *
         step(0.5, abs(near_province - other_province_id));
+    // The selection tint and its gold edge read their share from the coverage fields rather
+    // than a hard per-texel id test. The mask drew the outline as a staircase on the texel
+    // grid at every zoom a texel was still visible - the ugly jagged border on a picked
+    // region. A share of the pixel fades the boundary the way every other line on this map
+    // fades.
+    float region_selected = (abs(near_region - selected_region_id) < 0.5 ? region_cover
+        : abs(other_region_id - selected_region_id) < 0.5 ? 1.0 - region_cover : 0.0)
+        * selection_active * political.a;
+    float province_selected = (abs(near_province - selected_province_id) < 0.5 ? province_cover
+        : abs(other_province_id - selected_province_id) < 0.5 ? 1.0 - province_cover : 0.0)
+        * selection_active * political.a;
 
     // The country line, off the same coverage field as the province and region lines rather
     // than off a distance field.
