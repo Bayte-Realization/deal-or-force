@@ -207,15 +207,14 @@ public sealed partial class GlobePresentation
         private readonly List<Rect2> _medallions = new();
 
         /// <summary>
-        /// Where the headquarters were drawn last frame, medallions and names, on the screen: a
-        /// headquarters is drawn at every distance and is the one place such a country is, so the
-        /// city names are laid out around it rather than over it.
+        /// Where the headquarters' medallions were drawn last frame, on the screen: a headquarters
+        /// is drawn at every distance and is the one place such a country is, so the city names
+        /// are laid out around it rather than over it.
         /// </summary>
-        internal void AddOccupied(List<Rect2> into)
-        {
-            into.AddRange(_medallions);
-            into.AddRange(_placed);
-        }
+        internal void AddMedallions(List<Rect2> into) => into.AddRange(_medallions);
+
+        /// <summary>And their names - after the countries' capitals are named, which they keep off.</summary>
+        internal void AddNames(List<Rect2> into) => into.AddRange(_placed);
 
         private void Spread(Camera3D camera)
         {
@@ -255,6 +254,10 @@ public sealed partial class GlobePresentation
         {
             foreach (var placed in _placed)
                 if (placed.Intersects(box)) return true;
+            // A country's capital is named first, and a headquarters' name moves off it.
+            if (_globe is not null)
+                foreach (var capital in _globe._capitalNameBoxes)
+                    if (capital.Intersects(box)) return true;
             return false;
         }
 

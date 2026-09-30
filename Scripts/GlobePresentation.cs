@@ -504,7 +504,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
         if (_mapApplied && _campaign is not null && _capitalRevision != _campaign.CapitalRevision)
             BuildCapitalMarkers(_campaign);
-        UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f);
+        // The stars go as far round as the capitals' names do (GlobeCities): past that they stood
+        // in a nameless row along the limb, where the ground is seen edge-on.
+        UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f, CityHorizon());
         var armyLod = ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
         if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
@@ -2982,7 +2984,8 @@ void fragment() {
     private void UpdateMarkerVisibility(
         Node3D root,
         List<(Node3D Node, Vector3 Normal)> markers,
-        bool withinLod)
+        bool withinLod,
+        float horizon = 0.18f)
     {
         if (!IsInstanceValid(root) || !IsInstanceValid(_camera)) return;
         root.Visible = withinLod;
@@ -3008,7 +3011,7 @@ void fragment() {
         var viewNormal = _camera.GlobalPosition.Normalized();
         foreach (var marker in markers)
             if (IsInstanceValid(marker.Node))
-                marker.Node.Visible = marker.Normal.Dot(viewNormal) > 0.18f;
+                marker.Node.Visible = marker.Normal.Dot(viewNormal) > horizon;
     }
 
     /// <summary>

@@ -55,8 +55,25 @@ public sealed partial class GlobePresentation
         public Node3D Node;
         public Sprite3D Dot;
         public Label3D Name;
+        /// <summary>The city in the catalogue; -2 - n for the n-th star named at the star.</summary>
         public int City = -1;
+        /// <summary>The capital's star a name stands beside, when it is one of those.</summary>
+        public Node3D Star;
     }
+
+    /// <summary>
+    /// Every capital star, with the city beside it (-1 for none within the distance a star hides
+    /// a dot at) and whose star it is. Rebuilt when the stars are.
+    /// </summary>
+    private readonly List<(Node3D Marker, Vector3 Normal, int City, Nation Nation)> _starNames = new();
+    private (int Revision, int Count, ulong First) _starNamesBuilt = (-1, -1, 0);
+    /// <summary>Each star's place on the screen this placement, in <see cref="_starNames"/> order.</summary>
+    private readonly List<Vector2?> _starScreens = new();
+    /// <summary>The stars drawn this placement and the city each stands on, which names keep off.</summary>
+    private readonly List<(Vector2 Screen, int City)> _starMarks = new();
+    /// <summary>The countries' capitals' names on the screen, which the headquarters' names keep off.</summary>
+    private readonly List<Rect2> _capitalNameBoxes = new();
+    private readonly HashSet<int> _cityDone = new();
 
     private void CreateCityLayer(Node3D world)
     {
@@ -170,39 +187,110 @@ public sealed partial class GlobePresentation
         var horizon = CityHorizon();
 
         _cityTaken.Clear();
-        _movementLayer?.AddOccupied(_cityTaken);
+        _movementLayer?.AddMedallions(_cityTaken);
         var used = 0;
+
+        // Where every capital's star stands on the screen, before any name is set: a name is
+        // never written across a star that is not its own. Santo Domingo, with no room to its
+        // right, was set to its left straight over Port-au-Prince's.
+        RefreshStarNames();
+        _starMarks.Clear();
+        _starScreens.Clear();
+        var limb = SurfaceMarkerRadius / Math.Max(SurfaceMarkerRadius, _camera.GlobalPosition.Length());
+        foreach (var (marker, normal, city, _) in _starNames)
+        {
+            var screen = StarOnScreen(marker, normal, viewport, rootBasis, cameraNormal, limb);
+            _starScreens.Add(screen);
+            if (screen is { } point) _starMarks.Add((point, city));
+        }
+
+        // The stars no drawn city stands beside - Yaren, which the catalogue has no town for;
+        // Guam's, whose town is drawn only close in; the seat of a country born this year - are
+        // named at the star, by the name the country gives it. After the great capitals and
+        // world cities, before the rest: a territory of fifty thousand people does not take the
+        // room Santo Domingo's name needs.
+        var starsNamed = false;
+        void NameStars()
+        {
+            starsNamed = true;
+            for (var star = 0; star < _starNames.Count && used < limit; star++)
+            {
+                var (marker, normal, city, nation) = _starNames[star];
+                if (_starScreens[star] is not { } screen) continue;
+                if (city >= 0 && _cities[city].Tier <= tiers) continue;
+                if (!_flatMap && (rootBasis * normal).Dot(cameraNormal) < horizon) continue;
+                var name = StarCapitalName(nation);
+                if (string.IsNullOrWhiteSpace(name) && city >= 0) name = _cities[city].DisplayName;
+                if (string.IsNullOrWhiteSpace(name)) continue;
+
+                var tierPixels = textPixels * 1.22f;
+                var textWidth = font.GetStringSize(name, HorizontalAlignment.Left, -1, fontSize).X * tierPixels / fontSize;
+                const float starSize = 12f;
+                var side = TakeLabelRoom(screen, starSize, textWidth, tierPixels, city, out _);
+                if (side == 0) continue;
+
+                var pin = CityPinAt(used++);
+                if (pin.City != -2 - star || pin.Name.Text != name) SetUpStarPin(pin, star, marker, name, font, fontSize);
+                pin.Node.Position = _cityRoot.ToLocal(marker.GlobalPosition);
+                var pixel = _flatMap ? 1f : fixedPixel;
+                pin.Node.Scale = _flatMap ? Vector3.One * flatPixel : Vector3.One;
+                pin.Name.PixelSize = pixel * tierPixels / fontSize;
+                SetLabelSide(pin, side, starSize, fontSize, tierPixels);
+                pin.Dot.Visible = false;
+                pin.Node.Visible = true;
+            }
+        }
+
+        // Countries' capitals first, before the headquarters' names: Paris had its star and
+        // nothing else at the distance Europe is read at, because a movement's headquarters in
+        // Belgium wrote "HQ · Council for the Republic" across all the room it had. A
+        // headquarters' name moves down a line off a capital's instead (GlobeMovements); its
+        // medallion, which cannot move, was in the way from the start.
+        _capitalNameBoxes.Clear();
+        _cityDone.Clear();
+        for (var index = 0; index < _cities.Count && used < limit; index++)
+        {
+            if (_cities[index].Tier > 0) break;
+            if (!_cities[index].IsNationalCapital) continue;
+            _cityDone.Add(index);
+            if (PlaceCity(index, out var room)) _capitalNameBoxes.Add(room);
+        }
+        _movementLayer?.AddNames(_cityTaken);
+
         var examined = 0;
         for (var index = 0; index < _cities.Count && used < limit; index++)
         {
-            var city = _cities[index];
-            if (city.Tier > tiers) break;
+            if (_cities[index].Tier > tiers) break;
+            if (_cities[index].Tier > 0 && !starsNamed) NameStars();
+            if (used >= limit) break;
+            if (_cityDone.Contains(index)) continue;
             if (++examined > 4000) break;
+            PlaceCity(index, out _);
+        }
+
+        bool PlaceCity(int index, out Rect2 room)
+        {
+            room = default;
+            var city = _cities[index];
             Vector3 local;
             if (_flatMap)
                 local = FlatPoint(city.Latitude, city.Longitude, FlatMarkerZ);
             else
             {
-                if ((rootBasis * _cityNormals[index]).Dot(cameraNormal) < horizon) continue;
+                if ((rootBasis * _cityNormals[index]).Dot(cameraNormal) < horizon) return false;
                 local = _cityNormals[index] * SurfaceMarkerRadius;
             }
             var world = _cityRoot.GlobalTransform * local;
-            if (_camera.IsPositionBehind(world)) continue;
+            if (_camera.IsPositionBehind(world)) return false;
             var screen = _camera.UnprojectPosition(world);
-            if (screen.X < -40f || screen.Y < -20f || screen.X > viewport.X + 40f || screen.Y > viewport.Y + 20f) continue;
+            if (screen.X < -40f || screen.Y < -20f || screen.X > viewport.X + 40f || screen.Y > viewport.Y + 20f) return false;
 
             var tierPixels = textPixels * (city.Tier switch { 0 => 1.22f, 1 => 1.08f, _ => 1f });
             var name = city.DisplayName;
             var textWidth = font.GetStringSize(name, HorizontalAlignment.Left, -1, fontSize).X * tierPixels / fontSize;
             var dot = city.Tier == 0 ? 9f : 7f;
-            // The dot and the name to its right, with a little air around both.
-            var box = new Rect2(screen.X - dot * 0.5f - 2f, screen.Y - tierPixels * 0.62f,
-                dot + 5f + textWidth + 4f, tierPixels * 1.24f);
-            var clear = true;
-            foreach (var taken in _cityTaken)
-                if (taken.Intersects(box)) { clear = false; break; }
-            if (!clear) continue;
-            _cityTaken.Add(box);
+            var side = TakeLabelRoom(screen, dot, textWidth, tierPixels, index, out room);
+            if (side == 0) return false;
 
             var pin = CityPinAt(used++);
             if (pin.City != index || pin.Name.Text != name) SetUpCityPin(pin, index, name, font, fontSize);
@@ -210,13 +298,85 @@ public sealed partial class GlobePresentation
             var pixel = _flatMap ? 1f : fixedPixel;
             pin.Node.Scale = _flatMap ? Vector3.One * flatPixel : Vector3.One;
             pin.Name.PixelSize = pixel * tierPixels / fontSize;
-            pin.Name.Offset = new Vector2((dot * 0.5f + 4f) * fontSize / tierPixels, 0f);
+            SetLabelSide(pin, side, dot, fontSize, tierPixels);
             pin.Dot.PixelSize = pixel * dot / 32f;
-            pin.Dot.Visible = !(city.IsNationalCapital && NearCapitalMarker(index));
+            pin.Dot.Visible = !(city.IsNationalCapital && NearCapitalMarker(index)) && !StarStandsOn(index);
             pin.Node.Visible = true;
+            return true;
         }
+        if (!starsNamed) NameStars();
         for (var index = used; index < _cityPins.Count; index++)
             if (_cityPins[index].Node.Visible) _cityPins[index].Node.Visible = false;
+    }
+
+    /// <summary>Where a capital's star is drawn on the screen, or nothing when it is not.</summary>
+    private Vector2? StarOnScreen(Node3D marker, Vector3 normal, Vector2I viewport, Basis rootBasis,
+        Vector3 cameraNormal, float limb)
+    {
+        if (!IsInstanceValid(marker) || !marker.IsVisibleInTree()) return null;
+        if (!_flatMap && (rootBasis * normal).Dot(cameraNormal) < limb) return null;
+        var world = marker.GlobalPosition;
+        if (_camera.IsPositionBehind(world)) return null;
+        var screen = _camera.UnprojectPosition(world);
+        if (screen.X < -40f || screen.Y < -20f || screen.X > viewport.X + 40f || screen.Y > viewport.Y + 20f) return null;
+        return screen;
+    }
+
+    /// <summary>
+    /// Room for a mark and its name: to the right of the mark, as a name is set, or - where the
+    /// right is taken - to its left, then centred above it, then below, the way an atlas sets a
+    /// name with no room on its usual side. Returns the side taken (1 right, -1 left, 2 above,
+    /// -2 below) with the room marked as taken, or 0 when none is free. A capital in the Leeward
+    /// Islands had its star and nothing else, because the one side a name was ever tried on was
+    /// its neighbour's.
+    /// </summary>
+    private int TakeLabelRoom(Vector2 screen, float mark, float textWidth, float textHeight, int city, out Rect2 room)
+    {
+        room = default;
+        // The mark and the name beside it, with a little air around both.
+        var width = mark + 5f + textWidth + 4f;
+        var top = screen.Y - textHeight * 0.62f;
+        var right = new Rect2(screen.X - mark * 0.5f - 2f, top, width, textHeight * 1.24f);
+        var left = new Rect2(screen.X + mark * 0.5f + 2f - width, top, width, textHeight * 1.24f);
+        if (Free(right)) { _cityTaken.Add(room = right); return 1; }
+        if (Free(left)) { _cityTaken.Add(room = left); return -1; }
+        // Above and below: the name centred over the mark, the box reaching down (or up) to
+        // take the mark in too.
+        var half = Math.Max(textWidth * 0.5f + 4f, mark * 0.5f + 2f);
+        var tall = textHeight * 1.24f + mark * 0.5f + 2f;
+        var above = new Rect2(screen.X - half, screen.Y + mark * 0.5f + 2f - tall - textHeight * 0.1f, half * 2f, tall + textHeight * 0.1f);
+        if (Free(above)) { _cityTaken.Add(room = above); return 2; }
+        var below = new Rect2(screen.X - half, screen.Y - mark * 0.5f - 2f, half * 2f, tall + textHeight * 0.1f);
+        if (Free(below)) { _cityTaken.Add(room = below); return -2; }
+        return 0;
+
+        bool Free(Rect2 box)
+        {
+            foreach (var taken in _cityTaken)
+                if (taken.Intersects(box)) return false;
+            // A star is a mark as well; its own name, or its city's, may of course stand by it.
+            foreach (var (star, starCity) in _starMarks)
+            {
+                if ((city >= 0 && starCity == city) || star.DistanceSquaredTo(screen) < 4f) continue;
+                if (box.Intersects(new Rect2(star.X - 6f, star.Y - 6f, 12f, 12f))) return false;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>The name set on the side <see cref="TakeLabelRoom"/> found for it.</summary>
+    private static void SetLabelSide(CityPin pin, int side, float mark, int fontSize, float textPixels)
+    {
+        var toPixels = fontSize / textPixels;
+        pin.Name.HorizontalAlignment = side switch
+        {
+            1 => HorizontalAlignment.Left,
+            -1 => HorizontalAlignment.Right,
+            _ => HorizontalAlignment.Center
+        };
+        pin.Name.Offset = Math.Abs(side) == 1
+            ? new Vector2(side * (mark * 0.5f + 4f) * toPixels, 0f)
+            : new Vector2(0f, Math.Sign(side) * (mark * 0.5f + 2f + textPixels * 0.62f) * toPixels);
     }
 
     private CityPin CityPinAt(int slot)
@@ -254,6 +414,7 @@ public sealed partial class GlobePresentation
     {
         var city = _cities[index];
         pin.City = index;
+        pin.Star = null;
         pin.Node.Name = $"City_{city.Id}";
         pin.Name.Text = name;
         pin.Name.Font = font;
@@ -288,9 +449,93 @@ public sealed partial class GlobePresentation
         var rootBasis = _cityRoot.GlobalTransform.Basis;
         var horizon = CityHorizon();
         foreach (var pin in _cityPins)
-            if (pin.Node.Visible && pin.City >= 0 && pin.City < _cityNormals.Length &&
-                (rootBasis * _cityNormals[pin.City]).Dot(cameraNormal) < horizon)
-                pin.Node.Visible = false;
+        {
+            if (!pin.Node.Visible) continue;
+            Vector3 normal;
+            if (pin.City >= 0 && pin.City < _cityNormals.Length) normal = _cityNormals[pin.City];
+            else if (pin.Star is not null && -2 - pin.City < _starNames.Count && IsInstanceValid(pin.Star) &&
+                     pin.Star.IsVisibleInTree()) normal = _starNames[-2 - pin.City].Normal;
+            else { pin.Node.Visible = false; continue; }
+            if ((rootBasis * normal).Dot(cameraNormal) < horizon) pin.Node.Visible = false;
+        }
+    }
+
+    /// <summary>
+    /// Which city each capital's star stands on: a capital city within the distance a star hides
+    /// a dot at if there is one, else the nearest city there at all. Only when the stars have been
+    /// rebuilt - a new campaign, a capital moved or a country born - and then once over the list.
+    /// </summary>
+    private void RefreshStarNames()
+    {
+        var first = _capitalMarkers.Count > 0 && IsInstanceValid(_capitalMarkers[0].Node)
+            ? _capitalMarkers[0].Node.GetInstanceId() : 0ul;
+        var key = (_capitalRevision, _capitalMarkers.Count, first);
+        if (key == _starNamesBuilt) return;
+        _starNamesBuilt = key;
+        _starNames.Clear();
+        const float beside = 0.99995f;
+        var capitals = new List<(Nation Nation, Vector3 Normal)>();
+        if (_campaign is not null)
+            foreach (var nation in _campaign.Nations)
+                if (!string.IsNullOrWhiteSpace(nation.CapitalName))
+                    capitals.Add((nation, SurfacePoint(nation.CapitalLatitude, nation.CapitalLongitude, 1f).Normalized()));
+        foreach (var (marker, normal) in _capitalMarkers)
+        {
+            if (!IsInstanceValid(marker)) continue;
+            int capital = -1, nearest = -1;
+            float capitalCloseness = beside, nearestCloseness = beside;
+            for (var index = 0; index < _cityNormals.Length; index++)
+            {
+                var closeness = _cityNormals[index].Dot(normal);
+                if (closeness <= beside) continue;
+                if (closeness > nearestCloseness) { nearestCloseness = closeness; nearest = index; }
+                if (_cities[index].Capital is "national" or "seat" && closeness > capitalCloseness)
+                {
+                    capitalCloseness = closeness;
+                    capital = index;
+                }
+            }
+            // Whose star: the one country whose capital is at that point. Not by the node's name,
+            // which the rebuild cannot keep - the old stars are still there, only queued to go.
+            Nation owner = null;
+            var ownerCloseness = 0.9999f;
+            foreach (var (nation, capitalNormal) in capitals)
+            {
+                var closeness = capitalNormal.Dot(normal);
+                if (closeness > ownerCloseness) { ownerCloseness = closeness; owner = nation; }
+            }
+            _starNames.Add((marker, normal, capital >= 0 ? capital : nearest, owner));
+        }
+    }
+
+    /// <summary>What the country calls its capital, as the country picker says it.</summary>
+    private static string StarCapitalName(Nation nation)
+    {
+        if (nation is null || string.IsNullOrWhiteSpace(nation.CapitalName)) return "";
+        return Loc.GetOr("capital." + nation.CapitalName, Loc.Get(nation.CapitalName));
+    }
+
+    /// <summary>Whether a drawn capital star stands on this city, which then needs no dot of its own.</summary>
+    private bool StarStandsOn(int index)
+    {
+        foreach (var (marker, _, city, _) in _starNames)
+            if (city == index && IsInstanceValid(marker) && marker.IsVisibleInTree()) return true;
+        return false;
+    }
+
+    private void SetUpStarPin(CityPin pin, int star, Node3D marker, string name, Font font, int fontSize)
+    {
+        pin.City = -2 - star;
+        pin.Star = marker;
+        pin.Node.Name = $"Star_{star}";
+        pin.Name.Text = name;
+        pin.Name.Font = font;
+        pin.Name.FontSize = fontSize;
+        pin.Name.OutlineSize = Math.Max(4, fontSize / 4);
+        pin.Name.FixedSize = !_flatMap;
+        pin.Dot.FixedSize = !_flatMap;
+        pin.Name.Modulate = Ui.Colour("globe.city_capital");
+        pin.Name.OutlineModulate = Ui.Colour("globe.city_outline");
     }
 
     /// <summary>A capital's own star already marks this city: its dot would sit under it.</summary>

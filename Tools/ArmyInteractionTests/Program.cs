@@ -69,6 +69,7 @@ static class Program
         if (args.Contains("--militia-only")) { MilitiaSeatTests.Run(c); return; }
         if (args.Contains("--gaza-only")) { HeldGroundTests.Run(c); return; }
         if (args.Contains("--secession-name-only")) { SecessionNameTests.Run(c); return; }
+        if (args.Contains("--capital-point-only")) { CapitalPointTests.Run(c); return; }
         if (args.Contains("--ai-diplomacy-only")) { AiDiplomacyTests.Run(c); return; }
         if (args.Contains("--save-seed-mature-only"))
         {
