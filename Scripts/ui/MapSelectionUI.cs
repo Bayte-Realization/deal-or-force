@@ -564,6 +564,7 @@ public partial class DealOrForceGame
     private void OpenSelectedRegionDossier()
     {
         if (_selectedState is null || _selectedNation is null) return;
+        ForgetDossierReturn();
         var owner = SelectedRegionOwner() ?? _selectedNation;
         HideMapSelection(true);
         ReturnCountryActions();

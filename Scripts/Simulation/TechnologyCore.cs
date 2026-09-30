@@ -226,11 +226,30 @@ public sealed partial class Nation
     [JsonIgnore] internal int TechnologyBonusesFor = -1;
     [JsonIgnore] internal int TechnologyBonusesRevision = -1;
 
+    // The list stays a list because a save keeps technologies in the order they were learned.
+    // What is asked of it is membership, and that is asked a great deal: pricing one technology
+    // for one country asks it of every other country, and choosing what to research next prices
+    // every technology on offer - a walk of a hundred-odd names, case-folded, several million
+    // times a week. The set is rebuilt whenever the list has changed underneath it.
+    [JsonIgnore] private HashSet<string> _knownTechnologies;
+    [JsonIgnore] private int _knownTechnologiesCount = -1;
+    [JsonIgnore] private string _knownTechnologiesLast;
+
     public bool HasTechnology(string id)
     {
-        foreach (var known in Technologies)
-            if (string.Equals(known, id, StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
+        var count = Technologies.Count;
+        if (count == 0 || id is null) return false;
+        var last = Technologies[count - 1];
+        if (_knownTechnologies is null || _knownTechnologiesCount != count ||
+            !ReferenceEquals(_knownTechnologiesLast, last))
+        {
+            _knownTechnologies ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _knownTechnologies.Clear();
+            foreach (var known in Technologies) _knownTechnologies.Add(known);
+            _knownTechnologiesCount = count;
+            _knownTechnologiesLast = last;
+        }
+        return _knownTechnologies.Contains(id);
     }
 }
 
@@ -338,6 +357,110 @@ public static class ResearchSystem
     public static float CostFor(Campaign campaign, Nation nation, TechnologyDefinition technology) =>
         DiffusionFor(campaign, nation, technology).EffectiveCost;
 
+    /// <summary>
+    /// Who knows what, for one research week.
+    ///
+    /// Pricing a technology asks every other country whether it knows it, what share of the
+    /// world's output it is, whether it borders the buyer and how close a partner it is. Asked
+    /// buyer by buyer, that was every pair of countries in the world each week, and choosing what
+    /// to research next asked it again for every technology on offer - nine tenths of the research
+    /// pass. Most of the answers do not depend on the buyer and are worked out here once: the
+    /// world's output, and each technology's output already knowing it, summed in the order the
+    /// pair walk summed them so that every price comes out the same to the last bit. What does
+    /// depend on the buyer - its neighbours, its partners, who it will not learn from - is a
+    /// handful of countries each, read from the relations that exist rather than from all pairs.
+    /// </summary>
+    private sealed class Survey
+    {
+        public float World;
+        public readonly Dictionary<string, float> KnownOutput = new(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<int, Nation> ByMapIndex = new();
+        public readonly Dictionary<int, List<(Nation Other, DiplomaticRelation Relation)>> Ties = new();
+
+        public static Survey Take(Campaign campaign)
+        {
+            var survey = new Survey();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var nation in campaign.Nations)
+            {
+                survey.ByMapIndex[nation.MapIndex] = nation;
+                if (nation.Gdp <= 0f) continue;
+                survey.World += nation.Gdp;
+                seen.Clear();
+                foreach (var id in nation.Technologies)
+                    if (id is not null && seen.Add(id))
+                        survey.KnownOutput[id] = survey.KnownOutput.GetValueOrDefault(id) + nation.Gdp;
+            }
+            foreach (var relation in campaign.Relations.Values)
+            {
+                var weight = relation.Stance == DiplomaticStance.Allied ? 2f
+                    : relation.TradeAgreement ? 1f
+                    : relation.NonAggressionPact ? 0.5f : 0f;
+                if (weight <= 0f) continue;
+                var a = campaign.NationById(relation.A);
+                var b = campaign.NationById(relation.B);
+                if (a is null || b is null) continue;
+                Tie(survey, a, b, relation);
+                Tie(survey, b, a, relation);
+            }
+            return survey;
+        }
+
+        private static void Tie(Survey survey, Nation from, Nation to, DiplomaticRelation relation)
+        {
+            if (!survey.Ties.TryGetValue(from.Id, out var list)) survey.Ties[from.Id] = list = new();
+            list.Add((to, relation));
+        }
+
+        /// <summary>A country has learned it: its known output, summed again in the world's order.</summary>
+        public void Learned(Campaign campaign, string technology)
+        {
+            var sum = 0f;
+            foreach (var nation in campaign.Nations)
+                if (nation.Gdp > 0f && nation.HasTechnology(technology)) sum += nation.Gdp;
+            KnownOutput[technology] = sum;
+        }
+    }
+
+    private static bool Isolated(DiplomaticRelation relation, Nation nation, Nation other) =>
+        relation is { Stance: DiplomaticStance.AtWar or DiplomaticStance.Rival } ||
+        relation?.EmbargoBy(nation.Id) == true || relation?.EmbargoBy(other.Id) == true;
+
+    /// <summary>The price against a survey: for a technology the buyer does not know, which is the only kind it buys.</summary>
+    private static float CostFor(Campaign campaign, Survey survey, Nation nation, TechnologyDefinition technology)
+    {
+        var having = survey.KnownOutput.GetValueOrDefault(technology.Id);
+        var borderCount = 0;
+        var borderHaving = 0;
+        foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
+        {
+            if (!survey.ByMapIndex.TryGetValue(mapIndex, out var other) || other == nation ||
+                other.Population <= 0 || other.Landless) continue;
+            if (Isolated(CampaignDiplomacy.Peek(campaign, nation.Id, other.Id), nation, other)) continue;
+            borderCount++;
+            if (other.HasTechnology(technology.Id)) borderHaving++;
+        }
+        var partnerWeight = 0f;
+        var partnerHaving = 0f;
+        if (survey.Ties.TryGetValue(nation.Id, out var ties))
+            foreach (var (other, relation) in ties)
+            {
+                if (other == nation || other.Population <= 0 || other.Landless || Isolated(relation, nation, other)) continue;
+                var weight = relation.Stance == DiplomaticStance.Allied ? 2f
+                    : relation.TradeAgreement ? 1f
+                    : relation.NonAggressionPact ? 0.5f : 0f;
+                partnerWeight += weight;
+                if (other.HasTechnology(technology.Id)) partnerHaving += weight;
+            }
+        var world = survey.World;
+        var defines = campaign.Defines;
+        var global = M.Clamp01(defines.ResearchDiffusion) * (world <= 0f ? 0f : having / world);
+        var border = M.Clamp01(defines.ResearchNeighbourDiffusion) * (borderCount == 0 ? 0f : borderHaving / (float)borderCount);
+        var partners = M.Clamp01(defines.ResearchPartnerDiffusion) * (partnerWeight <= 0f ? 0f : partnerHaving / partnerWeight);
+        var discount = MathF.Min(M.Clamp01(defines.ResearchMaximumDiscount), global + border + partners);
+        return technology.Cost * (1f - discount);
+    }
+
     /// <summary>Weeks left at this week's pace, or -1 for never.</summary>
     public static int WeeksLeft(Campaign campaign, Nation nation, TechnologyDefinition technology)
     {
@@ -359,11 +482,13 @@ public static class ResearchSystem
     /// faster, so it took the attack bonuses first and the smaller side never caught up - over two
     /// years the Russo-Ukrainian front went from Ukraine's divisions at 44 % strength to 24 %.
     /// </summary>
-    public static TechnologyDefinition Choose(Campaign campaign, Nation nation)
+    public static TechnologyDefinition Choose(Campaign campaign, Nation nation) => Choose(campaign, nation, null);
+
+    private static TechnologyDefinition Choose(Campaign campaign, Nation nation, Survey survey)
     {
         var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
         return AvailableTo(nation)
-            .OrderBy(technology => CostFor(campaign, nation, technology))
+            .OrderBy(technology => survey is null ? CostFor(campaign, nation, technology) : CostFor(campaign, survey, nation, technology))
             .ThenBy(technology => (technology.Category is "military" or "logistics") == atWar ? 0 : 1)
             .ThenBy(technology => technology.Id, StringComparer.Ordinal)
             .FirstOrDefault();
@@ -373,21 +498,23 @@ public static class ResearchSystem
     public static void Tick(Campaign campaign)
     {
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % 7 != 0 || TechnologyCatalog.All.Count == 0) return;
+        var survey = Survey.Take(campaign);
         foreach (var nation in campaign.Nations)
         {
             if (nation.Population <= 0) continue;
             var current = TechnologyCatalog.Of(nation.CurrentResearch);
             if (current is null || !Available(nation, current))
             {
-                current = Choose(campaign, nation);
+                current = Choose(campaign, nation, survey);
                 nation.CurrentResearch = current?.Id ?? "";
             }
             nation.ResearchPerWeek = WeeklyPoints(campaign, nation);
             if (current is null) continue;
             var progress = nation.ResearchProgress.GetValueOrDefault(current.Id) + nation.ResearchPerWeek;
             nation.ResearchProgress[current.Id] = progress;
-            if (progress < CostFor(campaign, nation, current)) continue;
+            if (progress < CostFor(campaign, survey, nation, current)) continue;
             nation.Technologies.Add(current.Id);
+            survey.Learned(campaign, current.Id);
             nation.ResearchProgress.Remove(current.Id);
             nation.CurrentResearch = "";
             if (nation.IsHuman) campaign.MarkStrategicChange();

@@ -404,6 +404,8 @@ public partial class DealOrForceGame : Control
             CloseLedger();
         else if (_warLedgerLayer is { Visible: true })
             CloseWarLedger();
+        else if (_sidePanel.Visible && _dossierReturnArmyIds is not null)
+            ReturnToArmyOrders();
         else if (_sidePanel.Visible)
             CloseSidePanel();
         else if (MapSelectionShowing)
@@ -732,6 +734,10 @@ public partial class DealOrForceGame : Control
         _sideTitle.ClipText = true;
         _sideTitle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         header.AddChild(_sideTitle);
+        _sideBackToOrders = ActionButton("← Orders", ReturnToArmyOrders, 0, 34);
+        _sideBackToOrders.TooltipText = Ui.Tip(Tr("Back to the orders of the divisions this dossier was opened from (Esc)."));
+        _sideBackToOrders.Visible = false;
+        header.AddChild(_sideBackToOrders);
         header.AddChild(ActionButton("×", CloseSidePanel, 38, 34));
 
         _dossierTabs = new HBoxContainer();
@@ -1042,6 +1048,7 @@ public partial class DealOrForceGame : Control
 
     private void CloseSidePanel()
     {
+        ForgetDossierReturn();
         _sidePanel.Visible = false;
         _globe.SetMapModeSubject(null);
         _openScreen = "";

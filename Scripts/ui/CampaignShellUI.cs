@@ -82,13 +82,32 @@ public partial class DealOrForceGame
         {
             Ui.Place(_outliner, "hud.outliner");
             _outliner.AnchorBottom = 0;
-            _outliner.OffsetBottom = _outliner.OffsetTop + (_outlinerCollapsed ? InterfaceSkin.Metric("shell.outliner_collapsed", 48) :
-                Mathf.Clamp(Size.Y - _outliner.OffsetTop - 68, 180, InterfaceSkin.Metric("shell.outliner_height", 600)));
+            FitOutliner();
         }
+    }
+
+    /// <summary>
+    /// The situation report as tall as what it has to report, and no taller than the room
+    /// there is. At a fixed height it hung a tall empty frame down the side of the map on every
+    /// quiet day - three lines of news and four hundred pixels of nothing over the Gulf.
+    /// </summary>
+    private void FitOutliner()
+    {
+        if (_outliner is null) return;
+        var collapsed = InterfaceSkin.Metric("shell.outliner_collapsed", 48);
+        var room = Mathf.Clamp(Size.Y - _outliner.OffsetTop - 68, 180, InterfaceSkin.Metric("shell.outliner_height", 600));
+        var wanted = room;
+        // The frame's own minimum is the header, the margins and the border - the scroll counts
+        // for nothing there - and what scrolls is measured on its own.
+        if (_outlinerScroll is { } scroll && scroll.GetChildCount() > 0 && scroll.GetChild(0) is Control body)
+            wanted = _outliner.GetCombinedMinimumSize().Y + body.GetCombinedMinimumSize().Y + 6f;
+        _outliner.OffsetBottom = _outliner.OffsetTop + (_outlinerCollapsed ? collapsed : Mathf.Clamp(wanted, collapsed, room));
     }
 
     private void PrepareDossierTabs(string screen)
     {
+        // The way back to an army's orders belongs to the region it was asked about.
+        if (screen != "Region") ForgetDossierReturn();
         if (_dossierTabs is null || _dossierScreen == screen) return;
         _dossierScreen = screen;
         var tabs = CampaignUiCatalog.For(screen).Tabs;

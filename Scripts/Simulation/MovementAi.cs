@@ -165,7 +165,7 @@ public static class MovementAi
         foreach (var region in campaign.States)
         {
             if (region.NationMapIndex == nation.MapIndex) continue;
-            var people = MovementRules.PeopleOf(region, definition, out _);
+            var people = MovementRules.PeopleOf(campaign, region, definition, out _);
             if (people <= 0) continue;
             var score = people * (1f - state.Support.GetValueOrDefault(region.MapIndex)) *
                         (MovementDefinition.Listed(definition.Homeland, region.Id) ? 3f : 1f);

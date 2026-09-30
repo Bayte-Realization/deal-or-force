@@ -252,7 +252,7 @@ public partial class DealOrForceGame
         dropLead.TooltipText = Ui.Tip(Tr("Remove the lead division from the selection without moving or disbanding it."));
         selection.AddChild(dropLead);
         var region = ActionButton("Region info", ShowSelectedArmyRegion, 102, 30, false, Icon("region"));
-        region.TooltipText = Ui.Tip(Tr("Open the region dossier for the lead division's position. Click the division on the map to return to its orders."));
+        region.TooltipText = Ui.Tip(Tr("Open the region dossier for the lead division's position. ← Orders in its header, or Escape, brings the orders back."));
         selection.AddChild(region);
 
         _armyCommandFeedback = Title("Right-click to march or attack · Shift+right-click queues a waypoint",

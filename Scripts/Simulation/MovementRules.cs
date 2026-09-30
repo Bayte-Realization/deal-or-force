@@ -134,7 +134,7 @@ public static class MovementRules
         OwnStateCache.Clear();
         foreach (var region in campaign.States)
         {
-            var own = PeopleOf(region, definition, out var faithful);
+            var own = PeopleOf(campaign, region, definition, out var faithful);
             believers += faithful;
             if (own <= 0 && faithful <= 0) { state.Support.Remove(region.MapIndex); continue; }
             var support = state.Support.GetValueOrDefault(region.MapIndex);
@@ -252,6 +252,39 @@ public static class MovementRules
     }
 
     /// <summary>Its own peoples in a region, and the believers of its faiths who are not.</summary>
+    // A movement's people in every region of the world, for the day. Its week counts them and
+    // its leadership's week counts them again an hour later - each a walk of every population
+    // group of all eighteen hundred regions, which made movements a sixth of a campaign day.
+    // A day is the right lifetime: the census moves weekly, before either asks, and whatever
+    // else moves people between regions moves a border with them, which clears it.
+    private static Campaign _peopleCampaign;
+    private static int _peopleDay = -1;
+    private static int _peopleMapRevision = -1;
+    private static int _peopleStates = -1;
+    private static readonly Dictionary<(MovementDefinition, ScenarioState), (long Own, long Faithful)> PeopleToday = new();
+
+    /// <summary><see cref="PeopleOf(ScenarioState, MovementDefinition, out long)"/>, remembered for the day.</summary>
+    internal static long PeopleOf(Campaign campaign, ScenarioState region, MovementDefinition definition, out long faithful)
+    {
+        if (!ReferenceEquals(_peopleCampaign, campaign) || _peopleDay != campaign.ElapsedDays ||
+            _peopleMapRevision != campaign.MapRevision || _peopleStates != campaign.States.Count)
+        {
+            PeopleToday.Clear();
+            _peopleCampaign = campaign;
+            _peopleDay = campaign.ElapsedDays;
+            _peopleMapRevision = campaign.MapRevision;
+            _peopleStates = campaign.States.Count;
+        }
+        if (PeopleToday.TryGetValue((definition, region), out var known))
+        {
+            faithful = known.Faithful;
+            return known.Own;
+        }
+        var own = PeopleOf(region, definition, out faithful);
+        PeopleToday[(definition, region)] = (own, faithful);
+        return own;
+    }
+
     internal static long PeopleOf(ScenarioState region, MovementDefinition definition, out long faithful)
     {
         long own = 0;

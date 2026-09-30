@@ -13,6 +13,15 @@ public partial class DealOrForceGame
     private readonly Dictionary<ReinforcementPriority, Button> _armyPriorityButtons = new();
     private Label _armyCommandFeedback = null!;
 
+    /// <summary>
+    /// The divisions whose orders the region dossier was opened from. Asking where the lead
+    /// division stands is not the end of giving it orders, so the dossier carries a way back
+    /// to them - the button in its header, or Escape - for as long as it shows that ground.
+    /// </summary>
+    private int[] _dossierReturnArmyIds;
+    private int _dossierReturnLeadId = -1;
+    private Button _sideBackToOrders;
+
     /// <summary>Shift means "these as well".</summary>
     private static bool AddingToSelection =>
         Input.IsKeyPressed(Key.Shift) && !Input.IsKeyPressed(Key.Ctrl);
@@ -109,6 +118,7 @@ public partial class DealOrForceGame
     private void ShowSelectedArmy()
     {
         if (_selectedArmy is null) return;
+        ForgetDossierReturn();
         _openScreen = "";
         _sidePanel.Visible = false;
         _militarySpending.Visible = false;
@@ -128,6 +138,7 @@ public partial class DealOrForceGame
             ShowSelectedArmy();
             return;
         }
+        ForgetDossierReturn();
         _openScreen = "";
         _sidePanel.Visible = false;
         _militarySpending.Visible = false;
@@ -723,7 +734,40 @@ public partial class DealOrForceGame
         // This is an inspector shortcut, not an army order. The dossier lives in the
         // generic side panel, so hand the corner over to it instead of hiding the
         // command tabs inside a still-visible army panel (which left a blank deck).
+        var returnIds = (_selectedArmies.Count > 0 ? _selectedArmies : new List<Army> { _selectedArmy })
+            .Where(army => army is not null).Select(army => army.Id).ToArray();
+        var leadId = _selectedArmy.Id;
         OpenSelectedRegionDossier();
+        _dossierReturnArmyIds = returnIds;
+        _dossierReturnLeadId = leadId;
+        if (_sideBackToOrders is not null) _sideBackToOrders.Visible = true;
+    }
+
+    /// <summary>Back from the region dossier to the orders of the divisions it was opened from.</summary>
+    private void ReturnToArmyOrders()
+    {
+        var ids = _dossierReturnArmyIds;
+        var leadId = _dossierReturnLeadId;
+        ForgetDossierReturn();
+        if (ids is null || _campaign is null) return;
+        var armies = ids.Select(id => _campaign.Armies.FirstOrDefault(army => army.Id == id))
+            .Where(army => ArmyInteraction.CanSelect(_campaign, army)).ToList();
+        // Every one of them gone while the dossier was read - destroyed, merged, disbanded:
+        // there are no orders to go back to, so the dossier simply closes.
+        if (armies.Count == 0) { CloseSidePanel(); return; }
+        _selectedArmies.Clear();
+        _selectedArmies.AddRange(armies);
+        _selectedArmy = armies.FirstOrDefault(army => army.Id == leadId) ?? armies[0];
+        _globe.SelectArmies(armies.Select(army => army.Id));
+        ShowSelectedArmies();
+    }
+
+    /// <summary>The dossier is showing something else now: the way back no longer leads anywhere.</summary>
+    private void ForgetDossierReturn()
+    {
+        _dossierReturnArmyIds = null;
+        _dossierReturnLeadId = -1;
+        if (_sideBackToOrders is not null) _sideBackToOrders.Visible = false;
     }
 
     /// <summary>How tightly a plan is allowed to shuffle its divisions, in words.</summary>
