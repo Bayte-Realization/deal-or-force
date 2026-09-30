@@ -1,0 +1,11 @@
+{
+  "id": "example_long_range_forces",
+  "name": "Example: long-range forces",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 120,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

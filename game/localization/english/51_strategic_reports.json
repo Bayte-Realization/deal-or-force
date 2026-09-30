@@ -26,5 +26,7 @@
   "chronicle.embargo_ended": "{0} lifts its embargo on {1}.",
   "chronicle.state_formed": "A state is proclaimed: {2}.",
   "chronicle.decision_taken": "{0}: adopted the decision “{2}”.",
-  "chronicle.construction_completed": "{0}: completed “{2}” in {3}."
+  "chronicle.construction_completed": "{0}: completed “{2}” in {3}.",
+  "chronicle.militia_raised": "{0}: {3} takes up arms - its people form a militia of their own.",
+  "chronicle.militia_stood_down": "{0}: the danger has passed and {2} goes home."
 }

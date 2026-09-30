@@ -5479,13 +5479,17 @@ public static class Program
         if (replaced.CooldownMs != 250)
             return "replacing a cue's file discarded how the cue behaves";
 
-        MusicCatalog.Merge("{ \"tracks\": { \"theme\": { \"file\": \"audio/theme.ogg\", \"when\": \"menu\" } } }",
+        // Counted against what the game ships, which may be music of its own: a mod's menu track
+        // is one more menu track and no more campaign ones.
+        var menuBefore = MusicCatalog.For(MusicCatalog.Moment.Menu).Count;
+        var campaignBefore = MusicCatalog.For(MusicCatalog.Moment.Campaign).Count;
+        MusicCatalog.Merge("{ \"tracks\": { \"mod_example_theme\": { \"file\": \"audio/theme.ogg\", \"when\": \"menu\" } } }",
             "user://mods/example/music", "test", null);
         var menu = MusicCatalog.For(MusicCatalog.Moment.Menu);
         var campaign = MusicCatalog.For(MusicCatalog.Moment.Campaign);
-        if (menu.Count != 1 || menu[0].File != "user://mods/example/music/audio/theme.ogg")
+        if (menu.Count != menuBefore + 1 || !menu.Any(track => track.File == "user://mods/example/music/audio/theme.ogg"))
             return "a mod could not add a track of its own";
-        if (campaign.Count != 0)
+        if (campaign.Count != campaignBefore)
             return "a menu track was offered to the campaign as well";
 
         SoundCatalog.Load();
@@ -7348,6 +7352,12 @@ public static class Program
                             // weekly pass reads are only seven of them - so what has to be
                             // sound is what it says about itself.
                             "trade" => TradeControl(entry, file, templates, complaints),
+                            // A kind of long-range formation is the mod's to name; what has to be
+                            // sound is its kind and the missions it may be given.
+                            "support" => SupportEntry(entry),
+                            // Militia is one set of numbers, read by name: a key its reader
+                            // does not know is a number nobody reads.
+                            "militia" => MilitiaKnows(entry.Name),
                             _ => true
                         };
                         if (known) continue;
@@ -7368,6 +7378,34 @@ public static class Program
         Console.WriteLine($"  templates: {packages:N0} worked example(s) in mods/_templates, " +
                           $"{keys:N0} key(s) between them, every one naming something that exists.");
         return "";
+    }
+
+    private static readonly string[] SupportMissions =
+        { "standby", "close_air_support", "interdiction", "air_superiority" };
+
+    private static bool SupportEntry(System.Text.Json.JsonProperty entry)
+    {
+        var value = entry.Value;
+        if (value.ValueKind != System.Text.Json.JsonValueKind.Object) return false;
+        if (value.TryGetProperty("kind", out var kind) &&
+            (kind.ValueKind != System.Text.Json.JsonValueKind.String ||
+             !Enum.TryParse<SupportKind>(kind.GetString(), true, out _))) return false;
+        if (value.TryGetProperty("missions", out var missions))
+        {
+            if (missions.ValueKind != System.Text.Json.JsonValueKind.Array) return false;
+            foreach (var mission in missions.EnumerateArray())
+                if (mission.ValueKind != System.Text.Json.JsonValueKind.String ||
+                    Array.IndexOf(SupportMissions, mission.GetString()) < 0) return false;
+        }
+        return true;
+    }
+
+    private static bool MilitiaKnows(string key)
+    {
+        var errors = new List<string>();
+        MilitiaCore.Merge("{ " + System.Text.Json.JsonSerializer.Serialize(key) + ": 0 }", errors);
+        MilitiaCore.ResetCatalog();
+        return errors.Count == 0;
     }
 
     /// <summary>The template folder, wherever the bench happens to have been started from.</summary>

@@ -1,0 +1,7 @@
+// Militia, the people who take up arms without being told to. The base game's
+// common/militia/00_militia.json explains every number; a later file changes only the keys
+// it names. This one makes territorial defence quicker to rise and slower to go home.
+{
+  "base": 0.14,
+  "stand_down_days": 60
+}

@@ -17,7 +17,11 @@
 //   * (population / population_per_point)
 //   * whatever the government and the ideology are worth
 //
-// and when readiness passes 1 a formation stands up, paid for in manpower and nothing else.
+// and when readiness passes 1 a formation stands up, costing no manpower (see "formation").
+//
+// It forms up in the largest town of the region its country still holds - the cities are
+// map_data/cities - and is named for it: "1. Kharkiv Militia". With no town left, in the middle
+// of the ground still held; with no ground left, nowhere.
 {
   // A day's readiness for a region of `population_per_point` people with everything else
   // at one. The multipliers below only ever make it slower, and they compound: a front-line

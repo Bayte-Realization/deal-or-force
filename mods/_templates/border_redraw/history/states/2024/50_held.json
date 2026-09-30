@@ -1,0 +1,8 @@
+// A whole region held by somebody else on the first day - the base game does this for the
+// Gaza Strip. "controller" names the country whose troops stand there; every province of the
+// region opens occupied by it, striped on the map. Written by region, because province ids
+// change whenever the map is recut. Region ids are in common/states.
+{
+  // Donetsk, all of it, as an example: held by Russia, still Ukraine's.
+  "ua_14": { "controller": "RUS" }
+}

@@ -1,0 +1,21 @@
+// The cities on the map. Every file in map_data/cities is read in name order and later files
+// win key by key, so a mod adds a city under a key of its own, changes one by naming its key
+// again, and takes one off the map with "tier": -1. The base game's keys are in
+// map_data/cities/00_cities.json.
+//
+//   name        what the map calls it when the language has no city.<key>.name of its own
+//   latitude    degrees north
+//   longitude   degrees east
+//   population  people; the larger town of a region is where its militia forms up
+//   tier        0 capitals and world cities, seen from far out ... 3 towns, seen only close in
+//   capital     "national", "seat", "regional" or leave it out
+//   country     an ISO code, for information only - who holds a city is the map's business
+{
+  // A town the base map does not have.
+  "example_harbour_ukr": {
+    "name": "Example Harbour", "latitude": 46.6, "longitude": 32.6,
+    "population": 90000, "tier": 2, "country": "UKR"
+  },
+  // A town the base map has, made more important: it now shows from further out.
+  "kharkiv_ukr": { "tier": 0 }
+}

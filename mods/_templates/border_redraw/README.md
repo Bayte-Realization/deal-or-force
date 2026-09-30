@@ -14,6 +14,13 @@ The shape of the world is data (`provinces.png` + `definition.csv`) and so is wh
 `owner` is who holds it in law; `controller` is who is standing on it. Leaving the
 controller out means the owner holds it, which is the ordinary case.
 
+## A whole region held by somebody else
+
+`history/states/2024/50_held.json` does by region what the third column of a province line does
+by province: `{ "ua_14": { "controller": "RUS" } }` opens the campaign with every province of
+that region held by Russia and still owned by Ukraine. The base game writes the Gaza Strip this
+way. It survives a recut of the map, which a list of province ids does not.
+
 ## What this cannot do
 
 Region membership. A province is grown inside one region and never crosses its border, so

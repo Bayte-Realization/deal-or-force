@@ -1,0 +1,24 @@
+// A new kind of long-range formation, and a change to one the game already has - neither
+// needs a line of code. Every field is explained at the top of the base game's
+// common/support/00_support_types.json.
+{
+  // The loitering munition battery: a drone that is also the shell. Cheap, quick to raise,
+  // short of reach and all of its value in finding and hitting what is behind the line.
+  "loitering_munition_battery": {
+    "name": "Loitering munition battery",
+    "kind": "drone",
+    "icon": "drone",
+    "range_km": 60,
+    "support_fire": 3.5,
+    "interdiction": 2.5,
+    "recon": 1.2,
+    "recruitment_cost": 0.25,
+    "build_days": 30,
+    "personnel": 600,
+    "missions": ["standby", "close_air_support", "interdiction"]
+  },
+
+  // A kind the game already has, changed by one number. A later file naming the same kind
+  // changes only the fields it names: this is longer-legged rocket artillery and nothing else.
+  "mlrs_battalion": { "range_km": 120 }
+}

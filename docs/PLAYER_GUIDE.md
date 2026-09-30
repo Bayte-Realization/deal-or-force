@@ -364,6 +364,21 @@ If the path is cut, supply and organisation fall, isolation losses begin, and re
 men nearly stops. Replacements are not free: they come out of the national manpower reserve,
 and the daily volume is bounded by mobilisation capacity, the budget and local supply.
 
+## Militia
+
+Nobody recruits militia. A region raises it by itself when the enemy is on or next to its
+ground - quickly if its people think the state is theirs, live decently and still believe in
+the war, and not at all if they are held down by a state they do not recognise. It costs no
+manpower: these are the people who already live there.
+
+It forms up in the largest town of the region its country still holds - Kharkiv's militia in
+Kharkiv, and in Kupyansk once Kharkiv has fallen - and carries that town's name. A region with
+no town on the map forms up in the middle of the ground it still holds; one wholly occupied
+raises nobody. Militia holds its region rather than joining the field army's fronts, and once
+no enemy has come near for a month it goes home. Your own chronicle (the Ledger) records every
+town that takes up arms and every militia that stands down. The numbers are in
+`common/militia/00_militia.json`.
+
 ## Rivers and lakes
 
 Rivers and lakes are part of one geography, not a decorative layer. A river is crossed with

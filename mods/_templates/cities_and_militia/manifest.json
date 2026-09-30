@@ -1,0 +1,11 @@
+{
+  "id": "example_cities_and_militia",
+  "name": "Example: cities and militia",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 130,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

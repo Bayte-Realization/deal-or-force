@@ -184,7 +184,9 @@ public static class MilitiaCore
 
             var raised = Standing.GetValueOrDefault(nation.Id);
             if (raised >= weights.PerCountry) continue;
-            var politics = PoliticsMultiplier(nation);
+            // What the government and its beliefs are worth, and what it has prepared: a country
+            // that registered and armed its volunteers before the war raises them in days.
+            var politics = PoliticsMultiplier(nation) * NationalModifiers.Factor(nation, "militia_readiness");
             if (politics <= 0f) continue;
             foreach (var state in campaign.StatesOf(nation.MapIndex))
             {
@@ -251,14 +253,7 @@ public static class MilitiaCore
         var control = campaign.ProvinceController;
         var flag = (ushort)nation.MapIndex;
 
-        var province = -1;
-        for (var candidate = 1; candidate <= topology.ProvinceCount && candidate < control.Length; candidate++)
-        {
-            if (topology.ProvinceToState[candidate] != (ushort)state.MapIndex) continue;
-            if (control[candidate] != flag) continue;
-            province = candidate;
-            break;
-        }
+        var (province, town) = Seat(topology, control, flag, (ushort)state.MapIndex);
         // A region entirely under the enemy raises nobody: the people are there, the ground
         // to form up on is not. That is what a partisan rule would be for, and it is not
         // this one.
@@ -266,12 +261,17 @@ public static class MilitiaCore
 
         var men = (int)Weights.Formation;
         var position = topology.CenterOf(province);
+        // Named for the town it stood up in - "1. Kharkiv Militia" - because that is what it
+        // is; a region without a town on the map lends its own name.
+        var place = town?.Name ?? state.Name;
+        var suffix = " " + place + " Militia";
         var id = 0;
         var serial = 0;
         foreach (var army in campaign.Armies)
         {
             if (army.Id > id) id = army.Id;
-            if (army.NationId == nation.Id && army.TemplateId == TemplateId) serial++;
+            if (army.NationId == nation.Id && army.TemplateId == TemplateId &&
+                army.Name.EndsWith(suffix, StringComparison.Ordinal)) serial++;
         }
 
         campaign.Armies.Add(new Army
@@ -280,7 +280,7 @@ public static class MilitiaCore
             NationId = nation.Id,
             StateMapIndex = state.MapIndex,
             ProvinceId = province,
-            Name = $"{serial + 1}. {nation.Tag} Militia",
+            Name = $"{serial + 1}.{suffix}",
             TemplateId = TemplateId,
             Divisions = 1,
             Personnel = men,
@@ -300,9 +300,83 @@ public static class MilitiaCore
             Longitude = position.Longitude
         });
         DiagnosticLogs.Write("simulation",
-            $"MILITIA_RAISED nation={nation.Tag} region={state.Name} province={province} men={men}");
+            $"MILITIA_RAISED nation={nation.Tag} region={state.Name} town={place} province={province} men={men}");
+        // In the country's own chronicle: a town taking up arms is news to the people whose
+        // town it is, and forty of them across a world war are noise to everybody else.
+        campaign.Chronicle.Record(campaign, "militia_raised", nation.Id,
+            place: town is null ? state.Name : $"city.{town.Id}.name", isPublic: false);
         campaign.MarkStrategicChange();
         return true;
+    }
+
+    /// <summary>
+    /// Where a region's militia forms up: its largest town the country still holds.
+    ///
+    /// It used to be whichever of the region's provinces the map compiler happened to number
+    /// first, which put militia on offshore islands, in marshes and in the corner of the region
+    /// furthest from the war. People take up arms where they live, and where they live is the
+    /// towns: Kharkiv's militia is in Kharkiv. A region with no town on the map, or whose towns
+    /// have all fallen, forms up in the middle of the ground it still holds.
+    /// </summary>
+    public static (int Province, CityDefinition Town) Seat(ProvinceTopology topology, ushort[] control,
+        ushort flag, ushort region)
+    {
+        if (topology is null || control is null) return (-1, null);
+        CityDefinition town = null;
+        var seat = -1;
+        foreach (var city in CityCatalog.All)
+        {
+            if (town is not null && city.Population <= town.Population) continue;
+            var province = ProvinceAt(topology, city.Latitude, city.Longitude);
+            if (province <= 0 || province >= control.Length || topology.IsWater(province)) continue;
+            if (topology.ProvinceToState[province] != region || control[province] != flag) continue;
+            town = city;
+            seat = province;
+        }
+        if (town is not null) return (seat, town);
+
+        // The middle of what is still held, as a direction from the centre of the Earth, so a
+        // region across the date line does not average to the far side of the planet.
+        double x = 0, y = 0, z = 0;
+        for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
+        {
+            if (topology.ProvinceToState[province] != region || control[province] != flag || topology.IsWater(province))
+                continue;
+            var (latitude, longitude) = topology.CenterOf(province);
+            var (px, py, pz) = Direction(latitude, longitude);
+            x += px; y += py; z += pz;
+        }
+        var best = double.MinValue;
+        for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
+        {
+            if (topology.ProvinceToState[province] != region || control[province] != flag || topology.IsWater(province))
+                continue;
+            var (latitude, longitude) = topology.CenterOf(province);
+            var (px, py, pz) = Direction(latitude, longitude);
+            var toward = px * x + py * y + pz * z;
+            if (toward <= best) continue;
+            best = toward;
+            seat = province;
+        }
+        return (seat, null);
+    }
+
+    private static (double X, double Y, double Z) Direction(float latitude, float longitude)
+    {
+        var phi = latitude * Math.PI / 180.0;
+        var lambda = longitude * Math.PI / 180.0;
+        return (Math.Cos(phi) * Math.Cos(lambda), Math.Cos(phi) * Math.Sin(lambda), Math.Sin(phi));
+    }
+
+    /// <summary>The province under a point of the globe, or 0 for none.</summary>
+    private static int ProvinceAt(ProvinceTopology topology, float latitude, float longitude)
+    {
+        if (topology.Width <= 0 || topology.Height <= 0) return 0;
+        var x = (int)MathF.Floor((longitude + 180f) / 360f * topology.Width);
+        var y = (int)MathF.Floor((90f - latitude) / 180f * topology.Height);
+        x = ((x % topology.Width) + topology.Width) % topology.Width;
+        y = Math.Clamp(y, 0, topology.Height - 1);
+        return topology.CellToProvince[y * topology.Width + x];
     }
 
     /// <summary>
@@ -357,6 +431,7 @@ public static class MilitiaCore
             campaign.NationById(army.NationId)?.MilitiaQuietSince.Remove(army.Id);
             campaign.Armies.Remove(army);
             DiagnosticLogs.Write("simulation", $"MILITIA_STOOD_DOWN army={army.Id}");
+            campaign.Chronicle.Record(campaign, "militia_stood_down", army.NationId, subject: army.Name, isPublic: false);
         }
         campaign.MarkStrategicChange();
     }
