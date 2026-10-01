@@ -79,35 +79,26 @@ else was skipped rather than used.
 | `flag_culture_adyghe.png` | [Flag of Adygea.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Adygea.svg) | Public domain | Conscious |
 | `flag_culture_afar.png` | [Flag of the Afar Region.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Afar_Region.svg) | Public domain | Goran tek-en |
 | `flag_culture_afghan_theocratic_rule.png` | [Flag of the Taliban.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Taliban.svg) | Public domain | Original: Taliban Vector: Lexicon |
-| `flag_culture_african_american.png` | [Flag of South West Africa People's Organisation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_South_West_Africa_People%27s_Organisation.svg) | Public domain | Original by Bries |
 | `flag_culture_afrikaner.png` | [Flag of the Orange Free State.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Orange_Free_State.svg) | Public domain | David Benbennick wrote this file |
 | `flag_culture_ainu.png` | [Flag of Sakhalin and Kuril Ainu.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sakhalin_and_Kuril_Ainu.svg) | CC BY-SA 4.0 | 幻光尘 |
-| `flag_culture_akan.png` | [Flag of Akan, Hokkaido (1952–2005).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Akan%2C_Hokkaido_%281952%E2%80%932005%29.svg) | Public domain | Fred the Oyster |
 | `flag_culture_aland.png` | [Flag of Åland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_%C3%85land.svg) | Public domain | created by Zscout370 |
 | `flag_culture_albanian_communism.png` | [Flag of Albania (1946–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Albania_%281946%E2%80%931992%29.svg) | Public domain | Sadik Kaceli |
 | `flag_culture_altai.png` | [Flag of Altai Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Altai_Republic.svg) | Public domain | Comment – This license tag is also applicable to official documents, state symbols and sig |
 | `flag_culture_amazigh.png` | [Berber flag.svg](https://commons.wikimedia.org/wiki/File:Berber_flag.svg) | Public domain | Mysid |
 | `flag_culture_amazigh_nationalism.png` | [Berber flag.svg](https://commons.wikimedia.org/wiki/File:Berber_flag.svg) | Public domain | Mysid |
-| `flag_culture_american.png` | [German-American Flag (1867).png](https://commons.wikimedia.org/wiki/File:German-American_Flag_%281867%29.png) | CC0 | Tablelegs6 |
 | `flag_culture_amhara.png` | [Flag of the Amhara Region.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Amhara_Region.svg) | Public domain | made by J. Ollé reshaped and resized by MaxxL |
-| `flag_culture_arab_egyptian.png` | [Araball.png](https://commons.wikimedia.org/wiki/File:Araball.png) | CC BY-SA 4.0 | Dronebogus |
 | `flag_culture_arab_gulf.png` | [Arabic-Language-Flag.svg](https://commons.wikimedia.org/wiki/File:Arabic-Language-Flag.svg) | Public domain | Xiquet |
-| `flag_culture_arab_iraqi.png` | [Beni Amir Arab tribe flag (Morocco), علم قبيلة بني عمير العربية.png](https://commons.wikimedia.org/wiki/File:Beni_Amir_Arab_tribe_flag_%28Morocco%29%2C_%D8%B9%D9%84%D9%85_%D9%82%D8%A8%D9%8A%D9%84%D8%A9_%D8%A8%D9%86%D9%8A_%D8%B9%D9%85%D9%8A%D8%B1_%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9.png) | CC BY 4.0 | Arabios |
-| `flag_culture_arab_levantine.png` | [Flag of Iraqi Sunni Arabs.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraqi_Sunni_Arabs.svg) | CC0 | See File history below for details. |
-| `flag_culture_arab_maghrebi.png` | [Flag of arabic-hebrew people.png](https://commons.wikimedia.org/wiki/File:Flag_of_arabic-hebrew_people.png) | CC BY-SA 3.0 | recreated flag from picture from website |
 | `flag_culture_arab_nationalism.png` | [Flag of the Arab Revolt.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Arab_Revolt.svg) | Public domain | Orange Tuesday at English Wikipedia / ( Original text: Orange Tuesday ( talk ) ) |
 | `flag_culture_aromanian.png` | [Flag of the Aromanians in Greek Macedonia.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Aromanians_in_Greek_Macedonia.png) | CC BY-SA 4.0 | Unknown (original version) Super Dromaeosaurus (this version) |
 | `flag_culture_ashanti.png` | [Flag of Ashanti.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ashanti.svg) | Public domain | Himasaram |
 | `flag_culture_assyrian.png` | [Flag of the Assyrians.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Assyrians.svg) | Public domain | Assyrian Congress |
-| `flag_culture_australian.png` | [Australian Cornish-heritage flag.svg](https://commons.wikimedia.org/wiki/File:Australian_Cornish-heritage_flag.svg) | CC0 | File:Australian English-heritage flag.svg : Great Brightstar deritive works: Me |
 | `flag_culture_avar.png` | [Flag of Avars.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Avars.svg) | CC BY-SA 4.0 | Мухамед Аварский |
 | `flag_culture_aymara.png` | [Wiphala.svg](https://commons.wikimedia.org/wiki/File:Banner_of_the_Qulla_Suyu_(1979).svg) | Public domain | Huhsunqu |
 | `flag_culture_azerbaijani.png` | [Flag of Azerbaijan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Azerbaijan.svg) | Public domain | SKopp and others |
 | `flag_culture_bakongo.png` | [Bakongo Flag.png](https://commons.wikimedia.org/wiki/File:Bakongo_Flag.png) | CC BY-SA 4.0 | MiddleOfAfrica |
 | `flag_culture_balinese.png` | [Flag of Balinese.png](https://commons.wikimedia.org/wiki/File:Flag_of_Balinese.png) | CC BY-SA 4.0 | Kobokanaeru73 |
-| `flag_culture_balkar.png` | [Flag of the Kabardino-Balkar ASSR.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kabardino-Balkar_ASSR.svg) | Public domain | Osipov Georgiy Nokka |
+| `flag_culture_balkar.png` | [Flag of the Karachaуs and Balkars.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Karacha%D1%83s_and_Balkars.svg) | CC BY 4.0 | Ibragim Zankishiyev |
 | `flag_culture_baloch.png` | [Flag of Balochistan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Balochistan.svg) | CC0 | Baba66 |
-| `flag_culture_bambara.png` | [Flag of The Bambara Empire.png](https://commons.wikimedia.org/wiki/File:Flag_of_The_Bambara_Empire.png) | CC0 | Legionnx |
 | `flag_culture_bashkir.png` | [Flag of Bashkortostan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bashkortostan.svg) | Public domain | multiple Автор: Conscious |
 | `flag_culture_basque.png` | [Flag of the Basque Country.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Basque_Country.svg) | CC BY-SA 2.5 | Daniele Schirmo aka Frankie688 |
 | `flag_culture_basque_nationalism.png` | [Flag of the Basque Country.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Basque_Country.svg) | CC BY-SA 2.5 | Daniele Schirmo aka Frankie688 |
@@ -122,7 +113,6 @@ else was skipped rather than used.
 | `flag_culture_berber.png` | [Berber flag.svg](https://commons.wikimedia.org/wiki/File:Berber_flag.svg) | Public domain | Mysid |
 | `flag_culture_bosniak.png` | [Flag of Bosnia and Herzegovina (1992-1998).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bosnia_and_Herzegovina_(1992%E2%80%931998).svg) | Public domain | The authors of the final version of the officially adopted f |
 | `flag_culture_breton.png` | [Flag of Brittany.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Brittany.svg) | CC BY-SA 4.0 | Lexicon and GwenofGwened |
-| `flag_culture_bulgarian.png` | [Flag of SFR Yugoslav Bulgarian Minority.svg](https://commons.wikimedia.org/wiki/File:Flag_of_SFR_Yugoslav_Bulgarian_Minority.svg) | Public domain | w:User:R-41 |
 | `flag_culture_bulgarian_communism.png` | [Flag of Bulgaria (1971–1990).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bulgaria_%281971%E2%80%931990%29.svg) | CC BY-SA 3.0 | Scroch |
 | `flag_culture_buryat.png` | [Flag of Buryatia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Buryatia.svg) | Public domain | Elvonudinium |
 | `flag_culture_catalan.png` | [Flag of Catalonia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Catalonia.svg) | Public domain | Motoroil |
@@ -131,7 +121,6 @@ else was skipped rather than used.
 | `flag_culture_chamorro.png` | [Flag of Guam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Guam.svg) | Public domain | Xrmap |
 | `flag_culture_chechen.png` | [Flag of the Chechen Republic of Ichkeria.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Chechen_Republic_of_Ichkeria.svg) | Public domain | Maxxl² , original author Unknown Unknown |
 | `flag_culture_cherokee.png` | [Flag of the Cherokee Nation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Cherokee_Nation.svg) | Public domain | Original 1978 design by Stanley John [3] , with 1989 addition of black star by Amon Baker |
-| `flag_culture_chin.png` | [Flag of the People's Republic of China.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_People%27s_Republic_of_China.svg) | Public domain | Zeng Liansong |
 | `flag_culture_chinese_communism.png` | [Flag of the Chinese Communist Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Chinese_Communist_Party.svg) | Public domain | See above |
 | `flag_culture_chinese_nationalism.png` | [Flag of the Republic of China.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Republic_of_China.svg) | Public domain | Sun Yat-sen |
 | `flag_culture_chuvash.png` | [Flag of Chuvashia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Chuvashia.svg) | Public domain | Elli Mikhailovich Yuriev |
@@ -141,8 +130,6 @@ else was skipped rather than used.
 | `flag_culture_corsican.png` | [Flag of Corsica.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Corsica.svg) | CC0 | Patricia.fidi |
 | `flag_culture_costa_rican.png` | [Flag of Costa Rica.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Costa_Rica.svg) | Public domain | See File history below for details. |
 | `flag_culture_crimean_tatar.png` | [Flag of the Crimean Tatar people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Crimean_Tatar_people.svg) | Public domain | Riwnodennyk |
-| `flag_culture_croatian.png` | [Croatian-Serbian hybrid flag.svg](https://commons.wikimedia.org/wiki/File:Croatian-Serbian_hybrid_flag.svg) | Public domain | DIREKTOR |
-| `flag_culture_czech.png` | [Czech–Romani fictitious flag.svg](https://commons.wikimedia.org/wiki/File:Czech%E2%80%93Romani_fictitious_flag.svg) | CC BY-SA 4.0 | Dahn |
 | `flag_culture_dagestani.png` | [Flag of Dagestan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dagestan.svg) | Public domain | Stianbh |
 | `flag_culture_dargin.png` | [Flag of Dagestan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dagestan.svg) | Public domain | Stianbh |
 | `flag_culture_dayak.png` | [Flag of Dayak Besar.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Dayak_Besar.svg) | CC BY-SA 3.0 | Orange Tuesday |
@@ -157,27 +144,20 @@ else was skipped rather than used.
 | `flag_culture_faroese.png` | [Flag of the Faroe Islands.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Faroe_Islands.svg) | Public domain | It was made by User:IceKarma (Jeffrey Connell), who released it to the public domain. |
 | `flag_culture_first_nations.png` | [Flag of the Elsipogtog First Nation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Elsipogtog_First_Nation.svg) | Public domain | Unknown author Unknown author presumed to be from Elsipogtog First Nation |
 | `flag_culture_flemish.png` | [Flag of Flanders.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Flanders.svg) | CC0 | Tom Lemmens |
-| `flag_culture_french.png` | [French heritage.png](https://commons.wikimedia.org/wiki/File:French_heritage.png) | CC BY-SA 3.0 | 440Hertz |
 | `flag_culture_frisian.png` | [Flag of Friesland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Friesland.svg) | Public domain | P.H. Wagemakers and Joh. Koopmans |
 | `flag_culture_fulani.png` | [Flag of Fulani.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Fulani.svg) | CC0 | Frenchybal |
 | `flag_culture_fur.png` | [Flag of Darfur Liberation Front.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Darfur_Liberation_Front.svg) | Public domain | No machine-readable author provided. |
 | `flag_culture_gagauz.png` | [Flag of Gagauzia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Gagauzia.svg) | Public domain | Urmas |
 | `flag_culture_galician.png` | [Flag of Galicia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Galicia.svg) | Public domain | Pedro A. Gracia Fajardo |
 | `flag_culture_ganda.png` | [Flag of Buganda.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Buganda.svg) | Public domain | Mysid |
-| `flag_culture_german.png` | [Flag of the German Community in Belgium.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_German_Community_in_Belgium.svg) | Public domain | Precious alex |
 | `flag_culture_german_absolute_monarchy.png` | [Flag of the German Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_German_Empire.svg) | Public domain | Original: Adolf Soetbeer , Otto von Bismarck Vector: B1mbo , Madden |
 | `flag_culture_german_communism.png` | [Flag of East Germany.svg](https://commons.wikimedia.org/wiki/File:Flag_of_East_Germany.svg) | Public domain | Flaggenentwurf: unbekannt diese Datei: Jwnabd |
 | `flag_culture_guarani.png` | [Bandera del pueblo Mbya Guarani de Yyryapu.svg](https://commons.wikimedia.org/wiki/File:Bandera_del_pueblo_Mbya_Guarani_de_Yyryapu.svg) | Public domain | Mikelelgediento |
 | `flag_culture_guatemalan.png` | [Flag of Guatemala.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Guatemala.svg) | Public domain | K21edgo |
-| `flag_culture_hakka.png` | [Flag of Hakka Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hakka_Party.svg) | CC BY 4.0 | Sangjinhwa |
-| `flag_culture_hausa.png` | [Flag of the Hausa people AoE3DE.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Hausa_people_AoE3DE.svg) | CC BY-SA 3.0 | Hosmich modified by Laserlicht |
 | `flag_culture_hawaiian.png` | [Flag of Hawaii.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hawaii.svg) | Public domain | Dbenbenn |
 | `flag_culture_hazara.png` | [Hazaristan Flag.svg](https://commons.wikimedia.org/wiki/File:Hazaristan_Flag.svg) | Public domain | Kamran Mir Hazar |
-| `flag_culture_herero.png` | [Flag of Hereroland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hereroland.svg) | Public domain | Original by Foundert |
 | `flag_culture_hispanic_american.png` | [Flag of the Hispanic peoples.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Hispanic_peoples.svg) | CC BY-SA 3.0 | Banderas |
 | `flag_culture_hmong.png` | [Hmong Flag (UNPO).svg](https://commons.wikimedia.org/wiki/File:Hmong_Flag_%28UNPO%29.svg) | Public domain | Vectorisation: Chainwit. Original flag: https://unpo.org/members/7891 |
-| `flag_culture_honduran.png` | [Flag of Honduras (1866–1949).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Honduras_%281866%E2%80%931949%29.svg) | Public domain | AquaVacation |
-| `flag_culture_hungarian.png` | [Eight-spoked wheel flag used by Hungarian Romanies.svg](https://commons.wikimedia.org/wiki/File:Eight-spoked_wheel_flag_used_by_Hungarian_Romanies.svg) | CC BY-SA 4.0 | Dahn |
 | `flag_culture_hungarian_communism.png` | [Flag of Hungary (1949-1956).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hungary_%281949-1956%29.svg) | Public domain | Thommy |
 | `flag_culture_igbo.png` | [Flag of Biafra.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Biafra.svg) | CC BY-SA 3.0 | Mysid |
 | `flag_culture_ijaw.png` | [Flag of Ijaw.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ijaw.svg) | CC0 | EuropeanV |
@@ -185,10 +165,8 @@ else was skipped rather than used.
 | `flag_culture_ingush.png` | [Flag of Ingushetia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ingushetia.svg) | Public domain | Mysid |
 | `flag_culture_inuit.png` | [Flag of Greenland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Greenland.svg) | Public domain | Jeffrey Connell ( IceKarma ) |
 | `flag_culture_irish_nationalism.png` | [Flag of Ireland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ireland.svg) | Public domain | Éire |
-| `flag_culture_italian.png` | [Flag of SFR Yugoslav Italian Minority.svg](https://commons.wikimedia.org/wiki/File:Flag_of_SFR_Yugoslav_Italian_Minority.svg) | Public domain | w:User:R-41 |
 | `flag_culture_italian_communism.png` | [Flag of the Italian Communist Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Italian_Communist_Party.svg) | CC BY-SA 4.0 | Ethelium |
 | `flag_culture_jamaican.png` | [Flag of Jamaica.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Jamaica.svg) | Public domain | The SVG code is valid . This vector image was created with Inkscape by SKopp , and then ma |
-| `flag_culture_jewish.png` | [Flag for the Jewish Community in Morocco and Algeria.png](https://commons.wikimedia.org/wiki/File:Flag_for_the_Jewish_Community_in_Morocco_and_Algeria.png) | CC BY 3.0 | Original Author: https://www.reddit.com/user/israelilocal/ Written permission given by the |
 | `flag_culture_kabardian.png` | [Flag of Kabardino-Balkaria.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kabardino-Balkaria.svg) | Public domain | Original: Unknown Vector: Conscious |
 | `flag_culture_kabyle.png` | [Flag of Kabylia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kabylia.svg) | Public domain | unattributed |
 | `flag_culture_kachin.png` | [Flag of Kachin State.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kachin_State.svg) | Public domain | Original: Unknown Vector: UnreifeKirsche |
@@ -197,12 +175,10 @@ else was skipped rather than used.
 | `flag_culture_kannada.png` | [Flag of the Kannada people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kannada_people.svg) | Public domain | Urmas |
 | `flag_culture_kanuri.png` | [Flag of the Kanuri people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kanuri_people.svg) | Public domain | User:Hosmich |
 | `flag_culture_karachay.png` | [Flag of the Karachaуs and Balkars.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Karacha%D1%83s_and_Balkars.svg) | CC BY 4.0 | Ibragim Zankishiyev |
-| `flag_culture_karakalpak.png` | [Flag of Karakalpak ASSR (1934–1937).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Karakalpak_ASSR_%281934%E2%80%931937%29.svg) | Public domain | Zscout370 |
 | `flag_culture_karelian.png` | [Flag of Karelia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Karelia.svg) | Public domain | Fibonacci |
 | `flag_culture_karen.png` | [Flag of the Karen National Union.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Karen_National_Union.svg) | CC BY-SA 4.0 | Sshu94 |
 | `flag_culture_kashmiri.png` | [Flag of Jammu and Kashmir (1952-2019).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Jammu_and_Kashmir_%281952-2019%29.svg) | Public domain | Created by Jammu and Kashmir National Conference |
 | `flag_culture_khakas.png` | [Flag of Khakassia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Khakassia.svg) | CC BY-SA 3.0 | Fibonacci |
-| `flag_culture_khmer.png` | [Flag of the Khmer Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Khmer_Republic.svg) | Public domain | Himasaram |
 | `flag_culture_kikuyu.png` | [Kikuyu Flag (Cowrie on Ochre).svg](https://commons.wikimedia.org/wiki/File:Kikuyu_Flag_%28Cowrie_on_Ochre%29.svg) | CC0 | Femfem5 |
 | `flag_culture_komi.png` | [Flag of Komi.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Komi.svg) | Public domain | В. Я. Сердитов |
 | `flag_culture_korean.png` | [Unification flag of Korea.svg](https://commons.wikimedia.org/wiki/File:Unification_flag_of_Korea.svg) | CC BY-SA 3.0 | File:Unification flag of Korea (pre 2006).svg: Various derivative work: Valentim |
@@ -211,38 +187,26 @@ else was skipped rather than used.
 | `flag_culture_kurdish.png` | [Flag of Kurdistan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Kurdistan.svg) | Public domain | Unknown author Unknown author |
 | `flag_culture_kurdish_communism.png` | [Flag of Rojava.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Rojava.svg) | Public domain | TEV-DEM |
 | `flag_culture_kurdish_socialism.png` | [Flag of Rojava.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Rojava.svg) | Public domain | TEV-DEM |
-| `flag_culture_kyrgyz.png` | [Flag of andijan kyrgyz.svg](https://commons.wikimedia.org/wiki/File:Flag_of_andijan_kyrgyz.svg) | CC0 | Taw Tu'lki |
 | `flag_culture_lezgin.png` | [Flag of the peoples of the Lezgin branch of the Nakh-Dagestani family.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_peoples_of_the_Lezgin_branch_of_the_Nakh-Dagestani_family.svg) | CC0 | Salmoonlight |
-| `flag_culture_luba.png` | [Flag of Luba, Abra.png](https://commons.wikimedia.org/wiki/File:Flag_of_Luba%2C_Abra.png) | Public domain | Municipal Government of Luba |
 | `flag_culture_luxembourgish.png` | [Flag of Luxembourg.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Luxembourg.svg) | Public domain | Drawn by User:SKopp |
 | `flag_culture_maasai.png` | [Flag of the Maasai National Movement (Nations Without States, 1996).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Maasai_National_Movement_%28Nations_Without_States%2C_1996%29.svg) | CC BY-SA 2.5 | unattributed |
-| `flag_culture_macedonian.png` | [Flag of the People's Republic of Macedonia (1946–1963).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_People%27s_Republic_of_Macedonia_%281946%E2%80%931963%29.svg) | CC BY-SA 3.0 | Westermarck |
-| `flag_culture_malagasy.png` | [Flag of African and Malagasy Union.svg](https://commons.wikimedia.org/wiki/File:Flag_of_African_and_Malagasy_Union.svg) | CC0 | BlinxTheKitty |
-| `flag_culture_malay.png` | [Flag of Malay, Aklan (variant).png](https://commons.wikimedia.org/wiki/File:Flag_of_Malay%2C_Aklan_%28variant%29.png) | Public domain | Municipal Government of Malay |
-| `flag_culture_malayali.png` | [Malayali flag.svg](https://commons.wikimedia.org/wiki/File:Malayali_flag.svg) | CC0 | User:Hosmich |
-| `flag_culture_maldivian.png` | [Flag of the Maldives 2000s GIF Recreation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Maldives_2000s_GIF_Recreation.svg) | Public domain | Unknown author Unknown author |
-| `flag_culture_manchu.png` | [Flag of Concordia Association (Manchu Script).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Concordia_Association_%28Manchu_Script%29.svg) | CC BY-SA 4.0 | Inufuusen |
 | `flag_culture_manx.png` | [Flag of the Isle of Man.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Isle_of_Man.svg) | CC0 | Edited by Reisio , Alkari , e.a. |
 | `flag_culture_maori.png` | [Tino Rangatiratanga Maori sovereignty movement flag (3-2).png](https://commons.wikimedia.org/wiki/File:Tino_Rangatiratanga_Maori_sovereignty_movement_flag_%283-2%29.png) | Public domain | of code: cs:User:-xfi- ; of flag, Linda Munn, Jan Dobson and Hiraina Marsden. Linda Munn w |
 | `flag_culture_mapuche.png` | [Flag of the Mapuches (1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Mapuches_%281992%29.svg) | Public domain | Huhsunqu |
 | `flag_culture_marathi.png` | [Flag of the Maratha Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Maratha_Empire.svg) | Public domain | DarkEvil |
 | `flag_culture_mari.png` | [Flag of Mari El.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mari_El.svg) | Public domain | Urmas |
 | `flag_culture_maya.png` | [Flag of the Mayan People.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Mayan_People.svg) | Public domain | Johannes Rössel ( talk ) |
-| `flag_culture_mende.png` | [Flag of Mende (Hungary).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mende_%28Hungary%29.svg) | Public domain | Thommy |
 | `flag_culture_miao.png` | [Hainan Li Miao.svg](https://commons.wikimedia.org/wiki/File:Hainan_Li_Miao.svg) | CC BY-SA 3.0 | unattributed |
 | `flag_culture_micronesian.png` | [Flag of the Federated States of Micronesia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federated_States_of_Micronesia.svg) | Public domain | unattributed |
 | `flag_culture_minangkabau.png` | [Flag of Minang.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Minang.svg) | Public domain | Rahmatdenas Muffin Wizard This W3C-unspecified vector image was created with Inkscape . |
 | `flag_culture_mohawk.png` | [Flag of the Iroquois Confederacy.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Iroquois_Confederacy.svg) | Public domain | Rick Hill, Harold Johnson, and Tim Johnson |
 | `flag_culture_mon.png` | [Flag of Mon State (2018).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mon_State_(2018).svg) | Public domain | Ninjastrikers |
-| `flag_culture_mongol.png` | [Flag of the Buryat-Mongol ASSR (1954—1958).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Buryat-Mongol_ASSR_%281954%E2%80%941958%29.svg) | Public domain | Helgo13 |
 | `flag_culture_mongol_communism.png` | [Flag of the Mongolian People's Republic (1945–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Mongolian_People%27s_Republic_%281945%E2%80%931992%29.svg) | Public domain | Drawn by User:latebird |
-| `flag_culture_montenegrin.png` | [Flag of Montenegro (people's flag until 1905 Constitution).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Montenegro_%28people%27s_flag_until_1905_Constitution%29.svg) | Public domain | Unknown. Prince Danilo had something to do with the issue |
 | `flag_culture_mordvin.png` | [Flag of Mordovia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mordovia.svg) | Public domain | Fry1989 |
 | `flag_culture_moro.png` | [Flag of Bangsamoro.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bangsamoro.svg) | Public domain | Bangsamoro Regional Government |
 | `flag_culture_nahua.png` | [Flag of Nahuas.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nahuas.svg) | CC BY-SA 4.0 | FireBioGreen |
 | `flag_culture_native_american.png` | [Flag of Native Peoples of Colombia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Native_Peoples_of_Colombia.svg) | Public domain | Unknown author Unknown author |
 | `flag_culture_navajo.png` | [Official design of the Navajo Nation flag as it was adopted on May 21, 1968.png](https://commons.wikimedia.org/wiki/File:Official_design_of_the_Navajo_Nation_flag_as_it_was_adopted_on_May_21%2C_1968.png) | Public domain | Jay R. Degroat |
-| `flag_culture_ndebele.png` | [Flag of KwaNdebele.svg](https://commons.wikimedia.org/wiki/File:Flag_of_KwaNdebele.svg) | Public domain | Washiucho |
 | `flag_culture_nenets.png` | [Flag of Nenets people.png](https://commons.wikimedia.org/wiki/File:Flag_of_Nenets_people.png) | CC BY-SA 4.0 | RAslik rtahuta |
 | `flag_culture_nicaraguan.png` | [Flag of Nicaragua.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nicaragua.svg) | Public domain | C records |
 | `flag_culture_nogai.png` | [Flag of Nogai El.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Nogai_El.svg) | CC BY-SA 4.0 | ProjectHorizons |
@@ -250,26 +214,19 @@ else was skipped rather than used.
 | `flag_culture_occitan.png` | [Flag of Occitania (with star).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Occitania_%28with_star%29.svg) | Public domain | Nimlar |
 | `flag_culture_oromo.png` | [Flag of the Oromo Liberation Front.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Oromo_Liberation_Front.svg) | Public domain | J. Ollé , see es:Wikipedia:Autorizaciones/Banderas de Jaume Ollé |
 | `flag_culture_ossetian.png` | [Flag of North Ossetia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_North_Ossetia.svg) | Public domain | Nardo Polo |
-| `flag_culture_ovambo.png` | [Flag of Ovamboland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Ovamboland.svg) | Public domain | Mysid |
 | `flag_culture_ovimbundu.png` | [Flag of UNITA.svg](https://commons.wikimedia.org/wiki/File:Flag_of_UNITA.svg) | Public domain | Ceresnet |
 | `flag_culture_palestinian.png` | [Flag of Palestine.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Palestine.svg) | Public domain | Orionist , previous versions by Makaristos , Mysid , etc. |
 | `flag_culture_panamanian.png` | [Flag of Panama.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Panama.svg) | Public domain | Zscout370 et al. |
 | `flag_culture_papuan.png` | [Morning Star flag.svg](https://commons.wikimedia.org/wiki/File:Morning_Star_flag.svg) | Public domain | Pumbaa80 |
-| `flag_culture_paraguayan.png` | [Flag of Paraguay (reverse).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Paraguay_%28reverse%29.svg) | Public domain | Republica del Paraguay |
-| `flag_culture_pashtun.png` | [Flag of the Pashtun Tahafuz Movement.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Pashtun_Tahafuz_Movement.png) | CC0 | Maori Legend |
-| `flag_culture_persian.png` | [Flag of Persian Socialist Soviet Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Persian_Socialist_Soviet_Republic.svg) | CC BY-SA 3.0 | Froztbyte |
 | `flag_culture_persian_absolute_monarchy.png` | [Flag of Iran (1964–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iran_%281964%E2%80%931980%29.svg) | Public domain | unattributed |
-| `flag_culture_polish.png` | [Flag of SFR Yugoslav Polish Minority.svg](https://commons.wikimedia.org/wiki/File:Flag_of_SFR_Yugoslav_Polish_Minority.svg) | CC BY-SA 4.0 | Savasampion |
 | `flag_culture_polish_communism.png` | [Flag of Poland (1928–1980).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Poland_%281928%E2%80%931980%29.svg) | Public domain | Arvedui89 |
 | `flag_culture_polynesian.png` | [Flag of east Polynesian people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_east_Polynesian_people.svg) | CC BY-SA 3.0 | Chabe01 |
 | `flag_culture_puerto_rican.png` | [Flag of Puerto Rico.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Puerto_Rico.svg) | Public domain | Original: Unknown Vector: Cerejota |
 | `flag_culture_punjabi.png` | [Nishan Sahib.svg](https://commons.wikimedia.org/wiki/File:Nishan_Sahib.svg) | Public domain | Himasaram |
 | `flag_culture_quebecois.png` | [Flag of Quebec.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Quebec.svg) | Public domain | Original: René Chaloult Vector: Krun |
-| `flag_culture_quechua.png` | [Quechuaball.PNG](https://commons.wikimedia.org/wiki/File:Quechuaball.PNG) | CC0 | Russavia |
+| `flag_culture_quechua.png` | [Wiphala.svg](https://commons.wikimedia.org/wiki/File:Banner_of_the_Qulla_Suyu_(1979).svg) | Public domain | Huhsunqu |
 | `flag_culture_rakhine.png` | [Flag of Rakhine.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Rakhine.svg) | Public domain | Stefan Fussan |
-| `flag_culture_rohingya.png` | [Flag of the Arakan Army, under the United League of Arakan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Arakan_Army%2C_under_the_United_League_of_Arakan.svg) | CC0 | Albert Poliakoff |
 | `flag_culture_romani.png` | [Flag of the Romani people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Romani_people.svg) | Public domain | AdiJapan |
-| `flag_culture_romanian.png` | [Flag of SFR Yugoslav Romanian Minority.svg](https://commons.wikimedia.org/wiki/File:Flag_of_SFR_Yugoslav_Romanian_Minority.svg) | CC BY-SA 4.0 | Savasampion |
 | `flag_culture_romanian_communism.png` | [Flag of Romania (1965–1989).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Romania_%281965%E2%80%931989%29.svg) | Public domain | Various, see File History below for details. |
 | `flag_culture_romansh.png` | [Flag of Canton of Graubünden.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Canton_of_Graub%C3%BCnden.svg) | Public domain | Unknown authorUnknown author |
 | `flag_culture_russian_absolute_monarchy.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
@@ -279,27 +236,21 @@ else was skipped rather than used.
 | `flag_culture_saharawi.png` | [Flag of the Sahrawi Arab Democratic Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Sahrawi_Arab_Democratic_Republic.svg) | Public domain | El Uali Mustafá Sayed from Polisario Front |
 | `flag_culture_salvadoran.png` | [Flag of El Salvador.svg](https://commons.wikimedia.org/wiki/File:Flag_of_El_Salvador.svg) | Public domain | See File history below for details. |
 | `flag_culture_sami.png` | [Sami flag.svg](https://commons.wikimedia.org/wiki/File:Sami_flag.svg) | Public domain | Jeltz |
-| `flag_culture_sara.png` | [Flag of Sara, Iloilo.png](https://commons.wikimedia.org/wiki/File:Flag_of_Sara%2C_Iloilo.png) | Public domain | Municipal Government of Sara |
 | `flag_culture_sardinian.png` | [Flag of Sardinia, Italy.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sardinia%2C_Italy.svg) | CC BY-SA 3.0 | A ngelus |
 | `flag_culture_scottish.png` | [Flag of Scotland.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Scotland.svg) | Public domain | none known |
-| `flag_culture_serbian.png` | [Flag of Serbian national minority in Croatia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Serbian_national_minority_in_Croatia.svg) | Public domain | Srpsko narodno vijeće – nacionalna koordinacija vijeća srpske nacionalne manjine u Republi |
 | `flag_culture_serbian_communism.png` | [Flag of Yugoslavia (1946–1992).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Yugoslavia_%281946%E2%80%931992%29.svg) | Public domain | Flag designed by Đorđe Andrejević-Kun [3] SVG coding: Zscout370 |
 | `flag_culture_shan.png` | [Flag of the Shan State.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Shan_State.svg) | CC BY-SA 2.5 | derivative work from Flag of Myanmar.svg |
 | `flag_culture_sicilian.png` | [Flag of Sicily.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sicily.svg) | Public domain | Angelo Romano |
 | `flag_culture_sidama.png` | [Flag of the Sidama people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Sidama_people.svg) | Public domain | Matthew Jones (jmatthewuk) |
 | `flag_culture_silesian.png` | [Flag of Upper Silesia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Upper_Silesia.svg) | CC0 | Andrew J.Kurbiko |
 | `flag_culture_sindhi.png` | [Flag of Sindh.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sindh.svg) | CC0 | User:Baba66 |
-| `flag_culture_slovak.png` | [Flag-of-the-hungarians-in-slovakia-v0-r2qzy8hr1lxc1.png](https://commons.wikimedia.org/wiki/File:Flag-of-the-hungarians-in-slovakia-v0-r2qzy8hr1lxc1.png) | CC0 | OnePerson12 |
 | `flag_culture_slovene.png` | [Flag of Slovenia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Slovenia.svg) | Public domain | Original: Marko Pogačnik Vector: Achim1999 |
 | `flag_culture_somali.png` | [Flag of Somalia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Somalia.svg) | Public domain | see upload history |
 | `flag_culture_somali_nationalism.png` | [Flag of Somalia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Somalia.svg) | Public domain | see upload history |
 | `flag_culture_sorbian.png` | [Flag of Sorbs.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sorbs.svg) | Public domain | Mysid |
-| `flag_culture_spanish.png` | [Spanish Jewish flag.png](https://commons.wikimedia.org/wiki/File:Spanish_Jewish_flag.png) | CC BY-SA 4.0 | ClaraYaku |
 | `flag_culture_spanish_socialism.png` | [Flag of the Second Spanish Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Second_Spanish_Republic.svg) | Public domain | Marcos Felipe &amp; Valadrem ; SanchoPanzaXXI |
 | `flag_culture_sundanese.png` | [Flag of Pasundan (Separatist).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Pasundan_%28Separatist%29.svg) | CC BY-SA 4.0 | HclUSA |
 | `flag_culture_surinamese.png` | [Flag of Suriname.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Suriname.svg) | Public domain | See File history below for details. |
-| `flag_culture_swazi.png` | [Flag of the Swazi Democratic Party.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Swazi_Democratic_Party.svg) | CC0 | SpinnerLaserzthe2nd |
-| `flag_culture_swiss_german.png` | [Flag of a Swiss Armed Forces lieutenant general.svg](https://commons.wikimedia.org/wiki/File:Flag_of_a_Swiss_Armed_Forces_lieutenant_general.svg) | CC BY-SA 4.0 | Malo95 |
 | `flag_culture_szekely.png` | [Flag of Szekely Land.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Szekely_Land.svg) | Public domain | Székelyzászló(SZNT).png : unknown derivative work: Qorilla |
 | `flag_culture_tagalog.png` | [Flag of the Tagalog people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Tagalog_people.svg) | Public domain | Katipunan at Naic, Cavite , 1897 |
 | `flag_culture_tajik.png` | [Flag of Tajikistan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tajikistan.svg) | Public domain | Unknown author Unknown author |
@@ -307,30 +258,22 @@ else was skipped rather than used.
 | `flag_culture_tamil.png` | [Flag of Tamil Eelam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tamil_Eelam.svg) | CC BY-SA 4.0 | Tyiqnqnenq |
 | `flag_culture_tamil_socialism.png` | [Flag of Tamil Eelam.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tamil_Eelam.svg) | CC BY-SA 4.0 | Tyiqnqnenq |
 | `flag_culture_tatar.png` | [Flag of Tatarstan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tatarstan.svg) | Public domain | Urmas |
-| `flag_culture_thai.png` | [Flag of the Akha People (Thailand).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Akha_People_%28Thailand%29.svg) | CC BY-SA 3.0 | Mysid |
 | `flag_culture_tibetan.png` | [Flag of Tibet.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tibet.svg) | Public domain | Unknown author Unknown author |
 | `flag_culture_tibetan_theocratic_rule.png` | [Flag of Tibet.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tibet.svg) | Public domain | Unknown author Unknown author |
 | `flag_culture_tigrayan.png` | [Flag of the Tigray Region.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Tigray_Region.svg) | Public domain | Flag of the Tigray Region; Image made by J. Ollé also see es:Wikipedia:Autorizaciones/Band |
 | `flag_culture_tonga.png` | [Flag of Tonga.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tonga.svg) | Public domain | Uelingatoni Ngu Tupoumalohi |
 | `flag_culture_tsonga.png` | [Flag of Tsonga language.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tsonga_language.svg) | CC0 | User:Hosmich |
-| `flag_culture_tswana.png` | [Flag of Bophuthatswana (1972–1994).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Bophuthatswana_%281972%E2%80%931994%29.svg) | Public domain | Washiucho |
 | `flag_culture_tuareg.png` | [MNLA flag.svg](https://commons.wikimedia.org/wiki/File:MNLA_flag.svg) | Public domain | Orionist |
-| `flag_culture_turkish.png` | [Flag of SFR Yugoslav Turkish Minority.svg](https://commons.wikimedia.org/wiki/File:Flag_of_SFR_Yugoslav_Turkish_Minority.svg) | Public domain | w:User:R-41 |
 | `flag_culture_turkish_theocratic_rule.png` | [Flag of the Ottoman Empire.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Ottoman_Empire.svg) | Public domain | User:Orwellianist |
-| `flag_culture_turkmen.png` | [Flag of Iraq Turkmen FrontVEC.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Iraq_Turkmen_FrontVEC.svg) | Public domain | AteshCommons |
 | `flag_culture_turkmen_iraqi.png` | [Flag of the Iraqi Turkmen.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Iraqi_Turkmen.svg) | Public domain | unknown (vector version chris 論 ) |
 | `flag_culture_tuvan.png` | [Flag of Tuva.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tuva.svg) | Public domain | Mysid |
 | `flag_culture_tyrolean.png` | [Flag of Tyrol and of Trentino-South Tyrol.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Tyrol_and_of_Trentino-South_Tyrol.svg) | Public domain | OttavianoUrsu |
 | `flag_culture_udmurt.png` | [Flag of Udmurtia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Udmurtia.svg) | Public domain | Fibonacci |
-| `flag_culture_ukrainian.png` | [Flag of SFR Yugoslav Ruthenian and Ukrainian Minority.svg](https://commons.wikimedia.org/wiki/File:Flag_of_SFR_Yugoslav_Ruthenian_and_Ukrainian_Minority.svg) | Public domain | w:User:R-41 |
-| `flag_culture_uruguayan.png` | [Flag of Uruguay (1825-1828).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Uruguay_%281825-1828%29.svg) | Public domain | Kineto007 |
 | `flag_culture_uyghur.png` | [Flag of the First East Turkestan Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_First_East_Turkestan_Republic.svg) | Public domain | Orange Tuesday |
 | `flag_culture_uyghur_nationalism.png` | [Flag of the First East Turkestan Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_First_East_Turkestan_Republic.svg) | Public domain | Orange Tuesday |
 | `flag_culture_uyghur_theocratic_rule.png` | [Flag of the Second East Turkestan Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Second_East_Turkestan_Republic.svg) | Public domain | Unknown author Unknown author |
 | `flag_culture_uzbek.png` | [Flag of Uzbekistan.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Uzbekistan.svg) | Public domain | Farhod Yoʻldoshev |
-| `flag_culture_venda.png` | [Flag of Venda (1973–1994).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Venda_%281973%E2%80%931994%29.svg) | Public domain | odder |
 | `flag_culture_venetian.png` | [Flag of Veneto.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Veneto.svg) | CC BY-SA 3.0 | Derivative work: F l a n k e r |
-| `flag_culture_venezuelan.png` | [Flag of the First Republic of Venezuela.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_First_Republic_of_Venezuela.svg) | CC BY-SA 4.0 | Salvadoroff |
 | `flag_culture_walloon.png` | [Flag of Wallonia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Wallonia.svg) | CC0 | Tom Lemmens |
 | `flag_culture_welsh.png` | [Flag of Wales.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Wales.svg) | Public domain | Unknown Vector graphics by Tobias Jakobs |
 | `flag_culture_yakut.png` | [Flag of Sakha.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sakha.svg) | Public domain | Lyudmila Sleptsova, Mikhail Starostin, Pyotr Zakharov (Людмила Слепцова, Михаил Старостин, |
@@ -338,8 +281,6 @@ else was skipped rather than used.
 | `flag_culture_yoruba.png` | [Flag of the Yoruba people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Yoruba_people.svg) | CC BY-SA 3.0 | Ivan Sache |
 | `flag_culture_zaghawa.png` | [Flag of the Zaghawa.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Zaghawa.svg) | CC0 | Ermanarich |
 | `flag_culture_zhuang.png` | [Flag of the Zhuang people.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Zhuang_people.svg) | CC BY-SA 3.0 | User:Hosmich |
-| `flag_culture_zomi.png` | [Mizoram Flag(INDIA).png](https://commons.wikimedia.org/wiki/File:Mizoram_Flag%28INDIA%29.png) | CC BY-SA 3.0 | AlexR.L. |
-| `flag_culture_zulu.png` | [Flag of KwaZulu (1985–1994).svg](https://commons.wikimedia.org/wiki/File:Flag_of_KwaZulu_%281985%E2%80%931994%29.svg) | Public domain | Himasaram |
 | `flag_cuw_protectorate.png` | [Flag of the Netherlands Antilles (1986–2010).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Netherlands_Antilles_(1986%E2%80%932010).svg) | Public domain | No machine-readable author provided. |
 | `flag_cyn_protectorate.png` | [Flag of Cyprus (1881–1922).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cyprus_(1881%E2%80%931922).svg) | Public domain | Christmas Island |
 | `flag_cyp_protectorate.png` | [Flag of Cyprus (1922–1960).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Cyprus_%281922%E2%80%931960%29.svg) | Public domain | Shandris |
@@ -656,12 +597,17 @@ copies of the game's own flag for that state, and come under whatever terms that
 
 | Game file | Copy of |
 |---|---|
+| `flag_culture_akan.png` | `flag_gha.png` |
 | `flag_culture_albanian.png` | `flag_alb.png` |
+| `flag_culture_american.png` | `flag_usa.png` |
+| `flag_culture_arab_egyptian.png` | `flag_egy.png` |
+| `flag_culture_arab_iraqi.png` | `flag_irq.png` |
 | `flag_culture_arab_saudi.png` | `flag_sau.png` |
 | `flag_culture_arab_sudanese.png` | `flag_sdn.png` |
 | `flag_culture_arab_yemeni.png` | `flag_yem.png` |
 | `flag_culture_argentine.png` | `flag_arg.png` |
 | `flag_culture_armenian.png` | `flag_arm.png` |
+| `flag_culture_australian.png` | `flag_aus.png` |
 | `flag_culture_austrian.png` | `flag_aut.png` |
 | `flag_culture_baoule.png` | `flag_civ.png` |
 | `flag_culture_belarusian.png` | `flag_blr.png` |
@@ -669,6 +615,7 @@ copies of the game's own flag for that state, and come under whatever terms that
 | `flag_culture_bolivian.png` | `flag_bol.png` |
 | `flag_culture_brazilian.png` | `flag_bra.png` |
 | `flag_culture_bruneian_malay.png` | `flag_brn.png` |
+| `flag_culture_bulgarian.png` | `flag_bgr.png` |
 | `flag_culture_burmese.png` | `flag_mmr.png` |
 | `flag_culture_canadian.png` | `flag_can.png` |
 | `flag_culture_cape_coloured.png` | `flag_zaf.png` |
@@ -678,7 +625,9 @@ copies of the game's own flag for that state, and come under whatever terms that
 | `flag_culture_colombian.png` | `flag_col.png` |
 | `flag_culture_comorian.png` | `flag_com.png` |
 | `flag_culture_creole_african.png` | `flag_sle.png` |
+| `flag_culture_croatian.png` | `flag_hrv.png` |
 | `flag_culture_cuban.png` | `flag_cub.png` |
+| `flag_culture_czech.png` | `flag_cze.png` |
 | `flag_culture_danish.png` | `flag_dnk.png` |
 | `flag_culture_dutch.png` | `flag_nld.png` |
 | `flag_culture_ecuadorian.png` | `flag_ecu.png` |
@@ -686,33 +635,47 @@ copies of the game's own flag for that state, and come under whatever terms that
 | `flag_culture_fang.png` | `flag_gnq.png` |
 | `flag_culture_fijian.png` | `flag_fji.png` |
 | `flag_culture_finnish.png` | `flag_fin.png` |
+| `flag_culture_french.png` | `flag_fra.png` |
 | `flag_culture_georgian.png` | `flag_geo.png` |
+| `flag_culture_german.png` | `flag_deu.png` |
 | `flag_culture_greek.png` | `flag_grc.png` |
 | `flag_culture_greenlander.png` | `flag_grl.png` |
 | `flag_culture_guyanese.png` | `flag_guy.png` |
 | `flag_culture_haitian.png` | `flag_hti.png` |
 | `flag_culture_hindustani.png` | `flag_ind.png` |
+| `flag_culture_honduran.png` | `flag_hnd.png` |
+| `flag_culture_hungarian.png` | `flag_hun.png` |
 | `flag_culture_hutu.png` | `flag_bdi.png` |
 | `flag_culture_icelandic.png` | `flag_isl.png` |
 | `flag_culture_irish.png` | `flag_irl.png` |
 | `flag_culture_israeli_jew.png` | `flag_isr.png` |
+| `flag_culture_italian.png` | `flag_ita.png` |
 | `flag_culture_japanese.png` | `flag_jpn.png` |
+| `flag_culture_jewish.png` | `flag_isr.png` |
 | `flag_culture_kalenjin.png` | `flag_ken.png` |
 | `flag_culture_kamba.png` | `flag_ken.png` |
 | `flag_culture_kazakh.png` | `flag_kaz.png` |
+| `flag_culture_khmer.png` | `flag_khm.png` |
 | `flag_culture_kru.png` | `flag_lbr.png` |
+| `flag_culture_kyrgyz.png` | `flag_kgz.png` |
 | `flag_culture_lao.png` | `flag_lao.png` |
 | `flag_culture_latvian.png` | `flag_lva.png` |
 | `flag_culture_lithuanian.png` | `flag_ltu.png` |
 | `flag_culture_luhya.png` | `flag_ken.png` |
 | `flag_culture_luo.png` | `flag_ken.png` |
+| `flag_culture_macedonian.png` | `flag_mkd.png` |
 | `flag_culture_makua.png` | `flag_moz.png` |
+| `flag_culture_malagasy.png` | `flag_mdg.png` |
+| `flag_culture_malay.png` | `flag_mys.png` |
+| `flag_culture_maldivian.png` | `flag_mdv.png` |
 | `flag_culture_maltese.png` | `flag_mlt.png` |
 | `flag_culture_mandinka.png` | `flag_gmb.png` |
 | `flag_culture_mbundu.png` | `flag_ago.png` |
 | `flag_culture_mexican.png` | `flag_mex.png` |
 | `flag_culture_moldovan.png` | `flag_mda.png` |
 | `flag_culture_mongo.png` | `flag_cod.png` |
+| `flag_culture_mongol.png` | `flag_mng.png` |
+| `flag_culture_montenegrin.png` | `flag_mne.png` |
 | `flag_culture_mossi.png` | `flag_bfa.png` |
 | `flag_culture_nepali.png` | `flag_npl.png` |
 | `flag_culture_new_zealander.png` | `flag_nzl.png` |
@@ -721,27 +684,43 @@ copies of the game's own flag for that state, and come under whatever terms that
 | `flag_culture_nubian.png` | `flag_sdn.png` |
 | `flag_culture_nuer.png` | `flag_ssd.png` |
 | `flag_culture_omani_arab.png` | `flag_omn.png` |
+| `flag_culture_paraguayan.png` | `flag_pry.png` |
+| `flag_culture_persian.png` | `flag_irn.png` |
 | `flag_culture_peruvian.png` | `flag_per.png` |
+| `flag_culture_polish.png` | `flag_pol.png` |
 | `flag_culture_portuguese.png` | `flag_prt.png` |
+| `flag_culture_romanian.png` | `flag_rou.png` |
 | `flag_culture_russian.png` | `flag_rus.png` |
 | `flag_culture_samoan.png` | `flag_wsm.png` |
 | `flag_culture_san.png` | `flag_bwa.png` |
 | `flag_culture_senufo.png` | `flag_civ.png` |
+| `flag_culture_serbian.png` | `flag_srb.png` |
 | `flag_culture_shona.png` | `flag_zwe.png` |
 | `flag_culture_sinhalese.png` | `flag_lka.png` |
+| `flag_culture_slovak.png` | `flag_svk.png` |
 | `flag_culture_solomon_islander.png` | `flag_slb.png` |
 | `flag_culture_songhai.png` | `flag_mli.png` |
 | `flag_culture_soninke.png` | `flag_mli.png` |
 | `flag_culture_sotho.png` | `flag_lso.png` |
+| `flag_culture_spanish.png` | `flag_esp.png` |
 | `flag_culture_sukuma.png` | `flag_tza.png` |
 | `flag_culture_swahili.png` | `flag_tza.png` |
+| `flag_culture_swazi.png` | `flag_swz.png` |
 | `flag_culture_swedish.png` | `flag_swe.png` |
+| `flag_culture_swiss_german.png` | `flag_che.png` |
 | `flag_culture_temne.png` | `flag_sle.png` |
+| `flag_culture_thai.png` | `flag_tha.png` |
 | `flag_culture_timorese.png` | `flag_tls.png` |
 | `flag_culture_tiv.png` | `flag_nga.png` |
 | `flag_culture_tongan.png` | `flag_ton.png` |
 | `flag_culture_trinidadian.png` | `flag_tto.png` |
+| `flag_culture_tswana.png` | `flag_bwa.png` |
+| `flag_culture_turkish.png` | `flag_tur.png` |
+| `flag_culture_turkmen.png` | `flag_tkm.png` |
 | `flag_culture_tutsi.png` | `flag_rwa.png` |
+| `flag_culture_ukrainian.png` | `flag_ukr.png` |
+| `flag_culture_uruguayan.png` | `flag_ury.png` |
+| `flag_culture_venezuelan.png` | `flag_ven.png` |
 | `flag_culture_vietnamese.png` | `flag_vnm.png` |
 | `flag_culture_wolof.png` | `flag_sen.png` |
 | `flag_culture_xhosa.png` | `flag_zaf.png` |
