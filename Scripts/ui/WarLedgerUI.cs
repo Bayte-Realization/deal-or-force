@@ -8,25 +8,33 @@ namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
-    /// <summary>One line in the list of the world's wars, kept so it can be refreshed in place.</summary>
+    /// <summary>One war in the list of the world's wars, kept so it can be refreshed in place.</summary>
     private sealed class WarLedgerRow
     {
         public Button Button;
-        public ColorRect AttackerColour;
-        public ColorRect DefenderColour;
+        public Control AttackerFlag;
+        public Control DefenderFlag;
         public Label Attacker;
+        public Label AttackerSide;
         public Label Defender;
-        public Control BarField;
-        public ColorRect BarFill;
-        public Label Score;
-        public Label Casualties;
-        public Label Front;
+        public Label DefenderSide;
+        public Label Heading;
+        public WarBar Bar;
+        public Label Standing;
+        public Label Losses;
         public Label Age;
         public int WarId = -1;
+        public int Styled = -1;
     }
 
     private Control _warLedgerLayer = null!;
+    private PanelContainer _warLedgerPanel = null!;
+    private float _warLedgerPlacedBottom;
+    private Label _warLedgerTitle = null!;
     private Label _warLedgerSummary = null!;
+    private PanelContainer _warReadouts = null!;
+    private readonly Dictionary<string, Label> _warReadoutValues = new();
+    private Label _warLedgerEmpty = null!;
     private VBoxContainer _warListRows = null!;
     private VBoxContainer _warDetailRows = null!;
     private ScrollContainer _warListScroll = null!;
@@ -34,7 +42,6 @@ public partial class DealOrForceGame
     private Button _warFilterAll = null!;
     private Button _warFilterMine = null!;
     private Button _warBackButton = null!;
-    private HBoxContainer _warListHeader = null!;
     private readonly List<WarLedgerRow> _warLedgerRows = new();
     private readonly List<StrategicWar> _warLedgerOrder = new();
     private VBoxContainer _warDetailActions = null!;
@@ -43,20 +50,24 @@ public partial class DealOrForceGame
     private int _warDetailDay = int.MinValue;
     private int _warDetailBuiltFor = -1;
 
-    /// <summary>How lopsided a war has to be before its bar is drawn full.</summary>
-    private const float WarLedgerBarScale = 40f;
+    /// <summary>How lopsided a war has to be before its front line reaches the end of the bar.</summary>
+    private static float WarLedgerBarScale => Ui.Metric("war_ledger.bar_scale", 40f);
+
+    /// <summary>The same for one part of a war's score, which is a fraction of the whole.</summary>
+    private static float WarLedgerPartScale => Ui.Metric("war_ledger.part_scale", 20f);
+
+    private static float WarCardHeight => Ui.Metric("war_ledger.card_height", 76f);
 
     /// <summary>
-    /// The world's wars, as a list somebody can read.
+    /// The world's wars, as a board somebody can read.
     ///
-    /// There were a hundred and forty of them and the screen wrote a paragraph about each
-    /// one into the side panel: name, belligerents, war goal, doctrines, front size, four
-    /// score components, losses, support and the latest contact - nine lines a war, in one
-    /// column, unsorted. Everything about every war and nothing you could find.
-    ///
-    /// So it splits the way Hearts of Iron and Age of History split it. A list of one-line
-    /// rows that can be scanned - who, which way it is going, what it has cost, how long it
-    /// has run - and then one war at a time on its own page, where the nine lines belong.
+    /// There were a hundred and forty of them and the screen once wrote a paragraph about each
+    /// one into the side panel. Then it became a spreadsheet: one line a war across a window
+    /// the size of the screen, so that three wars were three lines at the top of a great deal
+    /// of navy. Now each war is a card - the two flags facing each other, the ground between
+    /// them as a bar with the front line drawn where the war score puts it, what it has cost
+    /// and how long it has run - and the window is as tall as the wars in it. The figures for
+    /// the whole world sit above them, read first, the way a situation room reads.
     /// </summary>
     private void BuildWarLedger()
     {
@@ -72,17 +83,20 @@ public partial class DealOrForceGame
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _warLedgerLayer.AddChild(shade);
 
-        var panel = TexturedPanel(_warLedgerLayer);
-        Ui.Place(panel, "modal.war_ledger");
+        _warLedgerPanel = TexturedPanel(_warLedgerLayer);
+        Ui.Place(_warLedgerPanel, "modal.war_ledger");
+        _warLedgerPlacedBottom = _warLedgerPanel.OffsetBottom;
 
-        var rows = PanelRows(panel, 22, 16, 9);
+        var rows = PanelRows(_warLedgerPanel, 22, 16, 10);
 
         var header = new HBoxContainer();
         header.AddThemeConstantOverride("separation", 8);
         rows.AddChild(header);
-        var title = Title("WARS OF THE WORLD", 25, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
+        _warLedgerTitle = Title("WARS OF THE WORLD", 25, Ui.Colour("text.accent"));
+        _warLedgerTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _warLedgerTitle.AutowrapMode = TextServer.AutowrapMode.Off;
+        _warLedgerTitle.ClipText = true;
+        header.AddChild(_warLedgerTitle);
 
         _warBackButton = ActionButton("← All wars", ShowWarLedgerList, 118, 30);
         _warBackButton.Visible = false;
@@ -94,8 +108,37 @@ public partial class DealOrForceGame
         header.AddChild(_warFilterMine);
         header.AddChild(ActionButton("×", CloseWarLedger, 34, 30));
 
-        _warLedgerSummary = Title("", 13, Ui.Colour("text.body_soft"));
-        _warLedgerSummary.CustomMinimumSize = new Vector2(0, 24);
+        // ------------------------------------------------------------------ the world
+        _warReadouts = new PanelContainer();
+        _warReadouts.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 9));
+        rows.AddChild(_warReadouts);
+        var readouts = new HBoxContainer();
+        readouts.AddThemeConstantOverride("separation", 18);
+        _warReadouts.AddChild(readouts);
+        foreach (var (key, caption) in new[]
+                 {
+                     ("wars", "WARS BEING FOUGHT"), ("nations", "COUNTRIES AT WAR"),
+                     ("battles", "ENGAGEMENTS"), ("losses", "LOSSES"), ("mine", "YOUR WARS")
+                 })
+        {
+            if (readouts.GetChildCount() > 0)
+                readouts.AddChild(new ColorRect
+                {
+                    Color = Ui.Colour("war.inset_border"),
+                    CustomMinimumSize = new Vector2(1, 0),
+                    MouseFilter = MouseFilterEnum.Ignore
+                });
+            var readout = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            readout.AddThemeConstantOverride("separation", 0);
+            readout.AddChild(RowLabel(caption, 10, Ui.Colour("text.caption")));
+            var value = RowLabel("—", 21, Ui.Colour("text.bright"));
+            readout.AddChild(value);
+            _warReadoutValues[key] = value;
+            readouts.AddChild(readout);
+        }
+
+        _warLedgerSummary = RowLabel("", 12, Ui.Colour("text.body_soft"));
+        _warLedgerSummary.ClipText = true;
         rows.AddChild(_warLedgerSummary);
 
         // ------------------------------------------------------------------ the list
@@ -106,35 +149,16 @@ public partial class DealOrForceGame
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto
         };
-        // The captions sit outside the scroll so they stay put while the list moves.
-        _warListHeader = new HBoxContainer();
-        _warListHeader.AddThemeConstantOverride("separation", 10);
-        rows.AddChild(_warListHeader);
-        Label Caption(string text, int width, HorizontalAlignment alignment = HorizontalAlignment.Left)
-        {
-            var label = RowLabel(text, 11, Ui.Colour("text.caption"), width);
-            label.HorizontalAlignment = alignment;
-            return label;
-        }
-        _warListHeader.AddChild(Caption("", 5));
-        var attackerCaption = Caption("ATTACKER", 0);
-        attackerCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _warListHeader.AddChild(attackerCaption);
-        _warListHeader.AddChild(Caption("", 24));
-        _warListHeader.AddChild(Caption("", 5));
-        var defenderCaption = Caption("DEFENDER", 0);
-        defenderCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _warListHeader.AddChild(defenderCaption);
-        _warListHeader.AddChild(Caption("WHO IS WINNING", 140, HorizontalAlignment.Center));
-        _warListHeader.AddChild(Caption("SCORE", 62, HorizontalAlignment.Right));
-        _warListHeader.AddChild(Caption("LOSSES", 104, HorizontalAlignment.Right));
-        _warListHeader.AddChild(Caption("FRONT", 96, HorizontalAlignment.Right));
-        _warListHeader.AddChild(Caption("LENGTH", 86, HorizontalAlignment.Right));
-
         rows.AddChild(_warListScroll);
         _warListRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _warListRows.AddThemeConstantOverride("separation", 3);
+        _warListRows.AddThemeConstantOverride("separation", 6);
         _warListScroll.AddChild(_warListRows);
+
+        _warLedgerEmpty = Title("", 15, Ui.Colour("text.muted"));
+        _warLedgerEmpty.HorizontalAlignment = HorizontalAlignment.Center;
+        _warLedgerEmpty.CustomMinimumSize = new Vector2(0, 70);
+        _warLedgerEmpty.VerticalAlignment = VerticalAlignment.Center;
+        _warListRows.AddChild(_warLedgerEmpty);
 
         // ------------------------------------------------------------------ one war
         _warDetailScroll = new ScrollContainer
@@ -147,11 +171,11 @@ public partial class DealOrForceGame
         };
         rows.AddChild(_warDetailScroll);
         var detail = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        detail.AddThemeConstantOverride("separation", 6);
+        detail.AddThemeConstantOverride("separation", 12);
         _warDetailScroll.AddChild(detail);
 
         _warDetailRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _warDetailRows.AddThemeConstantOverride("separation", 6);
+        _warDetailRows.AddThemeConstantOverride("separation", 12);
         detail.AddChild(_warDetailRows);
 
         // The buttons that end a war are built once per war and left alone. The figures
@@ -161,6 +185,41 @@ public partial class DealOrForceGame
         _warDetailActions = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _warDetailActions.AddThemeConstantOverride("separation", 6);
         detail.AddChild(_warDetailActions);
+    }
+
+    /// <summary>A recessed field on the screen: the world's figures, a column of one war.</summary>
+    private static StyleBoxFlat WarInsetStyle(int horizontal, int vertical)
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour("war.inset"),
+            BorderColor = Ui.Colour("war.inset_border"),
+            ContentMarginLeft = horizontal, ContentMarginRight = horizontal,
+            ContentMarginTop = vertical, ContentMarginBottom = vertical
+        };
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(3);
+        return style;
+    }
+
+    /// <summary>
+    /// A war's card, in its three states. The player's own wars carry a brass edge - the one
+    /// ornament on the board, so that "mine" is found before anything is read.
+    /// </summary>
+    private static StyleBoxFlat WarCardStyle(bool mine, bool hover)
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = hover ? Ui.Colour("war.card_hover") : Ui.Colour("war.card"),
+            BorderColor = mine
+                ? Ui.Colour("war.card_mine")
+                : hover ? Ui.Colour("war.card_border_hover") : Ui.Colour("war.card_border"),
+            ContentMarginLeft = 14, ContentMarginRight = 14, ContentMarginTop = 8, ContentMarginBottom = 8
+        };
+        style.SetBorderWidthAll(1);
+        if (mine) style.BorderWidthLeft = 4;
+        style.SetCornerRadiusAll(4);
+        return style;
     }
 
     private void OpenWarLedger()
@@ -190,9 +249,12 @@ public partial class DealOrForceGame
     {
         _warLedgerOpenWarId = -1;
         _warBackButton.Visible = false;
-        _warListHeader.Visible = true;
+        _warFilterAll.Visible = true;
+        _warFilterMine.Visible = true;
+        _warReadouts.Visible = true;
         _warListScroll.Visible = true;
         _warDetailScroll.Visible = false;
+        _warLedgerTitle.Text = Tr("WARS OF THE WORLD");
         RefreshWarLedger();
     }
 
@@ -202,17 +264,59 @@ public partial class DealOrForceGame
         _warDetailDay = int.MinValue;
         _warDetailBuiltFor = -1;
         _warBackButton.Visible = true;
-        _warListHeader.Visible = false;
+        _warFilterAll.Visible = false;
+        _warFilterMine.Visible = false;
+        _warReadouts.Visible = false;
         _warListScroll.Visible = false;
         _warDetailScroll.Visible = true;
         RefreshWarLedger();
     }
 
     /// <summary>
+    /// The window as tall as the wars in it, up to the rectangle the layout gives it.
+    ///
+    /// The rectangle is the most it may take, and is still the layout's to move; what is
+    /// taken off is taken from the bottom, so the title stays where the eye expects it.
+    /// `war_ledger.fit_content` 0 turns it off for a skin that wants a fixed window.
+    /// </summary>
+    private void FitWarLedger(float content)
+    {
+        if (Ui.Metric("war_ledger.fit_content", 1f) <= 0f || _warLedgerLayer.Size.Y <= 0f)
+        {
+            _warLedgerPanel.OffsetBottom = _warLedgerPlacedBottom;
+            return;
+        }
+        // Margins and frame, the title and the line under it, the world's figures when they are
+        // showing, and the gaps between them - then whatever the page itself holds.
+        var needed = 2f * 16f + 6f + 34f + 22f + 2f * 10f +
+                     (_warReadouts.Visible ? _warReadouts.GetCombinedMinimumSize().Y + 10f : 0f) + content;
+        var full = _warLedgerLayer.Size.Y * (_warLedgerPanel.AnchorBottom - _warLedgerPanel.AnchorTop) +
+                   _warLedgerPlacedBottom - _warLedgerPanel.OffsetTop;
+        _warLedgerPanel.OffsetBottom = _warLedgerPlacedBottom - Mathf.Max(0f, full - needed);
+    }
+
+    /// <summary>
+    /// How tall a column of controls is as built, not counting what is on its way out - a page
+    /// rebuilt this frame still has last frame's children in it until the frame ends.
+    /// </summary>
+    private static float LiveHeight(BoxContainer box)
+    {
+        var height = 0f;
+        var count = 0;
+        foreach (var child in box.GetChildren())
+        {
+            if (child is not Control { Visible: true } control || control.IsQueuedForDeletion()) continue;
+            height += control.GetCombinedMinimumSize().Y;
+            count++;
+        }
+        return height + Mathf.Max(0, count - 1) * box.GetThemeConstant("separation");
+    }
+
+    /// <summary>
     /// The whole screen, whichever half of it is showing.
     ///
-    /// Rows are kept and refilled rather than rebuilt: this runs whenever the campaign
-    /// changes, and throwing away a hundred and forty buttons a frame to make the same
+    /// Cards are kept and refilled rather than rebuilt: this runs whenever the campaign
+    /// changes, and throwing away a hundred and forty cards a frame to make the same
     /// hundred and forty is how a ledger becomes a stutter.
     /// </summary>
     private void RefreshWarLedger()
@@ -247,15 +351,36 @@ public partial class DealOrForceGame
                 .CompareTo(left.AttackerLosses + left.DefenderLosses);
         });
 
+        // The world's figures, which do not depend on the filter: "mine" narrows the list,
+        // not the world.
         var worldwide = 0f;
+        var fighting = 0;
+        var mineCount = 0;
+        var belligerents = new HashSet<int>();
         foreach (var war in _campaign.Wars)
-            if (!war.Ended) worldwide += war.AttackerLosses + war.DefenderLosses;
-        var fighting = _campaign.Wars.Count(war => !war.Ended);
+        {
+            if (war.Ended) continue;
+            fighting++;
+            worldwide += war.AttackerLosses + war.DefenderLosses;
+            foreach (var id in war.Side(true)) belligerents.Add(id);
+            foreach (var id in war.Side(false)) belligerents.Add(id);
+            if (player is not null && war.Involves(player.Id)) mineCount++;
+        }
+        var engagements = _campaign.Battles.Count(battle => !battle.Ended);
+        _warReadoutValues["wars"].Text = fighting.ToString("N0");
+        _warReadoutValues["nations"].Text = belligerents.Count.ToString("N0");
+        _warReadoutValues["battles"].Text = engagements.ToString("N0");
+        _warReadoutValues["losses"].Text = Fmt.People(worldwide);
+        _warReadoutValues["mine"].Text = mineCount == 0 ? "—" : mineCount.ToString("N0");
+        _warReadoutValues["mine"].AddThemeColorOverride("font_color",
+            mineCount > 0 ? Ui.Colour("text.accent") : Ui.Colour("text.muted"));
+
         _warLedgerSummary.Text = _warLedgerOrder.Count == 0
-            ? _warLedgerMineOnly ? "You are at peace." : "The world is at peace."
-            : Simulation.Loc.Format("{0} of {1} war(s) shown", _warLedgerOrder.Count.ToString("N0"), fighting.ToString("N0")) + "  ·  " +
-              Simulation.Loc.Format("{0} lost in the wars still being fought", Fmt.People(worldwide)) + "  ·  " +
-              "click a war for its own page";
+            ? ""
+            : Simulation.Loc.Format("{0} of {1} war(s) shown", _warLedgerOrder.Count.ToString("N0"), fighting.ToString("N0")) +
+              "  ·  " + Tr("the player's wars first, then the costliest") + "  ·  " + Tr("click a war for its own page");
+        _warLedgerEmpty.Visible = _warLedgerOrder.Count == 0;
+        _warLedgerEmpty.Text = _warLedgerMineOnly ? Tr("You are at peace.") : Tr("The world is at peace.");
 
         while (_warLedgerRows.Count < _warLedgerOrder.Count) _warLedgerRows.Add(CreateWarLedgerRow());
         for (var index = 0; index < _warLedgerRows.Count; index++)
@@ -269,6 +394,9 @@ public partial class DealOrForceGame
             row.Button.Visible = true;
             FillWarLedgerRow(row, _warLedgerOrder[index]);
         }
+        FitWarLedger(_warLedgerOrder.Count == 0
+            ? _warLedgerEmpty.CustomMinimumSize.Y
+            : _warLedgerOrder.Count * (WarCardHeight + 6f));
     }
 
     private WarLedgerRow CreateWarLedgerRow()
@@ -276,9 +404,9 @@ public partial class DealOrForceGame
         var row = new WarLedgerRow();
         row.Button = new Button
         {
-            CustomMinimumSize = new Vector2(0, 34),
+            CustomMinimumSize = new Vector2(0, WarCardHeight),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            ClipText = true
+            ClipContents = true
         };
         row.Button.Pressed += () =>
         {
@@ -288,78 +416,111 @@ public partial class DealOrForceGame
 
         var margin = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
         margin.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        margin.AddThemeConstantOverride("margin_left", 0);
-        margin.AddThemeConstantOverride("margin_right", 0);
+        margin.AddThemeConstantOverride("margin_left", 16);
+        margin.AddThemeConstantOverride("margin_right", 16);
+        margin.AddThemeConstantOverride("margin_top", 8);
+        margin.AddThemeConstantOverride("margin_bottom", 8);
         row.Button.AddChild(margin);
 
         var line = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        line.AddThemeConstantOverride("separation", 10);
+        line.AddThemeConstantOverride("separation", 14);
         margin.AddChild(line);
 
-        Label Cell(string text, int width, HorizontalAlignment alignment = HorizontalAlignment.Left)
+        Label Text(int size, string colour, HorizontalAlignment alignment = HorizontalAlignment.Left)
         {
-            var label = RowLabel(text, 13, Ui.Colour("text.body"), width);
+            var label = RowLabel("", size, Ui.Colour(colour));
             label.MouseFilter = MouseFilterEnum.Ignore;
             label.ClipText = true;
             label.HorizontalAlignment = alignment;
+            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             return label;
         }
 
-        ColorRect Swatch()
+        // A flag in a slot of its own width, so the names beside flags of every shape line up.
+        Control FlagSlot(out Control flag)
         {
-            var swatch = new ColorRect
+            var slot = new CenterContainer
             {
-                CustomMinimumSize = new Vector2(5, 18),
+                CustomMinimumSize = new Vector2(56, 0),
+                MouseFilter = MouseFilterEnum.Ignore
+            };
+            flag = FlagBadge("", 30);
+            flag.MouseFilter = MouseFilterEnum.Ignore;
+            slot.AddChild(flag);
+            return slot;
+        }
+
+        VBoxContainer Stack(float ratio, int separation = 1)
+        {
+            var stack = new VBoxContainer
+            {
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                SizeFlagsStretchRatio = ratio,
                 SizeFlagsVertical = SizeFlags.ShrinkCenter,
                 MouseFilter = MouseFilterEnum.Ignore
             };
-            line.AddChild(swatch);
-            return swatch;
+            stack.AddThemeConstantOverride("separation", separation);
+            return stack;
         }
 
-        row.AttackerColour = Swatch();
-        row.Attacker = Cell("", 0);
-        row.Attacker.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        line.AddChild(row.Attacker);
+        // The attacker, facing right.
+        line.AddChild(FlagSlot(out row.AttackerFlag));
+        var attacker = Stack(1f);
+        row.Attacker = Text(16, "text.bright");
+        row.AttackerSide = Text(11, "text.caption");
+        attacker.AddChild(row.Attacker);
+        attacker.AddChild(row.AttackerSide);
+        line.AddChild(attacker);
 
-        line.AddChild(Cell("vs", 24, HorizontalAlignment.Center));
-
-        row.DefenderColour = Swatch();
-        row.Defender = Cell("", 0);
-        row.Defender.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        line.AddChild(row.Defender);
-
-        // The bar is drawn by hand rather than laid out: it grows from the middle towards
-        // whoever is winning, which no container arrangement says as directly.
-        row.BarField = new Control
+        // The ground between them, and the front line on it.
+        var middle = Stack(1.5f, 4);
+        row.Heading = Text(11, "text.caption", HorizontalAlignment.Center);
+        middle.AddChild(row.Heading);
+        row.Bar = new WarBar
         {
-            CustomMinimumSize = new Vector2(140, 12),
+            CustomMinimumSize = new Vector2(220, 16),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            Track = Ui.Colour("war.track"),
+            MarkerColour = Ui.Colour("war.front_line")
+        };
+        middle.AddChild(row.Bar);
+        row.Standing = Text(11, "text.body_soft", HorizontalAlignment.Center);
+        middle.AddChild(row.Standing);
+        line.AddChild(middle);
+
+        // The defender, facing left.
+        var defender = Stack(1f);
+        row.Defender = Text(16, "text.bright", HorizontalAlignment.Right);
+        row.DefenderSide = Text(11, "text.caption", HorizontalAlignment.Right);
+        defender.AddChild(row.Defender);
+        defender.AddChild(row.DefenderSide);
+        line.AddChild(defender);
+        line.AddChild(FlagSlot(out row.DefenderFlag));
+
+        line.AddChild(new ColorRect
+        {
+            Color = Ui.Colour("war.inset_border"),
+            CustomMinimumSize = new Vector2(1, 0),
+            MouseFilter = MouseFilterEnum.Ignore
+        });
+
+        // What it has cost and how long it has run, read down the right edge of every card.
+        var cost = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(112, 0),
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
             MouseFilter = MouseFilterEnum.Ignore
         };
-        line.AddChild(row.BarField);
-        var track = new ColorRect { Color = Ui.Colour("surface.inset"), MouseFilter = MouseFilterEnum.Ignore };
-        track.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        row.BarField.AddChild(track);
-        row.BarFill = new ColorRect { MouseFilter = MouseFilterEnum.Ignore };
-        row.BarField.AddChild(row.BarFill);
-        var centre = new ColorRect
-        {
-            Color = Ui.Colour("surface.line"),
-            Position = new Vector2(69, 0),
-            Size = new Vector2(2, 12),
-            MouseFilter = MouseFilterEnum.Ignore
-        };
-        row.BarField.AddChild(centre);
-
-        row.Score = Cell("", 62, HorizontalAlignment.Right);
-        line.AddChild(row.Score);
-        row.Casualties = Cell("", 104, HorizontalAlignment.Right);
-        line.AddChild(row.Casualties);
-        row.Front = Cell("", 96, HorizontalAlignment.Right);
-        line.AddChild(row.Front);
-        row.Age = Cell("", 86, HorizontalAlignment.Right);
-        line.AddChild(row.Age);
+        cost.AddThemeConstantOverride("separation", 0);
+        var caption = RowLabel("LOSSES", 10, Ui.Colour("text.caption"));
+        caption.HorizontalAlignment = HorizontalAlignment.Right;
+        caption.MouseFilter = MouseFilterEnum.Ignore;
+        cost.AddChild(caption);
+        row.Losses = Text(18, "text.bright", HorizontalAlignment.Right);
+        cost.AddChild(row.Losses);
+        row.Age = Text(11, "text.muted", HorizontalAlignment.Right);
+        cost.AddChild(row.Age);
+        line.AddChild(cost);
         return row;
     }
 
@@ -370,47 +531,110 @@ public partial class DealOrForceGame
         var mine = _campaign.Player is not null && war.Involves(_campaign.Player.Id);
 
         row.WarId = war.Id;
-        row.AttackerColour.Color = NationColour(attacker);
-        row.DefenderColour.Color = NationColour(defender);
+        var styled = mine ? 1 : 0;
+        if (row.Styled != styled)
+        {
+            row.Styled = styled;
+            row.Button.AddThemeStyleboxOverride("normal", WarCardStyle(mine, false));
+            row.Button.AddThemeStyleboxOverride("hover", WarCardStyle(mine, true));
+            row.Button.AddThemeStyleboxOverride("pressed", WarCardStyle(mine, true));
+            row.Button.AddThemeStyleboxOverride("focus", WarCardStyle(mine, true));
+        }
+        row.Button.TooltipText = Ui.Tip(war.Name + "\n" + Tr("click a war for its own page"));
+
+        SetFlag(row.AttackerFlag, attacker?.Tag ?? "", 30);
+        SetFlag(row.DefenderFlag, defender?.Tag ?? "", 30);
+        TintBlankFlag(row.AttackerFlag, attacker);
+        TintBlankFlag(row.DefenderFlag, defender);
         row.Attacker.Text = attacker?.DisplayName ?? "?";
         row.Defender.Text = defender?.DisplayName ?? "?";
-        row.Attacker.AddThemeColorOverride("font_color",
-            mine ? Ui.Colour("text.accent") : Ui.Colour("text.body"));
-        row.Defender.AddThemeColorOverride("font_color",
-            mine ? Ui.Colour("text.accent") : Ui.Colour("text.body"));
+        var nameColour = mine ? Ui.Colour("text.accent") : Ui.Colour("text.bright");
+        row.Attacker.AddThemeColorOverride("font_color", nameColour);
+        row.Defender.AddThemeColorOverride("font_color", nameColour);
+        row.AttackerSide.Text = WarSideLine(war, true);
+        row.DefenderSide.Text = WarSideLine(war, false);
 
-        // The bar grows from the middle towards whoever is ahead, in that country's own
-        // colour - the same colour as the swatch beside their name. Red and green would
-        // have to mean something, and in a list of other people's wars they mean nothing.
-        var lean = Mathf.Clamp(war.WarScore / WarLedgerBarScale, -1f, 1f);
-        var half = 69f;
-        var width = Mathf.Abs(lean) * half;
-        var leader = lean >= 0f ? row.AttackerColour.Color : row.DefenderColour.Color;
-        row.BarFill.Position = new Vector2(lean >= 0f ? half + 1f : half + 1f - width, 1f);
-        row.BarFill.Size = new Vector2(Mathf.Max(1f, width), 10f);
-        row.BarFill.Color = leader;
+        var objective = WarObjective(war);
+        row.Heading.Text = (war.Name.Length > 0 ? war.Name.ToUpperInvariant() : Tr("WAR")) + "  ·  " +
+                           (objective is null ? Tr("no claim on ground") : Simulation.Loc.Format("for {0}", objective.DisplayName));
 
-        row.Score.Text = war.WarScore.ToString("+0.0;-0.0;0.0");
-        row.Score.AddThemeColorOverride("font_color",
-            Mathf.Abs(war.WarScore) < 0.05f ? Ui.Colour("text.muted") : leader);
-        row.Casualties.Text = Fmt.People(war.AttackerLosses + war.DefenderLosses);
-        row.Front.Text = Simulation.Loc.Format("{0:N0} front", war.AttackerFront.Count + war.DefenderFront.Count);
-        var days = Math.Max(0, _campaign.ElapsedDays - war.StartedDay);
-        row.Age.Text = days >= 730
-            ? Simulation.Loc.Format("{0} yr", (days / 365f).ToString("0.#"))
-            : Simulation.Loc.Format("{0} d", days.ToString("N0"));
+        // The ground between them in each side's own colour, and the front line where the war
+        // score puts it. Red and green would have to mean something, and in a list of other
+        // people's wars they mean nothing; the colours here are the ones on the map.
+        var attackerColour = WarSideColour(attacker);
+        var defenderColour = WarSideColour(defender);
+        row.Bar.Tug(Mathf.Clamp(war.WarScore / WarLedgerBarScale, -1f, 1f), attackerColour, defenderColour);
+
+        var battles = 0;
+        foreach (var battle in _campaign.Battles)
+            if (battle.WarId == war.Id && !battle.Ended) battles++;
+        var standing = new List<string> { WarStanding(war, attacker, defender) };
+        standing.Add(Simulation.Loc.Format("{0} province(s) of front", (war.AttackerFront.Count + war.DefenderFront.Count).ToString("N0")));
+        if (battles > 0) standing.Add(Simulation.Loc.Format("{0} battle(s)", battles.ToString("N0")));
+        row.Standing.Text = string.Join("  ·  ", standing);
+
+        row.Losses.Text = Fmt.People(war.AttackerLosses + war.DefenderLosses);
+        row.Age.Text = WarLength(Math.Max(0, _campaign.ElapsedDays - war.StartedDay));
     }
+
+    /// <summary>
+    /// A badge with no picture in it shows the country's colour rather than an empty frame -
+    /// a country with no flag file and no world to draw a provisional one from still has a
+    /// colour on the map, and that is what the player knows it by.
+    /// </summary>
+    private static void TintBlankFlag(Control badge, Nation nation)
+    {
+        if (badge?.GetThemeStylebox("panel") is not StyleBoxFlat frame) return;
+        var blank = badge.GetChildCount() == 0 || badge.GetChild(0) is not TextureRect { Texture: not null };
+        frame.BgColor = blank && nation is not null ? WarSideColour(nation) : Ui.Colour("surface.inset");
+    }
+
+    /// <summary>"attacking, with 2 allies" - the role, and whether anybody came.</summary>
+    private string WarSideLine(StrategicWar war, bool attacking)
+    {
+        var allies = Math.Max(0, war.Side(attacking).Count() - 1);
+        return attacking
+            ? allies == 0 ? Tr("attacking, alone") : Simulation.Loc.Format("attacking, with {0} ally(ies)", allies.ToString("N0"))
+            : allies == 0 ? Tr("defending, alone") : Simulation.Loc.Format("defending, with {0} ally(ies)", allies.ToString("N0"));
+    }
+
+    /// <summary>Who is ahead, in words, with the score that says so.</summary>
+    private string WarStanding(StrategicWar war, Nation attacker, Nation defender)
+    {
+        var score = war.WarScore.ToString("+0.0;-0.0;0.0");
+        if (war.Collapsed != 0)
+            return Simulation.Loc.Format("{0} has collapsed: the war is decided.",
+                (war.Collapsed > 0 ? defender?.DisplayName : attacker?.DisplayName) ?? Tr("nobody"));
+        if (Mathf.Abs(war.WarScore) < 0.5f) return Simulation.Loc.Format("{0} · neither side ahead", score);
+        return Simulation.Loc.Format("{0} · {1} ahead", score,
+            (war.WarScore > 0f ? attacker?.DisplayName : defender?.DisplayName) ?? Tr("nobody"));
+    }
+
+    private ScenarioState WarObjective(StrategicWar war) =>
+        war.ClaimedStateMapIndex < 0
+            ? null
+            : _campaign.States.FirstOrDefault(state => state.MapIndex == war.ClaimedStateMapIndex);
+
+    /// <summary>How long, in the unit a person would use for it.</summary>
+    private static string WarLength(int days) =>
+        days >= 730 ? Simulation.Loc.Format("{0} yr", (days / 365f).ToString("0.#"))
+        : days >= 90 ? Simulation.Loc.Format("{0} mo", ((int)(days / 30.44f)).ToString("N0"))
+        : Simulation.Loc.Format("{0} d", days.ToString("N0"));
 
     private static Color NationColour(Nation nation) =>
         nation is null ? new Color(0.5f, 0.5f, 0.5f) : new Color(nation.Color);
 
     /// <summary>
-    /// One war on its own page: who, what it is for, how it is going and what it has cost.
-    ///
-    /// This is where the nine lines the list refuses to carry belong, and where the peace
-    /// conference is reached from - for this war, rather than for whichever war the player
-    /// happened to enter first.
+    /// A country's colour as a field on this screen: its map colour, a shade deeper, so a
+    /// pale country does not glare out of a navy panel and a bar of two still reads as two.
     /// </summary>
+    private static Color WarSideColour(Nation nation)
+    {
+        var colour = NationColour(nation);
+        colour.A = 1f;
+        return colour.Darkened(Ui.Metric("war_ledger.colour_depth", 0.12f));
+    }
+
     private void CallAllyToWar(StrategicWar war, int allyId)
     {
         if (_campaign?.Player is null || war is null) return;
@@ -421,6 +645,7 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         // The answer lands on the war, and the panel is rebuilt so the side list shows it.
         _warDetailBuiltFor = -1;
+        _warDetailDay = int.MinValue;
         RefreshWarLedger();
     }
 
@@ -433,9 +658,20 @@ public partial class DealOrForceGame
         });
         _campaign.Commands.ApplyAll(_campaign);
         _warDetailBuiltFor = -1;
+        _warDetailDay = int.MinValue;
         RefreshWarLedger();
     }
 
+    /// <summary>
+    /// One war on its own page: who, what it is for, how it is going and what it has cost.
+    ///
+    /// The two sides face each other across the top, as on the card, larger; under them three
+    /// columns - how it is going, what it has cost, where it is being fought - so that the
+    /// page is read across as well as down, and a figure is next to the figure it is weighed
+    /// against rather than nine lines away from it. This is also where the peace conference
+    /// is reached from - for this war, rather than for whichever war the player happened to
+    /// enter first.
+    /// </summary>
     private void RefreshWarLedgerDetail()
     {
         var war = _campaign.Wars.Find(candidate => candidate.Id == _warLedgerOpenWarId);
@@ -445,7 +681,11 @@ public partial class DealOrForceGame
             return;
         }
         // Nothing on this page changes inside a day.
-        if (_warDetailDay == _campaign.ElapsedDays && _warDetailBuiltFor == war.Id) return;
+        if (_warDetailDay == _campaign.ElapsedDays && _warDetailBuiltFor == war.Id)
+        {
+            FitWarLedgerDetail();
+            return;
+        }
         _warDetailDay = _campaign.ElapsedDays;
         foreach (var child in _warDetailRows.GetChildren()) child.QueueFree();
 
@@ -454,113 +694,308 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var mine = player is not null && war.Involves(player.Id);
         var days = Math.Max(0, _campaign.ElapsedDays - war.StartedDay);
-        _warLedgerSummary.Text = war.Name + "  ·  " +
-                                 (war.Ended
-                                     ? Tr("settled")
-                                     : Simulation.Loc.Format("{0:N0} day(s) of fighting", days)) +
-                                 (mine ? Tr("  ·  you are a belligerent") : "");
+        var objective = WarObjective(war);
+        var attackerColour = WarSideColour(attacker);
+        var defenderColour = WarSideColour(defender);
 
-        void Heading(string text) =>
-            _warDetailRows.AddChild(RowLabel(text, 12, Ui.Colour("text.caption")));
+        _warLedgerTitle.Text = war.Name.Length > 0 ? war.Name.ToUpperInvariant() : Tr("WARS OF THE WORLD");
+        _warLedgerSummary.Text =
+            (objective is null ? Tr("no claim on ground") : Simulation.Loc.Format("for {0}", objective.DisplayName)) + "  ·  " +
+            (war.Ended ? Tr("settled") : Simulation.Loc.Format("{0:N0} day(s) of fighting", days)) +
+            (mine ? Tr("  ·  you are a belligerent") : "");
 
-        void Line(string text, Color? colour = null)
+        Label Caption(string text) => RowLabel(text, 11, Ui.Colour("text.caption"));
+
+        // A label keeps its own width unless it is one that is told to give way (a name beside
+        // a figure): a clipped label in a box that grants it nothing is a label of no letters.
+        Label Body(string text, int size = 13, Color? colour = null, bool wrap = false)
         {
-            var label = Title(text, 14, colour ?? Ui.Colour("text.body"));
-            label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            _warDetailRows.AddChild(label);
+            var label = RowLabel("", size, colour ?? Ui.Colour("text.body"));
+            label.Text = text;
+            if (wrap) label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            return label;
         }
 
-        Heading("BELLIGERENTS");
-        // Both sides in full. A war used to be a pair of countries and an alliance answering
-        // one produced a war per member; now it is one war with two sides, and the ledger is
-        // where that has to be visible or it may as well not be true.
-        string SideNames(bool attacking) => string.Join(", ", war.Side(attacking)
-            .Select(id => _campaign.NationById(id)?.DisplayName)
-            .Where(name => !string.IsNullOrEmpty(name)));
-        Line(Simulation.Loc.Format("{0}   against   {1}", SideNames(true), SideNames(false)));
+        Label Yielding(Label label)
+        {
+            label.ClipText = true;
+            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            return label;
+        }
 
-        var objective = _campaign.States.FirstOrDefault(state => state.MapIndex == war.ClaimedStateMapIndex);
-        Line(Simulation.Loc.Format("War goal: {0}",
-            objective?.Name ?? Tr("strategic supremacy")));
-        if (attacker is not null && defender is not null)
-            Line(Simulation.Loc.Format("Operational profiles: {0} against {1}",
-                AiStrategyCatalog.Resolve(_campaign, war, attacker).Id,
-                AiStrategyCatalog.Resolve(_campaign, war, defender).Id));
+        WarBar Bar(float height, float width = 0f) => new()
+        {
+            CustomMinimumSize = new Vector2(width, height),
+            SizeFlagsHorizontal = width > 0f ? SizeFlags.ShrinkCenter : SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            Track = Ui.Colour("war.track"),
+            MarkerColour = Ui.Colour("war.front_line")
+        };
 
-        Heading("HOW IT IS GOING");
-        Line(Simulation.Loc.Format("War score {0} towards {1}",
-                 war.WarScore.ToString("+0.0;-0.0;0.0"),
-                 (war.WarScore >= 0f ? attacker?.DisplayName : defender?.DisplayName) ?? Tr("nobody")),
-             NationColour(war.WarScore >= 0f ? attacker : defender));
-        Line("    " + string.Join("  ·  ", WarScoring.Parts(war)
-            .Select(part => Simulation.Loc.Format(part.Name, part.Value.ToString("+0.0;-0.0;0.0")))));
-        if (war.Collapsed != 0)
-            Line("    " + Simulation.Loc.Format("{0} has collapsed: the war is decided.",
-                (war.Collapsed > 0 ? defender?.DisplayName : attacker?.DisplayName) ?? Tr("nobody")),
-                NationColour(war.Collapsed > 0 ? attacker : defender));
-        Line(Simulation.Loc.Format("Front: {0} attacking province(s) against {1} defending",
-            war.AttackerFront.Count.ToString("N0"), war.DefenderFront.Count.ToString("N0")));
+        // ------------------------------------------------------------------ the two sides
+        var banner = new PanelContainer();
+        banner.AddThemeStyleboxOverride("panel", WarInsetStyle(20, 14));
+        _warDetailRows.AddChild(banner);
+        var bannerRows = new VBoxContainer();
+        bannerRows.AddThemeConstantOverride("separation", 10);
+        banner.AddChild(bannerRows);
 
+        var faces = new HBoxContainer();
+        faces.AddThemeConstantOverride("separation", 16);
+        bannerRows.AddChild(faces);
+
+        Control Side(Nation nation, bool attacking)
+        {
+            var box = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            box.AddThemeConstantOverride("separation", 12);
+            var flag = FlagBadge(nation?.Tag ?? "", 46);
+            TintBlankFlag(flag, nation);
+            var words = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            words.AddThemeConstantOverride("separation", 0);
+            var name = Yielding(Body(nation?.DisplayName ?? "?", 22, mine ? Ui.Colour("text.accent") : Ui.Colour("text.bright")));
+            var role = Body(WarSideLine(war, attacking), 12, Ui.Colour("text.caption"));
+            var support = Body(Simulation.Loc.Format("war support at home {0}",
+                (attacking ? war.AttackerWarSupport : war.DefenderWarSupport).ToString("P0")), 12, Ui.Colour("text.muted"));
+            if (!attacking)
+            {
+                name.HorizontalAlignment = HorizontalAlignment.Right;
+                role.HorizontalAlignment = HorizontalAlignment.Right;
+                support.HorizontalAlignment = HorizontalAlignment.Right;
+            }
+            words.AddChild(name);
+            words.AddChild(role);
+            words.AddChild(support);
+            if (attacking) { box.AddChild(flag); box.AddChild(words); }
+            else { box.AddChild(words); box.AddChild(flag); }
+            return box;
+        }
+
+        faces.AddChild(Side(attacker, true));
+        var front = new VBoxContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = 1.3f,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter
+        };
+        front.AddThemeConstantOverride("separation", 6);
+        var standing = Body(WarStanding(war, attacker, defender), 14,
+            Mathf.Abs(war.WarScore) < 0.5f ? Ui.Colour("text.body_soft") : NationColour(war.WarScore >= 0f ? attacker : defender));
+        standing.HorizontalAlignment = HorizontalAlignment.Center;
+        front.AddChild(standing);
+        var tug = Bar(24);
+        tug.Tug(Mathf.Clamp(war.WarScore / WarLedgerBarScale, -1f, 1f), attackerColour, defenderColour);
+        front.AddChild(tug);
+        var scale = Body(Simulation.Loc.Format("the front line is drawn at the war score; the end of the bar is {0}",
+            WarLedgerBarScale.ToString("0")), 11, Ui.Colour("text.faint"));
+        scale.HorizontalAlignment = HorizontalAlignment.Center;
+        front.AddChild(scale);
+        faces.AddChild(front);
+        faces.AddChild(Side(defender, false));
+
+        // Every country on each side, by flag: a war is two sides now, not a pair, and the
+        // allies who came are the first thing a player looks for.
+        if (war.Side(true).Count() + war.Side(false).Count() > 2)
+        {
+            var coalitions = new HBoxContainer();
+            coalitions.AddThemeConstantOverride("separation", 24);
+            bannerRows.AddChild(coalitions);
+            HFlowContainer Coalition(bool attacking)
+            {
+                var flow = new HFlowContainer
+                {
+                    SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                    Alignment = attacking ? FlowContainer.AlignmentMode.Begin : FlowContainer.AlignmentMode.End
+                };
+                flow.AddThemeConstantOverride("h_separation", 10);
+                flow.AddThemeConstantOverride("v_separation", 4);
+                foreach (var id in war.Side(attacking))
+                {
+                    var member = _campaign.NationById(id);
+                    if (member is null) continue;
+                    var chip = new HBoxContainer();
+                    chip.AddThemeConstantOverride("separation", 5);
+                    chip.AddChild(FlagBadge(member.Tag, 14, member.DisplayName));
+                    chip.AddChild(Body(member.DisplayName, 12, Ui.Colour("text.body_soft")));
+                    flow.AddChild(chip);
+                }
+                return flow;
+            }
+            coalitions.AddChild(Coalition(true));
+            coalitions.AddChild(Coalition(false));
+        }
+
+        // ------------------------------------------------------------------ three columns
+        var columns = new HBoxContainer();
+        columns.AddThemeConstantOverride("separation", 12);
+        _warDetailRows.AddChild(columns);
+
+        VBoxContainer Column(string caption, float ratio)
+        {
+            var panel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = ratio };
+            panel.AddThemeStyleboxOverride("panel", WarInsetStyle(14, 12));
+            columns.AddChild(panel);
+            var stack = new VBoxContainer();
+            stack.AddThemeConstantOverride("separation", 7);
+            panel.AddChild(stack);
+            stack.AddChild(Caption(caption));
+            return stack;
+        }
+
+        // How it is going: what the score is made of, and the two sides' weight at the front.
+        var going = Column("HOW IT IS GOING", 1f);
+        foreach (var (format, value) in WarScoring.Parts(war))
+        {
+            var part = new HBoxContainer();
+            part.AddThemeConstantOverride("separation", 8);
+            part.AddChild(Yielding(Body(Simulation.Loc.Format(format, "").Trim(), 12, Ui.Colour("text.body_soft"))));
+            var bar = Bar(8, 110);
+            bar.Lean(value / WarLedgerPartScale, attackerColour, defenderColour);
+            part.AddChild(bar);
+            var figure = Body(value.ToString("+0.0;-0.0;0.0"), 12,
+                Mathf.Abs(value) < 0.05f ? Ui.Colour("text.muted") : NationColour(value >= 0f ? attacker : defender));
+            figure.HorizontalAlignment = HorizontalAlignment.Right;
+            figure.CustomMinimumSize = new Vector2(46, 0);
+            part.AddChild(figure);
+            going.AddChild(part);
+        }
+
+        void Split(VBoxContainer column, string caption, float left, float right, string reading)
+        {
+            column.AddChild(new Control { CustomMinimumSize = new Vector2(0, 4) });
+            var head = new HBoxContainer();
+            head.AddChild(Yielding(Caption(caption)));
+            var figures = Body(reading, 12, Ui.Colour("text.body"));
+            figures.HorizontalAlignment = HorizontalAlignment.Right;
+            head.AddChild(figures);
+            column.AddChild(head);
+            var bar = Bar(10);
+            var whole = left + right;
+            if (whole > 0f) bar.Shares((left / whole, attackerColour), (right / whole, defenderColour));
+            column.AddChild(bar);
+        }
+
+        Split(going, "PROVINCES ON THE FRONT", war.AttackerFront.Count, war.DefenderFront.Count,
+            Simulation.Loc.Format("{0} against {1}", war.AttackerFront.Count.ToString("N0"), war.DefenderFront.Count.ToString("N0")));
         var committed = new Dictionary<int, int>();
         foreach (var army in _campaign.Armies)
             if (army.AssignedWarId == war.Id)
                 committed[army.NationId] = committed.GetValueOrDefault(army.NationId) + 1;
         var attackingDivisions = war.Side(true).Sum(id => committed.GetValueOrDefault(id));
         var defendingDivisions = war.Side(false).Sum(id => committed.GetValueOrDefault(id));
-        Line(Simulation.Loc.Format("Divisions committed: {0} against {1}",
-            attackingDivisions.ToString("N0"), defendingDivisions.ToString("N0")));
-
-        Heading("WHAT IT HAS COST");
-        // Losses rather than dead: the total always had the wounded in it, and now it has the
-        // prisoners too. The breakdown underneath is what the word used to hide.
-        Line(Simulation.Loc.Format("Losses: {0} against {1}",
-            Fmt.People(war.AttackerLosses), Fmt.People(war.DefenderLosses)));
-        void Breakdown(Nation leader, float killed, float wounded, float captured)
+        Split(going, "DIVISIONS COMMITTED", attackingDivisions, defendingDivisions,
+            Simulation.Loc.Format("{0} against {1}", attackingDivisions.ToString("N0"), defendingDivisions.ToString("N0")));
+        if (attacker is not null && defender is not null)
         {
-            // A war carried over from a save made before losses were broken down has a total
-            // and nothing under it; a row of zeros would say nobody died.
-            if (killed + wounded + captured < 1f) return;
-            Line("    " + Simulation.Loc.Format("{0}: {1} killed · {2} wounded · {3} captured",
-                leader?.DisplayName ?? Tr("nobody"), Fmt.People(killed), Fmt.People(wounded), Fmt.People(captured)),
-                NationColour(leader));
+            going.AddChild(new Control { CustomMinimumSize = new Vector2(0, 2) });
+            going.AddChild(Yielding(Body(Simulation.Loc.Format("Operational profiles: {0} against {1}",
+                AiStrategyCatalog.Resolve(_campaign, war, attacker).Id,
+                AiStrategyCatalog.Resolve(_campaign, war, defender).Id), 11, Ui.Colour("text.faint"))));
         }
-        Breakdown(attacker, war.AttackerKilled, war.AttackerWounded, war.AttackerCaptured);
-        Breakdown(defender, war.DefenderKilled, war.DefenderWounded, war.DefenderCaptured);
+
+        // What it has cost: each side's losses as a bar of the killed, the wounded and the
+        // captured, drawn to one scale so that the side that has lost more has the longer bar.
+        var cost = Column("WHAT IT HAS COST", 1f);
+        var killedColour = Ui.Colour("war.killed");
+        var woundedColour = Ui.Colour("war.wounded");
+        var capturedColour = Ui.Colour("war.captured");
+        var heaviest = Mathf.Max(1f, Mathf.Max(war.AttackerLosses, war.DefenderLosses));
+        void SideCost(Nation leader, float losses, float killed, float wounded, float captured)
+        {
+            var head = new HBoxContainer();
+            head.AddChild(Yielding(Body(leader?.DisplayName ?? Tr("nobody"), 13, Ui.Colour("text.bright"))));
+            var total = Body(Fmt.People(losses), 15, Ui.Colour("text.bright"));
+            total.HorizontalAlignment = HorizontalAlignment.Right;
+            head.AddChild(total);
+            cost.AddChild(head);
+            var bar = Bar(10);
+            // A war carried over from a save made before losses were broken down has a total
+            // and nothing under it; it is drawn as one undivided length rather than as nobody.
+            if (killed + wounded + captured >= 1f)
+                bar.Shares((killed / heaviest, killedColour), (wounded / heaviest, woundedColour), (captured / heaviest, capturedColour));
+            else
+                bar.Shares((losses / heaviest, Ui.Colour("text.muted")));
+            cost.AddChild(bar);
+            if (killed + wounded + captured >= 1f)
+                cost.AddChild(Body(Simulation.Loc.Format("{0} killed · {1} wounded · {2} captured",
+                    Fmt.People(killed), Fmt.People(wounded), Fmt.People(captured)), 11, Ui.Colour("text.muted")));
+            cost.AddChild(new Control { CustomMinimumSize = new Vector2(0, 2) });
+        }
+        SideCost(attacker, war.AttackerLosses, war.AttackerKilled, war.AttackerWounded, war.AttackerCaptured);
+        SideCost(defender, war.DefenderLosses, war.DefenderKilled, war.DefenderWounded, war.DefenderCaptured);
+
+        var key = new HBoxContainer();
+        key.AddThemeConstantOverride("separation", 12);
+        foreach (var (colour, word) in new[] { (killedColour, "killed"), (woundedColour, "wounded"), (capturedColour, "captured") })
+        {
+            var swatch = new ColorRect { Color = colour, CustomMinimumSize = new Vector2(9, 9), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            key.AddChild(swatch);
+            key.AddChild(RowLabel(word, 11, Ui.Colour("text.caption")));
+        }
+        cost.AddChild(key);
+
         var heldFromAttackers = war.Side(true).Sum(id => WarLosses.HeldFrom(war, id));
         var heldFromDefenders = war.Side(false).Sum(id => WarLosses.HeldFrom(war, id));
         if (heldFromAttackers + heldFromDefenders >= 1f)
-            Line(Simulation.Loc.Format("Prisoners still held: {0} of {1}'s side, {2} of {3}'s",
-                Fmt.People(heldFromAttackers), attacker?.DisplayName ?? "",
-                Fmt.People(heldFromDefenders), defender?.DisplayName ?? ""));
-        Line(Simulation.Loc.Format("War support at home: {0} against {1}",
-            war.AttackerWarSupport.ToString("P0"), war.DefenderWarSupport.ToString("P0")));
+            Split(cost, "PRISONERS STILL HELD", heldFromAttackers, heldFromDefenders,
+                Simulation.Loc.Format("{0} against {1}", Fmt.People(heldFromAttackers), Fmt.People(heldFromDefenders)));
 
+        // Where it is being fought.
+        var fought = _campaign.Battles.Count(battle => battle.WarId == war.Id && !battle.Ended);
+        var where = Column(Tr("ENGAGEMENTS") + "  ·  " + Simulation.Loc.Format("{0} being fought", fought.ToString("N0")), 1f);
         var battles = _campaign.Battles
             .Where(battle => battle.WarId == war.Id && !battle.Ended)
             .OrderByDescending(battle => battle.AttackerLosses + battle.DefenderLosses)
             .Take(8)
             .ToList();
-        Heading(Tr("ENGAGEMENTS") + "  ·  " + Simulation.Loc.Format("{0} being fought",
-            _campaign.Battles.Count(battle => battle.WarId == war.Id && !battle.Ended).ToString("N0")));
-        if (battles.Count == 0) Line("Nothing is in contact.");
+        if (battles.Count == 0) where.AddChild(Body(Tr("Nothing is in contact."), 13, Ui.Colour("text.muted")));
         foreach (var battle in battles)
         {
             var place = _campaign.ProvinceMap is null
                 ? Simulation.Loc.Format("province {0}", battle.ProvinceId.ToString("N0"))
-                : StateNameOfProvince(battle.ProvinceId);
-            Line(place + "  ·  " +
-                 Simulation.Loc.Format("day {0}", (_campaign.ElapsedDays - battle.StartedDay + 1).ToString("N0")) + "  ·  " +
-                 Simulation.Loc.Format("{0} casualties", Fmt.People(battle.AttackerLosses + battle.DefenderLosses)) + "  ·  " +
-                 Simulation.Loc.Get(battle.Outcome));
+                : BattlePlaceName(battle.ProvinceId);
+            var entry = new VBoxContainer();
+            entry.AddThemeConstantOverride("separation", 0);
+            entry.AddChild(Body(place, 13, Ui.Colour("text.bright")));
+            entry.AddChild(Body(
+                Simulation.Loc.Format("day {0}", (_campaign.ElapsedDays - battle.StartedDay + 1).ToString("N0")) + "  ·  " +
+                Simulation.Loc.Format("{0} casualties", Fmt.People(battle.AttackerLosses + battle.DefenderLosses)) + "  ·  " +
+                Simulation.Loc.Get(battle.Outcome), 11, Ui.Colour("text.muted")));
+            where.AddChild(entry);
         }
 
         if (war.LastNegotiation.Length > 0)
         {
-            Heading("LAST PROPOSAL");
-            Line(war.LastNegotiation);
+            var proposal = new PanelContainer();
+            proposal.AddThemeStyleboxOverride("panel", WarInsetStyle(14, 10));
+            var stack = new VBoxContainer();
+            stack.AddThemeConstantOverride("separation", 4);
+            stack.AddChild(Caption("LAST PROPOSAL"));
+            stack.AddChild(Body(war.LastNegotiation, 13, Ui.Colour("text.body"), true));
+            proposal.AddChild(stack);
+            _warDetailRows.AddChild(proposal);
         }
 
-        if (_warDetailBuiltFor == war.Id) return;
+        if (_warDetailBuiltFor != war.Id) BuildWarDetailActions(war, player, mine);
+        FitWarLedgerDetail();
+        // A paragraph that wraps knows its height only once it has been given its width, which
+        // is after this frame's layout: measure again when that has happened.
+        GetTree().CreateTimer(0.05).Timeout += FitWarLedgerDetail;
+    }
+
+    /// <summary>
+    /// The page as tall as what is on it, up to the window: a war nobody is asking the player
+    /// to act in is read in half the screen, and the map stays in view under it.
+    /// </summary>
+    private void FitWarLedgerDetail()
+    {
+        if (_warLedgerOpenWarId < 0 || !IsInstanceValid(_warLedgerLayer) || !_warLedgerLayer.Visible) return;
+        var actions = LiveHeight(_warDetailActions);
+        FitWarLedger(LiveHeight(_warDetailRows) + (actions > 0f ? actions + 12f : 0f) + 8f);
+    }
+
+    /// <summary>The buttons that act on a war - built once a war, so they can be clicked.</summary>
+    private void BuildWarDetailActions(StrategicWar war, Nation player, bool mine)
+    {
         _warDetailBuiltFor = war.Id;
         foreach (var child in _warDetailActions.GetChildren()) child.QueueFree();
         if (!mine || war.Ended) return;

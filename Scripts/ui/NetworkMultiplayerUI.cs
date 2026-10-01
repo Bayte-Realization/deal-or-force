@@ -444,6 +444,9 @@ public partial class DealOrForceGame
         _selectedState = _campaign.States.FirstOrDefault(state => state.NationMapIndex == local.MapIndex);
         _pickerNation = local;
         _modApi.Bind(_campaign);
+        // Flags are chosen against the world they fly in; left on the last one, a country born
+        // in this one - a secession, a rising - has no flag, only an empty frame.
+        BindFlags(_campaign);
         _globe.BindCampaign(_campaign);
         ResetStrategicAudioState();
         AttachNetworkCommandTransport();

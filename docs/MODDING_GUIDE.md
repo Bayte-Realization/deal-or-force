@@ -1557,6 +1557,34 @@ prints them with their current rectangles.
 screen the base game builds, but it cannot invent a new one or add an element to an existing one.
 That needs a C# mod.
 
+### A screen's own colours and measures
+
+Some screens carry tokens of their own, in a file of their own under `gui/`: the same `colours`,
+`metrics` and `layout` sections, read the same way, so a mod retints one screen by overlaying
+one file. The Wars screen is `gui/36_war_ledger.json`:
+
+```json
+{
+  "colours": { "war.front_line": "#f0d575", "war.card_mine": "#c7a94e", "war.killed": "#c2474f" },
+  "metrics": { "war_ledger.card_height": 76, "war_ledger.bar_scale": 40, "war_ledger.fit_content": 1 }
+}
+```
+
+| Token | What it sets |
+|---|---|
+| `war.card`, `war.card_hover`, `war.card_border`, `war.card_border_hover` | a war's card, at rest and under the pointer |
+| `war.card_mine` | the brass edge of the player's own wars |
+| `war.track`, `war.front_line` | the bar between the two sides, and the front line drawn on it |
+| `war.inset`, `war.inset_border` | the recessed fields: the world's figures, a war's three columns |
+| `war.killed`, `war.wounded`, `war.captured` | what a war has cost, in the bar of each side's losses |
+| `war_ledger.card_height` | a card's height in pixels |
+| `war_ledger.bar_scale`, `war_ledger.part_scale` | the war score at which the front line reaches the end of the bar; the same for one part of the score |
+| `war_ledger.colour_depth` | how much deeper than its map colour a side is drawn, 0 to 1 |
+| `war_ledger.fit_content` | 1: the window is as tall as the wars in it, up to its `modal.war_ledger` rectangle; 0: it always fills the rectangle |
+
+The same values are compiled into the game, as every shipped token is, so a mod lists only the
+token it changes, and a mod that removes the file still gets the shipped screen.
+
 ### A region's first day
 
 `history/states/2024/` holds every region of the 2024 world as the bookmark opens it: one file per

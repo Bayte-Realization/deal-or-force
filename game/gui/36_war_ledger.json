@@ -1,0 +1,31 @@
+{
+  // The world's wars (the Wars screen): the cards, the bar with the front line on it, and
+  // the colours of what a war has cost. The same values are compiled in (InterfaceSkin), so a
+  // mod lists only the token it changes.
+  "colours": {
+    "war.card": "#132230",
+    "war.card_hover": "#1a2d3d",
+    "war.card_border": "#2b3e4f",
+    "war.card_border_hover": "#9c8540",
+    "war.card_mine": "#c7a94e",
+    "war.track": "#0a131c",
+    "war.front_line": "#f0d575",
+    "war.inset": "#0e1a25",
+    "war.inset_border": "#273848",
+    "war.killed": "#c2474f",
+    "war.wounded": "#cf9446",
+    "war.captured": "#7e93aa"
+  },
+  "metrics": {
+    // How tall a war's card is, in pixels.
+    "war_ledger.card_height": 76,
+    // The war score at which the front line reaches the end of the bar, and the same for
+    // one part of the score.
+    "war_ledger.bar_scale": 40,
+    "war_ledger.part_scale": 20,
+    // How much deeper than its map colour a country's side of the bar is drawn (0 to 1).
+    "war_ledger.colour_depth": 0.12,
+    // 1: the window is as tall as the wars in it; 0: it always fills its layout rectangle.
+    "war_ledger.fit_content": 1
+  }
+}

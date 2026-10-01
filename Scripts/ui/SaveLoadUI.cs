@@ -378,6 +378,9 @@ public partial class DealOrForceGame
         _campaignInProgress = true;
 
         _modApi.Bind(_campaign);
+        // Flags are chosen against the world they fly in; left on the last one, a country born
+        // in this one - a secession, a rising - has no flag, only an empty frame.
+        BindFlags(_campaign);
         _globe.BindCampaign(_campaign);
         // The save's own step and autosave, not whatever the player has set since - and for
         // a save written before campaigns kept their options, the player's current ones,

@@ -184,6 +184,21 @@ public static class InterfaceSkin
         ("building.extraction",        "#a65f45"),
         ("building.power_plant",       "#dfb14a"),
         ("building.arms_industry",     "#b9414b"),
+
+        // The Wars screen - its cards, the bar with the front line on it, and what a war has
+        // cost. Mirrors game/gui/36_war_ledger.json, which ships the same values.
+        ("war.card",              "#132230"),
+        ("war.card_hover",        "#1a2d3d"),
+        ("war.card_border",       "#2b3e4f"),
+        ("war.card_border_hover", "#9c8540"),
+        ("war.card_mine",         "#c7a94e"),
+        ("war.track",             "#0a131c"),
+        ("war.front_line",        "#f0d575"),
+        ("war.inset",             "#0e1a25"),
+        ("war.inset_border",      "#273848"),
+        ("war.killed",            "#c2474f"),
+        ("war.wounded",           "#cf9446"),
+        ("war.captured",          "#7e93aa"),
     };
 
     private static readonly (string Key, float Value)[] DefaultMetrics =
