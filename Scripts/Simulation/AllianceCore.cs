@@ -1,7 +1,50 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
+
+public sealed partial class Defines
+{
+    /// <summary>
+    /// How far apart two governments' politics may be before an alliance between them costs
+    /// rather than helps (ideological distance, 0 to 1), how much a step either side of that
+    /// is worth, and the most that governments alike can add: kinship makes an alliance
+    /// easier, it does not make one. A liberal democracy and a one-party state sit at about
+    /// 0.75 apart.
+    /// </summary>
+    public float AllianceIdeologyNeutral { get; set; } = 0.25f;
+    public float AllianceIdeologyWeight { get; set; } = 0.8f;
+    public float AllianceIdeologyBonusCap { get; set; } = 0.15f;
+
+    /// <summary>What it costs that the country asking is allied to somebody we count a rival or are fighting.</summary>
+    public float AllianceRivalCampPenalty { get; set; } = 0.6f;
+
+    /// <summary>What it costs that one of our own allies counts the country asking a rival.</summary>
+    public float AllianceAllyObjectionPenalty { get; set; } = 0.35f;
+
+    /// <summary>
+    /// How far apart two capitals may be, in km, before two countries neither of which is a
+    /// great power cannot be of much use to each other in a war - and what that costs. A
+    /// great power on either side lifts it: patrons are allied to the far side of the world.
+    /// </summary>
+    public float AllianceReachKm { get; set; } = 2500f;
+    public float AllianceDistancePenalty { get; set; } = 0.35f;
+
+    /// <summary>
+    /// How many allies a country is comfortable with, and what each further one costs a new
+    /// offer, in tenths: a country already bound to thirty others is not short of friends.
+    /// </summary>
+    public int AllianceComfortableAllies { get; set; } = 6;
+    public float AllianceCrowdingWeight { get; set; } = 0.30f;
+
+    /// <summary>
+    /// How large a bloc the country asking may bring before joining it is joining everybody's
+    /// wars, and what each further dozen allies of theirs costs.
+    /// </summary>
+    public int AllianceEntanglementAllies { get; set; } = 12;
+    public float AllianceEntanglementWeight { get; set; } = 0.25f;
+}
 
 /// <summary>
 /// An alliance as a decision two countries take, rather than a number one of them crosses.
@@ -156,11 +199,19 @@ public static class AllianceSystem
             why?.Add("Their reputation", cost);
         }
 
-        // And the reason most alliances were ever signed: the same country frightens both.
+        // And the reason most alliances were ever signed: the same country frightens both. A
+        // country that frightens is a great power or one at the door - with two hundred and
+        // sixty countries in the world, any two of them dislike some third, and a shared
+        // dislike of the Falkland Islands is not a reason to go to war for each other.
+        var powers = GreatPowers(campaign);
+        var asksBorders = CampaignDiplomacy.Neighbours(campaign, asked.MapIndex);
+        var askingBorders = CampaignDiplomacy.Neighbours(campaign, asking.MapIndex);
         var shared = 0;
         foreach (var third in campaign.Nations)
         {
             if (third.Id == asked.Id || third.Id == asking.Id) continue;
+            if (!powers.Contains(third.Id) && !asksBorders.Contains(third.MapIndex) &&
+                !askingBorders.Contains(third.MapIndex)) continue;
             var ours = CampaignDiplomacy.Peek(campaign, asked.Id, third.Id);
             var theirsToo = CampaignDiplomacy.Peek(campaign, asking.Id, third.Id);
             if (ours is null || theirsToo is null) continue;
@@ -179,7 +230,113 @@ public static class AllianceSystem
         willingness += steady;
         why?.Add("What we can afford to promise", steady);
 
+        // What kind of government is asking. Opinion already counts it a little; an alliance
+        // counts it a great deal more, because an alliance is a promise to fight for the
+        // other government's survival, and few governments promise that to their opposite.
+        var politics = MathF.Min(defines.AllianceIdeologyBonusCap,
+            (defines.AllianceIdeologyNeutral - PoliticsCore.IdeologicalDistance(asked, asking)) * defines.AllianceIdeologyWeight);
+        if (MathF.Abs(politics) >= 0.01f)
+        {
+            willingness += politics;
+            why?.Add(politics >= 0f ? "Governments alike" : "Governments opposed", politics);
+        }
+
+        // Which camp they are in. An alliance with a friend of our rival is an alliance with
+        // their wars against us, and an ally of ours who cannot stand them will say so.
+        var askedAllies = AlliesOf(campaign, asked);
+        var askingAllies = AlliesOf(campaign, asking);
+        foreach (var friend in askingAllies)
+        {
+            if (friend.Id == asked.Id || askedAllies.Contains(friend)) continue;
+            var view = CampaignDiplomacy.Peek(campaign, asked.Id, friend.Id);
+            if (view is null) continue;
+            if (view.Opinion > defines.AiRivalryThreshold && !CampaignDiplomacy.AtWar(campaign, asked.Id, friend.Id)) continue;
+            willingness -= defines.AllianceRivalCampPenalty;
+            why?.Add(Loc.Format("They are allied to {0}", friend.DisplayName), -defines.AllianceRivalCampPenalty);
+            break;
+        }
+        foreach (var friend in askedAllies)
+        {
+            if (friend.Id == asking.Id) continue;
+            var view = CampaignDiplomacy.Peek(campaign, friend.Id, asking.Id);
+            if (view is null || view.Opinion > defines.AiRivalryThreshold) continue;
+            willingness -= defines.AllianceAllyObjectionPenalty;
+            why?.Add(Loc.Format("Our ally {0} distrusts them", friend.DisplayName), -defines.AllianceAllyObjectionPenalty);
+            break;
+        }
+
+        // How far apart they are. Two small countries on opposite sides of the world can
+        // promise each other nothing an army could deliver; a great power on either side can.
+        if (!powers.Contains(asked.Id) && !powers.Contains(asking.Id) &&
+            CapitalKm(asked, asking) > defines.AllianceReachKm)
+        {
+            willingness -= defines.AllianceDistancePenalty;
+            why?.Add("Too far away to defend each other", -defines.AllianceDistancePenalty);
+        }
+
+        // How bound they are already. A country with thirty allies is not short of friends,
+        // and joining a bloc of thirty is joining thirty countries' wars - counted as the allies
+        // the other does not share, because two members of one bloc signing with each other
+        // take on nobody new.
+        var newToUs = 0;
+        foreach (var friend in askedAllies)
+            if (friend.Id != asking.Id && !askingAllies.Contains(friend)) newToUs++;
+        var newToThem = 0;
+        foreach (var friend in askingAllies)
+            if (friend.Id != asked.Id && !askedAllies.Contains(friend)) newToThem++;
+        var crowded = MathF.Max(0, newToUs - defines.AllianceComfortableAllies) / 10f * defines.AllianceCrowdingWeight;
+        if (crowded > 0.001f)
+        {
+            willingness -= crowded;
+            why?.Add("We have allies enough", -crowded);
+        }
+        var entangled = MathF.Max(0, newToThem - defines.AllianceEntanglementAllies) / 12f *
+                        defines.AllianceEntanglementWeight;
+        if (entangled > 0.001f)
+        {
+            willingness -= entangled;
+            why?.Add("Their bloc's wars would be ours", -entangled);
+        }
+
         return willingness;
+    }
+
+    private static readonly HashSet<int> Powers = new();
+    private static int _powersDay = int.MinValue;
+    private static Campaign _powersFor;
+
+    /// <summary>
+    /// The countries large enough that a quarrel with them is everybody's quarrel - the same
+    /// number the AI watches (AiGreatPowers), ranked by strength, worked out once a day.
+    /// </summary>
+    internal static HashSet<int> GreatPowers(Campaign campaign)
+    {
+        if (_powersFor == campaign && _powersDay == campaign.ElapsedDays) return Powers;
+        _powersFor = campaign;
+        _powersDay = campaign.ElapsedDays;
+        Powers.Clear();
+        var ranked = new List<(float Strength, int Id)>();
+        foreach (var nation in campaign.Nations)
+            if (nation.Population > 0) ranked.Add((AiStatecraft.StrengthOf(campaign, nation), nation.Id));
+        ranked.Sort((left, right) => right.Strength != left.Strength
+            ? right.Strength.CompareTo(left.Strength)
+            : left.Id.CompareTo(right.Id));
+        for (var index = 0; index < ranked.Count && index < campaign.Defines.AiGreatPowers; index++)
+            Powers.Add(ranked[index].Id);
+        return Powers;
+    }
+
+    /// <summary>Between two capitals, over the globe, in km.</summary>
+    internal static float CapitalKm(Nation one, Nation other)
+    {
+        const float radians = MathF.PI / 180f;
+        var lat1 = one.CapitalLatitude * radians;
+        var lat2 = other.CapitalLatitude * radians;
+        var dLat = lat2 - lat1;
+        var dLon = (other.CapitalLongitude - one.CapitalLongitude) * radians;
+        var h = MathF.Sin(dLat / 2f) * MathF.Sin(dLat / 2f) +
+                MathF.Cos(lat1) * MathF.Cos(lat2) * MathF.Sin(dLon / 2f) * MathF.Sin(dLon / 2f);
+        return 2f * 6371f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(h)));
     }
 
     /// <summary>

@@ -104,6 +104,10 @@ public static class Program
         // `--flags` checks only the flags every country opens under - seconds, not a bench run.
         if (Array.IndexOf(args, "--flags") >= 0)
             return Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
+        // `--alliance-check` asks for an alliance and answers it, alone: the minute version of the
+        // full bench's alliance line, for a change to who signs what.
+        if (Array.IndexOf(args, "--alliance-check") >= 0)
+            return Check("an alliance is asked for and answered", AnAllianceIsAskedForAndAnswered());
         // `--skin` checks the shipped layout and colours against the compiled defaults, alone.
         if (Array.IndexOf(args, "--skin") >= 0)
             return Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
@@ -135,6 +139,10 @@ public static class Program
         // `--land` watches the map change hands: land taken far from the taker, land taken
         // from an ally, and occupations nobody is at war over (LandReport).
         if (Array.IndexOf(args, "--land") >= 0) return mapped ? LandReport.Run(campaign, days) : 2;
+        // `--alliances` counts the world's alliances once a year: how many, the largest blocs,
+        // and the ones between opposed governments, far-apart minor countries and great powers
+        // whose alliance would be news (AllianceReport).
+        if (Array.IndexOf(args, "--alliances") >= 0) return AllianceReport.Run(campaign, days);
 
         // `--profile N` plays N days of the world and prints where the time went, by total
         // time rather than by garbage - which pass to make faster, not which one to make

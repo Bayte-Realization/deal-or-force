@@ -1,0 +1,16 @@
+{
+  // Что страна взвешивает, когда ей предлагают союз.
+  "Whether they would sign": "Подпишут ли они",
+  "How we regard them": "Как мы к ним относимся",
+  "They are already fighting": "Они уже воюют",
+  "What they bring": "Что они дают",
+  "Their reputation": "Их репутация",
+  "What we can afford to promise": "Что мы можем себе позволить обещать",
+  "Governments alike": "Похожие правительства",
+  "Governments opposed": "Противоположные правительства",
+  "They are allied to {0}": "Они в союзе с: {0}",
+  "Our ally {0} distrusts them": "Наш союзник {0} им не доверяет",
+  "Too far away to defend each other": "Слишком далеко, чтобы защищать друг друга",
+  "We have allies enough": "Союзников у нас и так хватает",
+  "Their bloc's wars would be ours": "Войны их блока станут нашими"
+}

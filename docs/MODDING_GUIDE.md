@@ -677,6 +677,29 @@ a coalition answers when its target attacks somebody.
 us and not forgotten, our people living across the border, a friend already being hit. A war
 with no reason is expensive.
 
+### Who signs an alliance
+
+An alliance is offered and answered (AllianceCore): the country asked adds up how it regards
+the country asking, what that country brings, the rivals they share and whether it can afford
+to promise anything, and signs above `AllianceWillingness`. Since October 2026 it weighs four
+more things, all in `common/defines/39_alliance_camps.json`:
+
+| Define | What it does |
+|---|---|
+| `AllianceIdeologyNeutral`, `AllianceIdeologyWeight`, `AllianceIdeologyBonusCap` | Politics: an alliance is a promise to fight for the other government's survival. Distance below the neutral point helps, up to the cap; above it costs - a liberal democracy and a one-party state lose about 0.4. |
+| `AllianceRivalCampPenalty` | The country asking is allied to somebody we count a rival (opinion at or below `AiRivalryThreshold`) or are fighting - and who is not our ally too. |
+| `AllianceAllyObjectionPenalty` | One of our own allies counts the country asking a rival. |
+| `AllianceReachKm`, `AllianceDistancePenalty` | Two countries neither of which is a great power (the `AiGreatPowers` strongest), with capitals further apart than this. A great power on either side lifts it. |
+| `AllianceComfortableAllies`, `AllianceCrowdingWeight` | Each ally beyond the comfortable number that the other side does not share costs a tenth of the weight. |
+| `AllianceEntanglementAllies`, `AllianceEntanglementWeight` | And each dozen allies the country asking would bring with it, beyond the first dozen. |
+
+A shared rival counts only when it is a great power or borders one of the two: with two hundred
+and sixty countries any two dislike some third, and that is not a reason to fight for each other.
+Every term is named in the tooltip of the alliance button, so a player asking sees why the
+answer was no. The bench report `--alliances` (`SimBench <days> <seed> --alliances`) counts the
+world's alliances once a year: how many, the largest blocs, and the ones between opposed
+governments, far-apart minor countries and great powers whose alliance would be news.
+
 ### How the AI decides to fight
 
 Every eleven days a country looks at everybody it can reach and counts what a war is **worth**

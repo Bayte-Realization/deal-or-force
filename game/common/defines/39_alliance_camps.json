@@ -1,0 +1,26 @@
+{
+  // What else a country weighs when it is asked for an alliance (AllianceCore), beside how it
+  // regards the country asking, what that country brings and the rivals they share.
+  //
+  // How far apart two governments may be before an alliance between them costs, on the
+  // ideological distance from 0 to 1 (a liberal democracy and a one-party state are about
+  // 0.75 apart), what a step either side of that is worth, and the most governments alike
+  // can add - kinship makes an alliance easier, it does not make one.
+  "AllianceIdeologyNeutral": 0.25,
+  "AllianceIdeologyWeight": 0.8,
+  "AllianceIdeologyBonusCap": 0.15,
+  // The country asking is allied to somebody we count a rival, or are fighting.
+  "AllianceRivalCampPenalty": 0.6,
+  // One of our own allies counts the country asking a rival.
+  "AllianceAllyObjectionPenalty": 0.35,
+  // Two countries neither of which is a great power (the AiGreatPowers strongest), with
+  // capitals further apart than this many km, can do little for each other in a war.
+  "AllianceReachKm": 2500,
+  "AllianceDistancePenalty": 0.35,
+  // Each ally beyond the comfortable number costs a new offer a tenth of the weight.
+  "AllianceComfortableAllies": 6,
+  "AllianceCrowdingWeight": 0.30,
+  // And each dozen allies the country asking brings, beyond the first dozen.
+  "AllianceEntanglementAllies": 12,
+  "AllianceEntanglementWeight": 0.25
+}
