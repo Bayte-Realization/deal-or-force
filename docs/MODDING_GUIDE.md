@@ -156,6 +156,12 @@ a battle; `supply_use` is the load on a logistics node; `counter_symbol` chooses
 conventional mark on the map. Do not change an ID after publishing a scenario: an army stores
 exactly that.
 
+The game draws five marks itself - `infantry`, `armor`, `mechanized`, `motorized` and
+`artillery`. Any other symbol, or any of these redrawn, is a picture: put
+`unit_<symbol>.png` (white on transparent, any size) into any `gfx/` folder of the game or of
+a mod, and the counter paints it in its symbol colour inside the card. A new kind of
+formation is then a `counter_symbol` in its unit type and one picture, with no code.
+
 ## Countries: changing countries
 
 Files in `common/countries` contain an object keyed by country tags:

@@ -38,58 +38,218 @@ public sealed partial class GlobePresentation
         if (_armyCounterTextures.TryGetValue(key, out var cached)) return cached;
         const int width = 176;
         const int height = 104;
-        var pixels = new byte[width * height * 4];
+        // Drawn three times larger and brought down with a Lanczos filter. The card used to be
+        // painted pixel by pixel at its own size, so every diagonal of the symbol and every
+        // corner of the frame was a staircase once the card stood on the map.
+        const int s = 3;
+        var w = width * s;
+        var h = height * s;
+        var pixels = new byte[w * h * 4];
         var national = new Color(nation.Color);
-        var border = national.Lightened(0.32f);
-        var dark = new Color(0.115f, 0.145f, 0.170f, 0.97f);
-        var middle = new Color(0.165f, 0.200f, 0.230f, 0.97f);
+        var rim = national.Lightened(0.30f);
+        var ink = new Color(0.035f, 0.045f, 0.055f, 0.98f);
+        var top = new Color(0.205f, 0.245f, 0.280f, 0.97f);
+        var bottom = new Color(0.105f, 0.130f, 0.155f, 0.97f);
+        const float radius = 7f * s;
+        // The rim is the counter's nationality: it has to read as a coloured frame at the size a
+        // card stands on the map, so it is wide, and the dark line that parts it from the
+        // ground is a hair.
+        const float inkLine = 0.9f * s;
+        const float rimLine = 7.5f * s;
+        // A card stands on the map at about a third of its own size, so its nationality has to
+        // be broad strokes to survive: the rim, a band across the top and the stripe down the
+        // left are what read as "whose" from across a front.
+        const float bandBottom = 21f * s;
 
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
+        for (var y = 0; y < h; y++)
+        for (var x = 0; x < w; x++)
         {
-            var edge = x < 5 || x >= width - 5 || y < 5 || y >= height - 5;
-            var commandBand = y < 18;
-            var nationalStripe = x >= 7 && x < 15 && y >= 7 && y < height - 7;
-            var weave = ((x / 7 + y / 5 + nation.MapIndex) & 3) == 0;
-            var color = edge ? border : commandBand ? national.Darkened(0.18f) : weave ? middle : dark;
-            if (nationalStripe) color = national.Lightened(0.08f);
-            WritePixel(pixels, width, x, y, color);
+            var inward = -RoundedBox(x + 0.5f, y + 0.5f, w, h, radius);
+            if (inward < 0f)
+            {
+                // Transparent, but in the ink's colour, so the filter does not drag a pale
+                // fringe in from outside the card.
+                WritePixel(pixels, w, x, y, new Color(ink.R, ink.G, ink.B, 0f));
+                continue;
+            }
+            Color color;
+            if (inward < inkLine) color = ink;
+            else if (inward < rimLine) color = rim;
+            else
+            {
+                color = top.Lerp(bottom, y / (float)h);
+                if (y < bandBottom) color = national.Darkened(0.12f);
+                // A hairline of light under the band, the way a printed counter catches it, and
+                // the national stripe down the left.
+                else if (y < bandBottom + 1.4f * s) color = color.Lightened(0.16f);
+                if (x >= 9 * s && x < 18 * s && y >= bandBottom && y < h - 9 * s) color = national.Lightened(0.06f);
+            }
+            WritePixel(pixels, w, x, y, color);
         }
 
-        // NATO-inspired symbols share one frame language while the unit type remains
-        // readable without opening a panel. The symbol box is the square left of the
-        // strength number: centre (36,54), half-extent 20, kept wholly clear of the
-        // number's field - which is the middle of the card, where the marker is anchored.
-        var symbol = new Color(0.90f, 0.94f, 0.96f, 0.94f);
-        const int cx = 36, cy = 54;
-        var counterSymbol = UnitTypeCatalog.Get(templateId).CounterSymbol;
-        switch (counterSymbol)
-        {
-            case "armor":
-                DrawEllipse(pixels, width, cx, cy, 15, 10, symbol, 4);
-                break;
-            case "artillery":
-                // The dot is the whole art of it: heavy, filled, unmistakable at a glance -
-                // the one symbol on the map that is solid, because guns do not manoeuvre.
-                FillEllipse(pixels, width, cx, cy, 11, 11, symbol);
-                break;
-            case "mechanized":
-                DrawEllipse(pixels, width, cx, cy, 15, 10, symbol, 4);
-                DrawCross(pixels, width, cx, cy, 9, symbol, 4);
-                break;
-            case "motorized":
-                DrawCross(pixels, width, cx, cy, 15, symbol, 4);
-                // The wheel: an arc under the cross, open at the top.
-                DrawArc(pixels, width, cx, cy + 11, 9, 20, 160, symbol, 4);
-                break;
-            default: // infantry
-                DrawCross(pixels, width, cx, cy, 15, symbol, 4);
-                break;
-        }
+        // The unit symbol, NATO's, in the square left of the strength number - kept wholly
+        // clear of the number's field in the middle of the card, where the marker is anchored.
+        // Without the symbology's own frame around it: at the size a card stands on the map a
+        // framed cross reads as an envelope, and the card is the frame.
+        var symbol = new Color(0.92f, 0.95f, 0.97f, 0.96f);
+        const float cx = 37f * s, cy = 54f * s, halfW = 17f * s, halfH = 15f * s, stroke = 6.5f * s;
+        var counterSymbol = UnitTypeCatalog.Get(templateId).CounterSymbol ?? "";
+        if (!PaintSymbolArt(pixels, w, counterSymbol, cx, cy, halfW + stroke / 2f, halfH + stroke / 2f, symbol))
+            switch (counterSymbol)
+            {
+                case "armor":
+                    StrokeEllipse(pixels, w, cx, cy, halfW, halfH * 0.66f, stroke * 0.8f, symbol);
+                    break;
+                case "artillery":
+                    // The dot is the whole art of it: heavy, filled, unmistakable at a glance - the
+                    // one symbol on the map that is solid, because guns do not manoeuvre.
+                    FillDisc(pixels, w, cx, cy, halfH * 0.78f, symbol);
+                    break;
+                case "mechanized":
+                    StrokeEllipse(pixels, w, cx, cy, halfW, halfH * 0.66f, stroke * 0.7f, symbol);
+                    StrokeLine(pixels, w, cx - halfW * 0.62f, cy - halfH * 0.62f, cx + halfW * 0.62f, cy + halfH * 0.62f, stroke * 0.7f, symbol);
+                    StrokeLine(pixels, w, cx - halfW * 0.62f, cy + halfH * 0.62f, cx + halfW * 0.62f, cy - halfH * 0.62f, stroke * 0.7f, symbol);
+                    break;
+                case "motorized":
+                    // The cross on wheels: two of them under it, apart from it, so the mark still
+                    // reads as infantry first.
+                    StrokeLine(pixels, w, cx - halfW, cy - halfH, cx + halfW, cy + halfH * 0.45f, stroke, symbol);
+                    StrokeLine(pixels, w, cx - halfW, cy + halfH * 0.45f, cx + halfW, cy - halfH, stroke, symbol);
+                    FillDisc(pixels, w, cx - halfW * 0.55f, cy + halfH * 1.05f, stroke * 0.62f, symbol);
+                    FillDisc(pixels, w, cx + halfW * 0.55f, cy + halfH * 1.05f, stroke * 0.62f, symbol);
+                    break;
+                default: // infantry: the cross from corner to corner of the frame
+                    StrokeLine(pixels, w, cx - halfW, cy - halfH, cx + halfW, cy + halfH, stroke, symbol);
+                    StrokeLine(pixels, w, cx - halfW, cy + halfH, cx + halfW, cy - halfH, stroke, symbol);
+                    break;
+            }
 
-        var texture = ImageTexture.CreateFromImage(Image.CreateFromData(width, height, false, Image.Format.Rgba8, pixels));
+        var image = Image.CreateFromData(w, h, false, Image.Format.Rgba8, pixels);
+        image.Resize(width, height, Image.Interpolation.Lanczos);
+        var texture = ImageTexture.CreateFromImage(image);
         _armyCounterTextures[key] = texture;
         return texture;
+    }
+
+    /// <summary>
+    /// A unit symbol a mod - or the game - drew instead of the built-in shapes: the sprite
+    /// unit_[symbol] from any gfx/ folder, white on transparent, fitted inside the frame and
+    /// painted in the symbol colour. A new kind of formation declares its counter_symbol in
+    /// common/unit_types and ships a picture; nothing in code has to know it exists.
+    /// </summary>
+    private static bool PaintSymbolArt(byte[] pixels, int width, string symbol, float cx, float cy,
+        float halfWidth, float halfHeight, Color color)
+    {
+        if (string.IsNullOrWhiteSpace(symbol)) return false;
+        var name = "unit_" + symbol.ToLowerInvariant();
+        if (!SpriteCatalog.Has(name)) return false;
+        var path = SpriteCatalog.TextureOf(name);
+        Image art = null;
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        // Imported if Godot has seen it; read straight off the disk if it has not - a mod's
+        // folder, or a picture dropped into the game's own gfx/ since the last import.
+        var loose = path.StartsWith("res://", StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;
+        if (ResourceLoader.Exists(path)) art = GD.Load<Texture2D>(path)?.GetImage();
+        else if (System.IO.File.Exists(loose)) art = Image.LoadFromFile(loose);
+        if (art is null || art.IsEmpty()) return false;
+        if (art.IsCompressed()) art.Decompress();
+        art.Convert(Image.Format.Rgba8);
+        var scale = MathF.Min(halfWidth * 2f / art.GetWidth(), halfHeight * 2f / art.GetHeight());
+        var fitWidth = Math.Max(1, (int)(art.GetWidth() * scale));
+        var fitHeight = Math.Max(1, (int)(art.GetHeight() * scale));
+        art.Resize(fitWidth, fitHeight, Image.Interpolation.Lanczos);
+        var left = (int)(cx - fitWidth / 2f);
+        var top = (int)(cy - fitHeight / 2f);
+        for (var y = 0; y < fitHeight; y++)
+        for (var x = 0; x < fitWidth; x++)
+        {
+            var source = art.GetPixel(x, y);
+            var cover = source.A * MathF.Max(source.R, MathF.Max(source.G, source.B));
+            if (cover <= 0.004f) continue;
+            BlendPixel(pixels, width, left + x, top + y, color, cover);
+        }
+        return true;
+    }
+
+    /// <summary>Signed distance from a point to a rounded rectangle filling the image: negative inside.</summary>
+    private static float RoundedBox(float x, float y, int width, int height, float radius)
+    {
+        var qx = MathF.Abs(x - width / 2f) - (width / 2f - radius);
+        var qy = MathF.Abs(y - height / 2f) - (height / 2f - radius);
+        var outside = MathF.Sqrt(MathF.Max(qx, 0f) * MathF.Max(qx, 0f) + MathF.Max(qy, 0f) * MathF.Max(qy, 0f));
+        return outside + MathF.Min(MathF.Max(qx, qy), 0f) - radius;
+    }
+
+    private static void BlendPixel(byte[] pixels, int width, int x, int y, Color color, float cover)
+    {
+        if (x < 0 || y < 0 || x >= width) return;
+        var index = (y * width + x) * 4;
+        if (index < 0 || index + 3 >= pixels.Length) return;
+        var a = Mathf.Clamp(cover * color.A, 0f, 1f);
+        pixels[index] = (byte)Mathf.RoundToInt(pixels[index] * (1f - a) + color.R * 255f * a);
+        pixels[index + 1] = (byte)Mathf.RoundToInt(pixels[index + 1] * (1f - a) + color.G * 255f * a);
+        pixels[index + 2] = (byte)Mathf.RoundToInt(pixels[index + 2] * (1f - a) + color.B * 255f * a);
+        pixels[index + 3] = (byte)Mathf.Clamp(Mathf.RoundToInt(pixels[index + 3] + (255 - pixels[index + 3]) * a), 0, 255);
+    }
+
+    /// <summary>A line of a given thickness, covered by distance, so its edges are smooth and its ends round.</summary>
+    private static void StrokeLine(byte[] pixels, int width, float x0, float y0, float x1, float y1, float thickness, Color color)
+    {
+        var half = thickness / 2f;
+        var minX = (int)MathF.Floor(MathF.Min(x0, x1) - half - 1);
+        var maxX = (int)MathF.Ceiling(MathF.Max(x0, x1) + half + 1);
+        var minY = (int)MathF.Floor(MathF.Min(y0, y1) - half - 1);
+        var maxY = (int)MathF.Ceiling(MathF.Max(y0, y1) + half + 1);
+        var dx = x1 - x0;
+        var dy = y1 - y0;
+        var length = MathF.Max(0.0001f, dx * dx + dy * dy);
+        for (var y = minY; y <= maxY; y++)
+        for (var x = minX; x <= maxX; x++)
+        {
+            var px = x + 0.5f;
+            var py = y + 0.5f;
+            var along = Mathf.Clamp(((px - x0) * dx + (py - y0) * dy) / length, 0f, 1f);
+            var ex = px - (x0 + dx * along);
+            var ey = py - (y0 + dy * along);
+            var distance = MathF.Sqrt(ex * ex + ey * ey);
+            var cover = Mathf.Clamp(half + 0.5f - distance, 0f, 1f);
+            if (cover > 0f) BlendPixel(pixels, width, x, y, color, cover);
+        }
+    }
+
+    private static void StrokeBox(byte[] pixels, int width, float left, float top, float right, float bottom, float thickness, Color color)
+    {
+        StrokeLine(pixels, width, left, top, right, top, thickness, color);
+        StrokeLine(pixels, width, right, top, right, bottom, thickness, color);
+        StrokeLine(pixels, width, right, bottom, left, bottom, thickness, color);
+        StrokeLine(pixels, width, left, bottom, left, top, thickness, color);
+    }
+
+    private static void StrokeEllipse(byte[] pixels, int width, float cx, float cy, float rx, float ry, float thickness, Color color)
+    {
+        var half = thickness / 2f;
+        for (var y = (int)(cy - ry - half - 2); y <= (int)(cy + ry + half + 2); y++)
+        for (var x = (int)(cx - rx - half - 2); x <= (int)(cx + rx + half + 2); x++)
+        {
+            var nx = (x + 0.5f - cx) / rx;
+            var ny = (y + 0.5f - cy) / ry;
+            var radial = MathF.Sqrt(nx * nx + ny * ny);
+            // Distance to the curve, near enough for a stroke this thin on radii this round.
+            var distance = MathF.Abs(radial - 1f) * MathF.Min(rx, ry);
+            var cover = Mathf.Clamp(half + 0.5f - distance, 0f, 1f);
+            if (cover > 0f) BlendPixel(pixels, width, x, y, color, cover);
+        }
+    }
+
+    private static void FillDisc(byte[] pixels, int width, float cx, float cy, float radius, Color color)
+    {
+        for (var y = (int)(cy - radius - 2); y <= (int)(cy + radius + 2); y++)
+        for (var x = (int)(cx - radius - 2); x <= (int)(cx + radius + 2); x++)
+        {
+            var distance = MathF.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
+            var cover = Mathf.Clamp(radius + 0.5f - distance, 0f, 1f);
+            if (cover > 0f) BlendPixel(pixels, width, x, y, color, cover);
+        }
     }
 
     private static void DrawCross(byte[] pixels, int width, int cx, int cy, int reach, Color color, int thickness)
