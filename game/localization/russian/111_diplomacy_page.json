@@ -1,0 +1,27 @@
+{
+  // Страница дипломатии: страна, мнение, соотношение сил, связи.
+  "What they have is not known to us.": "Что у них есть, нам неизвестно.",
+  "{0} people · GDP {1} · stability {2}": "{0} чел. · ВВП {1} · стабильность {2}",
+  "YOUR COUNTRY": "ВАША СТРАНА",
+  "THEIR OPINION OF US": "ИХ МНЕНИЕ О НАС",
+  "We cannot see enough of them to judge.": "Мы знаем о них слишком мало, чтобы судить.",
+  "THE BALANCE OF POWER": "СООТНОШЕНИЕ СИЛ",
+  "WHAT THEIR OPINION IS MADE OF": "ИЗ ЧЕГО СКЛАДЫВАЕТСЯ ИХ МНЕНИЕ",
+  "Nothing in particular: they have no reason to think of us either way.": "Ничего особенного: у них нет причин думать о нас ни хорошо, ни плохо.",
+  "AT WAR": "В ВОЙНЕ",
+  "War score {0} for us · {1} lost on our side, {2} on theirs": "Счёт войны {0} для нас · наши потери {1}, их — {2}",
+  "Open the war's page": "Открыть страницу войны",
+  "TIES": "СВЯЗИ",
+  "No treaty, no tie and no trade between us.": "Между нами нет ни договоров, ни связей, ни торговли.",
+  "YOUR STANDING": "ВАШЕ ПОЛОЖЕНИЕ",
+  "ALLIES": "СОЮЗНИКИ",
+  "No alliance binds us.": "Нас не связывает ни один союз.",
+  "WE HAVE PROMISED TO DEFEND": "МЫ ОБЕЩАЛИ ЗАЩИЩАТЬ",
+  "OUR WARS": "НАШИ ВОЙНЫ",
+  "at peace": "мир",
+  "Open": "Открыть",
+  "WHO THINKS WELL OF US": "КТО К НАМ ХОРОШО ОТНОСИТСЯ",
+  "WHO THINKS ILL OF US": "КТО К НАМ ПЛОХО ОТНОСИТСЯ",
+  "Nobody in particular.": "Никто в особенности.",
+  "+{0} more": "и ещё {0}"
+}

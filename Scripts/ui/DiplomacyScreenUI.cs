@@ -178,14 +178,9 @@ public partial class DealOrForceGame
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(420, 0)
         };
-        _diplomacyDetailBody.AddThemeConstantOverride("separation", 7);
+        _diplomacyDetailBody.AddThemeConstantOverride("separation", 12);
         pageScroll.AddChild(_diplomacyDetailBody);
         _diplomacyDetailRows = _diplomacyDetailBody;
-        _diplomacyPactRows = new VBoxContainer
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill
-        };
-        _diplomacyPactRows.AddThemeConstantOverride("separation", 3);
 
         // ---- the actions: what you can do about any of it.
         var actions = new VBoxContainer
@@ -315,7 +310,7 @@ public partial class DealOrForceGame
         _diplomacyLayer.Visible = true;
         _diplomacyLayer.MoveToFront();
         RebuildDiplomacyList(force: true);
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
         UpdateScreenButtons();
     }
 
@@ -437,14 +432,7 @@ public partial class DealOrForceGame
         row.Opinion.HorizontalAlignment = HorizontalAlignment.Right;
         inner.AddChild(row.Opinion);
 
-        row.Select.Pressed += () =>
-        {
-            if (row.Nation is null) return;
-            _selectedNation = row.Nation;
-            _diplomacySelectedId = row.Nation.Id;
-            _globe.SetMapModeSubject(row.Nation);
-            RefreshDiplomacyScreen();
-        };
+        row.Select.Pressed += () => SelectDiplomacyNation(row.Nation);
         _diplomacyListRows.AddChild(row.Select);
         return row;
     }
@@ -469,6 +457,125 @@ public partial class DealOrForceGame
 
     // ------------------------------------------------------------------ the page
 
+    private string _diplomacyPageKey = "";
+
+    /// <summary>The page again now, whatever the day: something on it has just been done.</summary>
+    private void ForceDiplomacyRefresh()
+    {
+        _diplomacyPageKey = "";
+        RefreshDiplomacyScreen();
+    }
+
+    /// <summary>Another country on this page - from the list, or from a flag on the page itself.</summary>
+    private void SelectDiplomacyNation(Nation nation)
+    {
+        if (nation is null) return;
+        _selectedNation = nation;
+        _diplomacySelectedId = nation.Id;
+        _globe.SetMapModeSubject(nation);
+        ForceDiplomacyRefresh();
+    }
+
+    /// <summary>The selected row lit, without rebuilding a list that has not changed.</summary>
+    private void MarkDiplomacySelection()
+    {
+        foreach (var row in _diplomacyRows)
+            if (row.Nation is not null && GodotObject.IsInstanceValid(row.Select))
+                row.Select.Modulate = row.Nation.Id == _diplomacySelectedId ? new Color(1.15f, 1.10f, 0.9f) : Colors.White;
+    }
+
+    /// <summary>The war page for a war, from wherever the war was mentioned.</summary>
+    private void OpenWarPage(int warId)
+    {
+        CloseDiplomacyScreen();
+        OpenWarLedger();
+        ShowWarLedgerDetail(warId);
+    }
+
+    /// <summary>
+    /// A country, as a button: its flag and its name. Pressed, this page turns to it - so an
+    /// ally of an ally is one click away rather than a search.
+    /// </summary>
+    private Button DiplomacyChip(Nation member, string suffix = "")
+    {
+        var chip = new Button
+        {
+            Text = member.DisplayName + suffix,
+            Icon = FlagTexture(member.Tag),
+            // Not expanded: an expanded icon adds nothing to a button's minimum width, and a
+            // chip in a flow is given exactly its minimum - the flag would get no room at all.
+            ExpandIcon = false,
+            CustomMinimumSize = new Vector2(0, 24),
+            TooltipText = Ui.Tip(member.DisplayName + " · " + member.Tag)
+        };
+        chip.AddThemeConstantOverride("icon_max_width", 22);
+        chip.AddThemeConstantOverride("h_separation", 6);
+        chip.AddThemeFontSizeOverride("font_size", 12);
+        chip.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
+        chip.AddThemeColorOverride("font_hover_color", Ui.Colour("text.bright"));
+        StyleBoxFlat Style(bool hover)
+        {
+            var style = new StyleBoxFlat
+            {
+                BgColor = Ui.Colour(hover ? "war.card_hover" : "war.card"),
+                BorderColor = Ui.Colour(hover ? "war.card_border_hover" : "war.card_border"),
+                ContentMarginLeft = 6, ContentMarginRight = 8, ContentMarginTop = 2, ContentMarginBottom = 2
+            };
+            style.SetBorderWidthAll(1);
+            style.SetCornerRadiusAll(3);
+            return style;
+        }
+        chip.AddThemeStyleboxOverride("normal", Style(false));
+        chip.AddThemeStyleboxOverride("hover", Style(true));
+        chip.AddThemeStyleboxOverride("pressed", Style(true));
+        chip.AddThemeStyleboxOverride("focus", Style(true));
+        var captured = member;
+        chip.Pressed += () => SelectDiplomacyNation(captured);
+        return chip;
+    }
+
+    /// <summary>
+    /// Countries as a flow of chips, or a word saying there are none. A bloc of sixty is shown
+    /// by its first two dozen and a count: the page is about one country, not about its bloc.
+    /// </summary>
+    private Control DiplomacyChips(IEnumerable<Nation> members, string none, Func<Nation, string> suffix = null)
+    {
+        var flow = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        flow.AddThemeConstantOverride("h_separation", 6);
+        flow.AddThemeConstantOverride("v_separation", 6);
+        var limit = (int)Ui.Metric("diplomacy.chips_shown", 24f);
+        var shown = 0;
+        var more = 0;
+        foreach (var member in members)
+        {
+            if (shown >= limit) { more++; continue; }
+            flow.AddChild(DiplomacyChip(member, suffix?.Invoke(member) ?? ""));
+            shown++;
+        }
+        if (more > 0)
+        {
+            var rest = RowLabel("", 12, Ui.Colour("text.muted"));
+            rest.Text = Simulation.Loc.Format("+{0} more", more.ToString("N0"));
+            rest.CustomMinimumSize = new Vector2(0, 24);
+            flow.AddChild(rest);
+        }
+        if (flow.GetChildCount() > 0) return flow;
+        flow.QueueFree();
+        var label = RowLabel(none, 12, Ui.Colour("text.muted"));
+        return label;
+    }
+
+    /// <summary>
+    /// The page for one country, laid out as the Wars screen is: the country across the top with
+    /// what it thinks of us, then fields to read across rather than down - the balance of power
+    /// as bars of ours against theirs, what the opinion is made of, the war if there is one, and
+    /// every tie between us, the countries in them shown by their flags and one click away.
+    /// Opened on the player's own country, it is the player's standing in the world: allies,
+    /// subjects, wars, and who thinks well and ill of us.
+    ///
+    /// It is rebuilt when the day turns or the country changes rather than on every step: a page
+    /// torn down several times a second is a page whose buttons cannot be clicked.
+    /// </summary>
     private void RefreshDiplomacyScreen()
     {
         if (_diplomacyLayer is null || !_diplomacyLayer.Visible || _campaign?.Player is null) return;
@@ -477,169 +584,312 @@ public partial class DealOrForceGame
         _diplomacySelectedId = nation.Id;
 
         RebuildDiplomacyList();
+        MarkDiplomacySelection();
+        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_diplomacyPendingWarTarget}";
+        if (key == _diplomacyPageKey) return;
+        _diplomacyPageKey = key;
         foreach (var child in _diplomacyDetailBody.GetChildren())
         {
             _diplomacyDetailBody.RemoveChild(child);
-            // The pact rows are kept for the life of the screen and put back further down;
-            // freeing them with the rest made every refresh after the first throw there,
-            // before the action buttons were brought up to date for the new country.
-            if (child != _diplomacyPactRows) child.QueueFree();
+            child.QueueFree();
         }
 
-        // ---- who they are, in one line at the top of the page.
-        var heading = new HBoxContainer();
-        heading.AddThemeConstantOverride("separation", 10);
-        _diplomacyDetailBody.AddChild(heading);
-        var flag = FlagBadge(nation.Tag, 34);
-        heading.AddChild(flag);
-        var nameBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        heading.AddChild(nameBox);
-        var name = Title(nation.DisplayName, 22, Ui.Colour("text.bright"));
-        name.AutowrapMode = TextServer.AutowrapMode.Off;
-        name.ClipText = true;
-        name.AutowrapMode = TextServer.AutowrapMode.Off;
-        nameBox.AddChild(name);
-        var caption = Title(Simulation.Loc.Format("{0} · {1} · {2}", nation.Tag,
-            Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name)),
-            12, Ui.Colour("text.caption"));
-        caption.AutowrapMode = TextServer.AutowrapMode.Off;
-        caption.ClipText = true;
-        caption.AutowrapMode = TextServer.AutowrapMode.Off;
-        nameBox.AddChild(caption);
-        foreach (var info in new[]
+        Label Text(string words, int size, Color colour)
         {
-            ("Form of government", PoliticsCore.GovernmentOf(nation).Name),
-            ("Ideology", PoliticsCore.IdeologyOf(nation).Name)
-        })
-        {
-            var politics = Title(Tr(info.Item1) + ": " + Tr(info.Item2), 13, Ui.Colour("text.body_soft"));
-            politics.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            _diplomacyDetailBody.AddChild(politics);
+            var label = RowLabel("", size, colour);
+            label.Text = words;
+            return label;
         }
 
-        if (nation.Id == player.Id)
+        Label Giving(Label label)
         {
-            // There is nothing to do to yourself here, so say so and take the buttons
-            // away rather than leaving five dead ones on the page.
-            _diplomacyActionRows.Visible = false;
-            var own = Title("This is your country.", 13, Ui.Colour("text.body_soft"));
-            _diplomacyDetailBody.AddChild(own);
+            label.ClipText = true;
+            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            return label;
+        }
 
-            var ownDivisions = DivisionsByNation();
-            void OwnRow(string caption, string value)
+        // A recessed field with a caption, and a note on the caption's right when it has one.
+        VBoxContainer Field(string caption, string aside = "", Color? asideColour = null)
+        {
+            var panel = new PanelContainer();
+            panel.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 12));
+            _diplomacyDetailBody.AddChild(panel);
+            var stack = new VBoxContainer();
+            stack.AddThemeConstantOverride("separation", 7);
+            panel.AddChild(stack);
+            var head = new HBoxContainer();
+            head.AddThemeConstantOverride("separation", 10);
+            head.AddChild(Giving(RowLabel(caption, 11, Ui.Colour("text.caption"))));
+            if (aside.Length > 0)
             {
-                var row = new HBoxContainer();
-                row.AddThemeConstantOverride("separation", 6);
-                _diplomacyDetailBody.AddChild(row);
-                var label = Title(caption, 13, Ui.Colour("text.body_soft"));
-                Fixed(label, 130);
-                row.AddChild(label);
-                var figure = Title(value, 13, Ui.Colour("text.bright"));
-                Fixed(figure, 0);
-                figure.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-                figure.HorizontalAlignment = HorizontalAlignment.Right;
-                row.AddChild(figure);
+                var note = Text(aside, 13, asideColour ?? Ui.Colour("text.accent"));
+                note.HorizontalAlignment = HorizontalAlignment.Right;
+                head.AddChild(note);
             }
-            OwnRow(Tr("GDP"), Fmt.Money(player.Gdp));
-            OwnRow(Tr("Divisions"), ownDivisions.GetValueOrDefault(player.Id).ToString("0.#"));
-            OwnRow(Tr("Population"), Fmt.People(player.Population));
-            OwnRow(Tr("Stability"), Fmt.Percent(player.Stability));
+            stack.AddChild(head);
+            return stack;
+        }
+
+        WarBar Bar(float height, float width = 0f) => new()
+        {
+            CustomMinimumSize = new Vector2(width, height),
+            SizeFlagsHorizontal = width > 0f ? SizeFlags.ShrinkCenter : SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ShrinkCenter,
+            Track = Ui.Colour("war.track"),
+            MarkerColour = Ui.Colour("war.front_line")
+        };
+
+        var ourColour = WarSideColour(player);
+        var theirColour = WarSideColour(nation);
+        var positive = Ui.Colour("state.positive");
+        var negative = Ui.Colour("state.negative");
+        var own = nation.Id == player.Id;
+        var canSee = own || CanInspectNation(nation.Id);
+
+        // ---- who they are, and what they think of us.
+        var banner = new PanelContainer();
+        banner.AddThemeStyleboxOverride("panel", WarInsetStyle(18, 14));
+        _diplomacyDetailBody.AddChild(banner);
+        var top = new HBoxContainer();
+        top.AddThemeConstantOverride("separation", 14);
+        banner.AddChild(top);
+        var flag = FlagBadge(nation.Tag, 46);
+        TintBlankFlag(flag, nation);
+        top.AddChild(flag);
+        var who = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        who.AddThemeConstantOverride("separation", 1);
+        top.AddChild(who);
+        who.AddChild(Giving(Text(nation.DisplayName, 22, Ui.Colour("text.bright"))));
+        who.AddChild(Giving(Text(Simulation.Loc.Format("{0} · {1} · {2}", nation.Tag,
+            Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name)), 12, Ui.Colour("text.caption"))));
+        who.AddChild(Giving(Text(canSee
+            ? Simulation.Loc.Format("{0} people · GDP {1} · stability {2}",
+                Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Percent(nation.Stability))
+            : Tr("What they have is not known to us."), 12, Ui.Colour("text.muted"))));
+
+        var aside = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter, CustomMinimumSize = new Vector2(160, 0) };
+        aside.AddThemeConstantOverride("separation", 2);
+        top.AddChild(aside);
+        Label Right(Label label)
+        {
+            label.HorizontalAlignment = HorizontalAlignment.Right;
+            return label;
+        }
+
+        if (own)
+        {
+            _diplomacyActionRows.Visible = false;
+            aside.AddChild(Right(RowLabel("YOUR COUNTRY", 11, Ui.Colour("text.accent"))));
+            RefreshOwnDiplomacy(player, Field, Text, Giving, Bar);
             return;
         }
         _diplomacyActionRows.Visible = true;
 
-        // ---- what the balance of power says, as a sentence and then as the rows behind it.
+        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+        var opinionColour = relation.Opinion > 0 ? positive : relation.Opinion < 0 ? negative : Ui.Colour("text.body_soft");
+        aside.AddChild(Right(RowLabel("THEIR OPINION OF US", 10, Ui.Colour("text.caption"))));
+        aside.AddChild(Right(Text(relation.Opinion.ToString("+0;-0;0"), 28, opinionColour)));
+        var mood = Bar(8, 160);
+        mood.Lean(relation.Opinion / 100f, positive, negative);
+        aside.AddChild(mood);
+        aside.AddChild(Right(Text(DiplomaticVocabulary.StanceName(relation.Stance).ToUpperInvariant(), 11,
+            relation.Stance switch
+            {
+                DiplomaticStance.Allied or DiplomaticStance.Friendly => positive,
+                DiplomaticStance.Rival or DiplomaticStance.AtWar => negative,
+                _ => Ui.Colour("text.caption")
+            })));
+
+        // ---- the balance of power: a sentence, then each weight as a bar of ours against theirs.
         var mine = DiplomacyStrength(player);
         var theirs = DiplomacyStrength(nation);
         var ratio = theirs <= 0.0001f ? 99f : mine / theirs;
-        var banner = Title(
+        var verdict = !canSee ? Tr("We cannot see enough of them to judge.") :
             ratio > 2.5f ? Tr("We are much stronger than them.") :
             ratio > 1.25f ? Tr("We are stronger than them.") :
             ratio > 0.8f ? Tr("We are evenly matched.") :
             ratio > 0.4f ? Tr("We are weaker than them.") :
-            Tr("We are much weaker than them."),
-            14, Ui.Colour("text.accent"));
-        _diplomacyDetailBody.AddChild(banner);
+            Tr("We are much weaker than them.");
+        var balance = Field("THE BALANCE OF POWER", verdict);
+        var sides = new HBoxContainer();
+        sides.AddThemeConstantOverride("separation", 10);
+        sides.AddChild(new Control { CustomMinimumSize = new Vector2(100, 0) });
+        sides.AddChild(Right(Text(player.DisplayName, 11, Ui.Colour("text.caption"))));
+        sides.GetChild<Label>(1).CustomMinimumSize = new Vector2(96, 0);
+        sides.GetChild<Label>(1).ClipText = true;
+        sides.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        var theirName = Text(nation.DisplayName, 11, Ui.Colour("text.caption"));
+        theirName.CustomMinimumSize = new Vector2(96, 0);
+        theirName.ClipText = true;
+        sides.AddChild(theirName);
+        balance.AddChild(sides);
 
         var divisions = DivisionsByNation();
-        void CompareRow(string caption, float ours, float theirs2, string ourText, string theirText)
+        void Weigh(string caption, float ours, float others, string ourText, string theirText)
         {
             var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 6);
-            _diplomacyDetailBody.AddChild(row);
-            var label = Title(caption, 13, Ui.Colour("text.body_soft"));
-            Fixed(label, 130);
+            row.AddThemeConstantOverride("separation", 10);
+            var label = Text(Tr(caption), 13, Ui.Colour("text.body_soft"));
+            label.CustomMinimumSize = new Vector2(100, 0);
             row.AddChild(label);
-            var us = Title(ourText, 13, Ui.Colour(ours >= theirs2 ? "text.bright" : "text.muted"));
-            Fixed(us, 130);
-            us.HorizontalAlignment = HorizontalAlignment.Right;
+            var us = Right(Text(ourText, 13, Ui.Colour(!canSee || ours >= others ? "text.bright" : "text.muted")));
+            us.CustomMinimumSize = new Vector2(96, 0);
             row.AddChild(us);
-            var them = Title(theirText, 13, Ui.Colour(ours >= theirs2 ? "text.muted" : "text.bright"));
-            Fixed(them, 130);
-            them.HorizontalAlignment = HorizontalAlignment.Right;
+            var bar = Bar(10);
+            if (canSee && ours + others > 0f)
+                bar.Shares((ours / (ours + others), ourColour), (others / (ours + others), theirColour));
+            bar.CentreTick = true;
+            row.AddChild(bar);
+            var them = Text(canSee ? theirText : "?", 13, Ui.Colour(canSee && others > ours ? "text.bright" : "text.muted"));
+            them.CustomMinimumSize = new Vector2(96, 0);
             row.AddChild(them);
+            balance.AddChild(row);
         }
-
-        var canSee = CanInspectNation(nation.Id);
-        CompareRow(Tr("GDP"), player.Gdp, nation.Gdp, Fmt.Money(player.Gdp),
-            canSee ? Fmt.Money(nation.Gdp) : "?");
-        CompareRow(Tr("Divisions"), divisions.GetValueOrDefault(player.Id), divisions.GetValueOrDefault(nation.Id),
-            divisions.GetValueOrDefault(player.Id).ToString("0.#"), canSee ? divisions.GetValueOrDefault(nation.Id).ToString("0.#") : "?");
-        CompareRow(Tr("Population"), player.Population, nation.Population,
-            Fmt.People(player.Population), canSee ? Fmt.People(nation.Population) : "?");
-        CompareRow(Tr("Stability"), player.Stability, nation.Stability,
-            Fmt.Percent(player.Stability), canSee ? Fmt.Percent(nation.Stability) : "?");
+        Weigh("GDP", (float)player.Gdp, (float)nation.Gdp, Fmt.Money(player.Gdp), Fmt.Money(nation.Gdp));
+        Weigh("Divisions", divisions.GetValueOrDefault(player.Id), divisions.GetValueOrDefault(nation.Id),
+            divisions.GetValueOrDefault(player.Id).ToString("0.#"), divisions.GetValueOrDefault(nation.Id).ToString("0.#"));
+        Weigh("Population", player.Population, nation.Population, Fmt.People(player.Population), Fmt.People(nation.Population));
+        Weigh("Stability", player.Stability, nation.Stability, Fmt.Percent(player.Stability), Fmt.Percent(nation.Stability));
 
         // ---- the opinion, and what it is made of.
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
-        var opinionHeading = Title(Simulation.Loc.Format("Their opinion of us: {0:+0;-0;0}", relation.Opinion),
-            14, relation.Opinion >= 0 ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
-        _diplomacyDetailBody.AddChild(opinionHeading);
-
-        foreach (var entry in relation.OpinionDrivers.Entries
-                     .OrderByDescending(item => Math.Abs(item.Value))
-                     .Take(6))
+        var drivers = relation.OpinionDrivers.Entries
+            .OrderByDescending(item => Math.Abs(item.Value))
+            .Take(8)
+            .ToList();
+        var reasons = Field("WHAT THEIR OPINION IS MADE OF",
+            Simulation.Loc.Format("Their opinion of us: {0:+0;-0;0}", relation.Opinion), opinionColour);
+        if (drivers.Count == 0)
+            reasons.AddChild(Text(Tr("Nothing in particular: they have no reason to think of us either way."), 12, Ui.Colour("text.muted")));
+        var largest = drivers.Count == 0 ? 1f : Math.Max(1f, drivers.Max(item => Math.Abs((float)item.Value)));
+        foreach (var entry in drivers)
         {
+            var value = (float)entry.Value;
             var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 6);
-            _diplomacyDetailBody.AddChild(row);
-            var dot = Title(entry.Value >= 0 ? "▲" : "▼", 11,
-                Ui.Colour(entry.Value >= 0 ? "state.positive" : "state.negative"));
-            Fixed(dot, 14);
-            row.AddChild(dot);
-            var reason = Title(entry.Source, 12, Ui.Colour("text.body_soft"));
-            Fixed(reason, 0);
-            reason.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            reason.ClipText = true;
-            reason.AutowrapMode = TextServer.AutowrapMode.Off;
-            row.AddChild(reason);
-            var size = Title(entry.Value.ToString("+0.0;-0.0;0.0"), 12,
-                Ui.Colour(entry.Value >= 0 ? "state.positive" : "state.negative"));
-            Fixed(size, 42);
-            row.AddChild(size);
+            row.AddThemeConstantOverride("separation", 10);
+            row.AddChild(Giving(Text(Tr(entry.Source), 12, Ui.Colour("text.body_soft"))));
+            var bar = Bar(8, 120);
+            bar.Lean(value / largest, positive, negative);
+            row.AddChild(bar);
+            var figure = Right(Text(value.ToString("+0.0;-0.0;0.0"), 12, value >= 0f ? positive : negative));
+            figure.CustomMinimumSize = new Vector2(46, 0);
+            row.AddChild(figure);
+            reasons.AddChild(row);
         }
 
-        // ---- the war, if there is one.
+        // ---- the war, if there is one: the same bar as on the Wars screen, our side on the left.
         var war = DiplomaticPeaceWar(nation);
         if (war is not null)
         {
-            var score = war.IsAttacking(player.Id) ? war.WarScore : -war.WarScore;
-            var warLine = Title(Simulation.Loc.Format("At war · war score {0:+0.0;-0.0;0.0}", score),
-                13, Ui.Colour("state.negative"));
-            _diplomacyDetailBody.AddChild(warLine);
+            var attacking = war.IsAttacking(player.Id);
+            var score = attacking ? war.WarScore : -war.WarScore;
+            var front = Field("AT WAR", war.Name, negative);
+            var tug = Bar(18);
+            tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), ourColour, theirColour);
+            front.AddChild(tug);
+            var line = new HBoxContainer();
+            line.AddThemeConstantOverride("separation", 10);
+            line.AddChild(Giving(Text(Simulation.Loc.Format("War score {0} for us · {1} lost on our side, {2} on theirs",
+                score.ToString("+0.0;-0.0;0.0"),
+                Fmt.People(attacking ? war.AttackerLosses : war.DefenderLosses),
+                Fmt.People(attacking ? war.DefenderLosses : war.AttackerLosses)), 12, Ui.Colour("text.body_soft"))));
+            var warId = war.Id;
+            line.AddChild(ActionButton("Open the war's page", () => OpenWarPage(warId), 190, 28));
+            front.AddChild(line);
         }
 
-        // ---- pacts, embargoes, arrangements, and what their trade is worth.
-        _diplomacyDetailBody.AddChild(_diplomacyPactRows);
-        while (_diplomacyPactRows.GetChildCount() > 0)
-        {
-            var child = _diplomacyPactRows.GetChild(0);
-            _diplomacyPactRows.RemoveChild(child);
-            child.QueueFree();
-        }
+        // ---- every tie between us, and what their trade is worth.
+        var ties = Field("TIES");
+        _diplomacyPactRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _diplomacyPactRows.AddThemeConstantOverride("separation", 5);
+        ties.AddChild(_diplomacyPactRows);
         RefreshDiplomacyPacts(player, nation, relation, war is not null);
+        if (_diplomacyPactRows.GetChildCount() == 0)
+            _diplomacyPactRows.AddChild(Text(Tr("No treaty, no tie and no trade between us."), 12, Ui.Colour("text.muted")));
 
         RefreshDiplomacyActions(player, nation);
+    }
+
+    /// <summary>
+    /// The player's own page: where the country stands in the world rather than against one
+    /// other country - its figures, who it is bound to, the wars it is in, and who thinks well
+    /// and ill of it, each of them a click away.
+    /// </summary>
+    private void RefreshOwnDiplomacy(Nation player,
+        Func<string, string, Color?, VBoxContainer> field,
+        Func<string, int, Color, Label> text,
+        Func<Label, Label> giving,
+        Func<float, float, WarBar> bar)
+    {
+        var divisions = DivisionsByNation();
+        var standing = field("YOUR STANDING", "", null);
+        var readouts = new HBoxContainer();
+        readouts.AddThemeConstantOverride("separation", 18);
+        standing.AddChild(readouts);
+        foreach (var (caption, value) in new[]
+                 {
+                     ("GDP", Fmt.Money(player.Gdp)),
+                     ("Divisions", divisions.GetValueOrDefault(player.Id).ToString("0.#")),
+                     ("Population", Fmt.People(player.Population)),
+                     ("Stability", Fmt.Percent(player.Stability))
+                 })
+        {
+            var readout = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            readout.AddThemeConstantOverride("separation", 0);
+            readout.AddChild(RowLabel(caption, 10, Ui.Colour("text.caption"), upper: true));
+            readout.AddChild(text(value, 20, Ui.Colour("text.bright")));
+            readouts.AddChild(readout);
+        }
+
+        var allies = AllianceSystem.AlliesOf(_campaign, player);
+        field("ALLIES", "", null).AddChild(DiplomacyChips(allies, Tr("No alliance binds us.")));
+        var subjects = SubjectSystem.SubjectsOf(_campaign, player);
+        if (subjects.Count > 0)
+            field("SUBJECTS", "", null).AddChild(DiplomacyChips(subjects, ""));
+        var guaranteed = _campaign.Nations
+            .Where(other => other.Id != player.Id &&
+                            CampaignDiplomacy.Peek(_campaign, player.Id, other.Id) is { } tie && tie.GuaranteedBy(player.Id))
+            .ToList();
+        if (guaranteed.Count > 0)
+            field("WE HAVE PROMISED TO DEFEND", "", null).AddChild(DiplomacyChips(guaranteed, ""));
+
+        var wars = _campaign.Wars.Where(candidate => !candidate.Ended && candidate.Involves(player.Id)).ToList();
+        var fighting = field("OUR WARS", wars.Count == 0 ? Tr("at peace") : "", Ui.Colour("text.muted"));
+        foreach (var war in wars)
+        {
+            var attacking = war.IsAttacking(player.Id);
+            var score = attacking ? war.WarScore : -war.WarScore;
+            // By the side's members, never by a default id: nation 0 is Indonesia.
+            var enemy = war.EnemiesOf(player.Id).Select(id => _campaign.NationById(id)).FirstOrDefault(other => other is not null);
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 10);
+            row.AddChild(giving(text(war.Name, 13, Ui.Colour("text.bright"))));
+            var tug = bar(12, 200);
+            tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), WarSideColour(player), WarSideColour(enemy));
+            row.AddChild(tug);
+            var figure = text(score.ToString("+0.0;-0.0;0.0"), 12,
+                Mathf.Abs(score) < 0.5f ? Ui.Colour("text.muted") : score > 0f ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
+            figure.CustomMinimumSize = new Vector2(46, 0);
+            figure.HorizontalAlignment = HorizontalAlignment.Right;
+            row.AddChild(figure);
+            var warId = war.Id;
+            row.AddChild(ActionButton("Open", () => OpenWarPage(warId), 72, 26));
+            fighting.AddChild(row);
+        }
+
+        // Who thinks well and ill of us, five each - the people to call on and the people to watch.
+        var opinions = _campaign.Nations
+            .Where(other => other.Id != player.Id && other.Population > 0)
+            .Select(other => (Nation: other, Opinion: CampaignDiplomacy.Peek(_campaign, player.Id, other.Id)?.Opinion ?? 0))
+            .ToList();
+        var friends = opinions.Where(item => item.Opinion > 0).OrderByDescending(item => item.Opinion).Take(6).ToList();
+        var critics = opinions.Where(item => item.Opinion < 0).OrderBy(item => item.Opinion).Take(6).ToList();
+        var opinion = friends.ToDictionary(item => item.Nation.Id, item => item.Opinion);
+        foreach (var item in critics) opinion[item.Nation.Id] = item.Opinion;
+        string Says(Nation other) => "  " + opinion.GetValueOrDefault(other.Id).ToString("+0;-0;0");
+        field("WHO THINKS WELL OF US", "", null)
+            .AddChild(DiplomacyChips(friends.Select(item => item.Nation), Tr("Nobody in particular."), Says));
+        field("WHO THINKS ILL OF US", "", null)
+            .AddChild(DiplomacyChips(critics.Select(item => item.Nation), Tr("Nobody in particular."), Says));
     }
 
     /// <summary>
@@ -692,14 +942,25 @@ public partial class DealOrForceGame
             Pact(Tr("Embargo"), Tr("yours: nothing of theirs crosses your border"), "state.warning");
         if (relation.EmbargoBy(nation.Id))
             Pact(Tr("Embargo"), Tr("theirs: nothing of yours crosses theirs"), "state.warning");
+        // The countries in a tie by their flags, each one a click away.
+        void Members(string caption, IEnumerable<Nation> members)
+        {
+            var row = new HBoxContainer();
+            row.AddThemeConstantOverride("separation", 6);
+            _diplomacyPactRows.AddChild(row);
+            var label = Title(caption, 13, Ui.Colour("text.body_soft"));
+            Fixed(label, 150);
+            label.SizeFlagsVertical = SizeFlags.ShrinkBegin;
+            row.AddChild(label);
+            row.AddChild(DiplomacyChips(members, ""));
+        }
         if (allies.Count > 0)
-            Pact(Tr("Allied to"), string.Join(", ", allies.Take(6).Select(ally => ally.Tag)) +
-                                 (allies.Count > 6 ? " +" + (allies.Count - 6) : ""));
+            Members(Tr("Allied to"), allies);
         if (nation.AnswersTo(player.Id))
             Pact(Tr("Answers to"), Tr("you") + " · " + nation.SubjectType);
         var subjects = SubjectSystem.SubjectsOf(_campaign, nation);
         if (subjects.Count > 0)
-            Pact(Tr("Subjects"), string.Join(", ", subjects.Take(6).Select(subject => subject.Tag)));
+            Members(Tr("Subjects"), subjects);
 
         // What their trade is worth is the first thing a peace treaty weighs and the last
         // thing the old screen ever showed.
@@ -809,7 +1070,7 @@ public partial class DealOrForceGame
         _diplomacyFeedback.Text = relation.Opinion > before
             ? Simulation.Loc.Format("Mission received: their opinion of us is {0:+0;-0;0}.", relation.Opinion)
             : Tr("Diplomatic action is on cooldown or the treasury is insufficient.");
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
     }
 
     private void DenounceDiplomacyTarget()
@@ -824,7 +1085,7 @@ public partial class DealOrForceGame
         _diplomacyFeedback.Text = relation.Opinion < before
             ? Simulation.Loc.Format("Denunciation issued: their opinion of us is {0:+0;-0;0}.", relation.Opinion)
             : Tr("Diplomatic action is still on cooldown.");
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
     }
 
     private void ToggleDiplomacyAlliance()
@@ -858,7 +1119,7 @@ public partial class DealOrForceGame
                 ? Simulation.Loc.Format("{0} accepted.", target.DisplayName)
                 : Simulation.Loc.Format("{0} declined.", target.DisplayName);
         }
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
     }
 
     private void ToggleDiplomacyGuarantee()
@@ -877,7 +1138,7 @@ public partial class DealOrForceGame
         _diplomacyFeedback.Text = relation.GuaranteedBy(_campaign.Player.Id)
             ? Simulation.Loc.Format("You guarantee {0}.", target.DisplayName)
             : Simulation.Loc.Format("You no longer guarantee {0}.", target.DisplayName);
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
     }
 
     private void ConfirmOrDeclareDiplomacyWar()
@@ -893,7 +1154,7 @@ public partial class DealOrForceGame
         {
             _diplomacyPendingWarTarget = target.Id;
             _diplomacyFeedback.Text = Tr("This begins an immediate land war. Click the highlighted button again to confirm.");
-            RefreshDiplomacyScreen();
+            ForceDiplomacyRefresh();
             return;
         }
         _campaign.Commands.Enqueue(new DeclareWarCampaignCommand
@@ -908,7 +1169,7 @@ public partial class DealOrForceGame
         PlayStrategicCue("war_declared");
         _diplomacyPendingWarTarget = -1;
         _diplomacyFeedback.Text = Simulation.Loc.Format("War declared on {0}.", target.DisplayName);
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
     }
 
     private void ReleaseDiplomacySubject()
@@ -918,7 +1179,7 @@ public partial class DealOrForceGame
         if (!target.AnswersTo(_campaign.Player.Id)) return;
         SubjectSystem.Release(_campaign, target);
         _diplomacyFeedback.Text = Simulation.Loc.Format("{0} answers to nobody now.", target.DisplayName);
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
         Refresh();
     }
 
@@ -935,7 +1196,7 @@ public partial class DealOrForceGame
         _diplomacySelectedId = _campaign.Player.Id;
         _diplomacyFeedback.Text = Simulation.Loc.Format("{0} is part of your country now.", name);
         RebuildDiplomacyList(force: true);
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
         Refresh();
     }
 }

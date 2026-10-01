@@ -173,7 +173,7 @@ public partial class DealOrForceGame
     private void RefreshDiplomaticActionViews()
     {
         RefreshCountryViews("Diplomacy");
-        RefreshDiplomacyScreen();
+        ForceDiplomacyRefresh();
         Refresh();
     }
 }

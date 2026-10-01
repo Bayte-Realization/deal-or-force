@@ -1,0 +1,27 @@
+{
+  // The diplomacy page as fields: a country, its opinion, the balance, the ties.
+  "What they have is not known to us.": "What they have is not known to us.",
+  "{0} people · GDP {1} · stability {2}": "{0} people · GDP {1} · stability {2}",
+  "YOUR COUNTRY": "YOUR COUNTRY",
+  "THEIR OPINION OF US": "THEIR OPINION OF US",
+  "We cannot see enough of them to judge.": "We cannot see enough of them to judge.",
+  "THE BALANCE OF POWER": "THE BALANCE OF POWER",
+  "WHAT THEIR OPINION IS MADE OF": "WHAT THEIR OPINION IS MADE OF",
+  "Nothing in particular: they have no reason to think of us either way.": "Nothing in particular: they have no reason to think of us either way.",
+  "AT WAR": "AT WAR",
+  "War score {0} for us · {1} lost on our side, {2} on theirs": "War score {0} for us · {1} lost on our side, {2} on theirs",
+  "Open the war's page": "Open the war's page",
+  "TIES": "TIES",
+  "No treaty, no tie and no trade between us.": "No treaty, no tie and no trade between us.",
+  "YOUR STANDING": "YOUR STANDING",
+  "ALLIES": "ALLIES",
+  "No alliance binds us.": "No alliance binds us.",
+  "WE HAVE PROMISED TO DEFEND": "WE HAVE PROMISED TO DEFEND",
+  "OUR WARS": "OUR WARS",
+  "at peace": "at peace",
+  "Open": "Open",
+  "WHO THINKS WELL OF US": "WHO THINKS WELL OF US",
+  "WHO THINKS ILL OF US": "WHO THINKS ILL OF US",
+  "Nobody in particular.": "Nobody in particular.",
+  "+{0} more": "+{0} more"
+}

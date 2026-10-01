@@ -1585,6 +1585,10 @@ one file. The Wars screen is `gui/36_war_ledger.json`:
 The same values are compiled into the game, as every shipped token is, so a mod lists only the
 token it changes, and a mod that removes the file still gets the shipped screen.
 
+The Diplomacy page is drawn in the same materials - its fields are `war.inset`, its country
+chips `war.card` - so one retint carries both screens. `diplomacy.chips_shown` (24) is how many
+countries a tie lists by flag before it says "+N more".
+
 ### A region's first day
 
 `history/states/2024/` holds every region of the 2024 world as the bookmark opens it: one file per
