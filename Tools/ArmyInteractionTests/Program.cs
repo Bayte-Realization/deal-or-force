@@ -69,6 +69,7 @@ static class Program
         if (args.Contains("--militia-only")) { MilitiaSeatTests.Run(c); return; }
         if (args.Contains("--gaza-only")) { HeldGroundTests.Run(c); return; }
         if (args.Contains("--ally-ground-only")) { AllyGroundTests.Run(c); return; }
+        if (args.Contains("--lost-land-only")) { LostLandTests.Run(c); return; }
         if (args.Contains("--secession-name-only")) { SecessionNameTests.Run(c); return; }
         if (args.Contains("--capital-point-only")) { CapitalPointTests.Run(c); return; }
         if (args.Contains("--overrun-only")) { OverrunWarTests.Run(c); return; }

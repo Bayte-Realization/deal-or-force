@@ -743,6 +743,9 @@ public sealed partial class Campaign
             // war today - a peace, a submission, a subjugation - the troops do not stay.
             using (SimProfiler.Measure("occupations")) Occupations.Tick(this);
 
+            // And whether a country played by somebody has ground it lost that it could take back.
+            using (SimProfiler.Measure("lost lands")) LostLands.Tick(this);
+
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.
             CapitalCore.Tick(this);

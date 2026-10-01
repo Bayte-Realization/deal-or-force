@@ -67,6 +67,10 @@ public static partial class AiStatecraft
         // the demography already knows the answer region by region.
         value += Irredentism(campaign, nation, other) * defines.AiIrredentaAppetite;
 
+        // And ground that was ours. A region that seceded, rose or was signed away is still on
+        // every map the country prints; while the other side holds it, that is a reason.
+        value += LostLands.Weight(campaign, nation, other) * defines.AiRevancheAppetite;
+
         // Something we cannot buy. A country short of a good the target sells has a reason
         // that a country with a full market does not - which is the whole point of having
         // made trade bilateral.

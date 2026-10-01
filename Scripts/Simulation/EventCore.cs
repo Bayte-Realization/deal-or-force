@@ -33,6 +33,27 @@ public sealed class CampaignEventOption
     /// </summary>
     public int DeclareWarOn { get; init; }
 
+    /// <summary>
+    /// The region the war <see cref="DeclareWarOn"/> starts is declared over, or -1 for the
+    /// target's largest - what a declaration without a goal gets. Declared over a region it is
+    /// a reconquest when the region is one the country has lost (LostLands), which is a
+    /// justified war rather than an unprovoked one.
+    /// </summary>
+    public int WarGoalStateMapIndex { get; init; } = -1;
+
+    /// <summary>A region this option strikes off the country's homeland - a claim given up for good - or -1.</summary>
+    public int RenouncesClaimOn { get; init; } = -1;
+
+    /// <summary>
+    /// The same three, as an event file writes them: a tag to declare war on, and region ids
+    /// for the war goal and for a claim given up - "declare_war_on", "war_goal" and
+    /// "renounce_claim" in common/events. Resolved when the option is taken, because a file
+    /// cannot know the ids a campaign hands out.
+    /// </summary>
+    public string DeclareWarOnTag { get; init; } = "";
+    public string WarGoalRegion { get; init; } = "";
+    public string RenouncesClaimRegion { get; init; } = "";
+
     /// <summary>Falls back to a generated summary when content shipped no prose.</summary>
     public string ConsequenceText => string.IsNullOrWhiteSpace(Consequence) ? Effect.Describe() : Consequence;
 }
@@ -353,7 +374,10 @@ public static class EventCatalog
                     Title = option.TryGetProperty("title", out var optionTitle) ? optionTitle.GetString() ?? "Option" : "Option",
                     Consequence = option.TryGetProperty("consequence", out var consequence) ? consequence.GetString() ?? "" : "",
                     Effect = effect,
-                    Modifiers = ParseModifiers(option, context, errors)
+                    Modifiers = ParseModifiers(option, context, errors),
+                    DeclareWarOnTag = option.TryGetProperty("declare_war_on", out var warOn) ? warOn.GetString() ?? "" : "",
+                    WarGoalRegion = option.TryGetProperty("war_goal", out var goal) ? goal.GetString() ?? "" : "",
+                    RenouncesClaimRegion = option.TryGetProperty("renounce_claim", out var renounce) ? renounce.GetString() ?? "" : ""
                 });
             }
 
@@ -437,15 +461,31 @@ public static class EventSystem
         var nation = campaign.NationById(item.NationId);
         option.Effect.Apply(campaign, nation);
         foreach (var (id, days) in option.Modifiers) ModifierSystem.Grant(campaign, nation, id, days);
-        if (option.DeclareWarOn != 0 && nation is not null)
+        // By the country itself rather than by an id that means "nobody" at zero: nation 0 is
+        // Indonesia, and an event file naming IDN has to be able to mean it.
+        var declareWarOn = option.DeclareWarOn != 0 ? campaign.NationById(option.DeclareWarOn) : null;
+        if (declareWarOn is null && !string.IsNullOrWhiteSpace(option.DeclareWarOnTag))
+            declareWarOn = campaign.NationByTag(option.DeclareWarOnTag);
+        var warGoal = option.WarGoalStateMapIndex;
+        if (warGoal < 0 && !string.IsNullOrWhiteSpace(option.WarGoalRegion))
+            warGoal = Movements.StateById(campaign, option.WarGoalRegion)?.MapIndex ?? -1;
+        if (declareWarOn is not null && nation is not null)
         {
             // Refused, and unable to do anything about it - a truce, no shared border, no way
             // to reach them - is an acceptance whatever the cabinet decided. Nothing is said
             // here because the war itself is the message.
-            var target = campaign.NationById(option.DeclareWarOn);
-            if (target is not null)
-                CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id, -1, "secession");
+            var target = declareWarOn;
+            if (target.Id != nation.Id)
+                CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id, warGoal,
+                    campaign.Homelands.TryGetValue(nation.Id, out var home) && home.Contains(warGoal) ? "reconquest"
+                    // The secession question's own war, as it always was; an event file's war
+                    // is justified - or not - the way any declaration is.
+                    : option.DeclareWarOn != 0 && warGoal < 0 ? "secession" : null);
         }
+        if (option.RenouncesClaimOn >= 0 && nation is not null) LostLands.Renounce(campaign, nation, option.RenouncesClaimOn);
+        if (!string.IsNullOrWhiteSpace(option.RenouncesClaimRegion) && nation is not null &&
+            Movements.StateById(campaign, option.RenouncesClaimRegion) is { } given)
+            LostLands.Renounce(campaign, nation, given.MapIndex);
         campaign.PendingEvents.Remove(item);
         campaign.MarkStrategicChange();
     }

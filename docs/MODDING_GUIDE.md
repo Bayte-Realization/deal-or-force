@@ -1139,6 +1139,31 @@ relative weight when choosing among the events that fit.
 The old form `"effect": "InvestIndustry"` still works as a preset, so existing content does not
 break — but new content is better written through `effects`.
 
+An option can also start a war, or give a claim up, by naming countries and regions the way a
+file can - tags and region ids, resolved when the option is taken:
+
+```json
+{ "title": "Take the province back", "declare_war_on": "<TAG>", "war_goal": "<region_id>" }
+{ "title": "Let it go for good", "renounce_claim": "<region_id>" }
+```
+
+`declare_war_on` is a tag; `war_goal` the region the war is declared over (the target's
+largest when left out). A war over ground of the country's own homeland - the regions it held
+when the world first saw it - is declared as a reconquest, which is a justified war.
+`renounce_claim` strikes a region off the country's homeland for good.
+
+### Lost lands
+
+A region a country held at the start and does not hold now - it seceded, rose under a
+movement, or was signed away - is its lost ground (`LostLands`). A played country is asked
+about it once a month on a day of its own, when it is stronger than the holder by
+`LostLandStrengthRatio` (1.3) and could declare war on it, and not more often than
+`LostLandAskCooldownDays` (720): take it back - a war over that region, as a reconquest -
+not yet, or let it go for good. A country nobody plays weighs the same ground in its judgement
+of a war, `AiRevancheAppetite` (0.6) times millions of its people over twelve, the scale its
+own people across a border are weighed on. Ground held by its own dependency or by its overlord
+is not lost. `LostLandCheckDays` (30) sets how often a country looks.
+
 ### Modifiers (national spirits)
 
 `common/modifiers/*.json` holds named country conditions that events and decisions grant for a
