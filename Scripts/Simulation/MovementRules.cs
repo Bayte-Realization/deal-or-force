@@ -66,17 +66,31 @@ public static class MovementRules
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
-        Owners(campaign, rebuild: true);
-        using (SimProfiler.Measure("    mov:homelands")) MovementFall.RememberHomelands(campaign);
-        using (SimProfiler.Measure("    mov:fall")) MovementFall.Decide(campaign);
+        if (campaign.ElapsedDays == 0) return;
+        var week = Math.Max(1, campaign.Defines.EconomyTickDays);
+        // What the world decides about who has fallen happens on the week, as it did.
+        if (campaign.ElapsedDays % week == 0)
+        {
+            Owners(campaign, rebuild: true);
+            using (SimProfiler.Measure("    mov:homelands")) MovementFall.RememberHomelands(campaign);
+            using (SimProfiler.Measure("    mov:fall")) MovementFall.Decide(campaign);
+        }
+        // Each movement's own week on a day of its own. They all used to fall on the same
+        // day, so their cost did not spread: one frame in seven carried every movement's week
+        // at once, the largest hitch in a late campaign at the top speed. Every movement still
+        // has exactly one week in any seven days - on its day rather than on everybody's.
         foreach (var nation in campaign.Nations.ToList())
         {
-            if (nation.Movement is not { Dissolved: false }) continue;
+            if (nation.Movement is not { Dissolved: false } || !OnItsDay(campaign, nation.Id, week)) continue;
+            Owners(campaign);
             using (SimProfiler.Measure("    mov:week")) Week(campaign, nation);
             using (SimProfiler.Measure("    mov:endure")) MovementFall.Endure(campaign, nation);
         }
     }
+
+    /// <summary>Whether today is this one's day in a cycle of so many days.</summary>
+    internal static bool OnItsDay(Campaign campaign, int id, int cycle) =>
+        (campaign.ElapsedDays + (id % cycle + cycle) % cycle) % cycle == 0;
 
     private static Campaign _ownersFor;
     private static int _ownersDay = -1;

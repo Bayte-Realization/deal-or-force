@@ -267,11 +267,13 @@ public static class MovementDealings
         var movements = new List<Nation>();
         foreach (var candidate in campaign.Nations) if (candidate.Movement is { Dissolved: false }) movements.Add(candidate);
         if (movements.Count == 0) return;
-        // A quarter of the world a week: no country's policy towards a movement is a weekly matter.
-        var week = campaign.ElapsedDays / Math.Max(1, campaign.Defines.EconomyTickDays);
+        // Each country once every four weeks - no country's policy towards a movement is a
+        // weekly matter - and on a day of its own, so a twenty-eighth of the world each day
+        // rather than a quarter of it on one day in seven.
+        var cycle = 4 * Math.Max(1, campaign.Defines.EconomyTickDays);
         foreach (var country in campaign.Nations)
         {
-            if ((country.Id & 3) != (week & 3)) continue;
+            if (!MovementRules.OnItsDay(campaign, country.Id, cycle)) continue;
             if (country.IsHuman || country.Movement is not null || campaign.StatesOf(country).Length == 0) continue;
             var acted = false;
             foreach (var movement in movements)

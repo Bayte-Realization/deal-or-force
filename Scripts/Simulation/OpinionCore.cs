@@ -236,7 +236,9 @@ public static class OpinionSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign.ElapsedDays % 7 != 0) return;
-        foreach (var relation in campaign.Relations.Values) Settle(campaign, relation);
+        // A seventh of them each day, every relation still once a week. All on one day made
+        // that day's frame walk thirty thousand relations at once.
+        foreach (var relation in campaign.Relations.Values)
+            if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0) Settle(campaign, relation);
     }
 }

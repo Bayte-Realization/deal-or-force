@@ -24,10 +24,13 @@ public static class MovementAi
 {
     public static void Tick(Campaign campaign)
     {
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
+        if (campaign.ElapsedDays == 0) return;
+        var week = Math.Max(1, campaign.Defines.EconomyTickDays);
+        // On the same day as its week (MovementRules.Tick), so it acts on what that week made of it.
         foreach (var nation in campaign.Nations.ToList())
         {
-            if (nation.Movement is not { Dissolved: false } || nation.IsHuman) continue;
+            if (nation.Movement is not { Dissolved: false } || nation.IsHuman ||
+                !MovementRules.OnItsDay(campaign, nation.Id, week)) continue;
             using (SimProfiler.Measure("    mov:think")) Think(campaign, nation);
         }
         // And what the countries do about them.

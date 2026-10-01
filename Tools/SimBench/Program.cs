@@ -531,9 +531,51 @@ public static class Program
         GC.Collect();
         var allocatedBefore = GC.GetTotalAllocatedBytes(true);
         var run = Stopwatch.StartNew();
-        for (var day = 0; day < days; day++) campaign.TickDay();
+        // Step by step rather than a day at a time, timing each: what a player feels is not the
+        // mean but the worst frame, and a frame at the top speed is twelve steps.
+        var steps = new List<double>();
+        var step = Stopwatch.StartNew();
+        var until = campaign.ElapsedDays + days;
+        // And what the heaviest steps were made of: the profiler's totals before and after each,
+        // kept for the three worst.
+        var before = new Dictionary<string, double>();
+        var heaviest = new List<(double Ms, int Day, List<(string Name, double Ms)> Parts)>();
+        while (campaign.ElapsedDays < until)
+        {
+            before.Clear();
+            foreach (var sample in SimProfiler.All) before[sample.Name] = sample.TotalMilliseconds;
+            var day = campaign.ElapsedDays;
+            step.Restart();
+            campaign.Tick();
+            var took = step.Elapsed.TotalMilliseconds;
+            steps.Add(took);
+            if (heaviest.Count < 3 || took > heaviest[^1].Ms)
+            {
+                var parts = SimProfiler.All
+                    .Select(sample => (Name: sample.Name, Ms: sample.TotalMilliseconds - before.GetValueOrDefault(sample.Name)))
+                    .Where(part => part.Ms >= 1.0 && !part.Name.StartsWith(" ", StringComparison.Ordinal))
+                    .OrderByDescending(part => part.Ms).Take(8).ToList();
+                heaviest.Add((took, day, parts));
+                heaviest.Sort((left, right) => right.Ms.CompareTo(left.Ms));
+                if (heaviest.Count > 3) heaviest.RemoveAt(3);
+            }
+        }
+        foreach (var (ms, day, parts) in heaviest)
+            Console.WriteLine($"  heavy step {ms:0.0} ms on day {day} (day of week {day % 7}): " +
+                              string.Join(", ", parts.Select(part => $"{part.Name.Trim()} {part.Ms:0.0}")));
         run.Stop();
         var allocated = GC.GetTotalAllocatedBytes(true) - allocatedBefore;
+        if (steps.Count > 0)
+        {
+            var sorted = steps.OrderBy(ms => ms).ToList();
+            double At(double share) => sorted[Math.Min(sorted.Count - 1, (int)(sorted.Count * share))];
+            var frame = Math.Max(1, campaign.Defines.MaxDaysPerFrame);
+            var worstFrame = 0.0;
+            for (var start = 0; start + frame <= steps.Count; start++)
+                worstFrame = Math.Max(worstFrame, steps.Skip(start).Take(frame).Sum());
+            Console.WriteLine($"Steps: {steps.Count:N0} of {campaign.TickHours}h; median {At(0.5):0.00} ms, p95 {At(0.95):0.00}, " +
+                              $"p99 {At(0.99):0.00}, worst {sorted[^1]:0.0}; worst {frame} steps together (a frame at the top speed) {worstFrame:0.0} ms.");
+        }
         Console.WriteLine($"Profile: {days} day(s) in {run.ElapsedMilliseconds:N0} ms, " +
                           $"{run.Elapsed.TotalMilliseconds / days:0.00} ms a day, " +
                           $"{allocated / days / 1024.0:N0} kB a day; {campaign.Wars.Count(war => !war.Ended)} war(s) open, " +

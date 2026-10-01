@@ -55,9 +55,11 @@ static class Movement82Tests
         c.Defines.MovementAiUprisingChance = 0;
         c.Defines.MovementAiUprisingAppetite = 1;
         foreach (var n in c.Nations) n.IsHuman = n.Id != company.Id;
-        for (var week = 1; week <= 104; week++)
+        // Every day of two years: each movement thinks on a day of its own in the week now,
+        // so stepping only the days divisible by seven could miss this one's turns entirely.
+        for (var day = 1; day <= 104 * c.Defines.EconomyTickDays; day++)
         {
-            typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(c, (long)week * c.Defines.EconomyTickDays * 24);
+            typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(c, (long)day * 24);
             MovementAi.Tick(c);
         }
         Check(c.StatesOf(company).Length == 0 && snapshot.SequenceEqual(c.ProvinceController),
