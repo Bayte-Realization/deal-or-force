@@ -154,7 +154,7 @@ public partial class DealOrForceGame
         return texture;
     }
 
-    private static Texture2D FlagSpriteTexture(string sprite)
+    internal static Texture2D FlagSpriteTexture(string sprite)
     {
         if (string.IsNullOrEmpty(sprite)) return null;
         if (FlagCache.TryGetValue(sprite, out var cached)) return cached;

@@ -1,0 +1,11 @@
+{
+  "id": "example_era_features",
+  "name": "Example: era-dependent mechanics",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 130,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

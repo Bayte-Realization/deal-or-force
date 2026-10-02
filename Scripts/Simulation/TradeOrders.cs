@@ -428,6 +428,7 @@ public sealed class SetTradeInstructionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var definition = TradeDesk.Of(Setting);
         if (nation is null || definition is null) return;
@@ -467,6 +468,7 @@ public sealed class ClearTradeInstructionsCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation is null) return;
         Cleared = nation.TradeSettings.Count;

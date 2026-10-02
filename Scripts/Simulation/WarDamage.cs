@@ -125,6 +125,7 @@ public sealed class RebuildRegionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
         if (nation is null || state is null || WarDamage.RebuildRefusal(campaign, nation, state).Length > 0) return;
@@ -210,6 +211,7 @@ public static class WarDamage
     /// <summary>The week's rebuilding, and what the ruins cost in the meantime. Runs on the economy's week.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarDamage))) return;
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
         Week(campaign);
     }

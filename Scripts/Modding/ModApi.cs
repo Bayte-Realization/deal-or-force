@@ -28,6 +28,8 @@ public partial class ModApi : RefCounted
     public int get_day() => GetDay();
     public string get_date() => GetDate();
     public void log(string message) => Log(message);
+    public bool feature_enabled(string id) => _campaign?.FeatureEnabled(id) == true;
+    public bool set_feature(string id, bool enabled) => _campaign?.SetFeature(id, enabled) == true;
 
     public Godot.Collections.Dictionary get_province_terrain(int provinceId)
     {

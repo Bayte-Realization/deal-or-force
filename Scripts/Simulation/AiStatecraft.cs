@@ -69,12 +69,14 @@ public static partial class AiStatecraft
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(AiStatecraft))) return;
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
 
         // An offer nobody answered is withdrawn rather than left standing forever, so a
         // player who ignored one is asked again later instead of never.
         PeaceOffers.Expire(campaign);
 
+        using (SimProfiler.Measure("  ai:foundations")) PeacefulFormationAi.Tick(campaign);
         EnsureDailyTables(campaign);
         ThinkAboutTheNeighbours(campaign);
     }
@@ -941,7 +943,17 @@ public static partial class AiStatecraft
     /// The same figure, for the parts of statecraft that are not the AI's own decisions -
     /// whether an ally can afford to honour a promise, most of all.
     /// </summary>
-    public static float StrengthOf(Campaign campaign, Nation nation) => Strength(campaign, nation);
+    public static float StrengthOf(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return 0;
+        // Diplomacy/UI can query before the first AI tick or between commands. Never
+        // read another campaign's daily cache, or a stale pre-settlement army total.
+        var strength = nation.Gdp * campaign.Defines.AiEconomicWeight;
+        foreach (var army in campaign.Armies)
+            if (army.NationId == nation.Id)
+                strength += army.Divisions * army.Strength * M.Max(.15f, army.Organisation);
+        return strength;
+    }
 
     private static float Strength(Campaign campaign, Nation nation) =>
         nation is not null && StrengthCache.TryGetValue(nation.Id, out var value)

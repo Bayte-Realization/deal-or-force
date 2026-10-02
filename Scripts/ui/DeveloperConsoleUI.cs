@@ -314,7 +314,7 @@ public partial class DealOrForceGame
     }
 
     /// <summary>Translation coverage, the way a translator wants to see it.</summary>
-    private static string ConsoleLocalization(string argument)
+    private string ConsoleLocalization(string argument)
     {
         var words = (argument ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var template = words.Any(word => string.Equals(word, "template", StringComparison.OrdinalIgnoreCase));
@@ -325,6 +325,13 @@ public partial class DealOrForceGame
             return $"Unknown language '{language}'. Loaded: {string.Join(", ", Simulation.Loc.Languages)}";
 
         Simulation.Loc.Language = language;
+        RefreshLocalisedText();
+        if (_languageButton is not null && GodotObject.IsInstanceValid(_languageButton))
+        {
+            var caption = LanguageButtonLabel();
+            _languageButton.Text = caption;
+            _languageButton.SetMeta(LocAppliedMeta, caption);
+        }
         var missing = Simulation.Loc.MissingKeys(language);
         var header = $"Language: {Simulation.Loc.DisplayName(language)} ({language}) · " +
                      $"{Simulation.Loc.Keys(language).Count()} key(s) translated";

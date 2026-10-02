@@ -135,6 +135,41 @@ public static class HistoryDataLoader
                 relation.NonAggressionPact = true;
                 OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
             }
+
+        // What the two of them already thought of each other. Without this the world opened on
+        // two hundred and sixty countries that had never met: India and Pakistan neutral, Iran
+        // and Israel neutral, and the first thing the AI did was sign them into alliances. A
+        // rivalry is remembered as `historic_rivalry`, a friendship as `historic_friendship`
+        // (common/opinion_modifiers), scaled to the row's own `opinion` when it gives one; a
+        // rivalry that leaves the two at or below AiRivalryThreshold makes them rivals, and a
+        // friendship at or above AiFriendshipThreshold makes them friends.
+        foreach (var (section, reason) in new[] { ("rivalries", "historic_rivalry"), ("friendships", "historic_friendship") })
+        {
+            if (!root.TryGetProperty(section, out var rows) || rows.ValueKind != JsonValueKind.Array) continue;
+            var definition = OpinionCatalog.Find(reason);
+            foreach (var row in rows.EnumerateArray())
+            {
+                if (!row.TryGetProperty("between", out var between) || between.ValueKind != JsonValueKind.Array) continue;
+                var pair = new List<Nation>();
+                foreach (var tag in between.EnumerateArray())
+                {
+                    var nation = campaign.NationByTag(tag.GetString() ?? "");
+                    if (nation is null) errors?.Add($"Unknown country '{tag.GetString()}' in {section}.");
+                    else pair.Add(nation);
+                }
+                if (pair.Count != 2 || pair[0].Id == pair[1].Id || definition is null) continue;
+                var scale = 1f;
+                if (row.TryGetProperty("opinion", out var wanted) && wanted.ValueKind == JsonValueKind.Number &&
+                    MathF.Abs(definition.Value.Opinion) > 0.001f)
+                    scale = MathF.Max(0f, (float)wanted.GetDouble() / definition.Value.Opinion);
+                var relation = CampaignDiplomacy.Get(campaign, pair[0].Id, pair[1].Id);
+                OpinionSystem.Remember(campaign, relation, reason, scale);
+                if (relation.Stance is DiplomaticStance.Allied or DiplomaticStance.AtWar) continue;
+                if (relation.Opinion <= campaign.Defines.AiRivalryThreshold) relation.Stance = DiplomaticStance.Rival;
+                else if (relation.Opinion >= campaign.Defines.AiFriendshipThreshold && relation.Stance == DiplomaticStance.Neutral)
+                    relation.Stance = DiplomaticStance.Friendly;
+            }
+        }
     }
 
     public static void ApplyCountries(Campaign campaign, string json, List<string> errors)

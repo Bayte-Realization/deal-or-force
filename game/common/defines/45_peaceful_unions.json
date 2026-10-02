@@ -1,0 +1,22 @@
+{
+  "UnionAiReviewDays": 90,
+  "UnionAiEarliestDay": 180,
+  "UnionAiMinimumOwnedShare": 0.35,
+  "UnionAiTreasuryReserveShare": 0.12,
+  "UnionConsentDays": 730,
+  "UnionInvitationCooldownDays": 365,
+  "UnionInvitationExpiryDays": 60,
+  "UnionMinimumOpinion": 50,
+  "UnionAiAcceptance": 80,
+  "UnionMinimumPartnerStability": 0.55,
+  "UnionMaximumSubjectLiberty": 0.25,
+  "UnionCultureWeight": 30,
+  "UnionOpinionWeight": 0.45,
+  "UnionAllianceWeight": 20,
+  "UnionTradeAgreementWeight": 10,
+  "UnionGovernmentWeight": 8,
+  "UnionIdeologyWeight": 7,
+  "UnionSubjectLoyaltyWeight": 20,
+  "UnionStabilityWeight": 30,
+  "UnionStabilityBaseline": 0.65
+}

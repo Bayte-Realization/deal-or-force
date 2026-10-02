@@ -365,7 +365,9 @@ public sealed partial class GlobePresentation
             Texture = SelectionGlowTexture(width, height, inset),
             PixelSize = plate.PixelSize,
             FixedSize = plate.FixedSize,
-            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            Billboard = plate.Billboard,
+            NoDepthTest = true,
+            RenderPriority = -1,
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             Modulate = Ui.Colour("globe.selection"),
             Visible = false
@@ -390,9 +392,10 @@ public sealed partial class GlobePresentation
         foreach (var cachedMarker in _armyStacks.Values)
         {
             var marker = cachedMarker.Node;
-            var stack = cachedMarker.Stack;
+            var stack = cachedMarker.DisplayStack.Count > 0 ? cachedMarker.DisplayStack : cachedMarker.Stack;
             if (!IsInstanceValid(marker)) continue;
             if (stack.Count == 0) continue;
+            UpdateArmyConditionBars(cachedMarker);
             // One pass instead of seven. This runs for every counter on the map every
             // frame, and each of those Any and Average calls was a delegate and an
             // enumerator - some seven thousand of them a frame, for arithmetic over a
@@ -451,7 +454,8 @@ public sealed partial class GlobePresentation
         UpdateBattleMarkers();
     }
 
-    private int _battleMarkerDay = -1;
+    private long _battleMarkerDay = -1;
+    private int _battleMarkerCount = -1;
     private int _battleViewer = -1;
     private readonly HashSet<int> _activeBattleIds = new();
     private readonly List<int> _finishedBattleIds = new();
@@ -471,10 +475,13 @@ public sealed partial class GlobePresentation
     {
         if (!IsInstanceValid(_battleRoot) || _campaign?.ProvinceMap is null) return;
         var viewer = FogOfWarActive && _campaign.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
-        if (_battleMarkerDay != _campaign.ElapsedDays || _battleViewer != viewer)
+        var active = 0;
+        foreach (var battle in _campaign.Battles) if (!battle.Ended) active++;
+        if (_battleMarkerDay != _campaign.ElapsedHours || _battleViewer != viewer || _battleMarkerCount != active)
         {
             _battleViewer = viewer;
-            _battleMarkerDay = _campaign.ElapsedDays;
+            _battleMarkerDay = _campaign.ElapsedHours;
+            _battleMarkerCount = active;
             RebuildBattleMarkers();
         }
         foreach (var marker in _battleMarkers.Values)
@@ -493,8 +500,13 @@ public sealed partial class GlobePresentation
             if (!_activeBattleIds.Contains(id)) _finishedBattleIds.Add(id);
         foreach (var old in _finishedBattleIds)
         {
-            if (IsInstanceValid(_battleMarkers[old].Node)) _battleMarkers[old].Node.QueueFree();
+            if (IsInstanceValid(_battleMarkers[old].Node))
+            {
+                _battleRoot.RemoveChild(_battleMarkers[old].Node);
+                _battleMarkers[old].Node.QueueFree();
+            }
             _battleMarkers.Remove(old);
+            _battleReadouts.Remove(old);
         }
 
         _armyById.Clear();
@@ -509,32 +521,21 @@ public sealed partial class GlobePresentation
                 var normal = SurfacePoint(center.Latitude, center.Longitude, 1f).Normalized();
                 var node = new Node3D { Name = $"Battle_{battle.Id}" };
                 _battleRoot.AddChild(node);
-                var icon = new Label3D
-                {
-                    Name = "BattleIcon", Text = "⚔", FontSize = 46, PixelSize = 0.00030f,
-                    FixedSize = true, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-                    OutlineSize = 10, Modulate = Ui.Colour("military.battle"),
-                    OutlineModulate = Ui.Colour("military.battle_outline"), NoDepthTest = true
-                };
-                node.AddChild(icon);
-                var balance = new Label3D
-                {
-                    Name = "BattleBalance", FontSize = 16, PixelSize = 0.00022f,
-                    FixedSize = true, Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-                    OutlineSize = 6, Modulate = Ui.Colour("military.clash"),
-                    OutlineModulate = Ui.Colour("military.clash_outline"), NoDepthTest = true,
-                    Position = new Vector3(0f, -0.025f, 0.01f)
-                };
-                node.AddChild(balance);
                 marker = (node, normal);
                 _battleMarkers[battle.Id] = marker;
             }
 
-            var label = marker.Node.GetNodeOrNull<Label3D>("BattleBalance");
-            if (label is not null)
-                label.Text = !FogOfWarActive || CanShowMilitary(battle.AttackerId) || CanShowMilitary(battle.DefenderId)
-                    ? $"{SideOrganisation(battle.Attackers) * 100f:00} | {SideOrganisation(battle.Defenders) * 100f:00}"
-                    : "? | ?";
+            var own = _campaign.Player is { IsHuman: true } player &&
+                (battle.AttackerId == player.Id || battle.DefenderId == player.Id);
+            var detailed = !FogOfWarActive || own;
+            var assessment = BattleReadout.Assess(battle, _campaign.Defines.BattleBreakOrganisation);
+            var attacks = !own || battle.AttackerId == _campaign.Player.Id;
+            var share = assessment.ShareFor(attacks);
+            var tone = !detailed || !assessment.Known ? "text.muted" : !own ? "state.info" :
+                share > .55f ? "state.positive" : share < .45f ? "state.negative" : "state.warning";
+            _battleReadouts[battle.Id] = (detailed && assessment.Known ? $"{share * 100:0}" : "?", share, tone);
+            marker.Node.SetMeta("endurance_known", detailed && assessment.Known);
+            marker.Node.SetMeta("endurance_share", detailed ? share : -1f);
         }
     }
 
@@ -554,7 +555,7 @@ public sealed partial class GlobePresentation
     /// <summary>Which markers the camera can see. Cheap, and camera-dependent, so per frame.</summary>
     private void FinishBattleMarkers()
     {
-        _battleRoot.Visible = ViewDistance <= 14f;
+        _battleRoot.Visible = MilitaryMarkersEnabled && ViewDistance <= 14f;
         if (!_flatMap && _battleRoot.Visible)
         {
             var view = _camera.GlobalPosition.Normalized();
@@ -585,12 +586,13 @@ public sealed partial class GlobePresentation
     private bool TryPickBattle(Vector2 pixel, out LandBattle battle)
     {
         battle = null;
-        if (!IsInstanceValid(_camera) || ViewDistance > 14f) return false;
-        var best = 34f * 34f;
+        if (!IsInstanceValid(_camera) || !IsInstanceValid(_battleRoot) || !_battleRoot.IsVisibleInTree() || ViewDistance > 14f) return false;
+        var radius = BattleMarkerRadius();
+        var best = (radius + 3f) * (radius + 3f);
         foreach (var (battleId, marker) in _battleMarkers)
         {
             if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
-            var distance = _camera.UnprojectPosition(marker.Node.GlobalPosition).DistanceSquaredTo(pixel);
+            var distance = BattleMarkerScreen(marker.Node).DistanceSquaredTo(pixel);
             if (distance >= best) continue;
             var candidate = _campaign?.Battles.FirstOrDefault(item => item.Id == battleId && !item.Ended);
             if (candidate is null) continue;

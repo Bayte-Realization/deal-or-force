@@ -224,6 +224,7 @@ public sealed class AnswerPeaceOfferCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var war = campaign.Wars.Find(candidate => candidate.Id == WarId);
         if (war is not null) PeaceOffers.Answer(campaign, war, IssuerId, Accept);
     }

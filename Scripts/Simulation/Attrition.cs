@@ -58,6 +58,7 @@ public static class Attrition
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Attrition))) return;
         if (campaign is null) return;
         StarveThePockets(campaign);
         BuryTheBroken(campaign);

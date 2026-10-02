@@ -21,6 +21,8 @@ public sealed partial class GlobePresentation
         public float Latitude;
         public float Longitude;
         public Vector3 Normal;
+        public int Slot;
+        public Vector2 DisplayOffset;
     }
 
     private Node3D _supportMarkerRoot = null!;
@@ -32,15 +34,23 @@ public sealed partial class GlobePresentation
     private readonly List<(Node3D Node, Vector3 Normal)> _supportVisibility = new();
     private Campaign _supportMarkedCampaign;
     private int _supportRosterFingerprint = int.MinValue;
+    private int _supportRangeFingerprint = int.MinValue;
     private int _selectedSupportId = -1;
     private readonly HashSet<int> _selectedSupportIds = new();
     private bool _supportOverlay;
     private double _supportPresentationDelay;
     private float _supportRangeFlatX = float.NaN;
+    private float _supportRangeFlatZoom = float.NaN;
     private bool _supportRangeProjection;
+    private Transform3D _supportRangeView;
+    private Vector2 _supportRangeViewport;
+    private ulong _nextSupportRangeRefreshMs;
 
     public int SelectedSupportId => _selectedSupportId;
     public IReadOnlyCollection<int> SelectedSupportIds => _selectedSupportIds;
+    public bool SupportCommandMode { get; set; }
+    public bool SupportRebaseArmed { get; set; }
+    public event Action<List<SupportFormation>> SupportBoxPicked;
 
     /// <summary>
     /// The long-range forces panel is open: every base is shown from further out, and every
@@ -54,6 +64,7 @@ public sealed partial class GlobePresentation
         {
             if (_supportOverlay == value) return;
             _supportOverlay = value;
+            if (!value) { SupportCommandMode = false; SupportRebaseArmed = false; }
             _supportRangeFlatX = float.NaN;
             BuildSupportRange();
         }
@@ -62,21 +73,24 @@ public sealed partial class GlobePresentation
     /// <summary>Several formations selected at once - the panel's selection, mirrored on the map.</summary>
     public void SelectSupportFormations(IEnumerable<int> ids)
     {
+        var next = ids.ToHashSet();
+        if (_selectedSupportIds.SetEquals(next)) return;
         _selectedSupportIds.Clear();
-        foreach (var id in ids) _selectedSupportIds.Add(id);
+        foreach (var id in next) _selectedSupportIds.Add(id);
         _selectedSupportId = _selectedSupportIds.Count == 1 ? _selectedSupportIds.First() : _selectedSupportIds.Count > 0 ? _selectedSupportIds.Min() : -1;
         _supportRangeFlatX = float.NaN;
         BuildSupportRange();
         RefreshSupportMarkerSelection();
+        InvalidateFlatCounterDensity();
     }
 
     /// <summary>The colour of an arm: sky blue aircraft, teal drones, amber guns, red missile brigades.</summary>
     private static Color SupportArmColour(SupportKind kind) => kind switch
     {
-        SupportKind.Air => new Color(.46f, .74f, 1f),
-        SupportKind.Drone => new Color(.38f, .90f, .80f),
-        SupportKind.AirDefence => new Color(1f, .46f, .42f),
-        _ => new Color(1f, .78f, .36f)
+        SupportKind.Air => Ui.Colour("support.air"),
+        SupportKind.Drone => Ui.Colour("support.drone"),
+        SupportKind.AirDefence => Ui.Colour("support.air_defence"),
+        _ => Ui.Colour("support.artillery")
     };
 
     private void CreateSupportPresentation(Node3D world)
@@ -109,6 +123,7 @@ public sealed partial class GlobePresentation
         _supportRangeFlatX = float.NaN;
         BuildSupportRange();
         RefreshSupportMarkerSelection();
+        InvalidateFlatCounterDensity();
     }
 
     public void FocusSupportFormation(int formationId)
@@ -124,8 +139,8 @@ public sealed partial class GlobePresentation
     private void UpdateSupportPresentation(double delta)
     {
         if (!IsInstanceValid(_supportMarkerRoot)) return;
-        var show = MilitaryMarkersEnabled && _campaign?.Player is not null &&
-                   ViewDistance <= (_supportOverlay ? 17f : 9.2f);
+        var show = MilitaryMarkersEnabled && _campaign?.Player is not null && _campaign.FeatureEnabled("long_range_forces") &&
+                   (_flatMap || ViewDistance <= Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 9.2f));
         _supportMarkerRoot.Visible = show;
         _supportRangeNode.Visible = show && (_selectedSupportIds.Count > 0 || _supportOverlay) &&
                                     _supportRangeMesh.GetSurfaceCount() > 0;
@@ -136,11 +151,19 @@ public sealed partial class GlobePresentation
             _supportPresentationDelay = 0;
             SyncSupportMarkers();
         }
-        UpdateMarkerVisibility(_supportMarkerRoot, _supportVisibility, true);
-        // Flat-map wrapping changes when the camera crosses the seam. Redraw the small
-        // selected ring only then, never the formation roster on every camera frame.
-        if (_flatMap && (float.IsNaN(_supportRangeFlatX) || MathF.Abs(_supportRangeFlatX - _flatX) > .12f))
-            BuildSupportRange();
+        ReprojectSupportMarkers();
+        // Slots remain surface-local; use their actual normal for horizon culling.
+        var viewNormal = _camera.GlobalPosition.Normalized();
+        var horizon = GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f;
+        foreach (var marker in _supportMapMarkers.Values)
+            if (!_flatMap) marker.Node.Visible = marker.Node.Position.Normalized().Dot(viewNormal) > horizon;
+        if (_flatMap) UpdateMarkerVisibility(_supportMarkerRoot, _supportVisibility, true);
+        // Screen-width ribbons must follow perspective zoom too. Rebuild only while
+        // the view actually changes, at most twenty times a second; no roster rebuild.
+        if (_supportRangeNode.Visible && Time.GetTicksMsec() >= _nextSupportRangeRefreshMs &&
+            (_supportRangeView != _camera.GlobalTransform || _supportRangeViewport != Size ||
+             _supportRangeFlatZoom != _flatZoom ||
+             float.IsNaN(_supportRangeFlatX))) BuildSupportRange();
     }
 
     private void SyncSupportMarkers()
@@ -149,7 +172,7 @@ public sealed partial class GlobePresentation
         var map = _campaign?.ProvinceMap;
         if (player is null || map is null) return;
         var owned = _campaign.SupportFormations
-            .Where(f => f.NationId == player.Id && f.BaseProvinceId > 0 && f.BaseProvinceId <= map.ProvinceCount)
+            .Where(f => f.NationId == player.Id && SupportCore.Enabled(_campaign, f.TypeId) && f.BaseProvinceId > 0 && f.BaseProvinceId <= map.ProvinceCount)
             .OrderBy(f => f.StateMapIndex).ThenBy(f => f.Id).ToArray();
         var hash = new HashCode();
         hash.Add(player.Id);
@@ -161,28 +184,43 @@ public sealed partial class GlobePresentation
             hash.Add(formation.StateMapIndex);
         }
         var fingerprint = hash.ToHashCode();
+        var reachHash = new HashCode();
+        foreach (var formation in owned)
+        {
+            reachHash.Add(formation.Id); reachHash.Add(formation.BaseProvinceId);
+            reachHash.Add(formation.Mission); reachHash.Add(SupportCore.Displaced(_campaign, formation));
+        }
+        var reachFingerprint = reachHash.ToHashCode();
+        var reachChanged = _supportRangeFingerprint != reachFingerprint;
+        _supportRangeFingerprint = reachFingerprint;
         if (ReferenceEquals(_supportMarkedCampaign, _campaign) && fingerprint == _supportRosterFingerprint)
         {
             foreach (var formation in owned)
                 if (_supportMapMarkers.TryGetValue(formation.Id, out var marker))
                     PaintSupportMarker(marker, formation);
+            if (reachChanged) BuildSupportRange();
             return;
         }
         _supportMarkedCampaign = _campaign;
         _supportRosterFingerprint = fingerprint;
-        foreach (var marker in _supportMapMarkers.Values) marker.Node.QueueFree();
+        foreach (var marker in _supportMapMarkers.Values)
+        {
+            _supportMarkerRoot.RemoveChild(marker.Node);
+            marker.Node.QueueFree();
+        }
         _supportMapMarkers.Clear();
         _supportVisibility.Clear();
-        var withinState = new Dictionary<int, int>();
+        InvalidateFlatCounterDensity();
+        var withinBase = new Dictionary<int, int>();
         foreach (var formation in owned)
         {
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
-            var slot = withinState.GetValueOrDefault(formation.StateMapIndex);
-            withinState[formation.StateMapIndex] = slot + 1;
+            var slot = withinBase.GetValueOrDefault(formation.BaseProvinceId);
+            withinBase[formation.BaseProvinceId] = slot + 1;
             var center = map.CenterOf(formation.BaseProvinceId);
             // Several wings at the same airbase must not become one unclickable icon.
-            var latitude = Mathf.Clamp(center.Latitude + (slot / 3) * .18f, -89f, 89f);
-            var longitude = center.Longitude + (slot % 3 - 1) * .22f;
+            var latitude = center.Latitude;
+            var longitude = center.Longitude;
             var node = new Node3D { Name = $"LongRange_{formation.Id}" };
             _supportMarkerRoot.AddChild(node);
             // The symbol is part of the card now: cut out and fitted into its slot on the
@@ -193,16 +231,18 @@ public sealed partial class GlobePresentation
             var plate = new Sprite3D
             {
                 Texture = SupportPlate(iconPath),
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                Name = "SupportCard", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                NoDepthTest = true
+                NoDepthTest = false
             };
             node.AddChild(plate);
             var readiness = new Label3D
             {
-                FontSize = 20, OutlineSize = 5,
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                Font = PresentationFonts.For("ui.default"),
+                FontSize = 20, OutlineSize = 3, Offset = new Vector2(16, 0),
+                RenderPriority = 10, OutlineRenderPriority = 9,
+                Name = "SupportReadiness", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 NoDepthTest = true,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Modulate = new Color(.91f, .95f, .96f)
@@ -212,7 +252,7 @@ public sealed partial class GlobePresentation
             var marker = new SupportMapMarker
             {
                 Node = node, Plate = plate, Readiness = readiness,
-                Formation = formation, Latitude = latitude, Longitude = longitude, Normal = normal
+                Formation = formation, Latitude = latitude, Longitude = longitude, Normal = normal, Slot = slot
             };
             _supportMapMarkers[formation.Id] = marker;
             _supportVisibility.Add((node, normal));
@@ -231,21 +271,26 @@ public sealed partial class GlobePresentation
             ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ + .002f)
             : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * 1.0004f);
         var flatScale = MathF.Max(.00001f, _counterWorldPixel);
-        marker.Node.Scale = _flatMap ? Vector3.One * flatScale : Vector3.One;
-        marker.Plate.FixedSize = !_flatMap;
-        marker.Readiness.FixedSize = !_flatMap;
-        // Everything below is laid out in the card's own pixels (80x48), so the flat map
+        marker.Node.Scale = Vector3.One * (_flatMap ? flatScale * _counterFlatFar : SurfaceCounterWidth(marker.Node, "support"));
+        OrientSurfaceCounter(marker.Node, marker.Node.Position.Normalized());
+        marker.Readiness.FontSize = _flatMap && _flatStrategicCounters ? 30 : 20;
+        marker.Plate.FixedSize = marker.Readiness.FixedSize = false;
+        // Everything below is laid out in the card's own pixels (96x56), so the flat map
         // and the globe draw the same marker and one tuning moves both. The readiness
         // number sits in the middle of the card - where the marker is anchored - and the
         // symbol is drawn inside the card to the left of it. A label parked beside its
         // card by an offset drifts away from it as the camera moves; at the origin there
         // is no offset left to drift.
-        // The flat map's strategic zoom shrinks the marker with the armies and the fleets,
-        // from the same metric - everything on the map heeds the same curve.
-        var platePixel = _flatMap ? .72f * _counterFlatFar : .00027f * _counterScale;
+        // Orthographic cards have a fixed screen footprint; only Node.Scale tracks zoom.
+        var platePixel = _flatMap
+            ? Math.Clamp(Ui.Metric("support.flat_counter_width", 64f), 40f, 96f) / 96f
+            : 1f / 96f;
         marker.Plate.PixelSize = platePixel;
         marker.Readiness.PixelSize = platePixel * .85f;
-        marker.Readiness.Position = new Vector3(0f, 0f, _flatMap ? 3f : .004f);
+        marker.Readiness.Visible = !_flatMap || (!_flatStrategicCounters && _selectedSupportIds.Contains(marker.Formation.Id));
+        marker.Readiness.Position = Vector3.Zero;
+        marker.Readiness.Width = 0f;
+        marker.Readiness.RenderPriority = 20;
         marker.Readiness.HorizontalAlignment = HorizontalAlignment.Center;
         marker.Readiness.VerticalAlignment = VerticalAlignment.Center;
     }
@@ -254,13 +299,37 @@ public sealed partial class GlobePresentation
     {
         marker.Formation = formation;
         var displaced = SupportCore.Displaced(_campaign, formation);
-        var active = formation.Mission != SupportCore.MissionStandby;
-        marker.Plate.Modulate = displaced ? new Color(.76f, .35f, .34f) :
-            active ? new Color(.92f, .80f, .49f) : new Color(.77f, .87f, .92f);
-        var readiness = Math.Clamp((int)MathF.Round(formation.Strength * 100f), 0, 100).ToString();
+        if (SupportTypeCatalog.TryGet(formation.TypeId, out var type))
+        {
+            var icon = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
+            marker.Plate.Texture = SupportPlate(icon, _selectedSupportIds.Contains(formation.Id),
+                displaced ? Ui.Colour("support.displaced") : SupportArmColour(type.Kind));
+            var compact = _flatMap && (_flatStrategicCounters || !_selectedSupportIds.Contains(formation.Id));
+            if (compact)
+                marker.Plate.Texture = CompactCounterTexture(marker.Plate.Texture, new Rect2I(7, 13, 28, 30));
+            marker.Plate.PixelSize = _flatMap
+                ? Math.Clamp(Ui.Metric(compact ? "support.flat_idle_width" : "support.flat_counter_width", compact ? 34f : 64f), 24f, 96f) / marker.Plate.Texture.GetWidth()
+                : 1f / marker.Plate.Texture.GetWidth();
+        }
+        marker.Plate.Modulate = Colors.White;
+        var mission = displaced ? "!" : formation.Mission switch
+        {
+            SupportCore.MissionCloseAirSupport => Loc.Get("FIRE"),
+            SupportCore.MissionAirSuperiority => Loc.Get("AIR"),
+            SupportCore.MissionInterdiction => Loc.Get("RAID"),
+            _ => Loc.Get("REST")
+        };
+        var readiness = Math.Clamp((int)MathF.Round(formation.Strength * 100f), 0, 100) + "%" +
+            (_flatMap && _flatStrategicCounters ? "" : "\n" + mission);
         if (marker.Readiness.Text != readiness) marker.Readiness.Text = readiness;
-        marker.Readiness.Modulate = formation.Strength >= .7f ? new Color(.80f, .94f, .81f) :
-            formation.Strength >= .35f ? new Color(1f, .85f, .53f) : new Color(1f, .56f, .52f);
+        marker.Readiness.Modulate = formation.Strength >= .7f ? Ui.Colour("support.ready") :
+            formation.Strength >= .35f ? Ui.Colour("support.depleted") : Ui.Colour("support.critical");
+        marker.Readiness.Visible = !_flatMap || (!_flatStrategicCounters && _selectedSupportIds.Contains(formation.Id));
+        marker.Readiness.PixelSize = marker.Plate.PixelSize * .85f;
+        if (_flatMap)
+        {
+            marker.Node.SetMeta("flat_counter_width", marker.Plate.Texture.GetWidth() * marker.Plate.PixelSize);
+        }
     }
 
     private void RefreshSupportMarkerSelection()
@@ -268,8 +337,10 @@ public sealed partial class GlobePresentation
         foreach (var (id, marker) in _supportMapMarkers)
         {
             var selected = _selectedSupportIds.Contains(id);
-            marker.Plate.Scale = Vector3.One * (selected ? 1.22f : 1f);
+            // Selection changes the frame, not the card's size or click footprint.
+            marker.Plate.Scale = Vector3.One;
             marker.Readiness.Scale = marker.Plate.Scale;
+            PaintSupportMarker(marker, marker.Formation);
         }
     }
 
@@ -284,9 +355,26 @@ public sealed partial class GlobePresentation
                     var position = _flatMap
                         ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ + .002f)
                         : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * 1.0004f);
+                    if (_flatMap)
+                    {
+                        position += new Vector3(marker.DisplayOffset.X, -marker.DisplayOffset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
+                        if (marker.Node.Position != position) marker.Node.Position = position;
+                        continue;
+                    }
+                    // A base has local east/north slots, not a camera-facing spread.
+                    // Keep every wing on the sphere and never make the base drift as
+                    // the player rotates or zooms the camera.
+                    var basis = CountryLabelSurfaceBasis(marker.Latitude, marker.Longitude, 1f, 0f);
+                    var width = Math.Clamp(Ui.Metric("support.globe_slot_spacing", .14f), .06f, .4f);
+                    var offset = basis.X * ((marker.Slot % 3) - 1) * width +
+                        basis.Y * (.6f - (marker.Slot / 3) * .65f) * width;
+                    position = (position + offset).Normalized() * SurfaceMarkerRadius * 1.0004f;
                     if (marker.Node.Position != position) marker.Node.Position = position;
+                    OrientSurfaceCounter(marker.Node, position.Normalized());
+                    marker.Node.Scale = Vector3.One * SurfaceCounterWidth(marker.Node, "support");
                 }
             }
+        if (forceLayout) RefreshSupportMarkerSelection();
         if (_supportRangeProjection != _flatMap) BuildSupportRange();
     }
 
@@ -294,18 +382,44 @@ public sealed partial class GlobePresentation
     {
         formation = null!;
         if (!_supportMarkerRoot.Visible || !IsInstanceValid(_camera)) return false;
-        var best = 22f * 22f;
+        var best = float.MaxValue;
         foreach (var marker in _supportMapMarkers.Values)
         {
             if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
-            var distance = _camera.UnprojectPosition(marker.Node.GlobalPosition).DistanceSquaredTo(pixel);
+            if (!TryHitSurfaceCounter(marker.Plate, pixel, out var distance)) continue;
             if (distance >= best) continue;
             best = distance;
             formation = marker.Formation;
         }
         if (formation is null) return false;
-        SelectSupportFormation(formation.Id);
         return true;
+    }
+
+    private List<SupportFormation> SupportInScreenRect(Rect2 rect) =>
+        _supportMapMarkers.Values.Where(m => IsInstanceValid(m.Node) && m.Plate.IsVisibleInTree() &&
+            !_camera.IsPositionBehind(m.Node.GlobalPosition) && rect.HasPoint(_camera.UnprojectPosition(m.Node.GlobalPosition)))
+            .Select(m => m.Formation).ToList();
+
+    private string SupportMapTooltip(Vector2 pixel)
+    {
+        if (SupportRebaseArmed && TryPick(pixel, out var destination, updateSelection: false) && destination.State is not null)
+        {
+            var plan = SupportCore.PreviewRebase(_campaign, _campaign.Player.Id, _selectedSupportIds, destination.State.MapIndex);
+            return destination.State.DisplayName + "\n" +
+                Loc.Format("Need {0} posts · {1} free · {2} reserved for training.", plan.Moving, plan.Free, plan.Reserved) + "\n" +
+                (plan.Refusal.Length > 0 ? Loc.Get(plan.Refusal) : Loc.Get("Click to rebase the whole group. Esc cancels."));
+        }
+        if (!TryPickSupport(pixel, out var formation) || !SupportTypeCatalog.TryGet(formation.TypeId, out var type)) return "";
+        var state = _campaign.States.Find(s => s.MapIndex == formation.StateMapIndex);
+        return Loc.Get(type.Name) + "\n" + state?.DisplayName + "\n" +
+            Loc.Format("Readiness {0:P0} · reach {1:0} km", formation.Strength, type.RangeKm) + "\n" +
+            Loc.Get(formation.Mission switch
+            {
+                SupportCore.MissionCloseAirSupport => "Fire support",
+                SupportCore.MissionAirSuperiority => "Air superiority",
+                SupportCore.MissionInterdiction => "Interdiction",
+                _ => "Standby / recover"
+            }) + (SupportCore.Displaced(_campaign, formation) ? "\n" + Loc.Get("BASE LOST — REBASE IT") : "");
     }
 
     private void BuildSupportRange()
@@ -314,16 +428,23 @@ public sealed partial class GlobePresentation
         _supportRangeMesh.ClearSurfaces();
         var player = _campaign.Player;
         var rings = new List<(SupportFormation Formation, SupportTypeDefinition Type, bool Selected)>();
+        var deduplicate = new HashSet<(int Base, string Type, string Mission, bool Selected)>();
         foreach (var candidate in _campaign.SupportFormations)
         {
-            if (candidate.NationId != player?.Id || candidate.BaseProvinceId <= 0) continue;
+            if (!SupportCore.Enabled(_campaign, candidate.TypeId)) continue;
+            if (candidate.NationId != player?.Id || candidate.BaseProvinceId <= 0 || candidate.BaseProvinceId > _campaign.ProvinceMap.ProvinceCount) continue;
             var selected = _selectedSupportIds.Contains(candidate.Id);
             if (!selected && !_supportOverlay) continue;
             if (!SupportTypeCatalog.TryGet(candidate.TypeId, out var candidateType)) continue;
+            if (!deduplicate.Add((candidate.BaseProvinceId, candidate.TypeId, candidate.Mission, selected))) continue;
             rings.Add((candidate, candidateType, selected));
         }
         _supportRangeProjection = _flatMap;
         _supportRangeFlatX = _flatX;
+        _supportRangeFlatZoom = _flatZoom;
+        _supportRangeView = _camera.GlobalTransform;
+        _supportRangeViewport = Size;
+        _nextSupportRangeRefreshMs = Time.GetTicksMsec() + 50;
         if (rings.Count == 0)
         {
             _supportRangeNode.Visible = false;
@@ -336,13 +457,14 @@ public sealed partial class GlobePresentation
         // What the selected formations touch, filled faintly so it reads as ground rather than
         // as a line. Bands from the base outwards along great circles, so the fill follows the
         // globe instead of cutting under it the way a flat fan would for a bomber's reach.
-        var anyFill = false;
+        var surfaceOpen = false;
         foreach (var (formation, type, selected) in rings)
         {
-            if (!selected || SupportCore.Displaced(_campaign, formation)) continue;
-            if (!anyFill) { _supportRangeMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles); anyFill = true; }
+            // Reserve/recovery needs an outline to show reach, not a blanket that washes
+            // out the whole country. Only an active selected mission fills its footprint.
+            if (!selected || formation.Mission == SupportCore.MissionStandby || SupportCore.Displaced(_campaign, formation)) continue;
             Aim(formation, type);
-            var fill = SupportArmColour(type.Kind) with { A = .07f };
+            var fill = SupportArmColour(type.Kind) with { A = Ui.Metric("support.reach_fill_alpha", .08f) };
             for (var band = 0; band < bands; band++)
             {
                 var inner = band / (float)bands;
@@ -359,9 +481,7 @@ public sealed partial class GlobePresentation
                 }
             }
         }
-        if (anyFill) _supportRangeMesh.SurfaceEnd();
-
-        _supportRangeMesh.SurfaceBegin(Mesh.PrimitiveType.Lines);
+        if (surfaceOpen) { _supportRangeMesh.SurfaceEnd(); surfaceOpen = false; }
         foreach (var (formation, type, selected) in rings)
         {
             Aim(formation, type);
@@ -374,17 +494,39 @@ public sealed partial class GlobePresentation
             {
                 // A resting formation's ring is dashed: it reaches there, but it is not flying.
                 if (resting && segment % 4 >= 2) continue;
-                var start = Destination(segment, 1f);
-                var end = Destination(segment + 1, 1f);
-                if (_flatMap && Wraps(start, end)) continue;
-                _supportRangeMesh.SurfaceSetColor(colour);
-                _supportRangeMesh.SurfaceAddVertex(start);
-                _supportRangeMesh.SurfaceSetColor(colour);
-                _supportRangeMesh.SurfaceAddVertex(end);
+                {
+                    var a = Destination(segment, 1f);
+                    var b = Destination(segment + 1, 1f);
+                    if (_flatMap && Wraps(a, b)) continue;
+                    var worldA = _supportRangeNode.ToGlobal(a);
+                    var worldB = _supportRangeNode.ToGlobal(b);
+                    if (_camera.IsPositionBehind(worldA) || _camera.IsPositionBehind(worldB)) continue;
+                    if (!_flatMap)
+                    {
+                        var horizon = GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length());
+                        var view = _camera.GlobalPosition.Normalized();
+                        if (a.Normalized().Dot(view) < horizon && b.Normalized().Dot(view) < horizon) continue;
+                    }
+                    var screenA = _camera.UnprojectPosition(worldA);
+                    var screenB = _camera.UnprojectPosition(worldB);
+                    if (screenA.DistanceSquaredTo(screenB) < .01f) continue;
+                    var direction = (screenB - screenA).Normalized();
+                    var normal = new Vector2(-direction.Y, direction.X) *
+                        Math.Clamp(Ui.Metric(selected ? "support.reach_width_pixels" : "support.reach_idle_width_pixels", selected ? 1.2f : .7f), .5f, 3f) * .5f;
+                    var depthA = -_camera.ToLocal(_supportRangeNode.ToGlobal(a)).Z;
+                    var depthB = -_camera.ToLocal(_supportRangeNode.ToGlobal(b)).Z;
+                    var ai = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA - normal, depthA));
+                    var ao = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenA + normal, depthA));
+                    var bi = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB - normal, depthB));
+                    var bo = _supportRangeNode.ToLocal(_camera.ProjectPosition(screenB + normal, depthB));
+                    Triangle(ai, ao, bo, colour);
+                    Triangle(ai, bo, bi, colour);
+                }
             }
         }
-        _supportRangeMesh.SurfaceEnd();
-        _supportRangeNode.Visible = MilitaryMarkersEnabled && ViewDistance <= (_supportOverlay ? 17f : 9.2f);
+        if (surfaceOpen) _supportRangeMesh.SurfaceEnd();
+        _supportRangeNode.Visible = MilitaryMarkersEnabled && (_flatMap || ViewDistance <=
+            Ui.Metric(_supportOverlay ? "support.overlay_distance" : "support.marker_distance", _supportOverlay ? 17f : 9.2f));
 
         void Aim(SupportFormation formation, SupportTypeDefinition type)
         {
@@ -396,6 +538,9 @@ public sealed partial class GlobePresentation
 
         void Triangle(Vector3 p, Vector3 q, Vector3 r, Color colour)
         {
+            // Horizon/seam clipping may discard every segment during a projection change.
+            // ImmediateMesh rejects empty surfaces, so open only on the first real triangle.
+            if (!surfaceOpen) { _supportRangeMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles); surfaceOpen = true; }
             _supportRangeMesh.SurfaceSetColor(colour);
             _supportRangeMesh.SurfaceAddVertex(p);
             _supportRangeMesh.SurfaceSetColor(colour);
@@ -423,26 +568,28 @@ public sealed partial class GlobePresentation
     }
 
     /// <summary>
-    /// The base card: brass frame and command band over dark slate, 80x48, with the arm's
+    /// The base card: brass frame and command band over dark slate, 96x56, with the arm's
     /// symbol blended into its slot on the left. The symbol is part of the card so that it
     /// is inside the frame by construction - it used to be a sprite of its own parked over
     /// the card, and a wide drawing simply overran the frame it was meant to sit in.
     /// </summary>
-    private Texture2D SupportPlate(string path)
+    private Texture2D SupportPlate(string path, bool selected = false, Color? arm = null)
     {
-        if (_supportPlates.TryGetValue(path, out var cached)) return cached;
-        const int width = 80, height = 48;
+        var accent = arm ?? Ui.Colour("support.standby");
+        var key = path + "|" + selected + "|" + accent.ToHtml();
+        if (_supportPlates.TryGetValue(key, out var cached)) return cached;
+        const int width = 96, height = 56;
         var data = new byte[width * height * 4];
         for (var y = 0; y < height; y++)
         for (var x = 0; x < width; x++)
         {
             var border = x < 2 || x >= width - 2 || y < 2 || y >= height - 2;
-            var top = y < 6;
-            var stripe = x >= 70 && x < 75;
-            var brass = border || top || stripe;
-            var r = brass ? (byte)201 : (byte)15;
-            var g = brass ? (byte)166 : (byte)32;
-            var b = brass ? (byte)91 : (byte)48;
+            var strip = x >= 3 && x < 7;
+            var line = selected ? Ui.Colour("text.accent") : accent.Lerp(new Color(.35f, .46f, .53f), .5f);
+            var colour = strip ? accent : border ? line : new Color(.055f, .095f, .13f);
+            var r = (byte)(colour.R * 255);
+            var g = (byte)(colour.G * 255);
+            var b = (byte)(colour.B * 255);
             var offset = (y * width + x) * 4;
             data[offset] = r; data[offset + 1] = g; data[offset + 2] = b;
             data[offset + 3] = (byte)(border ? 245 : 226);
@@ -453,7 +600,7 @@ public sealed partial class GlobePresentation
         {
             // Fitted to the slot whatever bounds the cut-out came to: a wide plane and a
             // compact drone share one footprint here, both wholly inside the frame.
-            const float slot = 20f;
+            const float slot = 26f;
             var iconWidth = icon.GetWidth();
             var iconHeight = icon.GetHeight();
             var span = MathF.Max(iconWidth, iconHeight);
@@ -466,9 +613,9 @@ public sealed partial class GlobePresentation
                 iconHeight = icon.GetHeight();
             }
             card.BlendRect(icon, new Rect2I(0, 0, iconWidth, iconHeight),
-                new Vector2I(14 - iconWidth / 2, 24 - iconHeight / 2));
+                new Vector2I(21 - iconWidth / 2, 28 - iconHeight / 2));
         }
-        return _supportPlates[path] = ImageTexture.CreateFromImage(card);
+        return _supportPlates[key] = ImageTexture.CreateFromImage(card);
     }
 
     private Image SupportCutoutImage(string path)

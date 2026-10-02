@@ -1,0 +1,18 @@
+{
+  "Resources": "Ресурсы",
+  "Resource survey": "Ресурсная разведка",
+  "layout.panel.hud.resource_atlas": "Ресурсная разведка",
+  "Regional resource potential. Choose a raw material and locate its deposits.": "Ресурсный потенциал регионов. Выберите сырьё и найдите его месторождения.",
+  "Geological and plantation potential, not current production or measured reserves.": "Потенциал месторождений и плантаций, а не текущая добыча или измеренные запасы.",
+  "Dark: no deposit · green: lower potential · gold: highest potential": "Тёмный: нет ресурса · зелёный: меньше · золотой: максимум",
+  "Search regions or countries…": "Поиск регионов или стран…",
+  "Only our regions": "Только наши регионы",
+  "Previous": "Назад",
+  "Next": "Далее",
+  "World potential {0:0.##} · {1} regions\nMatches {2} · page {3}/{4}": "Мировой потенциал {0:0.##} · регионов: {1}\nНайдено: {2} · страница {3}/{4}",
+  "{0}\n{1} · potential {2:0.##}": "{0}\n{1} · потенциал {2:0.##}",
+  "{0} · {1}\nPotential {2:0.##} ({3:P1} of world total). Locate this region; no orders are issued.": "{0} · {1}\nПотенциал {2:0.##} ({3:P1} от мирового). Показать регион на карте, не отдавая приказов.",
+  "{0} · resource potential {1:0.##}": "{0} · ресурсный потенциал {1:0.##}",
+  "Map is loading. Region locations will be available when it is ready.": "Карта загружается. Переход к регионам станет доступен после загрузки.",
+  "No matching deposits. Choose another resource or clear the filters.": "Месторождения не найдены. Выберите другой ресурс или сбросьте фильтры."
+}

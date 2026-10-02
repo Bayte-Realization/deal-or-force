@@ -35,6 +35,7 @@ public partial class DealOrForceGame
     private readonly Dictionary<ArmyStance, Button> _armyStanceButtons = new();
     private int _lastRosterClickId = -1;
     private ulong _lastRosterClickMsec;
+    private Button _withdrawSelectedButton;
 
     /// <summary>
     /// NATO-ish counters. A player who has played a Paradox game reads these before they
@@ -145,7 +146,12 @@ public partial class DealOrForceGame
         plans.AddThemeConstantOverride("separation", 4);
         plansPage.AddChild(plans);
         AddOrderButton(plans, "army_halt", ArmyOrder.Manual, "Halt",
-            "Cancel the route or plan and hold the present province.");
+            "H: halt movement or leave the current battle. Attackers stop attacking; defenders need friendly ground to retreat.");
+        var leaveBattle = ActionButton("Leave battle", WithdrawSelectedDivisions, 110, 36);
+        _withdrawSelectedButton = leaveBattle;
+        leaveBattle.Name = "WithdrawSelectedDivisions";
+        leaveBattle.TooltipText = Ui.Tip(Tr("Leave battle with the selected divisions. Other participants keep fighting. Losses are not undone."));
+        plans.AddChild(leaveBattle);
         AddOrderButton(plans, "army_defend", ArmyOrder.DefendFront, "Front line",
             "Hold the assigned sector of the front. Entrench, recover, and repel what comes.");
         AddOrderButton(plans, "army_advance", ArmyOrder.AdvanceFront, "Offensive line",
@@ -313,6 +319,7 @@ public partial class DealOrForceGame
     /// <summary>Show the panel, or hide it and let the generic side panel have the space.</summary>
     private void SetArmyPanelVisible(bool visible)
     {
+        if (visible && _resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         if (!visible) EndDrawing();
         if (_armyPanel is null) return;
         _armyPanel.Visible = visible;
@@ -354,6 +361,10 @@ public partial class DealOrForceGame
                 divisions.Sum(army => army.Personnel),
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
         _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", divisions.Count);
+        // Selection counts are localised; a fixed English-sized slot clips Russian.
+        _armyPanelCount.CustomMinimumSize = new Vector2(Mathf.Max(84,
+            _armyPanelCount.GetThemeFont("font").GetStringSize(_armyPanelCount.Text,
+                fontSize: _armyPanelCount.GetThemeFontSize("font_size")).X + 2), 0);
 
         RefreshComposition(divisions);
         RefreshRoster(divisions, mine);
@@ -400,12 +411,16 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshRoster(List<Army> divisions, bool mine)
     {
+        if (_withdrawSelectedButton is not null)
+            _withdrawSelectedButton.Disabled = !mine || !divisions.Any(army => army.InBattle);
         foreach (var child in _armyRoster.GetChildren())
         {
             _armyRoster.RemoveChild(child);
             child.QueueFree();
         }
         _armyRosterRows.Clear();
+        _armyRoster.AddChild(Title(Simulation.Loc.Get("Condition bars: organisation · strength · equipment"),
+            11, Ui.Colour("text.muted")));
 
         foreach (var army in divisions.OrderBy(army => army.Name, System.StringComparer.Ordinal).Take(120))
         {
@@ -449,6 +464,8 @@ public partial class DealOrForceGame
                 army.Strength < 0.55f ? "state.warning" : "state.positive",
                 Simulation.Loc.Format("Fighting strength {0:P0} — {1:N0} of {2:N0} men",
                     army.Strength, army.Personnel, army.MaxPersonnel)));
+            line.AddChild(Bar(army.Equipment, 40, "combat.equipment",
+                Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment)));
             line.AddChild(StatusPip(army));
         }
 
@@ -458,7 +475,7 @@ public partial class DealOrForceGame
     }
 
     /// <summary>
-    /// A thin filled bar. Organisation and strength read faster as two bars than as
+    /// A high-contrast filled bar. Organisation and strength read faster as bars than as
     /// "84 % / 61 %", and forty of them read faster still. The fill is anchored rather
     /// than sized, so the proportion is the layout instead of a number recomputed by hand.
     /// </summary>
@@ -466,7 +483,8 @@ public partial class DealOrForceGame
     {
         var frame = new Control
         {
-            CustomMinimumSize = new Vector2(width, 8),
+            CustomMinimumSize = new Vector2(width,
+                Mathf.Clamp(Simulation.InterfaceSkin.Metric("combat.panel_bar_height", 12), 10, 20)),
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
             SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
             MouseFilter = MouseFilterEnum.Stop,
@@ -523,8 +541,8 @@ public partial class DealOrForceGame
         var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == army.StateMapIndex);
         var text =
             army.Name + "\n" + Simulation.Loc.Get(template.Name) + "\n\n" +
-            Simulation.Loc.Format("Organisation: {0:P0} of {1:P0}",
-                army.Organisation, template.Organisation) + "\n" +
+            Simulation.Loc.Format("Organisation: {0:P0}", army.Organisation) + "\n" +
+            Simulation.Loc.Format("Cohesion: {0:P0}", army.Cohesion) + "\n" +
             Simulation.Loc.Format("Fighting strength: {0:P0}", army.Strength) + "\n" +
             Simulation.Loc.Format("Manpower: {0:N0} of {1:N0}", army.Personnel, army.MaxPersonnel) + "\n" +
             Simulation.Loc.Format("Equipment: {0:P0} · experience: {1:P0}",

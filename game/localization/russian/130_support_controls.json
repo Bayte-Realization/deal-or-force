@@ -1,0 +1,19 @@
+// Operational long-range forces: player-facing controls and map counters.
+{
+  "Click: select · Ctrl: toggle · Shift: range · drag: group · right-click: rebase": "Клик: выбрать · Ctrl: добавить/убрать · Shift: диапазон · рамка: группа · ПКМ: новая база",
+  "Click selects one. Ctrl toggles; Shift selects a range. Use the command bar for missions.": "Клик выбирает одно формирование. Ctrl добавляет или убирает, Shift выбирает диапазон. Задания — в общей панели приказов.",
+  "Standby / recover": "Резерв / восстановление",
+  "Fire support": "Огневая поддержка",
+  "Air superiority": "Превосходство в воздухе",
+  "Interdiction": "Удары по тылам",
+  "Not enough posts for the whole selection.": "Недостаточно мест для всей группы.",
+  "Need {0} posts · {1} free · {2} reserved for training.": "Нужно мест: {0} · свободно: {1} · занято подготовкой: {2}.",
+  "Need {0} posts · {1} free · {2} reserved for training. Nothing moved.": "Нужно мест: {0} · свободно: {1} · занято подготовкой: {2}. Никто не перебазирован.",
+  "Click to rebase the whole group. Esc cancels.": "Щёлкните для перебазирования всей группы. Esc — отмена.",
+  "{0}: ordered {1} of {2} selected.": "{0}: приказ получили {1} из {2} выбранных.",
+  "Readiness {0:P0} · reach {1:0} km": "Готовность {0:P0} · радиус {1:0} км",
+  "FIRE": "ОГОНЬ",
+  "AIR": "НЕБО",
+  "RAID": "УДАР",
+  "REST": "РЕЗЕРВ"
+}

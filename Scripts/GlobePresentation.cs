@@ -49,20 +49,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private const float MaximumDistance = 24f;
 
     /// <summary>
-    /// How big a division counter is drawn, and how that changes with the altitude.
-    ///
-    /// Counters are fixed-size: they hold the same number of pixels however far away the
-    /// ground is. That is right for reading a map and wrong for working one - at
-    /// operational altitude the counter is about the width of two provinces, which is fine
-    /// because the provinces are dots, and at the new close zoom a province is three
-    /// hundred pixels tall and the counter is still a thumbnail.
-    ///
-    /// So the size follows the camera down - but only over the last stretch of it. Growing
-    /// across the whole operational range made counters large at the zoom a player actually
-    /// works at, and a front is dozens of counters in adjacent provinces: they piled into
-    /// each other and the map became unreadable at exactly the scale it has to be read.
-    /// They stay at their normal size until the camera is nearly on the ground, and grow a
-    /// third from there.
+    /// Historical billboard constants still used by fleet and support presentation.
+    /// Division cards now use a shared tangent-plane transform and bounded physical
+    /// footprint in SurfaceArmyCards; they no longer use shader fixed-size compensation.
     /// </summary>
     private const float CounterPlatePixelSize = 0.00016f;
     private const float CounterTextPixelSize = 0.00025f;
@@ -71,16 +60,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     /// <summary>Above this the counters are simply their normal size.</summary>
     private const float CounterGrowthDistance = 6.6f;
-    private const float CounterGrowthFlatZoom = 1.6f;
-
-    /// <summary>
-    /// The flat map's counters hold their working size - a third again larger than they
-    /// used to be, because a counter one reads is worth more than the map it covers - down
-    /// to this zoom, and only in the strategic range below it do they shrink toward the
-    /// compact chip. Growing at 1.6 put the shrink inside the range a country is actually
-    /// commanded at, which was exactly backwards.
-    /// </summary>
-    private const float CounterShrinkFlatZoom = 0.7f;
 
     private readonly Dictionary<int, uint> _colorByMapIndex = new();
     private readonly Dictionary<int, Simulation.Nation> _nationByMapIndex = new();
@@ -115,9 +94,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         public Node3D Node;
         public Sprite3D Plate;
+        public Texture2D FullPlateTexture;
         public Sprite3D Glow;
+        public Sprite3D ConditionBars;
         public Label3D Count;
         public readonly List<Simulation.Army> Stack = new();
+        // Display aggregation never changes simulation stacks, province positions or saves.
+        public readonly List<Simulation.Army> DisplayStack = new();
+        public int DisplayProvinces = 1;
+        public int DisplayFingerprint;
+        public int ActualFingerprint;
+        public Vector2 DisplayOffset;
+        public Vector2 SurfaceOffset;
         public Vector3 Normal;
         public int NationId = -1;
         public string TemplateId = "";
@@ -479,6 +467,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (_freeCamera) UpdateFreeCamera(delta);
             else UpdateOrbitCamera(delta);
         }
+        UpdateFlatDivisionDetail();
+        // Picking, density and city layout must see the same projected positions that
+        // will be rendered this frame, including wrapping at the date line.
+        if (_flatMap) UpdateFlatWorldPositions();
 
         // Keep the authored political raster legible at strategic distance. The old
         // quarter-resolution layer supplied almost forty percent of the default globe,
@@ -489,15 +481,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
             ? Mathf.Clamp((13f - _flatZoom) / 4.8f, 0.15f, 1f)
             : Mathf.Clamp((17f - _distance) / 5.5f, 0.12f, 1f);
         var provinceDetail = _flatMap
-            ? Mathf.Clamp((6.8f - _flatZoom) / 2.6f, 0f, 1f)
+            ? 1f - Mathf.SmoothStep(
+                Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_province_full_zoom", 0.95f), MinimumFlatZoom, 3f),
+                Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_province_hide_zoom", 3.8f), 3.1f, MaximumFlatZoom), _flatZoom)
             : Mathf.Clamp((9.3f - _distance) / 2.8f, 0f, 1f);
         _globeMaterial?.SetShaderParameter("detail_mix", detailMix);
         // Tactical boundaries should emerge only at operational zoom. Keeping them
         // faint at country-selection scale avoids turning the map into a crosshatch.
         _globeMaterial?.SetShaderParameter("province_detail", provinceDetail);
-        _globeMaterial?.SetShaderParameter("province_border_pixels", Math.Clamp(Simulation.InterfaceSkin.Metric("map.province_border_width", 2.0f), 0.5f, 4f));
-        _globeMaterial?.SetShaderParameter("province_border_opacity", Math.Clamp(Simulation.InterfaceSkin.Metric("map.province_border_opacity", 0.72f), 0f, 1f));
-        _globeMaterial?.SetShaderParameter("province_border_halo", Math.Clamp(Simulation.InterfaceSkin.Metric("map.province_border_halo", 0.15f), 0f, 0.4f));
+        _globeMaterial?.SetShaderParameter("front_pixels", Math.Clamp(Ui.Metric("map.front_width_pixels", 1.6f), .75f, 3f));
+        _globeMaterial?.SetShaderParameter("province_border_pixels", Math.Clamp(Simulation.InterfaceSkin.Metric(_flatMap ? "map.flat_province_border_width" : "map.province_border_width", _flatMap ? 1.1f : 2.0f), 0.5f, 4f));
+        _globeMaterial?.SetShaderParameter("province_border_opacity", Math.Clamp(Simulation.InterfaceSkin.Metric(_flatMap ? "map.flat_province_border_opacity" : "map.province_border_opacity", _flatMap ? 0.52f : 0.72f), 0f, 1f));
+        _globeMaterial?.SetShaderParameter("province_border_halo", Math.Clamp(Simulation.InterfaceSkin.Metric(_flatMap ? "map.flat_province_border_halo" : "map.province_border_halo", _flatMap ? 0.025f : 0.15f), 0f, 0.4f));
         var fogViewer = FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
         _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
@@ -509,7 +504,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // The stars go as far round as the capitals' names do (GlobeCities): past that they stood
         // in a nameless row along the limb, where the ground is seen edge-on.
         UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f, CityHorizon());
-        var armyLod = ViewDistance <= 10.8f;
+        var armyLod = _flatMap || ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
         if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
         {
@@ -520,13 +515,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
         using (Simulation.SimProfiler.Measure("f:army vis"))
         {
             UpdateCounterScale();
-            UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod && MilitaryMarkersEnabled);
-            if (_flatMap && armyLod && MilitaryMarkersEnabled) UpdateFlatCounterDensity();
+            UpdateMarkerVisibility(_armyRoot, _armyMarkers, armyLod && MilitaryMarkersEnabled,
+                _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
         }
         if (MilitaryMarkersEnabled)
             using (Simulation.SimProfiler.Measure("f:fleets")) UpdateFleetMarkers();
-        UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && ViewDistance <= 13.5f);
+        UpdateMarkerVisibility(_fleetRoot, _fleetMarkers, MilitaryMarkersEnabled && (_flatMap || ViewDistance <= 13.5f),
+            _flatMap ? 0f : GlobeRadius / Math.Max(GlobeRadius, _camera.GlobalPosition.Length()) + .002f);
         UpdateSupportPresentation(delta);
+        if (_flatMap && MilitaryMarkersEnabled)
+            using (Simulation.SimProfiler.Measure("f:counter layout")) UpdateFlatCounterDensity();
+        else if (MilitaryMarkersEnabled)
+            using (Simulation.SimProfiler.Measure("f:surface layout")) UpdateSurfaceCounterDensity();
         if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
@@ -536,9 +536,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:label place")) RefreshCountryLabelPlacement();
         if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
         using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
+        if (_battleMarkers.Count > 0) QueueRedraw();
         UpdateCityLabels(delta);
-        if (_flatMap)
-            using (Simulation.SimProfiler.Measure("f:flat positions")) UpdateFlatWorldPositions();
         UpdateMapModePaletteIfNeeded();
 
         if (!_mapApplied && _pendingMapResult is null && _mapTask is { IsCompletedSuccessfully: true })
@@ -665,6 +664,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// <summary>Frames a geographic point exactly as the source globe's country focus does.</summary>
     public void FocusOn(float latitude, float longitude, float distance = 8f)
     {
+        _flatZoomAnchorActive = false;
         if (_flatMap)
         {
             _targetFlatX = longitude / 18f;
@@ -693,8 +693,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // is never a settlement the player can price but not look at.
         if (inputEvent is InputEventMouseButton pan && pan.ButtonIndex == MouseButton.Middle)
         {
-            _dragging = pan.Pressed;
-            _previousPointer = pan.Position;
+            if (pan.Pressed) BeginCameraDrag(pan.Position, pan.ButtonIndex);
+            else _dragging = false;
             AcceptEvent();
             return true;
         }
@@ -886,17 +886,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _counterWorldPixel;
 
     /// <summary>
-    /// How far out the flat map has pulled the counters toward their compact chip: one close
-    /// in, down to the "map.counter_far_scale" metric at world view. On the flat map a
-    /// counter keeps its screen size at every zoom, so the world shrinks under it while it
-    /// stays put - and at strategic range a coastline's worth of full-size cards and fleets
-    /// piles into a litter. Out there the counters follow the zoom down instead, and past
-    /// <see cref="CounterCompactBelow"/> the number makes way for the symbol alone.
+    /// Flat counters use screen pixels, never the globe's distance-based scale curve.
+    /// This remains one so picking and presentation use the same footprint.
     /// </summary>
     private float _counterFlatFar = 1f;
 
-    /// <summary>Below this far-scale the card draws its symbol, not its digits.</summary>
-    private const float CounterCompactBelow = 0.5f;
     public bool MilitaryMarkersEnabled { get; set; } = true;
     private bool _showcasePan;
     public bool ShowcasePan => _showcasePan;
@@ -947,14 +941,17 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private void SizeArmyCounter(ArmyStackMarker marker)
     {
         if (marker.Plate is null || marker.Count is null) return;
+        marker.Plate.Texture = _flatMap && _flatStrategicCounters
+            ? CompactCounterTexture(marker.FullPlateTexture, new Rect2I(15, 28, 46, 52))
+            : marker.FullPlateTexture;
         // PixelSize/OutlineSize rebuild Label3D meshes. Never animate those properties
         // on every orthographic zoom frame for the entire world's counters.
         if (!marker.LayoutInitialized || marker.FlatLayout != _flatMap)
         {
             marker.LayoutInitialized = true;
             marker.FlatLayout = _flatMap;
-            marker.Plate.FixedSize = !_flatMap;
-            marker.Count.FixedSize = !_flatMap;
+            marker.Plate.FixedSize = false;
+            marker.Count.FixedSize = false;
             marker.Count.HorizontalAlignment = HorizontalAlignment.Center;
             marker.Count.VerticalAlignment = VerticalAlignment.Center;
             // Godot's Label3D defaults Width to 500 - a half-kilometre of text field the
@@ -974,86 +971,123 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         if (_flatMap)
         {
-            marker.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
-            // Far out the digits stop carrying their weight: a nine-pixel number on a
-            // twenty-nine-pixel card is noise, so the card keeps the symbol only - and
-            // picking agrees, giving the chip the smaller reach it is drawn at.
-            marker.Compact = _counterFlatFar < CounterCompactBelow;
-            marker.Count.Visible = !marker.Compact;
+            marker.Node.Scale = Vector3.One * _counterWorldPixel;
+            // Density owns visibility and compactness. A zoom must not turn text back on
+            // over a hidden plate before the density pass decides where it fits.
         }
-        else marker.Node.Scale = Vector3.One;
-        // One layout for the map and the globe, in the card's own pixels (176x104): the
-        // strength number sits in the middle of the card - where the marker is anchored -
-        // and the symbol box keeps to the left of it.
-        //
-        // The number used to be a Label3D parked beside the card by an offset, and it
-        // drifted away from the card with every zoom: fixed-size sprites keep their size by
-        // compensating distance in the renderer, while the offset between two of them gets
-        // no such compensation. Every counter ended up dragging its digits across the map
-        // below and beyond the frame they belong to. A label at its own origin, with the
-        // card's pixels carrying the layout, has no offset that could drift - at any
-        // distance, on any map.
-        var platePixel = _flatMap ? 72f / 176f : CounterPlatePixelSize * _counterScale;
+        else SizeSurfaceArmyCounter(marker);
+        // Shared texture-space layout, with no separate 3D displacement or shader
+        // billboard/fixed-size compensation. All four layers inherit the surface frame.
+        var platePixel = _flatMap
+            ? Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_counter_width", 64f), 40f, 96f) / marker.Plate.Texture.GetWidth()
+            : 1f / 176f;
         marker.Plate.PixelSize = platePixel;
-        if (marker.Glow is not null) marker.Glow.PixelSize = platePixel;
+        if (marker.Glow is not null)
+        {
+            marker.Glow.PixelSize = platePixel;
+            marker.Glow.Scale = _flatMap && _flatStrategicCounters
+                ? new Vector3(marker.Plate.Texture.GetWidth() / 176f, marker.Plate.Texture.GetHeight() / 104f, 1f)
+                : Vector3.One;
+        }
         marker.Count.PixelSize = platePixel * 1.45f;
+        marker.Count.FontSize = _flatMap && _flatStrategicCounters ? 30 : 21;
         marker.Count.OutlineSize = _flatMap ? 2 : Mathf.Max(1, Mathf.RoundToInt(4 * _counterScale));
-        marker.Count.Position = new Vector3(0f, 0f, _flatMap ? 4f : .004f);
-        // Measured against a crosshair at the card texture's centre: the fixed-size globe
-        // label needs no compensation (its Width=0 fix was the whole bug), while the flat
-        // map's non-fixed-size path anchors its two-line block a quarter-card left and
-        // low, so it gets a small nudge. Offset is scaled by pixel_size, so both hold at
-        // any zoom.
-        marker.Count.Offset = _flatMap ? new Vector2(-33f, 12f) : new Vector2(1f, -2f);
+        marker.Count.Position = Vector3.Zero;
+        // The centred two-line block uses the same texture-space anchor in both
+        // projections. A separate flat-map offset put the figures on top of the icon.
+        marker.Count.Offset = new Vector2(1f, 4f);
+        if (marker.ConditionBars is not null)
+        {
+            marker.ConditionBars.FixedSize = marker.Plate.FixedSize;
+            marker.ConditionBars.PixelSize = platePixel;
+            marker.ConditionBars.Offset = Vector2.Zero;
+            marker.ConditionBars.Position = Vector3.Zero;
+        }
     }
 
     /// <summary>
-    /// Resize the counters when the camera has moved far enough to matter.
-    ///
-    /// Twelve hundred markers is too many to touch every frame for a size that only
-    /// changes while the player is turning the wheel, so nothing happens until the factor
-    /// has moved a few percent. A zoom gesture costs a handful of passes rather than one
-    /// per frame.
+    /// Compensate the orthographic camera each frame using transforms only. Quantizing
+    /// this compensation made cards breathe/jump during smooth zoom. Expensive Label3D
+    /// layout changes remain limited to projection switches and the globe's scale steps.
     /// </summary>
-    private void UpdateCounterScale()
+    private void UpdateCounterScale(bool force = false)
     {
-        var wanted = _flatMap
-            ? Mathf.Lerp(CounterCloseScale, 1f,
-                Mathf.InverseLerp(MinimumFlatZoom, CounterGrowthFlatZoom, _flatZoom))
-            : Mathf.Lerp(CounterCloseScale, 1f,
+        if (_flatMap)
+        {
+            _counterWorldPixel = _camera.Size / Math.Max(1f, _camera.GetViewport().GetVisibleRect().Size.Y);
+            var referenceZoom = Math.Clamp(Ui.Metric("map.flat_counter_reference_zoom", 1.7f), .6f, 3f);
+            var minimumRatio = Math.Clamp(Ui.Metric("map.flat_counter_min_ratio", .25f), .15f, .5f);
+            // Follow the ground on retreat; only retain a small, clickable tactical symbol
+            // at the world view. Constant-width cards dwarf countries when zoomed out.
+            _counterFlatFar = Math.Clamp(referenceZoom / _flatZoom, minimumRatio, 1f);
+            var strategic = _flatStrategicCounters ? _flatZoom > 2.8f : _flatZoom > 3.3f;
+            var detailChanged = strategic != _flatStrategicCounters;
+            _flatStrategicCounters = strategic;
+            foreach (var (node, _) in _capitalMarkers)
+                if (node is Sprite3D star)
+                {
+                    if (force || star.FixedSize)
+                    {
+                        star.FixedSize = false;
+                        star.PixelSize = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_capital_pixels", 14f), 8f, 24f) / star.Texture.GetWidth();
+                    }
+                    star.Scale = Vector3.One * _counterWorldPixel;
+                }
+            foreach (var marker in _armyStacks.Values)
+            {
+                if (!IsInstanceValid(marker.Node)) continue;
+                if (force || detailChanged || !marker.LayoutInitialized || !marker.FlatLayout) SizeArmyCounter(marker);
+                marker.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
+                if (force || detailChanged) marker.Count.FontSize = strategic ? 30 : 21;
+            }
+            foreach (var parts in _fleetNodes.Values)
+            {
+                if (force || detailChanged || parts.Plate.FixedSize) SizeFleetCounter(parts);
+                parts.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
+                parts.Count.Visible = !strategic;
+                if (force || detailChanged) parts.Count.FontSize = strategic ? 30 : 24;
+            }
+            foreach (var marker in _supportMapMarkers.Values)
+            {
+                if (force || detailChanged || marker.Plate.FixedSize) PlaceSupportMarker(marker);
+                marker.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
+                marker.Readiness.Visible = !strategic && _selectedSupportIds.Contains(marker.Formation.Id);
+                if (force || detailChanged)
+                {
+                    marker.Readiness.FontSize = strategic ? 30 : 20;
+                    PaintSupportMarker(marker, marker.Formation);
+                }
+            }
+            if (force || detailChanged) InvalidateFlatCounterDensity();
+            return;
+        }
+        var wanted = Mathf.Lerp(CounterCloseScale, 1f,
                 Mathf.InverseLerp(MinimumDistance, CounterGrowthDistance, _distance));
         wanted = Mathf.Clamp(wanted, 1f, CounterCloseScale);
-        // The flat map's strategic range: counters shrink toward a compact chip instead of
-        // keeping their operational size over a world-scale map. One metric owns the curve,
-        // so a mod can keep the old behaviour with a value of one.
-        var flatFar = _flatMap
-            ? Mathf.Lerp(1f, Simulation.InterfaceSkin.Metric("map.counter_far_scale", 0.55f),
-                Mathf.InverseLerp(CounterShrinkFlatZoom, MinimumFlatZoom, _flatZoom))
-            : 1f;
-        var worldPixel = _flatMap ? _camera.Size / Math.Max(1f, _camera.GetViewport().GetVisibleRect().Size.Y) : 0f;
-        if (Mathf.Abs(wanted - _counterScale) < 0.03f &&
-            Math.Abs(worldPixel - _counterWorldPixel) <= Math.Max(.0000001f, worldPixel * .01f) &&
-            Mathf.Abs(flatFar - _counterFlatFar) < 0.02f) return;
+        // The entire surface card shares one real transform, not four independent
+        // shader distance compensations. Update transforms continuously even while
+        // the expensive texture/label layout remains unchanged.
+        foreach (var marker in _armyStacks.Values)
+            if (IsInstanceValid(marker.Node)) SizeSurfaceArmyCounter(marker);
+        foreach (var parts in _fleetNodes.Values)
+            if (IsInstanceValid(parts.Node)) parts.Node.Scale = Vector3.One * SurfaceCounterWidth(parts.Node, "fleet");
+        if (!force && Mathf.Abs(wanted - _counterScale) < 0.03f) return;
         _counterScale = wanted;
-        _counterWorldPixel = worldPixel;
-        _counterFlatFar = flatFar;
+        _counterWorldPixel = 0f;
+        _counterFlatFar = 1f;
+        _flatStrategicCounters = false;
+        InvalidateFlatCounterDensity();
+        foreach (var (node, _) in _capitalMarkers)
+            if (node is Sprite3D star) { star.FixedSize = true; star.PixelSize = .00016f; star.Scale = Vector3.One; }
 
         foreach (var marker in _armyStacks.Values)
         {
             if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
             SizeArmyCounter(marker);
+            marker.Count.FontSize = 21;
+            marker.Count.Text = marker.CountText;
         }
-        // Fleets grow with the camera as armies do. They were fixed at their far size, so
-        // up close a fleet was a speck beside the divisions in the port it was guarding.
-        // On the flat map they also follow the strategic zoom down, with the armies.
-        foreach (var (_, count, plate) in _fleetNodes.Values)
-        {
-            if (!IsInstanceValid(plate) || !IsInstanceValid(count)) continue;
-            plate.PixelSize = FleetPlatePixelSize * _counterScale * (_flatMap ? _counterFlatFar : 1f);
-            if (plate.GetChildOrNull<Sprite3D>(0) is { } glow) glow.PixelSize = plate.PixelSize;
-            count.PixelSize = FleetTextPixelSize * _counterScale * (_flatMap ? _counterFlatFar : 1f);
-            count.Visible = !_flatMap || _counterFlatFar >= CounterCompactBelow;
-        }
+        foreach (var parts in _fleetNodes.Values) { SizeFleetCounter(parts); parts.Count.FontSize = 24; }
         foreach (var marker in _supportMapMarkers.Values)
             if (IsInstanceValid(marker.Node)) PlaceSupportMarker(marker);
     }
@@ -1064,31 +1098,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (!MilitaryMarkersEnabled || (!_flatMap && _distance > 13.5f) || !IsInstanceValid(_camera)) return false;
         // A bigger counter is a bigger target: the radius that finds it follows the size
         // it is actually drawn at, or clicking a close-up counter near its edge misses.
-        var reach = _flatMap ? 36f * _counterFlatFar : 28f * _counterScale;
-        var bestDistance = reach * reach;
-        var expandedHit = false;
+        var bestDistance = float.MaxValue;
         foreach (var marker in _armyStacks.Values)
         {
             var node = marker.Node;
-            var candidates = marker.Stack;
+            var candidates = marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack;
             if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
             if (!node.IsVisibleInTree()) continue;
-            var screen = _camera.UnprojectPosition(node.GlobalPosition);
-            var distance = screen.DistanceSquaredTo(pixel);
-            if (_flatMap)
-            {
-                if (marker.Compact)
-                {
-                    if (expandedHit || distance > 64f) continue;
-                }
-                else
-                {
-                    var offset = screen - pixel;
-                    if (Mathf.Abs(offset.X) > 27f || Mathf.Abs(offset.Y) > 17f) continue;
-                    // A pin behind a readable counter must not steal that counter's click.
-                    if (!expandedHit) { expandedHit = true; bestDistance = float.MaxValue; }
-                }
-            }
+            if (!TryHitSurfaceArmyCard(marker, pixel, out var distance)) continue;
             if (distance >= bestDistance) continue;
             bestDistance = distance;
             // The counter still blocks a click on the province behind it, but foreign
@@ -1113,7 +1130,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             .Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)).Select(army => army.Id));
         _selectedArmyIds.Clear();
         _selectedArmyIds.UnionWith(selected);
-        _nextCounterDensityMs = 0;
+        InvalidateFlatCounterDensity();
         _routeFingerprint = int.MinValue;
         foreach (var (node, armies) in _armyByMarker)
         {
@@ -1128,6 +1145,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _Draw()
     {
+        DrawFlatCounterLeaders();
+        DrawBattleReadouts();
         if (!_boxSelecting) return;
         var rect = RectFromPoints(_boxStart, _boxCurrent);
         DrawRect(rect, new Color(0.91f, 0.77f, 0.31f, 0.12f), true);
@@ -1428,6 +1447,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         {
                             if (TryPick(button.Position, out var country)) CountryPicked?.Invoke(country);
                         }
+                        else if (SupportCommandMode)
+                        {
+                            if (!SupportRebaseArmed && TryPickSupport(button.Position, out var formation)) SupportPicked?.Invoke(formation);
+                            else if (TryPick(button.Position, out var destination)) CountryPicked?.Invoke(destination);
+                        }
                         else if (TryPickBattle(button.Position, out var battle)) BattlePicked?.Invoke(battle);
                         else if (TryPickFleet(button.Position, out var fleet)) FleetPicked?.Invoke(fleet);
                         else if (TryPickSupport(button.Position, out var support)) SupportPicked?.Invoke(support);
@@ -1442,8 +1466,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     }
                     else
                     {
-                        var selected = ArmiesInScreenRect(rect);
-                        if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                        if (!CountrySelectionOnly && SupportCommandMode) SupportBoxPicked?.Invoke(SupportInScreenRect(rect));
+                        else
+                        {
+                            var selected = ArmiesInScreenRect(rect);
+                            if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                        }
                     }
                     QueueRedraw();
                 }
@@ -1451,17 +1479,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 return;
             }
 
-            if (button.ButtonIndex == MouseButton.Right)
+            if (button.ButtonIndex is MouseButton.Right or MouseButton.Middle)
             {
                 if (button.Pressed)
                 {
-                    _dragging = true;
-                    _dragDistance = 0f;
-                    _previousPointer = button.Position;
+                    BeginCameraDrag(button.Position, button.ButtonIndex);
+                    _boxSelecting = false;
+                    QueueRedraw();
                 }
                 else
                 {
-                    var wasClick = _dragging && _dragDistance < 5f;
+                    if (button.ButtonIndex != _cameraDragButton) return;
+                    var wasClick = _dragging && _dragDistance < 5f && button.ButtonIndex == MouseButton.Right;
                     _dragging = false;
                     if (!CountrySelectionOnly && wasClick && TryPick(button.Position, out var commanded, updateSelection: false))
                         ProvinceCommanded?.Invoke(commanded);
@@ -1477,8 +1506,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 // and the whole reason for coming this close is to move one division.
                 var sign = button.ButtonIndex == MouseButton.WheelUp ? -1f : 1f;
                 if (_flatMap)
-                    _targetFlatZoom = Mathf.Clamp(_targetFlatZoom * (1f + sign * 0.15f),
-                        MinimumFlatZoom, MaximumFlatZoom);
+                    ZoomFlatMapAt(button.Position, sign);
                 else
                 {
                     var altitude = Mathf.Max(0.10f, _targetDistance - GlobeRadius);
@@ -1518,6 +1546,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _dragDistance += delta.Length();
         if (_flatMap)
         {
+            _flatZoomAnchorActive = false;
             // The current zoom, not the one being lerped towards: what a pixel is worth is
             // decided by what is on the screen now, so dragging while the wheel is still
             // settling moves the ground by the distance the hand moved rather than by the
@@ -1565,6 +1594,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override string _GetTooltip(Vector2 atPosition)
     {
+        var supportTip = SupportMapTooltip(atPosition);
+        if (supportTip.Length > 0) return supportTip;
         if (TryPickBattle(atPosition, out var battle))
         {
             var attacker = _campaign?.NationById(battle.AttackerId);
@@ -1578,7 +1609,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     battle.ProvinceId, attacker?.DisplayName ?? unknown, defender?.DisplayName ?? unknown);
             return Simulation.Loc.Format("BATTLE · province #{0:N0}\n{1} vs {2}\nLosses {3:N0} / {4:N0}",
                        battle.ProvinceId, attacker?.DisplayName ?? unknown, defender?.DisplayName ?? unknown,
-                       battle.AttackerLosses, battle.DefenderLosses) +
+                       battle.AttackerLosses, battle.DefenderLosses) + "\n" + BattleMapTooltip(battle) +
                    (latest is null ? "" : "\n" + Simulation.Loc.Format(
                        "Power {0:0.0} / {1:0.0} · plan {2:P0}",
                        latest.AttackerPower, latest.DefenderPower, latest.AttackerPlanning));
@@ -1608,9 +1639,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                        ? Simulation.Loc.Format("{0} · {1} posture · planning {2:P0}",
                            Simulation.ArmyVocabulary.OrderName(lead.OrderKind),
                            Simulation.ArmyVocabulary.StanceName(lead.Stance), lead.Planning)
-                       : Simulation.Loc.Get("Click to select every independent division in this province."));
+                       : Simulation.Loc.Get("Click to select every division represented by this counter. A + marks nearby provinces grouped at this zoom."));
         }
-        if (!TryPick(atPosition, out var pick)) return UnclaimedTooltip(atPosition);
+        if (!TryPick(atPosition, out var pick, updateSelection: false)) return UnclaimedTooltip(atPosition);
         var state = pick.State is null
             ? Simulation.Loc.Get("Unmapped administrative area")
             : pick.State.DisplayName + " · " + Simulation.Loc.Get(pick.State.Kind);
@@ -1630,6 +1661,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
                Simulation.Loc.Format("Province #{0:N0}", pick.ProvinceId) +
                (controller is null || controller == pick.Nation ? "" : "\n" + Simulation.Loc.Format(
                    "Controlled by {0} · occupation {1:P0}", controller.DisplayName, occupation)) +
+               (_mapMode == StrategicMapMode.Resources && pick.State is not null ? "\n" + Simulation.Loc.Format(
+                   "{0} · resource potential {1:0.##}", Simulation.Loc.Get(Simulation.CommodityCatalog.Get(_resourceGood).Name),
+                   Simulation.ResourceAtlas.Potential(pick.State, _resourceGood)) : "") +
                hydrology + (pick.ProvinceId > 0 && _provinceTopology is not null
                    ? TerrainDescription(_provinceTopology.TerrainAt(pick.ProvinceId)) : "");
     }
@@ -1638,11 +1672,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         var selected = new List<Simulation.Army>();
         if (!IsInstanceValid(_camera) || (!_flatMap && _distance > 13.5f)) return selected;
-        foreach (var (node, armies) in _armyByMarker)
+        foreach (var marker in _armyStacks.Values)
         {
-            if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            var node = marker.Node;
+            if (!IsInstanceValid(node) || !node.IsVisibleInTree() || !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
             if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition)))
-                selected.AddRange(armies.Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)));
+                selected.AddRange((marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack)
+                    .Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)));
         }
         return selected;
     }
@@ -1724,8 +1760,11 @@ uniform float border_pixels = 1.35;
 uniform float province_border_pixels = 2.0;
 uniform float province_border_opacity = 0.72;
 uniform float province_border_halo = 0.15;
+uniform float front_pixels = 1.6;
 uniform sampler2D front_membership : filter_nearest, repeat_disable;
 uniform sampler2D map_mode_colors : source_color, filter_nearest, repeat_disable;
+uniform sampler2D resource_colors : source_color, filter_nearest, repeat_disable;
+uniform float resource_mode = 0.0;
 uniform sampler2DArray terrain_tiles : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D province_terrain : filter_nearest, repeat_disable;
 uniform sampler2D terrain_surface : filter_nearest, repeat_enable;
@@ -2335,6 +2374,9 @@ void fragment() {
     vec4 strategic = map_mode_color(nation);
     political.rgb = mix(political.rgb, strategic.rgb * mix(0.84, 1.02, political_light),
         map_mode * strategic.a);
+    vec2 resource_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
+    vec4 resource = texture(resource_colors, resource_uv);
+    political.rgb = mix(political.rgb, resource.rgb, resource_mode * resource.a);
     vec3 base = mix(water, political.rgb, political.a);
     if (terrain_ready > 0.5) {
         vec2 province_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
@@ -2471,18 +2513,16 @@ void fragment() {
     country_edge *= step(0.5, abs(near_nation - other_nation)) *
                     step(0.5, near_nation) * clamp(2.2 - pixel_texels, 0.0, 1.0);
     vec3 front = front_data(province);
-    float front_edge = max(max(
-        front_crossing(province, front, UV + vec2(texel.x, 0.0)),
-        front_crossing(province, front, UV - vec2(texel.x, 0.0))), max(
-        front_crossing(province, front, UV + vec2(0.0, texel.y)),
-        front_crossing(province, front, UV - vec2(0.0, texel.y))));
-    // A restrained second pixel gives the active front enough weight at
-    // operational zoom without detached 3D geometry above the globe.
-    float front_outer = max(max(
-        front_crossing(province, front, UV + vec2(texel.x * 2.0, 0.0)),
-        front_crossing(province, front, UV - vec2(texel.x * 2.0, 0.0))), max(
-        front_crossing(province, front, UV + vec2(0.0, texel.y * 2.0)),
-        front_crossing(province, front, UV - vec2(0.0, texel.y * 2.0))));
+    // Use the same reconstructed boundary as the province contour, not a stripe
+    // one/two source texels wide. Source texels become giant steps at close zoom.
+    vec3 near_front = front_data(near_province);
+    vec3 other_front = front_data(other_province_id);
+    float front_pair = step(0.002, near_front.r) * step(0.002, other_front.r) *
+        (1.0 - step(0.002, abs(near_front.r - other_front.r))) *
+        step(0.20, abs(near_front.g - other_front.g)) *
+        step(0.5, abs(near_province - other_province_id));
+    float front_edge = (1.0 - smoothstep(front_pixels * 0.45, front_pixels + 0.55, province_distance)) * front_pair;
+    float front_outer = (1.0 - smoothstep(front_pixels + 0.55, front_pixels + 1.2, province_distance)) * front_pair;
     // The terrain/relief views contain no political front shading.
     front_edge *= 1.0 - step(0.5, terrain_mode);
     front_outer *= 1.0 - step(0.5, terrain_mode);
@@ -2515,8 +2555,8 @@ void fragment() {
         planned_border(province, UV - vec2(texel.x, 0.0))),
         max(planned_border(province, UV + vec2(0.0, texel.y)), planned_border(province, UV - vec2(0.0, texel.y))));
     base = mix(base, plan_color, plan_on * 0.40);
-    base = mix(base, vec3(1.0, 0.22, 0.10), front_edge * max(province_detail, detail_mix * 0.70) * 0.94);
-    base = mix(base, vec3(0.93, 0.16, 0.07), front_outer * max(province_detail, detail_mix * 0.70) * 0.38);
+    base = mix(base, vec3(0.45, 0.12, 0.07), front_outer * 0.30);
+    base = mix(base, vec3(0.96, 0.40, 0.20), front_edge * 0.90);
     // One narrow cartographic stroke on the shared boundary, never a filled province.
     base = mix(base, vec3(0.30, 0.72, 0.96), border_plan * 0.95);
     base = mix(base, vec3(0.95, 0.76, 0.25), region_selected * 0.10);
@@ -2524,13 +2564,12 @@ void fragment() {
     float selection_edge = max(region_edge * region_selected, province_edge * province_selected * province_detail);
     vec2 fog_lookup = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
     float known = texture(fog_visibility, fog_lookup).r;
-    float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, known)) * political.a * fog_tint;
+    float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, known)) * political.a * fog_tint * (1.0 - resource_mode);
     base = mix(base, mix(vec3(dot(base, vec3(0.2126, 0.7152, 0.0722))), base, fog_saturation) * fog_darkness, fog);
     ALBEDO = mix(base, vec3(1.0, 0.84, 0.30), selection_edge * 0.92);
     EMISSION = mix(water * 0.025, vec3(0.28, 0.18, 0.025), selection_edge * 0.48) +
         plan_color * plan_on * 0.14 +
-        vec3(0.30, 0.025, 0.008) * front_edge * max(province_detail, detail_mix * 0.70) +
-        vec3(0.08, 0.008, 0.002) * front_outer * max(province_detail, detail_mix * 0.70) +
+        vec3(0.04, 0.012, 0.003) * front_edge +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
     ROUGHNESS = mix(0.92, 0.82, political.a);
     METALLIC = 0.0;
@@ -2557,6 +2596,7 @@ void fragment() {
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rg8)));
         _globeMaterial.SetShaderParameter("map_mode_colors",
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
+        _globeMaterial.SetShaderParameter("resource_colors", placeholder);
         mesh.Material = _globeMaterial;
 
         _globeNode = new MeshInstance3D { Name = "PoliticalGlobe", Mesh = mesh };
@@ -2663,10 +2703,13 @@ void fragment() {
         _flatX = Mathf.Lerp(_flatX, _targetFlatX, weight);
         _flatY = Mathf.Lerp(_flatY, _targetFlatY, weight);
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
+        UpdateFlatZoomAnchor();
 
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
         if (_flatMap && !typing)
         {
+            if (DealOrForceGame.Held(Key.W) || DealOrForceGame.Held(Key.S) ||
+                DealOrForceGame.Held(Key.A) || DealOrForceGame.Held(Key.D)) _flatZoomAnchorActive = false;
             var flatSpeed = _flatZoom * 0.62f * (float)delta;
             if (DealOrForceGame.Held(Key.W)) _targetFlatY += flatSpeed;
             if (DealOrForceGame.Held(Key.S)) _targetFlatY -= flatSpeed;
@@ -3122,9 +3165,17 @@ void fragment() {
         foreach (var bucket in _vanishedStacks)
         {
             var marker = _armyStacks[bucket];
-            if (marker.Node is not null && IsInstanceValid(marker.Node)) marker.Node.QueueFree();
+            if (marker.Node is not null && IsInstanceValid(marker.Node))
+            {
+                // Re-bucketing can create a new individual card with the same lead ID
+                // this frame. Detach now: deferred deletion otherwise leaves a ghost
+                // and forces Godot to rename the replacement to an anonymous node.
+                marker.Node.GetParent()?.RemoveChild(marker.Node);
+                marker.Node.QueueFree();
+            }
             _armyStacks.Remove(bucket);
         }
+        if (_vanishedStacks.Count > 0) InvalidateFlatCounterDensity();
 
         _armyMarkers.Clear();
         _armyByMarker.Clear();
@@ -3151,20 +3202,42 @@ void fragment() {
                 }
 
             if (marker.Node is null || !IsInstanceValid(marker.Node))
+            {
                 CreateArmyStackMarker(marker, nation, lead, templateId);
+                InvalidateFlatCounterDensity();
+            }
             else if (marker.NationId != nation.Id ||
                      !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal))
             {
-                marker.Plate.Texture = ArmyCounterTexture(nation, templateId);
+                marker.FullPlateTexture = ArmyCounterTexture(nation, templateId);
+                SizeArmyCounter(marker);
                 marker.NationId = nation.Id;
                 marker.TemplateId = templateId;
             }
             if (marker.Node is null) continue;
 
-            var location = AverageArmyLocation(marker.Stack);
-            var position = PresentationPoint(location.Latitude, location.Longitude, SurfaceMarkerRadius);
-            if (marker.Node.Position != position) marker.Node.Position = position;
+            var location = ArmyPresentationLocation(marker.Stack);
+            var position = ArmyMarkerPosition(marker);
+            if (marker.Node.Position != position)
+            {
+                marker.Node.Position = position;
+                InvalidateFlatCounterDensity();
+            }
             marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f);
+            OrientSurfaceArmyCard(marker);
+
+            var membership = new HashCode();
+            foreach (var army in marker.Stack) membership.Add(army.Id);
+            var signature = membership.ToHashCode();
+            if (signature != marker.ActualFingerprint)
+            {
+                marker.ActualFingerprint = signature;
+                var ids = new Godot.Collections.Array<int>();
+                foreach (var army in marker.Stack) ids.Add(army.Id);
+                marker.Node.SetMeta("actual_army_ids", ids);
+                marker.Node.SetMeta("province_id", lead.ProvinceId);
+                InvalidateFlatCounterDensity();
+            }
 
             var divisions = 0f;
             var personnel = 0f;
@@ -3180,8 +3253,9 @@ void fragment() {
             var countText = $"{Mathf.CeilToInt(divisions)}\n{personnel / 1000f:0.#}k";
             if (!string.Equals(marker.CountText, countText, StringComparison.Ordinal))
             {
-                marker.Count.Text = countText;
+                if (!_flatMap && marker.DisplayProvinces <= 1) marker.Count.Text = countText;
                 marker.CountText = countText;
+                InvalidateFlatCounterDensity();
             }
 
             _armyMarkers.Add((marker.Node, marker.Normal));
@@ -3204,15 +3278,25 @@ void fragment() {
             {
                 Texture = ArmyCounterTexture(nation, templateId),
                 PixelSize = CounterPlatePixelSize * _counterScale,
-                FixedSize = true,
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                FixedSize = false,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Modulate = Colors.White
             };
             node.AddChild(plate);
             marker.Plate = plate;
+            marker.FullPlateTexture = plate.Texture;
             marker.Glow = AttachSelectionGlow(plate, 176, 104, 0);
+            marker.ConditionBars = new Sprite3D
+            {
+                Name = "OrganisationEquipmentBars", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
+                RenderPriority = 10,
+                NoDepthTest = true, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                TextureFilter = BaseMaterial3D.TextureFilterEnum.Nearest
+            };
+            // A sibling of the plate: status colours must not inherit its red battle tint.
+            node.AddChild(marker.ConditionBars);
 
             var divisions = new Label3D
             {
@@ -3221,14 +3305,15 @@ void fragment() {
                 FontSize = 21,
                 PixelSize = CounterTextPixelSize * _counterScale,
                 LineSpacing = -5f,
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
-                FixedSize = true,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
+                FixedSize = false,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 OutlineSize = Mathf.RoundToInt(CounterOutlineSize * _counterScale),
                 Modulate = Ui.Colour("military.ready"),
                 OutlineModulate = Ui.Colour("globe.label_outline"),
-                Position = new Vector3(0f, -0.004f, 0.004f),
+                Position = Vector3.Zero,
+                RenderPriority = 20,
                 NoDepthTest = true
             };
             node.AddChild(divisions);
@@ -3251,9 +3336,18 @@ void fragment() {
     /// of a degree, which is fine ground - two divisions merge only if they are within a
     /// few kilometres of each other, and they have nowhere else to be drawn anyway.
     /// </summary>
-    private static (int NationId, int LocationId, int FallbackLatitude, int FallbackLongitude)
+    private (int NationId, int LocationId, int FallbackLatitude, int FallbackLongitude)
         ArmyPresentationBucket(Simulation.Campaign campaign, Simulation.Army division)
     {
+        // Only the visible tactical area gets individual nodes. This avoids allocating
+        // thousands of off-screen Label3D meshes when zooming into one front.
+        if ((_flatIndividualDivisions || _surfaceIndividualDivisions) && IsInstanceValid(_camera) && IsInstanceValid(_armyRoot))
+        {
+            var at = _camera.UnprojectPosition(_armyRoot.ToGlobal(
+                PresentationPoint(division.Latitude, division.Longitude, SurfaceMarkerRadius)));
+            if (new Rect2(Vector2.Zero, Size).Grow(180f).HasPoint(at))
+                return (division.NationId, division.ProvinceId, division.Id, int.MinValue);
+        }
         if (division.ProvinceId > 0) return (division.NationId, division.ProvinceId, 0, 0);
         return (division.NationId, 0, Mathf.RoundToInt(division.Latitude * 20f),
             Mathf.RoundToInt(division.Longitude * 20f));
@@ -3292,7 +3386,7 @@ void fragment() {
 
     private readonly HashSet<int> _liveArmyIds = new();
 
-    private static int ArmyStructureFingerprint(Simulation.Campaign campaign)
+    private int ArmyStructureFingerprint(Simulation.Campaign campaign)
     {
         var hash = new HashCode();
         hash.Add(campaign.Armies.Count);
@@ -3312,10 +3406,13 @@ void fragment() {
     private void BuildFleetMarkers(Simulation.Campaign campaign)
     {
         if (!IsInstanceValid(_fleetRoot) || _fleetTexture is null) return;
-        foreach (var child in _fleetRoot.GetChildren()) child.QueueFree();
+        foreach (var child in _fleetRoot.GetChildren()) { _fleetRoot.RemoveChild(child); child.QueueFree(); }
         _fleetMarkers.Clear();
         _fleetByMarker.Clear();
         _fleetNodes.Clear();
+        _flatFleetOffsets.Clear();
+        InvalidateFlatCounterDensity();
+        if (!campaign.FeatureEnabled("navy")) return;
         foreach (var fleet in campaign.Fleets)
         {
             if (!CanShowMilitary(fleet.NationId)) continue;
@@ -3336,8 +3433,8 @@ void fragment() {
             {
                 Texture = _fleetTexture,
                 PixelSize = FleetPlatePixelSize * _counterScale,
-                FixedSize = true,
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                FixedSize = false,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Modulate = flag.Lerp(Colors.White, 0.22f) with { A = 0.94f }
@@ -3347,16 +3444,18 @@ void fragment() {
             fleetGlow.Visible = fleet.Id == _selectedFleetId;
             var strength = new Label3D
             {
+                Name = "FleetHullCount",
                 Text = fleet.Hulls.ToString(), FontSize = 24, PixelSize = FleetTextPixelSize * _counterScale,
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled, FixedSize = true,
+                Billboard = BaseMaterial3D.BillboardModeEnum.Disabled, FixedSize = false,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 OutlineSize = 7, Modulate = Ui.Colour("globe.label_province"), OutlineModulate = Ui.Colour("globe.label_province_outline"),
-                Position = new Vector3(0f, 0f, 0.004f), NoDepthTest = true
+                Position = Vector3.Zero, NoDepthTest = true, RenderPriority = 20
             };
             marker.AddChild(strength);
             _fleetMarkers.Add((marker, marker.Position.Normalized()));
             _fleetByMarker[marker] = fleet;
             _fleetNodes[fleet.Id] = (marker, strength, plate);
+            SizeFleetCounter((marker, strength, plate));
         }
     }
 
@@ -3370,7 +3469,7 @@ void fragment() {
     {
         if (_campaign is null || !IsInstanceValid(_fleetRoot)) return;
 
-        var fingerprint = HashCode.Combine(_campaign.Fleets.Count, FogOfWarActive, _campaign.Player?.Id, _campaign.Player?.IsHuman);
+        var fingerprint = HashCode.Combine(_campaign.Fleets.Count, FogOfWarActive, _campaign.Player?.Id, _campaign.Player?.IsHuman, _campaign.FeatureEnabled("navy"));
         foreach (var fleet in _campaign.Fleets) fingerprint = HashCode.Combine(fingerprint, fleet.Id, fleet.NationId);
         if (fingerprint != _fleetRosterFingerprint)
         {
@@ -3380,20 +3479,21 @@ void fragment() {
 
         for (var index = 0; index < _fleetMarkers.Count; index++)
         {
-            var (node, _) = _fleetMarkers[index];
+            var (node, previousNormal) = _fleetMarkers[index];
             if (!IsInstanceValid(node) || !_fleetByMarker.TryGetValue(node, out var fleet)) continue;
-            var point = SurfacePoint(fleet.Latitude, fleet.Longitude, SurfaceMarkerRadius);
+            var point = _flatMap ? FlatFleetPosition(fleet.Id, fleet.Latitude, fleet.Longitude)
+                : PresentationPoint(fleet.Latitude, fleet.Longitude, SurfaceMarkerRadius);
             node.Position = point;
-            _fleetMarkers[index] = (node, point.Normalized());
+            OrientSurfaceCounter(node, SurfacePoint(fleet.Latitude, fleet.Longitude, 1f));
+            _fleetMarkers[index] = (node, SurfacePoint(fleet.Latitude, fleet.Longitude, 1f));
+            if (_flatMap && previousNormal.DistanceSquaredTo(_fleetMarkers[index].Normal) > 0.00000001f) InvalidateFlatCounterDensity();
             if (!_fleetNodes.TryGetValue(fleet.Id, out var parts)) continue;
             if (IsInstanceValid(parts.Plate) && parts.Plate.GetChildOrNull<Sprite3D>(0) is { } fleetGlow)
             {
                 var chosen = fleet.Id == _selectedFleetId;
                 if (fleetGlow.Visible != chosen) fleetGlow.Visible = chosen;
-                // And a size up, as well as a light round it. A fleet counter is small and
-                // usually sits on a coast, where a yellow glow against pale land is exactly
-                // the thing the eye misses; a counter that stands a fifth larger is not.
-                var lift = chosen ? Vector3.One * SelectedFleetScale : Vector3.One;
+                // Selection changes the frame, never the geometry or click footprint.
+                var lift = Vector3.One;
                 if (parts.Plate.Scale != lift) parts.Plate.Scale = lift;
                 if (IsInstanceValid(parts.Count) && parts.Count.Scale != lift) parts.Count.Scale = lift;
             }
@@ -3413,13 +3513,13 @@ void fragment() {
     private bool TryPickFleet(Vector2 pixel, out Simulation.Fleet fleet)
     {
         fleet = null;
-        if (ViewDistance > 13.5f || !IsInstanceValid(_camera)) return false;
-        var bestDistance = 26f * 26f;
+        if ((!_flatMap && ViewDistance > 13.5f) || !IsInstanceValid(_camera)) return false;
+        var bestDistance = float.MaxValue;
         foreach (var (node, candidate) in _fleetByMarker)
         {
             if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
-            var screen = _camera.UnprojectPosition(node.GlobalPosition);
-            var distance = screen.DistanceSquaredTo(pixel);
+            if (!_fleetNodes.TryGetValue(candidate.Id, out var parts) ||
+                !TryHitSurfaceCounter(parts.Plate, pixel, out var distance)) continue;
             if (distance >= bestDistance) continue;
             bestDistance = distance;
             fleet = candidate;
@@ -3544,6 +3644,7 @@ void fragment() {
             army.ProvinceId = _provinceTopology.CellToProvince[cell];
         }
         _campaign.AttachProvinceTopology(_provinceTopology);
+        RefreshMapModePalette();
         if (_campaign.ScenarioId != "2024")
             foreach (var army in _campaign.Armies)
                 if (army.ProvinceId > 0 && army.ProvinceId <= _provinceTopology.ProvinceCount)

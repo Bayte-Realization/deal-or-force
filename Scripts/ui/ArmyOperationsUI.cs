@@ -43,6 +43,8 @@ public partial class DealOrForceGame
     {
         if (!_hudLayer.Visible || !ArmyInteraction.CanSelect(_campaign, army)) return;
         CloseFleetPanel();
+        if (_supportLayer is { Visible: true }) CloseSupportScreen();
+        _globe.SelectSupportFormation(-1);
         // Shift adds, control takes away - the Paradox reading, and the one that lets a
         // player build a selection without fear. A single key that toggled did both, so
         // shift-clicking a stack you had half-selected removed the ones you wanted and
@@ -83,6 +85,11 @@ public partial class DealOrForceGame
         if (!_hudLayer.Visible) return;
         var playerArmies = armies.Where(army => ArmyInteraction.CanSelect(_campaign, army)).Distinct().ToArray();
         if (playerArmies.Length == 0) return;
+        // Aggregated-card clicks arrive here too, not through OnArmyPicked.
+        // They must replace the previous military inspector just like a single click.
+        CloseFleetPanel();
+        if (_supportLayer is { Visible: true }) CloseSupportScreen();
+        _globe.SelectSupportFormation(-1);
 
         // A box does the same three things a click does: replace, add, or take away.
         if (RemovingFromSelection)
@@ -246,6 +253,7 @@ public partial class DealOrForceGame
 
     private void IssueArmyOrder(ArmyOrder order)
     {
+        if (order == ArmyOrder.Manual) { HaltSelectedDivisions(); return; }
         var targets = _selectedArmies.Count > 0 ? _selectedArmies : new List<Army> { _selectedArmy };
         foreach (var army in targets.Where(army => army is not null && army.NationId == _campaign.Player.Id))
         {
@@ -323,6 +331,12 @@ public partial class DealOrForceGame
     private void OnProvinceCommanded(GlobePick pick)
     {
         if (!_hudLayer.Visible) return;
+
+        if (_supportLayer is { Visible: true })
+        {
+            if (_supportSelected.Count > 0 && pick.State is not null) RebaseSupportSelection(pick.State);
+            return;
+        }
 
         // A fleet is ordered to a place rather than to a province - most of the sea is not
         // one - so it is handled before the province guard below rejects open water.
@@ -444,18 +458,40 @@ public partial class DealOrForceGame
     /// next tick. So each is its own key and each says what it did.
     /// </summary>
     private void HaltSelectedDivisions()
+        => ProcessHaltSelected(false);
+
+    private void WithdrawSelectedDivisions()
+        => ProcessHaltSelected(true);
+
+    private void ProcessHaltSelected(bool battlesOnly)
     {
-        var targets = SelectedPlayerDivisions();
+        var targets = SelectedPlayerDivisions().Where(army => !battlesOnly || army.InBattle).ToArray();
         if (targets.Length == 0) return;
         var stopped = 0;
+        var withdrawn = 0;
+        var blocked = 0;
         foreach (var army in targets)
         {
+            if (army.InBattle)
+            {
+                var withdrawal = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
+                _campaign.Commands.Enqueue(withdrawal);
+                _campaign.Commands.ApplyAll(_campaign);
+                if (withdrawal.Withdrawn) withdrawn++; else blocked++;
+                continue;
+            }
             var command = new HaltArmyCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
             _campaign.Commands.Enqueue(command);
             _campaign.Commands.ApplyAll(_campaign);
             if (command.Halted) stopped++;
         }
         ShowSelectedArmies();
+        if (withdrawn > 0 || blocked > 0)
+        {
+            SetArmyFeedback(Loc.Format("Left battle: {0} · stopped: {1} · no retreat route: {2}", withdrawn, stopped, blocked));
+            RefreshBattleDossier();
+            return;
+        }
         SetArmyFeedback(stopped == 0
             ? Simulation.Loc.Format(
                 Simulation.Plural.Key("{0:N0} division was already standing still. They keep their plan.",

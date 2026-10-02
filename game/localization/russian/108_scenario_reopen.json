@@ -1,0 +1,10 @@
+{
+  "Edit selected scenario on map": "Редактировать выбранный сценарий",
+  "Could not open scenario": "Не удалось открыть сценарий",
+  "Generated scenarios: use Edit current world on map to create a copy.": "Для встроенного сценария создайте копию кнопкой «Редактировать текущую карту».",
+  "Workspace scenarios save in place; base and mod scenarios become independent copies.": "Сценарии мастерской сохраняются на месте; сценарии игры и других модов открываются как независимые копии.",
+  "Editing a saved workspace scenario. Saving updates this scenario with backups.": "Открыт сценарий вашей мастерской. Сохранение обновит его с резервными копиями.",
+  "New independent copy. Saving creates a new scenario; the source is not overwritten.": "Независимая копия. Сохранение создаст новый сценарий, не изменяя исходник.",
+  "Save scenario changes": "Сохранить изменения сценария",
+  "Save new scenario copy": "Сохранить новый сценарий"
+}

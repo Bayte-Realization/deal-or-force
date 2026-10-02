@@ -172,6 +172,7 @@ public static class DecisionCatalog
 
     public static string BlockReason(Campaign campaign, Nation nation, DecisionDefinition definition)
     {
+        if (!campaign.FeatureEnabled("decisions")) return Loc.Get("This mechanic is disabled in this scenario.");
         if (nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays)
             return $"Available in {nation.DecisionAvailableDay[definition.Id] - campaign.ElapsedDays} days";
         if (nation.Treasury < Cost(nation, definition)) return "Insufficient treasury";
@@ -195,7 +196,7 @@ public static class DecisionCatalog
     /// simulated year, composed for nobody.
     /// </summary>
     public static bool IsBlocked(Campaign campaign, Nation nation, DecisionDefinition definition) =>
-        nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays ||
+        !campaign.FeatureEnabled("decisions") || nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays ||
         nation.Treasury < Cost(nation, definition) ||
         (definition.Kind == DecisionKind.EmergencyMobilisation && !AtWar(campaign, nation)) ||
         (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation));
@@ -219,6 +220,7 @@ public sealed class TakeDecisionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var definition = DecisionCatalog.Find(DecisionId);
         if (nation is null || definition is null ||

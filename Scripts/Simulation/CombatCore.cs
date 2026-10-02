@@ -19,6 +19,11 @@ public sealed class LandBattle
         public float AttackerPower;
         public float DefenderPower;
         public float AttackerPlanning;
+        // Actual weighted loss in this round, after template organisation resistance.
+        // Zero in older saves; their damage telemetry remains a conservative fallback.
+        public float AttackerOrganisationSpent;
+        public float DefenderOrganisationSpent;
+        public bool HasOrganisationTelemetry;
         public string Note = "";
     }
 
@@ -44,6 +49,8 @@ public sealed class LandBattle
     public float DefenderSupport;
     public readonly List<int> Attackers = new();
     public readonly List<int> Defenders = new();
+    public readonly List<int> WithdrawnAttackers = new();
+    public readonly List<int> WithdrawnDefenders = new();
     public readonly List<Round> Rounds = new();
 }
 
@@ -202,6 +209,7 @@ public static partial class Warfare
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Warfare))) return;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
@@ -441,16 +449,18 @@ public static partial class Warfare
                 var pace = open
                     ? MathF.Max(campaign.Defines.UnopposedCapturePerDay, campaign.Defines.OpenCountryCapturePerDay)
                     : campaign.Defines.UnopposedCapturePerDay;
+                if (ordered) pace = MathF.Max(pace, campaign.Defines.OrderedCapturePerDay);
                 var supplyFloor = open
                     ? MathF.Max(campaign.Defines.MarchSupplyFloor, campaign.Defines.OpenCountrySupplyFloor)
                     : campaign.Defines.MarchSupplyFloor;
+                if (ordered) supplyFloor = MathF.Max(supplyFloor, campaign.Defines.OrderedCaptureSupplyFloor);
                 // Progress belongs to the division, not a pooled province counter: a
                 // hundred divisions must not teleport one another across the border.
                 army.MoveProgress += pace * campaign.TickScale *
                     UnitTypeCatalog.Get(army.TemplateId).Speed * Researched(campaign, army, "army_speed") *
                     MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
                     M.Clamp(army.SupplyLevel, supplyFloor, 1f) *
-                    topology.TerrainAt(target).MovementSpeed * riverAdvance * contested;
+                    topology.TerrainAt(target).MovementSpeed * riverAdvance * contested * MovementPace.Roads(campaign, target);
                 war.UnopposedProgress[target] = MathF.Max(war.UnopposedProgress.GetValueOrDefault(target), army.MoveProgress);
                 if (army.MoveProgress >= 1f)
                     Capture(campaign, war, target, army.NationId, new[] { army }, Array.Empty<Army>(), "walked into a gap");
@@ -763,6 +773,8 @@ public static partial class Warfare
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
             var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker),
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
+            var attackerOrgBefore = AverageOrganisation(attacking);
+            var defenderOrgBefore = AverageOrganisation(defending);
             var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss, 1f, out var defenderKilled);
             var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss,
                 defines.AttackerCasualtyMultiplier, out var attackerKilled);
@@ -794,6 +806,9 @@ public static partial class Warfare
                 AttackerPower = attackerOffence,
                 DefenderPower = defenderProtection,
                 AttackerPlanning = attackerPlanning,
+                AttackerOrganisationSpent = M.Max(0f, attackerOrgBefore - attackerOrg),
+                HasOrganisationTelemetry = true,
+                DefenderOrganisationSpent = M.Max(0f, defenderOrgBefore - defenderOrg),
                 Note = attackerPierces < 0.99f ? "Armour is shrugging off the attack" :
                     defenderPierces < 0.99f ? "Defenders cannot pierce the assault" :
                     attackerWantedWidth > usableWidth * 1.35f ? "Too many divisions for the frontage" :

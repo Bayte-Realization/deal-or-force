@@ -82,6 +82,7 @@ public static class FrontManager
     /// <summary>Look at every front in the world.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(FrontManager))) return;
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
         CallUpIdle(campaign);
         foreach (var war in campaign.Wars)

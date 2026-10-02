@@ -382,6 +382,7 @@ public sealed class ProposePeaceCommand : ICampaignCommand
     public PeaceTerms Terms { get; init; }
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var war = campaign.Wars.FirstOrDefault(candidate => candidate.Id == WarId);
         if (war is not null) PeaceNegotiation.Resolve(campaign, war, IssuerId, Terms);
     }

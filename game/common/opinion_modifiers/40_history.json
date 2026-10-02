@@ -1,0 +1,19 @@
+// What two countries already thought of each other on the first day - an old enmity or an old
+// friendship, from history/diplomacy (`rivalries`, `friendships`). Each row there may scale it
+// to its own `opinion`. Fifty years to fade: a rivalry like India and Pakistan's outlasts any
+// government that inherits it, and so does a friendship like Pakistan and China's.
+{
+  "historic_rivalry": {
+    "name": "An old enmity",
+    "opinion": -45,
+    "days": 18250,
+    "decays": true
+  },
+
+  "historic_friendship": {
+    "name": "An old friendship",
+    "opinion": 30,
+    "days": 18250,
+    "decays": true
+  }
+}

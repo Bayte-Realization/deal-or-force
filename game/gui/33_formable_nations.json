@@ -1,0 +1,12 @@
+{
+  "metrics": {
+    "formation.search_height": 34,
+    "formation.card_gap": 12,
+    "formation.flag_width": 72,
+    "formation.flag_height": 48,
+    "formation.title_size": 20,
+    "formation.progress_height": 10,
+    "formation.invite_width": 72,
+    "formation.invite_height": 30
+  }
+}

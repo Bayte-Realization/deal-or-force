@@ -63,9 +63,12 @@ public partial class DealOrForceGame
 
     private void OnFleetPicked(Fleet fleet)
     {
+        if (!_campaign.FeatureEnabled("navy")) return;
         if (!_hudLayer.Visible || fleet is null) return;
         if (!CanInspectNation(fleet.NationId)) return;
         // One selection at a time: an order has to be unambiguous about who it is for.
+        if (_supportLayer is { Visible: true }) CloseSupportScreen();
+        _globe.SelectSupportFormation(-1);
         ClearArmySelectionAndClose();
         _selectedFleet = fleet;
         _globe.SelectFleet(fleet.Id);

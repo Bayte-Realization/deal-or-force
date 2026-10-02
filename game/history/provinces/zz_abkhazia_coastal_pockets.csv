@@ -1,0 +1,7 @@
+# Two isolated Georgian raster pockets on the Abkhazian coast west of Sukhumi.
+# Province 18115: 43.09375N, 40.65625E; province 18133: 43.03125N, 40.90625E.
+# Every land neighbour belongs to ABK. Geometry and other Georgian provinces are unchanged.
+# Kept separate from compiler-owned ownership.csv; mods can override these entries normally.
+province;owner;controller
+18115;ABK;ABK
+18133;ABK;ABK

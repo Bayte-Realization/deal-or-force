@@ -13,6 +13,13 @@ static class Program
         if (args.Contains("--reload-only")) { PresentationReloadTests.Run(); return; }
         if (args.Contains("--ultimatum-only")) { UltimatumTests.Run(); return; }
         if (args.Contains("--feed-only")) { NewsFeedTests.Run(); return; }
+        if (args.Contains("--presentation-diplomacy-only"))
+        {
+            PresentationReloadTests.Run();
+            UltimatumTests.Run();
+            NewsFeedTests.Run();
+            return;
+        }
         if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
         PresentationReloadTests.Run();
         UltimatumTests.Run();

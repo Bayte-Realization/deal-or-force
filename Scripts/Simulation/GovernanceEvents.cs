@@ -198,6 +198,7 @@ public static class GovernanceEvents
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(GovernanceEvents))) return;
         if (campaign is null) return;
         Recent.Clear();
         if (campaign.ElapsedDays % 7 != 0 || Transitions.Count == 0) return;

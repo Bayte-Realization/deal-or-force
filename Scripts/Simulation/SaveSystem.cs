@@ -601,6 +601,12 @@ public static class SaveSystem
         public bool ProductionUnitsSaved;
         public string ScenarioId = "2024";
         public Defines ScenarioRules;
+        public Dictionary<string, bool> FeatureDefaults;
+        public Dictionary<string, string> FeatureUnlocks;
+        public Dictionary<string, string> FeatureCommands;
+        public Dictionary<string, string> FeatureScreens;
+        public Dictionary<string, string> FeatureSystems;
+        public Dictionary<string, bool> FeatureOverrides = new();
         public Dictionary<string, int[]> ScenarioTerritories = new();
         public GameDate Date;
         public int ElapsedDays;
@@ -696,6 +702,12 @@ public static class SaveSystem
             ElapsedDays = campaign.ElapsedDays,
             ObserverMode = campaign.ObserverMode,
             Settings = new Dictionary<string, string>(campaign.Settings),
+            FeatureDefaults = new Dictionary<string, bool>(campaign.Defines.Features),
+            FeatureUnlocks = new Dictionary<string, string>(campaign.Defines.FeatureUnlocks),
+            FeatureCommands = new Dictionary<string, string>(campaign.Defines.FeatureCommands),
+            FeatureScreens = new Dictionary<string, string>(campaign.Defines.FeatureScreens),
+            FeatureSystems = new Dictionary<string, string>(campaign.Defines.FeatureSystems),
+            FeatureOverrides = new Dictionary<string, bool>(campaign.FeatureOverrides),
             IsPaused = campaign.IsPaused,
             RandomState = campaign.Random.State,
             PlayerId = campaign.Player?.Id ?? 0,
@@ -737,6 +749,13 @@ public static class SaveSystem
             var campaign = new Campaign(Seed, ScenarioRules) { ScenarioId = ScenarioId,
                 ScenarioTerritories = new Dictionary<string, int[]>(ScenarioTerritories, StringComparer.OrdinalIgnoreCase) };
             Replace(campaign.Nations, Nations);
+            if (FeatureDefaults is not null) campaign.Defines.Features = new(FeatureDefaults, StringComparer.OrdinalIgnoreCase);
+            if (FeatureUnlocks is not null) campaign.Defines.FeatureUnlocks = new(FeatureUnlocks, StringComparer.OrdinalIgnoreCase);
+            if (FeatureCommands is not null) campaign.Defines.FeatureCommands = new(FeatureCommands, StringComparer.OrdinalIgnoreCase);
+            if (FeatureScreens is not null) campaign.Defines.FeatureScreens = new(FeatureScreens, StringComparer.OrdinalIgnoreCase);
+            if (FeatureSystems is not null) campaign.Defines.FeatureSystems = new(FeatureSystems, StringComparer.OrdinalIgnoreCase);
+            foreach (var (id, enabled) in FeatureOverrides ?? new())
+                if (MechanicFeatures.ValidId(id)) campaign.FeatureOverrides[id] = enabled;
             Replace(campaign.States, States);
             Replace(campaign.Armies, Armies);
             Replace(campaign.Recruitment, Recruitment);

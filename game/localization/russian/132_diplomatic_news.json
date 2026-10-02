@@ -1,0 +1,14 @@
+{
+  "WORLD": "МИРОВЫЕ СОБЫТИЯ",
+  "Campaign day {0}": "День кампании: {0}",
+  "Issue ultimatum": "Предъявить ультиматум",
+  "CONFIRM DEMAND ON {0}": "ПОДТВЕРДИТЬ ТРЕБОВАНИЕ К {0}",
+  "Select one of their regions on the map first.": "Сначала выберите один из их регионов на карте.",
+  "Demand a region. They may yield it or refuse; refusal is remembered as a reason for war.": "Потребуйте регион. Страна может уступить или отказать; отказ станет поводом для войны.",
+  "Demand {0} from {1}? They may yield it, or refuse - and the refusal is a reason for war. Click the highlighted button again to confirm.": "Потребовать {0} у страны {1}? Она может уступить или отказать — отказ станет поводом для войны. Нажмите выделенную кнопку ещё раз для подтверждения.",
+  "{0} refused to yield {1}. The demand stands as a reason for war.": "Страна {0} отказалась передать {1}. Отказ станет поводом для войны.",
+  "{0} yielded {1}.": "Страна {0} передала {1}.",
+  "{0} yielded {1}. A truce protects this settlement for {2} days.": "Страна {0} передала {1}. Соглашение защищено перемирием на {2} дней.",
+  "A demand must leave them territory and cannot include occupied land.": "Нельзя потребовать всю оставшуюся страну или оккупированную территорию.",
+  "No ultimatum was issued.": "Ультиматум не был предъявлен."
+}

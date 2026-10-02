@@ -58,6 +58,15 @@ public static class InterfaceSkin
         // state.negative is genuinely bad news for the player.
         ("state.positive",      "#4fb477"),
         ("state.negative",      "#c94f55"),
+        ("support.air",         "#75bdff"),
+        ("support.drone",       "#61e6cc"),
+        ("support.air_defence", "#ff756b"),
+        ("support.artillery",   "#ffc75c"),
+        ("support.standby",     "#c4deeb"),
+        ("support.displaced",   "#c25957"),
+        ("support.ready",       "#ccefce"),
+        ("support.depleted",    "#ffd987"),
+        ("support.critical",    "#ff8f85"),
 
         // The production page's own palette: the card its lines sit on, the two economies
         // the war-industry slider moves between, and the states a factory cell can be in.
@@ -121,6 +130,10 @@ public static class InterfaceSkin
         ("map.terrain_low",     "#3c294f"),
         ("map.terrain_mid",     "#477f73"),
         ("map.terrain_high",    "#d6c45d"),
+        ("resources.none",      "#1c2b35"),
+        ("resources.low",       "#304951"),
+        ("resources.mid",       "#548677"),
+        ("resources.high",      "#d6bd65"),
 
         // The campaign shell - the frame the screen sits in and the striped rows inside it.
         // These were named in game/gui/20_campaign_structure.json and never added here, so
@@ -159,6 +172,16 @@ public static class InterfaceSkin
         ("military.battle_outline", "#631f1b"),
         ("military.clash",          "#fff1cf"),
         ("military.clash_outline",  "#291613"),
+
+        // Combat condition gauges also retain readable defaults in total conversions
+        // that replace the shipped gui catalog.
+        ("combat.organisation",    "#77c9e8"),
+        ("combat.equipment",       "#e7c966"),
+        ("combat.strength",        "#4fb477"),
+        ("combat.supply",          "#a6bdc9"),
+        ("combat.cohesion",        "#b6bfa5"),
+        ("combat.badge_background", "#101c26"),
+        ("combat.bar_background",  "#0b151e"),
 
         // Chart series. Six hues that stay apart from each other at small sizes; a mod
         // adding a seventh good picks its colour from here rather than inventing one.
@@ -243,7 +266,8 @@ public static class InterfaceSkin
         ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,       8f, 6f, -8f, 80f)),
         ("hud.navigation",     new PanelRect(0f, 0f, 0f, 1f,       8f, 90f, 74f, -60f)),
         ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 526f, -60f)),
-        ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -620f, -52f, -8f, -8f)),
+        ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -660f, -52f, -8f, -8f)),
+        ("hud.resource_atlas", new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 514f, -62f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
         ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -300f, 90f, -8f, 620f)),
         ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 590f, -60f)),
@@ -494,7 +518,13 @@ public static class InterfaceSkin
                 errors?.Add($"{context}: metric '{entry.Name}' must be a number.");
                 continue;
             }
-            Metrics[entry.Name] = (float)entry.Value.GetDouble();
+            var value = (float)entry.Value.GetDouble();
+            if (!float.IsFinite(value))
+            {
+                errors?.Add($"{context}: metric '{entry.Name}' must be finite.");
+                continue;
+            }
+            Metrics[entry.Name] = value;
         }
     }
 

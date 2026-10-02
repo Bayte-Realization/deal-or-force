@@ -54,6 +54,11 @@ public partial class DealOrForceGame
                     : "Right-drag to turn the globe · wheel to zoom · WASD to move.";
         };
         _globe.MapModeChanged += UpdateMapModeButtons;
+        _globe.MapModeChanged += mode =>
+        {
+            if (mode == StrategicMapMode.Resources) ShowResourceAtlas();
+            else if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
+        };
         _globe.MapModeSubjectChanged += _ => UpdateMapModeTooltips();
         UpdateMapModeButtons(StrategicMapMode.Political);
     }
@@ -92,6 +97,7 @@ public partial class DealOrForceGame
         StrategicMapMode.Population => "population",
         StrategicMapMode.Economy => "gdp",
         StrategicMapMode.Terrain => "terrain",
+        StrategicMapMode.Resources => "industry",
         _ => "relief"
     });
 
@@ -104,6 +110,7 @@ public partial class DealOrForceGame
         StrategicMapMode.Population => "Total population by country, not population density. Brighter means more people; unknown countries stay neutral.",
         StrategicMapMode.Economy => "Total GDP by country, not treasury or regional output. Brighter means a larger economy; unknown countries stay neutral.",
         StrategicMapMode.Terrain => "The ground itself, with no politics on it. Hover a province for what it does to a march and a battle.",
+        StrategicMapMode.Resources => "Regional resource potential. Choose a raw material and locate its deposits.",
         _ => "Height and shade, from the moddable relief layer."
     };
 

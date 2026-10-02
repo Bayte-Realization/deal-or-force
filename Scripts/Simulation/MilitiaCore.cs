@@ -152,6 +152,7 @@ public static class MilitiaCore
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitiaCore))) return;
         if (campaign?.ProvinceMap is null) return;
 
         var fighting = false;

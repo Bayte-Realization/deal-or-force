@@ -80,6 +80,8 @@ public partial class MainMenuScene : Control
         // is the whole point of this one. Two catalogue reads is a very different thing from
         // building a world.
         SpriteCatalog.Load();
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+        GameCursorService.Ensure(this).Refresh();
         FontCatalog.Load();
         if (PresentationFonts.For("ui.default") is { } face) AddThemeFontOverride("font", face);
 

@@ -1,0 +1,10 @@
+{
+  "aviation_era_started": {
+    "min_year": 1903
+  },
+  "experimental_air_ready": {
+    "tags": ["RUS"],
+    "min_year": 2030,
+    "min_technology.joint_air_ground_control": 1
+  }
+}

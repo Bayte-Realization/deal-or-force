@@ -70,6 +70,7 @@ public static class SecessionEvents
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SecessionEvents))) return;
         if (campaign?.ProvinceMap is null) return;
         Recent.Clear();
         RecentWorld = campaign;

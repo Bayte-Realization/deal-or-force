@@ -423,6 +423,7 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation is null || Provinces.Count == 0 || ArmyIds.Count == 0) return;
         var topology = campaign.ProvinceMap;
@@ -567,6 +568,7 @@ public sealed class SetPlanCohesionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var line = campaign.FrontLines.Find(candidate => candidate.Id == FrontLineId);
         if (line is null || line.NationId != IssuerId) return;
         line.Cohesion = Cohesion;
@@ -581,6 +583,7 @@ public sealed class ClearFrontLineCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         foreach (var id in ArmyIds)
         {
             var army = campaign.Armies.Find(candidate => candidate.Id == id);

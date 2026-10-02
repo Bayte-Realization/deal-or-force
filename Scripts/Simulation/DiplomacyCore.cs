@@ -137,6 +137,8 @@ public static class CampaignDiplomacy
         var attacker = campaign.NationById(attackerId);
         var defender = campaign.NationById(defenderId);
         if (attacker is null || defender is null || attacker == defender) { reason = Loc.Get("Invalid target."); return false; }
+        if (!campaign.HasOwnedLand(attacker) || !campaign.HasOwnedLand(defender))
+        { reason = Loc.Get("A country without territory cannot begin or receive a territorial war."); return false; }
         // A movement with no ground fights by rising, and nobody can march on a headquarters.
         if (attacker.Landless || defender.Landless)
         {
@@ -370,6 +372,7 @@ public sealed class ImproveRelationsCommand : ICampaignCommand
     public int TargetId { get; init; }
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         var nation = campaign.NationById(IssuerId);
         if (relation is null || nation is null || campaign.ElapsedDays - relation.LastActionDay < 14 || nation.Treasury < 0.1f) return;
@@ -388,6 +391,7 @@ public sealed class DenounceCommand : ICampaignCommand
     public int TargetId { get; init; }
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         if (relation is null || campaign.ElapsedDays - relation.LastActionDay < 14) return;
         OpinionSystem.Remember(campaign, relation, "denounced");
@@ -418,6 +422,7 @@ public sealed class SetEmbargoCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         if (relation is null) return;
         var already = relation.EmbargoBy(IssuerId);
@@ -448,6 +453,7 @@ public sealed class GuaranteeCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         if (relation is null || relation.Stance == DiplomaticStance.AtWar) return;
         if (relation.GuaranteedBy(IssuerId) == Guarantee) return;
@@ -465,7 +471,11 @@ public sealed class DeclareWarCampaignCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public int TargetId { get; init; }
     public int ClaimedStateMapIndex { get; init; } = -1;
-    public void Apply(Campaign campaign) => CampaignDiplomacy.DeclareWar(campaign, IssuerId, TargetId, ClaimedStateMapIndex);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        CampaignDiplomacy.DeclareWar(campaign, IssuerId, TargetId, ClaimedStateMapIndex);
+    }
 }
 
 /// <summary>
@@ -483,6 +493,7 @@ public sealed class CallAllyToWarCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var war = campaign.Wars.Find(candidate => candidate.Id == WarId);
         if (war is null || war.Ended || !war.Involves(IssuerId)) return;
         Statecraft.AskAllyToJoin(campaign, war, IssuerId, AllyId, out var answer);

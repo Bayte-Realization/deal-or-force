@@ -191,6 +191,7 @@ public sealed class AssignArmyGroupCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var division = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (division is null || division.NationId != IssuerId) return;
         if (ArmyGroupId >= 0 && campaign.ArmyGroups.All(group =>
@@ -206,6 +207,7 @@ public sealed class CreateArmyGroupCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         if (campaign.NationById(IssuerId) is null) return;
         var id = campaign.ArmyGroups.Count == 0 ? 1 : campaign.ArmyGroups.Max(group => group.Id) + 1;
         var number = campaign.ArmyGroups.Count(group => group.NationId == IssuerId) + 1;
@@ -231,6 +233,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         var nation = campaign.NationById(IssuerId);
         var topology = campaign.ProvinceMap;
@@ -410,6 +413,7 @@ public sealed class RaiseArmyCommand : ICampaignCommand
     public string FailureReason { get; private set; } = "";
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         if (!float.IsFinite(Divisions) || Divisions != MathF.Floor(Divisions) || Divisions < 1 || Divisions > 6)
         { FailureReason = "Choose 1–6 whole divisions."; return; }
         var count = (int)Divisions;
@@ -439,6 +443,7 @@ public sealed class SplitArmyCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId || army.InBattle || army.Divisions < 2f) return;
         var detached = MathF.Floor(army.Divisions * 2f) / 4f;
@@ -491,6 +496,7 @@ public static class MilitaryOperations
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitaryOperations))) return;
         var topology = campaign.ProvinceMap;
         // A nation's daily replacement capacity is shared out by priority - but only among
         // the formations that can actually take replacements. Counting every division in
@@ -915,6 +921,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId) return;
         // Where this division was already going, before the reset below wipes it.
@@ -1075,6 +1082,7 @@ public sealed class SetArmyStanceCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId || !Enum.IsDefined(Stance)) return;
         army.Stance = Stance;
@@ -1089,6 +1097,7 @@ public sealed class SetArmyReinforcementPriorityCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId || !Enum.IsDefined(Priority)) return;
         army.ReinforcementPriority = Priority;
@@ -1104,6 +1113,7 @@ public sealed class SetArmyPlanExecutionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId) return;
         if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) return;

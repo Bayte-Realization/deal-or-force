@@ -63,6 +63,7 @@ public static class RecruitmentSystem
 
     public static void Tick(Campaign c)
     {
+        if (!MechanicFeatures.SystemEnabled(c, nameof(RecruitmentSystem))) return;
         foreach (var order in c.Recruitment.ToArray())
         {
             if (order.LastProcessedDay >= c.ElapsedDays) continue;
@@ -99,6 +100,7 @@ public sealed class CancelRecruitmentCommand : ICampaignCommand
     public int OrderId { get; init; }
     public void Apply(Campaign c)
     {
+        if (!MechanicFeatures.Allows(c, this)) return;
         var order = c.Recruitment.Find(o => o.Id == OrderId && o.NationId == IssuerId);
         var nation = c.NationById(IssuerId);
         if (order is null || nation is null) return;

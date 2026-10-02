@@ -400,6 +400,7 @@ public static class SubjectSystem
     /// <summary>The weekly pass: tribute, manpower, and the slow drift towards leaving.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubjectSystem))) return;
         if (campaign is null) return;
 
         // Collected before anything is changed, because a subject that breaks free inside

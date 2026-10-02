@@ -15,6 +15,10 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--features-only")) { FeatureTests.Run(); return; }
+        if (args.Contains("--battle-readout-only")) { BattleReadoutTests.Run(); return; }
+        if (args.Contains("--withdrawal-only")) { BattleWithdrawalTests.RunFixture(); return; }
+        if (args.Contains("--advance-layout-only")) { AdvanceLayoutTests.Run(); return; }
         if (args.Contains("--peace81-only")) { Peace81Tests.Run(); return; }
         if (args.Contains("--peace-coalition-only")) { PeaceCoalitionTests.Run(); return; }
         var c = Campaign.CreateBootstrap(20260906);
@@ -70,6 +74,9 @@ static class Program
         if (args.Contains("--gaza-only")) { HeldGroundTests.Run(c); return; }
         if (args.Contains("--ally-ground-only")) { AllyGroundTests.Run(c); return; }
         if (args.Contains("--lost-land-only")) { LostLandTests.Run(c); return; }
+        if (args.Contains("--relations-only")) { RelationsTests.Run(c); return; }
+        if (args.Contains("--restraint-only")) { RestraintTests.Run(c); return; }
+        if (args.Contains("--incitement-only")) { IncitementTests.Run(c); return; }
         if (args.Contains("--secession-name-only")) { SecessionNameTests.Run(c); return; }
         if (args.Contains("--capital-point-only")) { CapitalPointTests.Run(c); return; }
         if (args.Contains("--overrun-only")) { OverrunWarTests.Run(c); return; }

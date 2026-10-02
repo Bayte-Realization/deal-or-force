@@ -181,7 +181,16 @@ public static class ScriptedEffects
     public static IEnumerable<(string Key, string Help)> Vocabulary =>
         Fields.Values.OrderBy(field => field.Name, StringComparer.Ordinal).Select(field => (field.Name, field.Help));
 
-    public static bool IsKnown(string key) => Resolve(key, out _, out _);
+    private static bool FeatureEffect(string key, out string id)
+    {
+        id = "";
+        if (key is null || !key.StartsWith("feature.", StringComparison.OrdinalIgnoreCase) ||
+            !key.EndsWith("_set", StringComparison.OrdinalIgnoreCase)) return false;
+        id = key[8..^4].ToLowerInvariant();
+        return MechanicFeatures.ValidId(id);
+    }
+
+    public static bool IsKnown(string key) => FeatureEffect(key, out _) || Resolve(key, out _, out _);
 
     private static bool Resolve(string rawKey, out Field field, out Operation operation)
     {
@@ -244,6 +253,11 @@ public static class ScriptedEffects
 
             foreach (var entry in _entries)
             {
+                if (FeatureEffect(entry.Key, out var feature))
+                {
+                    campaign.SetFeature(feature, entry.Value >= .5f);
+                    continue;
+                }
                 if (!Resolve(entry.Key, out var field, out var operation)) continue;
 
                 if (field.SetNation is not null)
@@ -458,6 +472,11 @@ public static class ScriptedEffects
                 lines.Add(Loc.Format("Loses «{0}»", Loc.Get(spirit.Name)));
         foreach (var entry in effect.Entries)
         {
+            if (FeatureEffect(entry.Key, out var feature))
+            {
+                lines.Add(Loc.Format(entry.Value >= .5f ? "Enable mechanic: {0}" : "Disable mechanic: {0}", feature));
+                continue;
+            }
             if (!Resolve(entry.Key, out var field, out var operation)) continue;
             var label = Loc.Get(Labels.GetValueOrDefault(field.Name, field.Name));
             // The same word is a heading elsewhere - the top bar's STABILITY - and a table that
@@ -708,15 +727,23 @@ public static class ScriptedValues
     /// </summary>
     private static readonly HashSet<string> ReadOnly = new(StringComparer.OrdinalIgnoreCase) { "worst_war_damage" };
 
-    public static bool IsReadOnly(string key) => key is not null && ReadOnly.Contains(key.Trim().Replace('-', '_'));
+    public static bool IsReadOnly(string key) => key is not null &&
+        (ReadOnly.Contains(key.Trim().Replace('-', '_')) || key.Equals("year", StringComparison.OrdinalIgnoreCase) ||
+         key.StartsWith("feature.", StringComparison.OrdinalIgnoreCase) && MechanicFeatures.ValidId(key[8..]) ||
+         key.StartsWith("technology.", StringComparison.OrdinalIgnoreCase) && MechanicFeatures.ValidId(key[11..]));
 
     public static bool TryRead(Campaign campaign, Nation nation, string key, out float value)
     {
         value = 0f;
         if (nation is null) return false;
+        if (key.StartsWith("feature.", StringComparison.OrdinalIgnoreCase))
+        { value = campaign.FeatureEnabled(key[8..]) ? 1f : 0f; return true; }
+        if (key.StartsWith("technology.", StringComparison.OrdinalIgnoreCase))
+        { value = nation.HasTechnology(key[11..]) ? 1f : 0f; return true; }
 
         switch (key.Trim().Replace('-', '_').ToLowerInvariant())
         {
+            case "year": value = campaign.Date.Year; return true;
             case "treasury": value = nation.Treasury; return true;
             case "gdp": value = nation.Gdp; return true;
             case "productivity": value = nation.Productivity; return true;

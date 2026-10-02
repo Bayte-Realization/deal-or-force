@@ -192,6 +192,7 @@ public partial class DealOrForceGame
     private void ShowMapSelection(GlobePick pick)
     {
         if (_campaign?.Player is null || pick.Nation is null) return;
+        if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         EnsureMapSelectionPanels();
         if (_countryCard is null) return;
         if (_fleetPanel is { Visible: true }) CloseFleetPanel();

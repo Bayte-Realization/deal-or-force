@@ -1,0 +1,19 @@
+{
+  "layout": {
+    "hud.resource_atlas": { "anchors": [0,0,0,1], "offsets": [84,90,514,-62] },
+    "hud.map_controls": { "anchors": [1,1,1,1], "offsets": [-660,-52,-8,-8] }
+  },
+  "colours": {
+    "resources.none": "#1c2b35",
+    "resources.low": "#304951",
+    "resources.mid": "#548677",
+    "resources.high": "#d6bd65"
+  },
+  "metrics": {
+    "resources.minimum_potential": 0.05,
+    "resources.rows_limit": 120,
+    "resources.focus_distance": 6.5,
+    "resources.title_size": 21,
+    "resources.row_height": 42
+  }
+}

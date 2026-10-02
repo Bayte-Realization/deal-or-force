@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace DealOrForce;
 
 /// <summary>
@@ -20,9 +22,22 @@ public partial class DealOrForceGame
     {
         KeepMapSelection(delta);
         KeepFleetPanel(delta);
+        KeepResourceAtlas(delta);
         _interfaceSinceRefresh += delta;
         if (!_campaign.IsPaused && _interfaceSinceRefresh < RunningInterfaceInterval) return;
         _interfaceSinceRefresh = 0d;
+        foreach (var (screen, button) in _screenButtons)
+        {
+            var enabled = Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen);
+            button.Visible = enabled;
+            if (!enabled && _openScreen == screen) ToggleCampaignScreen(screen);
+        }
+        if (!_campaign.FeatureEnabled("research") && _researchLayer is { Visible: true }) CloseResearchScreen();
+        if (!_campaign.FeatureEnabled("politics") && _stateAffairsLayer is { Visible: true }) CloseStateAffairs();
+        if (!_campaign.FeatureEnabled("navy") && _fleetPanel is { Visible: true }) SetFleetPanelVisible(false);
+        var supportEnabled = Simulation.SupportTypeCatalog.All.Any(t => Simulation.SupportCore.Enabled(_campaign, t));
+        if (_screenButtons.TryGetValue("Support", out var supportButton)) supportButton.Visible = supportEnabled && Simulation.MechanicFeatures.ScreenEnabled(_campaign, "Support");
+        if (!supportEnabled && _supportLayer is { Visible: true }) CloseSupportScreen();
         _campaign.FlushInterfaceChanges();
     }
 }

@@ -314,6 +314,7 @@ public sealed class QueueConstructionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation is null) return;
 
@@ -377,6 +378,7 @@ public sealed class DemolishBuildingCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation is null) return;
 
@@ -425,6 +427,7 @@ public sealed class CancelConstructionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation is null) return;
         var project = campaign.Construction.Find(candidate =>
@@ -781,6 +784,7 @@ public static class EconomySystem
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(EconomySystem))) return;
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
         using (SimProfiler.Measure("eco:market")) MarketSystem.Tick(campaign);
         foreach (var nation in campaign.Nations)
@@ -1395,6 +1399,7 @@ public static class ConstructionSystem
 {
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ConstructionSystem))) return;
         // A site works a day at a time, and this runs a step at a time.
         //
         // `ProgressDays++` and a day's payment, once per step, is correct exactly while a

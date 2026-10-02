@@ -56,7 +56,10 @@ var _overlay: CanvasLayer
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_active = not OS.has_feature("editor") or OS.get_cmdline_user_args().has("--boot-guard")
+	# Automated headless runs have no visible frame. A black dummy viewport is
+	# expected, not a broken GPU; never persist a renderer fallback or restart here.
+	_active = DisplayServer.get_name() != "headless" and \
+		(not OS.has_feature("editor") or OS.get_cmdline_user_args().has("--boot-guard"))
 	if not _active:
 		set_process(false)
 		return

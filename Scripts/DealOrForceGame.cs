@@ -46,6 +46,7 @@ public partial class DealOrForceGame : Control
     private Label _scenarioSummary = null!;
     private Nation _selectedNation;
     private double _dayAccumulator;
+    private double _clockStepSeconds;
     private int _speed = 1;
     private int _lastAutosaveDay = -1;
     private string _openScreen = "";
@@ -61,6 +62,8 @@ public partial class DealOrForceGame : Control
     public override async void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        Input.MouseMode = Input.MouseModeEnum.Visible;
+        ApplyCustomCursors();
         // A campaign's own options are read from whichever campaign is on screen now - asked
         // each time, so a loaded save or a new scenario is never answered for by the last one.
         Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
@@ -77,6 +80,7 @@ public partial class DealOrForceGame : Control
             Simulation.MusicCatalog.Load();
             Simulation.FontCatalog.Load();
             ApplyDeclaredFont();
+            ApplyCustomCursors();
             await LoadingPhase("Preparing the interface", 20);
             BuildInterface();
             _globe.LoadingInputBlocked = true;
@@ -118,13 +122,17 @@ public partial class DealOrForceGame : Control
         // Reported whether or not time is running: a measurement that only arrives when
         // everything is already going well is no use for finding out why it is not.
         ReportFrameCost(delta);
-        if (_campaign.IsPaused) return;
-
-        _dayAccumulator += delta;
+        if (_campaign.IsPaused) { _dayAccumulator = 0; return; }
         // Real seconds one step of the simulation is worth. The speed setting is still in
         // days, because that is what a player thinks in; a campaign stepping six hours at a
         // time simply takes four steps to spend one day's worth of them.
         var secondsPerDay = _campaign.Defines.SecondsForSpeed(_speed) * _campaign.TickScale;
+        // A new cadence must not reinterpret time queued under the old one (including
+        // console edits). A 24-hour remainder used to become 24 hourly steps at once.
+        if (secondsPerDay != _clockStepSeconds) _dayAccumulator = 0;
+        _clockStepSeconds = secondsPerDay;
+        _dayAccumulator = SimulationPacing.Accumulate(_dayAccumulator, delta, secondsPerDay,
+            _campaign.Defines.MaxDaysPerFrame);
         var days = 0;
 
         // Time is given a slice of the frame rather than a number of days.
@@ -183,8 +191,19 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_ultimatumComposer))
+        {
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            { CloseUltimatumComposer(); GetViewport().SetInputAsHandled(); }
+            return;
+        }
         if (IsInstanceValid(_authorCanvas))
         {
+            // Child inspectors and confirmation dialogs own their Escape key.
+            if (_authorCanvas.FindChildren("*", "Window", true, false).OfType<Window>().Any(w => w.Visible)) return;
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false } authorKey &&
+                (authorKey.CtrlPressed || authorKey.MetaPressed) && Letter(authorKey) == Key.S && IsInstanceValid(_authorCode) && IsInstanceValid(_authorTabs) && _authorTabs.IsVisibleInTree())
+            { AuthorOperation(true); GetViewport().SetInputAsHandled(); return; }
             // Escape takes the window's OWN way out, which is not always "close".
             //
             // It used to close unconditionally, and opened to choose a country there is no
@@ -209,6 +228,18 @@ public partial class DealOrForceGame : Control
         // only toggles time, and outside a campaign it is deliberately consumed.
         if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key)
             return;
+
+        // Reload is also available while typing in the console or searching a country.
+        if (key.CtrlPressed && key.ShiftPressed && Letter(key) == Key.R)
+        {
+            if (_developerConsoleLayer is not null)
+            {
+                if (!_developerConsoleLayer.Visible) ToggleDeveloperConsole();
+                ExecuteDeveloperCommand("reload");
+            }
+            GetViewport().SetInputAsHandled();
+            return;
+        }
 
         // Text entry owns letters and space; Escape first leaves the field.
         if (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit)
@@ -251,16 +282,6 @@ public partial class DealOrForceGame : Control
         // The free camera is a demonstration tool, and a demonstration tool that needs a
         // console command typed out first is one nobody reaches for. F10 flies - not F8,
         // which the Godot editor already uses to stop the running project.
-        if (key.CtrlPressed && key.ShiftPressed && Letter(key) == Key.R)
-        {
-            if (_developerConsoleLayer is not null)
-            {
-                ToggleDeveloperConsole();
-                ExecuteDeveloperCommand("reload");
-            }
-            GetViewport().SetInputAsHandled();
-            return;
-        }
         if (key.Keycode == Key.F10) { ToggleFreeCamera(); GetViewport().SetInputAsHandled(); return; }
 
         // Watching rather than playing. F7 rather than F8 for the same reason F10 is not F8:
@@ -349,6 +370,7 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_ultimatumComposer)) { GetViewport().SetInputAsHandled(); return; }
         // Escape while the workshop is up is answered in `_Input`, which runs first - see
         // there. Nothing else in the campaign hears a key while that window covers it.
         if (IsInstanceValid(_authorCanvas)) return;
@@ -459,6 +481,7 @@ public partial class DealOrForceGame : Control
         if (IsInstanceValid(_scenarioSummary))
             _scenarioSummary.Text = Simulation.Loc.Format("{0} nations · {1} states · deterministic campaign simulation", _campaign.Nations.Count, _campaign.States.Count);
         BindCampaignMods();
+        ApplyCustomCursors();
 
         // Every preference that reaches into the campaign, now that there is one.
         //
@@ -498,6 +521,7 @@ public partial class DealOrForceGame : Control
         _globe.ArmyPicked += OnArmyPicked;
         _globe.FleetPicked += OnFleetPicked;
         _globe.SupportPicked += OnSupportPicked;
+        _globe.SupportBoxPicked += OnSupportBoxPicked;
         _globe.BattlePicked += ShowBattleDetails;
         _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
         _globe.ProvinceCommanded += OnProvinceCommanded;
@@ -885,6 +909,9 @@ public partial class DealOrForceGame : Control
 
     private void OpenScreen(string screen)
     {
+        if (!Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen)) return;
+        if (screen != "Support" && _supportLayer is { Visible: true }) CloseSupportScreen();
+        if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         if (_researchLayer is not null) _researchLayer.Visible = false;
         if (screen == "Research") { OpenResearchScreen(); return; }
         if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
@@ -1179,6 +1206,7 @@ public partial class DealOrForceGame : Control
             return;
         }
         _campaign.IsPaused = !_campaign.IsPaused;
+        _dayAccumulator = 0;
         PlayStrategicCue(_campaign.IsPaused ? "game_pause" : "game_resume");
         _pause.Text = _campaign.IsPaused ? "▶" : "II";
         StyleButton(_pause, _campaign.IsPaused);
@@ -1193,6 +1221,7 @@ public partial class DealOrForceGame : Control
             return;
         }
         _speed = Mathf.Clamp(speed, 1, 5);
+        _dayAccumulator = 0;
         if (_campaign.IsPaused)
         {
             PlayStrategicCue("game_resume");
@@ -1284,6 +1313,7 @@ public partial class DealOrForceGame : Control
         RefreshEventInterface();
         RefreshPeaceOfferInterface();
         RefreshStrategicHud();
+        RefreshBattleDossier();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
         RefreshRecruitment();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
@@ -1825,6 +1855,8 @@ public partial class DealOrForceGame : Control
             ClipContents = true
         };
         var inCampaign = _hudLayer is not null && (parent == _hudLayer || _hudLayer.IsAncestorOf(parent));
+        panel.SetMeta("skin_panel_surface", (int)surface);
+        panel.SetMeta("skin_campaign_surface", inCampaign);
         panel.AddThemeStyleboxOverride("panel",
             inCampaign ? CampaignPanelStyle(surface) : PanelStyle(surface));
         parent.AddChild(panel);
@@ -1920,6 +1952,12 @@ public partial class DealOrForceGame : Control
         label.SetMeta(LocAppliedMeta, label.Text);
         label.AddThemeFontSizeOverride("font_size", size);
         label.AddThemeColorOverride("font_color", color);
+        var colourToken = Ui.ColourToken(color);
+        if (colourToken.Length > 0)
+        {
+            label.SetMeta("skin_label_colour", colourToken);
+            label.SetMeta("skin_label_applied", color);
+        }
         return label;
     }
 
@@ -2059,6 +2097,7 @@ public partial class DealOrForceGame : Control
         // Dropdowns. An OptionButton item is a plain string with nothing attached, so each
         // list is re-filled by whoever owns it.
         RefreshBuildingPicker();
+        if (_supportLayer is { Visible: true }) RefreshSupportScreen();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
         if (_peaceLayer is { Visible: true })
         {
@@ -2172,6 +2211,7 @@ public partial class DealOrForceGame : Control
     /// </summary>
     internal static void StyleButton(Button button, bool primary)
     {
+        button.SetMeta("skin_button_primary", primary);
         // A button carrying a picture and no caption is centred on the picture, and two
         // separate things stopped it being. Measured by rendering one and counting pixels:
         // the icon landed three pixels left and one pixel high in a fifty-four pixel button.
@@ -2203,6 +2243,7 @@ public partial class DealOrForceGame : Control
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
         button.AddThemeColorOverride("font_disabled_color",
             primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text_disabled"));
+        button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }
 
     private static StyleBoxFlat ButtonStyle(bool primary, int state, bool iconOnly = false)

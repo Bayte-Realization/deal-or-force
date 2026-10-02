@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
-public sealed record ScenarioEntry(string Id, string Name, string Description, string WorldFile);
+public sealed record ScenarioEntry(string Id, string Name, string Description, string WorldFile, string ManifestFile = "");
 
 public static class ScenarioLibrary
 {
@@ -27,7 +27,7 @@ public static class ScenarioLibrary
                     if (string.IsNullOrWhiteSpace(id)) continue;
                     var path = r.TryGetProperty("world", out var w) ? SafePath(Path.GetDirectoryName(file), w.GetString()) : "";
                     if (id != "2024" && !File.Exists(path)) continue;
-                    found[id] = new(id, r.GetProperty("name").GetString(), r.TryGetProperty("description", out var d) ? d.GetString() : "", path);
+                    found[id] = new(id, r.GetProperty("name").GetString(), r.TryGetProperty("description", out var d) ? d.GetString() : "", path, file);
                 }
                 catch (Exception e) { DiagnosticLogs.Write("errors", $"SCENARIO_REJECTED {file}: {e.Message}"); }
             }

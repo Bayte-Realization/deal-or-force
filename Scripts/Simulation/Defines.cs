@@ -376,6 +376,7 @@ public sealed partial class Defines
 
 	/// <summary>Stability a country loses for yielding land to an ultimatum instead of fighting.</summary>
 	public float UltimatumYieldStabilityCost { get; set; } = 0.10f;
+    public int UltimatumSettlementTruceDays { get; set; } = 180;
 
 	/// <summary>Strength ratio (demander over target) past which resistance looks hopeless
 	/// and the region is handed over rather than defended.</summary>
@@ -655,7 +656,7 @@ public sealed partial class Defines
 	/// covering fire alone allows, which against a held line the player cannot tell
 	/// apart from the refusal this replaces.
 	/// </summary>
-	public float OrderedAdvanceFloor { get; set; } = 0.25f;
+	public float OrderedAdvanceFloor { get; set; } = 0.5f;
 
 	/// <summary>
 	/// What a port or a shipyard on a lake or a river is worth against one on the sea.

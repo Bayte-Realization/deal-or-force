@@ -76,6 +76,7 @@ public static class BorderFronts
             if (line.BorderRevision == campaign.MapRevision) return;
             line.SourceProvinces.Clear();
             line.SourceProvinces.UnionWith(Resolve(campaign, line));
+            line.PostsDay = int.MinValue;
             line.BorderRevision = campaign.MapRevision;
             return;
         }

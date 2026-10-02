@@ -55,6 +55,15 @@ public sealed class GovernmentDefinition
     /// multiple. One is the ordinary case. See <see cref="MilitiaCore"/>.
     /// </summary>
     public float Militia = 1f;
+
+    /// <summary>
+    /// How hard it is for this kind of government to start a war of choice - parliaments,
+    /// courts, elections and a press, or a junta that answers to nobody. The AI prices it into
+    /// every war it considers, in full when there is no reason it could give the world and in
+    /// part when there is (AiRestraintWeight, AiRestraintWithCause); and two governments both
+    /// at or above AiDemocraticPeaceRestraint hardly ever fight each other at all.
+    /// </summary>
+    public float WarRestraint = 0.5f;
 }
 
 /// <summary>
@@ -205,6 +214,7 @@ public static class GovernmentCatalog
                     break;
                 case "change_cost": definition.ChangeCost = MathF.Max(0f, Number(field.Value, 1f)); break;
                 case "militia": definition.Militia = MathF.Max(0f, Number(field.Value, 1f)); break;
+                case "war_restraint": definition.WarRestraint = MathF.Max(0f, Number(field.Value, 0.5f)); break;
                 case "modifiers":
                     definition.Modifiers = NationalModifiers.Read(field.Value, $"government `{id}`", errors);
                     break;

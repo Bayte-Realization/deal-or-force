@@ -1,0 +1,26 @@
+{
+  // Initial switches, merged by key across mods. False suspends a mechanic, not its saved data.
+  "Features": {
+    "long_range_forces": true,
+    "aviation": true,
+    "drones": true,
+    "artillery": true,
+    "air_defence": true,
+    "navy": true,
+    "research": true,
+    "construction": true,
+    "recruitment": true,
+    "decisions": true,
+    "events": true,
+    "politics": true,
+    "movements": true,
+    "colonisation": true,
+    "subjects": true,
+    "formable_nations": true,
+    "secession": true,
+    "war_damage": true,
+    "war_weariness": true
+  },
+  // Optional feature -> named common/scripted_triggers rule. No automatic unlocks in 2024.
+  "FeatureUnlocks": {}
+}

@@ -1,0 +1,11 @@
+{
+  "Features": {
+    "aviation": false,
+    "drones": false,
+    "air_defence": false,
+    "experimental_air": false
+  },
+  "FeatureUnlocks": {
+    "aviation": "aviation_era_started"
+  }
+}

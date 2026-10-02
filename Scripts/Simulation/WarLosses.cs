@@ -209,6 +209,7 @@ public sealed class ExchangePrisonersCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var war = campaign.Wars.Find(candidate => candidate.Id == WarId);
         if (war is null || war.Ended || !war.Involves(IssuerId)) return;
         var refusal = WarLosses.ExchangeRefusal(campaign, war, IssuerId, CounterpartId);

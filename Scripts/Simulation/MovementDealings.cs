@@ -12,6 +12,19 @@ public sealed partial class Defines
     public float MovementCrackdownSupportKept { get; set; } = 0.6f;
     /// <summary>What a crackdown costs the country doing it in stability.</summary>
     public float MovementCrackdownStability { get; set; } = 0.01f;
+
+    /// <summary>
+    /// The enemy of my enemy (item 98). A country the game runs that counts somebody a rival -
+    /// its opinion of them at or below this - may back a movement that claims that rival's
+    /// ground: fund it, at this chance on each of its monthly looks, or recognise it at the
+    /// other. At most this many movements on its payroll at once, and only with this many
+    /// years of the subsidy in the treasury. 0 for either chance turns that half off.
+    /// </summary>
+    public float AiIncitementRivalOpinion { get; set; } = -40f;
+    public float AiIncitementFundChance { get; set; } = 0.06f;
+    public float AiIncitementRecogniseChance { get; set; } = 0.02f;
+    public int AiIncitementMaxFunded { get; set; } = 2;
+    public float AiIncitementTreasuryYears { get; set; } = 4f;
 }
 
 /// <summary>One thing a country does about a movement, from its player or its AI (<see cref="MovementDealings"/>).</summary>
@@ -23,6 +36,7 @@ public sealed class MovementDealingCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var country = campaign.NationById(IssuerId);
         var movement = campaign.NationById(MovementId);
         if (country is null || movement?.Movement is null) return;
@@ -97,6 +111,41 @@ public static class MovementDealings
             if (holder.Id == country.Id || CampaignDiplomacy.Get(campaign, country.Id, holder.Id).Stance == DiplomaticStance.Allied) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// A country this one counts a rival - or is fighting - that holds ground the movement
+    /// claims, if there is one: the reason a government with no love for a movement may pay
+    /// it all the same. Never the country itself or one of its allies.
+    /// </summary>
+    public static Nation RivalHolding(Campaign campaign, Nation country, Nation movement)
+    {
+        var definition = Movements.DefinitionOf(movement);
+        if (definition is null || country is null) return null;
+        Nation found = null;
+        foreach (var id in definition.Homeland)
+        {
+            var region = Movements.StateById(campaign, id);
+            var holder = region is null ? null : campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex);
+            if (holder is null || holder.Id == movement.Id) continue;
+            // Somebody that close is not a rival to be weakened but a side to be on.
+            if (holder.Id == country.Id || CampaignDiplomacy.Get(campaign, country.Id, holder.Id).Stance == DiplomaticStance.Allied)
+                return null;
+            if (found is not null) continue;
+            if (Opinion(campaign, country.Id, holder.Id) <= campaign.Defines.AiIncitementRivalOpinion ||
+                CampaignDiplomacy.AtWar(campaign, country.Id, holder.Id))
+                found = holder;
+        }
+        return found;
+    }
+
+    /// <summary>How many movements this country pays.</summary>
+    private static int Funded(Campaign campaign, Nation country)
+    {
+        var count = 0;
+        foreach (var nation in campaign.Nations)
+            if (nation.Movement is { Dissolved: false } state && state.SponsoredBy.ContainsKey(country.Id)) count++;
+        return count;
     }
 
     /// <summary>Why this cannot be done now; empty when it can.</summary>
@@ -259,8 +308,10 @@ public static class MovementDealings
     /// <summary>
     /// What every country the game runs does about the movements, once a week: few things, and
     /// the obvious ones. The country a movement rose against lists it and cracks down; its
-    /// friends recognise it; a friend that is its claim's enemy funds it; and anybody gives a
-    /// home to one that has nowhere to go and that it thinks well of.
+    /// friends recognise it; anybody gives a home to one that has nowhere to go and that it
+    /// thinks well of; and a country with a rival backs the movements that claim the rival's
+    /// ground - funds them, or recognises them - whatever it thinks of them otherwise, which is
+    /// how most of the last century's insurgencies were paid for.
     /// </summary>
     internal static void Ai(Campaign campaign)
     {
@@ -285,8 +336,15 @@ public static class MovementDealings
                 var claimant = opinion <= -30f || HoldsItsClaim(campaign, country, movement);
                 var hosting = state.Landless && state.HeadquartersStateMapIndex >= 0 && MovementRules.OwnerOf(campaign,
                     campaign.States.Find(region => region.MapIndex == state.HeadquartersStateMapIndex)) == country;
-                // Nothing to decide: neither side of the argument, not its host, and no stranger in need.
-                if (!claimant && !hosting && opinion < 20f && !(state.Landless && state.HeadquartersStateMapIndex < 0)) continue;
+                // The enemy of my enemy: backed for whose ground it claims, not for what it is -
+                // short of a movement that hates this country as much as the rival does.
+                var rival = !claimant && opinion > -20f && !state.DesignatedBy.Contains(country.Id)
+                    ? RivalHolding(campaign, country, movement)
+                    : null;
+                // Nothing to decide: neither side of the argument, not its host, no stranger in
+                // need and no rival's rebels.
+                if (!claimant && !hosting && rival is null && opinion < 20f &&
+                    !(state.Landless && state.HeadquartersStateMapIndex < 0)) continue;
                 var roll = MovementRules.Roll(campaign.Seed, country.Id, campaign.ElapsedDays, movement.Id);
                 bool Try(string action)
                 {
@@ -294,6 +352,22 @@ public static class MovementDealings
                     new MovementDealingCommand { IssuerId = country.Id, MovementId = movement.Id, Action = action }.Apply(campaign);
                     acted = true;
                     return true;
+                }
+
+                if (rival is not null)
+                {
+                    var defines = campaign.Defines;
+                    if (!state.SponsoredBy.ContainsKey(country.Id) && roll < defines.AiIncitementFundChance &&
+                        Funded(campaign, country) < defines.AiIncitementMaxFunded &&
+                        country.Treasury >= defines.MovementSponsorPerYear * defines.AiIncitementTreasuryYears &&
+                        Try("sponsor"))
+                    {
+                        DiagnosticLogs.Write("simulation",
+                            $"MOVEMENT_INCITED by={country.Tag} movement={movement.Tag} against={rival.Tag} day={campaign.ElapsedDays}");
+                        continue;
+                    }
+                    if (!state.RecognisedBy.Contains(country.Id) &&
+                        roll >= 1f - defines.AiIncitementRecogniseChance && Try("recognise")) continue;
                 }
 
                 var threatened = HoldsItsClaim(campaign, country, movement) || opinion <= -40f;

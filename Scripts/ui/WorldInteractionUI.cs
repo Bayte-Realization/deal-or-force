@@ -11,6 +11,7 @@ public partial class DealOrForceGame
     private Label _countryActionFeedback = null!;
     private Button _declareWarButton = null!;
     private Button _negotiatePeaceButton = null!;
+    private Button _quickUltimatumButton = null!;
     private VBoxContainer _subjectActions = null!;
     private Button _integrateButton = null!;
     private Button _allianceButton = null!;
@@ -63,6 +64,10 @@ public partial class DealOrForceGame
         _negotiatePeaceButton = ActionButton("Negotiate peace", () => OpenDiplomaticPeace(_selectedNation), 0, 38);
         _negotiatePeaceButton.Name = "NegotiatePeace";
         list.AddChild(_negotiatePeaceButton);
+        _quickUltimatumButton = ActionButton("Issue ultimatum",
+            () => IssueSelectedUltimatum(_selectedNation, _countryActionFeedback), 0, 38);
+        _quickUltimatumButton.Name = "IssueUltimatumQuick";
+        list.AddChild(_quickUltimatumButton);
         list.AddChild(_declareWarButton);
         _countryActionFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _countryActionFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -380,6 +385,13 @@ public partial class DealOrForceGame
         _declareWarButton.Visible = !_negotiatePeaceButton.Visible;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
         _declareWarButton.Disabled = !canDeclare;
+        _quickUltimatumButton.Visible = !_negotiatePeaceButton.Visible;
+        _quickUltimatumButton.Disabled = !canDeclare || nation.IsHuman;
+        _quickUltimatumButton.TooltipText = Ui.Tip(!canDeclare ? reason : nation.IsHuman
+            ? Tr("Human-controlled countries cannot be forced to answer automatically.")
+            : Tr("Compose territorial, financial and treaty demands. Review before sending."));
+        StyleButton(_quickUltimatumButton, false);
+        _quickUltimatumButton.Text = Tr("Issue ultimatum");
         _declareWarButton.TooltipText = Ui.Tip(canDeclare ? "Requires a second click to confirm." : reason);
         _declareWarButton.Text = _pendingWarTarget == nation.Id
             ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)

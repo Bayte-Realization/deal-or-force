@@ -1,0 +1,16 @@
+{
+  "colours": {
+    "combat.organisation": "#77c9e8",
+    "combat.equipment": "#e7c966",
+    "combat.strength": "#4fb477",
+    "combat.supply": "#a6bdc9",
+    "combat.cohesion": "#b6bfa5",
+    "combat.badge_background": "#101c26",
+    "combat.bar_background": "#0b151e"
+  },
+  "metrics": {
+    "combat.map_marker_pixels": 36,
+    "combat.roster_rows": 6,
+    "combat.panel_bar_height": 12
+  }
+}

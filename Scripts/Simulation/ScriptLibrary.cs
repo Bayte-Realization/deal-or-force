@@ -30,6 +30,22 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public static class ScriptLibrary
 {
+    private static readonly Dictionary<string, ScriptedTrigger> FeatureTriggers = new(StringComparer.OrdinalIgnoreCase);
+
+    public static bool MatchesTrigger(Campaign campaign, Nation nation, string name)
+    {
+        EnsureLoaded();
+        if (!FeatureTriggers.TryGetValue(name, out var trigger))
+        {
+            if (!TryTrigger(name, out var block)) return false;
+            var errors = new List<string>();
+            trigger = ScriptedTrigger.Parse(block, "feature unlock/" + name, errors);
+            // Invalid conditions fail closed rather than enabling a mechanic by accident.
+            if (errors.Count > 0 || trigger.IsEmpty) trigger = null;
+            FeatureTriggers[name] = trigger;
+        }
+        return trigger is not null && trigger.Matches(campaign, nation);
+    }
     private static readonly Dictionary<string, JsonDocument> TriggerBlocks =
         new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, JsonDocument> EffectBlocks =
@@ -103,6 +119,7 @@ public static class ScriptLibrary
         Clear(EffectBlocks);
         Clear(ScoreBlocks);
         ScoreTriggers.Clear();
+        FeatureTriggers.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "scripted_triggers"))
             using (document) Absorb(TriggerBlocks, document.RootElement);
         foreach (var document in GameDataLoader.DataDocuments("common", "scripted_effects"))
@@ -114,12 +131,20 @@ public static class ScriptLibrary
     /// <summary>Layer one package's libraries over what is already loaded.</summary>
     public static void LoadDirectories(string packageRoot, List<string> errors)
     {
+        FeatureTriggers.Clear();
         Read(Path.Combine(packageRoot, "common", "scripted_triggers"), "scripted_triggers",
             TriggerBlocks, errors);
         Read(Path.Combine(packageRoot, "common", "scripted_effects"), "scripted_effects",
             EffectBlocks, errors);
         Read(Path.Combine(packageRoot, "common", "scripted_modifiers"), "scripted_modifiers",
             ScoreBlocks, errors);
+    }
+
+    public static void MergeTriggers(JsonElement root)
+    {
+        EnsureLoaded();
+        FeatureTriggers.Clear();
+        Absorb(TriggerBlocks, root);
     }
 
     /// <summary>

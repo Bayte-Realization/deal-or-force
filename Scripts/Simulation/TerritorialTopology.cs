@@ -76,7 +76,8 @@ public static class TerritorialTopology
         /// around somebody else: a box over Hebei contains Beijing and Tianjin, and
         /// without this the rule would quietly eat two municipalities.
         /// </summary>
-        string CarveFromIso = ""
+        string CarveFromIso = "",
+        bool ReplaceExisting = false
     );
 
     private readonly record struct GeoPoint(float Longitude, float Latitude);
@@ -326,7 +327,8 @@ public static class TerritorialTopology
                     value.GetProperty("min_latitude").GetSingle(), value.GetProperty("max_latitude").GetSingle(),
                     value.TryGetProperty("polygon", out var polygon) ? ParsePolygon(polygon) : Array.Empty<GeoPoint>(),
                     value.TryGetProperty("seed_points", out var seeds) ? ParseSeeds(seeds) : Array.Empty<RegionSeed>(),
-                    value.TryGetProperty("carve_from_iso", out var carveFrom) ? carveFrom.GetString() ?? "" : "");
+                    value.TryGetProperty("carve_from_iso", out var carveFrom) ? carveFrom.GetString() ?? "" : "",
+                    value.TryGetProperty("replace_existing", out var replace) && replace.GetBoolean());
                 var index = RegionRules.FindIndex(item => item.MapIndex == rule.MapIndex);
                 if (index >= 0) RegionRules[index] = rule; else RegionRules.Add(rule);
             }
@@ -1229,6 +1231,23 @@ public static class TerritorialTopology
         var minY = LatitudeToY(rule.MaxLatitude, height);
         var maxY = LatitudeToY(rule.MinLatitude, height);
         var changed = 0;
+        // Replacing a placeholder contour must remove its old outside pixels, not union
+        // a traced polygon with the circle. Never take land from unrelated neighbours.
+        if (rule.ReplaceExisting && rule.Polygon.Length >= 3 && sourceNation != nation)
+        {
+            var donors = new List<(int X, int Y, ushort State)>();
+            for (var y = minY; y <= maxY; y++) for (var x = minX; x <= maxX; x++)
+                if (control[y * width + x] == sourceNation && states[y * width + x] != state && states[y * width + x] != 0)
+                    donors.Add((x, y, states[y * width + x]));
+            for (var y = minY; y <= maxY; y++) for (var x = minX; x <= maxX; x++)
+            {
+                var cell = y * width + x;
+                if (control[cell] != nation || donors.Count == 0 ||
+                    Contains(rule.Polygon, XToLongitude(x, width), YToLatitude(y, height))) continue;
+                var nearest = donors.MinBy(d => (d.X - x) * (d.X - x) + (d.Y - y) * (d.Y - y));
+                control[cell] = sourceNation; states[cell] = nearest.State; changed++;
+            }
+        }
         for (var y = minY; y <= maxY; y++)
         for (var x = minX; x <= maxX; x++)
         {

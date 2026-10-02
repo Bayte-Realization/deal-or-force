@@ -117,7 +117,15 @@ public static class Program
         if (Array.IndexOf(args, "--loc") >= 0)
             return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
 
+        // Authored national employment shares precede province-history transfers.
+        // A coastal correction can give ABK residents from a Georgian region; their
+        // existing professions must be preserved rather than recalibrated on transfer.
+        var authoredStatistics = TheStatedStatisticsCameTrue(campaign);
         var mapped = AttachMap(campaign);
+        if (Array.IndexOf(args, "--authored-world") >= 0)
+            return Check("authored national statistics", authoredStatistics) +
+                Check("province ownership matches ground and explicit corrections", ProvincesSitWhereTheirOwnerIs(campaign)) +
+                Check("base regions and resource overlays are valid", EveryRegionIsWrittenDown(campaign));
         // `--profile-save <file.bdfsave> N` loads a save and profiles N days of it. The world
         // a fresh bench plays is the first morning; the one players complain about is thirty
         // years on, with a hundred countries that were not there in 2024 and a history the
@@ -228,7 +236,7 @@ public static class Program
         failures += Check("a client sent the world is in the world it was sent",
             ASnapshotCarriesTheWholeWorld());
         failures += Check("a country that states a figure about itself gets that figure",
-            TheStatedStatisticsCameTrue(campaign));
+            authoredStatistics);
         failures += Check("the literacy history writes is the literacy a country starts with",
             StatedLiteracyStands(campaign));
         failures += Check("a battle leaves ruins, and ruins are rebuilt",
@@ -4497,6 +4505,13 @@ public static class Program
         var handedOver = new Dictionary<string, string> { ["ps_gza"] = "ISR" };
         var deliberate = campaign.States.Where(state => handedOver.ContainsKey(state.Id))
             .ToDictionary(state => state.MapIndex, state => campaign.NationByTag(handedOver[state.Id])?.MapIndex ?? -1);
+        // Narrow, reviewed 2024 coastal repairs; MapTerritoryTests additionally pins
+        // these IDs to geographic coordinates, neighbours and the compiled-map stamp.
+        // Do not whitelist all ownership.csv rows: a stale recut must still fail here.
+        var coastalRepairs = new Dictionary<int, (string Ground, string Owner)>
+        {
+            [18115] = ("GEO", "ABK"), [18133] = ("GEO", "ABK"), [21648] = ("PSE", "ISR")
+        };
         var nobodys = 0;
         var checkedProvinces = 0;
         var wrong = new List<string>();
@@ -4519,6 +4534,8 @@ public static class Program
             checkedProvinces++;
             if (owner == ground) continue;
             if (deliberate.TryGetValue(topology.ProvinceToState[province], out var handed) && owner == handed) continue;
+            if (coastalRepairs.TryGetValue(province, out var repair) &&
+                Tag(ground) == repair.Ground && Tag(owner) == repair.Owner) continue;
             wrong.Add(wrong.Count < 4 ? $"province {province:N0} stands on {Tag(ground)} ground and belongs to {Tag(owner)}" : "");
         }
 
@@ -7907,19 +7924,41 @@ public static class Program
         var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var twice = new List<string>();
         var badNames = new List<string>();
+        var resourceOverlays = new List<string>();
         foreach (var file in GameDataLoader.DataFiles("history", "states", "2024"))
         {
             var name = Path.GetFileNameWithoutExtension(file);
+            using var document = JsonDocument.Parse(File.ReadAllText(file),
+                new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            if (name.StartsWith("zz_", StringComparison.OrdinalIgnoreCase))
+            {
+                // Additive resource-only patches are not duplicate base records. They
+                // must reference a base region and cannot replace its census/identity.
+                foreach (var entry in document.RootElement.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind != JsonValueKind.Object ||
+                        entry.Value.EnumerateObject().Count() != 1 ||
+                        !entry.Value.TryGetProperty("resources", out var resources) ||
+                        resources.ValueKind != JsonValueKind.Object)
+                        return $"invalid resource overlay {name}: {entry.Name}";
+                    foreach (var resource in resources.EnumerateObject())
+                        if (resource.Value.ValueKind != JsonValueKind.Number ||
+                            !resource.Value.TryGetDouble(out var amount) || !double.IsFinite(amount) || amount < 0)
+                            return $"invalid resource amount {name}: {entry.Name}/{resource.Name}";
+                    resourceOverlays.Add(entry.Name);
+                }
+                continue;
+            }
             if (!string.Equals(name, "unclaimed", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(name, "lakes", StringComparison.OrdinalIgnoreCase) && campaign.NationByTag(name) is null)
                 badNames.Add(name);
-            using var document = JsonDocument.Parse(File.ReadAllText(file),
-                new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
                 if (!seen.TryAdd(entry.Name, name)) twice.Add($"{entry.Name} in {seen[entry.Name]} and {name}");
         }
         if (badNames.Count > 0) return "file(s) named for no country: " + string.Join(", ", badNames.Take(5));
         if (twice.Count > 0) return $"{twice.Count} region(s) written twice, starting with " + string.Join("; ", twice.Take(3));
+        var unknownOverlays = resourceOverlays.Where(id => !seen.ContainsKey(id)).Distinct().ToArray();
+        if (unknownOverlays.Length > 0) return "resource overlays name no base region: " + string.Join(", ", unknownOverlays.Take(5));
 
         var stated = HistoryDataLoader.StatedRegions(campaign);
         var missing = new List<string>();
@@ -10272,6 +10311,7 @@ public static class Program
         SettingsCatalog.ResetCatalog();
         DiagnosticLogs.ResetCatalog();
         InterfaceSkin.ResetCatalog();
+        ScenarioInspectorCatalog.ResetCatalog();
         if (ConsoleVerse.TouchGrass("english").Length == 0) return "the console's verse came back empty";
 
         var asked = new HashSet<string>(GameDataLoader.Asked, StringComparer.OrdinalIgnoreCase);

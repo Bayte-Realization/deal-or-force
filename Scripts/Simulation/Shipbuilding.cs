@@ -68,6 +68,7 @@ public static class Shipbuilding
     /// <summary>Once a day.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Shipbuilding))) return;
         Review(campaign);
 
         var anyOrdered = false;
@@ -231,6 +232,7 @@ public sealed class OrderHullsCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var fleet = campaign.Fleets.Find(candidate => candidate.Id == FleetId);
         var nation = campaign.NationById(IssuerId);
         if (fleet is null || nation is null || fleet.NationId != IssuerId) { Refusal = Loc.Get("That fleet is not yours to order."); return; }

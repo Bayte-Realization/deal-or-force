@@ -147,17 +147,21 @@ public static class CommodityCatalog
         }
         foreach (var document in GameDataLoader.DataDocuments("common", "goods"))
             using (document)
-            foreach (var entry in document.RootElement.EnumerateObject())
             {
-                if (!entry.Value.TryGetProperty("name", out var name)) name = default;
-                if (!entry.Value.TryGetProperty("icon", out var icon)) icon = default;
-                if (!entry.Value.TryGetProperty("description", out var description)) description = default;
-                Override(entry.Name,
-                    name.ValueKind == JsonValueKind.String ? name.GetString() : null,
-                    icon.ValueKind == JsonValueKind.String ? icon.GetString() : null,
-                    entry.Value.TryGetProperty("base_price", out var price) && price.TryGetSingle(out var basePrice) ? basePrice : null,
-                    entry.Value.TryGetProperty("essential_weight", out var weight) && weight.TryGetSingle(out var essential) ? essential : null,
-                    description.ValueKind == JsonValueKind.String ? description.GetString() : null);
+                if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
+                foreach (var entry in document.RootElement.EnumerateObject())
+                {
+                    if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                    if (!entry.Value.TryGetProperty("name", out var name)) name = default;
+                    if (!entry.Value.TryGetProperty("icon", out var icon)) icon = default;
+                    if (!entry.Value.TryGetProperty("description", out var description)) description = default;
+                    Override(entry.Name,
+                        name.ValueKind == JsonValueKind.String ? name.GetString() : null,
+                        icon.ValueKind == JsonValueKind.String ? icon.GetString() : null,
+                        entry.Value.TryGetProperty("base_price", out var price) && price.ValueKind == JsonValueKind.Number && price.TryGetSingle(out var basePrice) ? basePrice : null,
+                        entry.Value.TryGetProperty("essential_weight", out var weight) && weight.ValueKind == JsonValueKind.Number && weight.TryGetSingle(out var essential) ? essential : null,
+                        description.ValueKind == JsonValueKind.String ? description.GetString() : null);
+                }
             }
     }
 
@@ -189,6 +193,9 @@ public static class CommodityCatalog
     public static bool Override(string id, string name, string icon, float? basePrice, float? essentialWeight, string description)
     {
         if (string.IsNullOrWhiteSpace(id)) return false;
+        // Reject invalid numeric patches before changing even the name or allocating an ID.
+        if ((basePrice.HasValue && (!float.IsFinite(basePrice.Value) || basePrice.Value <= 0f)) ||
+            (essentialWeight.HasValue && (!float.IsFinite(essentialWeight.Value) || essentialWeight.Value < 0f))) return false;
         if (!TryParse(id, out var commodity))
         {
             if (string.IsNullOrWhiteSpace(name) || basePrice is not > 0f) return false;
@@ -245,6 +252,7 @@ public static class MarketSystem
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MarketSystem))) return;
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
         Recalculate(campaign, true);
     }

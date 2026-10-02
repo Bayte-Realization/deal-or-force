@@ -14,7 +14,8 @@ public enum StrategicMapMode
     Population,
     Economy,
     Terrain,
-    Relief
+    Relief,
+    Resources
 }
 
 public sealed partial class GlobePresentation
@@ -22,11 +23,13 @@ public sealed partial class GlobePresentation
     private const float FlatMapWidth = 20f;
     private const float FlatMapHeight = 10f;
     /// <summary>
-    /// The vertical extent of the flat map in world units. Its floor is the same decision
-    /// as <c>MinimumDistance</c>: close enough to give an order to one division standing
-    /// in one province.
+    /// Vertical extent in map units. Tactical 2D can zoom six times closer than the
+    /// former .6 floor, independently of the globe's safe camera altitude.
     /// </summary>
-    private const float MinimumFlatZoom = 0.6f;
+    private static float MinimumFlatZoom => Math.Clamp(InterfaceSkin.Metric("map.flat_min_zoom", .10f), .05f, .6f);
+    // Preserve the globe's existing altitude conversion. Tactical 2D zoom can now go
+    // below this reference without moving every ordinary view when changing projection.
+    private const float FlatProjectionReferenceZoom = .6f;
     private const float MaximumFlatZoom = 11.5f;
 
     /// <summary>
@@ -37,13 +40,13 @@ public sealed partial class GlobePresentation
     /// limits of the day. Moving either limit silently broke every one of them.
     /// </summary>
     private static float FlatZoomForDistance(float distance) => Mathf.Clamp(
-        Mathf.Lerp(MinimumFlatZoom, MaximumFlatZoom,
+        Mathf.Lerp(FlatProjectionReferenceZoom, MaximumFlatZoom,
             Mathf.InverseLerp(MinimumDistance, MaximumDistance, distance)),
         MinimumFlatZoom, MaximumFlatZoom);
 
     private static float DistanceForFlatZoom(float flatZoom) => Mathf.Clamp(
         Mathf.Lerp(MinimumDistance, MaximumDistance,
-            Mathf.InverseLerp(MinimumFlatZoom, MaximumFlatZoom, flatZoom)),
+            Mathf.InverseLerp(FlatProjectionReferenceZoom, MaximumFlatZoom, flatZoom)),
         MinimumDistance, MaximumDistance);
 
     private MeshInstance3D _globeNode = null!;
@@ -56,12 +59,102 @@ public sealed partial class GlobePresentation
     private float _targetFlatY;
     private float _flatZoom = 8.8f;
     private float _targetFlatZoom = 8.8f;
+    private float _resumeTacticalFlatZoom = float.NaN;
+    private bool _flatZoomAnchorActive;
+    private Vector2 _flatZoomAnchorWorld;
+    private Vector2 _flatZoomAnchorPixel;
+    private MouseButton _cameraDragButton;
+    private bool FlatViewInMotion => _dragging ||
+        MathF.Abs(_targetFlatZoom - _flatZoom) > _flatZoom * .0001f ||
+        MathF.Abs(_targetFlatX - _flatX) + MathF.Abs(_targetFlatY - _flatY) > _flatZoom * .0001f;
+
+    private void BeginCameraDrag(Vector2 pixel, MouseButton button)
+    {
+        _dragging = true;
+        _cameraDragButton = button;
+        _dragDistance = 0f;
+        _previousPointer = pixel;
+        if (!_flatMap) return;
+        _flatZoomAnchorActive = false;
+        // Taking hold of the map cancels an unfinished fly-to/zoom. Starting a drag
+        // from a pending target used to jump the map before it followed the hand.
+        _targetFlatX = _flatX;
+        _targetFlatY = _flatY;
+        _targetFlatZoom = _flatZoom;
+    }
+
+    private Vector2 FlatPointerOffset(Vector2 pixel) =>
+        new((pixel.X - Size.X * .5f) / Math.Max(1f, Size.Y),
+            (Size.Y * .5f - pixel.Y) / Math.Max(1f, Size.Y));
+
+    private void ZoomFlatMapAt(Vector2 pixel, float direction)
+    {
+        _flatZoomAnchorPixel = pixel;
+        _flatZoomAnchorWorld = new Vector2(_flatX, _flatY) + FlatPointerOffset(pixel) * _flatZoom;
+        var step = Math.Clamp(InterfaceSkin.Metric("map.flat_zoom_step", .15f), .04f, .3f);
+        _targetFlatZoom = Mathf.Clamp(_targetFlatZoom * (1f + direction * step), MinimumFlatZoom, MaximumFlatZoom);
+        var target = _flatZoomAnchorWorld - FlatPointerOffset(pixel) * _targetFlatZoom;
+        _targetFlatX = target.X;
+        _targetFlatY = target.Y;
+        _flatZoomAnchorActive = true;
+        ClampFlatCamera();
+    }
+
+    private void UpdateFlatZoomAnchor()
+    {
+        if (!_flatMap || !_flatZoomAnchorActive) return;
+        // Follow the same geographic point during the entire smooth zoom, not just
+        // at its end. That keeps the ground under the wheel at the pointer.
+        var center = _flatZoomAnchorWorld - FlatPointerOffset(_flatZoomAnchorPixel) * _flatZoom;
+        _flatX = center.X;
+        var margin = Math.Max(0f, FlatMapHeight * .5f - _flatZoom * .5f);
+        _flatY = Mathf.Clamp(center.Y, -margin, margin);
+        if (Math.Abs(_flatZoom - _targetFlatZoom) < .00001f) _flatZoomAnchorActive = false;
+    }
     private StrategicMapMode _mapMode;
     private ImageTexture _mapModeTexture;
     private int _lastMapModeDay = int.MinValue;
 
     public bool IsFlatMap => _flatMap;
     public StrategicMapMode MapMode => _mapMode;
+    private Commodity _resourceGood = Commodity.Coal;
+    private ImageTexture _resourceTexture;
+    public Commodity ResourceGood => _resourceGood;
+    public void SetResourceGood(Commodity good)
+    {
+        _resourceGood = good;
+        if (_mapMode == StrategicMapMode.Resources) RefreshMapModePalette();
+    }
+
+    private void RefreshResourcePalette()
+    {
+        var pixels = new byte[256 * 256 * 4];
+        var survey = ResourceAtlas.Read(_campaign, _resourceGood, InterfaceSkin.Metric("resources.minimum_potential", .05f));
+        var levels = survey.Regions.ToDictionary(r => r.MapIndex, r => r.Intensity);
+        var map = _campaign.ProvinceMap;
+        if (map is not null)
+            for (var p = 1; p <= map.ProvinceCount && p < 65536; p++)
+            {
+                if (map.WaterByProvince[p]) continue;
+                var value = levels.GetValueOrDefault(map.ProvinceToState[p]);
+                var colour = ResourceColour(value);
+                var i = p * 4;
+                pixels[i] = (byte)Mathf.RoundToInt(colour.R * 255);
+                pixels[i + 1] = (byte)Mathf.RoundToInt(colour.G * 255);
+                pixels[i + 2] = (byte)Mathf.RoundToInt(colour.B * 255);
+                pixels[i + 3] = 255;
+            }
+        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(image);
+        else _resourceTexture.Update(image);
+        _globeMaterial.SetShaderParameter("resource_colors", _resourceTexture);
+        _globeMaterial.SetShaderParameter("map_mode", 0f);
+        _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
+    }
+
+    public static Color ResourceColour(float intensity) => intensity <= 0 ? Ui.Colour("resources.none") :
+        intensity < .5f ? Ui.Colour("resources.low").Lerp(Ui.Colour("resources.mid"), intensity * 2) :
+        Ui.Colour("resources.mid").Lerp(Ui.Colour("resources.high"), (intensity - .5f) * 2);
     public event Action<bool> ProjectionChanged;
     public event Action<StrategicMapMode> MapModeChanged;
 
@@ -95,6 +188,7 @@ public sealed partial class GlobePresentation
     public void SetFlatMap(bool enabled)
     {
         if (_flatMap == enabled || !IsInstanceValid(_camera)) return;
+        _flatZoomAnchorActive = false;
         if (enabled)
         {
             var longitude = Mathf.RadToDeg(_targetYaw) - 180f;
@@ -102,10 +196,15 @@ public sealed partial class GlobePresentation
             while (longitude > 180f) longitude -= 360f;
             _targetFlatX = _flatX = longitude / 18f;
             _targetFlatY = _flatY = -Mathf.RadToDeg(_targetPitch) / 18f;
-            _targetFlatZoom = _flatZoom = FlatZoomForDistance(_targetDistance);
+            _targetFlatZoom = _flatZoom = float.IsFinite(_resumeTacticalFlatZoom) &&
+                Math.Abs(_targetDistance - MinimumDistance) < .0001f
+                ? Math.Clamp(_resumeTacticalFlatZoom, MinimumFlatZoom, FlatProjectionReferenceZoom)
+                : FlatZoomForDistance(_targetDistance);
+            _resumeTacticalFlatZoom = float.NaN;
         }
         else
         {
+            _resumeTacticalFlatZoom = _flatZoom < FlatProjectionReferenceZoom ? _flatZoom : float.NaN;
             var longitude = WrappedFlatX(_flatX) / FlatMapWidth * 360f;
             var latitude = _flatY / FlatMapHeight * 180f;
             _targetYaw = _yaw = Mathf.DegToRad(longitude + 180f);
@@ -122,6 +221,10 @@ public sealed partial class GlobePresentation
         ReprojectSupportMarkers(true);
         BuildFrontPreview();
         ApplyCamera();
+        UpdateFlatDivisionDetail();
+        // Apply the new projection's pixel scale immediately, including its label layout.
+        // Otherwise one frame can render with the previous camera's counter dimensions.
+        UpdateCounterScale(force: true);
         ProjectionChanged?.Invoke(enabled);
     }
 
@@ -153,11 +256,13 @@ public sealed partial class GlobePresentation
         {
             _flatX -= FlatMapWidth;
             _targetFlatX -= FlatMapWidth;
+            _flatZoomAnchorWorld.X -= FlatMapWidth;
         }
         else if (_flatX < -FlatMapWidth * 0.5f)
         {
             _flatX += FlatMapWidth;
             _targetFlatX += FlatMapWidth;
+            _flatZoomAnchorWorld.X += FlatMapWidth;
         }
     }
 
@@ -193,8 +298,24 @@ public sealed partial class GlobePresentation
     {
         if (stack is null || stack.Count == 0)
             return Vector3.Zero;
-        var location = AverageArmyLocation(stack);
+        var location = ArmyPresentationLocation(stack);
         return PresentationPoint(location.Latitude, location.Longitude, SurfaceMarkerRadius);
+    }
+
+    private (float Latitude, float Longitude) ArmyPresentationLocation(IReadOnlyList<Army> stack)
+    {
+        var topology = _campaign?.ProvinceMap;
+        if (topology is not null && stack.Count > 0 && stack[0].ProvinceId > 0 &&
+            stack[0].ProvinceId <= topology.ProvinceCount)
+        {
+            var stationary = true;
+            foreach (var army in stack)
+                if (army.IsMoving || army.ProvinceId != stack[0].ProvinceId) { stationary = false; break; }
+            // Province ID is authoritative; legacy/generated lat/lon is not a second
+            // location for a stationary division. Marching formations keep interpolation.
+            if (stationary) return topology.CenterOf(stack[0].ProvinceId);
+        }
+        return AverageArmyLocation(stack);
     }
 
     private void UpdateFlatWorldPositions()
@@ -210,16 +331,20 @@ public sealed partial class GlobePresentation
         {
             if (!IsInstanceValid(node)) continue;
             var geo = GeographicFromNormal(normal);
-            var position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
+            var position = _fleetByMarker.TryGetValue(node, out var fleet)
+                ? FlatFleetPosition(fleet.Id, geo.Latitude, geo.Longitude)
+                : FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
             if (node.Position != position) node.Position = position;
         }
         ReprojectSupportMarkers();
-        foreach (var (node, army) in _armyByMarker)
-            if (IsInstanceValid(node))
+        foreach (var marker in _armyStacks.Values)
+            if (IsInstanceValid(marker.Node))
             {
-                var position = ArmyPresentationPoint(army);
-                if (node.Position != position) node.Position = position;
+                var position = ArmyMarkerPosition(marker);
+                if (marker.Node.Position != position) marker.Node.Position = position;
+                OrientSurfaceArmyCard(marker);
             }
+        if (_flatIndividualDivisions || FlatViewInMotion) QueueRedraw();
         foreach (var glyph in _countryGlyphs)
         {
             if (!IsInstanceValid(glyph.Node)) continue;
@@ -244,8 +369,12 @@ public sealed partial class GlobePresentation
         foreach (var (node, normal) in _fleetMarkers)
             if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
         ReprojectSupportMarkers();
-        foreach (var (node, army) in _armyByMarker)
-            if (IsInstanceValid(node)) node.Position = ArmyPresentationPoint(army);
+        foreach (var marker in _armyStacks.Values)
+            if (IsInstanceValid(marker.Node))
+            {
+                marker.Node.Position = ArmyPresentationPoint(marker.Stack);
+                OrientSurfaceArmyCard(marker);
+            }
         foreach (var glyph in _countryGlyphs)
         {
             if (!IsInstanceValid(glyph.Node)) continue;
@@ -292,6 +421,12 @@ public sealed partial class GlobePresentation
     {
         if (_campaign is null || _globeMaterial is null) return;
         _lastMapModeDay = _campaign.ElapsedDays;
+        _globeMaterial.SetShaderParameter("resource_mode", 0f);
+        if (_mapMode == StrategicMapMode.Resources)
+        {
+            RefreshResourcePalette();
+            return;
+        }
         if (_mapMode is StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief)
         {
             _globeMaterial.SetShaderParameter("map_mode", 0f);

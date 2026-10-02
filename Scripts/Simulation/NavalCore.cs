@@ -184,6 +184,7 @@ public static class NavalOperations
 {
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(NavalOperations))) return;
         var defines = campaign.Defines;
         foreach (var fleet in campaign.Fleets) fleet.InAction = false;
 
@@ -670,6 +671,7 @@ public static class NavalOperations
     /// </summary>
     public static void ApplyCommerceEffects(Campaign campaign, Nation nation, Breakdown trade)
     {
+        if (!campaign.FeatureEnabled("navy")) return;
         var defines = campaign.Defines;
         var raided = 0f;
         var guarded = 0f;
@@ -741,6 +743,7 @@ public static class NavalOperations
     /// <summary>Whether a province's coast is being sat on, for the supply that reaches it.</summary>
     public static float BlockadePressure(Campaign campaign, Nation owner, float latitude, float longitude)
     {
+        if (!campaign.FeatureEnabled("navy")) return 0f;
         var defines = campaign.Defines;
         var pressure = 0f;
         foreach (var fleet in campaign.Fleets)
@@ -805,6 +808,7 @@ public sealed class SetFleetOrderCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var fleet = campaign.Fleets.Find(candidate => candidate.Id == FleetId);
         if (fleet is null || fleet.NationId != IssuerId) { Refusal = Loc.Get("That fleet is not yours to order."); return; }
         if (HasDestination)

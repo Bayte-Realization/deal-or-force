@@ -173,6 +173,7 @@ public sealed class SetDelegationCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign?.NationById(IssuerId);
         if (nation is null) return;
         Delegation.Set(nation, Portfolio, Delegated);

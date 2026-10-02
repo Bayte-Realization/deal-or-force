@@ -81,6 +81,8 @@ public partial class DealOrForceGame
         Add("speed", "TIME", "speed 1-5", "How fast the clock runs while it is running.", ConsoleSpeed);
         Add("date", "TIME", "date", "The date, the hour, and how long the campaign has run.",
             _ => ConsoleDate());
+        Add("feature", "MODDING", "feature · feature aviation off · feature aviation on",
+            "Inspect or switch global scenario mechanics. Disabled content stays dormant, not deleted.", ConsoleFeature);
         Add("skip", "TIME", "skip 30 · skip 2w · skip 1y",
             "Run days immediately, without watching them. The fastest way to find out what a " +
             "change does over a year. Days, weeks, months or years; ten years is the ceiling.",
@@ -1586,12 +1588,62 @@ public partial class DealOrForceGame
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var errors = PresentationReload.Reload(_modLoader.Packages.Select(package => package.PhysicalRoot));
         clock.Stop();
+        RepaintPresentation(this);
+        RefreshLocalisedText();
+        LayoutCampaignShell();
         Refresh();
         return $"Reloaded interface, GUI and localization in {clock.ElapsedMilliseconds:N0} ms. " +
-               "Campaign state and package selection unchanged. Reopen panels to see rebuilt styling.\n" +
+               "Campaign state and package selection unchanged. Standard panels, buttons and captions updated in place.\n" +
                (errors.Count == 0 ? "No loading errors." :
                    EscapeBb($"{errors.Count} loading error(s); valid files applied, invalid values skipped:\n" +
                        string.Join("\n", errors.Take(10))));
+    }
+
+    private string ConsoleFeature(string arguments)
+    {
+        if (_campaign is null) return "No campaign.";
+        var words = arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0)
+            return EscapeBb(string.Join("\n", _campaign.Defines.Features.Keys.Concat(_campaign.FeatureOverrides.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(id => id)
+                .Select(id => $"{id}: {(_campaign.FeatureEnabled(id) ? "on" : "off")}")));
+        if (words.Length == 1) return EscapeBb($"{words[0]}: {(_campaign.FeatureEnabled(words[0]) ? "on" : "off")}");
+        if (words.Length != 2 || (words[1] != "on" && words[1] != "off")) return "Usage: feature aviation on|off";
+        if (_networkConnected) return "Mechanic switches must be changed by deterministic scenario scripts in multiplayer.";
+        if (!_campaign.SetFeature(words[0], words[1] == "on")) return "Invalid mechanic id.";
+        Refresh();
+        return EscapeBb($"{words[0]}: {(_campaign.FeatureEnabled(words[0]) ? "on" : "off")}");
+    }
+
+    // Bindings belong to the shared UI factories. Do not rebuild the scene or replay
+    // initial conditions; keep selections, scroll positions and semantic colour overrides.
+    private void RepaintPresentation(Node node)
+    {
+        if (node.IsQueuedForDeletion()) return;
+        if (node is Control control && node.HasMeta("skin_layout"))
+            Ui.Place(control, node.GetMeta("skin_layout").AsString());
+        if (node is PanelContainer panel && node.HasMeta("skin_panel_surface"))
+        {
+            var surface = (PanelSurface)node.GetMeta("skin_panel_surface").AsInt32();
+            panel.AddThemeStyleboxOverride("panel", node.GetMeta("skin_campaign_surface").AsBool()
+                ? CampaignPanelStyle(surface) : PanelStyle(surface));
+        }
+        if (node is Button button && node.HasMeta("skin_button_primary"))
+        {
+            var colour = button.GetThemeColor("font_color");
+            var custom = node.HasMeta("skin_button_applied") &&
+                !colour.IsEqualApprox(node.GetMeta("skin_button_applied").AsColor());
+            StyleButton(button, node.GetMeta("skin_button_primary").AsBool());
+            if (custom) button.AddThemeColorOverride("font_color", colour);
+        }
+        if (node is Label label && node.HasMeta("skin_label_colour") &&
+            label.GetThemeColor("font_color").IsEqualApprox(node.GetMeta("skin_label_applied").AsColor()))
+        {
+            var colour = Ui.Colour(node.GetMeta("skin_label_colour").AsString());
+            label.AddThemeColorOverride("font_color", colour);
+            label.SetMeta("skin_label_applied", colour);
+        }
+        foreach (var child in node.GetChildren()) RepaintPresentation(child);
     }
 
     private string ConsoleValidate()

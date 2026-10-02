@@ -1,7 +1,7 @@
 {
   "campaign": {
     "top_stats":["TREASURY","BALANCE","GDP","INFLATION","POPULATION","STABILITY","MANPOWER"],
-    "outliner_order":["WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
+    "outliner_order":["WORLD","WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
     "hidden_outliner":[],
     "navigation": [
       {"screen":"Nation", "icon":"nation", "help":"Capital, people and institutions."},

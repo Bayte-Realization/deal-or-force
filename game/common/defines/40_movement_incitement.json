@@ -1,0 +1,15 @@
+{
+  // The enemy of my enemy (MovementDealings, item 98). A country the game runs that counts
+  // somebody a rival - opinion at or below AiIncitementRivalOpinion, or a war - may back a
+  // movement that claims that rival's ground, whatever it thinks of the movement otherwise:
+  // fund it at AiIncitementFundChance on each monthly look, or recognise it at
+  // AiIncitementRecogniseChance. Never a movement that claims its own ground or an ally's.
+  // At most AiIncitementMaxFunded movements on its payroll, and only with
+  // AiIncitementTreasuryYears of the subsidy (MovementSponsorPerYear) in the treasury.
+  // 0 for a chance turns that half off.
+  "AiIncitementRivalOpinion": -40,
+  "AiIncitementFundChance": 0.06,
+  "AiIncitementRecogniseChance": 0.02,
+  "AiIncitementMaxFunded": 2,
+  "AiIncitementTreasuryYears": 4
+}

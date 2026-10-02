@@ -4,6 +4,52 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>
+    /// What a government's restraint (common/governments `war_restraint`) costs a war it is
+    /// weighing, and how much of that is left when it has a reason it could give the world.
+    /// </summary>
+    public float AiRestraintWeight { get; set; } = 1.0f;
+    public float AiRestraintWithCause { get; set; } = 0.35f;
+
+    /// <summary>
+    /// How much an authoritarian creed thins the restraint of the arrangement it runs: the
+    /// restraint is multiplied by one less this times the ideology's authority above zero. A
+    /// presidential republic run on nationalism (authority 0.6) keeps about three fifths of it.
+    /// </summary>
+    public float AiRestraintAuthority { get; set; } = 0.7f;
+
+    /// <summary>
+    /// Two governments both at least this restrained, and what a war between them costs on top:
+    /// democracies have very nearly never fought each other.
+    /// </summary>
+    public float AiDemocraticPeaceRestraint { get; set; } = 1.0f;
+    public float AiDemocraticPeacePrice { get; set; } = 2.5f;
+
+    /// <summary>
+    /// How much of the strength of a country's allies and guarantors an attacker reckons with
+    /// when it weighs whether it is strong enough - the friends do not all come, and not with
+    /// everything, but they come.
+    /// </summary>
+    public float AiAllyCommitment { get; set; } = 0.6f;
+
+    /// <summary>
+    /// What it costs to turn on a country we think well of, per hundred points of opinion: the
+    /// hostility appetite only ever counted the dislike, so a friendly neighbour cost no more to
+    /// invade than an indifferent one.
+    /// </summary>
+    public float AiFriendshipCaution { get; set; } = 1.5f;
+
+    /// <summary>
+    /// How many regions a target has to hold before its weakness is worth all it can be: a
+    /// country of one region - the Vatican, San Marino - is a fraction of it, never less than
+    /// the floor.
+    /// </summary>
+    public float AiWorthRegions { get; set; } = 4f;
+    public float AiWorthFloor { get; set; } = 0.15f;
+}
+
 public sealed partial class Nation
 {
     /// <summary>
@@ -50,13 +96,20 @@ public static partial class AiStatecraft
     {
         var defines = campaign.Defines;
 
-        // Weakness invites. This is the old rule, kept, because it is true.
+        // Weakness invites. This is the old rule, kept, because it is true - but weakness is
+        // reckoned with the friends who would arrive, as a general staff reckons it: a small
+        // country with a great power's guarantee is not a small country. And it is worth what
+        // there is to take: the weakness of a country of one region is a fraction of the same
+        // weakness in a country of ten.
         var mine = Strength(campaign, nation);
-        var theirs = CampaignIntel.EstimatedStrength(campaign, nation.Id, other);
+        var theirs = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) +
+                     HelpFor(campaign, nation, other) * defines.AiAllyCommitment;
         if (mine <= 0.01f) return 0f;
         var advantage = mine / M.Max(0.01f, theirs);
         if (advantage < defines.AiWarMinimumAdvantage) return 0f;
-        var value = M.Clamp(advantage - defines.AiWarMinimumAdvantage, 0f, 4f);
+        var worth = M.Clamp(RegionCount.GetValueOrDefault(other.MapIndex) / M.Max(1f, defines.AiWorthRegions),
+            defines.AiWorthFloor, 1f);
+        var value = M.Clamp(advantage - defines.AiWarMinimumAdvantage, 0f, 4f) * worth;
 
         // What is actually over there. A neighbour with forty million people is worth more
         // than one with four, and the old rule could not tell them apart.
@@ -116,8 +169,22 @@ public static partial class AiStatecraft
 
         // And the standing we spend if we cannot say why. A country with a reason is far
         // more likely to act on it, which is exactly how it should read.
-        if (string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, other)))
-            price += defines.AiNoCasusBelliCaution;
+        var cause = !string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, other));
+        if (!cause) price += defines.AiNoCasusBelliCaution;
+
+        // What kind of government is deciding. A parliament has to be carried, a press read
+        // and an election faced; a junta answers to nobody. A reason the world would accept
+        // takes most of it away - and two restrained governments almost never fight at all.
+        // Turning on a friend. The opinion it costs is the least of it: everybody watching
+        // learns what this country's friendship is worth.
+        var regard = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id)?.Opinion ?? 0f;
+        if (regard > 0f) price += regard / 100f * defines.AiFriendshipCaution;
+
+        var restraint = Restraint(campaign, nation);
+        price += restraint * defines.AiRestraintWeight * (cause ? defines.AiRestraintWithCause : 1f);
+        if (restraint >= defines.AiDemocraticPeaceRestraint &&
+            Restraint(campaign, other) >= defines.AiDemocraticPeaceRestraint)
+            price += defines.AiDemocraticPeacePrice;
 
         // The state of the country itself. A tired, poor, unstable government has other
         // problems, and the old rule folded this into a multiplier where it could never
@@ -184,6 +251,63 @@ public static partial class AiStatecraft
             hunger += (1f - quote.Satisfaction) * CommodityCatalog.Get(commodity).EssentialWeight;
         }
         return M.Clamp(hunger * 0.5f, 0f, 1.5f);
+    }
+
+    /// <summary>
+    /// How hard it is for this government to start a war of choice: what its arrangement puts
+    /// in the way (`war_restraint`), thinned by how authoritarian the creed running it is - a
+    /// presidential republic run by a nationalist is not the same brake as one run by a liberal.
+    /// </summary>
+    public static float Restraint(Campaign campaign, Nation nation)
+    {
+        var arrangement = PoliticsCore.GovernmentOf(nation).WarRestraint;
+        var authority = M.Max(0f, PoliticsCore.IdeologyOf(nation).Authority);
+        return arrangement * M.Max(0f, 1f - campaign.Defines.AiRestraintAuthority * authority);
+    }
+
+    private static readonly Dictionary<int, List<int>> FriendsOf = new();
+    private static int _friendsDay = int.MinValue;
+    private static Campaign _friendsFor;
+
+    /// <summary>
+    /// The strength of everybody who would answer an attack on this country - its allies and
+    /// guarantors - as the attacker can see it. Not the attacker itself, and not a friend it
+    /// shares with the target: a country allied to both stays out. Who is whose friend is
+    /// worked out once a day, not once a question: the question is asked of every neighbour
+    /// of every country every eleven days.
+    /// </summary>
+    private static float HelpFor(Campaign campaign, Nation attacker, Nation target)
+    {
+        if (_friendsFor != campaign || _friendsDay != campaign.ElapsedDays)
+        {
+            _friendsFor = campaign;
+            _friendsDay = campaign.ElapsedDays;
+            foreach (var list in FriendsOf.Values) list.Clear();
+            foreach (var relation in campaign.Relations.Values)
+            {
+                var allied = relation.Stance == DiplomaticStance.Allied;
+                if (allied || relation.GuaranteedBy(relation.A)) Friend(relation.B, relation.A);
+                if (allied || relation.GuaranteedBy(relation.B)) Friend(relation.A, relation.B);
+            }
+        }
+        if (!FriendsOf.TryGetValue(target.Id, out var friends)) return 0f;
+        var help = 0f;
+        foreach (var friendId in friends)
+        {
+            if (friendId == attacker.Id) continue;
+            var friend = campaign.NationById(friendId);
+            if (friend is null || friend.Population <= 0) continue;
+            var theirs = CampaignDiplomacy.Peek(campaign, attacker.Id, friendId);
+            if (theirs is { Stance: DiplomaticStance.Allied }) continue;
+            help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, friend);
+        }
+        return help;
+
+        static void Friend(int protectedId, int friendId)
+        {
+            if (!FriendsOf.TryGetValue(protectedId, out var list)) FriendsOf[protectedId] = list = new List<int>();
+            list.Add(friendId);
+        }
     }
 
     private static bool AtWarWithAnybody(Campaign campaign, Nation nation)

@@ -14,6 +14,7 @@ public partial class ScenarioMapCanvas : Control
     public Action Changed;
     public int TargetOwner, TargetRegion;
     public bool PaintMode;
+    public int SelectedProvince { get; private set; }
     private bool _painting, _pan, _dirty = true;
     private float _zoom = 1;
     private Vector2 _center = new(.5f, .5f), _last;
@@ -23,9 +24,14 @@ public partial class ScenarioMapCanvas : Control
     public override void _Ready()
     {
         ClipContents = true; MouseFilter = MouseFilterEnum.Stop; MouseForcePassScrollEvents = false;
+        FocusMode = FocusModeEnum.All;
         MouseDefaultCursorShape = CursorShape.Cross;
         MouseExited += FinishStroke;
-        _colors = new Color[(Draft?.Countries.Max(c => c.MapIndex) ?? 0) + 1];
+        RefreshColours();
+    }
+    private void RefreshColours()
+    {
+        _colors = new Color[(Draft?.Countries.Select(c => c.MapIndex).DefaultIfEmpty(0).Max() ?? 0) + 1];
         if (Draft is not null) foreach (var c in Draft.Countries) _colors[c.MapIndex] = Color.FromString(c.Color, Colors.Gray);
     }
     private float MapScale => Math.Max(.001f, Math.Min(Size.X / Topology.Width, Size.Y / Topology.Height) * _zoom);
@@ -35,7 +41,7 @@ public partial class ScenarioMapCanvas : Control
         var s = Source(local); var x = (int)MathF.Floor(s.X); var y = (int)MathF.Floor(s.Y);
         return x < 0 || y < 0 || x >= Topology.Width || y >= Topology.Height ? 0 : Topology.CellToProvince[y * Topology.Width + x];
     }
-    public void InvalidateMap() { _dirty = true; }
+    public void InvalidateMap() { RefreshColours(); _dirty = true; }
     public void Fit() { FinishStroke(); _zoom = 1; _center = new(.5f, .5f); _dirty = true; }
     public void FocusCountry(int owner)
     {
@@ -49,8 +55,14 @@ public partial class ScenarioMapCanvas : Control
     }
     public void FinishStroke()
     {
+        _pan = false;
         if (!_painting) { _pan = false; return; }
         _painting = false; Draft.EndStroke(); Changed?.Invoke();
+    }
+    public bool CancelGesture()
+    {
+        if (!_painting && !_pan) return false;
+        _painting = _pan = false; Draft.CancelStroke(); InvalidateMap(); Changed?.Invoke(); return true;
     }
     private void Paint(Vector2 pos)
     {
@@ -61,6 +73,11 @@ public partial class ScenarioMapCanvas : Control
     public override void _GuiInput(InputEvent input)
     {
         if (Draft is null || Topology is null) return;
+        if (input is InputEventKey { Pressed: true, Echo: false } key)
+        {
+            if (key.Keycode == Key.Escape && CancelGesture()) AcceptEvent();
+            return;
+        }
         if (input is InputEventMouseButton b)
         {
             if (b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown && b.Pressed)
@@ -72,9 +89,10 @@ public partial class ScenarioMapCanvas : Control
             else if (b.ButtonIndex == MouseButton.Middle) { FinishStroke(); _pan = b.Pressed; }
             else if (b.ButtonIndex == MouseButton.Left)
             {
+                GrabFocus();
                 if (!b.Pressed) FinishStroke();
                 else if (PaintMode) { _painting = true; Paint(b.Position); }
-                else Picked?.Invoke(ProvinceAt(b.Position));
+                else { SelectedProvince = ProvinceAt(b.Position); _dirty = true; Picked?.Invoke(SelectedProvince); }
                 _last = b.Position;
             }
             AcceptEvent();
@@ -114,6 +132,7 @@ public partial class ScenarioMapCanvas : Control
                     var down = Topology.CellToProvince[ny * Topology.Width + sx];
                     if (owner != Draft.OwnerAt(right) || owner != Draft.OwnerAt(down)) color = new Color(.86f, .86f, .75f);
                     else if (_zoom >= 3 && (p != right || p != down)) color = color.Darkened(.65f);
+                    if (p == SelectedProvince) color = color.Lerp(new Color(1, .82f, .4f), .4f);
                 }
             }
             var offset = (y * w + x) * 4;

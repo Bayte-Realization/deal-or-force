@@ -8,7 +8,12 @@ namespace DealOrForce.Simulation;
 public sealed record FormableNation(string Id, string Name, string Description, string[] EligibleTags,
     string[] RequiredTags, int[] RequiredProvinces, float MinimumStability, float CostShare,
     float GovernanceGain, float ProductivityGain,
-    string[] RequiredIdeology, string[] RequiredGovernment, string Colour);
+    string[] RequiredIdeology, string[] RequiredGovernment, string Colour)
+{
+    public bool PeacefulAccession { get; init; }
+    public bool SubjectIntegration { get; init; }
+    public bool AiFoundation { get; init; }
+}
 public sealed record FormationRequirement(string Label, bool Met);
 public sealed record FormationStatus(FormationRequirement[] Requirements, int Owned, int Total, float Cost)
 {
@@ -30,7 +35,14 @@ public static class FormableNations
     public static FormableNation Find(string id) => id is not null ? Definitions.GetValueOrDefault(id) : null;
     public static bool Eligible(Nation nation, FormableNation definition) =>
         nation is not null && definition.EligibleTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase);
-    public static void Merge(JsonElement root, List<string> errors)
+    public static void Merge(JsonElement root, List<string> errors) => MergeInto(root, errors, Definitions);
+
+    /// <summary>Validate an editor overlay against current data without changing the
+    /// live catalogue. Bad drafts cannot delete or rewrite countries in a running game.</summary>
+    public static void Validate(JsonElement root, List<string> errors) =>
+        MergeInto(root, errors, new Dictionary<string, FormableNation>(Definitions, StringComparer.Ordinal));
+
+    private static void MergeInto(JsonElement root, List<string> errors, Dictionary<string, FormableNation> definitions)
     {
         if (root.ValueKind != JsonValueKind.Object) { errors?.Add("formable_nations: expected object"); return; }
         foreach (var entry in root.EnumerateObject())
@@ -40,8 +52,8 @@ public static class FormableNations
                 var e = entry.Value;
                 if (e.ValueKind != JsonValueKind.Object) throw new FormatException("expected object");
                 if (e.TryGetProperty("disabled", out var disabled) && disabled.ValueKind == JsonValueKind.True)
-                { Definitions.Remove(entry.Name); continue; }
-                var old = Find(entry.Name);
+                { definitions.Remove(entry.Name); continue; }
+                var old = definitions.GetValueOrDefault(entry.Name);
                 string Text(string key, string fallback) => e.TryGetProperty(key, out var x) ? x.GetString() : fallback;
                 string[] Tags(string key, string[] fallback) => e.TryGetProperty(key, out var x)
                     ? x.EnumerateArray().Select(v => v.GetString()?.ToUpperInvariant() ?? "").Where(v => v.Length > 0).Distinct().ToArray()
@@ -58,7 +70,15 @@ public static class FormableNations
                     Number("minimum_stability", old?.MinimumStability ?? .65f), Number("gdp_cost_share", old?.CostShare ?? .02f),
                     Number("governance_gain", old?.GovernanceGain ?? .04f), Number("productivity_gain", old?.ProductivityGain ?? .015f),
                     Ids("required_ideology", old?.RequiredIdeology), Ids("required_government", old?.RequiredGovernment),
-                    Text("colour", old?.Colour ?? ""));
+                    Text("colour", old?.Colour ?? ""))
+                {
+                    PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
+                        ? accession.GetBoolean() : old?.PeacefulAccession ?? false,
+                    SubjectIntegration = e.TryGetProperty("subject_integration", out var integration)
+                        ? integration.GetBoolean() : old?.SubjectIntegration ?? false,
+                    AiFoundation = e.TryGetProperty("ai_foundation", out var ai)
+                        ? ai.GetBoolean() : old?.AiFoundation ?? false
+                };
                 if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || d.EligibleTags.Length == 0 || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0) ||
                     d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
                     throw new FormatException("empty eligibility/territory or values outside 0..1");
@@ -66,7 +86,7 @@ public static class FormableNations
                     throw new FormatException("names an ideology nothing declares");
                 if (d.RequiredGovernment.Any(id => !GovernmentCatalog.Knows(id)))
                     throw new FormatException("names a form of government nothing declares");
-                Definitions[entry.Name] = d;
+                definitions[entry.Name] = d;
             }
             catch (Exception ex) { errors?.Add($"formable '{entry.Name}': {ex.Message}"); }
         }
@@ -91,13 +111,15 @@ public static class FormableNations
             requirements.Add(new(Loc.Format("Scenario territory: {0}", tag), authored.Length > 0));
             provinces.UnionWith(authored);
         }
-        bool Held(int p) => map is not null && p > 0 && p <= map.ProvinceCount &&
-            !map.WaterByProvince[p] && map.ProvinceToNation[p] == nation.MapIndex &&
-            campaign.ProvinceController is not null && p < campaign.ProvinceController.Length && campaign.ProvinceController[p] == nation.MapIndex;
+        var partners = campaign.Nations.Where(n => PeacefulFormation.Participates(campaign, nation, n, d))
+            .Select(n => n.MapIndex).ToHashSet();
+        bool Held(int p) => map is not null && p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p] &&
+            campaign.ProvinceController is not null && p < campaign.ProvinceController.Length &&
+            partners.Contains(map.ProvinceToNation[p]) && campaign.ProvinceController[p] == map.ProvinceToNation[p];
         // Unresolved IDs fail closed rather than silently disappearing.
-        var land = provinces.Where(p => map is null || p > map.ProvinceCount || !map.WaterByProvince[p]).ToArray();
+        var land = provinces.Where(p => map is null || p <= 0 || p > map.ProvinceCount || !map.WaterByProvince[p]).ToArray();
         var owned = land.Count(Held);
-        requirements.Add(new(Loc.Format("Territory owned and controlled: {0}/{1}", owned, land.Length), land.Length > 0 && owned == land.Length));
+        requirements.Add(new(Loc.Format("Foundation territory secured: {0}/{1}", owned, land.Length), land.Length > 0 && owned == land.Length));
         var cost = Math.Max(.05f, nation.Gdp * d.CostShare);
         requirements.Add(new(Loc.Get("Treasury covers the founding cost"), nation.Treasury >= cost));
         requirements.Add(new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id)));
@@ -124,11 +146,13 @@ public sealed class FormNationCommand : ICampaignCommand
     public string FormableId { get; init; } = "";
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var d = FormableNations.Find(FormableId);
         var status = FormableNations.Evaluate(campaign, nation, d);
         if (!status.CanForm) return;
         nation.Treasury -= status.Cost;
+        PeacefulFormation.Integrate(campaign, nation, d);
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
         nation.Name = d.Name;
@@ -141,7 +165,7 @@ public sealed class FormNationCommand : ICampaignCommand
         nation.StabilityGovernance = M.Clamp(nation.StabilityGovernance + d.GovernanceGain, -limit, limit);
         nation.Productivity += d.ProductivityGain;
         campaign.Chronicle.Record(campaign, "state_formed", nation.Id, subject: d.Name);
-        // IDs, diplomacy, armies, government and flags remain valid. No territory is granted.
+        // Stable identity is retained. Territory changes only through validated accession.
         campaign.MarkStrategicChange();
     }
 }

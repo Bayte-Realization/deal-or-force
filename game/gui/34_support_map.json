@@ -1,0 +1,29 @@
+{
+  "colours": {
+    "support.air": "#75bdff",
+    "support.drone": "#61e6cc",
+    "support.air_defence": "#ff756b",
+    "support.artillery": "#ffc75c",
+    "support.standby": "#c4deeb",
+    "support.displaced": "#c25957",
+    "support.ready": "#ccefce",
+    "support.depleted": "#ffd987",
+    "support.critical": "#ff8f85"
+  },
+  "metrics": {
+    "support.overlay_distance": 17,
+    "support.marker_distance": 9.2,
+    "support.selected_scale": 1.10,
+    "support.counter_scale": 1.15,
+    "support.stack_spacing_x": 76,
+    "support.stack_spacing_y": 48,
+    "support.pick_half_width": 36,
+    "support.pick_half_height": 22,
+    "support.reach_width_km": 2.5,
+    "support.reach_idle_width_km": 0.6,
+    "support.reach_fill_alpha": 0.08,
+    "support.roster_row_height": 58,
+    "support.compact_height": 840,
+    "support.recruitment_height": 210
+  }
+}

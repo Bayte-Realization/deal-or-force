@@ -31,6 +31,12 @@ static class NewsFeedTests
         Check(lines.Length == 2, "the feed carries public events only");
         Check(lines[0].Kind == "embargo_started" && lines[1].Kind == "war_started" &&
               lines[0].Sequence > lines[1].Sequence, "newest first");
+        Check(NewsFeed.Lines(c, take: 1).Single().Sequence == lines[0].Sequence,
+            "row limit keeps exactly the newest public line");
+        Check(NewsFeed.Lines(c, take: 0).Count() == 2 && NewsFeed.Lines(c, take: -1).Count() == 2,
+            "non-positive limits keep the unbounded API contract");
+        Check(NewsFeed.Lines(c, take: 6).Select(l => l.Sequence).SequenceEqual(lines.Select(l => l.Sequence)),
+            "repeated snapshot does not consume or duplicate news");
         Check(lines[1].Text.Contains("declares war", StringComparison.OrdinalIgnoreCase) &&
               lines[1].Text.Contains(kor.Name, StringComparison.OrdinalIgnoreCase),
             "a war is a sentence a stranger can read");
@@ -44,5 +50,17 @@ static class NewsFeedTests
         var fallback = NewsFeed.Lines(c, since: 0).First();
         Check(fallback.Kind == "kind_nobody_declared" && fallback.Text.Length > 0,
             "an unknown kind still reads as something");
+        var language = Loc.Language;
+        var snapshot = c.Chronicle.Entries.First();
+        try
+        {
+            Loc.Language = "russian";
+            var translated = NewsFeed.Lines(c).First(line => line.Kind == "war_started");
+            Check(translated.Text.Contains(kor.DisplayName) && translated.Text.Contains(prk.DisplayName),
+                "country names follow the selected language, not the recorded English caption");
+            Check(c.Chronicle.Entries.First() == snapshot,
+                "translation leaves historical chronicle data unchanged");
+        }
+        finally { Loc.Language = language; }
     }
 }

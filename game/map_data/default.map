@@ -3,4 +3,9 @@ provinces = "provinces.png"
 definition = "definition.csv"
 rivers = "rivers.png"
 lakes = "lakes.png"
+# Source geography, formerly embedded in LegacySourceMap. Lossless uint16 ids:
+# id = R + 256*G, B = 0. These are data maps, not rendered screenshots.
+source_control = "source_control.png"
+source_states = "source_states.png"
+source_disputes = "source_disputes.png"
 wrap_x = yes

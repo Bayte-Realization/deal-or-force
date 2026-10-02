@@ -86,6 +86,7 @@ public static class Statecraft
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Statecraft))) return;
         if (campaign is null) return;
 
         // Time is the only thing that forgets, and it forgets slowly.

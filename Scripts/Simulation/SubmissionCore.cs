@@ -330,6 +330,7 @@ public static class SubmissionSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubmissionSystem))) return;
         if (campaign is null) return;
         var defines = campaign.Defines;
         if (defines.SubmissionAiChancePerMonth <= 0f) return;
@@ -389,6 +390,7 @@ public sealed class OfferSubmissionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         Accepted = SubmissionSystem.Offer(campaign, campaign.NationById(IssuerId), campaign.NationById(TargetId),
             Route, out var answer);
         Answer = answer;

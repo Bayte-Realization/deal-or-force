@@ -66,6 +66,7 @@ public static class MovementRules
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementRules))) return;
         if (campaign.ElapsedDays == 0) return;
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
         // What the world decides about who has fallen happens on the week, as it did.

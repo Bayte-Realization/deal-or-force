@@ -4,7 +4,7 @@ namespace ExampleCSharpMod;
 
 public sealed class ExampleMod : IGlobalityMod
 {
-    public void OnLoad(ModContext context) => context.Log("Example C# mod loaded");
+    public void OnLoad(ModContext context) => context.Log("Example corecode mod loaded");
 
     public void OnCampaignCreated(ModContext context)
     {

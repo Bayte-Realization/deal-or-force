@@ -110,7 +110,13 @@ public static class GameDataLoader
                 {
                     if (!properties.TryGetValue(entry.Name, out var property)) continue;
                     var value = ConvertValue(entry.Value, property.PropertyType);
-                    if (value is not null) property.SetValue(defines, value);
+                    if (value is Dictionary<string, bool> flags) MechanicFeatures.Merge(defines.Features, flags);
+                    else if (value is Dictionary<string, string> rules)
+                    {
+                        if (property.Name == nameof(Defines.FeatureUnlocks)) MechanicFeatures.Merge(defines.FeatureUnlocks, rules);
+                        else if (property.GetValue(defines) is Dictionary<string, string> bindings) MechanicFeatures.MergeBindings(bindings, rules);
+                    }
+                    else if (value is not null) property.SetValue(defines, value);
                 }
             }
     }
@@ -191,6 +197,11 @@ public static class GameDataLoader
 
     private static object ConvertValue(JsonElement value, Type type)
     {
+        if (type == typeof(Dictionary<string, bool>) || type == typeof(Dictionary<string, string>))
+        {
+            try { return value.ValueKind == JsonValueKind.Object ? value.Deserialize(type) : null; }
+            catch (JsonException) { return null; }
+        }
         if (type == typeof(float) && value.TryGetSingle(out var single)) return single;
         if (type == typeof(double) && value.TryGetDouble(out var real)) return real;
         if (type == typeof(int) && value.TryGetInt32(out var integer)) return integer;

@@ -224,6 +224,7 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var asking = campaign.NationById(IssuerId);
         var asked = campaign.NationById(TargetId);
         if (!AgreementSystem.CanPropose(campaign, asking, asked, Kind, out var refusal))
@@ -257,6 +258,7 @@ public sealed class CancelAgreementCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var issuer = campaign.NationById(IssuerId);
         if (issuer is null || campaign.NationById(TargetId) is null) return;
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
@@ -290,6 +292,7 @@ public sealed class SendAidCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var giving = campaign.NationById(IssuerId);
         var receiving = campaign.NationById(TargetId);
         var amount = AgreementSystem.AidAmount(campaign, giving, receiving, out _);

@@ -15,6 +15,7 @@ public partial class LayoutPreview : Control
     public string Selection = "hud.side_panel";
     public Vector2 ReferenceSize = new(1920, 1080);
     public bool Snap = true;
+    public int Context; // Automatic, gameplay, region/province, country picker.
     private bool _dragging, _resize;
     public bool IsDragging => _dragging;
     private Vector2 _start;
@@ -44,7 +45,9 @@ public partial class LayoutPreview : Control
     }
     private IEnumerable<string> VisiblePanels()
     {
-        IEnumerable<string> context = Selection is "hud.country_card" or "hud.region_card" ? MapSelectionContext :
+        IEnumerable<string> context = Context == 2 ? MapSelectionContext : Context == 1 ? HudContext :
+            Context == 3 ? Panels.Keys.Where(k => k.StartsWith("picker.")) :
+            Selection is "hud.country_card" or "hud.region_card" ? MapSelectionContext :
             Selection.StartsWith("hud.") ? HudContext :
             Selection.StartsWith("picker.") ? Panels.Keys.Where(k => k.StartsWith("picker.")) : Array.Empty<string>();
         return context.Where(k => k != Selection && Panels.ContainsKey(k)).Append(Selection).Where(Panels.ContainsKey);
@@ -72,6 +75,15 @@ public partial class LayoutPreview : Control
             if (r.Size.X > 35 && r.Size.Y > 18)
                 DrawString(ThemeDB.FallbackFont, r.Position + new Vector2(5, 15), PanelName(key), HorizontalAlignment.Left, r.Size.X - 10, 12,
                     Ui.Colour(selected ? "text.bright" : "text.muted"));
+            if (key == "hud.region_card" && r.Size.X >= 150 && r.Size.Y >= 58)
+            {
+                var mid = r.Position.X + r.Size.X * .5f;
+                DrawLine(new(mid, r.Position.Y + 24), new(mid, r.End.Y - 8), Ui.Colour("surface.line"));
+                DrawString(ThemeDB.FallbackFont, r.Position + new Vector2(6, 34), Loc.Get("Region"), HorizontalAlignment.Left, r.Size.X * .5f - 12, 11, Ui.Colour("text.accent"));
+                DrawString(ThemeDB.FallbackFont, new(mid + 6, r.Position.Y + 34), Loc.Get("Province"), HorizontalAlignment.Left, r.Size.X * .5f - 12, 11, Ui.Colour("text.accent"));
+                DrawString(ThemeDB.FallbackFont, r.Position + new Vector2(6, 50), Loc.Get("Population · GDP"), HorizontalAlignment.Left, r.Size.X * .5f - 12, 10, Ui.Colour("text.muted"));
+                DrawString(ThemeDB.FallbackFont, new(mid + 6, r.Position.Y + 50), Loc.Get("Terrain · Controller"), HorizontalAlignment.Left, r.Size.X * .5f - 12, 10, Ui.Colour("text.muted"));
+            }
             if (selected)
             {
                 DrawRect(new Rect2(r.End - new Vector2(7, 7), new Vector2(10, 10)), accent);

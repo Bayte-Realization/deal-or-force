@@ -225,6 +225,7 @@ public static class ColonisationCore
     /// <summary>A day of settling, and a month's thinking for the countries nobody plays. Once a day.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ColonisationCore))) return;
         if (campaign?.ProvinceMap is null) return;
         foreach (var state in campaign.States)
         {
@@ -389,6 +390,7 @@ public sealed class ColoniseCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
         Started = ColonisationCore.Start(campaign, nation, state);
@@ -403,6 +405,7 @@ public sealed class AbandonColonyCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
         ColonisationCore.Abandon(campaign, nation, state);

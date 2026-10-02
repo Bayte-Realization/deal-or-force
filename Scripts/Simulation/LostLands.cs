@@ -80,6 +80,7 @@ public static class LostLands
     /// <summary>Once a day: each human country on its own day of the cycle.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LostLands))) return;
         if (campaign is null || campaign.ObserverMode || campaign.ElapsedDays <= 0) return;
         var cycle = Math.Max(1, campaign.Defines.LostLandCheckDays);
         foreach (var nation in campaign.Nations)

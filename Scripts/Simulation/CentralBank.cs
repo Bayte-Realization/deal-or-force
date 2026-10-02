@@ -335,6 +335,7 @@ public sealed class SetEmissionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign?.NationById(IssuerId);
         if (nation is null) return;
         CentralBank.SetEmission(nation, ShareOfOutput);
@@ -359,6 +360,7 @@ public sealed class SetKeyRateCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign?.NationById(IssuerId);
         if (nation is null || !nation.GovernmentSetsKeyRate) return;
         CentralBank.SetKeyRate(nation, Rate);
@@ -385,6 +387,7 @@ public sealed class SetCentralBankControlCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign?.NationById(IssuerId);
         if (nation is null) return;
         nation.GovernmentSetsKeyRate = GovernmentSets;

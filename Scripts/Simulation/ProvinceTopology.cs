@@ -282,6 +282,13 @@ public sealed class ProvinceTopology
             ProvinceCenterCell, Neighbors, Width, Height)
         { TerrainByProvince = (TerrainDefinition[])TerrainByProvince.Clone(), TerrainSurfaceSlots = TerrainSurfaceSlots };
 
+    internal ProvinceTopology WithGeometry(int[] cells, ushort[] regions, ushort[] nations)
+    {
+        BuildGraph(cells, ProvinceCount + 1, Width, Height, out var centres, out var neighbours);
+        if (centres.Skip(1).Any(c => c < 0)) throw new InvalidDataException("Border repair lost a province ID.");
+        return new(Pack(cells), regions, nations, centres, neighbours, Width, Height);
+    }
+
     /// <summary>
     /// The growth and relaxation algorithms need a sentinel for "not assigned yet" and use
     /// -1 for it, so they work in int and the result is packed on the way out. The wide

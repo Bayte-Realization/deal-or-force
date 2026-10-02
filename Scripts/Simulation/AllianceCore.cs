@@ -459,6 +459,7 @@ public sealed class ProposeAllianceCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var proposer = campaign.NationById(IssuerId);
         var target = campaign.NationById(TargetId);
         if (proposer is null || target is null) return;
@@ -474,6 +475,7 @@ public sealed class AnswerAllianceCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var answering = campaign.NationById(IssuerId);
         if (answering is null) return;
         AllianceSystem.Answer(campaign, answering, Accept, out _);
@@ -488,6 +490,7 @@ public sealed class BreakAllianceCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var other = campaign.NationById(TargetId);
         if (nation is null || other is null) return;

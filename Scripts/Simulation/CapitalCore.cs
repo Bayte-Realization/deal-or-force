@@ -93,6 +93,7 @@ public static class CapitalCore
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(CapitalCore))) return;
         var topology = campaign?.ProvinceMap;
         if (topology is null) return;
         foreach (var nation in campaign.Nations)
@@ -242,6 +243,7 @@ public sealed class MoveCapitalCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var state = campaign.States.Find(candidate => candidate.MapIndex == StateMapIndex);
         Moved = CapitalCore.Move(campaign, nation, state);

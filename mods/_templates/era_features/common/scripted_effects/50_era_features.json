@@ -1,0 +1,5 @@
+{
+  "open_aviation": { "feature.aviation_set": 1 },
+  "close_aviation": { "feature.aviation_set": 0 },
+  "open_experimental_air": { "feature.experimental_air_set": 1 }
+}

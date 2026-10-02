@@ -110,6 +110,7 @@ public sealed record SupportTypeDefinition(
     int Personnel)
 {
     public List<string> Missions { get; init; } = new();
+    public string RequiredFeature { get; init; } = "";
 }
 
 /// <summary>Paradox-style common/support catalogue, consumed by simulation and rendering.</summary>
@@ -159,7 +160,7 @@ public static class SupportTypeCatalog
         var name = value.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String
             ? nameElement.GetString() : earlier?.Name ?? id;
         var kind = value.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String &&
-                   Enum.TryParse<SupportKind>(kindElement.GetString(), true, out var parsed)
+                   Enum.TryParse<SupportKind>(kindElement.GetString().Replace("_", "").Replace("-", ""), true, out var parsed)
             ? parsed : earlier?.Kind ?? SupportKind.Ground;
         var icon = value.TryGetProperty("icon", out var iconElement) && iconElement.ValueKind == JsonValueKind.String
             ? iconElement.GetString() : earlier?.Icon ?? "artillery";
@@ -191,7 +192,8 @@ public static class SupportTypeCatalog
             MathF.Max(0.05f, Number("recruitment_cost", earlier?.RecruitmentCost ?? 0.5f)),
             Math.Max(7, Whole("build_days", earlier?.BuildDays ?? 45)),
             Math.Max(100, Whole("personnel", earlier?.Personnel ?? 4500)))
-        { Missions = missions };
+        { Missions = missions, RequiredFeature = value.TryGetProperty("required_feature", out var feature) &&
+            feature.ValueKind == JsonValueKind.String ? feature.GetString() : earlier?.RequiredFeature ?? "" };
         return definition;
     }
 }
@@ -211,6 +213,14 @@ public static class SupportCore
     public const string MissionAirSuperiority = "air_superiority";
     public const string MissionInterdiction = "interdiction";
 
+    public static bool Enabled(Campaign campaign, SupportTypeDefinition type) => type is not null &&
+        campaign is not null && campaign.FeatureEnabled("long_range_forces") &&
+        campaign.FeatureEnabled(MechanicFeatures.Of(type.Kind)) &&
+        (string.IsNullOrEmpty(type.RequiredFeature) || campaign.FeatureEnabled(type.RequiredFeature));
+
+    public static bool Enabled(Campaign campaign, string typeId) =>
+        SupportTypeCatalog.TryGet(typeId, out var type) && Enabled(campaign, type);
+
     /// <summary>
     /// Rebuild the by-nation reach index, once at the top of every step.
     ///
@@ -226,6 +236,7 @@ public static class SupportCore
         campaign.SupportByNation.Clear();
         foreach (var formation in campaign.SupportFormations)
         {
+            if (!Enabled(campaign, formation.TypeId)) continue;
             if (!campaign.SupportByNation.TryGetValue(formation.NationId, out var list))
                 campaign.SupportByNation[formation.NationId] = list = new List<SupportFormation>();
             list.Add(formation);
@@ -235,6 +246,7 @@ public static class SupportCore
     /// <summary>The daily pass: training completes, readiness recovers, the AI minds its missions.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SupportCore))) return;
         Train(campaign);
         Attrition(campaign);
         Recover(campaign);
@@ -258,7 +270,7 @@ public static class SupportCore
         var defines = campaign.Defines;
         foreach (var formation in campaign.SupportFormations)
         {
-            if (!campaign.SupportExposure.TryGetValue(formation.Id, out var threat) || threat <= 0f) continue;
+            if (!Enabled(campaign, formation.TypeId) || !campaign.SupportExposure.TryGetValue(formation.Id, out var threat) || threat <= 0f) continue;
             var loss = defines.SupportAttritionPerDay * threat / (threat + defines.SupportAttritionSaturation) *
                        NationalModifiers.Factor(campaign.NationById(formation.NationId), "support_losses");
             loss = MathF.Min(loss, MathF.Max(0f, formation.Strength - defines.SupportAttritionFloor));
@@ -314,7 +326,7 @@ public static class SupportCore
     /// <summary>Formations already based in a region, against what the region can host.</summary>
     public static int PostsUsed(Campaign campaign, int stateMapIndex, int exceptFormationId = -1) =>
         campaign.SupportFormations.Count(formation =>
-            formation.StateMapIndex == stateMapIndex && formation.Id != exceptFormationId);
+            formation.StateMapIndex == stateMapIndex && formation.Id != exceptFormationId && Enabled(campaign, formation.TypeId));
 
     /// <summary>A controlled province of the region, which the range is measured from. -1 if there is none.</summary>
     public static int BaseProvinceOf(Campaign campaign, Nation nation, int stateMapIndex)
@@ -355,6 +367,7 @@ public static class SupportCore
     {
         foreach (var order in campaign.SupportOrders.ToArray())
         {
+            if (!Enabled(campaign, order.TypeId)) { order.LastProcessedDay = campaign.ElapsedDays; continue; }
             if (order.LastProcessedDay >= campaign.ElapsedDays) continue;
             order.LastProcessedDay = campaign.ElapsedDays;
             var nation = campaign.NationById(order.NationId);
@@ -389,7 +402,7 @@ public static class SupportCore
         foreach (var formation in campaign.SupportFormations)
         {
             var nation = campaign.NationById(formation.NationId);
-            if (nation is null) continue;
+            if (nation is null || !Enabled(campaign, formation.TypeId)) continue;
             var arms = nation.Market.TryGetValue(Commodity.Arms, out var quote) ? quote.Satisfaction : 1f;
             var equipment = 0.50f + 0.50f * M.Clamp01(arms);
             // Standing by repairs faster: a formation working its missions wears and a
@@ -421,7 +434,7 @@ public static class SupportCore
         {
             var nation = campaign.NationById(formation.NationId);
             if (nation is null || nation.IsHuman) continue;
-            if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
+            if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !Enabled(campaign, type)) continue;
             // Displaced bases fly home: a formation whose ground is gone redeploys to the
             // most populous region the country still holds rather than going silent.
             if (Displaced(campaign, formation))
@@ -463,7 +476,7 @@ public static class SupportCore
     public static bool Displaced(Campaign campaign, SupportFormation formation)
     {
         var map = campaign.ProvinceMap;
-        if (map is null || formation.BaseProvinceId <= 0) return true;
+        if (map is null || formation.BaseProvinceId <= 0 || formation.BaseProvinceId > map.ProvinceCount) return true;
         var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
         var nation = campaign.NationById(formation.NationId);
         return nation is null || controllers[formation.BaseProvinceId] != nation.MapIndex;
@@ -472,7 +485,7 @@ public static class SupportCore
     /// <summary>Whether the formation reaches a province at all: a base that holds, inside the radius.</summary>
     public static bool InRange(Campaign campaign, SupportFormation formation, SupportTypeDefinition type, int province)
     {
-        if (type is null || formation.BaseProvinceId <= 0 || province <= 0) return false;
+        if (!Enabled(campaign, type) || formation.BaseProvinceId <= 0 || province <= 0) return false;
         return DistanceKm(campaign, formation.BaseProvinceId, province) <= type.RangeKm;
     }
 
@@ -494,19 +507,37 @@ public static class SupportCore
     /// <summary>Move a formation to a region the country holds, onto a province of it.</summary>
     public static string Rebase(Campaign campaign, SupportFormation formation, int stateMapIndex)
     {
-        var nation = campaign.NationById(formation.NationId);
-        var state = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
-        if (nation is null || state is null || state.NationMapIndex != nation.MapIndex)
-            return "Choose a region the country holds.";
-        if (PostsUsed(campaign, stateMapIndex, formation.Id) >= CapacityOf(campaign, state) &&
-            formation.StateMapIndex != stateMapIndex)
-            return "That region has no post free.";
-        var province = BaseProvinceOf(campaign, nation, stateMapIndex);
-        if (province <= 0) return "That region has no controlled province to base in.";
+        if (formation is null) return "No such formation.";
+        var plan = PreviewRebase(campaign, formation.NationId, new[] { formation.Id }, stateMapIndex);
+        if (plan.Refusal.Length > 0) return plan.Refusal;
         formation.StateMapIndex = stateMapIndex;
-        formation.BaseProvinceId = province;
+        formation.BaseProvinceId = plan.BaseProvinceId;
         campaign.MarkStrategicChange();
         return "";
+    }
+
+    /// <summary>Read-only, shared by map previews and commands. Training reserves real posts.
+    /// A group is accepted whole or refused whole; stale/foreign ids never silently disappear.</summary>
+    public sealed record RebasePreview(int BaseProvinceId, int Moving, int Free, int Reserved, string Refusal);
+
+    public static RebasePreview PreviewRebase(Campaign campaign, int issuer, IEnumerable<int> formationIds, int stateMapIndex)
+    {
+        var ids = formationIds?.Distinct().OrderBy(id => id).Take(4097).ToArray() ?? Array.Empty<int>();
+        var nation = campaign.NationById(issuer);
+        var state = campaign.States.Find(s => s.MapIndex == stateMapIndex);
+        RebasePreview Reject(string reason) => new(-1, 0, 0, 0, reason);
+        if (ids.Length == 0 || ids.Length > 4096) return Reject("No such formation.");
+        var formations = ids.Select(id => campaign.SupportFormations.Find(f => f.Id == id && f.NationId == issuer)).ToArray();
+        if (formations.Any(f => f is null)) return Reject("No such formation.");
+        if (formations.Any(f => !Enabled(campaign, f.TypeId))) return Reject("This mechanic is disabled in this scenario.");
+        if (nation is null || state is null || state.NationMapIndex != nation.MapIndex)
+            return Reject("Choose a region the country holds.");
+        var province = BaseProvinceOf(campaign, nation, stateMapIndex);
+        if (province <= 0) return Reject("That region has no controlled province to base in.");
+        var reserved = campaign.SupportOrders.Count(o => o.StateMapIndex == stateMapIndex && Enabled(campaign, o.TypeId));
+        var free = Math.Max(0, CapacityOf(campaign, state) - PostsUsed(campaign, stateMapIndex) - reserved);
+        var moving = formations.Count(f => f.StateMapIndex != stateMapIndex);
+        return new(province, moving, free, reserved, moving > free ? "Not enough posts for the whole selection." : "");
     }
 
     // ------------------------------------------------------------------ the reach into a battle
@@ -684,7 +715,7 @@ public static class SupportCore
                 : Array.Empty<string>();
             foreach (var typeId in types)
             {
-                if (!SupportTypeCatalog.TryGet(typeId, out var type)) continue;
+                if (!SupportTypeCatalog.TryGet(typeId, out var type) || !Enabled(campaign, type)) continue;
                 var state = states.FirstOrDefault(candidate =>
                     PostsUsed(campaign, candidate.MapIndex) < CapacityOf(campaign, candidate) &&
                     bases.ContainsKey((nation.MapIndex, candidate.MapIndex)));
@@ -713,10 +744,11 @@ public static class SupportCore
         if (nation is null || campaign.ProvinceMap is null) return "Campaign map is not ready.";
         if (state is null || state.NationMapIndex != nation.MapIndex) return "Choose an owned region to base in.";
         if (!SupportTypeCatalog.TryGet(typeId, out var type)) return "No such formation type.";
+        if (!Enabled(campaign, type)) return "This mechanic is disabled in this scenario.";
         if (BaseProvinceOf(campaign, nation, stateMapIndex) <= 0) return "That region has no controlled province.";
-        if (campaign.SupportOrders.Count(order => order.NationId == issuer) >= 8) return "Training capacity reached: 8 orders.";
+        if (campaign.SupportOrders.Count(order => order.NationId == issuer && Enabled(campaign, order.TypeId)) >= 8) return "Training capacity reached: 8 orders.";
         if (PostsUsed(campaign, stateMapIndex) + campaign.SupportOrders.Count(order =>
-                order.NationId == issuer && order.StateMapIndex == stateMapIndex) >= CapacityOf(campaign, state))
+                order.NationId == issuer && order.StateMapIndex == stateMapIndex && Enabled(campaign, order.TypeId)) >= CapacityOf(campaign, state))
             return "That region has no post free.";
         if (nation.Treasury < CostOf(nation, type)) return "Insufficient treasury.";
         if (nation.ManpowerReserve < type.Personnel) return "Insufficient manpower reserve.";
@@ -735,6 +767,7 @@ public sealed class RaiseSupportCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         Refusal = SupportCore.Validate(campaign, IssuerId, StateMapIndex, TypeId);
         if (Refusal.Length > 0) return;
         var nation = campaign.NationById(IssuerId);
@@ -762,6 +795,7 @@ public sealed class CancelSupportOrderCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var order = campaign.SupportOrders.Find(candidate =>
             candidate.Id == OrderId && candidate.NationId == IssuerId);
         if (order is null) return;
@@ -787,10 +821,12 @@ public sealed class SetSupportMissionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var formation = campaign.SupportFormations.Find(candidate =>
             candidate.Id == FormationId && candidate.NationId == IssuerId);
         if (formation is null) { Refusal = "No such formation."; return; }
         if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) return;
+        if (!SupportCore.Enabled(campaign, type)) { Refusal = "This mechanic is disabled in this scenario."; return; }
         if (!type.Missions.Contains(Mission)) { Refusal = "That formation cannot fly that mission."; return; }
         formation.Mission = Mission;
         campaign.MarkStrategicChange();
@@ -806,9 +842,38 @@ public sealed class RebaseSupportCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var formation = campaign.SupportFormations.Find(candidate =>
             candidate.Id == FormationId && candidate.NationId == IssuerId);
         if (formation is null) { Refusal = "No such formation."; return; }
         Refusal = SupportCore.Rebase(campaign, formation, StateMapIndex);
+    }
+}
+
+/// <summary>One replay/network order, with authoritative all-or-nothing validation.</summary>
+public sealed class RebaseSupportGroupCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int[] FormationIds { get; init; } = Array.Empty<int>();
+    public int StateMapIndex { get; init; }
+    public string Refusal { get; private set; } = "";
+    public int Moved { get; private set; }
+
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        Moved = 0;
+        var plan = SupportCore.PreviewRebase(campaign, IssuerId, FormationIds, StateMapIndex);
+        Refusal = plan.Refusal;
+        if (Refusal.Length > 0) return;
+        foreach (var id in FormationIds.Distinct().OrderBy(id => id))
+        {
+            var formation = campaign.SupportFormations.Find(f => f.Id == id && f.NationId == IssuerId);
+            if (formation.StateMapIndex == StateMapIndex && formation.BaseProvinceId == plan.BaseProvinceId) continue;
+            formation.StateMapIndex = StateMapIndex;
+            formation.BaseProvinceId = plan.BaseProvinceId;
+            Moved++;
+        }
+        if (Moved > 0) campaign.MarkStrategicChange();
     }
 }

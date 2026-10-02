@@ -90,7 +90,12 @@ $projectFile = Join-Path $project "project.godot"
 $projectBackup = Get-Content -LiteralPath $projectFile -Raw
 $keptLines = $projectBackup -split "`r?`n" | Where-Object { $_ -notmatch '^\s*_\w+\s*=\s*"\*?res://addons/' }
 $heldBack = ($projectBackup -split "`r?`n").Count - $keptLines.Count
-if ($heldBack -gt 0) {
+$keptLines = $keptLines | ForEach-Object {
+    # An editor plugin can re-register its autoload during export. Hold plugins
+    # back as well; the exact developer project is restored in finally below.
+    if ($_ -match '^enabled=PackedStringArray\(') { 'enabled=PackedStringArray()' } else { $_ }
+}
+if ($heldBack -gt 0 -or ($keptLines -join "`r`n") -ne $projectBackup) {
     Set-Content -LiteralPath $projectFile -Value ($keptLines -join "`r`n") -NoNewline
     Write-Host "  $heldBack development autoload(s) held back from the export" -ForegroundColor DarkGray
 }
@@ -108,7 +113,7 @@ finally {
     # The finally is the point of the whole arrangement: an export that throws half way must
     # not leave the project sitting there without its tooling.
     $ErrorActionPreference = $previousPreference
-    if ($heldBack -gt 0) {
+    if (($keptLines -join "`r`n") -ne $projectBackup) {
         Set-Content -LiteralPath $projectFile -Value $projectBackup -NoNewline
         Write-Host "  project.godot put back" -ForegroundColor DarkGray
     }

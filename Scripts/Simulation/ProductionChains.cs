@@ -142,6 +142,8 @@ public static class ProductionChains
     private static readonly List<Commodity> UsedDeposits = new();
 
     public static int RecipeCount => Regional.Count + National.Count;
+    /// <summary>Raw resources named by live recipes, including mod-added goods.</summary>
+    public static IReadOnlyList<Commodity> ResourceGoods => UsedDeposits.AsReadOnly();
 
     /// <summary>Every good some recipe makes, for anything that wants to check coverage.</summary>
     public static IEnumerable<Commodity> GoodsProduced()
@@ -196,10 +198,6 @@ public static class ProductionChains
 
     // ---------------------------------------------------------------- loading -----------
 
-    private static readonly HashSet<BuildingKind> StaffedSeen = new();
-    private static readonly HashSet<BuildingKind> RawSeen = new();
-    private static readonly HashSet<Commodity> DepositsSeen = new();
-
     static ProductionChains() => ResetCatalog();
 
     /// <summary>Back to what the game ships, before any mod is read.</summary>
@@ -207,9 +205,6 @@ public static class ProductionChains
     {
         Regional.Clear();
         National.Clear();
-        StaffedSeen.Clear();
-        RawSeen.Clear();
-        DepositsSeen.Clear();
 
         foreach (var document in GameDataLoader.DataDocuments("common", "production"))
             using (document)
@@ -227,38 +222,72 @@ public static class ProductionChains
     /// </summary>
     public static void Merge(JsonElement root, List<string> errors = null)
     {
-        if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            errors?.Add("Production recipes must be an object keyed by recipe ID.");
+            return;
+        }
         foreach (var entry in root.EnumerateObject())
         {
-            if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (entry.Value.ValueKind != JsonValueKind.Object)
+            {
+                errors?.Add($"Production recipe '{entry.Name}' must be an object.");
+                continue;
+            }
             var recipe = Read(entry.Name, entry.Value, errors);
             if (recipe is null) continue;
-            var into = recipe.National ? National : Regional;
-            into.RemoveAll(existing => existing.Id == recipe.Id);
-            into.Add(recipe);
+            // An override may move a recipe between scopes. Keep one ID, not both copies.
+            Regional.RemoveAll(existing => existing.Id == recipe.Id);
+            National.RemoveAll(existing => existing.Id == recipe.Id);
+            (recipe.National ? National : Regional).Add(recipe);
         }
 
         UsedBuildingsStaffed.Clear();
         UsedBuildingsRaw.Clear();
         UsedDeposits.Clear();
-        foreach (var kind in StaffedSeen) UsedBuildingsStaffed.Add((int)kind);
-        foreach (var kind in RawSeen) UsedBuildingsRaw.Add((int)kind);
-        foreach (var commodity in DepositsSeen) UsedDeposits.Add(commodity);
+        // Derive the slots from accepted recipes only. Validation and rejected overrides
+        // cannot change the live runner's metadata or retain abandoned mod factors.
+        foreach (var recipes in new[] { Regional, National })
+            foreach (var recipe in recipes)
+                foreach (var terms in new[] { recipe.Output, recipe.Demand })
+                    foreach (var term in terms)
+                        foreach (var slot in term.Factors)
+                        {
+                            if (slot >= FixedSlots + BuildingKinds * 2)
+                            {
+                                var good = (Commodity)(slot - FixedSlots - BuildingKinds * 2);
+                                if (!UsedDeposits.Contains(good)) UsedDeposits.Add(good);
+                            }
+                            else if (slot >= FixedSlots)
+                            {
+                                var staffed = slot < FixedSlots + BuildingKinds;
+                                var kind = slot - FixedSlots - (staffed ? 0 : BuildingKinds);
+                                if (staffed && !UsedBuildingsStaffed.Contains(kind)) UsedBuildingsStaffed.Add(kind);
+                                if (!UsedBuildingsRaw.Contains(kind)) UsedBuildingsRaw.Add(kind);
+                            }
+                        }
     }
 
     /// <summary>
     /// Read a file's recipes and report what is wrong with them, without keeping any.
     ///
     /// For the bench, and for anything else that wants to know a mod is sound before the
-    /// mod is live. The only trace it leaves is that a factor named here will be filled in
-    /// the slot table afterwards even if no live recipe asks for it, which costs one float.
+    /// mod is live. Does not alter recipes or the runner's slot metadata.
     /// </summary>
     public static void Validate(JsonElement root, List<string> problems)
     {
-        if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            problems.Add("Production recipes must be an object keyed by recipe ID.");
+            return;
+        }
         foreach (var entry in root.EnumerateObject())
         {
-            if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            if (entry.Value.ValueKind != JsonValueKind.Object)
+            {
+                problems.Add($"Production recipe '{entry.Name}' must be an object.");
+                continue;
+            }
             Read(entry.Name, entry.Value, problems);
         }
     }
@@ -278,28 +307,43 @@ public static class ProductionChains
             return null;
         }
 
+        var problems = new List<string>();
         var recipe = new Recipe { Id = id, Good = commodity };
-        recipe.National = value.TryGetProperty("scope", out var scope) &&
-                          scope.ValueKind == JsonValueKind.String &&
-                          string.Equals(scope.GetString(), "nation", StringComparison.OrdinalIgnoreCase);
-        recipe.Output = Terms(id, value, "output", errors);
-        recipe.Demand = Terms(id, value, "demand", errors);
-        recipe.Needs = Inputs(id, value, "needs", errors);
-        recipe.Shortfall = Inputs(id, value, "shortfall", errors);
+        if (value.TryGetProperty("scope", out var scope))
+        {
+            if (scope.ValueKind != JsonValueKind.String ||
+                !(string.Equals(scope.GetString(), "nation", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(scope.GetString(), "region", StringComparison.OrdinalIgnoreCase)))
+                problems.Add($"Production recipe '{id}' scope must be 'region' or 'nation'.");
+            else recipe.National = string.Equals(scope.GetString(), "nation", StringComparison.OrdinalIgnoreCase);
+        }
+        recipe.Output = Terms(id, value, "output", problems);
+        recipe.Demand = Terms(id, value, "demand", problems);
+        recipe.Needs = Inputs(id, value, "needs", problems);
+        recipe.Shortfall = Inputs(id, value, "shortfall", problems);
         if (recipe.Output.Length == 0 && recipe.Demand.Length == 0)
-            errors?.Add($"Production recipe '{id}' neither makes nor consumes anything.");
-        return recipe;
+            problems.Add($"Production recipe '{id}' neither makes nor consumes anything.");
+        errors?.AddRange(problems);
+        return problems.Count == 0 ? recipe : null;
     }
 
     private static Term[] Terms(string id, JsonElement value, string property, List<string> errors)
     {
-        if (!value.TryGetProperty(property, out var table) || table.ValueKind != JsonValueKind.Object)
+        if (!value.TryGetProperty(property, out var table)) return Array.Empty<Term>();
+        if (table.ValueKind != JsonValueKind.Object)
+        {
+            errors.Add($"Production recipe '{id}' {property} must be a factor-to-weight object.");
             return Array.Empty<Term>();
+        }
 
         var terms = new List<Term>();
         foreach (var entry in table.EnumerateObject())
         {
-            if (!entry.Value.TryGetSingle(out var weight)) continue;
+            if (entry.Value.ValueKind != JsonValueKind.Number || !entry.Value.TryGetSingle(out var weight) || !float.IsFinite(weight))
+            {
+                errors.Add($"Production recipe '{id}' {property}.{entry.Name} must be a finite number.");
+                continue;
+            }
             var factors = Factors(id, entry.Name, errors);
             if (factors is null) continue;
             terms.Add(new Term(factors, weight));
@@ -316,7 +360,7 @@ public static class ProductionChains
     /// </summary>
     private static int[] Factors(string id, string term, List<string> errors)
     {
-        var pieces = term.Split('*', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var pieces = term.Split('*', StringSplitOptions.TrimEntries);
         var slots = new int[pieces.Length];
         for (var index = 0; index < pieces.Length; index++)
         {
@@ -353,21 +397,17 @@ public static class ProductionChains
             CommodityCatalog.TryParse(name["deposit:".Length..], out var commodity))
         {
             if ((int)commodity >= CommodityKinds) return -1;
-            DepositsSeen.Add(commodity);
             return DepositSlot(commodity);
         }
         if (name.StartsWith("raw:", StringComparison.OrdinalIgnoreCase) &&
             BuildingCatalog.TryParse(name["raw:".Length..], out var unstaffed))
         {
             if ((int)unstaffed >= BuildingKinds) return -1;
-            RawSeen.Add(unstaffed);
             return RawSlot(unstaffed);
         }
         if (BuildingCatalog.TryParse(name, out var kind))
         {
             if ((int)kind >= BuildingKinds) return -1;
-            StaffedSeen.Add(kind);
-            RawSeen.Add(kind);
             return StaffedSlot(kind);
         }
         return -1;
@@ -376,8 +416,12 @@ public static class ProductionChains
     private static (Commodity, float)[] Inputs(string id, JsonElement value, string property,
         List<string> errors)
     {
-        if (!value.TryGetProperty(property, out var table) || table.ValueKind != JsonValueKind.Object)
+        if (!value.TryGetProperty(property, out var table)) return Array.Empty<(Commodity, float)>();
+        if (table.ValueKind != JsonValueKind.Object)
+        {
+            errors.Add($"Production recipe '{id}' {property} must be a good-to-floor object.");
             return Array.Empty<(Commodity, float)>();
+        }
 
         var inputs = new List<(Commodity, float)>();
         foreach (var entry in table.EnumerateObject())
@@ -387,7 +431,13 @@ public static class ProductionChains
                 errors?.Add($"Production recipe '{id}' {property} names '{entry.Name}', which is not a good.");
                 continue;
             }
-            inputs.Add((commodity, entry.Value.TryGetSingle(out var floor) ? M.Clamp01(floor) : 0f));
+            if (entry.Value.ValueKind != JsonValueKind.Number || !entry.Value.TryGetSingle(out var floor) ||
+                !float.IsFinite(floor) || floor < 0f || floor > 1f)
+            {
+                errors.Add($"Production recipe '{id}' {property}.{entry.Name} must be a finite floor between 0 and 1.");
+                continue;
+            }
+            inputs.Add((commodity, floor));
         }
         return inputs.ToArray();
     }

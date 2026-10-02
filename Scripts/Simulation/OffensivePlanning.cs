@@ -99,27 +99,8 @@ public static class OffensivePlanning
             // division on the plan marched to the same one. The division's own position was
             // in the ordering, but only as a tie-break between departures equally far from
             // the goal, which is a case that essentially never arises.
-            var departures = line.SourceProvinces.Where(p => control[p] == own.MapIndex)
-                .OrderBy(p => Distance(map, p, goal)).ThenBy(p => p).ToList();
-            if (departures.Count == 0) return;
-
-            // Where this division stands among the ones sharing its goal. By id, so it is
-            // the same answer every day and two divisions never swap jumping-off points
-            // between one tick and the next.
-            var sharing = 0;
-            var rank = 0;
-            foreach (var pair in line.Objectives)
-            {
-                if (pair.Value != goal) continue;
-                sharing++;
-                if (pair.Key < army.Id) rank++;
-            }
-
-            // One province each while there are enough to go round, and from the near end
-            // again when there are not: an attack forms up along the closest stretch of its
-            // own front, not spread over the whole border and not stacked on one tile.
-            var spread = Math.Max(1, Math.Min(departures.Count, Math.Max(1, sharing)));
-            target = departures[rank % spread];
+            target = DeparturePostFor(c, army, line);
+            if (target <= 0) return;
         }
         var route = army.PlanActive && war is not null
             ? map.FindOperationalRoute(army.ProvinceId, target, (ushort)own.MapIndex, (ushort)enemy.MapIndex, control)
@@ -129,5 +110,92 @@ public static class OffensivePlanning
         army.PlannedRoute.AddRange(route);
         army.Route.AddRange(route.TakeWhile(p => control[p] == own.MapIndex));
         army.OrderRouteSteps = route.Length; army.OrderStepsCompleted = 0;
+    }
+
+    /// <summary>Allocate the whole departure front, not a separate front for each goal.</summary>
+    public static int DeparturePostFor(Campaign c, Army army, DrawnFrontLine line)
+    {
+        var map = c.ProvinceMap;
+        var own = c.NationById(line.NationId);
+        if (map is null || own is null) return -1;
+        var control = c.ProvinceController ?? map.ProvinceToNation;
+        var posts = line.SourceProvinces.Where(p => p > 0 && p <= map.ProvinceCount &&
+            !map.IsWater(p) && control[p] == own.MapIndex).OrderBy(p => p).ToArray();
+        var members = line.ArmyIds.Distinct().OrderBy(id => id)
+            .Select(id => c.Armies.Find(a => a.Id == id)).Where(a => a is not null &&
+                a.NationId == line.NationId && a.FrontLineId == line.Id && a.Divisions >= .1f).ToArray();
+        if (posts.Length == 0 || members.Length == 0) { line.Posts.Clear(); return -1; }
+
+        // Follow distance along the connected border, including bends, rather than grouping
+        // by target. For a sparse army choose spaced posts across the entire departure line.
+        var first = posts.OrderBy(p => {
+            var point = map.CenterOf(p);
+            var dx = point.Longitude - line.StartLongitude;
+            var dy = point.Latitude - line.StartLatitude;
+            return dx * dx + dy * dy;
+        }).ThenBy(p => p).First();
+        var available = posts.ToHashSet();
+        var steps = new Dictionary<int, int> { [first] = 0 };
+        var queue = new Queue<int>(); queue.Enqueue(first);
+        while (queue.Count > 0)
+        {
+            var p = queue.Dequeue();
+            foreach (var n in map.Neighbors[p].OrderBy(n => n))
+                if (available.Contains(n) && steps.TryAdd(n, steps[p] + 1)) queue.Enqueue(n);
+        }
+        posts = posts.OrderBy(p => steps.GetValueOrDefault(p, int.MaxValue)).ThenBy(p => p).ToArray();
+        if (members.Length < posts.Length)
+            posts = Enumerable.Range(0, members.Length).Select(i => posts[members.Length == 1
+                ? posts.Length / 2 : (int)Math.Round(i * (posts.Length - 1d) / (members.Length - 1))]).ToArray();
+
+        var occupancy = posts.ToDictionary(p => p, _ => 0);
+        var ceiling = (members.Length + posts.Length - 1) / posts.Length;
+        var valid = line.PostsDay != int.MinValue && line.Posts.Count == members.Length;
+        foreach (var member in members)
+        {
+            if (!line.Posts.TryGetValue(member.Id, out var post) || !occupancy.ContainsKey(post)) { valid = false; continue; }
+            occupancy[post]++;
+        }
+        if (valid && occupancy.Values.Max() <= ceiling && occupancy.Values.Max() - occupancy.Values.Min() <= 1)
+            return line.Posts.GetValueOrDefault(army.Id, -1);
+
+        var previous = new Dictionary<int, int>(line.Posts);
+        line.Posts.Clear();
+        foreach (var post in posts) occupancy[post] = 0;
+        // Label friendly connected components once. Trying a full pathfinder for every
+        // division/post pair makes a large army's preparation unnecessarily quadratic.
+        var components = new Dictionary<int, int>();
+        int Component(int province)
+        {
+            if (province <= 0 || province > map.ProvinceCount || map.IsWater(province) ||
+                control[province] != own.MapIndex) return -1;
+            if (components.TryGetValue(province, out var known)) return known;
+            var id = components.Count;
+            var pending = new Queue<int>(); pending.Enqueue(province); components[province] = id;
+            while (pending.Count > 0)
+            {
+                var p = pending.Dequeue();
+                foreach (var next in map.Neighbors[p])
+                    if (!map.IsWater(next) && control[next] == own.MapIndex && components.TryAdd(next, id))
+                        pending.Enqueue(next);
+            }
+            return id;
+        }
+        var postComponents = posts.ToDictionary(p => p, Component);
+        foreach (var member in members)
+        {
+            // Balanced occupancy first. Keep a former post or the division's current tile
+            // where possible; an unchanged front must never reshuffle on camera/day changes.
+            var component = Component(member.ProvinceId);
+            var reachable = posts.Where(p => component >= 0 && postComponents[p] == component).ToArray();
+            if (reachable.Length == 0) continue;
+            var post = reachable.OrderBy(p => occupancy[p])
+                .ThenBy(p => previous.GetValueOrDefault(member.Id, -1) == p ? 0 : 1)
+                .ThenBy(p => p == member.ProvinceId ? 0 : 1)
+                .ThenBy(p => Distance(map, member.ProvinceId, p)).ThenBy(p => p).First();
+            line.Posts[member.Id] = post; occupancy[post]++;
+        }
+        line.PostsDay = c.ElapsedDays;
+        return line.Posts.GetValueOrDefault(army.Id, -1);
     }
 }

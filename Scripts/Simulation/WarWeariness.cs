@@ -68,6 +68,7 @@ public static class WarWeariness
 {
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarWeariness))) return;
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
         var defines = campaign.Defines;
         Mobilise(campaign);

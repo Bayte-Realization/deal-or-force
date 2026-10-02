@@ -117,6 +117,7 @@ public static class NationalModifiers
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(NationalModifiers))) return;
         foreach (var nation in campaign.Nations)
         {
             nation.ModifierTotals = null;

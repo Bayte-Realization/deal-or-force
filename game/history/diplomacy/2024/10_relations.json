@@ -1,0 +1,83 @@
+// Deal or Force - what the world already thought of itself on 1 January 2024.
+//
+// 00_pacts.json is what was signed; this is what was felt. Without it the scenario opened on
+// countries that had never met: India and Pakistan neutral, Iran and Israel neutral, the two
+// Koreas neutral - and the computer, finding nothing between them, signed them into alliances.
+//
+//     rivalries     an old enmity (opinion modifier `historic_rivalry`, -45 unless the row
+//                   says otherwise). Two countries it leaves at or below AiRivalryThreshold
+//                   open as rivals.
+//     friendships   an old friendship (`historic_friendship`, +30 unless the row says).
+//
+// Both fade over fifty years. `why` is for whoever reads this file; nothing reads it in the
+// game. Only standing, well-known relationships are here - not every quarrel of 2023 - and a
+// mod that wants a different world ships its own file beside this one.
+{
+  "rivalries": [
+    { "between": ["IND", "PAK"], "opinion": -60, "why": "Kashmir; four wars since 1947" },
+    { "between": ["IND", "CHN"], "opinion": -30, "why": "the Line of Actual Control; Galwan, 2020" },
+    { "between": ["CHN", "TWN"], "opinion": -60, "why": "unification claimed, independence held" },
+    { "between": ["CHN", "USA"], "opinion": -35, "why": "the strategic rivalry of the decade" },
+    { "between": ["CHN", "JPN"], "opinion": -25, "why": "the Senkaku islands; the war's memory" },
+    { "between": ["CHN", "PHL"], "opinion": -35, "why": "the South China Sea; Second Thomas Shoal" },
+    { "between": ["PRK", "KOR"], "opinion": -70, "why": "the armistice of 1953 and no peace since" },
+    { "between": ["PRK", "USA"], "opinion": -70, "why": "the same war, and the missiles" },
+    { "between": ["PRK", "JPN"], "opinion": -60, "why": "the abductions and the missiles over Hokkaido" },
+    { "between": ["AFG", "PAK"], "opinion": -30, "why": "the Durand Line; the TTP" },
+    { "between": ["KGZ", "TJK"], "opinion": -40, "why": "the border wars of 2021 and 2022" },
+    { "between": ["ARM", "AZE"], "opinion": -70, "why": "Karabakh, to September 2023" },
+    { "between": ["RUS", "UKR"], "opinion": -80, "why": "the war since 2014, in full since 2022" },
+    { "between": ["RUS", "USA"], "opinion": -50, "why": "sanctions and the arming of Ukraine" },
+    { "between": ["RUS", "GBR"], "opinion": -45, "why": "Salisbury, and the arming of Ukraine" },
+    { "between": ["RUS", "POL"], "opinion": -50, "why": "the arsenal and the road to Ukraine" },
+    { "between": ["RUS", "EST"], "opinion": -45, "why": "the Baltic front line" },
+    { "between": ["RUS", "LVA"], "opinion": -45, "why": "the Baltic front line" },
+    { "between": ["RUS", "LTU"], "opinion": -45, "why": "the Baltic front line; Kaliningrad" },
+    { "between": ["RUS", "GEO"], "opinion": -45, "why": "the war of 2008; Abkhazia and South Ossetia" },
+    { "between": ["GEO", "ABK"], "opinion": -55, "why": "secession, 1992-1993" },
+    { "between": ["GEO", "OST"], "opinion": -55, "why": "secession; the war of 2008" },
+    { "between": ["BLR", "POL"], "opinion": -35, "why": "the border crisis of 2021; Wagner on the border" },
+    { "between": ["BLR", "LTU"], "opinion": -30, "why": "the same border; Lithuania hosts the opposition" },
+    { "between": ["SRB", "KOS"], "opinion": -55, "why": "independence, 2008, unrecognised by Belgrade" },
+    { "between": ["CYP", "TUR"], "opinion": -40, "why": "the island divided since 1974" },
+    { "between": ["ISR", "IRN"], "opinion": -80, "why": "the shadow war" },
+    { "between": ["ISR", "LBN"], "opinion": -45, "why": "Hezbollah; the border war of 2006 and 2023" },
+    { "between": ["ISR", "SYR"], "opinion": -55, "why": "the Golan, at war in name since 1948" },
+    { "between": ["IRN", "USA"], "opinion": -70, "why": "1979, sanctions, Soleimani" },
+    { "between": ["IRN", "SAU"], "opinion": -20, "why": "Yemen; the détente of 2023 thawed it, not ended it" },
+    { "between": ["MAR", "DZA"], "opinion": -45, "why": "Western Sahara; relations cut in 2021" },
+    { "between": ["EGY", "ETH"], "opinion": -25, "why": "the Grand Renaissance Dam" },
+    { "between": ["ETH", "ERI"], "opinion": -25, "why": "the peace of 2018 gone cold after Tigray" },
+    { "between": ["SOM", "ETH"], "opinion": -25, "why": "the Somaliland port deal of 1 January 2024" },
+    { "between": ["RWA", "COD"], "opinion": -50, "why": "the M23" },
+    { "between": ["VEN", "GUY"], "opinion": -45, "why": "the Essequibo referendum of December 2023" },
+    { "between": ["USA", "VEN"], "opinion": -45, "why": "sanctions; no recognition since 2019" },
+    { "between": ["USA", "CUB"], "opinion": -40, "why": "the embargo since 1962" }
+  ],
+
+  "friendships": [
+    { "between": ["USA", "GBR"], "opinion": 35, "why": "the special relationship" },
+    { "between": ["USA", "ISR"], "opinion": 40, "why": "the closest partnership outside an alliance" },
+    { "between": ["USA", "JPN"], "opinion": 30, "why": "the security treaty of 1960" },
+    { "between": ["USA", "KOR"], "opinion": 30, "why": "the mutual defence treaty of 1953" },
+    { "between": ["USA", "CAN"], "opinion": 30, "why": "NORAD and the longest border" },
+    { "between": ["USA", "AUS"], "opinion": 30, "why": "ANZUS and AUKUS" },
+    { "between": ["USA", "UKR"], "opinion": 25, "why": "the arms that keep it in the war" },
+    { "between": ["GBR", "UKR"], "opinion": 25, "why": "the same" },
+    { "between": ["POL", "UKR"], "opinion": 20, "why": "the road to the front and millions of refugees" },
+    { "between": ["FRA", "DEU"], "opinion": 30, "why": "the Élysée Treaty" },
+    { "between": ["GRC", "CYP"], "opinion": 40, "why": "one people, two states" },
+    { "between": ["TUR", "AZE"], "opinion": 40, "why": "one nation, two states" },
+    { "between": ["RUS", "BLR"], "opinion": 40, "why": "the Union State" },
+    { "between": ["RUS", "CHN"], "opinion": 30, "why": "the partnership without limits" },
+    { "between": ["RUS", "IRN"], "opinion": 25, "why": "the drones and the sanctions they share" },
+    { "between": ["RUS", "PRK"], "opinion": 25, "why": "the shells for Ukraine" },
+    { "between": ["RUS", "SYR"], "opinion": 40, "why": "the intervention of 2015" },
+    { "between": ["RUS", "IND"], "opinion": 20, "why": "fifty years of arms and oil" },
+    { "between": ["CHN", "PAK"], "opinion": 40, "why": "the all-weather friendship" },
+    { "between": ["CHN", "KHM"], "opinion": 25, "why": "Ream, and the loans" },
+    { "between": ["SAU", "ARE"], "opinion": 30, "why": "the Gulf's two pillars" },
+    { "between": ["SAU", "EGY"], "opinion": 20, "why": "money for Cairo" },
+    { "between": ["IRN", "SYR"], "opinion": 35, "why": "the axis" }
+  ]
+}

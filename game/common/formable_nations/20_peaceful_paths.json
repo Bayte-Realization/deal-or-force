@@ -1,0 +1,16 @@
+// Opt-in routes: a signed treaty is valid for 730 days; reluctant sovereigns may refuse.
+// Subjects need liberty desire <=25% and peace. Only authored foundation land is integrated.
+{
+  "united_korea": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "central_asian_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "benelux_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "nordic_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "iberian_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "baltic_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "kalmar_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "union_state": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "eurasian_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "west_indies_federation": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "australasia": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "gulf_union": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true}
+}

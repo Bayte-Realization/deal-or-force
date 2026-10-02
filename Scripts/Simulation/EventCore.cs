@@ -53,6 +53,8 @@ public sealed class CampaignEventOption
     public string DeclareWarOnTag { get; init; } = "";
     public string WarGoalRegion { get; init; } = "";
     public string RenouncesClaimRegion { get; init; } = "";
+    public int UnionFounderId { get; init; }
+    public string UnionFormableId { get; init; } = "";
 
     /// <summary>Falls back to a generated summary when content shipped no prose.</summary>
     public string ConsequenceText => string.IsNullOrWhiteSpace(Consequence) ? Effect.Describe() : Consequence;
@@ -429,6 +431,7 @@ public static class EventSystem
 {
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(EventSystem))) return;
         // Nobody is asked anything in observer mode. It is the whole of what the mode is
         // for: a timelapse is a campaign at speed five with nobody at the wheel, and one
         // modal window waiting for an answer ends it.
@@ -459,6 +462,9 @@ public static class EventSystem
         optionIndex = M.Clamp(optionIndex, 0, item.Options.Length - 1);
         var option = item.Options[optionIndex];
         var nation = campaign.NationById(item.NationId);
+        if (!string.IsNullOrEmpty(option.UnionFormableId) && item.ExpiresDay > campaign.ElapsedDays)
+            PeacefulFormation.Accept(campaign, campaign.NationById(option.UnionFounderId), nation,
+                FormableNations.Find(option.UnionFormableId));
         option.Effect.Apply(campaign, nation);
         foreach (var (id, days) in option.Modifiers) ModifierSystem.Grant(campaign, nation, id, days);
         // By the country itself rather than by an id that means "nobody" at zero: nation 0 is
@@ -567,6 +573,7 @@ public sealed class ResolveCampaignEventCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var item = campaign.PendingEvents.FirstOrDefault(candidate => candidate.Id == EventId && candidate.NationId == IssuerId);
         if (item is not null) EventSystem.Resolve(campaign, item, OptionIndex);
     }

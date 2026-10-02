@@ -93,6 +93,7 @@ internal static class Ui
     /// </summary>
     internal static T Place<T>(T control, string key) where T : Control
     {
+        control.SetMeta("skin_layout", key);
         var rect = InterfaceSkin.Layout(key);
         control.AnchorLeft = rect.AnchorLeft;
         control.AnchorTop = rect.AnchorTop;
@@ -103,6 +104,13 @@ internal static class Ui
         control.OffsetRight = rect.OffsetRight;
         control.OffsetBottom = rect.OffsetBottom;
         return control;
+    }
+
+    internal static string ColourToken(Color colour)
+    {
+        foreach (var entry in InterfaceSkin.Tokens)
+            if (new Color(entry.Value).IsEqualApprox(colour)) return entry.Token;
+        return "";
     }
 
     /// <summary>Drop every cached brush. Called automatically when a mod reloads the skin.</summary>

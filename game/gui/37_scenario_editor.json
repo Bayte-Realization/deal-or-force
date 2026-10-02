@@ -1,0 +1,14 @@
+{
+  "metrics": {
+    "map_editor.sidebar_width": 280,
+    "map_editor.country_list_height": 150,
+    "map_editor.field_label_width": 160,
+    "map_editor.form_font_size": 14,
+    "map_editor.ScenarioSettings.width": 680,
+    "map_editor.ScenarioSettings.height": 650,
+    "map_editor.CountryInspector.width": 760,
+    "map_editor.CountryInspector.height": 680,
+    "map_editor.RegionInspector.width": 760,
+    "map_editor.RegionInspector.height": 680
+  }
+}

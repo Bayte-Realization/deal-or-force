@@ -131,7 +131,11 @@ public sealed class ChangePoliticsCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public string Government { get; init; } = "";
     public string Ideology { get; init; } = "";
-    public void Apply(Campaign campaign) => campaign.ChangePolitics(IssuerId, Government, Ideology, out _);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.ChangePolitics(IssuerId, Government, Ideology, out _);
+    }
 }
 
 public sealed class SetPolicyRateCommand : ICampaignCommand
@@ -139,26 +143,42 @@ public sealed class SetPolicyRateCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public string LineId { get; init; } = "";
     public float Value { get; init; }
-    public void Apply(Campaign campaign) => campaign.SetPolicyRate(IssuerId, LineId, Value);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.SetPolicyRate(IssuerId, LineId, Value);
+    }
 }
 
 public sealed class SetWelfareSpendingCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public float Value { get; init; }
-    public void Apply(Campaign campaign) => campaign.SetWelfareSpending(IssuerId, Value);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.SetWelfareSpending(IssuerId, Value);
+    }
 }
 
 public sealed class SetEducationSpendingCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public float Value { get; init; }
-    public void Apply(Campaign campaign) => campaign.SetEducationSpending(IssuerId, Value);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.SetEducationSpending(IssuerId, Value);
+    }
 }
 
 public sealed class SetGovernmentFocusCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public GovernmentFocus Focus { get; init; }
-    public void Apply(Campaign campaign) => campaign.SetGovernmentFocus(IssuerId, Focus);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.SetGovernmentFocus(IssuerId, Focus);
+    }
 }

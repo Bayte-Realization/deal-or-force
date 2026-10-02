@@ -8,40 +8,76 @@ public partial class DealOrForceGame
 {
     private string _formationConfirmation = "";
     private bool _showAllFormables;
+    private string _formationSearch = "";
+    private bool _peacefulFormablesOnly;
 
     private void ShowFormableNations()
     {
-        var nation = _campaign.Player;
-        _sideBody.Text = Tr("A new state, built on territory you already own. No land is granted by proclamation.");
+        _sideBody.Text = Tr("A shared state needs territory, a stable government and a founding mandate. Partners may join by treaty; a proclamation never grants unowned land.");
         ClearRuntimeChildren(_decisionControls);
         var all = new CheckButton { Text = Tr("Show all formable nations"), ButtonPressed = _showAllFormables };
         all.Toggled += value => { _showAllFormables = value; _formationConfirmation = ""; ShowFormableNations(); };
         _decisionControls.AddChild(all);
+        var search = new LineEdit
+        {
+            Name = "FormationSearch", Text = _formationSearch,
+            PlaceholderText = Tr("Search foundations or country tags…"),
+            CustomMinimumSize = new Vector2(0, Ui.Metric("formation.search_height", 34)), SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        Tip(search, "Filter by the state's name or a member's country tag.");
+        _decisionControls.AddChild(search);
+        var peaceful = new CheckButton
+        {
+            Name = "PeacefulFoundationsOnly", Text = Tr("Peaceful accession routes"), ButtonPressed = _peacefulFormablesOnly
+        };
+        _decisionControls.AddChild(peaceful);
+        var cards = new VBoxContainer { Name = "FormationCards", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        cards.AddThemeConstantOverride("separation", (int)Ui.Metric("formation.card_gap", 12));
+        _decisionControls.AddChild(cards);
+        search.TextChanged += value => { _formationSearch = value; _formationConfirmation = ""; RenderFormationCards(cards); };
+        peaceful.Toggled += value => { _peacefulFormablesOnly = value; _formationConfirmation = ""; RenderFormationCards(cards); };
+        RenderFormationCards(cards);
+    }
+
+    private void RenderFormationCards(VBoxContainer cards)
+    {
+        var nation = _campaign.Player;
+        ClearRuntimeChildren(cards);
         if (!string.IsNullOrEmpty(nation.FormedNationId))
         {
-            _decisionControls.AddChild(Title(Simulation.Loc.Format("Proclaimed: {0} · campaign day {1}", nation.DisplayName,
+            cards.AddChild(Title(Simulation.Loc.Format("Proclaimed: {0} · campaign day {1}", nation.DisplayName,
                 nation.FormedNationDay), 18, Ui.Colour("text.accent")));
-            _decisionControls.AddChild(Title("Each country may proclaim one new state in a campaign.", 13, Ui.Colour("text.body_soft")));
+            cards.AddChild(Title("Each country may proclaim one new state in a campaign.", 13, Ui.Colour("text.body_soft")));
         }
-        var definitions = FormableNations.All.Where(d => _showAllFormables || FormableNations.Eligible(nation, d)).ToArray();
+        var term = _formationSearch.Trim();
+        var definitions = FormableNations.All.Where(d => (_showAllFormables || FormableNations.Eligible(nation, d)) &&
+            (!_peacefulFormablesOnly || d.PeacefulAccession) &&
+            (term.Length == 0 || Simulation.Loc.Get(d.Name).Contains(term, System.StringComparison.OrdinalIgnoreCase) ||
+             d.Id.Contains(term, System.StringComparison.OrdinalIgnoreCase) || d.RequiredTags.Any(t => t.Contains(term, System.StringComparison.OrdinalIgnoreCase))))
+            .Select(d => (Definition: d, Status: FormableNations.Evaluate(_campaign, nation, d)))
+            .OrderByDescending(entry => entry.Status.CanForm)
+            .ThenBy(entry => Simulation.Loc.Get(entry.Definition.Name)).ToArray();
+        cards.AddChild(Title(Simulation.Loc.Format("Foundations shown: {0}", definitions.Length), 12, Ui.Colour("text.body_soft")));
         if (definitions.Length == 0)
-            _decisionControls.AddChild(Title("No formation is defined for this country. You can browse other states above.", 14, Ui.Colour("text.body_soft")));
-        foreach (var d in definitions)
+            cards.AddChild(Title("No foundations match these filters. Clear the search or browse all countries.", 14, Ui.Colour("text.body_soft")));
+        foreach (var entry in definitions)
         {
-            var status = FormableNations.Evaluate(_campaign, nation, d);
-            var card = WorkbenchCard(_decisionControls);
-            card.AddChild(Title(d.Name, 21, Ui.Colour("text.accent")));
+            var d = entry.Definition;
+            var status = entry.Status;
+            var card = WorkbenchCard(cards);
             var future = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             var futureSprite = FlagCatalog.ResolveFormationPreview(_campaign, nation, d.Id);
             future.AddChild(new TextureRect {
                 Name = "FormationFlag_" + d.Id, Texture = FlagSpriteTexture(futureSprite),
-                CustomMinimumSize = new Vector2(72, 48), SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
+                CustomMinimumSize = new Vector2(Ui.Metric("formation.flag_width", 72), Ui.Metric("formation.flag_height", 48)), SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
                 SizeFlagsVertical = SizeFlags.ShrinkCenter, ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered });
-            var flagCaption = Title(futureSprite.Length == 0 ? "No flag available" : "Flag after formation", 13, Ui.Colour("text.body_soft"));
-            flagCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            flagCaption.SizeFlagsVertical = SizeFlags.ShrinkCenter;
-            future.AddChild(flagCaption);
+            var heading = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            heading.AddChild(Title(d.Name, (int)Ui.Metric("formation.title_size", 20), Ui.Colour("text.accent")));
+            heading.AddChild(Title(status.CanForm ? "Ready to proclaim" : d.PeacefulAccession ? "Treaty or territorial route" : "Territorial route",
+                12, Ui.Colour(status.CanForm ? "state.positive" : "text.body_soft")));
+            future.AddChild(heading);
+            Tip(future, futureSprite.Length == 0 ? "No flag available" : "Flag after formation");
             card.AddChild(future);
             card.AddChild(Title(d.Description, 13, Ui.Colour("text.body_soft")));
             var members = new HFlowContainer();
@@ -55,9 +91,11 @@ public partial class DealOrForceGame
             card.AddChild(new ProgressBar
             {
                 Name = "FormationTerritory_" + d.Id, MaxValue = System.Math.Max(1, status.Total), Value = status.Owned,
-                CustomMinimumSize = new Vector2(0, 10), ShowPercentage = false, MouseFilter = MouseFilterEnum.Ignore
+                CustomMinimumSize = new Vector2(0, Ui.Metric("formation.progress_height", 10)), ShowPercentage = false, MouseFilter = MouseFilterEnum.Ignore
             });
-            card.AddChild(Title(Simulation.Loc.Format("Territory owned and controlled: {0}/{1}", status.Owned, status.Total), 13, Ui.Colour("text.bright")));
+            card.AddChild(Title(Simulation.Loc.Format("Foundation territory secured: {0}/{1}", status.Owned, status.Total), 13, Ui.Colour("text.bright")));
+            if (d.PeacefulAccession && FormableNations.Eligible(nation, d) && string.IsNullOrEmpty(nation.FormedNationId))
+                AddFormationPartners(card, nation, d);
             // Successful technical checks are not UI content. Failed checks remain explicit.
             for (var i = 0; i < status.Requirements.Length; i++)
             {
@@ -82,9 +120,50 @@ public partial class DealOrForceGame
             }, 0, 36, status.CanForm);
             button.Name = "FormNation_" + d.Id;
             button.Disabled = !status.CanForm;
-            Tip(button, status.CanForm ? "Proclamation spends the displayed cost. Existing borders do not change." : string.Join("\n", status.Requirements.Where(r => !r.Met).Select(r => r.Label)));
+            Tip(button, status.CanForm ? "Proclamation spends the displayed cost and integrates consenting partners' declared foundation territory." : string.Join("\n", status.Requirements.Where(r => !r.Met).Select(r => r.Label)));
             card.AddChild(button);
             if (confirming) card.AddChild(ActionButton("Cancel", () => { _formationConfirmation = ""; ShowFormableNations(); }, 0, 30));
+        }
+    }
+
+    private void AddFormationPartners(VBoxContainer card, Nation founder, FormableNation definition)
+    {
+        if (_campaign.ProvinceMap is null) return;
+        var owners = PeacefulFormation.Territory(_campaign, definition)
+            .Where(p => p > 0 && p <= _campaign.ProvinceMap.ProvinceCount && !_campaign.ProvinceMap.WaterByProvince[p])
+            .Select(p => _campaign.ProvinceMap.ProvinceToNation[p]).Distinct().ToHashSet();
+        var partners = _campaign.Nations.Where(n => n.Id != founder.Id && owners.Contains((ushort)n.MapIndex)).ToArray();
+        if (partners.Length == 0) return;
+        card.AddChild(Title("ACCESSION TALKS", 12, Ui.Colour("text.accent_dim")));
+        foreach (var partner in partners)
+        {
+            var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            row.AddChild(FlagBadge(partner.Tag, 22));
+            var name = Title(partner.DisplayName, 13, Ui.Colour("text.bright"));
+            name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            row.AddChild(name);
+            var participating = PeacefulFormation.Participates(_campaign, founder, partner, definition);
+            if (participating)
+            {
+                row.AddChild(Title(partner.AnswersTo(founder.Id) ? "Subject ready" : "Treaty signed", 12, Ui.Colour("state.positive")));
+                card.AddChild(row);
+                continue;
+            }
+            var refusal = PeacefulFormation.Refusal(_campaign, founder, partner, definition);
+            var willingness = PeacefulFormation.Willingness(_campaign, founder, partner);
+            var invite = ActionButton("Invite", () =>
+            {
+                _campaign.Commands.Enqueue(new InviteFormationCommand { IssuerId = founder.Id, PartnerId = partner.Id, FormableId = definition.Id });
+                _campaign.Commands.ApplyAll(_campaign);
+                Refresh();
+                ShowFormableNations();
+            }, Ui.Metric("formation.invite_width", 72), Ui.Metric("formation.invite_height", 30));
+            invite.Name = "InviteFoundation_" + definition.Id + "_" + partner.Tag;
+            invite.Disabled = refusal.Length > 0;
+            Tip(invite, refusal.Length > 0 ? Simulation.Loc.Get(refusal) : Simulation.Loc.Format("Willingness: {0:0}/100 · acceptance needs {1:0}. Culture, relations, alliances and trade matter.", willingness, _campaign.Defines.UnionAiAcceptance));
+            row.AddChild(invite);
+            card.AddChild(row);
+            card.AddChild(Title(refusal.Length > 0 ? refusal : Simulation.Loc.Format("Willingness: {0:0}/100", willingness), 12, Ui.Colour("text.body_soft")));
         }
     }
 }

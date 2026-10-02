@@ -70,21 +70,27 @@ public static class ProductionProgramme
     }
     public static void Merge(JsonElement root, List<string> errors = null)
     {
-        if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.ValueKind != JsonValueKind.Object)
+        { errors?.Add("Production programme must be an object."); return; }
         if (root.TryGetProperty("units_per_factory", out var units))
         {
             if (units.ValueKind == JsonValueKind.Number && units.TryGetInt32(out var count) && count is >= 1 and <= 1000)
                 UnitsPerFactory = count;
             else errors?.Add("units_per_factory must be an integer from 1 to 1000.");
         }
-        if (root.TryGetProperty("conversion", out var conversion) && conversion.ValueKind == JsonValueKind.Object &&
-            conversion.TryGetProperty("efficiency", out var efficiency))
+        if (root.TryGetProperty("conversion", out var conversion))
         {
-            if (efficiency.ValueKind == JsonValueKind.Number && efficiency.TryGetSingle(out var value) &&
-                float.IsFinite(value) && value is >= .05f and <= 1f) ConversionEfficiency = value;
-            else errors?.Add("Conversion efficiency must be a finite number from 0.05 to 1.");
+            if (conversion.ValueKind != JsonValueKind.Object) errors?.Add("Production conversion must be an object.");
+            else if (conversion.TryGetProperty("efficiency", out var efficiency))
+            {
+                if (efficiency.ValueKind == JsonValueKind.Number && efficiency.TryGetSingle(out var value) &&
+                    float.IsFinite(value) && value is >= .05f and <= 1f) ConversionEfficiency = value;
+                else errors?.Add("Conversion efficiency must be a finite number from 0.05 to 1.");
+            }
         }
-        if (!root.TryGetProperty("lines", out var lines) || lines.ValueKind != JsonValueKind.Object) return;
+        if (!root.TryGetProperty("lines", out var lines)) return;
+        if (lines.ValueKind != JsonValueKind.Object)
+        { errors?.Add("Production lines must be an object keyed by good ID."); return; }
         foreach (var entry in lines.EnumerateObject())
         {
             if (!CommodityCatalog.TryParse(entry.Name, out var good))
@@ -168,6 +174,7 @@ public sealed class SetProductionProgrammeCommand : ICampaignCommand
     public List<ProductionLine> Lines { get; init; }
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation is null) return;
         // Never retain a network caller's mutable list.

@@ -1,0 +1,10 @@
+{
+  "lines": {
+    "Steel": { "pool": "civilian" },
+    "Batteries": { "pool": "civilian" },
+    "Semiconductors": { "pool": "civilian" },
+    "MotorVehicles": { "pool": "civilian" },
+    "PrecisionComponents": { "pool": "civilian" },
+    "Ammunition": { "pool": "military" }
+  }
+}

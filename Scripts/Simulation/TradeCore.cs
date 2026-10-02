@@ -106,6 +106,9 @@ public static class TradeNetwork
 
     private static readonly Dictionary<int, float> Reach = new();
     private static readonly Dictionary<int, (int States, int Infrastructure, float Ports, int Rails)> Counts = new();
+    // The same pair trades several goods. Geography and diplomacy do not change within
+    // one market clearing; commodity-specific instructions still get checked each time.
+    private static readonly Dictionary<long, float> PartnerScores = new();
 
     /// <summary>
     /// Route objects, reused.
@@ -126,6 +129,7 @@ public static class TradeNetwork
     /// divergence rather than an error.
     /// </summary>
     private static Campaign _distanceCampaign;
+    private static readonly Dictionary<int, (float Latitude, float Longitude)> DistanceCapitals = new();
 
     /// <summary>
     /// Match the world's shortfalls against the world's surpluses, and write the result
@@ -150,6 +154,7 @@ public static class TradeNetwork
 
         EnsureDistances(campaign);
         MeasureReach(campaign);
+        PartnerScores.Clear();
 
         foreach (var commodity in CommodityCatalog.All)
             RouteOne(campaign, commodity);
@@ -318,6 +323,20 @@ public static class TradeNetwork
         // wide when it names a good and the ordinary kind when it does not.
         if (TradeDesk.Forbidden(buyer, seller, commodity)) return 0f;
 
+        var key = ((long)buyer.Id << 32) | (uint)seller.Id;
+        if (!PartnerScores.TryGetValue(key, out var score))
+        {
+            score = PartnerAffinity(campaign, buyer, seller);
+            PartnerScores[key] = score;
+        }
+        return score * TradePolicyRules.ImportAccess(buyer.TradePolicy) *
+               TradePolicyRules.ExportAccess(seller.TradePolicy) *
+               TradeDesk.PreferenceBetween(buyer, seller, commodity);
+    }
+
+    private static float PartnerAffinity(Campaign campaign, Nation buyer, Nation seller)
+    {
+
         // A war stops trade, and so does either side forbidding it. These are the whole
         // point of the exercise: they are what an embargo and a blockade now mean.
         var relation = CampaignDiplomacy.Peek(campaign, buyer.Id, seller.Id);
@@ -348,9 +367,7 @@ public static class TradeNetwork
             score *= falloff * reach;
         }
 
-        return score * TradePolicyRules.ImportAccess(buyer.TradePolicy) *
-               TradePolicyRules.ExportAccess(seller.TradePolicy) *
-               TradeDesk.PreferenceBetween(buyer, seller, commodity);
+        return score;
     }
 
     /// <summary>
@@ -420,19 +437,29 @@ public static class TradeNetwork
     {
         var count = 0;
         foreach (var nation in campaign.Nations) count = Math.Max(count, nation.Id + 1);
-        if (_distance is not null && _distanceNations == count &&
-            ReferenceEquals(_distanceCampaign, campaign)) return;
+        var unchanged = _distance is not null && _distanceNations == count &&
+            ReferenceEquals(_distanceCampaign, campaign) && DistanceCapitals.Count == campaign.Nations.Count;
+        if (unchanged)
+            foreach (var nation in campaign.Nations)
+                if (!DistanceCapitals.TryGetValue(nation.Id, out var coordinates) ||
+                    coordinates != (nation.CapitalLatitude, nation.CapitalLongitude)) { unchanged = false; break; }
+        if (unchanged) return;
 
         _distanceCampaign = campaign;
         _distanceNations = count;
         _distance = new float[count * count];
+        DistanceCapitals.Clear();
+        foreach (var nation in campaign.Nations)
+            DistanceCapitals[nation.Id] = (nation.CapitalLatitude, nation.CapitalLongitude);
         for (var index = 0; index < _distance.Length; index++) _distance[index] = 12000f;
         foreach (var a in campaign.Nations)
         foreach (var b in campaign.Nations)
         {
-            if (a.Id < 0 || b.Id < 0) continue;
-            _distance[a.Id * count + b.Id] = GreatCircle(
+            if (a.Id < 0 || b.Id < a.Id) continue;
+            var kilometres = GreatCircle(
                 a.CapitalLatitude, a.CapitalLongitude, b.CapitalLatitude, b.CapitalLongitude);
+            _distance[a.Id * count + b.Id] = kilometres;
+            _distance[b.Id * count + a.Id] = kilometres;
         }
     }
 

@@ -18,6 +18,7 @@ public sealed class MovementActionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         if (nation?.Movement is null) return;
         if (MovementActions.Refusal(campaign, nation, Action, StateMapIndex, TargetNationId).Length > 0) return;

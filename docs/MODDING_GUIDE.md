@@ -2,6 +2,9 @@
 
 *Русская версия: [MODDING_GUIDE_RU.md](MODDING_GUIDE_RU.md)*
 
+Scenario mechanic switches (`Features` / `FeatureUnlocks`), scripted activation,
+and custom flags: [mechanic features reference, Russian](MECHANIC_FEATURES_RU.md).
+
 ## Philosophy and folders
 
 Modding is the game's public layer. The basic path resembles Paradox games: a mod is an
@@ -70,7 +73,7 @@ my_first_mod/
   "load_order": 100,
   "dependencies": ["shared_library"],
   "gdscript_entry": "scripts/main.gd",
-  "csharp_assembly": ""
+  "corecode_assembly": ""
 }
 ```
 
@@ -78,7 +81,7 @@ my_first_mod/
   publication.
 - `load_order` — lower numbers load earlier. A later mod overrides a value that matches.
 - `dependencies` — required `id`s; a dependency always loads first.
-- `gdscript_entry` and `csharp_assembly` are optional.
+- `gdscript_entry` and `corecode_assembly` are optional. Compiled code belongs in `corecode/`; `csharp_assembly` remains readable for legacy manifests.
 - paths must be relative and cannot leave the mod's folder.
 
 If a dependency is missing, the mod is not activated. Circular dependencies should be treated
@@ -792,8 +795,10 @@ C# is for new systems, complex AI or large libraries. Copy `mods/_templates/csha
 rename the folder and build the nested project:
 
 ```powershell
-dotnet build .\mods\my_csharp_mod\csharp\ExampleCSharpMod.csproj
+dotnet build .\mods\my_csharp_mod\corecode\ExampleCSharpMod.csproj
 ```
+
+The manifest uses `"corecode_assembly": "corecode/bin/Debug/net8.0/ExampleCSharpMod.dll"`. It takes precedence over legacy `csharp_assembly`; invalid modern paths are rejected rather than falling back.
 
 The mod implements `DealOrForce.Modding.IGlobalityMod`:
 
@@ -1612,6 +1617,25 @@ The Diplomacy page is drawn in the same materials - its fields are `war.inset`, 
 chips `war.card` - so one retint carries both screens. `diplomacy.chips_shown` (24) is how many
 countries a tie lists by flag before it says "+N more".
 
+### What the world had signed, and what it felt
+
+`history/diplomacy/2024/` is the world's diplomacy on the first morning. `00_pacts.json` is what
+was signed - `alliances` (a name and its members, written out pairwise), `guarantees` (`by` and
+`to`) and `pacts` (pairs). `10_relations.json` is what was felt:
+
+```jsonc
+"rivalries":   [ { "between": ["IND", "PAK"], "opinion": -60, "why": "Kashmir" } ],
+"friendships": [ { "between": ["CHN", "PAK"], "opinion": 40 } ]
+```
+
+A rivalry is remembered as the opinion reason `historic_rivalry`, a friendship as
+`historic_friendship` (`common/opinion_modifiers/40_history.json`, fifty years to fade), scaled to
+the row's own `opinion` when it gives one. A rivalry that leaves the two at or below
+`AiRivalryThreshold` opens them as rivals; a friendship at or above `AiFriendshipThreshold`, as
+friends; an alliance or a war already between them is left as it is. `why` is for whoever reads
+the file. Files are read in name order and a mod's after the base game's; an unknown tag is
+reported, not guessed at.
+
 ### A region's first day
 
 `history/states/2024/` holds every region of the 2024 world as the bookmark opens it: one file per
@@ -1837,6 +1861,12 @@ countries fighting it take the `long_war` and `exhausted_by_war` modifiers
 `PeaceForcedEndLead`.
 
 ### The console and mod diagnostics
+
+Hardware cursor SVG/PNG assets, hotspots and scale are mod-overridable through
+`gfx/interface/cursors` and `gui`. See [Cursor reference (Russian)](CURSORS_RU.md)
+for all 17 shapes, aliases, source-pixel hotspots and fallback rules. Scenario editor
+form metrics live in `gui/37_scenario_editor.json`; their colours use the game's
+shared interface roles rather than a separate grey engine theme.
 
 The console on `~` exists for checking content without special UI buttons. `tag`, `observe`,
 `focus`, `teleport`, `mapmode`, `province`, `armies`, `fronts` and `sim` let you get to the

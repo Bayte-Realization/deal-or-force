@@ -44,8 +44,8 @@ public sealed partial class GlobePresentation
         // Middle-drag pans while the front tool owns RMB; wheel zoom remains available.
         if (input is InputEventMouseButton middle && middle.ButtonIndex == MouseButton.Middle)
         {
-            _dragging = middle.Pressed;
-            _previousPointer = middle.Position;
+            if (middle.Pressed) BeginCameraDrag(middle.Position, middle.ButtonIndex);
+            else _dragging = false;
             AcceptEvent();
             return true;
         }

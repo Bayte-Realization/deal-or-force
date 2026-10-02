@@ -497,6 +497,7 @@ public static class ResearchSystem
     /// <summary>Once a week, with the economy: every country puts its week into what it is researching.</summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ResearchSystem))) return;
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % 7 != 0 || TechnologyCatalog.All.Count == 0) return;
         var survey = Survey.Take(campaign);
         foreach (var nation in campaign.Nations)
@@ -532,6 +533,7 @@ public sealed class SetResearchCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
         var technology = TechnologyCatalog.Of(TechnologyId);
         if (nation is null || !ResearchSystem.Available(nation, technology)) return;

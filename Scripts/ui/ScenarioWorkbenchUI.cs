@@ -19,6 +19,9 @@ public partial class DealOrForceGame
     private string _authorSaved = "", _authorRelative = "";
     private bool _authorDirty;
     private ScenarioEntry _pickerScenarioEntry;
+    private string _authorScenarioId = "";
+    private Action _authorRefreshFiles;
+    private ScenarioMapEditor _authorMap;
     private string AuthorRoot => ProjectSettings.GlobalizePath("user://mods/editor_workspace");
     private IEnumerable<string> ScenarioRoots => _modLoader.Packages.Select(p => p.PhysicalRoot);
 
@@ -90,6 +93,7 @@ public partial class DealOrForceGame
         _authorDirty = false;
         _authorExit = null;
         _authorHomeExit = null;
+        _authorRefreshFiles = null; _authorMap = null;
         // The workshop pauses the campaign to open, and used to leave it that way: the world
         // stood still afterwards while the pause button said it was running, because the
         // button follows a flag that had been set behind its back. Whatever the clock was
@@ -113,6 +117,7 @@ public partial class DealOrForceGame
     /// <summary>Escape takes the window's own way out, whichever one that is.</summary>
     private void EscapeAuthorWindow()
     {
+        if (IsInstanceValid(_authorMap) && _authorMap.CancelGesture()) return;
         if (IsInstanceValid(_authorLayout) && _authorLayout.CancelGesture()) return;
         ConfirmAuthorExit(_authorExit ?? (() => CloseAuthorWindow()));
     }
@@ -152,6 +157,11 @@ public partial class DealOrForceGame
         var pickedCards = new List<(PanelContainer Card, ScenarioEntry Entry)>();
         ScenarioEntry chosen = null;
         var start = ActionButton("Choose country on map", () => { if (chosen is not null) LoadAuthoredScenario(chosen); }, 300, 42, true);
+        var openError = Title("", 14, Ui.Colour("text.caption")); openError.Name = "ScenarioOpenError";
+        openError.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        var edit = ActionButton("Edit selected scenario on map", () => { if (chosen is not null) OpenAuthoredScenarioMapEditor(chosen, openError); }, 320, 42);
+        edit.Name = "EditSelectedScenario";
+        var editHint = Title("", 13, Ui.Colour("text.caption")); editHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 
         void Paint(PanelContainer card, ScenarioEntry entry, bool hovered) =>
             card.AddThemeStyleboxOverride("panel", ButtonStyle(entry == chosen, hovered ? 1 : 0));
@@ -159,8 +169,13 @@ public partial class DealOrForceGame
         void Choose(ScenarioEntry entry)
         {
             chosen = entry;
+            _authorScenarioId = entry?.Id ?? "";
             foreach (var (card, candidate) in pickedCards) Paint(card, candidate, false);
             start.Disabled = chosen is null;
+            edit.Disabled = chosen is null || _campaign.ProvinceMap is null || string.IsNullOrEmpty(chosen.WorldFile);
+            editHint.Text = Tr(edit.Disabled ? "Generated scenarios: use Edit current world on map to create a copy." :
+                "Workspace scenarios save in place; base and mod scenarios become independent copies.");
+            openError.Text = "";
         }
 
         foreach (var entry in entries)
@@ -172,6 +187,7 @@ public partial class DealOrForceGame
                 MouseDefaultCursorShape = CursorShape.PointingHand,
                 TooltipText = Ui.Tip(Tr("Click to choose this scenario, double-click to start it."))
             };
+            card.SetMeta("scenario_id", entry.Id);
             cards.AddChild(card);
             var margin = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
             foreach (var side in new[] { "left", "right" }) margin.AddThemeConstantOverride("margin_" + side, 16);
@@ -202,8 +218,10 @@ public partial class DealOrForceGame
             };
             pickedCards.Add((card, entry));
         }
-        Choose(entries.FirstOrDefault());
-        rows.AddChild(start);
+        Choose(entries.FirstOrDefault(e => e.Id == _authorScenarioId) ?? entries.FirstOrDefault());
+        var launch = new HFlowContainer(); rows.AddChild(launch);
+        launch.AddChild(start); launch.AddChild(edit);
+        rows.AddChild(editHint); rows.AddChild(openError);
 
         var actions = new HFlowContainer();
         rows.AddChild(actions);
@@ -296,17 +314,22 @@ public partial class DealOrForceGame
         browser.AddChild(files);
         var paths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var baseRoot = GameDataLoader.DataFolder("");
-        foreach (var root in new[] { baseRoot }.Concat(ScenarioRoots).Append(AuthorRoot))
+        void ScanFiles()
         {
-            if (root is null || !Directory.Exists(root)) continue;
-            foreach (var category in ContentWorkbench.Roots)
+            paths.Clear();
+            foreach (var root in new[] { baseRoot }.Concat(ScenarioRoots).Append(AuthorRoot))
             {
-                var dir = Path.Combine(root, category);
-                if (!Directory.Exists(dir)) continue;
-                foreach (var f in Directory.EnumerateFiles(dir, "*.json", SearchOption.AllDirectories))
-                    paths[Path.GetRelativePath(root, f).Replace('\\', '/')] = f;
+                if (root is null || !Directory.Exists(root)) continue;
+                foreach (var category in ContentWorkbench.Roots)
+                {
+                    var dir = Path.Combine(root, category);
+                    if (!Directory.Exists(dir)) continue;
+                    foreach (var f in Directory.EnumerateFiles(dir, "*.json", SearchOption.AllDirectories))
+                        paths[Path.GetRelativePath(root, f).Replace('\\', '/')] = f;
+                }
             }
         }
+        ScanFiles();
         void Filter()
         {
             files.Clear();
@@ -317,8 +340,13 @@ public partial class DealOrForceGame
             }
         }
         search.TextChanged += _ => Filter();
-        files.ItemSelected += index => ConfirmAuthorExit(() => OpenAuthorFile(files.GetItemText((int)index), paths[files.GetItemText((int)index)]));
+        files.ItemSelected += index =>
+        {
+            var relative = files.GetItemText((int)index); var path = paths[relative];
+            ConfirmAuthorExit(() => OpenAuthorFile(relative, path));
+        };
         Filter();
+        _authorRefreshFiles = () => { ScanFiles(); Filter(); };
         var editing = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         columns.AddChild(editing);
         var tabs = _authorTabs = new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -330,7 +358,7 @@ public partial class DealOrForceGame
         _authorTree.SetColumnTitle(0, Tr("Property")); _authorTree.SetColumnTitle(1, Tr("Value"));
         _authorTree.ColumnTitlesVisible = true;
         inspector.AddChild(_authorTree);
-        var value = new LineEdit { PlaceholderText = Tr("JSON value: number, true, or a quoted string"), CustomMinimumSize = new Vector2(0, 36) };
+        var value = new CodeEdit { Name = "PropertyValue", PlaceholderText = Tr("JSON value: number, true, or a quoted string"), GuttersDrawLineNumbers = true, CustomMinimumSize = new Vector2(0, 100) };
         inspector.AddChild(value);
         _authorTree.ItemSelected += () =>
         {
@@ -342,7 +370,7 @@ public partial class DealOrForceGame
             try
             {
                 var selected = _authorTree.GetSelected();
-                if (selected is null) return;
+                if (selected is null) { _authorStatus.Text = Tr("Select a property first."); return; }
                 var updated = ContentWorkbench.SetValue(_authorCode.Text, selected.GetMetadata(0).AsString(), value.Text);
                 _authorCode.BeginComplexOperation();
                 _authorCode.SelectAll(); _authorCode.InsertTextAtCaret(updated);
@@ -350,6 +378,37 @@ public partial class DealOrForceGame
                 RebuildAuthorTree();
             }
             catch (Exception e) { _authorStatus.Text = e.Message; }
+        }, 200, 36));
+        var addRow = new HFlowContainer(); inspector.AddChild(addRow);
+        var propertyName = new LineEdit { Name = "NewPropertyName", PlaceholderText = Tr("New property name (objects)"), CustomMinimumSize = new Vector2(210, 36) }; addRow.AddChild(propertyName);
+        addRow.AddChild(ActionButton("Add child / array item", () =>
+        {
+            try
+            {
+                var pointer = _authorTree.GetSelected()?.GetMetadata(0).AsString() ?? "";
+                ReplaceAuthorDocument(ContentWorkbench.AddValue(_authorCode.Text, pointer, propertyName.Text, value.Text)); RebuildAuthorTree();
+            }
+            catch (Exception e) { _authorStatus.Text = e.Message; }
+        }, 200, 36));
+        addRow.AddChild(ActionButton("Delete selected property", () =>
+        {
+            var pointer = _authorTree.GetSelected()?.GetMetadata(0).AsString();
+            if (string.IsNullOrEmpty(pointer)) return;
+            var document = _authorCode.Text;
+            var relative = _authorRelative;
+            var confirmation = new ConfirmationDialog { Title = Tr("Delete property"), DialogText = pointer + "\n" + Tr("This removes the selected property and its children. Undo is available in the JSON tab."), Exclusive = true };
+            _authorCanvas.AddChild(confirmation);
+            confirmation.Confirmed += () =>
+            {
+                try
+                {
+                    if (_authorRelative != relative || _authorCode.Text != document) throw new InvalidDataException(Tr("The document changed. Select the property again before deleting it."));
+                    ReplaceAuthorDocument(ContentWorkbench.RemoveValue(document, pointer)); RebuildAuthorTree();
+                }
+                catch (Exception e) { _authorStatus.Text = e.Message; }
+                confirmation.QueueFree();
+            };
+            confirmation.Canceled += () => confirmation.QueueFree(); confirmation.PopupCentered();
         }, 200, 36));
         _authorCode = new CodeEdit { Name = "JSON", GuttersDrawLineNumbers = true, SizeFlagsVertical = SizeFlags.ExpandFill };
         tabs.AddChild(_authorCode);
@@ -363,12 +422,13 @@ public partial class DealOrForceGame
         tabs.AddChild(_authorLayout);
         tabs.SetTabTitle(2, Tr("Layout"));
         tabs.TabChanged += index => { if (index == 0) RebuildAuthorTree(); if (index == 2) _authorLayout.RefreshDocument(); };
-        var toolbar = new HBoxContainer();
+        var toolbar = new HFlowContainer();
         rows.AddChild(toolbar);
         toolbar.AddChild(ActionButton("Validate", () => AuthorOperation(false), 130, 38));
         toolbar.AddChild(ActionButton("Save to my mod", () => AuthorOperation(true), 190, 38, true));
         toolbar.AddChild(ActionButton("Scenarios", () => ConfirmAuthorExit(OpenScenarioLibrary), 140, 38));
         toolbar.AddChild(ActionButton("New document", NewAuthorDocument, 160, 38));
+        toolbar.AddChild(ActionButton("Refresh file list", () => { ScanFiles(); Filter(); }, 160, 38));
         toolbar.AddChild(ActionButton("Open mod folder", () => { ContentWorkbench.EnsureMod(AuthorRoot); OS.ShellOpen(AuthorRoot); }, 180, 38));
         _authorStatus = Title("Select a file. Changes to rules and UI take effect after restarting with Editor workspace enabled.", 13, Ui.Colour("text.caption"));
         _authorStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -420,7 +480,7 @@ public partial class DealOrForceGame
                         throw new InvalidDataException(Tr("Use a content folder and the .json extension."));
                     if (File.Exists(ScenarioLibrary.SafePath(AuthorRoot, relative)))
                         throw new InvalidDataException(Tr("This document already exists. Open it in the file list."));
-                    _authorRelative = relative; _authorSaved = ""; _authorCode.Text = "{\n}\n"; _authorDirty = true;
+                    _authorRelative = relative; _authorSaved = ""; _authorCode.Text = "{\n}\n"; _authorCode.ClearUndoHistory(); _authorDirty = true;
                     _authorStatus.Text = relative; RebuildAuthorTree(); _authorLayout.RefreshDocument();
                 }
                 catch (Exception e) { _authorStatus.Text = e.Message; }
@@ -435,8 +495,10 @@ public partial class DealOrForceGame
     {
         try
         {
+            // Read first: an unavailable file must not bind the previous buffer to a new save path.
+            var contents = File.ReadAllText(path);
             _authorRelative = relative;
-            _authorSaved = File.ReadAllText(path);
+            _authorSaved = contents;
             _authorCode.Text = _authorSaved;
             _authorCode.ClearUndoHistory();
             _authorDirty = false;
@@ -449,6 +511,15 @@ public partial class DealOrForceGame
 
     private void RebuildAuthorTree()
     {
+        var selection = _authorTree.GetSelected()?.GetMetadata(0).AsString();
+        var expanded = new HashSet<string>();
+        void Remember(TreeItem item)
+        {
+            if (item is null) return;
+            if (!item.Collapsed) expanded.Add(item.GetMetadata(0).AsString());
+            for (var child = item.GetFirstChild(); child is not null; child = child.GetNext()) Remember(child);
+        }
+        Remember(_authorTree.GetRoot());
         _authorTree.Clear();
         if (_authorCode.Text.Length == 0) return;
         try
@@ -464,9 +535,10 @@ public partial class DealOrForceGame
                 item.SetMetadata(0, pointer);
                 var raw = element.GetRawText();
                 var container = element.ValueKind is JsonValueKind.Object or JsonValueKind.Array;
-                item.SetMetadata(1, container ? "" : raw);
+                item.SetMetadata(1, raw);
                 item.SetText(1, container ? element.ValueKind == JsonValueKind.Array ? $"[{element.GetArrayLength()}]" : "{…}" : raw);
-                item.Collapsed = depth > 0;
+                item.Collapsed = depth > 0 && !expanded.Contains(pointer);
+                if (selection == pointer) item.Select(0);
                 if (depth >= 6) return;
                 if (element.ValueKind == JsonValueKind.Object)
                     foreach (var p in element.EnumerateObject()) Add(p.Value, item, p.Name, pointer + "/" + p.Name.Replace("~", "~0").Replace("/", "~1"), depth + 1);
@@ -478,6 +550,7 @@ public partial class DealOrForceGame
             }
             if (doc.RootElement.ValueKind == JsonValueKind.Object)
                 foreach (var p in doc.RootElement.EnumerateObject()) Add(p.Value, root, p.Name, "/" + p.Name.Replace("~", "~0").Replace("/", "~1"), 0);
+            else if (doc.RootElement.ValueKind == JsonValueKind.Array) Add(doc.RootElement, root, Tr("Document array"), "", 0);
             _authorTree.TooltipText = Tr("Property preview: first 100 array entries, 6 levels. The JSON tab exposes the complete document.");
         }
         catch (Exception e) { _authorStatus.Text = e.Message; }
@@ -493,6 +566,7 @@ public partial class DealOrForceGame
             ContentWorkbench.EnsureMod(AuthorRoot);
             var path = ContentWorkbench.Write(AuthorRoot, _authorRelative, _authorCode.Text);
             _authorSaved = _authorCode.Text; _authorDirty = false;
+            _authorRefreshFiles?.Invoke();
             _authorStatus.Text = Tr("Saved. Previous version: .bak. Enable Editor workspace and restart for rules/UI changes.") + " " + path;
         }
         catch (Exception e) { _authorStatus.Text = e.Message; }

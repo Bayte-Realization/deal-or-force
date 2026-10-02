@@ -108,7 +108,7 @@ public sealed class LauncherCatalog
                             Order = value.TryGetProperty("load_order", out var o) ? o.GetInt32() : 0,
                             Owned = !dlc || string.IsNullOrWhiteSpace(entitlement) || unlock || owned.Contains(entitlement),
                             Enabled = Selection.IsEnabled(id, dlc, dlc || !value.TryGetProperty("enabled", out var en) || en.GetBoolean()),
-                            HasCode = Text(value, "gdscript_entry").Length > 0 || Text(value, "csharp_assembly").Length > 0
+                            HasCode = Text(value, "gdscript_entry").Length > 0 || Text(value, "corecode_assembly").Length > 0 || Text(value, "csharp_assembly").Length > 0
                         };
                         if (found.TryGetValue(id, out var previous)) DiscoveryNotes.Add($"{id}: using {directory}; it replaces {previous.Path}");
                         found[id] = package;

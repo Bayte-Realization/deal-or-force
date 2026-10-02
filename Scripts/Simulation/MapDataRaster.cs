@@ -184,16 +184,25 @@ public static class MapRasterCatalog
     public static string RiverPath { get; private set; }
     public static string LakePath { get; private set; }
     public static string StampPath { get; private set; }
+    public static string SourceControlPath { get; private set; }
+    public static string SourceStatesPath { get; private set; }
+    public static string SourceDisputesPath { get; private set; }
+    private static string _sourceRevision = "";
+    private static bool _resettingSources;
 
     static MapRasterCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
     {
+        _resettingSources = true;
+        try
+        {
         ProvincePath = null;
         DefinitionPath = null;
         RiverPath = null;
         LakePath = null;
         StampPath = null;
+        SourceControlPath = SourceStatesPath = SourceDisputesPath = null;
         var descriptor = GameDataLoader.FindDataFile("map_data", DescriptorFile);
         if (descriptor is not null) ApplyDirectory(Path.GetDirectoryName(descriptor)!, null);
         else
@@ -203,7 +212,33 @@ public static class MapRasterCatalog
             RiverPath = GameDataLoader.FindDataFile("map_data", RiverFile);
             LakePath = GameDataLoader.FindDataFile("map_data", LakeFile);
             StampPath = GameDataLoader.FindDataFile("map_data", StampFile);
+            SourceControlPath = GameDataLoader.FindDataFile("map_data", "source_control.png");
+            SourceStatesPath = GameDataLoader.FindDataFile("map_data", "source_states.png");
+            SourceDisputesPath = GameDataLoader.FindDataFile("map_data", "source_disputes.png");
         }
+        }
+        finally
+        {
+            _resettingSources = false;
+            RefreshSourceRevision();
+        }
+    }
+
+    private static void RefreshSourceRevision()
+    {
+        if (_resettingSources) return;
+        string Revision(string path)
+        {
+            if (path is null || !File.Exists(path)) return "missing:" + path;
+            var file = new FileInfo(path);
+            return $"{file.FullName}|{file.Length}|{file.LastWriteTimeUtc.Ticks}";
+        }
+        var revision = string.Join(";", Revision(SourceControlPath), Revision(SourceStatesPath), Revision(SourceDisputesPath));
+        // Catalog refreshes must not discard the campaign's repaired region grid when
+        // its source files are unchanged. Changed files/paths still invalidate it.
+        if (revision == _sourceRevision) return;
+        _sourceRevision = revision;
+        Globality.EarthData.ReleaseDecodedGrids();
     }
 
     public static void ApplyDirectory(string directory, List<string> errors)
@@ -243,6 +278,37 @@ public static class MapRasterCatalog
         if (File.Exists(lakes)) LakePath = lakes;
         var stamp = Path.Combine(directory, StampFile);
         if (File.Exists(stamp)) StampPath = stamp;
+        SourceControlPath = SourceFileFor("source_control", "source_control.png", SourceControlPath);
+        SourceStatesPath = SourceFileFor("source_states", "source_states.png", SourceStatesPath);
+        SourceDisputesPath = SourceFileFor("source_disputes", "source_disputes.png", SourceDisputesPath);
+        RefreshSourceRevision();
+
+        string SourceFileFor(string key, string fallback, string previous)
+        {
+            var path = FileFor(key, fallback);
+            if (!File.Exists(path))
+            {
+                if (descriptor.ContainsKey(key))
+                {
+                    var message = $"default.map references missing source image: {Path.GetFileName(path)}";
+                    if (errors is null) throw new InvalidDataException(message);
+                    errors.Add(message);
+                }
+                return previous;
+            }
+            try
+            {
+                // Validate before committing a mod override. An invalid mod must not
+                // replace a working base layer or leak old decoded ids into a new map.
+                if (errors is not null) SourceMapGrid.Load(path, Globality.EarthData.Width, Globality.EarthData.Height);
+                return path;
+            }
+            catch (Exception exception) when (errors is not null)
+            {
+                errors.Add($"source map: {exception.Message}");
+                return previous;
+            }
+        }
     }
 
     /// <summary>

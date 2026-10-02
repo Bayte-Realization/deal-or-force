@@ -43,6 +43,7 @@ public partial class VisualLayoutEditor : VBoxContainer
     private static Button Button(string label, Action action)
     {
         var button = new Button { Text = Loc.Get(label), CustomMinimumSize = new Vector2(0, 32) };
+        DealOrForceGame.StyleButton(button, false);
         button.Pressed += action;
         return button;
     }
@@ -51,7 +52,11 @@ public partial class VisualLayoutEditor : VBoxContainer
     {
         AddThemeConstantOverride("separation", 8);
         AddChild(Caption("Layout schematic — drag a panel; drag its lower-right handle to resize. Shift: ignore grid. Esc: cancel drag."));
-        var tools = new HBoxContainer(); AddChild(tools);
+        var tools = new HFlowContainer(); AddChild(tools);
+        var context = new OptionButton { Name = "PreviewContext" };
+        foreach (var label in new[] { "Automatic context", "Gameplay panels", "Country / region / province", "Country selection" }) context.AddItem(Loc.Get(label));
+        tools.AddChild(context);
+        context.ItemSelected += i => { _preview.CancelDrag(); _preview.Context = (int)i; _preview.QueueRedraw(); };
         var resolution = new OptionButton { Name = "PreviewResolution" };
         var sizes = new[] { new Vector2(1920, 1080), new Vector2(1280, 720), new Vector2(2560, 1440), new Vector2(3440, 1440) };
         foreach (var size in sizes) resolution.AddItem($"{size.X:0} × {size.Y:0}");

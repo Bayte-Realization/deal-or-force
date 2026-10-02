@@ -1,0 +1,28 @@
+{
+  // Who a government would actually attack (AiJudgement, item 98).
+  //
+  // A government's `war_restraint` (common/governments) is priced into every war it weighs,
+  // times AiRestraintWeight - in full when it has no reason the world would accept, and
+  // AiRestraintWithCause of it when it has one (ground taken from it, its people across the
+  // border, an ally attacked).
+  "AiRestraintWeight": 1.0,
+  "AiRestraintWithCause": 0.35,
+  // And how much an authoritarian creed thins it: restraint times one less this times the
+  // ideology's authority above zero - a presidential republic run on nationalism keeps
+  // about three fifths of its restraint.
+  "AiRestraintAuthority": 0.7,
+  // Two governments both at least this restrained pay this much more to fight each other:
+  // democracies have very nearly never fought each other.
+  "AiDemocraticPeaceRestraint": 1.0,
+  "AiDemocraticPeacePrice": 2.5,
+  // How much of the strength of a target's allies and guarantors the attacker reckons with
+  // when it asks whether it is strong enough - a small country with a great power's
+  // guarantee is not a small country.
+  "AiAllyCommitment": 0.6,
+  // What turning on a country we think well of costs, per hundred points of opinion.
+  "AiFriendshipCaution": 1.5,
+  // How many regions a target has to hold before its weakness is worth all it can be: one
+  // region (the Vatican, San Marino) is a quarter of it, never less than the floor.
+  "AiWorthRegions": 4,
+  "AiWorthFloor": 0.15
+}

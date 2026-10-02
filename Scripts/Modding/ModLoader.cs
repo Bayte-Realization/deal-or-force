@@ -23,6 +23,7 @@ public sealed class ModManifest
     [JsonPropertyName("dependencies")] public List<string> Dependencies { get; set; } = new();
     [JsonPropertyName("gdscript_entry")] public string GdscriptEntry { get; set; } = "";
     [JsonPropertyName("csharp_assembly")] public string CsharpAssembly { get; set; } = "";
+    [JsonPropertyName("corecode_assembly")] public string CorecodeAssembly { get; set; } = "";
 }
 
 public sealed class ModPackage
@@ -301,6 +302,7 @@ public sealed class ModLoader
         ("secession", () => SecessionCore.ResetCatalog(), SecessionCore.Merge),
         ("settings", () => SettingsCatalog.ResetCatalog(), SettingsCatalog.Merge),
         ("flags", () => FlagCatalog.ResetCatalog(), FlagCatalog.Merge),
+        ("editor", () => ScenarioInspectorCatalog.ResetCatalog(), ScenarioInspectorCatalog.Merge),
         ("governance", () => GovernanceEvents.ResetCatalog(), GovernanceEvents.Merge),
         ("formable_nations", () => FormableNations.ResetCatalog(), FormableNations.Merge)
     };
@@ -619,7 +621,13 @@ public sealed class ModLoader
                         package.Errors.Add($"Unknown or invalid define '{entry.Name}' in {Path.GetFileName(path)}");
                         continue;
                     }
-                    property.SetValue(defines, value);
+                    if (value is Dictionary<string, bool> flags) MechanicFeatures.Merge(defines.Features, flags);
+                    else if (value is Dictionary<string, string> rules)
+                    {
+                        if (property.Name == nameof(Defines.FeatureUnlocks)) MechanicFeatures.Merge(defines.FeatureUnlocks, rules);
+                        else if (property.GetValue(defines) is Dictionary<string, string> bindings) MechanicFeatures.MergeBindings(bindings, rules);
+                    }
+                    else property.SetValue(defines, value);
                 }
             }
             catch (Exception exception)
@@ -770,11 +778,14 @@ public sealed class ModLoader
 
     private void LoadCsharp(ModPackage package, Campaign campaign)
     {
-        if (string.IsNullOrWhiteSpace(package.Manifest.CsharpAssembly)) return;
-        var path = SafePath(package, package.Manifest.CsharpAssembly);
+        string relative;
+        try { relative = ModCodePaths.AssemblyPath(package.Manifest.CorecodeAssembly, package.Manifest.CsharpAssembly); }
+        catch (InvalidDataException e) { package.Errors.Add(e.Message); return; }
+        if (relative.Length == 0) return;
+        var path = SafePath(package, relative);
         if (path is null || !File.Exists(path))
         {
-            package.Errors.Add($"C# assembly not found: {package.Manifest.CsharpAssembly}");
+            package.Errors.Add($"Code assembly not found: {relative}");
             return;
         }
 
@@ -847,6 +858,7 @@ public sealed class ModLoader
             else if (type == typeof(float)) value = element.GetSingle();
             else if (type == typeof(double)) value = element.GetDouble();
             else if (type == typeof(List<float>)) value = element.EnumerateArray().Select(item => item.GetSingle()).ToList();
+            else if (type == typeof(Dictionary<string, bool>) || type == typeof(Dictionary<string, string>)) value = element.Deserialize(type);
             else return false;
             return true;
         }

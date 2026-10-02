@@ -27,10 +27,12 @@ public partial class DealOrForceGame
     private Label _supportFeedback = null!;
     private Control _supportSelectionBar = null!;
     private Label _supportSelectionCaption = null!;
-    private HBoxContainer _supportSelectionMissions = null!;
+    private GridContainer _supportSelectionMissions = null!;
     private Button _supportRebaseButton = null!;
     private Label _supportRebaseBanner = null!;
     private Button _supportRaiseToggle = null!;
+    private Button _supportRaiseButton = null!;
+    private ScrollContainer _supportRaiseScroll = null!;
     private VBoxContainer _supportRaiseBody = null!;
     private GridContainer _supportTypeGrid = null!;
     private Label _supportTypeDetail = null!;
@@ -42,6 +44,7 @@ public partial class DealOrForceGame
     private string _supportRaiseType = "";
     private bool _supportRebaseArmed;
     private bool _supportRaiseOpen;
+    private int _supportSelectionAnchor = -1;
     private readonly HashSet<int> _supportSelected = new();
     private readonly Dictionary<string, Button> _supportFilterButtons = new();
     private readonly Dictionary<string, Button> _supportTypeButtons = new();
@@ -58,7 +61,6 @@ public partial class DealOrForceGame
         public ColorRect StrengthFill;
         public Label Strength;
         public HBoxContainer Missions;
-        public readonly Dictionary<string, Button> MissionButtons = new();
         public Label Displaced;
         public SupportFormation Formation;
         public string MissionSet = "";
@@ -100,6 +102,7 @@ public partial class DealOrForceGame
         _supportLayer.Visible = false;
         _supportLayer.MouseFilter = MouseFilterEnum.Ignore;
         _hudLayer.AddChild(_supportLayer);
+        Resized += () => { if (_supportLayer.Visible) RefreshSupportScreen(); };
 
         var panel = TexturedPanel(_supportLayer);
         Ui.Place(panel, "hud.support_panel");
@@ -117,6 +120,10 @@ public partial class DealOrForceGame
         _supportSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _supportSummary.CustomMinimumSize = new Vector2(1, 18);
         rows.AddChild(_supportSummary);
+        var help = Title("Click: select · Ctrl: toggle · Shift: range · drag: group · right-click: rebase", 11, Ui.Colour("text.caption"));
+        help.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        help.CustomMinimumSize = new Vector2(1, 0);
+        rows.AddChild(help);
 
         // What arm of the forces the list shows.
         var filters = new HBoxContainer();
@@ -151,7 +158,7 @@ public partial class DealOrForceGame
         _supportRows.AddThemeConstantOverride("separation", 6);
         _supportScroll.AddChild(_supportRows);
 
-        // ---- what to do with the selected formations, always in reach under the list.
+        // ---- what to do with the selected formations, above the scrollable roster.
         var selection = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
         selection.AddThemeConstantOverride("separation", 5);
         rows.AddChild(selection);
@@ -171,9 +178,10 @@ public partial class DealOrForceGame
         Tip(_supportRebaseButton, Tr("Then click a region of the country on the map: the selected formations are based there, if it has posts free."));
         selectionHeader.AddChild(_supportRebaseButton);
         selectionHeader.AddChild(ActionButton("CLEAR", ClearSupportSelection, 64, 26));
-        _supportSelectionMissions = new HBoxContainer();
+        _supportSelectionMissions = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _supportSelectionMissions.AddThemeConstantOverride("separation", 4);
         selection.AddChild(_supportSelectionMissions);
+        rows.MoveChild(selection, _supportScroll.GetIndex());
 
         _supportFeedback = Title("", 11, Ui.Colour("state.negative"));
         _supportFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -187,7 +195,14 @@ public partial class DealOrForceGame
         rows.AddChild(_supportRaiseToggle);
         _supportRaiseBody = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
         _supportRaiseBody.AddThemeConstantOverride("separation", 6);
-        rows.AddChild(_supportRaiseBody);
+        _supportRaiseScroll = new ScrollContainer
+        {
+            Visible = false, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            CustomMinimumSize = new Vector2(0, Ui.Metric("support.recruitment_height", 210)),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        _supportRaiseScroll.AddChild(_supportRaiseBody);
+        rows.AddChild(_supportRaiseScroll);
 
         _supportTypeGrid = new GridContainer { Columns = 3, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _supportTypeGrid.AddThemeConstantOverride("h_separation", 4);
@@ -220,9 +235,12 @@ public partial class DealOrForceGame
         _supportRaiseBody.AddChild(raiseActions);
         _supportCostReadout = Title("", 12, Ui.Colour("text.accent_dim"));
         _supportCostReadout.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _supportCostReadout.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _supportCostReadout.CustomMinimumSize = new Vector2(1, 0);
         _supportCostReadout.VerticalAlignment = VerticalAlignment.Center;
         raiseActions.AddChild(_supportCostReadout);
-        raiseActions.AddChild(ActionButton("RAISE", RaiseSupportFormation, 96, 30, true));
+        _supportRaiseButton = ActionButton("RAISE", RaiseSupportFormation, 96, 30, true);
+        raiseActions.AddChild(_supportRaiseButton);
 
         _supportTrainingCaption = Title("", 11, Ui.Colour("text.caption"));
         _supportRaiseBody.AddChild(_supportTrainingCaption);
@@ -235,9 +253,12 @@ public partial class DealOrForceGame
 
     private void OpenSupportScreen()
     {
+        if (_campaign is null || !SupportTypeCatalog.All.Any(t => SupportCore.Enabled(_campaign, t))) return;
+        EndDrawing();
+        CloseFleetPanel();
+        ClearArmySelectionAndClose();
         _openScreen = "Support";
         _sidePanel.Visible = false;
-        SetArmyPanelVisible(false);
         HideMapSelection(true);
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
@@ -248,6 +269,7 @@ public partial class DealOrForceGame
         _supportLayer.Visible = true;
         _supportLayer.MoveToFront();
         _globe.SupportOverlay = true;
+        _globe.SupportCommandMode = true;
         _globe.SelectSupportFormations(_supportSelected);
         RefreshSupportScreen();
         UpdateScreenButtons();
@@ -258,6 +280,7 @@ public partial class DealOrForceGame
         _supportLayer.Visible = false;
         _supportRebaseArmed = false;
         _globe.SupportOverlay = false;
+        _globe.SupportCommandMode = false;
         if (_openScreen == "Support") _openScreen = "";
         UpdateScreenButtons();
     }
@@ -267,7 +290,7 @@ public partial class DealOrForceGame
     {
         if (_campaign?.Player is null || formation.NationId != _campaign.Player.Id) return;
         if (!_supportLayer.Visible) _supportSelected.Clear();
-        _supportSelected.Add(formation.Id);
+        SelectSupportRow(formation.Id, false);
         OpenSupportScreen();
         if (_supportRowMap.TryGetValue(formation.Id, out var row))
             _supportScroll.EnsureControlVisible(row.Row);
@@ -287,9 +310,8 @@ public partial class DealOrForceGame
             RebaseSupportSelection(pick.State);
             return true;
         }
-        if (pick.State.NationMapIndex != player.MapIndex) return false;
-        SelectSupportRaiseRegion(pick.State.MapIndex);
-        if (!_supportRaiseOpen) ToggleSupportRaise();
+        if (_supportRaiseOpen && pick.State.NationMapIndex == player.MapIndex)
+            SelectSupportRaiseRegion(pick.State.MapIndex);
         return true;
     }
 
@@ -297,8 +319,8 @@ public partial class DealOrForceGame
     {
         if (_supportLayer is null || !_supportLayer.Visible || _campaign?.Player is null) return;
         var player = _campaign.Player;
-        var owned = _campaign.SupportFormations.Where(f => f.NationId == player.Id).ToList();
-        var training = _campaign.SupportOrders.Where(o => o.NationId == player.Id).ToList();
+        var owned = _campaign.SupportFormations.Where(f => f.NationId == player.Id && SupportCore.Enabled(_campaign, f.TypeId)).ToList();
+        var training = _campaign.SupportOrders.Where(o => o.NationId == player.Id && SupportCore.Enabled(_campaign, o.TypeId)).ToList();
         _supportSelected.RemoveWhere(id => owned.All(f => f.Id != id));
 
         var working = owned.Count(f => f.Mission != SupportCore.MissionStandby);
@@ -311,8 +333,14 @@ public partial class DealOrForceGame
             readiness) +
             (hurt > 0 ? " · " + Loc.Format("{0} took losses yesterday", hurt) : "");
 
-        foreach (var (id, chip) in _supportFilterButtons)
-            chip.SetPressedNoSignal(id == _supportFilter);
+        foreach (var (id, _, kind) in SupportFilters)
+        {
+            var chip = _supportFilterButtons[id];
+            chip.Visible = kind is null || SupportTypeCatalog.All.Any(t => t.Kind == kind && SupportCore.Enabled(_campaign, t));
+            if (!chip.Visible && id == _supportFilter) _supportFilter = "all";
+        }
+        foreach (var (id, chip) in _supportFilterButtons) chip.SetPressedNoSignal(id == _supportFilter);
+        _globe.SelectSupportFormations(_supportSelected);
 
         RefreshSupportEstablishment(player, owned);
         RefreshSupportSelection(owned);
@@ -361,7 +389,7 @@ public partial class DealOrForceGame
                 _supportRows.AddChild(section.Box);
             }
             _supportRows.MoveChild(section.Box, order++);
-            var lost = state.NationMapIndex != player.MapIndex;
+            var lost = formations.All(f => SupportCore.Displaced(_campaign, f));
             section.Caption.Text = $"{state.DisplayName} · " + (lost
                 ? Tr("BASE LOST")
                 : Loc.Format("posts {0}/{1}", SupportCore.PostsUsed(_campaign, state.MapIndex), SupportCore.CapacityOf(_campaign, state)));
@@ -473,12 +501,13 @@ public partial class DealOrForceGame
         var row = new SupportRow { Formation = formation };
         var button = new Button
         {
-            CustomMinimumSize = new Vector2(0, 62),
+            Name = $"SupportRow_{formation.Id}",
+            CustomMinimumSize = new Vector2(0, Ui.Metric("support.roster_row_height", 58)),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             FocusMode = FocusModeEnum.None,
             ActionMode = BaseButton.ActionModeEnum.Press
         };
-        button.Pressed += () => ToggleSupportRow(row.Formation.Id);
+        button.Pressed += () => SelectSupportRow(row.Formation.Id, true);
         row.Row = button;
 
         var inner = new VBoxContainer();
@@ -529,7 +558,7 @@ public partial class DealOrForceGame
         bottom.AddThemeConstantOverride("separation", 4);
         bottom.MouseFilter = MouseFilterEnum.Ignore;
         inner.AddChild(bottom);
-        row.Missions = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        row.Missions = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         row.Missions.AddThemeConstantOverride("separation", 3);
         bottom.AddChild(row.Missions);
         row.Displaced = Title("", 10, Ui.Colour("state.negative"));
@@ -572,22 +601,22 @@ public partial class DealOrForceGame
         if (row.MissionSet != missionSet)
         {
             row.MissionSet = missionSet;
-            foreach (var child in row.Missions.GetChildren()) child.QueueFree();
-            row.MissionButtons.Clear();
-            foreach (var mission in type.Missions.Distinct())
-            {
-                var captured = mission;
-                var button = ActionButton(SupportMissionShort(mission), () => SetSupportMission(new[] { row.Formation.Id }, captured), 0, 22);
-                button.ToggleMode = true;
-                button.CustomMinimumSize = new Vector2(Math.Max(58, SupportMissionShort(mission).Length * 8 + 16), 22);
-                button.AddThemeFontSizeOverride("font_size", 11);
-                button.TooltipText = Ui.Tip(SupportMissionHelp(mission));
-                row.Missions.AddChild(button);
-                row.MissionButtons[mission] = button;
-            }
+            foreach (var child in row.Missions.GetChildren()) { row.Missions.RemoveChild(child); child.QueueFree(); }
+            // One status line, not four competing miniature command bars per row.
+            var status = Title("", 11, Ui.Colour("text.body_soft"));
+            status.Name = "MissionStatus";
+            status.AutowrapMode = TextServer.AutowrapMode.Off;
+            status.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            status.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            status.MouseFilter = MouseFilterEnum.Ignore;
+            row.Missions.AddChild(status);
         }
-        foreach (var (mission, button) in row.MissionButtons)
-            button.SetPressedNoSignal(mission == formation.Mission);
+        if (row.Missions.GetNodeOrNull<Label>("MissionStatus") is { } missionStatus)
+        {
+            missionStatus.Text = Tr(SupportMissionShort(formation.Mission));
+            missionStatus.AddThemeColorOverride("font_color", Ui.Colour(
+                formation.Mission == SupportCore.MissionStandby ? "text.caption" : "text.accent"));
+        }
 
         row.Row.TooltipText = Ui.Tip(
             $"{Loc.Get(type.Name)}\n" +
@@ -595,16 +624,17 @@ public partial class DealOrForceGame
             Loc.Format("fire {0:0.#} · air superiority {1:0.#} · interdiction {2:0.#} · air defence {3:0.#} · recon {4:0.#}",
                 type.SupportFire, type.AirSuperiority, type.Interdiction, type.AirDefence, type.Recon) + "\n" +
             Loc.Format("experience {0:P0}", formation.Experience) + "\n" +
-            Tr("Click to select; selected formations share their orders and are drawn on the map."));
+            SupportMissionHelp(formation.Mission) + "\n" +
+            Tr("Click selects one. Ctrl toggles; Shift selects a range. Use the command bar for missions."));
     }
 
-    /// <summary>A mission as a button says it: one word.</summary>
+    /// <summary>A mission's player-facing name, shared by the roster and command bar.</summary>
     private static string SupportMissionShort(string mission) => mission switch
     {
-        SupportCore.MissionStandby => "Rest",
-        SupportCore.MissionCloseAirSupport => "Support",
-        SupportCore.MissionAirSuperiority => "Sky",
-        SupportCore.MissionInterdiction => "Strike",
+        SupportCore.MissionStandby => "Standby / recover",
+        SupportCore.MissionCloseAirSupport => "Fire support",
+        SupportCore.MissionAirSuperiority => "Air superiority",
+        SupportCore.MissionInterdiction => "Interdiction",
         _ => mission
     };
 
@@ -625,9 +655,39 @@ public partial class DealOrForceGame
 
     // ------------------------------------------------------------------ selection and orders
 
-    private void ToggleSupportRow(int formationId)
+    private void SelectSupportRow(int id, bool allowRange)
     {
-        if (!_supportSelected.Remove(formationId)) _supportSelected.Add(formationId);
+        var ctrl = Input.IsKeyPressed(Key.Ctrl);
+        if (allowRange && Input.IsKeyPressed(Key.Shift) && _supportSelectionAnchor > 0)
+        {
+            var visible = _supportRegionSections.Values.OrderBy(s => s.Box.GetIndex())
+                .SelectMany(s => s.Formations.GetChildren().OfType<Button>())
+                .Select(b => b.Name.ToString()).Where(n => n.StartsWith("SupportRow_"))
+                .Select(n => int.Parse(n[11..])).ToList();
+            var a = visible.IndexOf(_supportSelectionAnchor);
+            var b = visible.IndexOf(id);
+            if (!ctrl) _supportSelected.Clear();
+            if (a >= 0 && b >= 0)
+                foreach (var selected in visible.Skip(Math.Min(a, b)).Take(Math.Abs(a - b) + 1))
+                    _supportSelected.Add(selected);
+            else _supportSelected.Add(id);
+        }
+        else
+        {
+            if (!ctrl) _supportSelected.Clear();
+            if (!_supportSelected.Add(id)) _supportSelected.Remove(id);
+            _supportSelectionAnchor = id;
+        }
+        _supportRebaseArmed = false;
+        SupportSelectionChanged();
+    }
+
+    private void OnSupportBoxPicked(List<SupportFormation> formations)
+    {
+        if (_supportLayer is not { Visible: true }) return;
+        if (!Input.IsKeyPressed(Key.Ctrl) && !Input.IsKeyPressed(Key.Shift)) _supportSelected.Clear();
+        foreach (var formation in formations) _supportSelected.Add(formation.Id);
+        _supportRebaseArmed = false;
         SupportSelectionChanged();
     }
 
@@ -648,9 +708,13 @@ public partial class DealOrForceGame
     private void RefreshSupportSelection(List<SupportFormation> owned)
     {
         var selected = owned.Where(f => _supportSelected.Contains(f.Id)).ToList();
-        _supportSelectionBar.Visible = selected.Count > 0;
+        // On short screens recruitment and orders are separate tasks. Preserve selection,
+        // but give the roster room instead of crushing it between two command surfaces.
+        _supportSelectionBar.Visible = selected.Count > 0 &&
+            (!_supportRaiseOpen || Size.Y >= Ui.Metric("support.compact_height", 840));
         if (selected.Count == 0) _supportRebaseArmed = false;
         _supportRebaseButton.SetPressedNoSignal(_supportRebaseArmed);
+        _globe.SupportRebaseArmed = _supportRebaseArmed;
         _supportRebaseBanner.Visible = _supportRebaseArmed;
         _supportRebaseBanner.Text = Loc.Format(
             "Click a region of the country on the map to base the {0} selected formation(s) there. Esc cancels.",
@@ -667,38 +731,50 @@ public partial class DealOrForceGame
         var existing = _supportSelectionMissions.GetChildren().OfType<Button>().Select(b => b.GetMeta("mission", "").AsString()).ToList();
         if (!existing.SequenceEqual(missions))
         {
-            foreach (var child in _supportSelectionMissions.GetChildren()) child.QueueFree();
+            foreach (var child in _supportSelectionMissions.GetChildren()) { _supportSelectionMissions.RemoveChild(child); child.QueueFree(); }
             foreach (var mission in missions)
             {
                 var captured = mission;
                 var button = ActionButton(SupportMissionShort(mission),
                     () => SetSupportMission(_supportSelected.ToArray(), captured), 0, 26);
                 button.SetMeta("mission", mission);
+                button.ToggleMode = true;
                 button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 button.TooltipText = Ui.Tip(SupportMissionHelp(mission) + "\n" +
                     Tr("Given to every selected formation that can fly it."));
                 _supportSelectionMissions.AddChild(button);
             }
         }
+        foreach (var button in _supportSelectionMissions.GetChildren().OfType<Button>())
+        {
+            var mission = button.GetMeta("mission", "").AsString();
+            var compatible = selected.Count(f => SupportTypeCatalog.TryGet(f.TypeId, out var type) && type.Missions.Contains(mission));
+            button.Text = Tr(SupportMissionShort(mission)) + $" · {compatible}/{selected.Count}";
+            button.SetPressedNoSignal(compatible > 0 && selected.Where(f => SupportTypeCatalog.TryGet(f.TypeId, out var type) && type.Missions.Contains(mission)).All(f => f.Mission == mission));
+        }
     }
 
     private void SetSupportMission(IEnumerable<int> formationIds, string mission)
     {
         if (_campaign?.Player is null) return;
-        var given = 0;
-        foreach (var id in formationIds)
+        var commands = new List<SetSupportMissionCommand>();
+        foreach (var id in formationIds.Distinct())
         {
             var formation = _campaign.SupportFormations.Find(f => f.Id == id && f.NationId == _campaign.Player.Id);
             if (formation is null || !SupportTypeCatalog.TryGet(formation.TypeId, out var type) || !type.Missions.Contains(mission)) continue;
-            _campaign.Commands.Enqueue(new SetSupportMissionCommand
+            var command = new SetSupportMissionCommand
             {
                 IssuerId = _campaign.Player.Id, FormationId = id, Mission = mission
-            });
-            given++;
+            };
+            commands.Add(command);
+            _campaign.Commands.Enqueue(command);
         }
-        if (given == 0) return;
+        if (commands.Count == 0) return;
         _campaign.Commands.ApplyAll(_campaign);
-        PlayStrategicCue("support_mission");
+        var applied = commands.Count(c => c.Refusal.Length == 0);
+        _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour(applied > 0 ? "state.positive" : "state.negative"));
+        _supportFeedback.Text = Loc.Format("{0}: ordered {1} of {2} selected.", Tr(SupportMissionShort(mission)), applied, _supportSelected.Count);
+        if (applied > 0) PlayStrategicCue("support_mission");
         _globe.SelectSupportFormations(_supportSelected);
         RefreshSupportScreen();
     }
@@ -712,9 +788,21 @@ public partial class DealOrForceGame
             .Select(f => _campaign.ProvinceMap.CenterOf(f.BaseProvinceId)).ToList();
         var reach = _campaign.SupportFormations.Where(f => _supportSelected.Contains(f.Id))
             .Select(f => SupportTypeCatalog.Get(f.TypeId)?.RangeKm ?? 100f).DefaultIfEmpty(100f).Max();
-        var latitude = bases.Average(b => b.Latitude);
-        var longitude = bases.Average(b => b.Longitude);
-        var distance = Mathf.Clamp(6.2f + reach / 260f, 6.2f, 13f);
+        // Spherical mean: bases on either side of the date line are neighbours, not
+        // opposite sides of a longitude average. Include their spread in the framing.
+        Vector3 Direction(float lat, float lon)
+        {
+            var a = Mathf.DegToRad(lat); var b = Mathf.DegToRad(lon);
+            return new Vector3(Mathf.Cos(a) * Mathf.Cos(b), Mathf.Sin(a), Mathf.Cos(a) * Mathf.Sin(b));
+        }
+        var directions = bases.Select(b => Direction(b.Latitude, b.Longitude)).ToArray();
+        var mean = directions.Aggregate(Vector3.Zero, (sum, direction) => sum + direction);
+        if (mean.LengthSquared() < .000001f) mean = directions[0];
+        mean = mean.Normalized();
+        var latitude = Mathf.RadToDeg(Mathf.Asin(mean.Y));
+        var longitude = Mathf.RadToDeg(Mathf.Atan2(mean.Z, mean.X));
+        var spread = directions.Max(d => Mathf.Acos(Mathf.Clamp(mean.Dot(d), -1f, 1f))) * 6371f;
+        var distance = Mathf.Clamp(6.2f + (reach + spread) / 260f, 6.2f, 17f);
         _globe.FocusOn(latitude, longitude, distance);
     }
 
@@ -736,45 +824,35 @@ public partial class DealOrForceGame
     private void CancelSupportRebase()
     {
         _supportRebaseArmed = false;
+        _supportFeedback.Text = "";
         RefreshSupportScreen();
     }
 
     private void RebaseSupportSelection(ScenarioState target)
     {
         var player = _campaign.Player;
-        _supportRebaseArmed = false;
-        if (target.NationMapIndex != player.MapIndex)
+        var plan = SupportCore.PreviewRebase(_campaign, player.Id, _supportSelected, target.MapIndex);
+        if (plan.Refusal.Length > 0)
         {
-            _supportFeedback.Text = Tr("Choose a region the country holds.");
+            _supportRebaseArmed = true;
+            _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour("state.negative"));
+            _supportFeedback.Text = target.DisplayName + " · " + Tr(plan.Refusal) +
+                (plan.Moving > 0 ? "\n" + Loc.Format("Need {0} posts · {1} free · {2} reserved for training. Nothing moved.", plan.Moving, plan.Free, plan.Reserved) : "");
             RefreshSupportScreen();
             return;
         }
-        var moving = _campaign.SupportFormations
-            .Where(f => _supportSelected.Contains(f.Id) && f.NationId == player.Id && f.StateMapIndex != target.MapIndex)
-            .ToList();
-        var free = SupportCore.CapacityOf(_campaign, target) - SupportCore.PostsUsed(_campaign, target.MapIndex);
-        if (moving.Count == 0)
+        var command = new RebaseSupportGroupCommand
         {
-            _supportFeedback.Text = Loc.Format("The selected formations are already based in {0}.", target.DisplayName);
-            RefreshSupportScreen();
-            return;
-        }
-        var moved = 0;
-        foreach (var formation in moving.Take(Math.Max(0, free)))
-        {
-            _campaign.Commands.Enqueue(new RebaseSupportCommand
-            {
-                IssuerId = player.Id, FormationId = formation.Id, StateMapIndex = target.MapIndex
-            });
-            moved++;
-        }
+            IssuerId = player.Id, FormationIds = _supportSelected.OrderBy(id => id).ToArray(), StateMapIndex = target.MapIndex
+        };
+        _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
-        var stayed = moving.Count - moved;
-        _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour(stayed > 0 ? "state.warning" : "state.positive"));
-        _supportFeedback.Text = stayed > 0
-            ? Loc.Format("{0} based in {1}; {2} did not fit - it has {3} post(s). Barracks add two each.", moved, target.DisplayName, stayed, SupportCore.CapacityOf(_campaign, target))
-            : Loc.Format("{0} formation(s) based in {1}.", moved, target.DisplayName);
-        if (moved > 0) PlayStrategicCue("support_order");
+        _supportRebaseArmed = command.Refusal.Length > 0;
+        _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour(_supportRebaseArmed ? "state.negative" : "state.positive"));
+        _supportFeedback.Text = _supportRebaseArmed ? Tr(command.Refusal) : command.Moved == 0
+            ? Loc.Format("The selected formations are already based in {0}.", target.DisplayName)
+            : Loc.Format("{0} formation(s) based in {1}.", command.Moved, target.DisplayName);
+        if (command.Moved > 0) PlayStrategicCue("support_order");
         _globe.SelectSupportFormations(_supportSelected);
         RefreshSupportScreen();
     }
@@ -844,6 +922,8 @@ public partial class DealOrForceGame
     private void ToggleSupportRaise()
     {
         _supportRaiseOpen = !_supportRaiseOpen;
+        if (_supportRaiseOpen) _supportRebaseArmed = false;
+        _supportRaiseScroll.Visible = _supportRaiseOpen;
         _supportRaiseBody.Visible = _supportRaiseOpen;
         _supportRaiseToggle.Text = Tr(_supportRaiseOpen ? "▾ RAISE A FORMATION" : "▸ RAISE A FORMATION");
         RefreshSupportScreen();
@@ -869,7 +949,13 @@ public partial class DealOrForceGame
             }
             if (_supportRaiseType.Length == 0) _supportRaiseType = SupportTypeCatalog.All.FirstOrDefault()?.Id ?? "";
         }
-        foreach (var (id, button) in _supportTypeButtons) button.SetPressedNoSignal(id == _supportRaiseType);
+        if (!SupportCore.Enabled(_campaign, _supportRaiseType))
+            _supportRaiseType = SupportTypeCatalog.All.FirstOrDefault(t => SupportCore.Enabled(_campaign, t))?.Id ?? "";
+        foreach (var (id, button) in _supportTypeButtons)
+        {
+            button.Visible = SupportCore.Enabled(_campaign, id);
+            button.SetPressedNoSignal(id == _supportRaiseType);
+        }
 
         // The base picker follows the map: regions are gained and lost, and one that offered a
         // region the country no longer holds would be a promise the campaign refuses at the door.
@@ -881,7 +967,7 @@ public partial class DealOrForceGame
         foreach (var state in _campaign.States.Where(s => s.NationMapIndex == player.MapIndex).OrderBy(s => s.DisplayName))
         {
             var free = SupportCore.CapacityOf(_campaign, state) - SupportCore.PostsUsed(_campaign, state.MapIndex) -
-                       _campaign.SupportOrders.Count(o => o.NationId == player.Id && o.StateMapIndex == state.MapIndex);
+                       _campaign.SupportOrders.Count(o => o.NationId == player.Id && o.StateMapIndex == state.MapIndex && SupportCore.Enabled(_campaign, o.TypeId));
             _supportRegionPicker.AddItem(Loc.Format("{0} · {1} free", state.DisplayName, Math.Max(0, free)));
             _supportRegionPicker.SetItemMetadata(option, state.MapIndex);
             if (state.MapIndex == selected) _supportRegionPicker.Select(option);
@@ -918,7 +1004,13 @@ public partial class DealOrForceGame
 
     private void RefreshSupportRaiseReadout()
     {
-        if (_campaign?.Player is null || !SupportTypeCatalog.TryGet(_supportRaiseType, out var type)) return;
+        if (_campaign?.Player is null || !SupportTypeCatalog.TryGet(_supportRaiseType, out var type) || !SupportCore.Enabled(_campaign, type))
+        {
+            _supportRaiseButton.Disabled = true;
+            _supportTypeDetail.Text = "";
+            _supportCostReadout.Text = Tr("This mechanic is disabled in this scenario.");
+            return;
+        }
         var player = _campaign.Player;
         var missions = string.Join(", ", type.Missions.Where(m => m != SupportCore.MissionStandby).Select(m => Tr(SupportMissionShort(m))));
         _supportTypeDetail.Text =
@@ -930,6 +1022,7 @@ public partial class DealOrForceGame
         var cost = SupportCore.CostOf(player, type);
         var days = SupportCore.BuildDaysOf(player, type);
         var refusal = SupportCore.Validate(_campaign, player.Id, SupportRaiseRegion(), type.Id);
+        _supportRaiseButton.Disabled = refusal.Length > 0;
         _supportCostReadout.Text = Loc.Format("{0} · {1} · {2} days", Fmt.Money(cost), Fmt.People(type.Personnel), days) +
                                    (refusal.Length > 0 ? " · " + Tr(refusal) : "");
         _supportCostReadout.AddThemeColorOverride("font_color", Ui.Colour(refusal.Length == 0 ? "text.accent_dim" : "state.negative"));

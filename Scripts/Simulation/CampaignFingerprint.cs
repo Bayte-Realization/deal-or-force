@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -39,6 +40,24 @@ public static class CampaignFingerprint
         Mix(campaign.ElapsedHours);
         foreach (var character in campaign.ScenarioId ?? "2024") Mix(character);
         Mix(-1);
+        foreach (var id in campaign.Defines.Features.Keys.Concat(campaign.FeatureOverrides.Keys).Concat(MechanicFeatures.BuiltIns)
+                     .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var character in id.ToLowerInvariant()) Mix(character);
+            Mix(-2); Mix(campaign.FeatureEnabled(id) ? 1 : 0);
+        }
+        foreach (var table in new[] { campaign.Defines.FeatureUnlocks, campaign.Defines.FeatureCommands,
+                     campaign.Defines.FeatureScreens, campaign.Defines.FeatureSystems })
+        {
+            Mix(-3);
+            foreach (var entry in table.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                foreach (var character in entry.Key.ToLowerInvariant()) Mix(character);
+                Mix(-4);
+                foreach (var character in entry.Value ?? "") Mix(character);
+                Mix(-5);
+            }
+        }
 
         // The region list is no longer fixed: a border cuts a region in two and a border
         // going away puts it back. Two worlds that disagree about how many regions exist

@@ -10,7 +10,13 @@ public sealed partial class Defines
     /// area after a breakthrough, a province the enemy never garrisoned. The same pace as a
     /// march by default: walking into an empty district is walking.
     /// </summary>
-    public float OpenCountryCapturePerDay { get; set; } = 0.22f;
+    public float OpenCountryCapturePerDay { get; set; } = 0.35f;
+
+    /// <summary>Base pace for explicit player orders into covered, unoccupied ground.</summary>
+    public float OrderedCapturePerDay { get; set; } = 0.30f;
+
+    /// <summary>Supply floor for explicit advances; resistance still slows covered gaps.</summary>
+    public float OrderedCaptureSupplyFloor { get; set; } = 0.7f;
 
     /// <summary>
     /// The least supply counts for when advancing into open country. The trace from the depots

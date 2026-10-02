@@ -15,12 +15,9 @@ public partial class DealOrForceGame
     private ScrollContainer _outlinerScroll;
     private readonly HashSet<string> _collapsedOutlinerGroups = new();
     private VBoxContainer _battleDetailControls = null!;
-    private ProgressBar _attackerOrganisation = null!;
-    private ProgressBar _defenderOrganisation = null!;
     private int _selectedBattleId = -1;
     private int _strategicHudFingerprint = int.MinValue;
     private bool _outlinerCollapsed;
-    private long _newsFeedSequence;
 
     private void BuildStrategicHud()
     {
@@ -89,14 +86,14 @@ public partial class DealOrForceGame
         var availableDecisions = DecisionCatalog.All.Count(definition =>
             DecisionCatalog.BlockReason(_campaign, player, definition).Length == 0);
         var fingerprint = HashCode.Combine(
-            _campaign.ElapsedDays / 3,
+            _campaign.ElapsedDays,
             _campaign.MapRevision,
             player.Id,
             _campaign.Wars.Count(war => !war.Ended && war.Involves(player.Id)),
             playerBattles,
             _campaign.Construction.Count(project => project.NationId == player.Id),
             _campaign.PendingEvents.Count,
-            (availableDecisions, _campaign.Chronicle.Entries.Count == 0
+            (availableDecisions, _campaign.FeatureEnabled("navy"), _campaign.FeatureEnabled("construction"), _campaign.Chronicle.Entries.Count == 0
                 ? 0
                 : _campaign.Chronicle.Entries[^1].Sequence));
         if (fingerprint == _strategicHudFingerprint) return;
@@ -152,7 +149,7 @@ public partial class DealOrForceGame
                 () => OpenEconomyTab("Budget"),
                 Tr("Prices are rising well past the comfortable rate. The policy rate in the budget is the lever."));
 
-        if (construction.Length == 0)
+        if (construction.Length == 0 && _campaign.FeatureEnabled("construction"))
             AddAlert(AlertLevel.Notice, "alert_construction", Tr("Nothing being built"),
                 () => OpenEconomyTab("Construction"), Tr("Construction capacity is idle."));
 
@@ -164,11 +161,10 @@ public partial class DealOrForceGame
         FlushAlerts();
 
         AddOutlinerHeader("WORLD");
-        // The world's news since the last look: one line per public act, newest first, so a
-        // war two continents away lands in the corner of the eye instead of waiting to be
-        // found in the ledger. A quiet world shows nothing, which is the point.
-        foreach (var line in NewsFeed.Lines(_campaign, since: _newsFeedSequence,
-                     take: (int)InterfaceSkin.Metric("news.feed_rows", 6)))
+        // This rail is rebuilt, not appended. Read a bounded snapshot rather than a delta:
+        // otherwise collapsing a group or changing language erases the already read news.
+        foreach (var line in NewsFeed.Lines(_campaign,
+                     take: (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 6), 1, 20)))
         {
             var actor = line.ActorId > 0 ? _campaign.NationById(line.ActorId) : null;
             NewsFeed.Line captured = line;
@@ -177,8 +173,14 @@ public partial class DealOrForceGame
                     _selectedNation = actor;
                     OpenDiplomacyScreen();
                 },
-                $"{captured.Kind} · {captured.Day}");
-            _newsFeedSequence = line.Sequence;
+                line.Text + System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day));
+            if (_outlinerGroupRows.GetChild(_outlinerGroupRows.GetChildCount() - 1) is Button news)
+            {
+                news.Name = "WorldNews_" + line.Sequence;
+                news.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                news.AddThemeFontSizeOverride("font_size", 12);
+                news.CustomMinimumSize = new Vector2(0, 48);
+            }
         }
 
         AddOutlinerHeader("WARS");
@@ -203,9 +205,17 @@ public partial class DealOrForceGame
             // Where the fight is, in words: a province number is a coordinate, and a place
             // is the town it is at - four battles in one region used to read as the same
             // line four times - or the region when no town of it is near.
-            AddOutlinerButton(Simulation.Loc.Format("⚔ {0} · {1}",
-                    BattlePlaceName(battle.ProvinceId), enemy?.Tag ?? "?"),
+            var assessment = BattleReadout.Assess(battle, _campaign.Defines.BattleBreakOrganisation);
+            var attacking = battle.AttackerId == player.Id;
+            var indicator = assessment.Known ? $"{assessment.ShareFor(attacking):P0}" : "—";
+            var battleRow = AddOutlinerButton(Simulation.Loc.Format("{0} · {1} · {2}",
+                    BattlePlaceName(battle.ProvinceId), enemy?.Tag ?? "?", indicator),
                 () => ShowBattleDetails(battle), "Open the battle report and focus the engagement.");
+            battleRow.Name = "BattleOutliner_" + battle.Id;
+            battleRow.TooltipText = Ui.Tip(Tr(assessment.StatusFor(attacking)) + "\n" + Tr(BattleBalanceExplanation));
+            battleRow.AddThemeColorOverride("font_color", Ui.Colour(!assessment.Known ? "text.muted" :
+                assessment.ShareFor(attacking) > .55f ? "state.positive" :
+                assessment.ShareFor(attacking) < .45f ? "state.negative" : "state.warning"));
         }
 
         // The navy, in full. The armies list was dropped because it showed seven divisions
@@ -214,7 +224,7 @@ public partial class DealOrForceGame
         // is no way to find your own navy. Every Paradox game has this list for that reason.
         var fleets = _campaign.Fleets.Where(fleet => fleet.NationId == player.Id)
             .OrderByDescending(fleet => fleet.Hulls).ToArray();
-        if (fleets.Length > 0)
+        if (fleets.Length > 0 && _campaign.FeatureEnabled("navy"))
         {
             AddOutlinerHeader("NAVY");
             foreach (var fleet in fleets)
@@ -432,7 +442,7 @@ public partial class DealOrForceGame
         _outlinerGroupRows.AddChild(label);
     }
 
-    private void AddOutlinerButton(string text, Action action, string tooltip)
+    private Button AddOutlinerButton(string text, Action action, string tooltip)
     {
         OpenOutlinerGroup();
         var button = ActionButton(text, action, 0, 29);
@@ -448,6 +458,7 @@ public partial class DealOrForceGame
         button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         button.TooltipText = Ui.Tip(tooltip);
         _outlinerGroupRows.AddChild(button);
+        return button;
     }
 
     private static void ClearRuntimeChildren(Node parent)
@@ -492,108 +503,4 @@ public partial class DealOrForceGame
         _globe.FocusOn(center.Latitude, center.Longitude, distance);
     }
 
-    private void BuildBattleDetailControls(VBoxContainer parent)
-    {
-        _battleDetailControls = new VBoxContainer { Visible = false };
-        _battleDetailControls.AddThemeConstantOverride("separation", 5);
-        parent.AddChild(_battleDetailControls);
-        _battleDetailControls.AddChild(Title("BATTLE COHESION", 11, Ui.Colour("text.caption")));
-        _attackerOrganisation = new ProgressBar { MinValue = 0, MaxValue = 100, ShowPercentage = true };
-        _defenderOrganisation = new ProgressBar { MinValue = 0, MaxValue = 100, ShowPercentage = true };
-        _battleDetailControls.AddChild(_attackerOrganisation);
-        _battleDetailControls.AddChild(_defenderOrganisation);
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 5);
-        _battleDetailControls.AddChild(row);
-        row.AddChild(ActionButton("Focus battle", () => FocusProvince(SelectedBattle()?.ProvinceId ?? -1, 6.5f), 145, 32, true));
-        row.AddChild(ActionButton("War dossier", () => OpenScreen("Wars"), 145, 32));
-    }
-
-    private LandBattle SelectedBattle() => _campaign?.Battles.FirstOrDefault(battle => battle.Id == _selectedBattleId);
-
-    private void ShowBattleDetails(LandBattle battle)
-    {
-        if (battle is null || !_hudLayer.Visible) return;
-        if (!CampaignIntel.PlayerCanSeeBattle(_campaign, battle)) return;
-        PrepareDossierTabs("Battle");
-        ApplyDossierTab();
-        ClearDetail();
-        _selectedBattleId = battle.Id;
-        _openScreen = "";
-        _sidePanel.Visible = true;
-        SetArmyPanelVisible(false);
-        _countryActions.Visible = false;
-        HideRegionInteractionControls();
-        _economyControls.Visible = false;
-        _decisionControls.Visible = false;
-        _militarySpending.Visible = false;
-        _battleDetailControls.Visible = true;
-        var attacker = _campaign.NationById(battle.AttackerId);
-        var defender = _campaign.NationById(battle.DefenderId);
-        var stateIndex = _campaign.ProvinceMap is null || battle.ProvinceId <= 0
-            ? 0 : _campaign.ProvinceMap.ProvinceToState[battle.ProvinceId];
-        var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == stateIndex);
-        var latest = battle.Rounds.LastOrDefault();
-        var attackerFormations = battle.Attackers.Select(id => _campaign.Armies.Find(army => army.Id == id))
-            .Where(army => army is not null).ToArray();
-        var defenderFormations = battle.Defenders.Select(id => _campaign.Armies.Find(army => army.Id == id))
-            .Where(army => army is not null).ToArray();
-        var attackerTypes = string.Join(", ", attackerFormations.GroupBy(army => UnitTypeCatalog.Get(army!.TemplateId).Name)
-            .Select(group => $"{group.Count()}× {Tr(group.Key)}"));
-        var defenderTypes = string.Join(", ", defenderFormations.GroupBy(army => UnitTypeCatalog.Get(army!.TemplateId).Name)
-            .Select(group => $"{group.Count()}× {Tr(group.Key)}"));
-        _sideTitle.Text = battle.Ended ? "BATTLE REPORT" : "BATTLE IN PROGRESS";
-        _attackerOrganisation.Value = (latest?.AttackerOrganisation ?? 1f) * 100f;
-        _defenderOrganisation.Value = (latest?.DefenderOrganisation ?? 1f) * 100f;
-        var recent = string.Join("\n", battle.Rounds.TakeLast(6).Reverse().Select(round =>
-            Simulation.Loc.Format("Day {0:N0}: {1} · losses {2:N0}/{3:N0}",
-                round.Day - battle.StartedDay + 1, Tr(round.Note),
-                round.AttackerLosses, round.DefenderLosses)));
-        _sideBody.Text =
-            Simulation.Loc.Format("{0}  vs  {1}\n{2} · province #{3:N0}\nDay {4} · {5}\n\n",
-                attacker?.DisplayName ?? "?", defender?.DisplayName ?? "?",
-                state?.DisplayName ?? Tr("Unmapped theatre"), battle.ProvinceId,
-                _campaign.ElapsedDays - battle.StartedDay + 1,
-                battle.Ended ? battle.Outcome : Tr("Fighting")) +
-            Simulation.Loc.Format("Combat width: {0:0}/{1:0}",
-                battle.AttackerWidth, battle.DefenderWidth) + "\n" +
-            (battle.RiverCrossingStrength > 0f
-                ? Tr(battle.RiverCrossingStrength > 0.66f
-                    ? "River crossing: major · defender advantage active"
-                    : "River crossing: ordinary · defender advantage active") + "\n"
-                : "") +
-            Simulation.Loc.Format("Committed formations: {0:N0}/{1:N0}",
-                battle.Attackers.Count, battle.Defenders.Count) + "\n" +
-            // What the guns and aircraft over this ground added, when any of them did.
-            (battle.AttackerSupport > 0f || battle.DefenderSupport > 0f
-                ? Simulation.Loc.Format("Long-range fire: {0:0.#}/{1:0.#}",
-                    battle.AttackerSupport, battle.DefenderSupport) + "\n"
-                : "") +
-            Simulation.Loc.Format("Attacker: {0}",
-                attackerTypes.Length == 0 ? Tr("none") : attackerTypes) + "\n" +
-            Simulation.Loc.Format("Defender: {0}",
-                defenderTypes.Length == 0 ? Tr("none") : defenderTypes) + "\n" +
-            (latest is null ? "" : Simulation.Loc.Format(
-                "Effective power: {0:0.0}/{1:0.0} · planning {2:P0}",
-                latest.AttackerPower, latest.DefenderPower, latest.AttackerPlanning) + "\n") +
-            Simulation.Loc.Format("Reinforcements: +{0:N0}/+{1:N0}",
-                battle.AttackerReinforcements, battle.DefenderReinforcements) + "\n" +
-            Simulation.Loc.Format("Losses: {0:N0}/{1:N0}",
-                battle.AttackerLosses, battle.DefenderLosses) + "\n\n" +
-            (recent.Length == 0 ? Tr("The first combat round has not resolved yet.") : recent);
-        if (_campaign.Player.IsHuman && battle.AttackerId != _campaign.Player.Id && battle.DefenderId != _campaign.Player.Id)
-        {
-            _attackerOrganisation.Visible = false;
-            _defenderOrganisation.Visible = false;
-            _sideBody.Text = Simulation.Loc.Format(
-                    "{0} vs {1}\n{2} · province #{3:N0}\n{4} · Day {5}\n\n" +
-                    "Observed battle between foreign countries. Detailed combat reports unavailable.\n",
-                    attacker?.DisplayName, defender?.DisplayName, state?.DisplayName ?? "", battle.ProvinceId,
-                    battle.Ended ? battle.Outcome : Tr("Fighting"),
-                    _campaign.ElapsedDays - battle.StartedDay + 1) +
-                (battle.RiverCrossingStrength > 0 ? Tr("River crossing — defender advantage.") : "");
-        }
-        else _attackerOrganisation.Visible = _defenderOrganisation.Visible = true;
-        FocusProvince(battle.ProvinceId, 6.5f);
-    }
 }

@@ -223,6 +223,7 @@ public static class ModifierSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ModifierSystem))) return;
         // Every day: what the modifiers add up to, and the weekly ones paid a day at a time.
         NationalModifiers.Tick(campaign);
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;

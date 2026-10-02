@@ -49,7 +49,7 @@ public sealed class SimRandom
     internal void Restore(uint state) => State = state == 0 ? 0x9E3779B9u : state;
 }
 
-/// <summary>Small Gregorian-like campaign calendar; its serialized fields are engine independent.</summary>
+/// <summary>Gregorian campaign calendar; its serialized fields are engine independent.</summary>
 public struct GameDate
 {
     private static readonly int[] MonthLengths = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
@@ -71,7 +71,9 @@ public struct GameDate
     public void Advance()
     {
         Day++;
-        if (Day <= MonthLengths[Month - 1]) return;
+        var days = MonthLengths[Month - 1];
+        if (Month == 2 && Year % 4 == 0 && (Year % 100 != 0 || Year % 400 == 0)) days++;
+        if (Day <= days) return;
         Day = 1;
         Month++;
         if (Month <= 12) return;
@@ -654,6 +656,7 @@ public sealed partial class Campaign
         if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
         Commands.ApplyAll(this);
+        EvaluateFeatureUnlocks();
 
         // The long-range reach index, rebuilt fresh from the orders the step has just
         // applied: the fighting below asks it who reaches into each battle, and a client
@@ -1136,7 +1139,11 @@ public sealed class SetMilitarySpendingCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public float Value { get; init; }
 
-    public void Apply(Campaign campaign) => campaign.SetMilitarySpending(IssuerId, Value);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.SetMilitarySpending(IssuerId, Value);
+    }
 }
 
 public sealed class SetTaxRateCommand : ICampaignCommand
@@ -1144,7 +1151,11 @@ public sealed class SetTaxRateCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public float Value { get; init; }
 
-    public void Apply(Campaign campaign) => campaign.SetTaxRate(IssuerId, Value);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.SetTaxRate(IssuerId, Value);
+    }
 }
 
 public sealed class SetTradePolicyCommand : ICampaignCommand
@@ -1152,7 +1163,11 @@ public sealed class SetTradePolicyCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public TradePolicy Policy { get; init; }
 
-    public void Apply(Campaign campaign) => campaign.SetTradePolicy(IssuerId, Policy);
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        campaign.SetTradePolicy(IssuerId, Policy);
+    }
 }
 
 /// <summary>Engine-independent sample profiler. Godot's monitors complement, not replace it.</summary>

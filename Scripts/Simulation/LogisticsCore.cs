@@ -39,6 +39,7 @@ public static class LogisticsSystem
 
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LogisticsSystem))) return;
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
         // Every third day, and once on it. Without the first half of this a campaign
         // stepping an hour at a time rebuilt the whole supply network twenty-four times on

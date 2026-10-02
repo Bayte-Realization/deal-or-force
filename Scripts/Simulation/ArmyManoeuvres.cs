@@ -49,6 +49,7 @@ public sealed class SupportAttackCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId) return;
         army.SupportOnly = SupportOnly;
@@ -72,6 +73,7 @@ public sealed class StrategicRedeploymentCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         Result = ArmyMoveResult.None;
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null)
@@ -161,6 +163,7 @@ public sealed class ConsolidateArmiesCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         Merged = 0;
         PersonnelKept = 0;
         Refusal = "";

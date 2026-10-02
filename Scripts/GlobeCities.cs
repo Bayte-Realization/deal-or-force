@@ -143,6 +143,14 @@ public sealed partial class GlobePresentation
 
         _cityClock += delta;
         var viewport = ViewportSize();
+        if (_flatMap)
+        {
+            // Placement is throttled, scaling is not. Otherwise town labels grow for
+            // several frames then snap back whenever the 10 Hz placement pass runs.
+            var pixels = _camera.Size / Math.Max(1, viewport.Y);
+            foreach (var pin in _cityPins)
+                if (pin.Node.Visible) pin.Node.Scale = Vector3.One * pixels;
+        }
         var cameraTransform = _camera.GlobalTransform;
         var moved = _citySeenFlat != _flatMap || _citySeenViewport != viewport ||
                     !cameraTransform.IsEqualApprox(_citySeenCamera) ||
@@ -151,6 +159,15 @@ public sealed partial class GlobePresentation
         if (language != _citySeenLanguage) { _citySeenLanguage = language; InvalidateCities(); }
         // Fixed-size pins on the globe, pixel-scaled ones on the flat map: a switch redoes them all.
         if (_citySeenFlat != _flatMap) InvalidateCities();
+        if (_flatMap && !_cityDirty && _citySeenSize > 0 && FlatViewInMotion)
+        {
+            // Keep names on the same side during a gesture. Reflow only after a
+            // significant move/zoom, or once the camera has settled.
+            var shift = new Vector2(cameraTransform.Origin.X - _citySeenCamera.Origin.X,
+                cameraTransform.Origin.Y - _citySeenCamera.Origin.Y).Length();
+            var ratio = _camera.Size / _citySeenSize;
+            if (shift < _camera.Size * .22f && ratio > .75f && ratio < 1.33f) return;
+        }
         if (!_cityDirty && (!moved || _cityClock < 0.1))
         {
             // Between placements the pins turn with the view, and a name carried over the limb
@@ -170,13 +187,17 @@ public sealed partial class GlobePresentation
 
     private void PlaceCities(Vector2I viewport)
     {
-        var limit = Math.Clamp((int)InterfaceSkin.Metric("map.city_label_limit", 140f), 0, 400);
+        var limit = Math.Clamp((int)InterfaceSkin.Metric(_flatMap ? "map.flat_city_label_limit" : "map.city_label_limit", _flatMap ? 90f : 140f), 0, 400);
         var fontSize = Math.Clamp((int)InterfaceSkin.Metric("map.city_font_size", 28f), 12, 64);
-        var textPixels = Math.Clamp(InterfaceSkin.Metric("map.city_text_pixels", 13f), 8f, 28f);
+        var textPixels = Math.Clamp(InterfaceSkin.Metric(_flatMap ? "map.flat_city_text_pixels" : "map.city_text_pixels", _flatMap ? 12f : 13f), 8f, 28f);
         var font = PresentationFonts.For("map.cities");
         var distance = ViewDistance;
         var tiers = 0;
-        while (tiers < 3 && distance <= CityTierDistance(tiers + 1)) tiers++;
+        if (_flatMap)
+            while (tiers < 3 && _flatZoom <= InterfaceSkin.Metric($"map.flat_city_tier{tiers + 1}_zoom",
+                tiers switch { 0 => 3.2f, 1 => 1.5f, _ => .8f })) tiers++;
+        else
+            while (tiers < 3 && distance <= CityTierDistance(tiers + 1)) tiers++;
 
         // World units per screen pixel: on the flat map the camera's own height over the
         // viewport; on the globe, a fixed-size label's pixel size for the field of view.
@@ -193,17 +214,41 @@ public sealed partial class GlobePresentation
         // counter itself does - world-sized on the flat map, fixed-size on the globe.
         foreach (var marker in _armyStacks.Values)
         {
-            if (marker.Plate is not { Visible: true } plate) continue;
+            if (marker.Plate is not { Visible: true } plate || !plate.IsVisibleInTree()) continue;
             var world = plate.GlobalPosition;
             if (_camera.IsPositionBehind(world)) continue;
             var screen = _camera.UnprojectPosition(world);
             if (screen.X < -60f || screen.Y < -40f || screen.X > viewport.X + 60f || screen.Y > viewport.Y + 40f) continue;
             var pixels = _flatMap
-                ? 176f * plate.PixelSize * marker.Node.Scale.X / flatPixel
-                : 176f * plate.PixelSize / fixedPixel;
+                ? plate.Texture.GetWidth() * plate.PixelSize * marker.Node.Scale.X * plate.Scale.X / flatPixel
+                : 176f * plate.PixelSize * plate.Scale.X / fixedPixel;
             var cardWidth = pixels + 8f;
-            _cityTaken.Add(new Rect2(screen.X - cardWidth * 0.5f, screen.Y - pixels * (104f / 176f) * 0.5f - 4f,
-                cardWidth, pixels * (104f / 176f) + 8f));
+            var cardHeight = pixels * plate.Texture.GetHeight() / plate.Texture.GetWidth();
+            _cityTaken.Add(new Rect2(screen.X - cardWidth * 0.5f, screen.Y - cardHeight * 0.5f - 4f,
+                cardWidth, cardHeight + 8f));
+        }
+        // Wings and artillery are map marks too. Their readiness labels must not be
+        // crossed by town names, especially on the flat map where both are screen-sized.
+        foreach (var marker in _supportMapMarkers.Values)
+        {
+            var plate = marker.Plate;
+            if (!IsInstanceValid(plate) || !plate.IsVisibleInTree() || _camera.IsPositionBehind(plate.GlobalPosition)) continue;
+            var screen = _camera.UnprojectPosition(plate.GlobalPosition);
+            var pixels = _flatMap
+                ? plate.Texture.GetWidth() * plate.PixelSize * marker.Node.Scale.X * plate.Scale.X / flatPixel
+                : 96f * plate.PixelSize * plate.Scale.X / fixedPixel;
+            var cardHeight = pixels * plate.Texture.GetHeight() / plate.Texture.GetWidth();
+            _cityTaken.Add(new Rect2(screen - new Vector2(pixels * .5f + 4f, cardHeight * .5f + 4f),
+                new Vector2(pixels + 8f, cardHeight + 8f)));
+        }
+        foreach (var parts in _fleetNodes.Values)
+        {
+            var plate = parts.Plate;
+            if (!IsInstanceValid(plate) || !plate.IsVisibleInTree() || _camera.IsPositionBehind(plate.GlobalPosition)) continue;
+            var screen = _camera.UnprojectPosition(plate.GlobalPosition);
+            var pixels = new Vector2(plate.Texture.GetWidth(), plate.Texture.GetHeight()) * plate.PixelSize * plate.Scale.X *
+                (_flatMap ? parts.Node.Scale.X / flatPixel : 1f / fixedPixel);
+            _cityTaken.Add(new Rect2(screen - pixels * .5f - Vector2.One * 4f, pixels + Vector2.One * 8f));
         }
         var used = 0;
 

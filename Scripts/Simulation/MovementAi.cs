@@ -24,6 +24,7 @@ public static class MovementAi
 {
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementAi))) return;
         if (campaign.ElapsedDays == 0) return;
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
         // On the same day as its week (MovementRules.Tick), so it acts on what that week made of it.

@@ -240,6 +240,7 @@ public sealed class EmbarkArmiesCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var fleet = campaign.Fleets.Find(candidate => candidate.Id == FleetId);
         if (fleet is null || fleet.NationId != IssuerId) return;
         foreach (var id in ArmyIds)
@@ -264,6 +265,7 @@ public sealed class LaunchInvasionCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var fleet = campaign.Fleets.Find(candidate => candidate.Id == FleetId);
         var topology = campaign.ProvinceMap;
         if (fleet is null || fleet.NationId != IssuerId || topology is null) { Refusal = Loc.Get("No fleet to send."); return; }

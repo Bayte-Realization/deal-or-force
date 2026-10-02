@@ -236,6 +236,7 @@ public static class OpinionSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(OpinionSystem))) return;
         // A seventh of them each day, every relation still once a week. All on one day made
         // that day's frame walk thirty thousand relations at once.
         foreach (var relation in campaign.Relations.Values)

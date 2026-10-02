@@ -70,6 +70,13 @@
   // UnopposedCapturePerDay, with supply counted at no less than OpenCountrySupplyFloor. A
   // gap in a line the enemy is still holding stays slow; what lies behind it no longer takes
   // three weeks a district.
-  "OpenCountryCapturePerDay": 0.22,
-  "OpenCountrySupplyFloor": 0.7
+  "OpenCountryCapturePerDay": 0.35,
+  "OpenCountrySupplyFloor": 0.7,
+
+  // Explicit orders into covered but unoccupied ground. These do not bypass a garrison,
+  // combat, terrain or rivers; the autonomous planner's coverage refusal is unchanged.
+  // Worst-case supply and coverage must not multiply a single district into months.
+  "OrderedCapturePerDay": 0.30,
+  "OrderedCaptureSupplyFloor": 0.7,
+  "OrderedAdvanceFloor": 0.5
 }

@@ -104,7 +104,11 @@ public partial class DealOrForceGame
 
             case "hours_per_tick":
                 if (_campaign is not null)
+                {
                     _campaign.Defines.HoursPerTick = Math.Clamp(Whole("hours_per_tick"), 1, 240);
+                    _dayAccumulator = 0;
+                    if (!_applyingEverySetting && _startupComplete) Refresh();
+                }
                 break;
 
             // `pause_on_event` and `confirm_declaration` are read where they are used

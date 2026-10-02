@@ -1,0 +1,18 @@
+{
+  "country": {
+    "Population": { "label": "Population", "min": 0, "max": 1000000000000, "step": 1, "order": 0 },
+    "Gdp": { "label": "GDP ($B)", "min": 0, "max": 1000000000000000, "step": 0.01, "order": 1 },
+    "Treasury": { "label": "Treasury ($B)", "min": -1000000000000000, "max": 1000000000000000, "step": 0.01, "order": 2 },
+    "TaxRate": { "label": "Tax rate (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 3 },
+    "Literacy": { "label": "Literacy (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 4 },
+    "Stability": { "label": "Stability (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 5 },
+    "WarSupport": { "label": "War support (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 6 }
+  },
+  "region": {
+    "Population": { "label": "Population", "min": 0, "max": 1000000000000, "step": 1, "order": 0 },
+    "Literacy": { "label": "Literacy (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 1 },
+    "StandardOfLiving": { "label": "Standard of living (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 2 },
+    "Stability": { "label": "Stability (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 3 },
+    "Radicalism": { "label": "Radicalism (%)", "min": 0, "max": 100, "scale": 100, "step": 0.1, "order": 4 }
+  }
+}

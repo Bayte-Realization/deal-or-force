@@ -1,0 +1,8 @@
+{
+  "metrics": {
+    "cursor.enabled": 1, "cursor.scale": 1,
+    "cursor.arrow.hotspot_x": 2, "cursor.arrow.hotspot_y": 2,
+    "cursor.hand.hotspot_x": 10, "cursor.hand.hotspot_y": 3,
+    "cursor.cross.hotspot_x": 16, "cursor.cross.hotspot_y": 16
+  }
+}
