@@ -10,30 +10,11 @@ public sealed partial class GlobePresentation
     private readonly Dictionary<Vector2I, List<(ArmyStackMarker Marker, Rect2 Room, bool Selected)>> _occupiedCounterCells = new();
     private readonly List<(Node3D Node, Sprite3D Plate, Vector3 Anchor, int Id, SupportMapMarker Support)> _auxiliaryCounters = new();
     private readonly Dictionary<int, Vector2> _flatFleetOffsets = new();
-    private readonly Dictionary<ArmyStackMarker, Vector2> _provinceCounterSlots = new();
-    private readonly Dictionary<(int Nation, int Province), List<ArmyStackMarker>> _provinceCounterGroups = new();
     private ulong _nextCounterDensityMs;
     private Vector3 _densityView = new(float.NaN, float.NaN, float.NaN);
     private Vector2 _densityViewport;
     private bool _counterDensityDirty = true;
     private bool _flatStrategicCounters;
-    private bool _flatIndividualDivisions;
-    private bool _surfaceIndividualDivisions;
-
-    private void UpdateFlatDivisionDetail()
-    {
-        var threshold = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_individual_zoom", .40f), .15f, 1.5f);
-        var hysteresis = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_individual_hysteresis", .05f), .02f, .3f);
-        var individual = _flatMap && _flatZoom <= threshold + (_flatIndividualDivisions ? hysteresis : 0f);
-        var surfaceThreshold = Math.Clamp(Ui.Metric("map.globe_individual_distance", 5.9f), 5.5f, 7f);
-        var surfaceIndividual = !_flatMap && ViewDistance <= surfaceThreshold + (_surfaceIndividualDivisions ? .12f : 0f);
-        if (individual == _flatIndividualDivisions && surfaceIndividual == _surfaceIndividualDivisions) return;
-        _flatIndividualDivisions = individual;
-        _surfaceIndividualDivisions = surfaceIndividual;
-        foreach (var marker in _armyStacks.Values) marker.DisplayOffset = Vector2.Zero;
-        if (_mapApplied && _campaign is not null) ReconcileArmyMarkers(_campaign);
-        InvalidateFlatCounterDensity();
-    }
 
     private Vector3 ArmyMarkerPosition(ArmyStackMarker marker)
     {
@@ -138,27 +119,23 @@ public sealed partial class GlobePresentation
             if (screen.X < -80 || screen.Y < -50 || screen.X > Size.X + 80 || screen.Y > Size.Y + 50) continue;
             _densityCandidates.Add((marker, screen, selected));
         }
-        _densityCandidates.Sort((a, b) => _flatIndividualDivisions
-            ? a.Marker.Stack[0].Id.CompareTo(b.Marker.Stack[0].Id)
-            : a.Selected != b.Selected
+        _densityCandidates.Sort((a, b) => a.Selected != b.Selected
             ? (a.Selected ? -1 : 1)
             : a.Marker.Plate.Visible != b.Marker.Plate.Visible
                 ? (a.Marker.Plate.Visible ? -1 : 1)
                 : a.Marker.Stack[0].Id.CompareTo(b.Marker.Stack[0].Id));
-        BuildProvinceCounterSlots();
         foreach (var (marker, at, selected) in _densityCandidates)
         {
             var halfWidth = marker.Plate.Texture.GetWidth() * marker.Plate.PixelSize * _counterFlatFar * .5f;
             var halfHeight = marker.Plate.Texture.GetHeight() * marker.Plate.PixelSize * _counterFlatFar * .5f;
             var gap = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_counter_gap", 4f), 0f, 16f);
             var half = new Vector2(halfWidth, halfHeight) + Vector2.One * gap * .5f;
-            var localSlot = _provinceCounterSlots.GetValueOrDefault(marker);
-            var room = new Rect2(at + localSlot - half, half * 2f);
+            var room = new Rect2(at - half, half * 2f);
             var hysteresis = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_counter_clearance", 6f), 0f, 16f);
             var test = marker.Plate.Visible ? room : room.Grow(hysteresis);
-            var host = _flatIndividualDivisions ? null : FindCounterHost(test, marker.NationId, selected);
+            var host = FindCounterHost(test, marker.NationId, selected);
             var hidden = host is not null;
-            marker.DisplayOffset = localSlot;
+            marker.DisplayOffset = Vector2.Zero;
             if (!hidden)
             {
                 if (TryFindFreeCounterOffset(room, out var adjustment))
@@ -181,7 +158,7 @@ public sealed partial class GlobePresentation
             {
                 // Enemy cards never merge either. Move crowded cards in screen space,
                 // retaining geography as their anchor and keeping every division clickable.
-                room.Position += marker.DisplayOffset - localSlot;
+                room.Position += marker.DisplayOffset;
                 TakeCounterRoom(marker, room, selected);
             }
             // Keep these states together even when a sizing pass just ran. Returning only
@@ -193,9 +170,8 @@ public sealed partial class GlobePresentation
             marker.Node.Position = ArmyMarkerPosition(marker);
         }
         QueueRedraw();
-        foreach (var (marker, _, _) in _densityCandidates)
+        foreach (var marker in _armyStacks.Values)
         {
-            if (!marker.Plate.Visible) continue;
             var divisions = 0f;
             var personnel = 0f;
             var fingerprint = new HashCode();
@@ -208,7 +184,7 @@ public sealed partial class GlobePresentation
             var cluster = marker.DisplayProvinces > 1 ? "+" : "";
             var text = $"{Mathf.CeilToInt(divisions)}{cluster}" +
                 (_flatStrategicCounters ? "" : $"\n{personnel / 1000f:0.#}k");
-            if (marker.Count.Text != text) marker.Count.Text = text;
+            if (marker.Plate.Visible && marker.Count.Text != text) marker.Count.Text = text;
             // Inspectable display membership; no simulation or save-state mutation.
             var signature = fingerprint.ToHashCode();
             if (signature != marker.DisplayFingerprint)
@@ -219,44 +195,9 @@ public sealed partial class GlobePresentation
                 marker.Node.SetMeta("display_army_ids", ids);
             }
             marker.Node.SetMeta("display_provinces", marker.DisplayProvinces);
-        }
-    }
-
-    private void BuildProvinceCounterSlots()
-    {
-        _provinceCounterSlots.Clear();
-        _provinceCounterGroups.Clear();
-        if (!_flatIndividualDivisions) return;
-        foreach (var (marker, _, _) in _densityCandidates)
-        {
-            var province = marker.Stack[0].ProvinceId;
-            // Unplaced modded formations must not share a fictional province zero.
-            var key = (marker.NationId, province > 0 ? province : -marker.Stack[0].Id - 1);
-            if (!_provinceCounterGroups.TryGetValue(key, out var group))
-                _provinceCounterGroups[key] = group = new();
-            group.Add(marker);
-        }
-        foreach (var group in _provinceCounterGroups.Values)
-        {
-            group.Sort((a, b) => a.Stack[0].Id.CompareTo(b.Stack[0].Id));
-            // A mod may put hundreds of divisions in one province. Overflow reuses
-            // these local slots and is merged with its nearby host, never a long train.
-            var slots = Math.Min(group.Count, 12);
-            var columns = slots <= 4 ? 1 : slots <= 8 ? 2 : 3;
-            var rows = (slots + columns - 1) / columns;
-            var marker = group[0];
-            var gap = Math.Clamp(Ui.Metric("map.flat_counter_gap", 4), 0, 16);
-            var step = new Vector2(marker.Plate.Texture.GetWidth(), marker.Plate.Texture.GetHeight()) *
-                marker.Plate.PixelSize * _counterFlatFar + Vector2.One * (gap + 1);
-            for (var index = 0; index < group.Count; index++)
-            {
-                var slot = index % slots;
-                var row = slot / columns;
-                var rowColumns = Math.Min(columns, slots - row * columns);
-                _provinceCounterSlots[group[index]] = new Vector2(
-                    (slot % columns - (rowColumns - 1) * .5f) * step.X,
-                    (row - (rows - 1) * .5f) * step.Y);
-            }
+            // Density runs after the ordinary military refresh. Apply visibility
+            // and the aggregate condition now, not against last frame's plate.
+            UpdateArmyConditionBars(marker);
         }
     }
 

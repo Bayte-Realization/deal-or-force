@@ -467,7 +467,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
             if (_freeCamera) UpdateFreeCamera(delta);
             else UpdateOrbitCamera(delta);
         }
-        UpdateFlatDivisionDetail();
         // Picking, density and city layout must see the same projected positions that
         // will be rendered this frame, including wrapping at the date line.
         if (_flatMap) UpdateFlatWorldPositions();
@@ -3167,9 +3166,8 @@ void fragment() {
             var marker = _armyStacks[bucket];
             if (marker.Node is not null && IsInstanceValid(marker.Node))
             {
-                // Re-bucketing can create a new individual card with the same lead ID
-                // this frame. Detach now: deferred deletion otherwise leaves a ghost
-                // and forces Godot to rename the replacement to an anonymous node.
+                // Detach now so a replacement with the same lead ID does not
+                // inherit an anonymous name while the old node awaits deletion.
                 marker.Node.GetParent()?.RemoveChild(marker.Node);
                 marker.Node.QueueFree();
             }
@@ -3339,15 +3337,9 @@ void fragment() {
     private (int NationId, int LocationId, int FallbackLatitude, int FallbackLongitude)
         ArmyPresentationBucket(Simulation.Campaign campaign, Simulation.Army division)
     {
-        // Only the visible tactical area gets individual nodes. This avoids allocating
-        // thousands of off-screen Label3D meshes when zooming into one front.
-        if ((_flatIndividualDivisions || _surfaceIndividualDivisions) && IsInstanceValid(_camera) && IsInstanceValid(_armyRoot))
-        {
-            var at = _camera.UnprojectPosition(_armyRoot.ToGlobal(
-                PresentationPoint(division.Latitude, division.Longitude, SurfaceMarkerRadius)));
-            if (new Rect2(Vector2.Zero, Size).Grow(180f).HasPoint(at))
-                return (division.NationId, division.ProvinceId, division.Id, int.MinValue);
-        }
+        // Province membership never depends on zoom, projection, visibility or
+        // selection. A close view must not fan one province out into dozens of
+        // displaced cards. Individual divisions remain accessible in the roster.
         if (division.ProvinceId > 0) return (division.NationId, division.ProvinceId, 0, 0);
         return (division.NationId, 0, Mathf.RoundToInt(division.Latitude * 20f),
             Mathf.RoundToInt(division.Longitude * 20f));

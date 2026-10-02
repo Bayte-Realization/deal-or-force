@@ -21,7 +21,7 @@ public sealed partial class GlobePresentation
         _placedCounterHosts.Clear();
         _densityCandidates.Clear();
         _retainedSurfaceSlots.Clear();
-        var aggregate = !_surfaceIndividualDivisions && ViewDistance > Math.Clamp(Ui.Metric("map.globe_cluster_distance", 9.5f), 5.5f, 12f);
+        var aggregate = ViewDistance > Math.Clamp(Ui.Metric("map.globe_cluster_distance", 9.5f), 5.5f, 12f);
         var angularLimit = Math.Clamp(Ui.Metric("map.globe_cluster_radius_km", 140f), 30f, 300f) / 6371f;
         var chordSquared = 2f - 2f * MathF.Cos(angularLimit);
         foreach (var marker in _armyStacks.Values)
@@ -89,7 +89,9 @@ public sealed partial class GlobePresentation
             PlaceSurfaceCounterLocally(marker, _retainedSurfaceSlots[marker]);
             TakeCounterRoom(marker, SurfaceCounterScreenBounds(marker.Plate).Grow(1f), selected);
         }
-        foreach (var (marker, _, _) in _densityCandidates)
+        // Refresh membership even outside the screen. A projection switch must
+        // not leave last view's overview members attached to an ordinary stack.
+        foreach (var marker in _armyStacks.Values)
         {
             var ids = new Godot.Collections.Array<int>();
             var fingerprint = new HashCode();

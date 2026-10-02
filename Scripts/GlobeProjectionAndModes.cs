@@ -221,7 +221,6 @@ public sealed partial class GlobePresentation
         ReprojectSupportMarkers(true);
         BuildFrontPreview();
         ApplyCamera();
-        UpdateFlatDivisionDetail();
         // Apply the new projection's pixel scale immediately, including its label layout.
         // Otherwise one frame can render with the previous camera's counter dimensions.
         UpdateCounterScale(force: true);
@@ -344,7 +343,7 @@ public sealed partial class GlobePresentation
                 if (marker.Node.Position != position) marker.Node.Position = position;
                 OrientSurfaceArmyCard(marker);
             }
-        if (_flatIndividualDivisions || FlatViewInMotion) QueueRedraw();
+        if (FlatViewInMotion) QueueRedraw();
         foreach (var glyph in _countryGlyphs)
         {
             if (!IsInstanceValid(glyph.Node)) continue;
