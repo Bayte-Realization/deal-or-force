@@ -90,7 +90,33 @@ static class UltimatumTests
             var foreign = c.States.First(s => s.NationMapIndex != target.MapIndex && s.NationMapIndex != demander.MapIndex);
             var outcome = Ultimatum.Accept(c, demander, target, foreign.MapIndex);
             Check(!outcome.Accepted, "the target cannot yield a state it does not own");
- Check(Statecraft.CasusBelli(c, demander, target) != "ultimatum_refusal", "a refused demand over foreign land threatens nobody");
+            Check(Statecraft.CasusBelli(c, demander, target) != "ultimatum_refusal", "a refused demand over foreign land threatens nobody");
+        }
+        {
+            var (c, map, demander, target, stateIdx, provinces) = Setup();
+            // An unplayable dwarf facing a giant yields. The fixture's KOR/PRK are near
+            // peers, so the balance is forced instead of hoping bootstrap values agree.
+            target.Population = 1;
+            target.Gdp = 0.01f;
+            var answer = Ultimatum.Consider(c, demander, target, stateIdx);
+            Check(answer == Ultimatum.Answer.Yield, "the powerless yield");
+        }
+        {
+            var (c, map, demander, target, stateIdx, _) = Setup();
+            // A giant facing a dwarf calls the bluff.
+            demander.Population = 1;
+            demander.Gdp = 0.01f;
+            target.Population = 1_000_000;
+            target.Gdp = 500f;
+            var answer = Ultimatum.Consider(c, demander, target, stateIdx);
+            Check(answer == Ultimatum.Answer.Refuse, "the powerful refuse");
+        }
+        {
+            var (c, map, demander, target, stateIdx, _) = Setup();
+            // Whatever it answers, the same demand asked twice gets the same answer.
+            var again = Ultimatum.Consider(c, demander, target, stateIdx);
+            Check(Ultimatum.Consider(c, demander, target, stateIdx) == again,
+                "the answer is deterministic");
         }
     }
 }

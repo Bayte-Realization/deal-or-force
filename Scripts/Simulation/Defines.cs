@@ -377,6 +377,16 @@ public sealed partial class Defines
 	/// <summary>Stability a country loses for yielding land to an ultimatum instead of fighting.</summary>
 	public float UltimatumYieldStabilityCost { get; set; } = 0.10f;
 
+	/// <summary>Strength ratio (demander over target) past which resistance looks hopeless
+	/// and the region is handed over rather than defended.</summary>
+	public float UltimatumYieldStrengthRatio { get; set; } = 2.6f;
+
+	/// <summary>Stability below which a government cannot ask its people to fight for the land.</summary>
+	public float UltimatumYieldStability { get; set; } = 0.25f;
+
+	/// <summary>Opinion of the demander past which the target refuses on principle, whatever the odds.</summary>
+	public float UltimatumRefuseGrudge { get; set; } = 25f;
+
 	/// <summary>War support lost for a war declared with no reason given.</summary>
 	public float UnjustifiedWarSupportCost { get; set; } = 0.10f;
 

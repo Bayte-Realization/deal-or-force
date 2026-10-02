@@ -22,6 +22,42 @@ public static class Ultimatum
 {
     public sealed record Outcome(bool Accepted, string Note);
 
+    /// <summary>What the country under the gun decides to do about it.</summary>
+    public enum Answer { Yield, Refuse }
+
+    /// <summary>
+    /// The target's answer, worked out the way the game works everything else out: from
+    /// state it already keeps. Nobody is reading a dice roll - the same country, on the
+    /// same day, with the same armies, gives the same answer, so a player can learn what
+    /// makes a demand credible and a mod can read the rule instead of guessing it.
+    /// Tuning lives in the flat defines beside <see cref="Defines.UltimatumYieldStabilityCost"/>,
+    /// where a mod's defines file can reach it.
+    /// </summary>
+    public static Answer Consider(Campaign campaign, Nation demander, Nation target, int stateMapIndex)
+    {
+        if (campaign is null || demander is null || target is null) return Answer.Refuse;
+        if (!CanDemand(campaign, target, stateMapIndex)) return Answer.Refuse;
+
+        var defines = campaign.Defines;
+        var mine = AiStatecraft.StrengthOf(campaign, target);
+        var theirs = AiStatecraft.StrengthOf(campaign, demander);
+        // Somebody else's promised army is part of the answer, the same way it is part of
+        // the answer to a declaration of war.
+        var defenders = Statecraft.DefendersOf(campaign, target);
+        if (defenders > 0) mine *= 1f + MathF.Min(defenders * 0.15f, 0.6f);
+
+        // Beaten before it starts: no allies worth the name and nothing to fight with.
+        if (mine <= 0.01f || theirs > mine * defines.UltimatumYieldStrengthRatio) return Answer.Yield;
+        // A government that has already lost its people's trust cannot ask them to bleed.
+        if (target.Stability < defines.UltimatumYieldStability) return Answer.Yield;
+        // Asked by a country it has every reason to hate, it takes its chances.
+        var relation = CampaignDiplomacy.Peek(campaign, demander.Id, target.Id);
+        if (relation is not null && relation.Opinion <= -defines.UltimatumRefuseGrudge) return Answer.Refuse;
+        // Close to peers: refusing is the default, because yielding land costs a government
+        // more at home than a war it might survive.
+        return Answer.Refuse;
+    }
+
     /// <summary>
     /// Whether this region could even be demanded: it has to be the target's to give. A
     /// demand over somebody else's land threatens nobody, and is not remembered.
@@ -87,5 +123,35 @@ public static class Ultimatum
         OpinionSystem.Remember(campaign, relation, "refused_our_ultimatum");
         campaign.Chronicle.Record(campaign, "ultimatum_refused", demander.Id, target.Id);
         return new Outcome(true, $"{target.Tag} refused.");
+    }
+}
+
+/// <summary>
+/// Demand a region in the player's name, and let the target answer for itself.
+///
+/// A command rather than a direct call so it travels the same queue as every other
+/// diplomatic act: replayed identically in multiplayer, undoable by the same machinery,
+/// and visible to the same listeners.
+/// </summary>
+public sealed class IssueUltimatumCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int TargetId { get; init; }
+    public int StateMapIndex { get; init; } = -1;
+
+    public void Apply(Campaign campaign)
+    {
+        var demander = campaign.NationById(IssuerId);
+        var target = campaign.NationById(TargetId);
+        if (demander is null || target is null) return;
+        var state = StateMapIndex >= 0 ? StateMapIndex : campaign.States
+            .Where(s => s.NationMapIndex == target.MapIndex)
+            .OrderByDescending(s => s.Population)
+            .ThenBy(s => s.MapIndex)
+            .FirstOrDefault()?.MapIndex ?? -1;
+        if (Ultimatum.Consider(campaign, demander, target, state) == Ultimatum.Answer.Yield)
+            Ultimatum.Accept(campaign, demander, target, state);
+        else
+            Ultimatum.Refuse(campaign, demander, target, state);
     }
 }

@@ -45,6 +45,7 @@ public partial class DealOrForceGame
     private Button _diplomacyAllianceButton = null!;
     private Button _diplomacyGuaranteeButton = null!;
     private Button _diplomacyWarButton = null!;
+    private Button _diplomacyUltimatumButton = null!;
     private Button _diplomacyPeaceButton = null!;
     private Button _diplomacyTradeButton = null!;
     private Button _diplomacyPactButton = null!;
@@ -57,6 +58,7 @@ public partial class DealOrForceGame
     private Button _diplomacyIntegrateButton = null!;
     private int _diplomacySelectedId = -1;
     private int _diplomacyPendingWarTarget = -1;
+    private int _diplomacyPendingUltimatumTarget = -1;
     private int _diplomacyListBuiltDay = int.MinValue;
     private string _diplomacyListBuiltKey = "";
 
@@ -247,6 +249,12 @@ public partial class DealOrForceGame
         _diplomacyWarButton = AddDiplomacyAction("War and peace", "Declare war",
             ConfirmOrDeclareDiplomacyWar);
         _diplomacyWarButton.TooltipText = Ui.Tip(Tr("This begins an immediate land war. Click the highlighted button again to confirm."));
+        _diplomacyUltimatumButton = AddDiplomacyAction("War and peace", "Issue ultimatum",
+            ConfirmOrIssueUltimatum);
+        _diplomacyUltimatumButton.TooltipText = Ui.Tip(Tr(
+            "Demand one of their regions. If they feel they cannot defend it, they hand it " +
+            "over without a war; if they refuse, the refusal itself is a reason for war. " +
+            "Click the highlighted button again to confirm."));
 
         _diplomacySubjectActions = new VBoxContainer { Visible = false };
         _diplomacySubjectActions.AddThemeConstantOverride("separation", 6);
@@ -1035,6 +1043,19 @@ public partial class DealOrForceGame
             ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
             : Tr("Declare war");
 
+        // The ultimatum wants the same targets a war would take, minus the wars already
+        // being fought - and it has to name a region, which the selected state supplies
+        // the way it supplies a war goal.
+        var canDemand = canDeclare && Ultimatum.CanDemand(_campaign, nation,
+            _selectedState?.NationMapIndex == nation.MapIndex ? _selectedState.MapIndex : -1);
+        _diplomacyUltimatumButton.Disabled = !canDemand;
+        if (!canDemand) _diplomacyUltimatumButton.TooltipText = Ui.Tip(canDeclare
+            ? Tr("Select one of their regions on the map first.")
+            : reason);
+        _diplomacyUltimatumButton.Text = _diplomacyPendingUltimatumTarget == nation.Id
+            ? Simulation.Loc.Format("CONFIRM DEMAND ON {0}", nation.Tag)
+            : Tr("Issue ultimatum");
+
         _diplomacySubjectActions.Visible = nation.AnswersTo(player.Id);
         if (_diplomacySubjectActions.Visible)
         {
@@ -1169,6 +1190,45 @@ public partial class DealOrForceGame
         PlayStrategicCue("war_declared");
         _diplomacyPendingWarTarget = -1;
         _diplomacyFeedback.Text = Simulation.Loc.Format("War declared on {0}.", target.DisplayName);
+        ForceDiplomacyRefresh();
+    }
+
+    private void ConfirmOrIssueUltimatum()
+    {
+        if (!ValidDiplomacyTarget()) return;
+        var target = DiplomacyTarget();
+        if (!CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, target.Id, out var reason))
+        {
+            _diplomacyFeedback.Text = reason;
+            return;
+        }
+        var state = _selectedState?.NationMapIndex == target.MapIndex ? _selectedState : null;
+        if (state is null)
+        {
+            _diplomacyFeedback.Text = Tr("Select one of their regions on the map first.");
+            return;
+        }
+        if (_diplomacyPendingUltimatumTarget != target.Id)
+        {
+            _diplomacyPendingUltimatumTarget = target.Id;
+            _diplomacyFeedback.Text = Simulation.Loc.Format(
+                "Demand {0} from {1}? They may yield it, or refuse - and the refusal is a reason for war. Click the highlighted button again to confirm.",
+                state.Name, target.DisplayName);
+            ForceDiplomacyRefresh();
+            return;
+        }
+        _campaign.Commands.Enqueue(new IssueUltimatumCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            TargetId = target.Id,
+            StateMapIndex = state.MapIndex
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        _diplomacyPendingUltimatumTarget = -1;
+        // The command already applied the answer; the land itself tells which way it went.
+        _diplomacyFeedback.Text = Ultimatum.CanDemand(_campaign, target, state.MapIndex)
+            ? Simulation.Loc.Format("{0} refused to yield {1}. The demand stands as a reason for war.", target.DisplayName, state.Name)
+            : Simulation.Loc.Format("{0} yielded {1}.", target.DisplayName, state.Name);
         ForceDiplomacyRefresh();
     }
 
