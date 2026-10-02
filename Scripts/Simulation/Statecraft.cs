@@ -223,8 +223,15 @@ public static class Statecraft
         // been remembering exactly this since the day it was written.
         if (relation is not null)
             foreach (var reason in relation.Reasons)
+            {
                 if (string.Equals(reason.Id, "took_our_land", StringComparison.OrdinalIgnoreCase))
                     return "reconquest";
+
+                // They were told to hand a region over and said no. The demand and the
+                // refusal are both remembered; this is the refusal doing its work.
+                if (string.Equals(reason.Id, "refused_our_ultimatum", StringComparison.OrdinalIgnoreCase))
+                    return "ultimatum_refusal";
+            }
 
         // Our people live there. Answered out of the demography rather than a claim flag,
         // so it is true of exactly the regions where it is true.

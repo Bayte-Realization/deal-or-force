@@ -1,0 +1,25 @@
+// What two countries remember about an ultimatum - the demand for land that arrives before
+// any war does (Ultimatum).
+//
+// The demand itself is an insult with a price tag attached: a country that was told to hand
+// over a region or else remembers being told, whatever it answered. The refusal is the
+// casus belli it looks like - the demander now has a reason the world can read.
+{
+  // Told to yield a region, whatever came of it.
+  "received_our_ultimatum": {
+    "name": "Demanded our land at gunpoint",
+    "opinion": -25,
+    "days": 3650,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // And said no. The demander's read on this pair - Statecraft.CasusBelli answers a war
+  // declared over exactly this reason.
+  "refused_our_ultimatum": {
+    "name": "Refused our demand",
+    "opinion": -15,
+    "days": 1825,
+    "decays": true
+  }
+}

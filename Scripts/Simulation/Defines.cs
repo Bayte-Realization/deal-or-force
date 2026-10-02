@@ -374,6 +374,9 @@ public sealed partial class Defines
 	/// <summary>Stability lost at home for a war declared with no reason given.</summary>
 	public float UnjustifiedWarStabilityCost { get; set; } = 0.06f;
 
+	/// <summary>Stability a country loses for yielding land to an ultimatum instead of fighting.</summary>
+	public float UltimatumYieldStabilityCost { get; set; } = 0.10f;
+
 	/// <summary>War support lost for a war declared with no reason given.</summary>
 	public float UnjustifiedWarSupportCost { get; set; } = 0.10f;
 
