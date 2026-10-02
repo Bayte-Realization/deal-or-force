@@ -270,8 +270,8 @@ public partial class DealOrForceGame
             "by the same road a secession takes on its own: a new country, its militia, and an " +
             "answer from the one it left.", ConsoleSecede);
         Add("reload", "CONTENT", "reload",
-            "Re-read every data file into the running campaign. Text, art, sound, tunables and " +
-            "catalogues all come back changed without restarting the game.", _ => ConsoleReload());
+            "Reload interface/, gui/ and localization/ from game and the active packages. " +
+            "Campaign state, gameplay rules, art and code are not reloaded. Ctrl+Shift+R.", _ => ConsoleReload());
         Add("validate", "CONTENT", "validate",
             "Every complaint the data made while loading, mod by mod.", _ => ConsoleValidate(), "errors");
 
@@ -1584,14 +1584,14 @@ public partial class DealOrForceGame
     {
         if (_campaign is null) return "No campaign.";
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        _modLoader.Discover();
-        _modLoader.ApplyCampaignData(_campaign);
+        var errors = PresentationReload.Reload(_modLoader.Packages.Select(package => package.PhysicalRoot));
         clock.Stop();
         Refresh();
-        return $"Re-read every data file in {clock.ElapsedMilliseconds:N0} ms. " +
-               $"{_modLoader.EnabledCount} mod(s), {_modLoader.ErrorCount} complaint(s) - `validate` lists them.\n" +
-               "Text, numbers and catalogues are live now; panels already drawn take their new " +
-               "colours as they are rebuilt.";
+        return $"Reloaded interface, GUI and localization in {clock.ElapsedMilliseconds:N0} ms. " +
+               "Campaign state and package selection unchanged. Reopen panels to see rebuilt styling.\n" +
+               (errors.Count == 0 ? "No loading errors." :
+                   EscapeBb($"{errors.Count} loading error(s); valid files applied, invalid values skipped:\n" +
+                       string.Join("\n", errors.Take(10))));
     }
 
     private string ConsoleValidate()

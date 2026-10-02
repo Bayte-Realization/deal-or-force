@@ -372,7 +372,7 @@ public static class InterfaceSkin
     }
 
     /// <summary>Reload the base-game skin. Mods layer on top afterwards via <see cref="Merge"/>.</summary>
-    public static void ResetCatalog()
+    public static void ResetCatalog(List<string> errors = null)
     {
         CampaignUiCatalog.Reset();
         Colours.Clear();
@@ -389,7 +389,7 @@ public static class InterfaceSkin
         {
             GameDataLoader.Asked.Add(folder);
             var root = FindSkinRoot(folder);
-            if (root is not null) LoadDirectory(root, null);
+            if (root is not null) LoadDirectory(root, errors);
         }
 
         Changed?.Invoke();

@@ -175,11 +175,11 @@ public static class Loc
     });
 
     /// <summary>Reload base-game tables. Mods layer on top afterwards via <see cref="Merge"/>.</summary>
-    public static void ResetCatalog()
+    public static void ResetCatalog(List<string> errors = null)
     {
         Tables.Clear();
         var root = FindLocalizationRoot();
-        if (root is not null) LoadDirectory(root, null);
+        if (root is not null) LoadDirectory(root, errors);
 
         // The base game must be readable even with no data files present at all.
         if (!Tables.ContainsKey(DefaultLanguage)) Tables[DefaultLanguage] = new Dictionary<string, string>(StringComparer.Ordinal);

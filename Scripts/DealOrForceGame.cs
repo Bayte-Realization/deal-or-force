@@ -251,6 +251,16 @@ public partial class DealOrForceGame : Control
         // The free camera is a demonstration tool, and a demonstration tool that needs a
         // console command typed out first is one nobody reaches for. F10 flies - not F8,
         // which the Godot editor already uses to stop the running project.
+        if (key.CtrlPressed && key.ShiftPressed && Letter(key) == Key.R)
+        {
+            if (_developerConsoleLayer is not null)
+            {
+                ToggleDeveloperConsole();
+                ExecuteDeveloperCommand("reload");
+            }
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.Keycode == Key.F10) { ToggleFreeCamera(); GetViewport().SetInputAsHandled(); return; }
 
         // Watching rather than playing. F7 rather than F8 for the same reason F10 is not F8:
