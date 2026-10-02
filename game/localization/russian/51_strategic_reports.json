@@ -28,5 +28,9 @@
   "chronicle.decision_taken": "{0}: принято решение «{2}».",
   "chronicle.construction_completed": "{0}: завершено строительство «{2}», регион — {3}.",
   "chronicle.militia_raised": "{0}: {3} берётся за оружие — жители сами собирают ополчение.",
-  "chronicle.militia_stood_down": "{0}: опасность миновала, {2} расходится по домам."
+  "chronicle.militia_stood_down": "{0}: опасность миновала, {2} расходится по домам.",
+  "chronicle.ultimatum_accepted": "{0} уступает {2} по требованию {1}.",
+  "chronicle.ultimatum_refused": "{0} отвергает требование {1}.",
+  "chronicle.accession_signed": "{0} подписывает договор о присоединении: {2}.",
+  "chronicle.accession_declined": "{0} отклоняет приглашение в {2}."
 }

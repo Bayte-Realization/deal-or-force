@@ -20,6 +20,7 @@ public partial class DealOrForceGame
     private int _selectedBattleId = -1;
     private int _strategicHudFingerprint = int.MinValue;
     private bool _outlinerCollapsed;
+    private long _newsFeedSequence;
 
     private void BuildStrategicHud()
     {
@@ -95,7 +96,9 @@ public partial class DealOrForceGame
             playerBattles,
             _campaign.Construction.Count(project => project.NationId == player.Id),
             _campaign.PendingEvents.Count,
-            availableDecisions);
+            (availableDecisions, _campaign.Chronicle.Entries.Count == 0
+                ? 0
+                : _campaign.Chronicle.Entries[^1].Sequence));
         if (fingerprint == _strategicHudFingerprint) return;
         _strategicHudFingerprint = fingerprint;
         if (_outliner.FindChild("OutlinerToggle", true, false) is Button toggle)
@@ -159,6 +162,24 @@ public partial class DealOrForceGame
                 Tr("National decisions are available."));
 
         FlushAlerts();
+
+        AddOutlinerHeader("WORLD");
+        // The world's news since the last look: one line per public act, newest first, so a
+        // war two continents away lands in the corner of the eye instead of waiting to be
+        // found in the ledger. A quiet world shows nothing, which is the point.
+        foreach (var line in NewsFeed.Lines(_campaign, since: _newsFeedSequence,
+                     take: (int)InterfaceSkin.Metric("news.feed_rows", 6)))
+        {
+            var actor = line.ActorId > 0 ? _campaign.NationById(line.ActorId) : null;
+            NewsFeed.Line captured = line;
+            AddOutlinerButton(line.Text, actor is null ? null : () =>
+                {
+                    _selectedNation = actor;
+                    OpenDiplomacyScreen();
+                },
+                $"{captured.Kind} · {captured.Day}");
+            _newsFeedSequence = line.Sequence;
+        }
 
         AddOutlinerHeader("WARS");
         var wars = _campaign.Wars.Where(war => !war.Ended && war.Involves(player.Id)).ToArray();
