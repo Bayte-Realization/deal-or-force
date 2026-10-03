@@ -310,6 +310,11 @@ public partial class DealOrForceGame
         bool primary, string icon)
     {
         var button = ActionButton(caption, action, width, height, primary, Icon(icon));
+        if (icon != "stability")
+        {
+            button.SetMeta("army_monochrome_icon", true);
+            StyleButton(button, primary);
+        }
         button.SetMeta("army_icon_min_width", width);
         _armyCaptionIconButtons.Add(button);
         ReserveArmyIconSpace(button);
@@ -338,7 +343,7 @@ public partial class DealOrForceGame
 
     private void AddOrderButton(Container parent, string icon, ArmyOrder order, string name, string help)
     {
-        var button = ActionButton("", () => IssueArmyOrder(order), 56, 36, false, Icon(icon));
+        var button = ArmyIconButton("", () => IssueArmyOrder(order), 56, 36, false, icon);
         ArmyCommandTip(button, name, help);
         _armyOrderButtons[order] = button;
         parent.AddChild(button);

@@ -45,6 +45,20 @@ static class InterfaceIconTests
             Check(File.Exists(path) && File.ReadAllBytes(path).Take(8).SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
                 "PNG file exists: " + name);
         }
+        using var recipe = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(root, "..", "Assets", "ArtSource", "Icons", "minimal-icons.json")));
+        var authored = recipe.RootElement.EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
+        Check(authored.Length == 32 && authored.Distinct().Count() == 32,
+            "minimal geometry defines thirty-two distinct PNG assets");
+        Check(icons.All(authored.Contains), "every army command has editable minimal geometry");
+        foreach (var name in authored)
+        {
+            var png = File.ReadAllBytes(Path.Combine(root, "gfx", "interface", "icons", "icon_" + name + ".png"));
+            int ReadBigEndian(int offset) => (png[offset] << 24) | (png[offset + 1] << 16) |
+                (png[offset + 2] << 8) | png[offset + 3];
+            Check(png.Length > 33 && ReadBigEndian(16) == 96 && ReadBigEndian(20) == 96 &&
+                png[24] == 8 && png[25] == 6, "minimal PNG is 96x96 with RGBA transparency: " + name);
+        }
         CommodityCatalog.Override("TestCrystalFuel", "Test crystal fuel", "CF", .01f, .01f, "test");
         CommodityCatalog.TryParse("TestCrystalFuel", out var custom);
         Check(CommodityCatalog.IconNameOf(custom) == "good_testcrystalfuel", "mod-added good uses the same PNG naming convention");

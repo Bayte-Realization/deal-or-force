@@ -1,10 +1,45 @@
-# Command and strategic-goods PNGs
+# Minimal command and strategic-goods PNGs
+
+The current shipped set is authored as simple geometry in `minimal-icons.json`
+and exported to **individual transparent 96 × 96 PNGs**. No gradients, metallic
+shading, dark outlines, text, or decorative frames are baked into these icons.
+White silhouettes accept the existing interface tint. Army commands use the
+skin's `text.accent_dim`, `text.accent`, and button-state tokens; commodity marks
+receive their colour from the consuming UI.
+
+## Reproduce / extend the current artwork
+
+Run from the repository root with Windows PowerShell 5.1 (System.Drawing):
+
+```powershell
+powershell -NoProfile -File Tools/IconCompiler/build-minimal-icons.ps1
+powershell -NoProfile -File Tools/IconCompiler/check-minimal-icons.ps1
+```
+
+The JSON stores normalized 24 × 24 geometry. Each entry has a stable `name` and
+ordered `shapes`: `polygon` and `line` use x/y pairs; `rect` and `ellipse` use
+x/y/width/height. Lines default to width 2.4 with round caps and joins. `cut: true`
+clears a shape to transparent negative space. Keep every silhouette away from
+the outer edge. Rendering supersamples at 384 × 384 before exporting 96 × 96;
+the check decodes each PNG and rejects empty symbols, coloured interiors and
+clipped edges. Neutral RGB rounding on antialiased edges is permitted.
+
+This is an asset-authoring tool, **not a runtime requirement**. The game does not
+need PowerShell or source geometry to draw icons. Modders can replace them with
+ordinary PNGs without using the renderer. A coloured replacement receives the
+same UI tint; the skin can adjust this. The new set contains 16 army commands,
+15 commodity marks and one optional supply mark.
+
+Let Godot finish importing changed PNGs before launching/exporting; a running
+game may retain old textures. Do not hand-edit generated `.import` files.
+
+## Historical generated artwork — not the current source
 
 Original artwork generated with the built-in `image_gen` tool on 2026-10-04.
 These are newly generated game assets, not cut-outs from the user's Paradox screenshots.
 The screenshots informed the interaction/readability goal, not the artwork.
 
-## Art direction / reusable briefs
+### Earlier art direction / reusable briefs
 
 - `army_commands.png`: a transparent 4 × 4 icon sheet; sixteen isolated, centred
   grand-strategy command pictograms. Brass gold and ivory, a dark contour, strong
@@ -23,10 +58,15 @@ The screenshots informed the interaction/readability goal, not the artwork.
   shells; precision gear/sensor; arms/rifle+wrench; supply crate/arrow.
 
 These briefs describe the generated sets; they are not a promise that another
-generation will reproduce identical pixels. The committed atlases are the exact
-source of the shipped rasters. `*.mapping.json` records their cell names.
+generation will reproduce identical pixels. The committed atlases preserve the
+earlier version only. Current PNGs come from `minimal-icons.json`; subsequent AI
+generation trials were rejected for alpha artefacts. `*.mapping.json` records
+the historical sheets' cell names.
 
-## Mechanical export
+### Historical atlas export
+
+**Do not run these commands to rebuild the current minimal set:** they restore
+the earlier decorative version. Use `build-minimal-icons.ps1` instead.
 
 Run from the repository root with **Windows PowerShell 5.1** (System.Drawing):
 

@@ -2248,6 +2248,15 @@ public partial class DealOrForceGame : Control
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
         button.AddThemeColorOverride("font_disabled_color",
             primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text_disabled"));
+        // White command silhouettes take their colour from the skin, not baked-in art.
+        // Reapply on selection and presentation reload as well as initial construction.
+        if (button.HasMeta("army_monochrome_icon") && button.GetMeta("army_monochrome_icon").AsBool())
+        {
+            button.AddThemeColorOverride("icon_normal_color", Ui.Colour("text.accent_dim"));
+            button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));
+            button.AddThemeColorOverride("icon_pressed_color", Ui.Colour("button.text_pressed"));
+            button.AddThemeColorOverride("icon_disabled_color", Ui.Colour("button.text_disabled"));
+        }
         button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }
 

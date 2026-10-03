@@ -11,8 +11,10 @@ static class Program
     static void Main(string[] args)
     {
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
+        if (args.Contains("--fleet-localization-only")) { FleetNameLocalizationTests.Run(); return; }
         if (args.Contains("--icons-only")) { InterfaceIconTests.Run(); return; }
         ArmyCommandLocalizationTests.Run();
+        FleetNameLocalizationTests.Run();
         if (args.Contains("--events-only")) { EventCadenceTests.Run(); return; }
         if (args.Contains("--reload-only")) { PresentationReloadTests.Run(); return; }
         if (args.Contains("--ultimatum-only")) { UltimatumTests.Run(); return; }
