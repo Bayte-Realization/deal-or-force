@@ -319,6 +319,7 @@ public partial class DealOrForceGame
         {
             if (!player.Market.TryGetValue(row.Good, out var quote)) continue;
             var definition = CommodityCatalog.Get(row.Good);
+            row.Icon.Modulate = Ui.Colour("text.accent_dim");
             row.Name.Text = Simulation.Loc.Get(definition.Name);
             row.Made.Text = quote.Production.ToString("0.0");
             row.Wanted.Text = quote.Demand.ToString("0.0");

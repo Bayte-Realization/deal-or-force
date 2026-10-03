@@ -321,7 +321,7 @@ public partial class DealOrForceGame
         rows.AddChild(body);
         var portrait = new PanelContainer { CustomMinimumSize = new Vector2(76, 76), SizeFlagsVertical = SizeFlags.ShrinkCenter };
         portrait.AddThemeStyleboxOverride("panel", ProductionStyle("production.inset", "production.border", 12));
-        line.Icon = new TextureRect { CustomMinimumSize = new Vector2(48, 48),
+        line.Icon = new TextureRect { Name = "CommodityIcon", CustomMinimumSize = new Vector2(48, 48),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             MouseFilter = MouseFilterEnum.Ignore };
         portrait.AddChild(line.Icon);
@@ -420,6 +420,7 @@ public partial class DealOrForceGame
             row.Reading.Text = Tr("National output / tick");
             if (entry.Units > assigned) row.Reading.Text = Simulation.Loc.Format("{0} units suspended", entry.Units - assigned);
             row.Icon.Texture = Art("icon_" + GoodIcon(entry.Good), $"res://game/gfx/interface/icons/icon_{GoodIcon(entry.Good)}.png");
+            row.Icon.Modulate = Ui.Colour("text.accent_dim");
             row.Root.TooltipText = Ui.Tip(CommodityCatalog.Get(entry.Good).Description);
             if (row.Priority.ItemCount != lines.Count)
             {

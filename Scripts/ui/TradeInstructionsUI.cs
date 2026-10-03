@@ -523,8 +523,11 @@ public partial class DealOrForceGame
             var partnerInForce = 0;
 
             if (_tradeGoodMark is not null)
+            {
                 _tradeGoodMark.Texture = Art("icon_" + GoodIcon(commodity),
                     $"res://game/gfx/interface/icons/icon_{GoodIcon(commodity)}.png");
+                _tradeGoodMark.Modulate = Ui.Colour("text.accent_dim");
+            }
             SetFlag(_tradePartnerFlag, partner, 20);
 
             foreach (var (id, definition) in TradeDesk.All)

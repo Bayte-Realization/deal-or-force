@@ -7,6 +7,13 @@ White silhouettes accept the existing interface tint. Army commands use the
 skin's `text.accent_dim`, `text.accent`, and button-state tokens; commodity marks
 receive their colour from the consuming UI.
 
+Production portraits, market rows and the selected trade-good mark use
+`text.accent_dim` (base skin: `#d3bf72`). Refresh reapplies that token, including
+after presentation hot reload. Do not bake the base skin's gold into monochrome
+PNG masks: another skin can recolour the same files. The steel icon is an oblique
+I-beam silhouette; arms use a single connected rifle silhouette with balanced
+stock, receiver, barrel and magazine proportions.
+
 ## Reproduce / extend the current artwork
 
 Run from the repository root with Windows PowerShell 5.1 (System.Drawing):
