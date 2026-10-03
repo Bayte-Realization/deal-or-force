@@ -117,6 +117,8 @@ public static class Program
         if (Array.IndexOf(args, "--loc") >= 0)
             return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
         // Fast data/UI checks, without the multi-year simulation fixtures.
+        if (Array.IndexOf(args, "--prepare-front-only") >= 0)
+            return Check("an attack forms up along its actual assigned front", AnAttackFormsUpAlongItsFront());
         if (Array.IndexOf(args, "--integrity-only") >= 0)
             return Check("integrity checks distinguish captions and compare dictionary values", IntegrityScannerSelfTest()) +
                 Check("the shipped skin matches the compiled defaults", SkinIsCoherent()) +
@@ -11119,6 +11121,10 @@ public static class Program
         line.ObjectiveSequence.Add(goal);
         foreach (var army in divisions)
         {
+            // The planner deliberately ignores stale membership lists. This fixture must
+            // assign the real formation too, as DrawFrontLineCommand does in the game.
+            DrawFrontLineCommand.Detach(campaign, army);
+            army.FrontLineId = line.Id;
             line.ArmyIds.Add(army.Id);
             line.Objectives[army.Id] = goal;          // every one of them aimed at the same place
         }
@@ -11131,6 +11137,9 @@ public static class Program
             {
                 army.PlanActive = false;              // prepared, not executing: the case that broke
                 OffensivePlanning.Route(campaign, army, line);
+                if (!line.Posts.TryGetValue(army.Id, out var assigned) || army.OrderProvinceId != assigned ||
+                    !line.SourceProvinces.Contains(assigned))
+                    return $"division {army.Id} did not receive a post on its assigned departure front";
                 if (army.OrderProvinceId > 0)
                     standing[army.OrderProvinceId] = standing.GetValueOrDefault(army.OrderProvinceId) + 1;
             }
