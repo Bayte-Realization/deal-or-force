@@ -21,6 +21,8 @@ static class ArmyCommandLocalizationTests
                     throw new Exception("Army translation missing or overridden: " + entry.Name);
                 if (!Loc.Placeholders(entry.Name).SetEquals(Loc.Placeholders(entry.Value.GetString())))
                     throw new Exception("Army translation placeholders differ: " + entry.Name);
+                if (string.IsNullOrWhiteSpace(Loc.TextIn("english", entry.Name)))
+                    throw new Exception("Army source key missing from English index: " + entry.Name);
                 count++;
             }
             Console.WriteLine($"PASS army localization: {count} commands, tabs and help texts resolve in Russian");
