@@ -306,14 +306,10 @@ public sealed partial class GlobePresentation
         var topology = _campaign?.ProvinceMap;
         if (topology is not null && stack.Count > 0 && stack[0].ProvinceId > 0 &&
             stack[0].ProvinceId <= topology.ProvinceCount)
-        {
-            var stationary = true;
-            foreach (var army in stack)
-                if (army.IsMoving || army.ProvinceId != stack[0].ProvinceId) { stationary = false; break; }
-            // Province ID is authoritative; legacy/generated lat/lon is not a second
-            // location for a stationary division. Marching formations keep interpolation.
-            if (stationary) return topology.CenterOf(stack[0].ProvinceId);
-        }
+            // A counter represents one occupied province, even when some members
+            // are marching. Averaging their interpolated routes would drag the entire
+            // stack (including stationary members) away from its authoritative centre.
+            return topology.CenterOf(stack[0].ProvinceId);
         return AverageArmyLocation(stack);
     }
 

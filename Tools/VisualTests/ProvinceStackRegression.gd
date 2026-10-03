@@ -19,7 +19,7 @@ func inspect(ctx: Variant, label: String, baseline: Dictionary = {}) -> Dictiona
 			ctx.error("Counter combines unrelated provinces: " + str(node.name))
 		var display_ids: Array = node.get_meta("display_army_ids", [])
 		if display_ids != ids: ctx.error("Counter no longer represents its own province")
-		if province > 0 and node.get_meta("stationary", false):
+		if province > 0:
 			if not node.has_meta("province_center_latlon"):
 				ctx.error("Missing authoritative province centre")
 			else:
@@ -61,7 +61,7 @@ func inspect(ctx: Variant, label: String, baseline: Dictionary = {}) -> Dictiona
 		ctx.error("Zoom/projection/selection changed actual stack membership")
 	ctx.log(label, {"stacks": keys.size(), "divisions": members.size(), "multi_stacks": multi, "visible": visible,
 		"centered": centered, "max_center_error": max_center_error})
-	if centered == 0: ctx.error("Fixture needs stationary province stacks")
+	if centered != keys.size(): ctx.error("Every province counter must be centred, including marching stacks")
 	if multi == 0 or visible == 0: ctx.error("Fixture needs visible counters and multi-division provinces")
 	return members
 

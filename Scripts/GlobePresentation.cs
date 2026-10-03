@@ -3221,12 +3221,7 @@ void fragment() {
             }
             marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f);
             OrientSurfaceArmyCard(marker);
-            // Diagnostic geography is independent of the rendered position. It also
-            // distinguishes a marching stack, which must retain route interpolation.
-            var stationary = true;
-            foreach (var army in marker.Stack)
-                if (army.IsMoving) { stationary = false; break; }
-            marker.Node.SetMeta("stationary", stationary);
+            // Diagnostic geography is independent of the rendered position.
             if (_campaign.ProvinceMap is { } topology && lead.ProvinceId > 0 &&
                 lead.ProvinceId <= topology.ProvinceCount)
             {
