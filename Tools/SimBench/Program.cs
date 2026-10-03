@@ -116,6 +116,13 @@ public static class Program
         // `--loc` checks every translation alone: seconds, and the list of what is wrong.
         if (Array.IndexOf(args, "--loc") >= 0)
             return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
+        // Fast data/UI checks, without the multi-year simulation fixtures.
+        if (Array.IndexOf(args, "--integrity-only") >= 0)
+            return Check("integrity checks distinguish captions and compare dictionary values", IntegrityScannerSelfTest()) +
+                Check("the shipped skin matches the compiled defaults", SkinIsCoherent()) +
+                Check("effective shipped defines match the compiled defaults", ShippedDefinesMatchTheCode()) +
+                Check("the English table indexes visible captions", TheEnglishTableIsAnIndex()) +
+                Check("translations are sound", TranslationsAreSound());
 
         // Authored national employment shares precede province-history transfers.
         // A coastal correction can give ABK residents from a Georgian region; their
@@ -6938,6 +6945,15 @@ public static class Program
                 at += call.Length;
                 if (char.IsLetterOrDigit(before) || before == '_') continue;
 
+                // ScenarioMapEditor has ActionButton(nodeName, caption, action), while
+                // campaign widgets use ActionButton(caption, action, ...). Two literal
+                // strings identify the named-node overload: index its caption, not its ID.
+                if (call == "ActionButton(" && Argument(source, at, 0) is not null &&
+                    Argument(source, at, 1) is string namedCaption)
+                {
+                    yield return namedCaption;
+                    continue;
+                }
                 foreach (var index in wanted)
                 {
                     var argument = Argument(source, at, index);
@@ -7610,46 +7626,69 @@ public static class Program
         if (files.Count == 0) return "no defines are shipped at all; common/defines is missing or empty";
 
         var compiled = new Defines();
+        var effective = new Defines();
+        GameDataLoader.ApplyDefines(effective);
         var properties = typeof(Defines)
             .GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
             .Where(property => property.CanWrite)
             .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);
 
         var drifted = new List<string>();
-        var checkedKeys = 0;
+        var checkedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var document in GameDataLoader.DataDocuments("common", "defines"))
         using (document)
         foreach (var entry in document.RootElement.EnumerateObject())
         {
             if (!properties.TryGetValue(entry.Name, out var property)) continue;
-            checkedKeys++;
-            var shipped = entry.Value.ToString();
+            // Compare the final layered value, not an intermediate file overridden later.
+            // ApplyDefines also merges individual feature flags and unlock rules.
+            if (!checkedNames.Add(property.Name)) continue;
+            var shippedValue = property.GetValue(effective);
+            var compiledValue = property.GetValue(compiled);
+            if (DefineValuesAgree(shippedValue, compiledValue)) continue;
+            var shipped = JsonSerializer.Serialize(shippedValue);
             var code = Convert.ToString(property.GetValue(compiled),
                 System.Globalization.CultureInfo.InvariantCulture) ?? "";
-            if (property.PropertyType == typeof(float) &&
-                entry.Value.TryGetSingle(out var number) &&
-                MathF.Abs(number - (float)property.GetValue(compiled)) < 0.0001f) continue;
-            if (property.PropertyType == typeof(bool) &&
-                string.Equals(shipped, code, StringComparison.OrdinalIgnoreCase)) continue;
-            if (property.PropertyType == typeof(int) &&
-                entry.Value.TryGetInt32(out var whole) &&
-                whole == (int)property.GetValue(compiled)) continue;
-            // Words as well as numbers: which kind of dependency a route makes is a define
-            // (SubmissionProtectionKind), and the loader reads strings and enums by name.
-            if (property.PropertyType == typeof(string) &&
-                entry.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
-                string.Equals(entry.Value.GetString(), code, StringComparison.Ordinal)) continue;
-            if (property.PropertyType.IsEnum &&
-                entry.Value.ValueKind == System.Text.Json.JsonValueKind.String &&
-                string.Equals(entry.Value.GetString(), code, StringComparison.OrdinalIgnoreCase)) continue;
+            if (compiledValue is System.Collections.IDictionary) code = JsonSerializer.Serialize(compiledValue);
             drifted.Add($"{entry.Name}: file {shipped}, code {code}");
         }
 
-        if (checkedKeys == 0) return "the shipped defines file sets nothing the code recognises";
+        if (checkedNames.Count == 0) return "the shipped defines file sets nothing the code recognises";
         if (drifted.Count > 0)
             return $"{drifted.Count} shipped define(s) disagree with the code: " +
                    string.Join("; ", drifted.Take(6));
-        Console.WriteLine($"  {checkedKeys:N0} shipped defines all agree with the compiled values.");
+        Console.WriteLine($"  {checkedNames.Count:N0} effective shipped defines all agree with the compiled values.");
+        return "";
+    }
+
+    private static bool DefineValuesAgree(object shipped, object compiled)
+    {
+        if (shipped is float number && compiled is float baseline)
+            return MathF.Abs(number - baseline) < 0.0001f;
+        if (shipped is System.Collections.IDictionary map && compiled is System.Collections.IDictionary defaults)
+        {
+            if (map.Count != defaults.Count) return false;
+            foreach (System.Collections.DictionaryEntry item in map)
+                if (!defaults.Contains(item.Key) || !DefineValuesAgree(item.Value, defaults[item.Key])) return false;
+            return true;
+        }
+        return Equals(shipped, compiled);
+    }
+
+    private static string IntegrityScannerSelfTest()
+    {
+        var captions = Captions("ActionButton(\"MapSettings\", \"Scenario settings…\", EditSettings); " +
+            "ActionButton(\"Clear plans\", () => ClearPlans(1, 2));").ToHashSet(StringComparer.Ordinal);
+        if (captions.Contains("MapSettings") || !captions.Contains("Scenario settings…") || !captions.Contains("Clear plans"))
+            return "the caption scanner confused a node identifier with visible text";
+        var left = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { ["aviation"] = false };
+        var right = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { ["AVIATION"] = false };
+        if (!DefineValuesAgree(left, right)) return "equivalent feature dictionaries disagree";
+        right["aviation"] = true;
+        if (DefineValuesAgree(left, right)) return "a real feature change went undetected";
+        if (DefineValuesAgree(0.25f, 0.5f)) return "a real numeric rebalance went undetected";
+        right.Clear();
+        if (DefineValuesAgree(left, right)) return "a missing feature went undetected";
         return "";
     }
 
