@@ -33,6 +33,7 @@ public partial class DealOrForceGame
     private readonly Dictionary<int, Button> _armyRosterRows = new();
     private readonly Dictionary<ArmyOrder, Button> _armyOrderButtons = new();
     private readonly Dictionary<ArmyStance, Button> _armyStanceButtons = new();
+    private readonly List<Button> _armyCaptionIconButtons = new();
     private int _lastRosterClickId = -1;
     private ulong _lastRosterClickMsec;
     private Button _withdrawSelectedButton;
@@ -53,6 +54,7 @@ public partial class DealOrForceGame
 
     private void BuildArmyPanel()
     {
+        _armyCaptionIconButtons.Clear();
         _armyPanel = TexturedPanel(_hudLayer, PanelSurface.Command);
         Ui.Place(_armyPanel, "hud.army_panel");
         _armyPanel.Visible = false;
@@ -142,12 +144,13 @@ public partial class DealOrForceGame
         var organisationPage = CommandPage(commandTabs, "ORGANISE");
 
         // ---- battle plans -------------------------------------------------------------
-        var plans = new HBoxContainer();
-        plans.AddThemeConstantOverride("separation", 4);
+        var plans = new HFlowContainer();
+        plans.AddThemeConstantOverride("h_separation", 4);
+        plans.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(plans);
         AddOrderButton(plans, "army_halt", ArmyOrder.Manual, "Halt",
             "H: halt movement or leave the current battle. Attackers stop attacking; defenders need friendly ground to retreat.");
-        var leaveBattle = ActionButton("Leave battle", WithdrawSelectedDivisions, 110, 36);
+        var leaveBattle = ArmyIconButton("Leave battle", WithdrawSelectedDivisions, 110, 36, false, "army_withdraw");
         _withdrawSelectedButton = leaveBattle;
         leaveBattle.Name = "WithdrawSelectedDivisions";
         leaveBattle.TooltipText = Ui.Tip(Tr("Leave battle with the selected divisions. Other participants keep fighting. Losses are not undone."));
@@ -161,16 +164,17 @@ public partial class DealOrForceGame
         AddOrderButton(plans, "army_reserve", ArmyOrder.ReserveFront, "Reserve",
             "Stand behind the contact line, recover faster and reinforce defensive battles nearby.");
 
-        var execution = new HBoxContainer();
-        execution.AddThemeConstantOverride("separation", 4);
+        var execution = new HFlowContainer();
+        execution.AddThemeConstantOverride("h_separation", 4);
+        execution.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(execution);
-        var prepare = ActionButton("Prepare", () => IssuePlanExecution(false), 102, 32, false, Icon("plan_prepare"));
+        var prepare = ArmyIconButton("Prepare", () => IssuePlanExecution(false), 102, 32, false, "plan_prepare");
         prepare.TooltipText = Ui.Tip(Tr("Hold offensive formations on their sector so they entrench and accumulate a plan."));
         execution.AddChild(prepare);
-        var execute = ActionButton("Execute", () => IssuePlanExecution(true), 104, 32, true, Icon("plan_execute"));
+        var execute = ArmyIconButton("Execute", () => IssuePlanExecution(true), 104, 32, true, "plan_execute");
         execute.TooltipText = Ui.Tip(Tr("Activate the selected offensive plans. Front-line and reserve orders stay as they are."));
         execution.AddChild(execute);
-        var autoFront = ActionButton("Auto-deploy", AutoDeployFront, 118, 32, false, Icon("auto_deploy"));
+        var autoFront = ArmyIconButton("Auto-deploy", AutoDeployFront, 118, 32, false, "auto_deploy");
         autoFront.TooltipText = Ui.Tip(Tr("Spread the selection across unique sectors of the active front."));
         execution.AddChild(autoFront);
 
@@ -178,8 +182,10 @@ public partial class DealOrForceGame
         // An order names a role; a drawn line says where. The three buttons pick which
         // kind of line the brush is drawing, and pressing the same one again commits it.
         plansPage.AddChild(Title("DRAW ON THE MAP", 11, Ui.Colour("text.caption")));
-        var draw = new HBoxContainer();
-        draw.AddThemeConstantOverride("separation", 4);
+        // Two columns leave room for translated captions as well as the pictograms.
+        var draw = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        draw.AddThemeConstantOverride("h_separation", 4);
+        draw.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(draw);
         AddDrawButton(draw, "Front", "plan_front", FrontLineKind.Defence, "Front line",
             "Draw the line to hold. The selection spreads along its length and digs in.");
@@ -187,10 +193,10 @@ public partial class DealOrForceGame
             "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Alt+RMB redraws it. Prepare holds the departure front; Execute advances to the objective and stops.");
         AddDrawButton(draw, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
             "RMB-drag a connected line on controlled land. Release to distribute divisions evenly and hold immediately, in peace or war. Backtrack to shorten; Alt+RMB redraws the selected line; Esc cancels.");
-        var dropLine = ActionButton("Clear plans", ClearDrawnLine, 96, 30, false, Icon("plan_erase"));
+        var dropLine = ArmyIconButton("Clear plans", ClearDrawnLine, 96, 30, false, "plan_clear");
         Tip(dropLine, "Delete the plans of the selected divisions and stop their planned movement. Other plans and ongoing battles remain.");
         draw.AddChild(dropLine);
-        _planEraserButton = ActionButton("Eraser", TogglePlanEraser, 90, 30, false, Icon("plan_erase"));
+        _planEraserButton = ArmyIconButton("Eraser", TogglePlanEraser, 90, 30, false, "plan_erase");
         Tip(_planEraserButton, "Click a plan on the map to erase it. An offensive arrow or destination removes only the objective and keeps its departure front. Esc cancels.");
         plansPage.AddChild(_planEraserButton);
 
@@ -205,8 +211,9 @@ public partial class DealOrForceGame
 
         // ---- posture and reinforcement -------------------------------------------------
         doctrinePage.AddChild(Title("POSTURE", 11, Ui.Colour("text.caption")));
-        var posture = new HBoxContainer();
-        posture.AddThemeConstantOverride("separation", 4);
+        var posture = new HFlowContainer();
+        posture.AddThemeConstantOverride("h_separation", 4);
+        posture.AddThemeConstantOverride("v_separation", 4);
         doctrinePage.AddChild(posture);
         AddStanceButton(posture, "Cautious", ArmyStance.Cautious,
             "Slower and more careful: better recovery, entrenchment and defence, fewer casualties.");
@@ -297,9 +304,33 @@ public partial class DealOrForceGame
         Simulation.SpriteCatalog.TextureOf($"icon_{name}",
             $"res://game/gfx/interface/icons/icon_{name}.png");
 
+    // ExpandIcon does not reserve the icon's full width in Godot's minimum size.
+    // A translated caption can otherwise squeeze a perfectly loaded PNG to a dot.
+    private Button ArmyIconButton(string caption, System.Action action, float width, float height,
+        bool primary, string icon)
+    {
+        var button = ActionButton(caption, action, width, height, primary, Icon(icon));
+        button.SetMeta("army_icon_min_width", width);
+        _armyCaptionIconButtons.Add(button);
+        ReserveArmyIconSpace(button);
+        return button;
+    }
+
+    private static void ReserveArmyIconSpace(Button button)
+    {
+        var textWidth = button.GetThemeFont("font").GetStringSize(button.Text,
+            fontSize: button.GetThemeFontSize("font_size")).X;
+        var padding = button.GetThemeStylebox("normal").GetMinimumSize().X;
+        var iconWidth = button.Icon is null ? 0 : button.GetThemeConstant("icon_max_width") +
+            button.GetThemeConstant("h_separation");
+        var minimum = button.GetMeta("army_icon_min_width").AsSingle();
+        button.CustomMinimumSize = new Vector2(Mathf.Max(minimum, textWidth + padding + iconWidth + 2),
+            button.CustomMinimumSize.Y);
+    }
+
     private void AddDrawButton(Container parent, string label, string icon, FrontLineKind kind, string name, string help)
     {
-        var button = ActionButton(label, () => ToggleDrawing(kind), 96, 30, false, Icon(icon));
+        var button = ArmyIconButton(label, () => ToggleDrawing(kind), 96, 30, false, icon);
         ArmyCommandTip(button, name, help);
         _drawButtons[kind] = button;
         parent.AddChild(button);
@@ -315,7 +346,13 @@ public partial class DealOrForceGame
 
     private void AddStanceButton(Container parent, string caption, ArmyStance stance, string help)
     {
-        var button = ActionButton(caption, () => IssueArmyStance(stance), 96, 28);
+        var icon = stance switch
+        {
+            ArmyStance.Cautious => "stance_cautious",
+            ArmyStance.Aggressive => "stance_aggressive",
+            _ => "stability"
+        };
+        var button = ArmyIconButton(caption, () => IssueArmyStance(stance), 96, 32, false, icon);
         Tip(button, help);
         _armyStanceButtons[stance] = button;
         parent.AddChild(button);
@@ -362,6 +399,9 @@ public partial class DealOrForceGame
         var owner = _campaign.NationById(divisions[0].NationId);
         var mine = owner == _campaign.Player;
         SetArmyPanelVisible(true);
+
+        // Also follows language/font changes made while the campaign is open.
+        foreach (var button in _armyCaptionIconButtons) ReserveArmyIconSpace(button);
 
         var group = _campaign.ArmyGroups.FirstOrDefault(candidate => candidate.Id == divisions[0].ArmyGroupId);
         _armyPanelTitle.Text = divisions.Count == 1

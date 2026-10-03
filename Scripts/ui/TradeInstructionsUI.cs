@@ -237,7 +237,8 @@ public partial class DealOrForceGame
 
         _tradeGoodMark = Symbol("good_food", 20, "text.accent_dim");
         if (_tradeGoodMark is not null) heading.AddChild(_tradeGoodMark);
-        _tradeGoodPicker = new OptionButton { CustomMinimumSize = new Vector2(190, 32) };
+        _tradeGoodPicker = new OptionButton { CustomMinimumSize = new Vector2(190, 32),
+            FitToLongestItem = false, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _tradeGoodPicker.ItemSelected += _ => RefreshTradeInstructions();
         heading.AddChild(_tradeGoodPicker);
 
@@ -282,7 +283,8 @@ public partial class DealOrForceGame
 
         _tradePartnerFlag = FlagBadge("", 20);
         heading.AddChild(_tradePartnerFlag);
-        _tradePartnerPicker = new OptionButton { CustomMinimumSize = new Vector2(190, 32) };
+        _tradePartnerPicker = new OptionButton { CustomMinimumSize = new Vector2(190, 32),
+            FitToLongestItem = false, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _tradePartnerPicker.ItemSelected += _ => RefreshTradeInstructions();
         heading.AddChild(_tradePartnerPicker);
 
@@ -333,22 +335,22 @@ public partial class DealOrForceGame
         card.AddThemeConstantOverride("separation", 5);
         margin.AddChild(card);
 
+        // Selectors must not steal the heading's width. Keep the title/count above them;
+        // counts retain their natural translated width instead of a clipped 120 px slot.
+        var titleRow = new HBoxContainer();
+        titleRow.AddThemeConstantOverride("separation", 8);
+        card.AddChild(titleRow);
+        var caption = Title(title, 12, Ui.Colour("text.caption"), upper: true);
+        caption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        caption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        titleRow.AddChild(caption);
+        count = Title("", 11, Ui.Colour("text.accent"));
+        count.AutowrapMode = TextServer.AutowrapMode.Off;
+        count.HorizontalAlignment = HorizontalAlignment.Right;
+        titleRow.AddChild(count);
         heading = new HBoxContainer();
         heading.AddThemeConstantOverride("separation", 8);
         card.AddChild(heading);
-        // The caption takes the width, the count gets a fixed slot on the right.
-        //
-        // The other way round - which is how this was - gives a clipped label with no
-        // minimum width exactly no width at all, and what survives on screen is the first
-        // pixel of the first letter. Two of those sat at the top of the trade screen looking
-        // like a pair of stray dots for weeks. Same mistake as the key-rate headline and the
-        // printing-money row; it is the standard trap of this layout.
-        var caption = Fixed(Title(title, 12, Ui.Colour("text.caption"), upper: true));
-        caption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        heading.AddChild(caption);
-        count = Fixed(Title("", 11, Ui.Colour("text.accent")), 120);
-        count.HorizontalAlignment = HorizontalAlignment.Right;
-        heading.AddChild(count);
         return card;
     }
 

@@ -1,0 +1,6 @@
+[
+  "army_halt", "army_defend", "army_advance", "army_spearhead",
+  "army_reserve", "plan_prepare", "plan_execute", "auto_deploy",
+  "plan_front", "plan_attack", "plan_fallback", "plan_clear",
+  "plan_erase", "army_withdraw", "stance_cautious", "stance_aggressive"
+]

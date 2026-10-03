@@ -1614,9 +1614,9 @@ public partial class DealOrForceGame : Control
         };
     }
 
-    /// <summary>The mark for one good. Twenty of them, named after the good itself.</summary>
+    /// <summary>Named after the data ID, not a numeric enum slot for mod-added goods.</summary>
     private static string GoodIcon(Simulation.Commodity commodity) =>
-        "good_" + commodity.ToString().ToLowerInvariant();
+        CommodityCatalog.IconNameOf(commodity);
 
     /// <summary>And for one building. Seventeen, named the same way.</summary>
     private static string BuildingIcon(Simulation.BuildingKind building) =>

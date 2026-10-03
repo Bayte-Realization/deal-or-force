@@ -131,6 +131,9 @@ public static class CommodityCatalog
     public static string IdOf(Commodity commodity) =>
         Ids.TryGetValue(commodity, out var id) ? id : ((int)commodity).ToString();
 
+    /// <summary>Stable raster icon key, including data-defined goods outside the enum.</summary>
+    public static string IconNameOf(Commodity commodity) => "good_" + IdOf(commodity).ToLowerInvariant();
+
     static CommodityCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
