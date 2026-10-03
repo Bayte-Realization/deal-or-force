@@ -1,0 +1,10 @@
+{
+  "id": "example_fsharp_mod",
+  "name": "Example: compiled F# mod",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 200,
+  "dependencies": [],
+  "corecode_assembly": "corecode/bin/Debug/net8.0/ExampleFSharpMod.dll"
+}
