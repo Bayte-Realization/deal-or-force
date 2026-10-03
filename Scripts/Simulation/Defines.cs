@@ -700,8 +700,11 @@ public sealed partial class Defines
 	/// </summary>
 	public float PeaceRoundDownShare { get; set; } = 0.50f;
 
-	/// <summary>How often a country somebody is playing is handed an event, in days.</summary>
-	public int EventIntervalDays { get; set; } = 75;
+	/// <summary>Days between ambient events for human countries. Zero or negative disables them, not scripted requests.</summary>
+	public int EventIntervalDays { get; set; } = 125;
+
+	/// <summary>Ambient interval for landless human movements. Negative inherits EventIntervalDays; zero disables it.</summary>
+	public int MovementEventIntervalDays { get; set; } = -1;
 
 	/// <summary>
 	/// How long a country remembers an event it has already had, for the purpose of not

@@ -435,11 +435,15 @@ public static class EventSystem
         // Nobody is asked anything in observer mode. It is the whole of what the mode is
         // for: a timelapse is a campaign at speed five with nobody at the wheel, and one
         // modal window waiting for an answer ends it.
-        if (!campaign.ObserverMode &&
-            campaign.ElapsedDays > 0 && campaign.ElapsedDays % campaign.Defines.EventIntervalDays == 0)
+        if (!campaign.ObserverMode && campaign.ElapsedDays > 0)
         {
             foreach (var nationId in campaign.HumanSeats)
             {
+                var nation = campaign.NationById(nationId);
+                if (nation is null) continue;
+                var interval = nation.Landless && campaign.Defines.MovementEventIntervalDays >= 0
+                    ? campaign.Defines.MovementEventIntervalDays : campaign.Defines.EventIntervalDays;
+                if (interval <= 0 || campaign.ElapsedDays % interval != 0) continue;
                 if (campaign.PendingEvents.Any(item => item.NationId == nationId)) continue;
                 var created = Create(campaign, nationId);
                 if (created is not null) campaign.PendingEvents.Add(created);

@@ -17,7 +17,11 @@
   "DemolitionRefund": 0.25,
   "PeaceRoundUpShare": 0.50,
   "PeaceRoundDownShare": 0.50,
-  "EventIntervalDays": 75,
+  // Ambient popups: 125 days instead of 75 = 40% fewer over a long campaign.
+  // <= 0 disables ambient draws only. Secession/union/scripted requests still work.
+  "EventIntervalDays": 125,
+  // Landless human movements: -1 inherits the interval above, 0 disables, >0 overrides.
+  "MovementEventIntervalDays": -1,
   "EventMemoryDays": 1460,
   "EventExpiryDays": 182,
   "MaxConstructionProjects": 12,
