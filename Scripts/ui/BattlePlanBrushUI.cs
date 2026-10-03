@@ -30,6 +30,31 @@ public partial class DealOrForceGame
     private DrawnFrontLine _offensiveSource;
     private readonly List<int> _defensiveStroke = new();
     private bool _defensiveStrokeValid;
+    private Button _planEraserButton;
+    private bool _erasingPlans;
+
+    private void TogglePlanEraser()
+    {
+        var next = !_erasingPlans;
+        EndDrawing();
+        _erasingPlans = next;
+        _globe.PlanEraseMode = next;
+        _globe.MouseDefaultCursorShape = next ? Control.CursorShape.Cross : Control.CursorShape.Arrow;
+        _globe.PlanEraseRequested -= ErasePickedPlan;
+        if (next) _globe.PlanEraseRequested += ErasePickedPlan;
+        RefreshDrawingUi();
+    }
+
+    private void ErasePickedPlan(int lineId, bool objectiveOnly)
+    {
+        if (!_erasingPlans || _campaign?.Player is null) return;
+        _campaign.Commands.Enqueue(new DeleteBattlePlanCommand
+        { IssuerId = _campaign.Player.Id, FrontLineId = lineId, ObjectiveOnly = objectiveOnly });
+        _campaign.Commands.ApplyAll(_campaign);
+        _globe.RefreshBattlePlans();
+        SetArmyFeedback(Tr(objectiveOnly ? "Objective erased; departure front retained." : "Plan erased; planned movement stopped."));
+        ShowSelectedArmies();
+    }
 
     private static string DrawName(FrontLineKind kind) => Simulation.Loc.Get(kind switch
     {
@@ -42,6 +67,7 @@ public partial class DealOrForceGame
     /// <summary>Start, switch or finish a stroke. The same button twice puts the brush down.</summary>
     private void ToggleDrawing(FrontLineKind kind)
     {
+        if (_erasingPlans) EndDrawing();
         if (_drawingKind == kind)
         {
             CommitDrawnLine();
@@ -176,26 +202,45 @@ public partial class DealOrForceGame
         ShowSelectedArmies();
     }
 
-    /// <summary>Take the selected formations off whatever line they were on.</summary>
+    /// <summary>Remove entire selected plans, not just the selected entries of their rosters.</summary>
     private void ClearDrawnLine()
     {
         EndDrawing();
         var armies = SelectedPlayerArmies().Select(army => army.Id).ToList();
         if (armies.Count == 0) return;
+        var selected = armies.ToHashSet();
+        var lineIds = _campaign.FrontLines.Where(l => l.NationId == _campaign.Player.Id &&
+            (l.ArmyIds.Any(selected.Contains) || SelectedPlayerArmies().Any(a => a.FrontLineId == l.Id)))
+            .Select(l => l.Id).OrderBy(id => id).ToArray();
+        foreach (var id in lineIds)
+            _campaign.Commands.Enqueue(new DeleteBattlePlanCommand { IssuerId = _campaign.Player.Id, FrontLineId = id });
         _campaign.Commands.Enqueue(new ClearFrontLineCommand
         {
             IssuerId = _campaign.Player.Id,
             ArmyIds = armies
         });
+        foreach (var id in armies)
+        {
+            _campaign.Commands.Enqueue(new DetachArmyFromPlanCommand { IssuerId = _campaign.Player.Id, ArmyId = id });
+            _campaign.Commands.Enqueue(new HaltArmyCommand { IssuerId = _campaign.Player.Id, ArmyId = id });
+        }
         _campaign.Commands.ApplyAll(_campaign);
         _globe.RefreshBattlePlans();
-        SetArmyFeedback(Tr("Back on the war's own front line."));
+        SetArmyFeedback(Tr("Selected plans cleared; planned movement stopped."));
         ShowSelectedArmies();
     }
 
     /// <summary>Put the brush down without committing. Escape and closing the panel do this.</summary>
     private void EndDrawing()
     {
+        if (_erasingPlans)
+        {
+            _erasingPlans = false;
+            _globe.PlanEraseMode = false;
+            _globe.MouseDefaultCursorShape = Control.CursorShape.Arrow;
+            _globe.PlanEraseRequested -= ErasePickedPlan;
+            RefreshDrawingUi();
+        }
         if (_drawingKind is null) return;
         _drawingKind = null;
         _drawnProvinces.Clear();
@@ -217,13 +262,16 @@ public partial class DealOrForceGame
 
     private void RefreshDrawingUi()
     {
+        if (IsInstanceValid(_planEraserButton)) StyleButton(_planEraserButton, _erasingPlans);
         foreach (var (kind, button) in _drawButtons)
         {
             if (!IsInstanceValid(button)) continue;
             StyleButton(button, _drawingKind == kind);
         }
         if (!IsInstanceValid(_drawFeedback)) return;
-        _drawFeedback.Text = _drawingKind is null
+        _drawFeedback.Text = _erasingPlans
+            ? Tr("Eraser: click one of your plans. Offensive arrows erase the objective only. Esc cancels.")
+            : _drawingKind is null
             ? OffensiveStatus()
             : _drawingKind == FrontLineKind.Defence
                 ? Simulation.Loc.Format(

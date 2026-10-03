@@ -10,6 +10,8 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
+        ArmyCommandLocalizationTests.Run();
         if (args.Contains("--events-only")) { EventCadenceTests.Run(); return; }
         if (args.Contains("--reload-only")) { PresentationReloadTests.Run(); return; }
         if (args.Contains("--ultimatum-only")) { UltimatumTests.Run(); return; }

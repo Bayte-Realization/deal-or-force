@@ -68,6 +68,14 @@ public sealed partial class GlobePresentation
             /// <summary>Its name, and the line of the row's stack it is written on before any spreading.</summary>
             public Label3D Label;
             public int Line;
+            public int TargetLine;
+            public int CandidateLine;
+            public float CandidateAge;
+            public float DisplayLine;
+            public Vector2 PreviousOrigin;
+            public float PreviousScale;
+            public float StillTime;
+            public bool Positioned;
         }
 
         public MovementLayer(GlobePresentation globe) => _globe = globe;
@@ -106,7 +114,7 @@ public sealed partial class GlobePresentation
                 }
                 if (marker.Node.Visible != shown) marker.Node.Visible = shown;
             }
-            Spread(camera);
+            Spread(camera, (float)Math.Clamp(delta, 0.0, 0.05));
         }
 
         private static bool Standing(MovementState state) =>
@@ -114,6 +122,7 @@ public sealed partial class GlobePresentation
 
         public override void _Input(InputEvent inputEvent)
         {
+            if (_globe?.PlanEraseMode == true) return;
             if (inputEvent is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } click) return;
             if (GetViewport().GuiGetHoveredControl() is not null) return;
             var camera = _globe?._camera;
@@ -164,7 +173,8 @@ public sealed partial class GlobePresentation
                 .ToList();
             foreach (var group in groups)
             {
-                var members = group.OrderBy(nation => nation.DisplayName, StringComparer.CurrentCulture).ToList();
+                // A translation must not rearrange offices sharing the same headquarters.
+                var members = group.OrderBy(nation => nation.Tag, StringComparer.Ordinal).ToList();
                 for (var index = 0; index < members.Count; index++)
                 {
                     var nation = members[index];
@@ -194,15 +204,17 @@ public sealed partial class GlobePresentation
                     };
                     node.AddChild(label);
                     AddChild(node);
-                    _markers.Add(new Marker { Node = node, Nation = nation, Offset = offset, Label = label, Line = index });
+                    _markers.Add(new Marker { Node = node, Nation = nation, Offset = offset, Label = label,
+                        Line = index, TargetLine = index, CandidateLine = index, DisplayLine = index });
                 }
             }
         }
 
         // Names that would print over each other - two headquarters a province or two apart,
         // Doha and Abu Dhabi from the distance a player reads the Gulf at - are pushed down a line
-        // at a time until they do not. Worked out on the screen every frame, so it is right at
-        // every zoom: close in, the same two names sit side by side with nothing to move.
+        // at a time until they do not. Keep the chosen row while the camera moves; only compact
+        // after it settles. Debounce a collision and ease the offset rather than jumping a
+        // whole line because a capital's rectangle touched ours for a single frame.
         private readonly List<Rect2> _placed = new();
         private readonly List<Rect2> _medallions = new();
 
@@ -216,7 +228,7 @@ public sealed partial class GlobePresentation
         /// <summary>And their names - after the countries' capitals are named, which they keep off.</summary>
         internal void AddNames(List<Rect2> into) => into.AddRange(_placed);
 
-        private void Spread(Camera3D camera)
+        private void Spread(Camera3D camera, float delta)
         {
             _placed.Clear();
             _medallions.Clear();
@@ -224,7 +236,11 @@ public sealed partial class GlobePresentation
             var up = camera.GlobalBasis.Y.Normalized();
             foreach (var marker in _markers)
             {
-                if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || marker.Label is null) continue;
+                if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || marker.Label is null)
+                {
+                    marker.Positioned = false;
+                    continue;
+                }
                 var at = marker.Node.GlobalPosition;
                 if (camera.IsPositionBehind(at)) continue;
                 // A fixed-size label is as large at any depth as it would be one unit away, so a
@@ -234,18 +250,33 @@ public sealed partial class GlobePresentation
                 var linePixels = MathF.Abs(camera.UnprojectPosition(at + up * (LabelLine * LabelPixelSize * depth)).Y - origin.Y);
                 if (linePixels < 0.5f) continue;
                 var scale = linePixels / LabelLine;
+                var still = marker.Positioned && origin.DistanceSquaredTo(marker.PreviousOrigin) < 0.04f &&
+                            MathF.Abs(scale - marker.PreviousScale) < 0.0005f;
+                marker.StillTime = still ? marker.StillTime + delta : 0f;
+                marker.PreviousOrigin = origin;
+                marker.PreviousScale = scale;
+                marker.Positioned = true;
                 // The medallion: a 128-pixel sprite at its own pixel size, moved along its row.
                 var sprite = scale * PixelSize / LabelPixelSize;
                 var radius = 64f * sprite;
                 _medallions.Add(new Rect2(origin.X + marker.Offset * sprite - radius, origin.Y - radius, radius * 2f, radius * 2f));
                 var width = marker.Label.Text.Length * marker.Label.FontSize * 0.56f * scale;
-                var line = marker.Line;
-                Rect2 Box(int row) => new(origin.X - width / 2f, origin.Y + (80f + row * LabelLine - LabelLine / 2f) * scale,
+                var line = marker.StillTime >= 0.45f ? marker.Line : marker.TargetLine;
+                Rect2 Box(float row) => new(origin.X - width / 2f, origin.Y + (80f + row * LabelLine - LabelLine / 2f) * scale,
                     width, LabelLine * scale);
                 var box = Box(line);
-                for (var guard = 0; guard < 8 && Overlaps(box); guard++) box = Box(++line);
-                _placed.Add(box);
-                var offset = new Vector2(0f, -80f - line * LabelLine);
+                while (line < marker.Line + 8 && Overlaps(box.Grow(2f))) box = Box(++line);
+                if (line != marker.CandidateLine)
+                {
+                    marker.CandidateLine = line;
+                    marker.CandidateAge = 0f;
+                }
+                else marker.CandidateAge += delta;
+                if (marker.CandidateAge >= 0.12f) marker.TargetLine = line;
+                // Six source-pixel rows per second, bounded even after a slow frame.
+                marker.DisplayLine = Mathf.MoveToward(marker.DisplayLine, marker.TargetLine, 6f * delta);
+                _placed.Add(Box(marker.DisplayLine));
+                var offset = new Vector2(0f, -80f - marker.DisplayLine * LabelLine);
                 if (marker.Label.Offset != offset) marker.Label.Offset = offset;
             }
         }

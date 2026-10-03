@@ -332,7 +332,7 @@ public partial class DealOrForceGame : Control
         }
         // A brush left down turns the map into a canvas and swallows ordinary clicks, so
         // escape has to reach it before anything else that escape closes.
-        if (key.Keycode == Key.Escape && _drawingKind is not null)
+        if (key.Keycode == Key.Escape && (_drawingKind is not null || _erasingPlans))
         {
             EndDrawing();
             SetArmyFeedback(Tr("The line was abandoned."));
@@ -2106,12 +2106,15 @@ public partial class DealOrForceGame : Control
         }
         if (_settingsLayer is { Visible: true }) ShowSettingsCategory(_settingsCategory);
         if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
+        if (_armyPanel is { Visible: true }) RefreshArmyPanel();
 
         if (_campaign is not null && _dossierScreen == "Economy") ShowEconomyScreen();
     }
 
     private static void RefreshLocalisedText(Node node)
     {
+        if (node is Control page && page.HasMeta("loc_tab") && page.GetParent() is TabContainer tabs)
+            tabs.SetTabTitle(tabs.GetTabIdxFromControl(page), Tr(page.GetMeta("loc_tab").AsString()));
         if (node.HasMeta(LocSourceMeta))
         {
             var source = node.GetMeta(LocSourceMeta).AsString();
@@ -2144,7 +2147,9 @@ public partial class DealOrForceGame : Control
             // back to the wording it was created with.
             if (applied is null || control.TooltipText == applied)
             {
-                control.TooltipText = Ui.Tip(node.GetMeta(LocTipMeta).AsString());
+                var help = Tr(node.GetMeta(LocTipMeta).AsString());
+                control.TooltipText = Ui.Tip(node.HasMeta("loc_tip_heading")
+                    ? Tr(node.GetMeta("loc_tip_heading").AsString()) + "\n" + help : help);
                 node.SetMeta(LocTipAppliedMeta, control.TooltipText);
             }
         }

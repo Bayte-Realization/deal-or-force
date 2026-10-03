@@ -187,9 +187,12 @@ public partial class DealOrForceGame
             "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Alt+RMB redraws it. Prepare holds the departure front; Execute advances to the objective and stops.");
         AddDrawButton(draw, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
             "RMB-drag a connected line on controlled land. Release to distribute divisions evenly and hold immediately, in peace or war. Backtrack to shorten; Alt+RMB redraws the selected line; Esc cancels.");
-        var dropLine = ActionButton("Erase", ClearDrawnLine, 82, 30, false, Icon("plan_erase"));
-        dropLine.TooltipText = Ui.Tip(Tr("Take the selection off its drawn line and return it to the war's own front."));
+        var dropLine = ActionButton("Clear plans", ClearDrawnLine, 96, 30, false, Icon("plan_erase"));
+        Tip(dropLine, "Delete the plans of the selected divisions and stop their planned movement. Other plans and ongoing battles remain.");
         draw.AddChild(dropLine);
+        _planEraserButton = ActionButton("Eraser", TogglePlanEraser, 90, 30, false, Icon("plan_erase"));
+        Tip(_planEraserButton, "Click a plan on the map to erase it. An offensive arrow or destination removes only the objective and keeps its departure front. Esc cancels.");
+        plansPage.AddChild(_planEraserButton);
 
         _drawFeedback = Title("Pick a line, then drag along the map. Right button rubs out.",
             11, Ui.Colour("text.muted"));
@@ -281,6 +284,8 @@ public partial class DealOrForceGame
         };
         page.AddThemeConstantOverride("separation", 6);
         tabs.AddChild(page);
+        page.SetMeta("loc_tab", name);
+        tabs.SetTabTitle(tabs.GetTabIdxFromControl(page), Tr(name));
         return page;
     }
 
@@ -295,7 +300,7 @@ public partial class DealOrForceGame
     private void AddDrawButton(Container parent, string label, string icon, FrontLineKind kind, string name, string help)
     {
         var button = ActionButton(label, () => ToggleDrawing(kind), 96, 30, false, Icon(icon));
-        button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0}\n{1}", name, help));
+        ArmyCommandTip(button, name, help);
         _drawButtons[kind] = button;
         parent.AddChild(button);
     }
@@ -303,7 +308,7 @@ public partial class DealOrForceGame
     private void AddOrderButton(Container parent, string icon, ArmyOrder order, string name, string help)
     {
         var button = ActionButton("", () => IssueArmyOrder(order), 56, 36, false, Icon(icon));
-        button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0}\n{1}", name, help));
+        ArmyCommandTip(button, name, help);
         _armyOrderButtons[order] = button;
         parent.AddChild(button);
     }
@@ -311,9 +316,17 @@ public partial class DealOrForceGame
     private void AddStanceButton(Container parent, string caption, ArmyStance stance, string help)
     {
         var button = ActionButton(caption, () => IssueArmyStance(stance), 96, 28);
-        button.TooltipText = Ui.Tip(help);
+        Tip(button, help);
         _armyStanceButtons[stance] = button;
         parent.AddChild(button);
+    }
+
+    private static void ArmyCommandTip(Button button, string heading, string help)
+    {
+        Tip(button, help);
+        button.SetMeta("loc_tip_heading", heading);
+        button.TooltipText = Ui.Tip(Tr(heading) + "\n" + Tr(help));
+        button.SetMeta(LocTipAppliedMeta, button.TooltipText);
     }
 
     /// <summary>Show the panel, or hide it and let the generic side panel have the space.</summary>
@@ -357,7 +370,7 @@ public partial class DealOrForceGame
         _armyPanelSubtitle.Text = divisions.Count == 1
             ? OneLineSummary(divisions[0])
             : Simulation.Loc.Format("{0} · {1:N0} men · {2:N0} headquarters",
-                group?.Commander ?? Simulation.Loc.Get("No commander assigned"),
+                Tr(group?.Commander ?? "No commander assigned"),
                 divisions.Sum(army => army.Personnel),
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
         _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", divisions.Count);

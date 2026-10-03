@@ -72,5 +72,16 @@ static class OffensivePlanTests
         var final=armies.Select(a=>a.ProvinceId).ToArray();
         for(var day=0;day<10;day++){ foreach(var a in armies)a.ReadyDay=0; MilitaryOperations.Tick(c); Warfare.Tick(c); }
         Check(armies.Select(a=>a.ProvinceId).SequenceEqual(final)&&armies.All(a=>!a.PlanActive),"completed offensive stops instead of attacking beyond drawn goal");
+        // A progressed war must not resurrect an erased plan through any daily planner.
+        line.ArmyIds.Clear(); line.ArmyIds.Add(999999);
+        new DeleteBattlePlanCommand { IssuerId = rus.Id, FrontLineId = line.Id }.Apply(c);
+        for (var day = 0; day < 30; day++)
+        {
+            FrontManager.Tick(c); MilitaryOperations.Tick(c); Warfare.Tick(c);
+        }
+        Check(c.FrontLines.Count == 0 && armies.All(a => a.FrontLineId < 0 &&
+            a.OrderKind == ArmyOrder.Manual && a.Route.Count == 0 && a.PlannedRoute.Count == 0) &&
+            armies.Select(a => a.ProvinceId).SequenceEqual(final),
+            "erased stale-roster plan stays erased for 30 daily planner passes without renewed movement");
     }
 }

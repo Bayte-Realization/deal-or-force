@@ -1190,6 +1190,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         if (_campaign?.ProvinceMap is null || _globeMaterial is null) return;
         _frontMesh.ClearSurfaces();
+        _planHitSegments.Clear();
+        _drawingPlanId = -1;
         _frontPreview.Visible = false;
         var pixels = _frontPixels ??= new byte[256 * 256 * 4];
         var borderTargets = new byte[256 * 256 * 4];
@@ -1225,6 +1227,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         foreach (var line in _campaign.FrontLines)
         {
             if (line.NationId != _campaign.Player?.Id) continue;
+            _drawingPlanId = line.Id;
+            _drawingPlanObjective = line.Kind == Simulation.FrontLineKind.Offensive;
             Simulation.BorderFronts.Refresh(_campaign, line);
             if (line.Kind == Simulation.FrontLineKind.Fallback)
             {
@@ -1251,6 +1255,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     PutBorderTarget(borderTargets, province, line.NationId, line.BorderNationId);
             }
         }
+        _drawingPlanId = -1;
         if (_objectivePreview.Count > 0) DrawOffensiveGeometry(_objectivePreview, _departurePreview, true);
         if (_defensivePreview.Count > 0) DrawDefensiveGeometry(_defensivePreview, _campaign.Player.Id, true);
         if (_planPreview.Count > 0 && _objectivePreview.Count == 0 && _defensivePreview.Count == 0)
@@ -1418,6 +1423,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public override void _GuiInput(InputEvent inputEvent)
     {
         if (LoadingInputBlocked) { AcceptEvent(); return; }
+        if (PlanEraseMode && inputEvent is InputEventMouseButton erase && erase.ButtonIndex == MouseButton.Left)
+        {
+            if (erase.Pressed && TryPickPlan(erase.Position, out var lineId, out var objectiveOnly))
+                PlanEraseRequested?.Invoke(lineId, objectiveOnly);
+            AcceptEvent(); return;
+        }
         if (_freeCamera && HandleFreeCameraInput(inputEvent)) { AcceptEvent(); return; }
         if (BorderPaintMode && HandleBorderInput(inputEvent)) return;
         if (PaintMode && HandlePaintInput(inputEvent)) return;
@@ -1489,7 +1500,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     if (button.ButtonIndex != _cameraDragButton) return;
                     var wasClick = _dragging && _dragDistance < 5f && button.ButtonIndex == MouseButton.Right;
                     _dragging = false;
-                    if (!CountrySelectionOnly && wasClick && TryPick(button.Position, out var commanded, updateSelection: false))
+                    if (!PlanEraseMode && !CountrySelectionOnly && wasClick && TryPick(button.Position, out var commanded, updateSelection: false))
                         ProvinceCommanded?.Invoke(commanded);
                 }
                 AcceptEvent();

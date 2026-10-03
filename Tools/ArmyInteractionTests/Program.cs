@@ -15,6 +15,8 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--plan-erasing-only")) { PlanErasingTests.Run(); return; }
+        PlanErasingTests.Run();
         if (args.Contains("--features-only")) { FeatureTests.Run(); return; }
         if (args.Contains("--battle-readout-only")) { BattleReadoutTests.Run(); return; }
         if (args.Contains("--withdrawal-only")) { BattleWithdrawalTests.RunFixture(); return; }

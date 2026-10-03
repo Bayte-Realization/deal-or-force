@@ -77,6 +77,9 @@ public sealed partial class GlobePresentation
             }
         }
         SampleRibbonTo(points[^1]);
+        if (_drawingPlanId >= 0)
+            for (var i = 1; i < _ribbonSamples.Count; i++)
+                _planHitSegments.Add((_drawingPlanId, _drawingPlanObjective, _ribbonSamples[i - 1], _ribbonSamples[i]));
         // Quiet charcoal keyline keeps the red ink readable on political/terrain colours.
         for (var pass = 0; pass < 2; pass++)
         {

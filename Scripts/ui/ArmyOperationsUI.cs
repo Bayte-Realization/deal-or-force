@@ -209,7 +209,7 @@ public partial class DealOrForceGame
         string tooltip, bool primary = false)
     {
         var button = ActionButton(caption, () => IssueReinforcementPriority(priority), 96, 30, primary);
-        button.TooltipText = Ui.Tip(tooltip);
+        Tip(button, tooltip);
         row.AddChild(button);
         _armyPriorityButtons[priority] = button;
     }
