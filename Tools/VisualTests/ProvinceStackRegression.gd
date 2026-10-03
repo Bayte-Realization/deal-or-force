@@ -8,10 +8,37 @@ func inspect(ctx: Variant, label: String, baseline: Dictionary = {}) -> Dictiona
 	var displayed: Dictionary = {}
 	var multi: int = 0
 	var visible: int = 0
+	var centered: int = 0
+	var max_center_error: float = 0.0
+	var camera: Camera3D = ctx.get_scene_root().find_children("*", "Camera3D", true, false)[0]
 	for node: Node3D in ctx.get_scene_root().find_children("DivisionStack_*", "Node3D", true, false):
 		var ids: Array = node.get_meta("actual_army_ids", [])
 		var province: int = node.get_meta("province_id", 0)
 		var nation: String = str(node.name).split("_")[1]
+		if node.get_meta("display_provinces", 0) != 1:
+			ctx.error("Counter combines unrelated provinces: " + str(node.name))
+		var display_ids: Array = node.get_meta("display_army_ids", [])
+		if display_ids != ids: ctx.error("Counter no longer represents its own province")
+		if province > 0 and node.get_meta("stationary", false):
+			if not node.has_meta("province_center_latlon"):
+				ctx.error("Missing authoritative province centre")
+			else:
+				var geo: Vector2 = node.get_meta("province_center_latlon")
+				var expected: Vector3
+				if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+					var x: float = geo.y / 360.0 * 20.0
+					while x - camera.position.x > 10.0: x -= 20.0
+					while x - camera.position.x < -10.0: x += 20.0
+					expected = Vector3(x, geo.x / 180.0 * 10.0, 0.004)
+				else:
+					var lat: float = deg_to_rad(geo.x)
+					var lon: float = deg_to_rad(geo.y + 180.0)
+					expected = Vector3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon)) * 5.011
+				var error: float = node.position.distance_to(expected)
+				max_center_error = maxf(max_center_error, error)
+				centered += 1
+				if error > 0.00001:
+					ctx.error("Counter displaced from province centre: " + str(node.name))
 		if province > 0:
 			var key: String = nation + ":" + str(province)
 			if keys.has(key): ctx.error("More than one counter in province: " + key)
@@ -32,7 +59,9 @@ func inspect(ctx: Variant, label: String, baseline: Dictionary = {}) -> Dictiona
 			displayed[id] = true
 	if not baseline.is_empty() and baseline != members:
 		ctx.error("Zoom/projection/selection changed actual stack membership")
-	ctx.log(label, {"stacks": keys.size(), "divisions": members.size(), "multi_stacks": multi, "visible": visible})
+	ctx.log(label, {"stacks": keys.size(), "divisions": members.size(), "multi_stacks": multi, "visible": visible,
+		"centered": centered, "max_center_error": max_center_error})
+	if centered == 0: ctx.error("Fixture needs stationary province stacks")
 	if multi == 0 or visible == 0: ctx.error("Fixture needs visible counters and multi-division provinces")
 	return members
 
@@ -45,7 +74,7 @@ func roster(ctx: Variant) -> Array[Button]:
 
 func run(ctx: Variant) -> void:
 	for label: Label in ctx.get_scene_root().find_children("*", "Label", true, false):
-		if label.is_visible_in_tree() and label.text == "LONG-RANGE FORCES":
+		if label.is_visible_in_tree() and label.text in ["LONG-RANGE FORCES", "ДАЛЬНОБОЙНЫЕ СИЛЫ"]:
 			await ctx.tap_key(KEY_ESCAPE, {"physical": false})
 			break
 	await ctx.wait(0.3)
@@ -80,6 +109,12 @@ func run(ctx: Variant) -> void:
 	await ctx.wait(1.2)
 	var baseline: Dictionary = inspect(ctx, "Globe close: one stack per province")
 	await ctx.capture("province-stack-globe-close", 1920)
+	map.call("FocusOn", latitude, longitude, 10.0)
+	await ctx.wait(1.2)
+	inspect(ctx, "Globe overview remains province-centred", baseline)
+	await ctx.capture("province-stack-globe-overview", 1920)
+	map.call("FocusOn", latitude, longitude, 5.45)
+	await ctx.wait(1.2)
 	await ctx.tap_key(KEY_F2, {"physical": false})
 	await ctx.wait(0.5)
 	inspect(ctx, "Flat tactical entry", baseline)
@@ -123,4 +158,9 @@ func run(ctx: Variant) -> void:
 	await ctx.wait(1.2)
 	inspect(ctx, "Flat operational zoom", baseline)
 	await ctx.capture("province-stack-flat-operational", 1920)
+	for step: int in range(16):
+		await ctx.click_at(Vector2(960, 540), {"button": MOUSE_BUTTON_WHEEL_DOWN})
+	await ctx.wait(0.8)
+	inspect(ctx, "Flat overview remains province-centred", baseline)
+	await ctx.capture("province-stack-flat-overview", 1920)
 	ctx.release_all_inputs()

@@ -2,9 +2,6 @@
   "metrics": {
     "map.globe_counter_pixels": 56,
     "map.globe_counter_world_width": 0.06,
-    "map.globe_cluster_distance": 9.5,
-    "map.globe_cluster_radius_km": 140,
-    "map.globe_counter_local_radius": 0.025,
     "support.globe_slot_spacing": 0.14,
     "map.flat_province_full_zoom": 0.95,
     "map.flat_province_hide_zoom": 3.8,
@@ -16,7 +13,6 @@
     "map.flat_counter_min_ratio": 0.25,
     "map.front_width_pixels": 1.6,
     "map.flat_counter_gap": 4,
-    "map.flat_counter_clearance": 6,
     "map.flat_fleet_counter_width": 64,
     "map.flat_capital_pixels": 14,
     "map.flat_zoom_step": 0.15,

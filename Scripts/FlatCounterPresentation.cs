@@ -6,8 +6,7 @@ namespace DealOrForce;
 
 public sealed partial class GlobePresentation
 {
-    private readonly List<(ArmyStackMarker Marker, Vector2 Screen, bool Selected)> _densityCandidates = new();
-    private readonly Dictionary<Vector2I, List<(ArmyStackMarker Marker, Rect2 Room, bool Selected)>> _occupiedCounterCells = new();
+    private readonly Dictionary<Vector2I, List<Rect2>> _occupiedCounterCells = new();
     private readonly List<(Node3D Node, Sprite3D Plate, Vector3 Anchor, int Id, SupportMapMarker Support)> _auxiliaryCounters = new();
     private readonly Dictionary<int, Vector2> _flatFleetOffsets = new();
     private ulong _nextCounterDensityMs;
@@ -16,43 +15,13 @@ public sealed partial class GlobePresentation
     private bool _counterDensityDirty = true;
     private bool _flatStrategicCounters;
 
-    private Vector3 ArmyMarkerPosition(ArmyStackMarker marker)
-    {
-        var anchor = ArmyPresentationPoint(marker.Stack);
-        if (!_flatMap)
-        {
-            var geo = GeographicFromNormal(anchor.Normalized());
-            var basis = CountryLabelSurfaceBasis(geo.Latitude, geo.Longitude, 1f, 0f);
-            return (anchor + basis.X * marker.SurfaceOffset.X + basis.Y * marker.SurfaceOffset.Y).Normalized() * anchor.Length();
-        }
-        var pixel = _camera.Size / Math.Max(1f, Size.Y);
-        return anchor + new Vector3(marker.DisplayOffset.X, -marker.DisplayOffset.Y, 0f) * pixel;
-    }
+    // Geography is authoritative. Collision avoidance must never move a division
+    // counter away from its province or merge it with a neighbouring province.
+    private Vector3 ArmyMarkerPosition(ArmyStackMarker marker) => ArmyPresentationPoint(marker.Stack);
 
     private void DrawFlatCounterLeaders()
     {
         if (!_flatMap || !MilitaryMarkersEnabled || !IsInstanceValid(_armyRoot)) return;
-        foreach (var marker in _armyStacks.Values)
-        {
-            if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || !marker.Plate.Visible ||
-                marker.DisplayOffset.LengthSquared() < 36f) continue;
-            // A whole front must not become a web of leader lines. Explain geography
-            // only for the selected formations; the other cards stay in local bundles.
-            var selected = false;
-            foreach (var army in marker.DisplayStack)
-                if (_selectedArmyIds.Contains(army.Id)) { selected = true; break; }
-            if (!selected) continue;
-            var anchor = _camera.UnprojectPosition(_armyRoot.ToGlobal(ArmyPresentationPoint(marker.Stack)));
-            var center = _camera.UnprojectPosition(marker.Node.GlobalPosition);
-            var half = new Vector2(marker.Plate.Texture.GetWidth(), marker.Plate.Texture.GetHeight()) *
-                marker.Plate.PixelSize * _counterFlatFar * .5f;
-            var delta = anchor - center;
-            var edgeRatio = Math.Min(half.X / Math.Max(.01f, Math.Abs(delta.X)),
-                half.Y / Math.Max(.01f, Math.Abs(delta.Y)));
-            if (edgeRatio >= 1f) continue;
-            DrawLine(anchor, center + delta * edgeRatio, new Color(.83f, .87f, .78f, .35f), 1f, true);
-            DrawCircle(anchor, 1.5f, new Color(.83f, .87f, .78f, .5f));
-        }
         foreach (var counter in _auxiliaryCounters)
         {
             if (!IsInstanceValid(counter.Node) || !counter.Node.IsVisibleInTree()) continue;
@@ -77,150 +46,68 @@ public sealed partial class GlobePresentation
         _cityDirty = true;
     }
 
-    /// <summary>
-    /// Overlapping friendly cards represent all nearby divisions instead of silently
-    /// dropping them. Simulation stacks and real province positions remain unchanged.
-    /// Opposing nations and different selection states never merge. Stable hosts and
-    /// rectangle hysteresis avoid grid-boundary flicker during a pan.
-    /// </summary>
+    /// <summary>Only auxiliary counters search for free space. Army counters remain
+    /// at their geographic anchor in every zoom and selection state.</summary>
     private void UpdateFlatCounterDensity()
     {
-        // Throttle collision layout, not the per-frame pixel-size compensation.
         var now = Time.GetTicksMsec();
         var unitsPerPixel = _flatZoom / Math.Max(1f, Size.Y);
         var moved = Mathf.Abs(_flatX - _densityView.X) + Mathf.Abs(_flatY - _densityView.Y);
         var zoomed = Mathf.Abs(_flatZoom - _densityView.Z);
         if (!_counterDensityDirty && _densityViewport == Size &&
             moved < unitsPerPixel * 3f && zoomed < _flatZoom * 0.0015f) return;
-
-        // And while it is moving, twenty times a second rather than every frame: fourteen
-        // hundred markers unprojected and gridded is not free, and a decision the eye cannot
-        // catch up with is not worth making faster.
         if (now < _nextCounterDensityMs) return;
         _nextCounterDensityMs = now + 50;
         _counterDensityDirty = false;
         _densityViewport = Size;
         _densityView = new Vector3(_flatX, _flatY, _flatZoom);
-        _densityCandidates.Clear();
         _occupiedCounterCells.Clear();
-        _placedCounterHosts.Clear();
-        LayoutFlatAuxiliaryCounters();
         foreach (var marker in _armyStacks.Values)
         {
-            marker.DisplayStack.Clear();
-            marker.DisplayStack.AddRange(marker.Stack);
-            marker.DisplayProvinces = 1;
-            if (marker.Node is null || !marker.Node.Visible || marker.Stack.Count == 0) continue;
-            var selected = false;
-            foreach (var army in marker.Stack)
-                if (_selectedArmyIds.Contains(army.Id)) { selected = true; break; }
-            // Layout always starts from geography, not last frame's visual displacement.
-            var screen = _camera.UnprojectPosition(_armyRoot.ToGlobal(ArmyPresentationPoint(marker.Stack)));
-            if (screen.X < -80 || screen.Y < -50 || screen.X > Size.X + 80 || screen.Y > Size.Y + 50) continue;
-            _densityCandidates.Add((marker, screen, selected));
-        }
-        _densityCandidates.Sort((a, b) => a.Selected != b.Selected
-            ? (a.Selected ? -1 : 1)
-            : a.Marker.Plate.Visible != b.Marker.Plate.Visible
-                ? (a.Marker.Plate.Visible ? -1 : 1)
-                : a.Marker.Stack[0].Id.CompareTo(b.Marker.Stack[0].Id));
-        foreach (var (marker, at, selected) in _densityCandidates)
-        {
-            var halfWidth = marker.Plate.Texture.GetWidth() * marker.Plate.PixelSize * _counterFlatFar * .5f;
-            var halfHeight = marker.Plate.Texture.GetHeight() * marker.Plate.PixelSize * _counterFlatFar * .5f;
-            var gap = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_counter_gap", 4f), 0f, 16f);
-            var half = new Vector2(halfWidth, halfHeight) + Vector2.One * gap * .5f;
-            var room = new Rect2(at - half, half * 2f);
-            var hysteresis = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_counter_clearance", 6f), 0f, 16f);
-            var test = marker.Plate.Visible ? room : room.Grow(hysteresis);
-            var host = FindCounterHost(test, marker.NationId, selected);
-            var hidden = host is not null;
-            marker.DisplayOffset = Vector2.Zero;
-            if (!hidden)
-            {
-                if (TryFindFreeCounterOffset(room, out var adjustment))
-                    marker.DisplayOffset += adjustment;
-                else
-                {
-                    // When the local space is exhausted, retain membership in a nearby
-                    // friendly card instead of spiralling across unrelated provinces.
-                    host = FindNearbyCounterHost(at, marker.NationId, selected);
-                    hidden = host is not null;
-                }
-            }
-            if (hidden)
-            {
-                host.DisplayStack.AddRange(marker.Stack);
-                host.DisplayProvinces++;
-                marker.DisplayStack.Clear();
-            }
-            else
-            {
-                // Enemy cards never merge either. Move crowded cards in screen space,
-                // retaining geography as their anchor and keeping every division clickable.
-                room.Position += marker.DisplayOffset;
-                TakeCounterRoom(marker, room, selected);
-            }
-            // Keep these states together even when a sizing pass just ran. Returning only
-            // because Compact matched left orphaned numbers above invisible card plates.
-            marker.Compact = _flatStrategicCounters;
-            marker.Plate.Visible = !hidden;
-            marker.Plate.Scale = Vector3.One;
-            marker.Count.Visible = !hidden && !_flatStrategicCounters;
             marker.Node.Position = ArmyMarkerPosition(marker);
+            RefreshProvinceCounterDisplay(marker, _flatStrategicCounters);
+            // Auxiliary base/port cards may fit around armies, never the reverse.
+            if (!marker.Node.IsVisibleInTree() || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
+            var at = _camera.UnprojectPosition(marker.Node.GlobalPosition);
+            if (!new Rect2(-80, -50, Size.X + 160, Size.Y + 100).HasPoint(at)) continue;
+            var half = marker.Plate.Texture.GetSize() * marker.Plate.PixelSize * _counterFlatFar * .5f;
+            TakeCounterRoom(new Rect2(at - half, half * 2f));
         }
+        LayoutFlatAuxiliaryCounters();
         QueueRedraw();
-        foreach (var marker in _armyStacks.Values)
-        {
-            var divisions = 0f;
-            var personnel = 0f;
-            var fingerprint = new HashCode();
-            foreach (var army in marker.DisplayStack)
-            {
-                divisions += army.Divisions;
-                personnel += DivisionPersonnel(army);
-                fingerprint.Add(army.Id);
-            }
-            var cluster = marker.DisplayProvinces > 1 ? "+" : "";
-            var text = $"{Mathf.CeilToInt(divisions)}{cluster}" +
-                (_flatStrategicCounters ? "" : $"\n{personnel / 1000f:0.#}k");
-            if (marker.Plate.Visible && marker.Count.Text != text) marker.Count.Text = text;
-            // Inspectable display membership; no simulation or save-state mutation.
-            var signature = fingerprint.ToHashCode();
-            if (signature != marker.DisplayFingerprint)
-            {
-                marker.DisplayFingerprint = signature;
-                var ids = new Godot.Collections.Array<int>();
-                foreach (var army in marker.DisplayStack) ids.Add(army.Id);
-                marker.Node.SetMeta("display_army_ids", ids);
-            }
-            marker.Node.SetMeta("display_provinces", marker.DisplayProvinces);
-            // Density runs after the ordinary military refresh. Apply visibility
-            // and the aggregate condition now, not against last frame's plate.
-            UpdateArmyConditionBars(marker);
-        }
     }
 
-    private ArmyStackMarker FindNearbyCounterHost(Vector2 anchor, int nationId, bool selected)
+    private void RefreshProvinceCounterDisplay(ArmyStackMarker marker, bool compact)
     {
-        var limit = Math.Clamp(Ui.Metric("map.flat_counter_local_radius", 96), 48, 160);
-        ArmyStackMarker best = null;
-        var distance = limit * limit;
-        // Inspect anchors, not displaced rectangles: clustering remains geographical.
-        foreach (var (candidate, at, candidateSelected) in _densityCandidates)
+        marker.DisplayStack.Clear();
+        marker.DisplayStack.AddRange(marker.Stack);
+        marker.DisplayProvinces = 1;
+        marker.Compact = compact;
+        marker.Plate.Visible = true;
+        marker.Plate.Scale = Vector3.One;
+        marker.Count.Visible = !compact;
+        var divisions = 0f;
+        var personnel = 0f;
+        var fingerprint = new HashCode();
+        foreach (var army in marker.DisplayStack)
         {
-            if (candidate.NationId != nationId || candidateSelected != selected ||
-                candidate.DisplayStack.Count == 0) continue;
-            var next = anchor.DistanceSquaredTo(at);
-            // Only earlier, already placed cards are valid hosts.
-            if (!_placedCounterHosts.Contains(candidate) || next >= distance) continue;
-            best = candidate;
-            distance = next;
+            divisions += army.Divisions;
+            personnel += DivisionPersonnel(army);
+            fingerprint.Add(army.Id);
         }
-        return best;
+        var text = $"{Mathf.CeilToInt(divisions)}" + (compact ? "" : $"\n{personnel / 1000f:0.#}k");
+        if (marker.Count.Text != text) marker.Count.Text = text;
+        var signature = fingerprint.ToHashCode();
+        if (signature != marker.DisplayFingerprint)
+        {
+            marker.DisplayFingerprint = signature;
+            var ids = new Godot.Collections.Array<int>();
+            foreach (var army in marker.DisplayStack) ids.Add(army.Id);
+            marker.Node.SetMeta("display_army_ids", ids);
+        }
+        marker.Node.SetMeta("display_provinces", 1);
+        UpdateArmyConditionBars(marker);
     }
-
-    private readonly HashSet<ArmyStackMarker> _placedCounterHosts = new();
 
     private bool CounterRoomOccupied(Rect2 room)
     {
@@ -228,7 +115,7 @@ public sealed partial class GlobePresentation
         for (var x = Mathf.FloorToInt(room.Position.X / 64); x <= Mathf.FloorToInt(room.End.X / 64); x++)
             if (_occupiedCounterCells.TryGetValue(new Vector2I(x, y), out var entries))
                 foreach (var entry in entries)
-                    if (entry.Room.Intersects(room)) return true;
+                    if (entry.Intersects(room)) return true;
         return false;
     }
 
@@ -243,7 +130,7 @@ public sealed partial class GlobePresentation
         if (!CounterRoomOccupied(room)) return true;
         var limit = Math.Clamp(Ui.Metric("map.flat_counter_local_radius", 96), 48, 160);
         // Bounded rectangular spiral; prefer the nearest free slot on each ring.
-        // Stable army-id ordering makes selection and small pans preserve the layout.
+        // Stable auxiliary-id ordering keeps base/port layout deterministic.
         for (var ring = 1; ring <= 3; ring++)
         {
             var best = Vector2.Zero;
@@ -266,17 +153,6 @@ public sealed partial class GlobePresentation
         return false;
     }
 
-    private ArmyStackMarker FindCounterHost(Rect2 room, int nationId, bool selected)
-    {
-        for (var y = Mathf.FloorToInt(room.Position.Y / 64); y <= Mathf.FloorToInt(room.End.Y / 64); y++)
-        for (var x = Mathf.FloorToInt(room.Position.X / 64); x <= Mathf.FloorToInt(room.End.X / 64); x++)
-            if (_occupiedCounterCells.TryGetValue(new Vector2I(x, y), out var entries))
-                foreach (var entry in entries)
-                    if (entry.Marker is not null && entry.Marker.NationId == nationId && entry.Selected == selected && entry.Room.Intersects(room))
-                        return entry.Marker;
-        return null;
-    }
-
     private Vector3 FlatFleetPosition(int id, float latitude, float longitude)
     {
         var anchor = FlatPoint(latitude, longitude, FlatMarkerZ);
@@ -284,8 +160,8 @@ public sealed partial class GlobePresentation
         return anchor + new Vector3(offset.X, -offset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
     }
 
-    /// <summary>One occupancy grid across branches. Auxiliary marks reserve their base/port
-    /// first; armies then fit around them. Offsets are presentation-only, never save data.</summary>
+    /// <summary>Auxiliary cards fit around anchored province stacks. These offsets
+    /// affect only base/port presentation, never army geography or save data.</summary>
     private void LayoutFlatAuxiliaryCounters()
     {
         _auxiliaryCounters.Clear();
@@ -317,7 +193,7 @@ public sealed partial class GlobePresentation
                 var room = new Rect2(at - size * .5f, size);
                 offset = FindFreeCounterOffset(room);
                 room.Position += offset;
-                TakeCounterRoom(null, room, false);
+                TakeCounterRoom(room);
             }
             if (counter.Support is { } marker) marker.DisplayOffset = offset;
             else _flatFleetOffsets[counter.Id] = offset;
@@ -325,16 +201,15 @@ public sealed partial class GlobePresentation
         }
     }
 
-    private void TakeCounterRoom(ArmyStackMarker marker, Rect2 room, bool selected)
+    private void TakeCounterRoom(Rect2 room)
     {
-        if (marker is not null) _placedCounterHosts.Add(marker);
         for (var y = Mathf.FloorToInt(room.Position.Y / 64); y <= Mathf.FloorToInt(room.End.Y / 64); y++)
         for (var x = Mathf.FloorToInt(room.Position.X / 64); x <= Mathf.FloorToInt(room.End.X / 64); x++)
         {
             var cell = new Vector2I(x, y);
             if (!_occupiedCounterCells.TryGetValue(cell, out var entries))
                 _occupiedCounterCells[cell] = entries = new();
-            entries.Add((marker, room, selected));
+            entries.Add(room);
         }
     }
 }

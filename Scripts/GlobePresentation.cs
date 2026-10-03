@@ -104,8 +104,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public int DisplayProvinces = 1;
         public int DisplayFingerprint;
         public int ActualFingerprint;
-        public Vector2 DisplayOffset;
-        public Vector2 SurfaceOffset;
         public Vector3 Normal;
         public int NationId = -1;
         public string TemplateId = "";
@@ -3223,6 +3221,18 @@ void fragment() {
             }
             marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f);
             OrientSurfaceArmyCard(marker);
+            // Diagnostic geography is independent of the rendered position. It also
+            // distinguishes a marching stack, which must retain route interpolation.
+            var stationary = true;
+            foreach (var army in marker.Stack)
+                if (army.IsMoving) { stationary = false; break; }
+            marker.Node.SetMeta("stationary", stationary);
+            if (_campaign.ProvinceMap is { } topology && lead.ProvinceId > 0 &&
+                lead.ProvinceId <= topology.ProvinceCount)
+            {
+                var center = topology.CenterOf(lead.ProvinceId);
+                marker.Node.SetMeta("province_center_latlon", new Vector2(center.Latitude, center.Longitude));
+            }
 
             var membership = new HashCode();
             foreach (var army in marker.Stack) membership.Add(army.Id);
