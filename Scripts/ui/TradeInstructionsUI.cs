@@ -526,7 +526,7 @@ public partial class DealOrForceGame
             {
                 _tradeGoodMark.Texture = Art("icon_" + GoodIcon(commodity),
                     $"res://game/gfx/interface/icons/icon_{GoodIcon(commodity)}.png");
-                _tradeGoodMark.Modulate = Ui.Colour("text.accent_dim");
+                _tradeGoodMark.Modulate = ArtColour("icon_" + GoodIcon(commodity), "text.accent_dim");
             }
             SetFlag(_tradePartnerFlag, partner, 20);
 

@@ -313,6 +313,7 @@ public partial class DealOrForceGame
         if (icon != "stability")
         {
             button.SetMeta("army_monochrome_icon", true);
+            button.SetMeta("army_icon_sprite", "icon_" + icon);
             StyleButton(button, primary);
         }
         button.SetMeta("army_icon_min_width", width);

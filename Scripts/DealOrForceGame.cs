@@ -1979,8 +1979,21 @@ public partial class DealOrForceGame : Control
     /// passed as the fallback, so a mod that removes a declaration loses its own override
     /// rather than leaving the player with an empty frame.
     /// </summary>
-    private static Texture2D Art(string sprite, string shipped) =>
-        GD.Load<Texture2D>(SpriteCatalog.TextureOf(sprite, shipped));
+    private static Texture2D Art(string sprite, string shipped)
+    {
+        var path = SpriteCatalog.TextureOf(sprite, shipped);
+        // A new mod good may not have artwork yet. Keep its name and controls usable
+        // instead of emitting loader errors on every refresh of the production line.
+        return !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path)
+            ? GD.Load<Texture2D>(path) : null;
+    }
+
+    private static Color ArtColour(string sprite, string token)
+    {
+        var target = Ui.Colour(token);
+        var reference = Color.FromString(SpriteCatalog.Get(sprite).SourceColour ?? "", Colors.White);
+        return new Color(target.R / reference.R, target.G / reference.G, target.B / reference.B, target.A);
+    }
 
     private Button ActionButton(string text, System.Action callback, float width, float height,
         bool primary = false, string iconPath = "")
@@ -2248,14 +2261,15 @@ public partial class DealOrForceGame : Control
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
         button.AddThemeColorOverride("font_disabled_color",
             primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text_disabled"));
-        // White command silhouettes take their colour from the skin, not baked-in art.
+        // Compensate the authored palette so gold PNGs do not receive a second gold tint.
         // Reapply on selection and presentation reload as well as initial construction.
         if (button.HasMeta("army_monochrome_icon") && button.GetMeta("army_monochrome_icon").AsBool())
         {
-            button.AddThemeColorOverride("icon_normal_color", Ui.Colour("text.accent_dim"));
-            button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));
-            button.AddThemeColorOverride("icon_pressed_color", Ui.Colour("button.text_pressed"));
-            button.AddThemeColorOverride("icon_disabled_color", Ui.Colour("button.text_disabled"));
+            var sprite = button.GetMeta("army_icon_sprite").AsString();
+            button.AddThemeColorOverride("icon_normal_color", ArtColour(sprite, "text.accent_dim"));
+            button.AddThemeColorOverride("icon_hover_color", ArtColour(sprite, "text.accent"));
+            button.AddThemeColorOverride("icon_pressed_color", ArtColour(sprite, "button.text_pressed"));
+            button.AddThemeColorOverride("icon_disabled_color", ArtColour(sprite, "button.text_disabled"));
         }
         button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }

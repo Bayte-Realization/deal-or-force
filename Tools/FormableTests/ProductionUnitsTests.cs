@@ -100,6 +100,27 @@ static class ProductionUnitsTests
         ProductionProgramme.Merge("""{"units_per_factory":12,"lines":{"Machinery":{"pool":"military"}}}""");
         Check(ProductionProgramme.UnitsPerFactory == 12 && ProductionProgramme.PoolOf(Commodity.Machinery) == ProductionPool.Military,
             "mods can redefine units per factory and line pools");
+        ProductionProgramme.Merge("""{"conversion":{"efficiency":0.5},"lines":{"Steel":{"pool":"military"}}}""");
+        CommodityCatalog.TryParse("Steel", out var steel);
+        Check(ProductionProgramme.UnitsPerFactory == 12 && Near(ProductionProgramme.ConversionEfficiency, .5f) &&
+            ProductionProgramme.PoolOf(Commodity.Machinery) == ProductionPool.Military &&
+            ProductionProgramme.PoolOf(steel) == ProductionPool.Military,
+            "later partial programmes inherit units and unrelated line pools");
+        CommodityCatalog.Override("TestProgrammeGood", "Test programme good", "TP", .01f, .01f, "test");
+        CommodityCatalog.TryParse("TestProgrammeGood", out var customGood);
+        ProductionProgramme.Merge("""{"lines":{"TestProgrammeGood":{"pool":"civilian"}}}""");
+        ProductionProgramme.Merge("""{"lines":{"TestProgrammeGood":{}}}""");
+        Check(ProductionProgramme.IsLineable(customGood) && ProductionProgramme.Lineable.Count(x => x == customGood) == 1,
+            "mod-added good gains a stable line without duplicate entries on later layers");
+        errors.Clear();
+        ProductionProgramme.Merge("""{"units_per_factory":0,"conversion":{"efficiency":2},"lines":{"Steel":{"pool":"unknown"},"MissingProgrammeGood":{}}}""", errors);
+        Check(errors.Count == 4 && ProductionProgramme.UnitsPerFactory == 12 && Near(ProductionProgramme.ConversionEfficiency, .5f) &&
+            ProductionProgramme.PoolOf(steel) == ProductionPool.Military,
+            "invalid overlay fields preserve effective settings and report every problem");
+        CommodityCatalog.ResetCatalog();
         ProductionProgramme.ResetCatalog();
+        Check(ProductionProgramme.UnitsPerFactory == 10 && Near(ProductionProgramme.ConversionEfficiency, .35f) &&
+            ProductionProgramme.PoolOf(Commodity.Machinery) == ProductionPool.Civilian && !ProductionProgramme.IsLineable(customGood),
+            "next campaign clears programme settings and custom lines from disabled mods");
     }
 }

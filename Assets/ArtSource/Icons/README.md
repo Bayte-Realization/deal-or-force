@@ -1,17 +1,21 @@
 # Minimal command and strategic-goods PNGs
 
 The current shipped set is authored as simple geometry in `minimal-icons.json`
-and exported to **individual transparent 96 × 96 PNGs**. No gradients, metallic
-shading, dark outlines, text, or decorative frames are baked into these icons.
-White silhouettes accept the existing interface tint. Army commands use the
+and exported to **individual transparent 96 × 96 PNGs**. Their authored palette
+is gold `#e7bd69`, including when opened outside the game. No gradients, metallic
+highlights, dark outlines, text, or decorative frames are baked into these icons.
+Steel and material blocks use a few flat gold shades to distinguish facets.
+Army commands use the
 skin's `text.accent_dim`, `text.accent`, and button-state tokens; commodity marks
 receive their colour from the consuming UI.
 
 Production portraits, market rows and the selected trade-good mark use
 `text.accent_dim` (base skin: `#d3bf72`). Refresh reapplies that token, including
-after presentation hot reload. Do not bake the base skin's gold into monochrome
-PNG masks: another skin can recolour the same files. The steel icon is an oblique
-I-beam silhouette; arms use a single connected rifle silhouette with balanced
+after presentation hot reload. `minimal_palette.json` declares the authored
+`source_colour`; the UI compensates for it before applying the theme, avoiding
+double gold tint. Another skin can still recolour these PNGs. Steel is a faceted
+I-beam with the underside of its upper flange; IndustrialMaterials uses stacked
+construction blocks, not a second I-beam. Arms use a connected rifle with balanced
 stock, receiver, barrel and magazine proportions.
 
 ## Reproduce / extend the current artwork
@@ -26,16 +30,20 @@ powershell -NoProfile -File Tools/IconCompiler/check-minimal-icons.ps1
 The JSON stores normalized 24 × 24 geometry. Each entry has a stable `name` and
 ordered `shapes`: `polygon` and `line` use x/y pairs; `rect` and `ellipse` use
 x/y/width/height. Lines default to width 2.4 with round caps and joins. `cut: true`
-clears a shape to transparent negative space. Keep every silhouette away from
+clears a shape to transparent negative space. Optional `shade` (0.5–1) selects
+a flat shade of the gold palette. Keep every silhouette away from
 the outer edge. Rendering supersamples at 384 × 384 before exporting 96 × 96;
-the check decodes each PNG and rejects empty symbols, coloured interiors and
-clipped edges. Neutral RGB rounding on antialiased edges is permitted.
+the check decodes each PNG and rejects empty symbols, wrong-palette interiors
+and clipped edges. RGB rounding on antialiased edges is permitted.
 
 This is an asset-authoring tool, **not a runtime requirement**. The game does not
 need PowerShell or source geometry to draw icons. Modders can replace them with
-ordinary PNGs without using the renderer. A coloured replacement receives the
-same UI tint; the skin can adjust this. The new set contains 16 army commands,
-15 commodity marks and one optional supply mark.
+ordinary PNGs without using the renderer. Filename or explicit texture replacement
+clears inherited `source_colour`: legacy white-mask mods still work. A gold mod PNG
+can opt into compensation with a declaration such as
+`{"icon_good_steel":{"source_colour":"#e7bd69"}}` in its `gfx/` JSON.
+An empty reference means a white mask. Explicit references must be `#RRGGBB`
+with nonzero channels. The new set contains 16 commands, 16 goods and one supply mark.
 
 Let Godot finish importing changed PNGs before launching/exporting; a running
 game may retain old textures. Do not hand-edit generated `.import` files.

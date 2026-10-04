@@ -1,0 +1,7 @@
+{
+  "id": "example_production_programme",
+  "name": "Production programme example",
+  "version": "1.0.0",
+  "enabled": false,
+  "load_order": 50
+}

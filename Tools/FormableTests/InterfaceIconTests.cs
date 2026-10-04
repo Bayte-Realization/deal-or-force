@@ -48,8 +48,46 @@ static class InterfaceIconTests
         using var recipe = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
             Path.Combine(root, "..", "Assets", "ArtSource", "Icons", "minimal-icons.json")));
         var authored = recipe.RootElement.EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
-        Check(authored.Length == 32 && authored.Distinct().Count() == 32,
-            "minimal geometry defines thirty-two distinct PNG assets");
+        Check(authored.Length == 33 && authored.Distinct().Count() == 33,
+            "editable geometry defines thirty-three distinct PNG assets");
+        Check(authored.All(name => SpriteCatalog.Get("icon_" + name).SourceColour == "#e7bd69"),
+            "gold PNGs declare their authored palette for theme compensation");
+        Check(!File.ReadAllBytes(Path.Combine(root, "gfx/interface/icons/icon_good_steel.png"))
+            .SequenceEqual(File.ReadAllBytes(Path.Combine(root, "gfx/interface/icons/icon_good_industrialmaterials.png"))),
+            "steel and construction materials have distinct artwork");
+        errors.Clear();
+        SpriteCatalog.Merge("{\"icon_good_steel\":{\"source_colour\":\"#ffffff\"}}", "test", "test", errors);
+        Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "#ffffff",
+            "mod can declare a white icon reference");
+        SpriteCatalog.Merge("{\"icon_good_steel\":{\"source_colour\":\"#ff0000\"}}", "test", "test", errors);
+        Check(errors.Count == 1 && SpriteCatalog.Get("icon_good_steel").SourceColour == "#ffffff",
+            "invalid zero-channel references report a problem and preserve prior colour");
+        SpriteCatalog.Load();
+        errors.Clear();
+        SpriteCatalog.Merge("{\"icon_good_steel\":{\"texture\":\"my_white_steel.png\"}}", "test", "test", errors);
+        Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "",
+            "explicit replacement texture does not inherit the old gold reference");
+        SpriteCatalog.Load();
+        var fixture = Path.Combine(Path.GetTempPath(), "dof-icon-overlay-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(fixture);
+        try
+        {
+            File.Copy(Path.Combine(root, "gfx/interface/icons/icon_good_steel.png"), Path.Combine(fixture, "icon_good_steel.png"));
+            SpriteCatalog.LoadTree(fixture, "test", errors);
+            Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "" &&
+                SpriteCatalog.Get("icon_good_arms").SourceColour == "#e7bd69",
+                "drop-in PNG override clears only its own reference, preserving unrelated gold sprites");
+            SpriteCatalog.Merge("{\"icon_good_steel\":{\"source_colour\":\"#e7bd69\"}}", "test", "test", errors);
+            Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "#e7bd69",
+                "gold replacement can opt into compensation after a filename scan");
+        }
+        finally
+        {
+            // Only our uniquely named single-file fixture, never a user directory.
+            File.Delete(Path.Combine(fixture, "icon_good_steel.png"));
+            Directory.Delete(fixture);
+            SpriteCatalog.Load();
+        }
         Check(icons.All(authored.Contains), "every army command has editable minimal geometry");
         foreach (var name in authored)
         {

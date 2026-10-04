@@ -14,9 +14,10 @@ foreach ($item in (Get-Content -LiteralPath $Recipe -Raw | ConvertFrom-Json)) {
                 $pixel = $image.GetPixel($x, $y)
                 if ($pixel.A -lt 16) { continue }
                 $filled++
-                # GDI+ round-trips premultiplied antialias edges with a small RGB rounding error.
-                if ($pixel.R -ne $pixel.G -or $pixel.G -ne $pixel.B -or ($pixel.A -ge 250 -and $pixel.R -lt 250)) {
-                    throw "Non-monochrome pixel: $path at $x,$y"
+                # Alpha edges may round-trip with small RGB errors; check fully covered faces.
+                if ($pixel.A -ge 250 -and ([Math]::Abs($pixel.R / 231.0 - $pixel.G / 189.0) -gt 0.02 -or
+                    [Math]::Abs($pixel.R / 231.0 - $pixel.B / 105.0) -gt 0.02 -or $pixel.R -lt 110)) {
+                    throw "Pixel outside the gold palette: $path at $x,$y"
                 }
                 if ($x -lt 2 -or $y -lt 2 -or $x -ge 94 -or $y -ge 94) { throw "Clipped silhouette: $path at $x,$y" }
             }
@@ -25,4 +26,4 @@ foreach ($item in (Get-Content -LiteralPath $Recipe -Raw | ConvertFrom-Json)) {
         $count++
     } finally { $image.Dispose() }
 }
-Write-Output "PASS $count minimal PNGs: decoded, 96x96, monochrome, transparent margins, non-empty silhouettes."
+Write-Output "PASS $count PNGs: decoded, 96x96, gold palette, transparent margins, non-empty silhouettes."

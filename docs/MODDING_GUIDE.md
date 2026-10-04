@@ -439,6 +439,42 @@ What a recipe cannot do: ask for a factor the simulation does not compute. The f
 deliberately closed — otherwise a mod would be asking a question the simulation cannot answer.
 What is open is how they combine, and the whole design of the game is right there.
 
+## Production allocation programmes
+
+`common/programme/*.json` is layered by the mod loader **after goods**. It can
+change `units_per_factory` (integer 1–1000), `conversion.efficiency` (0.05–1),
+and a good's allocation pool:
+
+```json
+{
+  "units_per_factory": 12,
+  "conversion": { "efficiency": 0.5 },
+  "lines": { "Steel": { "pool": "military" } }
+}
+```
+
+Omitted settings and unrelated lines inherit earlier layers. Goods declared by
+the same package can be used here. Only `civilian` and `military` pools exist;
+changing a pool does not rewrite the recipe's factory factors. Change recipes
+under `common/production/` separately when changing the industry's actual source.
+Invalid fields are diagnosed and preserve inherited values. The catalogue resets
+on campaign loading, so disabling a mod clears its programme settings. Presentation
+hot reload does not change these simulation settings.
+
+Copyable, inactive example: `mods/_templates/production-programme/`.
+
+### Gold PNG reference colours
+
+The latest minimal commodity and army-command PNGs are authored in gold
+`#e7bd69`, not white. `gfx/interface/icons/minimal_palette.json` declares
+`source_colour` for these sprites. Their UI tint compensates for the reference
+before applying theme colours, preserving flat facet shading without double tint.
+PNG filename overrides and explicit replacement textures clear this reference,
+so old white-mask mods remain compatible. To theme-tint a gold replacement,
+declare e.g. `{"icon_good_steel":{"source_colour":"#e7bd69"}}` in the mod's
+`gfx/` JSON. Empty means white; explicit `#RRGGBB` references require nonzero
+channels. A metadata-only overlay inherits the texture and other sprite fields.
+
 ## Buildings
 
 JSON in `common/buildings` overrides buildings. Seventeen stable IDs: `Agriculture`,
@@ -896,13 +932,13 @@ category it was asked for, and SimBench compares that list against what is on di
 folder nobody reads fails the check — otherwise a modder would edit it all day with no error
 and no effect.
 
-As of today, everything under `common/` is read, and that is 34 categories:
+Moddable `common/` categories include:
 
 `common/ai_strategy`, `common/budget`, `common/buildings`, `common/countries`,
 `common/cultures`, `common/decisions`, `common/defines`, `common/diagnostics`, `common/flags`,
 `common/formable_nations`, `common/goods`, `common/governance`, `common/government_focus`,
 `common/governments`, `common/ideologies`, `common/militia`, `common/modifiers`,
-`common/opinion_modifiers`, `common/peace_terms`, `common/production`, `common/professions`,
+`common/opinion_modifiers`, `common/peace_terms`, `common/production`, `common/programme`, `common/professions`,
 `common/religions`, `common/scripted_effects`, `common/scripted_modifiers`,
 `common/scripted_triggers`, `common/secession`, `common/settings`, `common/stability`,
 `common/states`, `common/subjects`, `common/terrain`, `common/trade`, `common/trade_policies`,

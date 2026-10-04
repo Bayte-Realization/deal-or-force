@@ -1,0 +1,103 @@
+{
+    "sprites":  {
+                    "icon_army_halt":  {
+                                           "source_colour":  "#e7bd69"
+                                       },
+                    "icon_army_defend":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_army_advance":  {
+                                              "source_colour":  "#e7bd69"
+                                          },
+                    "icon_army_spearhead":  {
+                                                "source_colour":  "#e7bd69"
+                                            },
+                    "icon_army_reserve":  {
+                                              "source_colour":  "#e7bd69"
+                                          },
+                    "icon_plan_prepare":  {
+                                              "source_colour":  "#e7bd69"
+                                          },
+                    "icon_plan_execute":  {
+                                              "source_colour":  "#e7bd69"
+                                          },
+                    "icon_auto_deploy":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_plan_front":  {
+                                            "source_colour":  "#e7bd69"
+                                        },
+                    "icon_plan_attack":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_plan_fallback":  {
+                                               "source_colour":  "#e7bd69"
+                                           },
+                    "icon_plan_clear":  {
+                                            "source_colour":  "#e7bd69"
+                                        },
+                    "icon_plan_erase":  {
+                                            "source_colour":  "#e7bd69"
+                                        },
+                    "icon_army_withdraw":  {
+                                               "source_colour":  "#e7bd69"
+                                           },
+                    "icon_stance_cautious":  {
+                                                 "source_colour":  "#e7bd69"
+                                             },
+                    "icon_stance_aggressive":  {
+                                                   "source_colour":  "#e7bd69"
+                                               },
+                    "icon_good_copper":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_good_lithium":  {
+                                              "source_colour":  "#e7bd69"
+                                          },
+                    "icon_good_nickel":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_good_cobalt":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_good_phosphates":  {
+                                                 "source_colour":  "#e7bd69"
+                                             },
+                    "icon_good_silica":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_good_rubber":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_good_sulfur":  {
+                                             "source_colour":  "#e7bd69"
+                                         },
+                    "icon_good_steel":  {
+                                            "source_colour":  "#e7bd69"
+                                        },
+                    "icon_good_industrialmaterials":  {
+                                                          "source_colour":  "#e7bd69"
+                                                      },
+                    "icon_good_batteries":  {
+                                                "source_colour":  "#e7bd69"
+                                            },
+                    "icon_good_semiconductors":  {
+                                                     "source_colour":  "#e7bd69"
+                                                 },
+                    "icon_good_motorvehicles":  {
+                                                    "source_colour":  "#e7bd69"
+                                                },
+                    "icon_good_ammunition":  {
+                                                 "source_colour":  "#e7bd69"
+                                             },
+                    "icon_good_precisioncomponents":  {
+                                                          "source_colour":  "#e7bd69"
+                                                      },
+                    "icon_good_arms":  {
+                                           "source_colour":  "#e7bd69"
+                                       },
+                    "icon_military_supply":  {
+                                                 "source_colour":  "#e7bd69"
+                                             }
+                }
+}

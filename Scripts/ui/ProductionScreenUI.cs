@@ -420,7 +420,7 @@ public partial class DealOrForceGame
             row.Reading.Text = Tr("National output / tick");
             if (entry.Units > assigned) row.Reading.Text = Simulation.Loc.Format("{0} units suspended", entry.Units - assigned);
             row.Icon.Texture = Art("icon_" + GoodIcon(entry.Good), $"res://game/gfx/interface/icons/icon_{GoodIcon(entry.Good)}.png");
-            row.Icon.Modulate = Ui.Colour("text.accent_dim");
+            row.Icon.Modulate = ArtColour("icon_" + GoodIcon(entry.Good), "text.accent_dim");
             row.Root.TooltipText = Ui.Tip(CommodityCatalog.Get(entry.Good).Description);
             if (row.Priority.ItemCount != lines.Count)
             {

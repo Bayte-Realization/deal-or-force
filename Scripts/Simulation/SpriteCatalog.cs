@@ -39,11 +39,12 @@ public static class SpriteCatalog
     /// <summary>One named picture: where it is, and how the interface should use it.</summary>
     public readonly struct Sprite
     {
-        public Sprite(string texture, string tint, int frames)
+        public Sprite(string texture, string tint, int frames, string sourceColour = "")
         {
             Texture = texture ?? "";
             Tint = tint ?? "";
             Frames = frames < 1 ? 1 : frames;
+            SourceColour = sourceColour ?? "";
         }
 
         /// <summary>The resolved path, ready for the engine to load.</summary>
@@ -51,6 +52,9 @@ public static class SpriteCatalog
 
         /// <summary>A colour to multiply the art by, or empty to use it as authored.</summary>
         public string Tint { get; }
+
+        /// <summary>Authored RGB reference for theme-tinted icons. Empty means a white mask.</summary>
+        public string SourceColour { get; }
 
         /// <summary>Frames across a strip, for art that holds several states in one file.</summary>
         public int Frames { get; }
@@ -144,6 +148,8 @@ public static class SpriteCatalog
             Sprites[name] = new Sprite(
                 GameDataLoader.ResolveAssetPath(relative, virtualDirectory),
                 previous.Tint, previous.Frames);
+            // A replacement PNG may be white or another colour. Do not inherit the
+            // base game's gold reference; the mod may declare its own source_colour.
         }
 
         foreach (var file in everything)
@@ -200,7 +206,8 @@ public static class SpriteCatalog
                             texture = found.GetString();
                             break;
                         }
-                    if (string.IsNullOrWhiteSpace(texture))
+                    var replacesTexture = !string.IsNullOrWhiteSpace(texture);
+                    if (!replacesTexture)
                     {
                         // No file named, so this line is describing a picture the scan
                         // already found - how many frames it holds, what to tint it by.
@@ -224,7 +231,18 @@ public static class SpriteCatalog
                                  counted.TryGetInt32(out var parsed)
                         ? parsed
                         : known.Frames;
-                    Sprites[name] = new Sprite(GameDataLoader.ResolveAssetPath(texture, assetRoot), tint, frames);
+                    var sourceColour = replacesTexture ? "" : known.SourceColour;
+                    if (value.TryGetProperty("source_colour", out var source))
+                    {
+                        var colour = source.ValueKind == JsonValueKind.String ? source.GetString() : null;
+                        if (colour == "" || (colour is { Length: 7 } && colour[0] == '#' &&
+                            colour.Skip(1).All(Uri.IsHexDigit) &&
+                            Convert.ToInt32(colour.Substring(1, 2), 16) > 0 &&
+                            Convert.ToInt32(colour.Substring(3, 2), 16) > 0 &&
+                            Convert.ToInt32(colour.Substring(5, 2), 16) > 0)) sourceColour = colour;
+                        else errors?.Add($"{origin}: sprite '{name}' source_colour must be empty or #RRGGBB with nonzero channels");
+                    }
+                    Sprites[name] = new Sprite(GameDataLoader.ResolveAssetPath(texture, assetRoot), tint, frames, sourceColour);
                     break;
                 }
 

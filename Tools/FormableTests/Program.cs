@@ -13,6 +13,7 @@ static class Program
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
         if (args.Contains("--fleet-localization-only")) { FleetNameLocalizationTests.Run(); return; }
         if (args.Contains("--icons-only")) { InterfaceIconTests.Run(); return; }
+        if (args.Contains("--production-only")) { ProductionUnitsTests.Run(); return; }
         ArmyCommandLocalizationTests.Run();
         FleetNameLocalizationTests.Run();
         if (args.Contains("--events-only")) { EventCadenceTests.Run(); return; }

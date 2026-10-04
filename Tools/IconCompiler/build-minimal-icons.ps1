@@ -1,8 +1,9 @@
 param(
     [string]$Recipe = 'Assets/ArtSource/Icons/minimal-icons.json',
-    [string]$OutputDirectory = 'game/gfx/interface/icons'
+    [string]$OutputDirectory = 'game/gfx/interface/icons',
+    [string]$Colour = '#e7bd69'
 )
-# Author flat silhouettes from editable geometry; PNGs remain the runtime/mod format.
+# Editable geometry and restrained facets; PNGs are authored in the game's gold palette.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
@@ -16,12 +17,15 @@ public static class MinimalIconRenderer {
         var g = Graphics.FromImage(canvas);
         g.Clear(Color.Transparent);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.CompositingMode = CompositingMode.SourceCopy;
+        g.CompositingMode = CompositingMode.SourceOver;
         g.ScaleTransform(16, 16);
         return g;
     }
-    public static void Shape(Graphics g, string kind, float[] values, bool cut, float width) {
-        var colour = cut ? Color.Transparent : Color.White;
+    public static void Shape(Graphics g, string kind, float[] values, bool cut, float width, float shade) {
+        if (shade < 0.5f || shade > 1f) throw new ArgumentException("Shade must be from 0.5 to 1");
+        g.CompositingMode = cut ? CompositingMode.SourceCopy : CompositingMode.SourceOver;
+        int level = (int)Math.Round(255 * shade);
+        var colour = cut ? Color.Transparent : Color.FromArgb(level, level, level);
         using (var brush = new SolidBrush(colour))
         using (var pen = new Pen(colour, width)) {
             pen.StartCap = pen.EndCap = LineCap.Round;
@@ -38,7 +42,7 @@ public static class MinimalIconRenderer {
             }
         }
     }
-    public static void Save(Bitmap canvas, string path) {
+    public static void Save(Bitmap canvas, string path, Color colour) {
         using (var result = new Bitmap(96, 96, PixelFormat.Format32bppArgb))
         using (var g = Graphics.FromImage(result)) {
             g.Clear(Color.Transparent);
@@ -46,6 +50,13 @@ public static class MinimalIconRenderer {
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.DrawImage(canvas, new Rectangle(0, 0, 96, 96));
+            for (int y = 0; y < 96; y++) for (int x = 0; x < 96; x++) {
+                var pixel = result.GetPixel(x, y);
+                result.SetPixel(x, y, Color.FromArgb(pixel.A,
+                    (int)Math.Round(pixel.R * colour.R / 255.0),
+                    (int)Math.Round(pixel.G * colour.G / 255.0),
+                    (int)Math.Round(pixel.B * colour.B / 255.0)));
+            }
             result.Save(path, ImageFormat.Png);
         }
     }
@@ -53,22 +64,33 @@ public static class MinimalIconRenderer {
 '@
 $recipes = Get-Content -LiteralPath $Recipe -Raw | ConvertFrom-Json
 $seen = @{}
+if ($Colour -notmatch '^#[0-9a-fA-F]{6}$') { throw 'Colour must be #RRGGBB.' }
+$palette = [Drawing.ColorTranslator]::FromHtml($Colour)
+if ($palette.R -eq 0 -or $palette.G -eq 0 -or $palette.B -eq 0) {
+    throw 'Colour must have nonzero channels for runtime theme compensation.'
+}
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $outputRoot = (Resolve-Path -LiteralPath $OutputDirectory).Path
+$sprites = [ordered]@{}
 foreach ($item in $recipes) {
     if ($item.name -notmatch '^[a-z][a-z0-9_]+$' -or $seen.ContainsKey($item.name)) {
         throw "Invalid or duplicate icon name: $($item.name)"
     }
     $seen[$item.name] = $true
+    $sprites["icon_$($item.name)"] = @{ source_colour = $Colour }
     if ($item.shapes.Count -eq 0) { throw "Empty icon: $($item.name)" }
     $canvas = [MinimalIconRenderer]::Canvas()
     $graphics = [MinimalIconRenderer]::Context($canvas)
     try {
         foreach ($shape in $item.shapes) {
             $width = if ($null -eq $shape.width) { 2.4 } else { $shape.width }
-            [MinimalIconRenderer]::Shape($graphics, $shape.kind, [single[]]$shape.values, [bool]$shape.cut, $width)
+            $shade = if ($null -eq $shape.shade) { 1.0 } else { $shape.shade }
+            [MinimalIconRenderer]::Shape($graphics, $shape.kind, [single[]]$shape.values, [bool]$shape.cut, $width, $shade)
         }
-        [MinimalIconRenderer]::Save($canvas, (Join-Path $outputRoot "icon_$($item.name).png"))
+        [MinimalIconRenderer]::Save($canvas, (Join-Path $outputRoot "icon_$($item.name).png"), $palette)
     } finally { $graphics.Dispose(); $canvas.Dispose() }
 }
-Write-Output "Rendered $($seen.Count) flat monochrome 96x96 PNGs from editable geometry."
+[IO.File]::WriteAllText((Join-Path $outputRoot 'minimal_palette.json'),
+    (@{ sprites = $sprites } | ConvertTo-Json -Depth 4) + [Environment]::NewLine,
+    [Text.UTF8Encoding]::new($false))
+Write-Output "Rendered $($seen.Count) gold 96x96 PNGs from editable geometry."
