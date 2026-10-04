@@ -119,6 +119,8 @@ public static class Program
         // Fast data/UI checks, without the multi-year simulation fixtures.
         if (Array.IndexOf(args, "--prepare-front-only") >= 0)
             return Check("an attack forms up along its actual assigned front", AnAttackFormsUpAlongItsFront());
+        if (Array.IndexOf(args, "--templates-only") >= 0)
+            return Check("mod templates still name real things", TheTemplatesStillNameRealThings());
         if (Array.IndexOf(args, "--integrity-only") >= 0)
             return Check("integrity checks distinguish captions and compare dictionary values", IntegrityScannerSelfTest()) +
                 Check("the shipped skin matches the compiled defaults", SkinIsCoherent()) +
@@ -7278,11 +7280,10 @@ public static class Program
         void Declare(string folder, Action<string, System.Text.Json.JsonElement> apply)
         {
             if (!Directory.Exists(folder)) return;
-            foreach (var file in Directory.GetFiles(folder, "*.json")
-                         .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+            foreach (var file in StructuredData.Files(folder))
             {
                 System.Text.Json.JsonDocument document;
-                try { document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file), options); }
+                try { document = StructuredData.ReadDocument(file); }
                 catch { continue; }
                 using (document)
                 {
@@ -7431,10 +7432,10 @@ public static class Program
             // at the end of the package.
             DeclareTemplateContent(common, options);
             foreach (var category in Directory.GetDirectories(common))
-            foreach (var file in Directory.GetFiles(category, "*.json"))
+            foreach (var file in StructuredData.Files(category))
             {
                 System.Text.Json.JsonDocument document;
-                try { document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file), options); }
+                try { document = StructuredData.ReadDocument(file); }
                 catch (Exception exception)
                 {
                     complaints.Add($"{Short(templates, file)} will not parse: {exception.Message}");

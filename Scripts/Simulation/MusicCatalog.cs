@@ -85,7 +85,7 @@ public static class MusicCatalog
         string[] files;
         try
         {
-            files = Directory.EnumerateFiles(directory, "*.json", SearchOption.AllDirectories)
+            files = StructuredData.Files(directory, SearchOption.AllDirectories)
                 .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
@@ -98,7 +98,7 @@ public static class MusicCatalog
         foreach (var file in files)
         {
             var origin = $"music/{Path.GetFileName(file)}";
-            try { Merge(File.ReadAllText(file), assetRoot, origin, errors); }
+            try { Merge(StructuredData.ReadJson(file), assetRoot, origin, errors); }
             catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
         }
 

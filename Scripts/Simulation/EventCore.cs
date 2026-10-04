@@ -264,7 +264,7 @@ public static class EventCatalog
         Definitions.AddRange(Defaults());
         foreach (var file in GameDataLoader.DataFiles("events"))
         {
-            try { Load(File.ReadAllText(file), null); }
+            try { Load(StructuredData.ReadJson(file), null); }
             catch { /* One unreadable file costs that file, not the whole category. */ }
         }
     }

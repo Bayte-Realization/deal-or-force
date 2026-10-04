@@ -81,7 +81,7 @@ public static class ModifierCatalog
 
         foreach (var file in GameDataLoader.DataFiles("common", "modifiers"))
         {
-            try { Load(File.ReadAllText(file), null); }
+            try { Load(StructuredData.ReadJson(file), null); }
             catch { /* One unreadable file costs that file, not the whole category. */ }
         }
     }

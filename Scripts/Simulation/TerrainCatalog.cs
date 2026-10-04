@@ -78,7 +78,7 @@ public static class TerrainCatalog
         foreach (var path in Files(root, "common/terrain"))
         try
         {
-            using var json = JsonDocument.Parse(File.ReadAllText(path), GameDataLoader.ForgivingJson);
+            using var json = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);
             foreach (var entry in json.RootElement.EnumerateObject())
             {
                 var value = entry.Value;
@@ -113,11 +113,11 @@ public static class TerrainCatalog
         if (File.Exists(LocalPath(root, "map_data/heightmap.png"))) HeightPath = LocalPath(root, "map_data/heightmap.png");
         if (File.Exists(LocalPath(root, "map_data/relief_color.png"))) ReliefColorPath = LocalPath(root, "map_data/relief_color.png");
         if (File.Exists(LocalPath(root, "map_data/bathymetry.png"))) BathymetryPath = LocalPath(root, "map_data/bathymetry.png");
-        var settingsPath = LocalPath(root, "map_data/terrain_settings.json");
-        if (File.Exists(settingsPath))
+        foreach (var settingsPath in Files(root, "map_data").Where(path =>
+                     Path.GetFileNameWithoutExtension(path).Equals("terrain_settings", StringComparison.OrdinalIgnoreCase)))
         try
         {
-            using var json = JsonDocument.Parse(File.ReadAllText(settingsPath), GameDataLoader.ForgivingJson);
+            using var json = StructuredData.ReadDocument(settingsPath);
             var s = json.RootElement;
             TerrainPath = MapAsset(s, "terrain", root, TerrainPath);
             HeightPath = MapAsset(s, "heightmap", root, HeightPath);
@@ -139,7 +139,7 @@ public static class TerrainCatalog
         foreach (var path in Files(root, "history/provinces/terrain"))
         try
         {
-            using var json = JsonDocument.Parse(File.ReadAllText(path), GameDataLoader.ForgivingJson);
+            using var json = JsonDocument.Parse(StructuredData.ReadJson(path), GameDataLoader.ForgivingJson);
             foreach (var entry in json.RootElement.EnumerateObject())
             {
                 var id = int.Parse(entry.Name, CultureInfo.InvariantCulture);
@@ -195,8 +195,7 @@ public static class TerrainCatalog
 
     // Extended Windows paths (\\?\) do not normalize forward slashes for us.
     private static string LocalPath(string root, string relative) => Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
-    private static IEnumerable<string> Files(string root, string folder) => Directory.Exists(LocalPath(root, folder))
-        ? Directory.GetFiles(LocalPath(root, folder), "*.json").OrderBy(x => x, StringComparer.Ordinal) : Array.Empty<string>();
+    private static IEnumerable<string> Files(string root, string folder) => StructuredData.Files(LocalPath(root, folder));
     private static string Asset(string root, string path)
     {
         var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;

@@ -1,0 +1,5 @@
+# Partial overlay: inherit every omitted field from the base game.
+Steel:
+  description: >-
+    Steel with a YAML-authored description.
+    Production recipes and icons keep their existing definitions.

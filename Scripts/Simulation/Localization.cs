@@ -200,11 +200,11 @@ public static class Loc
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
 
-        foreach (var file in Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly)
+        foreach (var file in StructuredData.Files(directory, SearchOption.TopDirectoryOnly)
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
             var language = Path.GetFileNameWithoutExtension(file);
-            try { Merge(language, File.ReadAllText(file), errors); }
+            try { Merge(language, StructuredData.ReadJson(file), errors); }
             catch (Exception exception) { errors?.Add($"localization/{Path.GetFileName(file)}: {exception.Message}"); }
         }
 
@@ -212,10 +212,10 @@ public static class Loc
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
             var language = Path.GetFileName(folder);
-            foreach (var file in Directory.EnumerateFiles(folder, "*.json", SearchOption.TopDirectoryOnly)
+            foreach (var file in StructuredData.Files(folder, SearchOption.TopDirectoryOnly)
                          .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
             {
-                try { Merge(language, File.ReadAllText(file), errors); }
+                try { Merge(language, StructuredData.ReadJson(file), errors); }
                 catch (Exception exception)
                 {
                     errors?.Add($"localization/{language}/{Path.GetFileName(file)}: {exception.Message}");

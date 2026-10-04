@@ -10,6 +10,7 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--yaml-only")) { StructuredDataTests.Run(); return; }
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
         if (args.Contains("--fleet-localization-only")) { FleetNameLocalizationTests.Run(); return; }
         if (args.Contains("--icons-only")) { InterfaceIconTests.Run(); return; }
@@ -28,6 +29,7 @@ static class Program
             return;
         }
         if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
+        StructuredDataTests.Run();
         EventCadenceTests.Run();
         PresentationReloadTests.Run();
         UltimatumTests.Run();

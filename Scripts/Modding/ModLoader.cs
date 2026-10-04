@@ -218,10 +218,10 @@ public sealed class ModLoader
 
     private void ApplyBuildings(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "buildings"))
+        foreach (var path in DataFiles(package, "common", "buildings"))
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
             {
                 if (entry.Value.ValueKind != JsonValueKind.Object)
@@ -259,10 +259,10 @@ public sealed class ModLoader
 
     private void ApplyDecisions(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "decisions"))
+        foreach (var path in DataFiles(package, "common", "decisions"))
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             foreach (var entry in document.RootElement.EnumerateObject())
             {
                 // The same reader the base game's own folder goes through. It used to be
@@ -276,8 +276,8 @@ public sealed class ModLoader
 
     private void ApplyEvents(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "events"))
-        try { EventCatalog.Load(File.ReadAllText(path), package.Errors); }
+        foreach (var path in DataFiles(package, "events"))
+        try { EventCatalog.Load(StructuredData.ReadJson(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
@@ -312,10 +312,10 @@ public sealed class ModLoader
     private void ApplyTunables(ModPackage package)
     {
         foreach (var (folder, _, merge) in Tunables)
-        foreach (var path in JsonFiles(package, "common", folder))
+        foreach (var path in DataFiles(package, "common", folder))
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions
             {
                 AllowTrailingCommas = true,
                 CommentHandling = JsonCommentHandling.Skip
@@ -328,10 +328,10 @@ public sealed class ModLoader
     /// <summary>A mod's own reasons for one country to think ill of another.</summary>
     private void ApplyOpinionModifiers(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "opinion_modifiers"))
+        foreach (var path in DataFiles(package, "common", "opinion_modifiers"))
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions
             {
                 AllowTrailingCommas = true,
                 CommentHandling = JsonCommentHandling.Skip
@@ -352,32 +352,32 @@ public sealed class ModLoader
     private bool ApplyDemography(ModPackage package)
     {
         var read = false;
-        foreach (var path in JsonFiles(package, "common", "religions"))
-        try { DemographyCatalog.LoadReligions(File.ReadAllText(path), package.Errors); read = true; }
+        foreach (var path in DataFiles(package, "common", "religions"))
+        try { DemographyCatalog.LoadReligions(StructuredData.ReadJson(path), package.Errors); read = true; }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in JsonFiles(package, "common", "cultures"))
-        try { DemographyCatalog.LoadCultures(File.ReadAllText(path), package.Errors); read = true; }
+        foreach (var path in DataFiles(package, "common", "cultures"))
+        try { DemographyCatalog.LoadCultures(StructuredData.ReadJson(path), package.Errors); read = true; }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in JsonFiles(package, "common", "professions"))
-        try { DemographyCatalog.LoadProfessions(File.ReadAllText(path), package.Errors); read = true; }
+        foreach (var path in DataFiles(package, "common", "professions"))
+        try { DemographyCatalog.LoadProfessions(StructuredData.ReadJson(path), package.Errors); read = true; }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in JsonFiles(package, "history", "pops"))
-        try { DemographyCatalog.LoadPops(File.ReadAllText(path), package.Errors); read = true; }
+        foreach (var path in DataFiles(package, "history", "pops"))
+        try { DemographyCatalog.LoadPops(StructuredData.ReadJson(path), package.Errors); read = true; }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
         return read;
     }
 
     private void ApplyModifiers(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "modifiers"))
-        try { ModifierCatalog.Load(File.ReadAllText(path), package.Errors); }
+        foreach (var path in DataFiles(package, "common", "modifiers"))
+        try { ModifierCatalog.Load(StructuredData.ReadJson(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
     private void ApplyAiStrategies(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "ai_strategy"))
-        try { AiStrategyCatalog.Load(File.ReadAllText(path), package.Errors); }
+        foreach (var path in DataFiles(package, "common", "ai_strategy"))
+        try { AiStrategyCatalog.Load(StructuredData.ReadJson(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
@@ -385,10 +385,10 @@ public sealed class ModLoader
     {
         TerrainCatalog.ApplyDirectory(package.PhysicalRoot, package.Errors);
         MapRasterCatalog.ApplyDirectory(Path.Combine(package.PhysicalRoot, "map_data"), package.Errors);
-        foreach (var path in JsonFiles(package, "map_data"))
+        foreach (var path in DataFiles(package, "map_data"))
         try
         {
-            var json = File.ReadAllText(path);
+            var json = StructuredData.ReadJson(path);
             if (HydrologyCatalog.LooksLikeGeoJson(json)) HydrologyCatalog.LoadGeoJson(json, package.Errors);
             else TerritorialTopology.LoadOverrides(json, package.Errors);
         }
@@ -472,11 +472,11 @@ public sealed class ModLoader
 
     private void ApplyHistory(ModPackage package, Campaign campaign)
     {
-        foreach (var path in JsonFiles(package, "history", "countries"))
-        try { HistoryDataLoader.ApplyCountries(campaign, File.ReadAllText(path), package.Errors); }
+        foreach (var path in DataFiles(package, "history", "countries"))
+        try { HistoryDataLoader.ApplyCountries(campaign, StructuredData.ReadJson(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
-        foreach (var path in JsonFiles(package, "history", "states"))
-        try { HistoryDataLoader.ApplyStates(campaign, File.ReadAllText(path), package.Errors); }
+        foreach (var path in DataFiles(package, "history", "states"))
+        try { HistoryDataLoader.ApplyStates(campaign, StructuredData.ReadJson(path), package.Errors); }
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
 
         // The order of battle: how many soldiers a country keeps, and the ships it starts
@@ -492,11 +492,11 @@ public sealed class ModLoader
 
     private void ApplyUnits(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "units"))
+        foreach (var path in DataFiles(package, "common", "units"))
         {
             try
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions
+                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions
                 {
                     AllowTrailingCommas = true,
                     CommentHandling = JsonCommentHandling.Skip
@@ -608,11 +608,11 @@ public sealed class ModLoader
 
     private void ApplyDefines(ModPackage package, Defines defines)
     {
-        foreach (var path in JsonFiles(package, "common", "defines"))
+        foreach (var path in DataFiles(package, "common", "defines"))
         {
             try
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 foreach (var entry in document.RootElement.EnumerateObject())
                 {
                     var property = typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -640,11 +640,11 @@ public sealed class ModLoader
 
     private void ApplyCountries(ModPackage package, Campaign campaign)
     {
-        foreach (var path in JsonFiles(package, "common", "countries"))
+        foreach (var path in DataFiles(package, "common", "countries"))
         {
             try
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 foreach (var country in document.RootElement.EnumerateObject())
                 {
                     var nation = campaign.NationByTag(country.Name);
@@ -667,11 +667,11 @@ public sealed class ModLoader
 
     private void ApplyGoods(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "goods"))
+        foreach (var path in DataFiles(package, "common", "goods"))
         {
             try
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+                using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 foreach (var good in document.RootElement.EnumerateObject())
                 {
                     if (good.Value.ValueKind != JsonValueKind.Object)
@@ -702,9 +702,9 @@ public sealed class ModLoader
     /// </summary>
     private void ApplyProduction(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "production"))
+        foreach (var path in DataFiles(package, "common", "production"))
         {
-            try { ProductionChains.Merge(File.ReadAllText(path), package.Errors); }
+            try { ProductionChains.Merge(StructuredData.ReadJson(path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
@@ -728,17 +728,17 @@ public sealed class ModLoader
     /// </summary>
     private void ApplyPolicies(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "government_focus"))
+        foreach (var path in DataFiles(package, "common", "government_focus"))
         {
-            try { GovernmentFocusCatalog.Merge(File.ReadAllText(path), package.Errors); }
+            try { GovernmentFocusCatalog.Merge(StructuredData.ReadJson(path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
             }
         }
-        foreach (var path in JsonFiles(package, "common", "trade_policies"))
+        foreach (var path in DataFiles(package, "common", "trade_policies"))
         {
-            try { TradePolicyCatalog.Merge(File.ReadAllText(path), package.Errors); }
+            try { TradePolicyCatalog.Merge(StructuredData.ReadJson(path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
@@ -748,9 +748,9 @@ public sealed class ModLoader
 
     private void ApplyBudget(ModPackage package)
     {
-        foreach (var path in JsonFiles(package, "common", "budget"))
+        foreach (var path in DataFiles(package, "common", "budget"))
         {
-            try { BudgetCore.Merge(File.ReadAllText(path), package.Errors); }
+            try { BudgetCore.Merge(StructuredData.ReadJson(path), package.Errors); }
             catch (Exception exception)
             {
                 package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}");
@@ -828,12 +828,10 @@ public sealed class ModLoader
         });
     }
 
-    private static IEnumerable<string> JsonFiles(ModPackage package, params string[] parts)
+    private static IEnumerable<string> DataFiles(ModPackage package, params string[] parts)
     {
         var directory = parts.Aggregate(package.PhysicalRoot, Path.Combine);
-        return Directory.Exists(directory)
-            ? Directory.GetFiles(directory, "*.json", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-            : Enumerable.Empty<string>();
+        return StructuredData.Files(directory, SearchOption.AllDirectories);
     }
 
     private static string SafePath(ModPackage package, string relative)

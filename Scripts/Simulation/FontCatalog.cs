@@ -69,7 +69,7 @@ public static class FontCatalog
         string[] files;
         try
         {
-            files = Directory.EnumerateFiles(directory, "*.json", SearchOption.AllDirectories)
+            files = StructuredData.Files(directory, SearchOption.AllDirectories)
                 .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
@@ -82,7 +82,7 @@ public static class FontCatalog
         foreach (var file in files)
         {
             var origin = $"fonts/{Path.GetFileName(file)}";
-            try { Merge(File.ReadAllText(file), assetRoot, origin, errors); }
+            try { Merge(StructuredData.ReadJson(file), assetRoot, origin, errors); }
             catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
         }
 

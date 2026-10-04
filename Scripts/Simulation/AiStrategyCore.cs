@@ -43,7 +43,7 @@ public static class AiStrategyCatalog
         CountryProfiles.Clear();
         foreach (var file in GameDataLoader.DataFiles("common", "ai_strategy"))
         {
-            try { Load(File.ReadAllText(file), null); }
+            try { Load(StructuredData.ReadJson(file), null); }
             catch { /* One unreadable file costs that file, not the whole category. */ }
         }
     }

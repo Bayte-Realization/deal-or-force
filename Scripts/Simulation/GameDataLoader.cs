@@ -31,7 +31,7 @@ namespace DealOrForce.Simulation;
 public static class GameDataLoader
 {
     /// <summary>
-    /// Every `*.json` in one category folder, in file-name order. Numbered prefixes are the
+    /// Every JSON/YAML/YML document in one category folder, in file-name order. Prefixes are the
     /// convention for the same reason Paradox uses them: they make the load order visible.
     /// </summary>
     public static IReadOnlyList<string> DataFiles(params string[] relativeFolder)
@@ -40,7 +40,7 @@ public static class GameDataLoader
         if (folder is null) return Array.Empty<string>();
         try
         {
-            return Directory.EnumerateFiles(folder, "*.json", SearchOption.TopDirectoryOnly)
+            return StructuredData.Files(folder, SearchOption.TopDirectoryOnly)
                 .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
@@ -62,7 +62,7 @@ public static class GameDataLoader
             JsonDocument document;
             try
             {
-                document = JsonDocument.Parse(File.ReadAllText(file), ForgivingJson);
+                document = JsonDocument.Parse(StructuredData.ReadJson(file), ForgivingJson);
             }
             catch (Exception exception)
             {

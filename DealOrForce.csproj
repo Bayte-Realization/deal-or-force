@@ -28,11 +28,14 @@
     <DebugType>portable</DebugType>
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
+  <Import Project="Scripts/Simulation/StructuredData.Dependencies.props" />
   <!-- Mod source projects live below mods but are compiled into their own DLLs. -->
   <ItemGroup>
     <Compile Remove="mods\**\*.cs" />
     <Compile Remove="Tools\**\*.cs" />
     <Content Include="game\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.yaml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="game\**\*.yml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!--
       Every other picture the sprite catalogue will accept.

@@ -154,9 +154,9 @@ public static class SpriteCatalog
 
         foreach (var file in everything)
         {
-            if (!file.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!StructuredData.IsDocument(file)) continue;
             var origin = $"gfx/{Path.GetFileName(file)}";
-            try { Merge(File.ReadAllText(file), virtualDirectory, origin, errors); }
+            try { Merge(StructuredData.ReadJson(file), virtualDirectory, origin, errors); }
             catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }
         }
 

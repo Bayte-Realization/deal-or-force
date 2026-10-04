@@ -1342,10 +1342,7 @@ public static class MilitaryBootstrap
         string[] files;
         try
         {
-            files = System.IO.Directory
-                .EnumerateFiles(directory, "*.json", System.IO.SearchOption.AllDirectories)
-                .OrderBy(path => path.Replace('\\', '/'), StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            files = StructuredData.Files(directory, System.IO.SearchOption.AllDirectories);
         }
         catch (Exception exception)
         {
@@ -1359,7 +1356,7 @@ public static class MilitaryBootstrap
             try
             {
                 using var document = System.Text.Json.JsonDocument.Parse(
-                    System.IO.File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                    StructuredData.ReadJson(file), GameDataLoader.ForgivingJson);
                 if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
                 foreach (var entry in document.RootElement.EnumerateObject())
                     if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.Number &&

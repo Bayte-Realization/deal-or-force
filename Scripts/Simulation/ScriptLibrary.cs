@@ -213,7 +213,7 @@ public static class ScriptLibrary
         string[] files;
         try
         {
-            files = Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly)
+            files = StructuredData.Files(directory, SearchOption.TopDirectoryOnly)
                 .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
@@ -228,7 +228,7 @@ public static class ScriptLibrary
             var origin = $"{category}/{Path.GetFileName(file)}";
             try
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                using var document = JsonDocument.Parse(StructuredData.ReadJson(file), GameDataLoader.ForgivingJson);
                 Absorb(blocks, document.RootElement);
             }
             catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }

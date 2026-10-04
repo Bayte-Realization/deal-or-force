@@ -49,10 +49,7 @@ public static class FleetHistory
         string[] files;
         try
         {
-            files = System.IO.Directory
-                .EnumerateFiles(directory, "*.json", System.IO.SearchOption.AllDirectories)
-                .ToArray();
-            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+            files = StructuredData.Files(directory, System.IO.SearchOption.AllDirectories);
         }
         catch (Exception exception)
         {
@@ -66,7 +63,7 @@ public static class FleetHistory
             var origin = $"history/units/{System.IO.Path.GetFileName(file)}";
             try
             {
-                using var document = JsonDocument.Parse(System.IO.File.ReadAllText(file),
+                using var document = JsonDocument.Parse(StructuredData.ReadJson(file),
                     GameDataLoader.ForgivingJson);
                 touched |= ReadFleets(campaign, document.RootElement);
             }

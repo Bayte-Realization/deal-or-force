@@ -56,7 +56,7 @@ public static class HistoryDataLoader
         foreach (var file in GameDataLoader.DataFiles("history", "diplomacy", "2024"))
         {
             if (file is null || !File.Exists(file)) continue;
-            try { ApplyDiplomacy(campaign, File.ReadAllText(file), null); }
+            try { ApplyDiplomacy(campaign, StructuredData.ReadJson(file), null); }
             catch (Exception exception)
             {
                 DiagnosticLogs.Write("simulation",
@@ -268,7 +268,7 @@ public static class HistoryDataLoader
         {
             try
             {
-                using var document = Parse(File.ReadAllText(file));
+                using var document = Parse(StructuredData.ReadJson(file));
                 if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
                 foreach (var entry in document.RootElement.EnumerateObject())
                 {
@@ -537,7 +537,7 @@ public static class HistoryDataLoader
         if (path is null || !File.Exists(path)) return;
         try
         {
-            var json = File.ReadAllText(path);
+            var json = StructuredData.ReadJson(path);
             if (countries) ApplyCountries(campaign, json, errors); else ApplyStates(campaign, json, errors);
         }
         catch (Exception exception) { errors?.Add($"{Path.GetFileName(path)}: {exception.Message}"); }

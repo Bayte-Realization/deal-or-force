@@ -31,7 +31,7 @@ public static class ConsoleVerse
         {
             try
             {
-                using var document = JsonDocument.Parse(File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                using var document = JsonDocument.Parse(StructuredData.ReadJson(file), GameDataLoader.ForgivingJson);
                 if (document.RootElement.ValueKind != JsonValueKind.Object ||
                     !document.RootElement.TryGetProperty("touchgrass", out var verse) ||
                     verse.ValueKind != JsonValueKind.Object) continue;

@@ -1,0 +1,7 @@
+{
+  "id": "example_yaml_data",
+  "name": "YAML data example",
+  "version": "1.0.0",
+  "enabled": false,
+  "load_order": 50
+}

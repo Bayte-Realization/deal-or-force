@@ -425,10 +425,10 @@ public static class InterfaceSkin
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
 
-        foreach (var file in Directory.EnumerateFiles(directory, "*.json", SearchOption.TopDirectoryOnly)
+        foreach (var file in StructuredData.Files(directory, SearchOption.TopDirectoryOnly)
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
-            try { Merge(File.ReadAllText(file), $"interface/{Path.GetFileName(file)}", errors); }
+            try { Merge(StructuredData.ReadJson(file), $"interface/{Path.GetFileName(file)}", errors); }
             catch (Exception exception) { errors?.Add($"interface/{Path.GetFileName(file)}: {exception.Message}"); }
         }
 

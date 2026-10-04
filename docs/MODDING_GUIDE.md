@@ -7,6 +7,10 @@ and custom flags: [mechanic features reference, Russian](MECHANIC_FEATURES_RU.md
 
 ## Philosophy and folders
 
+Data catalogues accept `.json`, `.yaml` and `.yml` with the same schemas and filename
+overlay order. See the [YAML reference and current limits (Russian)](YAML_MODDING_RU.md).
+Package manifests, scenario descriptors/world snapshots and saves remain JSON.
+
 Modding is the game's public layer. The basic path resembles Paradox games: a mod is an
 ordinary folder with a manifest and subject catalogues. Changing the balance needs no IDE, no
 compiler and no engine sources.
@@ -35,6 +39,7 @@ loaded by the game: copy the one you want out, give it a new `id` and set `enabl
 | `central_bank` | The monetary model: inflation, the key rate and the price of cheap money. |
 | `trade_instructions` | Trade controls and the sentences with which they explain themselves. |
 | `csharp_mod` | A new mechanic in C#. |
+| `yaml-data` | Mixed JSON/YAML data, feature switches and production allocation settings. |
 
 Every key of every template is covered by the standing bench check `every mod template names
 something the game actually has`, so an example that has fallen behind the code breaks the

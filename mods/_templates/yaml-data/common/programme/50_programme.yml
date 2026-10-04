@@ -1,0 +1,6 @@
+units_per_factory: 12
+conversion:
+  efficiency: 0.5
+lines:
+  Steel:
+    pool: civilian

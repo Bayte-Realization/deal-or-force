@@ -300,7 +300,7 @@ public static class TerritorialTopology
         LakeRegions.ResetCatalog();
         var file = GameDataLoader.DataFiles("map_data", "state_regions").FirstOrDefault();
         if (file is null) return;
-        try { LoadOverrides(File.ReadAllText(file), null); }
+        try { LoadOverrides(StructuredData.ReadJson(file), null); }
         catch { /* Compiled corrections deliberately remain bootable. */ }
     }
 
