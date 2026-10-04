@@ -66,6 +66,12 @@ public partial class DealOrForceGame
     private void ShowMovement(Nation nation)
     {
         if (nation?.Movement is null || _movementPanel is null) return;
+        // On the picker, choose the movement rather than opening the hidden campaign HUD.
+        if (_pickerLayer is { Visible: true })
+        {
+            SetPickerNation(nation, false);
+            return;
+        }
         // It takes the place of whatever stood there.
         if (_sidePanel is { Visible: true }) CloseSidePanel();
         if (_armyPanel is { Visible: true }) SetArmyPanelVisible(false);

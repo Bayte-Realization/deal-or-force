@@ -1451,7 +1451,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     var rect = RectFromPoints(_boxStart, _boxCurrent);
                     if (rect.Size.Length() < 8f)
                     {
-                        if (CountrySelectionOnly)
+                        // Resolve headquarters through the same map GUI input as provinces.
+                        // The container consumes this click before child _Input handlers run.
+                        if (_movementLayer is not null && _movementLayer.TryPickAt(button.Position, out var movement))
+                        {
+                            MovementPicked?.Invoke(movement);
+                        }
+                        else if (CountrySelectionOnly)
                         {
                             if (TryPick(button.Position, out var country)) CountryPicked?.Invoke(country);
                         }

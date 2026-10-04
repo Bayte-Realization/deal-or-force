@@ -15,7 +15,8 @@ namespace DealOrForce;
 ///
 /// Headquarters stand on a province (Movements.SeatOf), and several often share one: Doha, Abu
 /// Dhabi and London are where such offices are. Those are drawn as one row, fanned out side by
-/// side around the city, with their names stacked underneath - never on top of each other.
+/// side around the city, with each name directly under its own medallion. Crowded names hide
+/// rather than moving away from the headquarters they identify.
 ///
 /// A headquarters is the one place such a country is, so it is drawn at every distance, where
 /// a capital is only drawn close up.
@@ -47,6 +48,7 @@ public sealed partial class GlobePresentation
         private const float Spacing = 138f;
         private const float LabelPixelSize = 0.00021f;
         private const float LabelLine = 40f;
+        private const float LabelDrop = 80f;
         private const float PickRadius = 20f;
 
         private readonly GlobePresentation _globe;
@@ -65,17 +67,8 @@ public sealed partial class GlobePresentation
             public Simulation.Nation Nation;
             /// <summary>Its place in the row it shares a city with, in sprite pixels from the middle.</summary>
             public float Offset;
-            /// <summary>Its name, and the line of the row's stack it is written on before any spreading.</summary>
+            /// <summary>Its name, anchored directly under its own medallion.</summary>
             public Label3D Label;
-            public int Line;
-            public int TargetLine;
-            public int CandidateLine;
-            public float CandidateAge;
-            public float DisplayLine;
-            public Vector2 PreviousOrigin;
-            public float PreviousScale;
-            public float StillTime;
-            public bool Positioned;
         }
 
         public MovementLayer(GlobePresentation globe) => _globe = globe;
@@ -106,6 +99,10 @@ public sealed partial class GlobePresentation
                 var shown = Standing(state);
                 if (shown)
                 {
+                    // FixedSize uses half the orthographic height on the flat map, versus
+                    // camera depth on the globe. Match its screen scale in both projections.
+                    marker.Node.Scale = Vector3.One * (_globe._flatMap && IsInstanceValid(camera)
+                        ? 1f / Mathf.Tan(Mathf.DegToRad(camera.Fov * 0.5f)) : 1f);
                     marker.Node.Position = _globe.PresentationPoint(state.HeadquartersLatitude, state.HeadquartersLongitude,
                         SurfaceMarkerRadius * 1.002f);
                     // On the globe, only the side that faces the camera.
@@ -114,20 +111,18 @@ public sealed partial class GlobePresentation
                 }
                 if (marker.Node.Visible != shown) marker.Node.Visible = shown;
             }
-            Spread(camera, (float)Math.Clamp(delta, 0.0, 0.05));
+            Spread(camera);
         }
 
         private static bool Standing(MovementState state) =>
             state is { Landless: true, Dissolved: false } && state.HeadquartersStateMapIndex >= 0;
 
-        public override void _Input(InputEvent inputEvent)
+        internal bool TryPickAt(Vector2 position, out Simulation.Nation best)
         {
-            if (_globe?.PlanEraseMode == true) return;
-            if (inputEvent is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } click) return;
-            if (GetViewport().GuiGetHoveredControl() is not null) return;
+            best = null;
+            if (!IsVisibleInTree() || _globe?.PlanEraseMode == true) return false;
             var camera = _globe?._camera;
-            if (!IsInstanceValid(camera)) return;
-            Simulation.Nation best = null;
+            if (!IsInstanceValid(camera)) return false;
             var bestDistance = PickRadius;
             var right = camera.GlobalBasis.X.Normalized();
             foreach (var marker in _markers)
@@ -135,18 +130,14 @@ public sealed partial class GlobePresentation
                 if (!IsInstanceValid(marker.Node) || !marker.Node.Visible) continue;
                 var at = marker.Node.GlobalPosition;
                 if (camera.IsPositionBehind(at)) continue;
-                // A fixed-size sprite is as large at any depth as it would be one unit away, so
-                // its place in the row is that many pixels scaled by how far away it is.
-                var depth = MathF.Max(0.001f, -(camera.GlobalTransform.AffineInverse() * at).Z);
-                var centre = camera.UnprojectPosition(at + right * (marker.Offset * PixelSize * depth));
-                var distance = centre.DistanceTo(click.Position);
+                var size = FixedWorldScale(camera, at) * marker.Node.Scale.X;
+                var centre = camera.UnprojectPosition(at + right * (marker.Offset * PixelSize * size));
+                var distance = centre.DistanceTo(position);
                 if (distance >= bestDistance) continue;
                 bestDistance = distance;
                 best = marker.Nation;
             }
-            if (best is null) return;
-            _globe.MovementPicked?.Invoke(best);
-            GetViewport().SetInputAsHandled();
+            return best is not null;
         }
 
         private void Rebuild(Simulation.Campaign campaign, bool insignia)
@@ -162,9 +153,8 @@ public sealed partial class GlobePresentation
             _mark ??= GD.Load<Texture2D>(SpriteCatalog.TextureOf("icon_movement_headquarters",
                 "res://game/gfx/interface/icons/icon_movement_headquarters.png"));
 
-            // Headquarters sharing a province are one row: fanned out, names stacked below.
-            // Names of headquarters that are merely close - Doha and Abu Dhabi - are kept apart
-            // on the screen every frame instead (Spread), which is right at every zoom.
+            // Headquarters sharing a province are one row. Every name follows its own
+            // medallion; overlap suppression is recalculated at the current camera position.
             var groups = Movements.Active(campaign)
                 .Where(nation => Standing(nation.Movement))
                 .GroupBy(nation => nation.Movement.HeadquartersProvinceId > 0
@@ -199,22 +189,18 @@ public sealed partial class GlobePresentation
                         RenderPriority = 23,
                         Modulate = Ui.Colour("globe.label"),
                         OutlineModulate = Ui.Colour("globe.label_outline", 0.95f),
-                        // One name per line under the whole row, in the row's order.
-                        Offset = new Vector2(0f, -80f - index * LabelLine)
+                        Offset = new Vector2(offset * PixelSize / LabelPixelSize, -LabelDrop)
                     };
                     node.AddChild(label);
                     AddChild(node);
-                    _markers.Add(new Marker { Node = node, Nation = nation, Offset = offset, Label = label,
-                        Line = index, TargetLine = index, CandidateLine = index, DisplayLine = index });
+                    _markers.Add(new Marker { Node = node, Nation = nation, Offset = offset, Label = label });
                 }
             }
         }
 
-        // Names that would print over each other - two headquarters a province or two apart,
-        // Doha and Abu Dhabi from the distance a player reads the Gulf at - are pushed down a line
-        // at a time until they do not. Keep the chosen row while the camera moves; only compact
-        // after it settles. Debounce a collision and ease the offset rather than jumping a
-        // whole line because a capital's rectangle touched ours for a single frame.
+        // Never resolve a collision by displacing the name. An accumulated row offset made
+        // names drift away during zoom/orbit and could identify the wrong nearby headquarters.
+        // Keep one fixed anchor; hide only overlapping names, not their clickable medallions.
         private readonly List<Rect2> _placed = new();
         private readonly List<Rect2> _medallions = new();
 
@@ -228,7 +214,7 @@ public sealed partial class GlobePresentation
         /// <summary>And their names - after the countries' capitals are named, which they keep off.</summary>
         internal void AddNames(List<Rect2> into) => into.AddRange(_placed);
 
-        private void Spread(Camera3D camera, float delta)
+        private void Spread(Camera3D camera)
         {
             _placed.Clear();
             _medallions.Clear();
@@ -237,47 +223,27 @@ public sealed partial class GlobePresentation
             foreach (var marker in _markers)
             {
                 if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || marker.Label is null)
-                {
-                    marker.Positioned = false;
                     continue;
-                }
                 var at = marker.Node.GlobalPosition;
+                marker.Label.Visible = false;
                 if (camera.IsPositionBehind(at)) continue;
-                // A fixed-size label is as large at any depth as it would be one unit away, so a
-                // line of it on the screen is that many pixels scaled by how far away it is.
-                var depth = MathF.Max(0.001f, -(camera.GlobalTransform.AffineInverse() * at).Z);
+                // Measure exactly the projection-dependent scale used by FixedSize, including
+                // the flat-map compensation. Depth is not the scale for an orthographic camera.
+                var size = FixedWorldScale(camera, at) * marker.Node.Scale.X;
                 var origin = camera.UnprojectPosition(at);
-                var linePixels = MathF.Abs(camera.UnprojectPosition(at + up * (LabelLine * LabelPixelSize * depth)).Y - origin.Y);
+                var linePixels = MathF.Abs(camera.UnprojectPosition(at + up * (LabelLine * LabelPixelSize * size)).Y - origin.Y);
                 if (linePixels < 0.5f) continue;
                 var scale = linePixels / LabelLine;
-                var still = marker.Positioned && origin.DistanceSquaredTo(marker.PreviousOrigin) < 0.04f &&
-                            MathF.Abs(scale - marker.PreviousScale) < 0.0005f;
-                marker.StillTime = still ? marker.StillTime + delta : 0f;
-                marker.PreviousOrigin = origin;
-                marker.PreviousScale = scale;
-                marker.Positioned = true;
                 // The medallion: a 128-pixel sprite at its own pixel size, moved along its row.
                 var sprite = scale * PixelSize / LabelPixelSize;
                 var radius = 64f * sprite;
                 _medallions.Add(new Rect2(origin.X + marker.Offset * sprite - radius, origin.Y - radius, radius * 2f, radius * 2f));
                 var width = marker.Label.Text.Length * marker.Label.FontSize * 0.56f * scale;
-                var line = marker.StillTime >= 0.45f ? marker.Line : marker.TargetLine;
-                Rect2 Box(float row) => new(origin.X - width / 2f, origin.Y + (80f + row * LabelLine - LabelLine / 2f) * scale,
-                    width, LabelLine * scale);
-                var box = Box(line);
-                while (line < marker.Line + 8 && Overlaps(box.Grow(2f))) box = Box(++line);
-                if (line != marker.CandidateLine)
-                {
-                    marker.CandidateLine = line;
-                    marker.CandidateAge = 0f;
-                }
-                else marker.CandidateAge += delta;
-                if (marker.CandidateAge >= 0.12f) marker.TargetLine = line;
-                // Six source-pixel rows per second, bounded even after a slow frame.
-                marker.DisplayLine = Mathf.MoveToward(marker.DisplayLine, marker.TargetLine, 6f * delta);
-                _placed.Add(Box(marker.DisplayLine));
-                var offset = new Vector2(0f, -80f - marker.DisplayLine * LabelLine);
-                if (marker.Label.Offset != offset) marker.Label.Offset = offset;
+                var box = new Rect2(origin.X + marker.Offset * sprite - width / 2f,
+                    origin.Y + (LabelDrop - LabelLine / 2f) * scale, width, LabelLine * scale);
+                if (Overlaps(box.Grow(2f))) continue;
+                marker.Label.Visible = true;
+                _placed.Add(box);
             }
         }
 
@@ -285,12 +251,17 @@ public sealed partial class GlobePresentation
         {
             foreach (var placed in _placed)
                 if (placed.Intersects(box)) return true;
-            // A country's capital is named first, and a headquarters' name moves off it.
+            // Visible capitals retain priority; the headquarters' name stays at its anchor.
             if (_globe is not null)
                 foreach (var capital in _globe._capitalNameBoxes)
                     if (capital.Intersects(box)) return true;
             return false;
         }
+
+        private static float FixedWorldScale(Camera3D camera, Vector3 at) =>
+            camera.Projection == Camera3D.ProjectionType.Orthogonal
+                ? 1f / MathF.Abs(camera.GetCameraProjection().Y.Y)
+                : MathF.Max(0.001f, -(camera.GlobalTransform.AffineInverse() * at).Z);
 
         /// <summary>The complete flag or emblem, fitted inside the ring without cropping.</summary>
         private Texture2D Roundel(Simulation.Nation nation)

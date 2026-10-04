@@ -139,7 +139,12 @@ public sealed partial class GlobePresentation
         var wanted = CityLabelsEnabled && _mapApplied && _cities.Count > 0 &&
                      ViewDistance <= CityTierDistance(0);
         _cityRoot.Visible = wanted;
-        if (!wanted) return;
+        if (!wanted)
+        {
+            // Hidden capitals must not reserve old screen rectangles after zooming out.
+            _capitalNameBoxes.Clear();
+            return;
+        }
 
         _cityClock += delta;
         var viewport = ViewportSize();
@@ -306,8 +311,8 @@ public sealed partial class GlobePresentation
         // Countries' capitals first, before the headquarters' names: Paris had its star and
         // nothing else at the distance Europe is read at, because a movement's headquarters in
         // Belgium wrote "HQ · Council for the Republic" across all the room it had. A
-        // headquarters' name moves down a line off a capital's instead (GlobeMovements); its
-        // medallion, which cannot move, was in the way from the start.
+        // headquarters' name hides on collision instead of drifting away (GlobeMovements);
+        // its medallion, which cannot move, was in the way from the start.
         _capitalNameBoxes.Clear();
         _cityDone.Clear();
         for (var index = 0; index < _cities.Count && used < limit; index++)
