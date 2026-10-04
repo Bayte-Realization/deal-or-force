@@ -308,11 +308,10 @@ public sealed partial class GlobePresentation
             }
         }
 
-        // Countries' capitals first, before the headquarters' names: Paris had its star and
-        // nothing else at the distance Europe is read at, because a movement's headquarters in
-        // Belgium wrote "HQ · Council for the Republic" across all the room it had. A
-        // headquarters' name hides on collision instead of drifting away (GlobeMovements);
-        // its medallion, which cannot move, was in the way from the start.
+        // Headquarters names have fixed anchors and never hide on collision. Reserve their
+        // room first, then place capitals before lesser cities without a cyclic dependency
+        // between last frame's city rectangles and this frame's headquarters visibility.
+        _movementLayer?.AddNames(_cityTaken);
         _capitalNameBoxes.Clear();
         _cityDone.Clear();
         for (var index = 0; index < _cities.Count && used < limit; index++)
@@ -322,8 +321,6 @@ public sealed partial class GlobePresentation
             _cityDone.Add(index);
             if (PlaceCity(index, out var room)) _capitalNameBoxes.Add(room);
         }
-        _movementLayer?.AddNames(_cityTaken);
-
         var examined = 0;
         for (var index = 0; index < _cities.Count && used < limit; index++)
         {

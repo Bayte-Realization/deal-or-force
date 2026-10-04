@@ -15,8 +15,8 @@ namespace DealOrForce;
 ///
 /// Headquarters stand on a province (Movements.SeatOf), and several often share one: Doha, Abu
 /// Dhabi and London are where such offices are. Those are drawn as one row, fanned out side by
-/// side around the city, with each name directly under its own medallion. Crowded names hide
-/// rather than moving away from the headquarters they identify.
+/// side around the city, with each name directly under its own medallion. Names remain visible
+/// with their headquarters, without camera-dependent collision hiding or displacement.
 ///
 /// A headquarters is the one place such a country is, so it is drawn at every distance, where
 /// a capital is only drawn close up.
@@ -154,7 +154,7 @@ public sealed partial class GlobePresentation
                 "res://game/gfx/interface/icons/icon_movement_headquarters.png"));
 
             // Headquarters sharing a province are one row. Every name follows its own
-            // medallion; overlap suppression is recalculated at the current camera position.
+            // medallion; their screen bounds reserve room in the city-label layout.
             var groups = Movements.Active(campaign)
                 .Where(nation => Standing(nation.Movement))
                 .GroupBy(nation => nation.Movement.HeadquartersProvinceId > 0
@@ -200,7 +200,8 @@ public sealed partial class GlobePresentation
 
         // Never resolve a collision by displacing the name. An accumulated row offset made
         // names drift away during zoom/orbit and could identify the wrong nearby headquarters.
-        // Keep one fixed anchor; hide only overlapping names, not their clickable medallions.
+        // Keep one fixed anchor and visibility tied to the medallion. Collision hiding caused
+        // names to blink while the camera moved and city-label rectangles were refreshed.
         private readonly List<Rect2> _placed = new();
         private readonly List<Rect2> _medallions = new();
 
@@ -211,7 +212,7 @@ public sealed partial class GlobePresentation
         /// </summary>
         internal void AddMedallions(List<Rect2> into) => into.AddRange(_medallions);
 
-        /// <summary>And their names - after the countries' capitals are named, which they keep off.</summary>
+        /// <summary>Their anchored names reserve room before the city names are laid out.</summary>
         internal void AddNames(List<Rect2> into) => into.AddRange(_placed);
 
         private void Spread(Camera3D camera)
@@ -225,7 +226,7 @@ public sealed partial class GlobePresentation
                 if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || marker.Label is null)
                     continue;
                 var at = marker.Node.GlobalPosition;
-                marker.Label.Visible = false;
+                marker.Label.Visible = true;
                 if (camera.IsPositionBehind(at)) continue;
                 // Measure exactly the projection-dependent scale used by FixedSize, including
                 // the flat-map compensation. Depth is not the scale for an orthographic camera.
@@ -241,21 +242,8 @@ public sealed partial class GlobePresentation
                 var width = marker.Label.Text.Length * marker.Label.FontSize * 0.56f * scale;
                 var box = new Rect2(origin.X + marker.Offset * sprite - width / 2f,
                     origin.Y + (LabelDrop - LabelLine / 2f) * scale, width, LabelLine * scale);
-                if (Overlaps(box.Grow(2f))) continue;
-                marker.Label.Visible = true;
                 _placed.Add(box);
             }
-        }
-
-        private bool Overlaps(Rect2 box)
-        {
-            foreach (var placed in _placed)
-                if (placed.Intersects(box)) return true;
-            // Visible capitals retain priority; the headquarters' name stays at its anchor.
-            if (_globe is not null)
-                foreach (var capital in _globe._capitalNameBoxes)
-                    if (capital.Intersects(box)) return true;
-            return false;
         }
 
         private static float FixedWorldScale(Camera3D camera, Vector3 at) =>
