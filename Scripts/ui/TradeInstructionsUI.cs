@@ -235,7 +235,7 @@ public partial class DealOrForceGame
     {
         var card = TradeCard(parent, "ABOUT ONE GOOD", out var heading, out _tradeGoodCount);
 
-        _tradeGoodMark = Symbol("good_food", 20, "text.accent_dim");
+        _tradeGoodMark = Symbol("good_food", 20, "icon.commodity");
         if (_tradeGoodMark is not null) heading.AddChild(_tradeGoodMark);
         _tradeGoodPicker = new OptionButton { CustomMinimumSize = new Vector2(190, 32),
             FitToLongestItem = false, SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -526,7 +526,7 @@ public partial class DealOrForceGame
             {
                 _tradeGoodMark.Texture = Art("icon_" + GoodIcon(commodity),
                     $"res://game/gfx/interface/icons/icon_{GoodIcon(commodity)}.png");
-                _tradeGoodMark.Modulate = ArtColour("icon_" + GoodIcon(commodity), "text.accent_dim");
+                _tradeGoodMark.Modulate = ArtColour("icon_" + GoodIcon(commodity), "icon.commodity");
             }
             SetFlag(_tradePartnerFlag, partner, 20);
 

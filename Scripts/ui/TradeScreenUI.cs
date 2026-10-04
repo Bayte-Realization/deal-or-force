@@ -319,7 +319,7 @@ public partial class DealOrForceGame
         {
             if (!player.Market.TryGetValue(row.Good, out var quote)) continue;
             var definition = CommodityCatalog.Get(row.Good);
-            row.Icon.Modulate = ArtColour("icon_" + GoodIcon(row.Good), "text.accent_dim");
+            row.Icon.Modulate = ArtColour("icon_" + GoodIcon(row.Good), "icon.commodity");
             row.Name.Text = Simulation.Loc.Get(definition.Name);
             row.Made.Text = quote.Production.ToString("0.0");
             row.Wanted.Text = quote.Demand.ToString("0.0");
@@ -336,9 +336,13 @@ public partial class DealOrForceGame
                 supplied > 0.8f ? "state.warning" : "state.negative");
             row.Supply.Text = supplied.ToString("P0");
             row.Select.TooltipText = Ui.Tip(Simulation.Loc.Get(definition.Description));
-            row.Select.Modulate = supplied < 0.985f
+            // Highlight the row background, not every descendant (including commodity art).
+            row.Select.Modulate = Colors.White;
+            row.Select.SelfModulate = supplied < 0.985f
                 ? new Color(1.25f, 0.85f, 0.85f)
                 : Colors.White;
+            row.Name.AddThemeColorOverride("font_color", Ui.Colour(
+                supplied < 0.985f ? "state.warning" : "text.body"));
         }
     }
 
@@ -373,7 +377,7 @@ public partial class DealOrForceGame
             SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
             MouseFilter = MouseFilterEnum.Ignore,
-            Modulate = ArtColour("icon_" + GoodIcon(good), "text.accent_dim")
+            Modulate = ArtColour("icon_" + GoodIcon(good), "icon.commodity")
         };
         row.Icon.Texture = Art("icon_" + GoodIcon(good),
             $"res://game/gfx/interface/icons/icon_{GoodIcon(good)}.png");

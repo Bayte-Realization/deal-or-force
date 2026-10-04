@@ -233,7 +233,7 @@ public partial class DealOrForceGame
             rows.AddChild(heading);
             // Twenty goods in one scrolling list, told apart by reading twenty names. A mark
             // per good is what makes the market scannable rather than searchable.
-            if (Symbol(GoodIcon(quote.Commodity), 22, "text.accent_dim") is { } mark)
+            if (Symbol(GoodIcon(quote.Commodity), 22, "icon.commodity") is { } mark)
                 heading.AddChild(mark);
             var label = Title(definition.Name, 15, Ui.Colour("text.bright"));
             label.SizeFlagsHorizontal = SizeFlags.ExpandFill;

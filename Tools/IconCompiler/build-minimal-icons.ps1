@@ -1,7 +1,8 @@
 param(
     [string]$Recipe = 'Assets/ArtSource/Icons/minimal-icons.json',
     [string]$OutputDirectory = 'game/gfx/interface/icons',
-    [string]$Colour = '#e7bd69'
+    [string]$Colour = '#e7bd69',
+    [string]$GoodsColour = '#b48732'
 )
 # Editable geometry and restrained facets; PNGs are authored in the game's gold palette.
 $ErrorActionPreference = 'Stop'
@@ -32,11 +33,19 @@ public static class MinimalIconRenderer {
             pen.LineJoin = LineJoin.Round;
             if (kind == "rect") g.FillRectangle(brush, values[0], values[1], values[2], values[3]);
             else if (kind == "ellipse") g.FillEllipse(brush, values[0], values[1], values[2], values[3]);
+            else if (kind == "ring") g.DrawEllipse(pen, values[0], values[1], values[2], values[3]);
+            else if (kind == "curve") {
+                if (values.Length < 8 || (values.Length - 2) % 6 != 0) throw new ArgumentException("Invalid cubic curve");
+                var points = new PointF[values.Length / 2];
+                for (int i = 0; i < points.Length; i++) points[i] = new PointF(values[i * 2], values[i * 2 + 1]);
+                g.DrawBeziers(pen, points);
+            }
             else {
                 if (values.Length < 4 || values.Length % 2 != 0) throw new ArgumentException("Invalid points");
                 var points = new PointF[values.Length / 2];
                 for (int i = 0; i < points.Length; i++) points[i] = new PointF(values[i * 2], values[i * 2 + 1]);
                 if (kind == "polygon") g.FillPolygon(brush, points);
+                else if (kind == "outline") g.DrawPolygon(pen, points);
                 else if (kind == "line") g.DrawLines(pen, points);
                 else throw new ArgumentException("Unknown shape " + kind);
             }
@@ -64,10 +73,12 @@ public static class MinimalIconRenderer {
 '@
 $recipes = Get-Content -LiteralPath $Recipe -Raw | ConvertFrom-Json
 $seen = @{}
-if ($Colour -notmatch '^#[0-9a-fA-F]{6}$') { throw 'Colour must be #RRGGBB.' }
-$palette = [Drawing.ColorTranslator]::FromHtml($Colour)
-if ($palette.R -eq 0 -or $palette.G -eq 0 -or $palette.B -eq 0) {
-    throw 'Colour must have nonzero channels for runtime theme compensation.'
+foreach ($value in @($Colour, $GoodsColour)) {
+    if ($value -notmatch '^#[0-9a-fA-F]{6}$') { throw 'Colour must be #RRGGBB.' }
+    $reference = [Drawing.ColorTranslator]::FromHtml($value)
+    if ($reference.R -eq 0 -or $reference.G -eq 0 -or $reference.B -eq 0) {
+        throw 'Colour must have nonzero channels for runtime theme compensation.'
+    }
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $outputRoot = (Resolve-Path -LiteralPath $OutputDirectory).Path
@@ -77,13 +88,15 @@ foreach ($item in $recipes) {
         throw "Invalid or duplicate icon name: $($item.name)"
     }
     $seen[$item.name] = $true
-    $sprites["icon_$($item.name)"] = @{ source_colour = $Colour }
+    $itemColour = if ($item.name.StartsWith('good_')) { $GoodsColour } else { $Colour }
+    $palette = [Drawing.ColorTranslator]::FromHtml($itemColour)
+    $sprites["icon_$($item.name)"] = @{ source_colour = $itemColour }
     if ($item.shapes.Count -eq 0) { throw "Empty icon: $($item.name)" }
     $canvas = [MinimalIconRenderer]::Canvas()
     $graphics = [MinimalIconRenderer]::Context($canvas)
     try {
         foreach ($shape in $item.shapes) {
-            $width = if ($null -eq $shape.width) { 2.4 } else { $shape.width }
+            $width = if ($null -ne $shape.width) { $shape.width } elseif ($item.name.StartsWith('good_')) { 1.25 } else { 2.4 }
             $shade = if ($null -eq $shape.shade) { 1.0 } else { $shape.shade }
             [MinimalIconRenderer]::Shape($graphics, $shape.kind, [single[]]$shape.values, [bool]$shape.cut, $width, $shade)
         }

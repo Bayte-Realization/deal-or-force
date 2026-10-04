@@ -49,55 +49,109 @@
                                                    "source_colour":  "#e7bd69"
                                                },
                     "icon_good_copper":  {
-                                             "source_colour":  "#e7bd69"
+                                             "source_colour":  "#b48732"
                                          },
                     "icon_good_lithium":  {
-                                              "source_colour":  "#e7bd69"
+                                              "source_colour":  "#b48732"
                                           },
                     "icon_good_nickel":  {
-                                             "source_colour":  "#e7bd69"
+                                             "source_colour":  "#b48732"
                                          },
                     "icon_good_cobalt":  {
-                                             "source_colour":  "#e7bd69"
+                                             "source_colour":  "#b48732"
                                          },
                     "icon_good_phosphates":  {
-                                                 "source_colour":  "#e7bd69"
+                                                 "source_colour":  "#b48732"
                                              },
                     "icon_good_silica":  {
-                                             "source_colour":  "#e7bd69"
+                                             "source_colour":  "#b48732"
                                          },
                     "icon_good_rubber":  {
-                                             "source_colour":  "#e7bd69"
+                                             "source_colour":  "#b48732"
                                          },
                     "icon_good_sulfur":  {
-                                             "source_colour":  "#e7bd69"
+                                             "source_colour":  "#b48732"
                                          },
                     "icon_good_steel":  {
-                                            "source_colour":  "#e7bd69"
+                                            "source_colour":  "#b48732"
                                         },
                     "icon_good_industrialmaterials":  {
-                                                          "source_colour":  "#e7bd69"
+                                                          "source_colour":  "#b48732"
                                                       },
                     "icon_good_batteries":  {
-                                                "source_colour":  "#e7bd69"
+                                                "source_colour":  "#b48732"
                                             },
                     "icon_good_semiconductors":  {
-                                                     "source_colour":  "#e7bd69"
+                                                     "source_colour":  "#b48732"
                                                  },
                     "icon_good_motorvehicles":  {
-                                                    "source_colour":  "#e7bd69"
+                                                    "source_colour":  "#b48732"
                                                 },
                     "icon_good_ammunition":  {
-                                                 "source_colour":  "#e7bd69"
+                                                 "source_colour":  "#b48732"
                                              },
                     "icon_good_precisioncomponents":  {
-                                                          "source_colour":  "#e7bd69"
+                                                          "source_colour":  "#b48732"
                                                       },
                     "icon_good_arms":  {
-                                           "source_colour":  "#e7bd69"
+                                           "source_colour":  "#b48732"
                                        },
                     "icon_military_supply":  {
                                                  "source_colour":  "#e7bd69"
-                                             }
+                                             },
+                    "icon_good_food":  {
+                                           "source_colour":  "#b48732"
+                                       },
+                    "icon_good_consumergoods":  {
+                                                    "source_colour":  "#b48732"
+                                                },
+                    "icon_good_energy":  {
+                                             "source_colour":  "#b48732"
+                                         },
+                    "icon_good_coal":  {
+                                           "source_colour":  "#b48732"
+                                       },
+                    "icon_good_oil":  {
+                                          "source_colour":  "#b48732"
+                                      },
+                    "icon_good_ironore":  {
+                                              "source_colour":  "#b48732"
+                                          },
+                    "icon_good_rareearths":  {
+                                                 "source_colour":  "#b48732"
+                                             },
+                    "icon_good_machinery":  {
+                                                "source_colour":  "#b48732"
+                                            },
+                    "icon_good_naturalgas":  {
+                                                 "source_colour":  "#b48732"
+                                             },
+                    "icon_good_timber":  {
+                                             "source_colour":  "#b48732"
+                                         },
+                    "icon_good_bauxite":  {
+                                              "source_colour":  "#b48732"
+                                          },
+                    "icon_good_uranium":  {
+                                              "source_colour":  "#b48732"
+                                          },
+                    "icon_good_aluminium":  {
+                                                "source_colour":  "#b48732"
+                                            },
+                    "icon_good_chemicals":  {
+                                                "source_colour":  "#b48732"
+                                            },
+                    "icon_good_fertiliser":  {
+                                                 "source_colour":  "#b48732"
+                                             },
+                    "icon_good_electronics":  {
+                                                  "source_colour":  "#b48732"
+                                              },
+                    "icon_good_textiles":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_pharmaceuticals":  {
+                                                      "source_colour":  "#b48732"
+                                                  }
                 }
 }

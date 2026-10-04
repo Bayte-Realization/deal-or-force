@@ -48,10 +48,21 @@ static class InterfaceIconTests
         using var recipe = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
             Path.Combine(root, "..", "Assets", "ArtSource", "Icons", "minimal-icons.json")));
         var authored = recipe.RootElement.EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
-        Check(authored.Length == 33 && authored.Distinct().Count() == 33,
-            "editable geometry defines thirty-three distinct PNG assets");
-        Check(authored.All(name => SpriteCatalog.Get("icon_" + name).SourceColour == "#e7bd69"),
-            "gold PNGs declare their authored palette for theme compensation");
+        Check(authored.Length == 51 && authored.Distinct().Count() == 51,
+            "editable geometry defines fifty-one distinct PNG assets");
+        Check(CommodityCatalog.All.All(good => authored.Contains(CommodityCatalog.IconNameOf(good))),
+            "all thirty-four goods have editable artwork, not just the newer strategic goods");
+        Check(authored.All(name => SpriteCatalog.Get("icon_" + name).SourceColour ==
+            (name.StartsWith("good_", StringComparison.Ordinal) ? "#b48732" : "#e7bd69")),
+            "all commodity PNGs declare bronze while command artwork keeps its gold palette");
+        Check(InterfaceSkin.Colour("icon.commodity") == "#b48732", "commodity token uses the requested darker gold");
+        errors.Clear();
+        var commandColour = InterfaceSkin.Colour("text.accent_dim");
+        InterfaceSkin.Merge("{\"colours\":{\"icon.commodity\":\"#997733\"}}", "commodity-palette-test", errors);
+        Check(errors.Count == 0 && InterfaceSkin.Colour("icon.commodity") == "#997733" &&
+            InterfaceSkin.Colour("text.accent_dim") == commandColour,
+            "modders can recolour goods independently of commands and headings");
+        InterfaceSkin.ResetCatalog();
         Check(!File.ReadAllBytes(Path.Combine(root, "gfx/interface/icons/icon_good_steel.png"))
             .SequenceEqual(File.ReadAllBytes(Path.Combine(root, "gfx/interface/icons/icon_good_industrialmaterials.png"))),
             "steel and construction materials have distinct artwork");
@@ -75,8 +86,8 @@ static class InterfaceIconTests
             File.Copy(Path.Combine(root, "gfx/interface/icons/icon_good_steel.png"), Path.Combine(fixture, "icon_good_steel.png"));
             SpriteCatalog.LoadTree(fixture, "test", errors);
             Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "" &&
-                SpriteCatalog.Get("icon_good_arms").SourceColour == "#e7bd69",
-                "drop-in PNG override clears only its own reference, preserving unrelated gold sprites");
+                SpriteCatalog.Get("icon_good_arms").SourceColour == "#b48732",
+                "drop-in PNG override clears only its own reference, preserving unrelated bronze sprites");
             SpriteCatalog.Merge("{\"icon_good_steel\":{\"source_colour\":\"#e7bd69\"}}", "test", "test", errors);
             Check(errors.Count == 0 && SpriteCatalog.Get("icon_good_steel").SourceColour == "#e7bd69",
                 "gold replacement can opt into compensation after a filename scan");

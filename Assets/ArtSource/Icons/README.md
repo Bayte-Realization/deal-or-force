@@ -1,16 +1,18 @@
-# Minimal command and strategic-goods PNGs
+# Command and commodity PNGs
 
 The current shipped set is authored as simple geometry in `minimal-icons.json`
 and exported to **individual transparent 96 × 96 PNGs**. Their authored palette
-is gold `#e7bd69`, including when opened outside the game. No gradients, metallic
+is dark gold `#b48732` for **all 34 goods and resources**, and `#e7bd69` for
+commands and the supply mark, including when opened outside the game. No gradients, metallic
 highlights, dark outlines, text, or decorative frames are baked into these icons.
-Steel and material blocks use a few flat gold shades to distinguish facets.
+Commodity icons combine slender contours and selective solid faces in one shade.
+Steel and material blocks use geometry and negative space to distinguish facets.
 Army commands use the
 skin's `text.accent_dim`, `text.accent`, and button-state tokens; commodity marks
 receive their colour from the consuming UI.
 
-Production portraits, market rows and the selected trade-good mark use
-`text.accent_dim` (base skin: `#d3bf72`). Refresh reapplies that token, including
+Production portraits, market rows, the economy workbench and the selected trade-good mark use
+`icon.commodity` (base skin: `#b48732`). Refresh reapplies that token, including
 after presentation hot reload. `minimal_palette.json` declares the authored
 `source_colour`; the UI compensates for it before applying the theme, avoiding
 double gold tint. Another skin can still recolour these PNGs. Steel is a faceted
@@ -28,10 +30,15 @@ powershell -NoProfile -File Tools/IconCompiler/check-minimal-icons.ps1
 ```
 
 The JSON stores normalized 24 × 24 geometry. Each entry has a stable `name` and
-ordered `shapes`: `polygon` and `line` use x/y pairs; `rect` and `ellipse` use
-x/y/width/height. Lines default to width 2.4 with round caps and joins. `cut: true`
+ordered `shapes`: `polygon`, `outline` and `line` use x/y pairs; `rect`, `ellipse`
+and `ring` use x/y/width/height. `curve` stores a starting x/y pair followed by
+groups of three x/y pairs (two cubic Bézier control points and an endpoint).
+Lines default to width 1.25 for goods and 2.4 for commands, with round caps and joins.
+`outline` and `ring` stroke rather than fill. Per-shape `width` overrides this.
+`cut: true`
 clears a shape to transparent negative space. Optional `shade` (0.5–1) selects
-a flat shade of the gold palette. Keep every silhouette away from
+a flat shade of the command palette; shipped goods use only the single base shade.
+The checker rejects shaded commodity interiors. Keep every silhouette away from
 the outer edge. Rendering supersamples at 384 × 384 before exporting 96 × 96;
 the check decodes each PNG and rejects empty symbols, wrong-palette interiors
 and clipped edges. RGB rounding on antialiased edges is permitted.
@@ -43,7 +50,9 @@ clears inherited `source_colour`: legacy white-mask mods still work. A gold mod 
 can opt into compensation with a declaration such as
 `{"icon_good_steel":{"source_colour":"#e7bd69"}}` in its `gfx/` JSON.
 An empty reference means a white mask. Explicit references must be `#RRGGBB`
-with nonzero channels. The new set contains 16 commands, 16 goods and one supply mark.
+with nonzero channels. The current editable set contains 16 commands, 34 goods and one supply mark.
+The authoring script accepts `-GoodsColour` and `-Colour` independently; when changing
+the goods palette, also override `icon.commodity` in a mod's `interface/` file.
 
 Let Godot finish importing changed PNGs before launching/exporting; a running
 game may retain old textures. Do not hand-edit generated `.import` files.

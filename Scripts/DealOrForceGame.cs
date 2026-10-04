@@ -1610,7 +1610,9 @@ public partial class DealOrForceGame : Control
             SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
             MouseFilter = MouseFilterEnum.Ignore,
-            Modulate = Ui.Colour(colourToken)
+            // Commodity PNGs carry their own palette; do not multiply that gold twice.
+            Modulate = name.StartsWith("good_", System.StringComparison.Ordinal)
+                ? ArtColour("icon_" + name, colourToken) : Ui.Colour(colourToken)
         };
     }
 

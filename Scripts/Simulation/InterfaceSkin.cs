@@ -46,6 +46,7 @@ public static class InterfaceSkin
         // plus the gold that marks a heading and the caption grey above a control.
         ("text.accent",         "#e7c966"),
         ("text.accent_dim",     "#d3bf72"),
+        ("icon.commodity",      "#b48732"),
         ("text.bright",         "#eef4fb"),
         ("text.body",           "#e9eef5"),
         ("text.body_soft",      "#c8d3e0"),
