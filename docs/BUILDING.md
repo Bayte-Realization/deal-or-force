@@ -42,18 +42,15 @@ The same thing by hand, if the script does not suit for some reason:
     --export-release "Windows Desktop" "D:\Godot Projects\by-deal-or-force\build\Deal or Force\Deal or Force.exe"
 ```
 
-### One wrinkle about `export_presets.cfg`
+### Export preset and loose mod templates
 
-The `Windows Desktop` preset is already in the project root and Godot accepts it — verified:
-the export gets as far as checking the templates and fails only on those. But the file is in
-`.gitignore` (that is Godot's convention: presets often end up holding machine paths and
-signing keys), so anybody who clones the repository will not have it, and `Tools\build.ps1`
-will not run for them.
+The tracked `export_presets.cfg` supplies the `Windows Desktop` preset. Its export path is
+relative and signing is disabled; do not put credentials in this shared file.
 
-There is nothing machine-specific in this preset — the export path is relative and there is
-no signing. If somebody other than you will be making builds, remove the `export_presets.cfg`
-line from `.gitignore` and commit the file. While you are the only one building, it can stay
-as it is.
+`mods/*` is excluded from the packed `.pck`. The build script copies mod templates beside
+the executable and removes their `bin`/`obj` folders. The mod loader reads these physical
+folders, not packed resources. This also prevents compiled F# template output (and its
+duplicate game assets) from being accidentally included in the game package.
 
 ## Three things the first build tripped over
 
