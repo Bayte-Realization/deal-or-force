@@ -195,7 +195,8 @@ public static class StabilityCore
             if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
         var warCost = atWar ? weights.War + (1f - nation.WarSupport) * weights.WarSupport : 0f;
 
-        var target = geography - warCost + nation.StabilityBias + nation.StabilityGovernance;
+        var memory = SocialMemory.StabilityEffect(campaign, nation);
+        var target = geography - warCost + nation.StabilityBias + nation.StabilityGovernance + memory;
 
         if (drivers is not null)
         {
@@ -206,6 +207,8 @@ public static class StabilityCore
             drivers.Add("What this country is, beyond its conditions", nation.StabilityBias);
             if (MathF.Abs(nation.StabilityGovernance) > 0.0005f)
                 drivers.Add("How it has been governed lately", nation.StabilityGovernance);
+            if (MathF.Abs(memory) > 0.0005f)
+                drivers.Add(Loc.Get("Institutions and living-standard expectations"), memory);
             drivers.Settle(M.Clamp(target, weights.Floor, weights.Ceiling) - target,
                 target > weights.Ceiling ? "already as settled as a country gets"
                     : target < weights.Floor ? "held up off the floor" : "rounding");

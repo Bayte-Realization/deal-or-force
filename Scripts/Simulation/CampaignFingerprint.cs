@@ -33,6 +33,15 @@ public static class CampaignFingerprint
         }
 
         void MixFloat(float value) => Mix(BitConverter.SingleToInt32Bits(value));
+        void MixText(string value) { foreach (var character in value ?? "") Mix(character); Mix(-8); }
+        void MixImage(PublicImage image)
+        {
+            Mix(image is null ? 0 : 1);
+            if (image is null) return;
+            MixFloat(image.Esteem); MixFloat(image.Incident); MixFloat(image.Familiarity);
+            MixFloat(image.Entrenchment); MixFloat(image.Target); Mix(image.LastReviewDay);
+            Mix(image.ConsistentDays); Mix(image.Status); Mix(image.LastIncidentDay); MixText(image.LastReason);
+        }
 
         // Hours, not days. A step can be a fraction of a day or several of them, so two
         // worlds can agree on the date and still be a step apart - which is a divergence
@@ -63,6 +72,19 @@ public static class CampaignFingerprint
         // going away puts it back. Two worlds that disagree about how many regions exist
         // disagree about everything downstream of that.
         Mix(campaign.States.Count);
+        foreach (var pair in campaign.Relations.OrderBy(p => p.Key))
+        {
+            Mix(pair.Key); var r = pair.Value;
+            Mix((int)r.Stance); MixFloat(r.Opinion); MixFloat(r.AllianceCohesion);
+            Mix(r.AllianceAssessmentDay); Mix(r.AllianceStrainedDays); Mix(r.AllianceReaffirmedDay);
+            Mix(r.AllianceRefusedDay); Mix(r.AllianceSinceDay);
+            foreach (var character in r.AllianceProgram ?? "") Mix(character);
+            Mix(-1); Mix(r.AllianceProgramSponsor); Mix(r.AllianceProgramStarted);
+            Mix(r.AllianceProgramLastPaid); Mix(r.AllianceProgramDuration); Mix(r.AllianceProgramPaidWeeks);
+            MixFloat(r.AllianceProgramWeeklyCost); MixFloat(r.AllianceProgramTrustBudget);
+            Mix(r.AllianceProgramRelief ? 1 : 0);
+            Mix(r.AllianceProgramPausedDay);
+        }
 
         foreach (var nation in Ordered(campaign.Nations, nation => nation.Id))
         {
@@ -70,8 +92,36 @@ public static class CampaignFingerprint
             foreach (var character in nation.FormedNationId ?? "") Mix(character);
             Mix(-1);
             Mix(nation.FormedNationDay);
+            foreach (var id in nation.FormedNationHistory.OrderBy(id => id, StringComparer.Ordinal)) MixText(id);
+            Mix(-11);
             Mix(nation.Population);
             MixFloat(nation.Treasury);
+            Mix(nation.DebtInitialized ? 1 : 0); Mix(nation.DebtMechanicActive ? 1 : 0);
+            MixFloat(nation.PublicDebt); MixFloat(nation.DebtArrears); MixFloat(nation.PaymentArrears);
+            MixFloat(nation.CreditConfidence); MixFloat(nation.DebtSpreadAnnual);
+            MixFloat(nation.DebtIssuedWeekly); MixFloat(nation.DebtInterestWeekly);
+            Mix(nation.DebtMissedWeeks); Mix(nation.DebtCrisisWeeks); Mix((int)nation.DebtCondition);
+            Mix(nation.DebtRestructuringProgress); Mix(nation.DebtRestructuringLastDay);
+            Mix(nation.LawsActive ? 1 : 0); Mix(nation.AgendasActive ? 1 : 0); Mix(nation.LastPolicyReviewDay);
+            foreach (var law in nation.Laws.OrderBy(p => p.Key, StringComparer.Ordinal))
+            { MixText(law.Key); MixText(law.Value.Id); MixText(law.Value.TargetTag); Mix(law.Value.Region); Mix(law.Value.AdoptedDay); }
+            Mix(-8);
+            foreach (var clock in nation.PolicyReadyOnDay.OrderBy(p => p.Key, StringComparer.Ordinal)) { MixText(clock.Key); Mix(clock.Value); }
+            Mix(-9);
+            if (nation.Agenda is { } agenda)
+            {
+                MixText(agenda.Id); MixText(agenda.Goal); MixFloat(agenda.GoalValue); Mix(agenda.DurationDays);
+                Mix(agenda.ElapsedDays); Mix(agenda.SatisfiedDays); Mix(agenda.Completed ? 1 : 0); Mix(agenda.Succeeded ? 1 : 0);
+            }
+            Mix(-10);
+            var course = nation.NationalCourse;
+            Mix(nation.NationalCourseActive ? 1 : 0); Mix(course.Initialized ? 1 : 0);
+            MixText(course.Dominant); MixText(course.Challenger); MixText(course.ShockReason); MixText(course.RememberedPolitics);
+            Mix(course.ChallengerDays); Mix(course.AgeDays); Mix(course.LastReviewDay); Mix(course.RememberedSecessionDay);
+            MixFloat(course.Entrenchment); MixFloat(course.Shock); MixFloat(course.PreviousLiving); MixFloat(course.WarExperience);
+            foreach (var conviction in course.Convictions.OrderBy(p => p.Key, StringComparer.Ordinal))
+            { MixText(conviction.Key); MixFloat(conviction.Value); }
+            Mix(-12);
             MixFloat(nation.Gdp);
             MixFloat(nation.Stability);
             // What the country is beyond its conditions, and how it has been governed. Both
@@ -83,6 +133,21 @@ public static class CampaignFingerprint
             MixFloat(nation.ManpowerReserve);
             // When it last came apart, which is what decides whether it may again.
             Mix(nation.LastSecessionDay);
+            MixText(nation.RememberedInstitutions); Mix(nation.InstitutionAgeDays);
+            Mix(nation.LastInstitutionReviewDay); Mix(nation.LastSocialReviewDay);
+            MixFloat(nation.InstitutionalHabit); MixFloat(nation.ExpectedLivingStandard);
+            MixImage(nation.DomesticImage);
+            Mix(nation.PublicImages.Count);
+            foreach (var image in nation.PublicImages.OrderBy(p => p.Key, StringComparer.Ordinal))
+            { MixText(image.Key); MixImage(image.Value); }
+            Mix(nation.Outreach.Count);
+            foreach (var entry in nation.Outreach.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                var p = entry.Value; MixText(entry.Key); MixText(p.ActionId); MixText(p.TargetTag);
+                Mix(p.StartedDay); Mix(p.LastReviewDay); Mix(p.DurationDays); Mix(p.ProgressDays);
+                Mix(p.CooldownDays); Mix(p.CooldownUntilDay); Mix(p.PausedDay); Mix(p.Cancelled ? 1 : 0);
+                MixFloat(p.PaidCost); MixFloat(p.NationImpulse); MixFloat(p.CultureImpulse);
+            }
         }
 
         // How far each region has gone towards leaving. Two peers that disagree about this
@@ -91,9 +156,10 @@ public static class CampaignFingerprint
         // looks wrong at all.
         foreach (var state in Ordered(campaign.States, state => state.MapIndex))
         {
-            if (state.SecessionPressure <= 0f) continue;
             Mix(state.MapIndex);
             MixFloat(state.SecessionPressure);
+            Mix(state.RememberedOwner); Mix(state.SettledBorderDays); Mix(state.LastBorderReviewDay);
+            MixFloat(state.BorderHabit);
         }
         foreach (var army in Ordered(campaign.Armies, army => army.Id))
         {
@@ -111,6 +177,7 @@ public static class CampaignFingerprint
             Mix(war.Ended ? 1 : 0);
             MixFloat(war.OccupationScore);
             MixFloat(war.BattleScore);
+            Mix(war.CivilConflict ? 1 : 0); Mix(war.EscalationStage); Mix(war.AiNegotiationUnlockDay);
         }
         var controllers = campaign.ProvinceController;
         if (controllers is null) return hash;

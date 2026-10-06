@@ -616,7 +616,7 @@ public static class SecessionEvents
         {
             Tag = tag,
             Iso = tag,
-            Name = NameFor(theirs ? culture : "", seat.Name, parent),
+            Name = NameFor(campaign, theirs ? culture : "", seatState?.Id ?? "", seat.Name, parent),
             Continent = parent.Continent,
             Region = parent.Region,
             Color = ColourFor(theirs ? culture : "", parent),
@@ -780,10 +780,15 @@ public static class SecessionEvents
     /// as the country they left, where the adjective would be the country's own; and the
     /// adjective only when there is not even a region name to use.
     /// </summary>
-    private static string NameFor(string culture, string seat, Nation parent)
+    internal static string NameFor(Campaign campaign, string culture, string regionId, string seat, Nation parent)
     {
-        var country = DemographyCatalog.Culture(culture)?.Country;
-        if (!string.IsNullOrWhiteSpace(country)) return country;
+        var definition = DemographyCatalog.Culture(culture);
+        var country = definition?.Country;
+        var homeland = definition is not null && (definition.CountryRegions.Count == 0 ||
+            definition.CountryRegions.Any(prefix => regionId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
+        if (!string.IsNullOrWhiteSpace(country) && homeland &&
+            !campaign.Nations.Any(n => string.Equals(n.Name, country, StringComparison.OrdinalIgnoreCase) &&
+                campaign.StatesOf(n).Length > 0)) return country;
         if (!string.IsNullOrWhiteSpace(seat)) return seat;
         var people = DemographyCatalog.CultureName(culture);
         return string.IsNullOrWhiteSpace(people) ? parent?.Name ?? "" : people;

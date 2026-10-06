@@ -1,0 +1,6 @@
+{
+  "Features": { "national_courses": true },
+  "CourseReviewDays": 7, "CourseResponseDays": 730, "CourseShockResponseDays": 120,
+  "CourseShockDecayDays": 180, "CourseMinimumTenureDays": 365, "CourseChallengeDays": 180,
+  "CourseShockChallengeDays": 60, "CourseEntrenchmentDays": 1460
+}

@@ -303,6 +303,7 @@ public static class InterfaceSkin
         // the same rectangle the ledger and the war ledger take: most of the screen, with
         // the map still visible behind the shade and the top bar still readable above it.
         ("modal.diplomacy",    new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("modal.policies",     new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
         ("modal.trade",        new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
         // The production page's own file (game/gui/28_production_units.json) ships the panel it
         // finished at: wider than the other three pages, and sitting higher. Mirrored here,

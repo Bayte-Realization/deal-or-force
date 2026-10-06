@@ -1,0 +1,23 @@
+{
+  "lake_texture": "gfx/water/lake_surface.png",
+  "river_texture": "gfx/water/river_surface.png",
+  "river_inset_texels": 0.18,
+  "river_near_opacity": 0.92,
+  "river_far_opacity": 0.58,
+  "shore_width_texels": 0.75,
+  "lake_depth_texels": 5.0,
+  "texture_strength": 0.65,
+  "tile_repeat": 640,
+  "ripple_strength": 0.035,
+  "animation_speed": 0.0,
+  "tile_resolution": 512,
+  "river_profiles": [
+    {
+      "feature_names": ["Dnipro", "Dnieper", "Dnepre"],
+      "width_texels": 1.2,
+      "upstream_width_texels": 0.6,
+      "upstream_latitude": 54.5,
+      "full_width_latitude": 50.0
+    }
+  ]
+}

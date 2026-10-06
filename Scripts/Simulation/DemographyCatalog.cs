@@ -20,6 +20,8 @@ public sealed class CultureDefinition
     /// region it is founded on instead.
     /// </summary>
     public string Country = "";
+    /// <summary>Optional homeland region prefixes. A diaspora elsewhere uses its local seat's name.</summary>
+    public readonly List<string> CountryRegions = new();
 
     /// <summary>
     /// What this people believes, as weights. One entry is the usual case; two is a people
@@ -326,6 +328,13 @@ public static class DemographyCatalog
             if (entry.Value.TryGetProperty("group", out var group)) culture.Group = group.GetString() ?? "";
             if (entry.Value.TryGetProperty("colour", out var colour)) culture.Colour = colour.GetString() ?? culture.Colour;
             if (entry.Value.TryGetProperty("country", out var country)) culture.Country = country.GetString() ?? "";
+            if (entry.Value.TryGetProperty("country_regions", out var homeland) && homeland.ValueKind == JsonValueKind.Array)
+            {
+                culture.CountryRegions.Clear();
+                foreach (var id in homeland.EnumerateArray())
+                    if (id.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(id.GetString()))
+                        culture.CountryRegions.Add(id.GetString());
+            }
 
             // "religion": "orthodox", or a split: { "christian": 0.55, "sunni": 0.45 }
             if (!entry.Value.TryGetProperty("religion", out var faith)) continue;

@@ -46,11 +46,19 @@ public sealed class MovementDefinition
     /// from (`government_in_exile`), its peoples and homeland filled in from the country itself.
     /// </summary>
     public bool Template;
+    /// <summary>Some organisations appear only once conditions justify them.</summary>
+    public bool StartActive = true;
+    public bool CanEmerge;
+    public float EmergenceThreshold = .35f;
+    public float EmergenceChance = .25f;
+    /// <summary>Operational reach from headquarters or a homeland, not a radius of automatic popularity.</summary>
+    public float OutreachKm = 800f;
+    public float DiasporaReachKm = 3500f;
 
     public bool Has(string trait) => Listed(Traits, trait);
 
     /// <summary>Contract work is not a territorial claim. Warlord-company mods must opt in.</summary>
-    public bool CanStageUprising => !Has("for_hire") || Has("territorial_ambition");
+    public bool CanStageUprising => !Has("civic_independence") && (!Has("for_hire") || Has("territorial_ambition"));
 
     /// <summary>
     /// Whether a list of names holds this one, whatever its case. A loop rather than
@@ -132,6 +140,14 @@ public static class MovementCatalog
                 definition.Playable = playable.GetBoolean();
             if (value.TryGetProperty("template", out var template) && template.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 definition.Template = template.GetBoolean();
+            if (value.TryGetProperty("start_active", out var startActive) && startActive.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                definition.StartActive = startActive.GetBoolean();
+            if (value.TryGetProperty("can_emerge", out var emerge) && emerge.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                definition.CanEmerge = emerge.GetBoolean();
+            definition.EmergenceThreshold = M.Clamp01(Number("emergence_threshold", definition.EmergenceThreshold));
+            definition.EmergenceChance = M.Clamp01(Number("emergence_chance", definition.EmergenceChance));
+            definition.OutreachKm = M.Clamp(Number("outreach_km", definition.OutreachKm), 50f, 20000f);
+            definition.DiasporaReachKm = M.Clamp(Number("diaspora_reach_km", definition.DiasporaReachKm), 50f, 20000f);
             Strings("peoples", definition.Peoples);
             Strings("faiths", definition.Faiths);
             Strings("homeland", definition.Homeland);
@@ -290,19 +306,31 @@ public static partial class Movements
     public static void Found(Campaign campaign)
     {
         if (campaign is null || campaign.ElapsedDays > 0) return;
+        FoundDefinitions(campaign, MovementCatalog.All.Where(d => d.StartActive));
+    }
+
+    public static void Activate(Campaign campaign, MovementDefinition definition)
+    {
+        if (campaign is not null && definition is not null && campaign.FeatureEnabled("movements"))
+            FoundDefinitions(campaign, new[] { definition });
+    }
+
+    private static void FoundDefinitions(Campaign campaign, IEnumerable<MovementDefinition> definitions)
+    {
         var founded = 0;
-        foreach (var definition in MovementCatalog.All)
+        foreach (var definition in definitions)
         {
             if (string.IsNullOrWhiteSpace(definition.Tag) || definition.Template) continue;
-            if (campaign.Nations.Any(nation => nation.Movement?.Id == definition.Id ||
-                                               string.Equals(nation.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase)))
+            var existing = campaign.Nations.FirstOrDefault(nation => nation.Movement?.Id == definition.Id ||
+                                               string.Equals(nation.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null && (existing.Movement is not { Dissolved: true } || existing.IsHuman || campaign.StatesOf(existing).Length > 0))
                 continue;
             var headquarters = StateById(campaign, definition.Headquarters);
             if (headquarters is null) continue;
-            var mapIndex = FreeMapIndex(campaign);
+            var mapIndex = existing?.MapIndex ?? FreeMapIndex(campaign);
             if (mapIndex <= 0) continue;
 
-            var nation = campaign.AddNation(new Nation
+            var nation = existing ?? campaign.AddNation(new Nation
             {
                 Tag = definition.Tag,
                 Iso = definition.Tag,
@@ -328,6 +356,15 @@ public static partial class Movements
                 Cadres = definition.Cadres,
                 Legitimacy = definition.Legitimacy
             };
+            nation.Movement.ReadyOnDay["lifecycle_born"] = campaign.ElapsedDays;
+            if (existing is not null)
+            {
+                nation.Treasury = definition.Treasury;
+                nation.ManpowerReserve = definition.Cadres;
+                nation.Government = definition.Government;
+                nation.Ideology = definition.Ideology;
+                campaign.Fallen.Remove(nation.Id);
+            }
             foreach (var (regionId, share) in definition.Support)
                 if (StateById(campaign, regionId) is { } region) nation.Movement.Support[region.MapIndex] = M.Clamp01(share);
             foreach (var tag in definition.RecognisedBy)
@@ -336,8 +373,14 @@ public static partial class Movements
             nation.FoundedCultures.Clear();
             nation.FoundedCultures.AddRange(definition.Peoples);
             founded++;
+            campaign.MovementRevision++;
+            if (campaign.ElapsedDays > 0)
+            {
+                nation.Movement.LastReport = Loc.Get("A new civic organisation has formed around local demands.");
+                campaign.Chronicle.Record(campaign, "movement_emerged", nation.Id);
+            }
         }
-        if (founded > 0) Place(campaign);
+        if (founded > 0) { Place(campaign); campaign.MarkStrategicChange(); }
     }
 
     /// <summary>Put every landless headquarters where its region is on the map.</summary>

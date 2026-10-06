@@ -563,7 +563,7 @@ public static class BudgetCore
 
     private static float BasisOf(Nation nation, BudgetLine line, float weeklyOutput) => line.Charge switch
     {
-        BudgetBasis.Debt => MathF.Max(0f, -nation.Treasury),
+        BudgetBasis.Debt => SovereignFinance.Outstanding(nation),
         BudgetBasis.Tariffs => nation.WeeklyTariffIncome,
         BudgetBasis.TradeBalance => nation.WeeklyTradeBalance,
         _ => weeklyOutput
@@ -640,6 +640,8 @@ public static class BudgetCore
         if (nation is null || line is null) return 0f;
         FillSlots(nation, atWar);
         var amount = BasisOf(nation, line, weeklyOutput) * rate * line.Yield * ScaleOf(line);
+        if (nation.DebtMechanicActive && line.Id == "debt_interest")
+            amount += nation.PublicDebt * nation.DebtSpreadAnnual / 52f;
         // At the rate being asked about, not the one the country has set - otherwise the
         // slider would promise money that the rate it is promising it for would evade.
         if (IsLevy(line)) amount *= Compliance(nation, weeklyOutput, line, rate) * NationalModifiers.Factor(nation, "tax_efficiency");
@@ -650,6 +652,8 @@ public static class BudgetCore
         float compliance)
     {
         var amount = BasisOf(nation, line, weeklyOutput) * RateOf(nation, line) * line.Yield * ScaleOf(line);
+        if (nation.DebtMechanicActive && line.Id == "debt_interest")
+            amount += nation.PublicDebt * nation.DebtSpreadAnnual / 52f;
         if (IsLevy(line)) amount *= compliance * NationalModifiers.Factor(nation, "tax_efficiency");
         // A trade balance is allowed to be a loss; nothing else is allowed to be negative,
         // because a tax that pays money out because the country is miserable is a bug

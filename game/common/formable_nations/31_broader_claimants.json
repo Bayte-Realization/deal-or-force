@@ -1,0 +1,9 @@
+{
+  "byzantium":{"eligible_tags":["GRC","TUR","ITA","ROU","BGR","SRB"]},
+  "benelux_union":{"eligible_tags":["BEL","NLD","LUX","FRA","DEU"]},
+  "baltic_union":{"eligible_tags":["EST","LVA","LTU","POL","FIN"]},
+  "nordic_union":{"eligible_tags":["NOR","SWE","DNK","FIN","ISL","EST"]},
+  "iberian_union":{"eligible_tags":["ESP","PRT","AND","FRA"]},
+  "maghreb_union":{"eligible_tags":["MAR","DZA","TUN","LBY","MRT"]},
+  "transcaucasia":{"eligible_tags":["GEO","ARM","AZE","TUR","RUS"]}
+}

@@ -67,9 +67,10 @@ static class Program
         Check(foreign.Stance == ArmyStance.Cautious, "AI/remote issuer still controls its own division");
 
         MapRasterCatalog.ResetCatalog(); TerrainCatalog.ResetCatalog();
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
+        if (args.Contains("--map-peace-only")) { MapAndPeaceRegressionTests.Run(map); return; }
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
         if (args.Contains("--militia-only")) { MilitiaSeatTests.Run(c); return; }

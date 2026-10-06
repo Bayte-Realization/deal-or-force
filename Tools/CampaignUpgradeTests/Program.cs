@@ -33,8 +33,8 @@ static class Program
             Check(campaign.ElapsedHours - before == hours, $"one simulation step advances exactly {hours} hours");
         }
         campaign = Campaign.CreateBootstrap(20261001);
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
         campaign.AttachProvinceTopology(map);
         campaign.Wars.Clear();
         var founder = campaign.NationByTag("KOR");
@@ -77,8 +77,8 @@ static class Program
         Check(restored.Options[0].UnionFounderId == founder.Id && restored.Options[0].UnionFormableId == definition.Id, "pending treaty choice remains editable save data");
         var loaded = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(campaign, ""), "").Campaign;
         Check(PeacefulFormation.Consented(loaded, loaded.NationByTag("KOR"), loaded.NationByTag("PRK"), definition), "consent survives real campaign save snapshot");
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var loadedMap, out message), message);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var loadedMap, out message), message);
         loaded.AttachProvinceTopology(loadedMap);
         var humanFounder = loaded.NationByTag("PRK");
         var humanPartner = loaded.NationByTag("KOR");
@@ -135,8 +135,8 @@ static class Program
         Check(map.ProvinceToNation.Count(owner => owner == founder.MapIndex) == taken, "repeated proclamation cannot transfer land twice");
 
         campaign = Campaign.CreateBootstrap(20261001);
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out map, out message), message);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out map, out message), message);
         campaign.AttachProvinceTopology(map);
         var parent = campaign.NationByTag("RUS");
         campaign.ConfigureSinglePlayer(parent.Id);
@@ -170,8 +170,8 @@ static class Program
     static void AiFoundations()
     {
         var campaign = Campaign.CreateBootstrap(20261001);
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
         campaign.AttachProvinceTopology(map);
         campaign.Wars.Clear();
         campaign.Defines.UnionAiReviewDays = 1;
@@ -236,8 +236,8 @@ static class Program
             "vanilla reload uses the mod-readable union balance rather than test-only overrides");
         loaded.Defines.UnionAiReviewDays = 1;
         loaded.Defines.UnionAiEarliestDay = 10;
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var loadedMap, out message), message);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var loadedMap, out message), message);
         loaded.AttachProvinceTopology(loadedMap);
         var loadedFounder = loaded.NationById(founder.Id);
         var loadedPartner = loaded.NationById(partner.Id);

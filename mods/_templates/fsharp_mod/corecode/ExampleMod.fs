@@ -2,6 +2,15 @@ namespace ExampleFSharpMod
 
 open DealOrForce.Modding
 
+// Explicit examples, not automatic campaign mutations. Each returns queue acceptance.
+type GovernanceHelpers =
+    static member Borrow(context: ModContext, tag: string, amount: double) =
+        context.ManageDebt(tag, "borrow", amount)
+    static member EnactLaw(context: ModContext, tag: string, policy: string) =
+        context.EnactPolicy(tag, policy, "", 0, false)
+    static member CourseShock(context: ModContext, tag: string, strength: double, reason: string) =
+        context.AddCourseShock(tag, strength, reason)
+
 // Same language-neutral managed contract as C# mods. No Godot inheritance required.
 type ExampleMod() =
     interface IGlobalityMod with

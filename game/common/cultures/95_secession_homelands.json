@@ -1,0 +1,7 @@
+{
+  "scottish": {"country_regions": ["gb_abd", "gb_agb", "gb_dgy", "gb_hld", "gb_pkn", "gb_scb"]},
+  "welsh": {"country_regions": ["gb_pow"]},
+  "quebecois": {"country_regions": ["ca_qc"]},
+  "catalan": {"country_regions": ["es_ct"]},
+  "basque": {"country_regions": ["es_pv", "es_nc", "fr_na"]}
+}

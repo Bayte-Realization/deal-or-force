@@ -1,0 +1,7 @@
+{
+  "national_reconciliation": { "description": "Sustain the promised stability through reconciliation. More peaceful civic activity may include voices opposing the government." },
+  "fiscal_recovery": { "description": "Reduce debt relative to GDP and restore payment credibility. Slower construction helps finance the adjustment." },
+  "peace_dividend": { "description": "Remain at peace for a meaningful part of the term and at its end. Recovery benefits, but offensive military strength is reduced." },
+  "institutional_renewal": { "description": "Sustain stronger institutions and the promised stability. Additional credit capacity comes with an administrative cost." },
+  "shared_prosperity": { "icon": "industry", "description": "Sustain a higher living standard. Output improves, but expansion becomes more expensive to finance." }
+}

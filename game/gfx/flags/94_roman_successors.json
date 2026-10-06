@@ -1,0 +1,9 @@
+{
+  "sprites": {
+    "flag_formable_roman_restoration": "res://game/gfx/flags/flag_roman_empire_v2.png",
+    "flag_formable_roman_restoration_absolute_monarchy": "res://game/gfx/flags/flag_roman_empire_v2.png",
+    "flag_formable_roman_restoration_communism": "res://game/gfx/flags/flag_roman_empire_v2.png",
+    "flag_formable_byzantium": "res://game/gfx/flags/flag_eastern_roman_empire_v2.png",
+    "flag_formable_western_roman_empire": "res://game/gfx/flags/flag_western_roman_empire.png"
+  }
+}

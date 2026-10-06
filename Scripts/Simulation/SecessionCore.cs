@@ -218,7 +218,8 @@ public static class SecessionCore
                * (weights.RadicalismFloor + weights.Radicalism * M.Clamp01(state.Radicalism))
                * (1f - M.Clamp01(state.Stability))
                * (weights.WeaknessFloor + weights.Weakness * (1f - M.Clamp01(owner.Stability)))
-               * (losing ? weights.WarMultiplier : 1f);
+               * (losing ? weights.WarMultiplier : 1f)
+               * (1f - SocialMemory.BorderRelief(campaign, state));
     }
 
     /// <summary>

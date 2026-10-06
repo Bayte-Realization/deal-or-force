@@ -404,8 +404,7 @@ public static partial class Warfare
                 // Support fire does not occupy empty ground. Wait for an actual battle;
                 // an ordinary RMB order can turn this into a march explicitly.
                 if (army.SupportOnly) continue;
-                var riverAdvance = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier,
-                    topology.RiverCrossingStrength(army.ProvinceId, target));
+                var riverAdvance = WaterConditions.MovementMultiplier(campaign, army.ProvinceId, target);
                 // An empty province is not open ground. The divisions holding the provinces
                 // around it cover the gap by fire, which is what keeps a front a front rather
                 // than a race: a breach has to be widened and held, not strolled through
@@ -718,10 +717,7 @@ public static partial class Warfare
             var defenderPierces = ArmourFactor(defenderPiercing, attackerArmour, defines);
 
             var attackerPlanning = WeightedPlanning(attacking);
-            var riverAttackMultiplier = battle.RiverCrossingStrength <= 0f ? 1f : M.Lerp(
-                defines.RiverAttackMultiplier,
-                defines.MajorRiverAttackMultiplier,
-                M.Clamp01((battle.RiverCrossingStrength - 0.45f) / 0.45f));
+            var riverAttackMultiplier = WaterConditions.AttackMultiplier(campaign, battle.RiverCrossingStrength, battle.ProvinceId);
 
             // ----------------------------------------------------------------------
             // Both sides shoot. The attacker's fire is measured against the defender's

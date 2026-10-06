@@ -55,7 +55,15 @@ public static class ScriptedEffects
     static ScriptedEffects()
     {
         NationField("treasury", n => n.Treasury, (n, v) => n.Treasury = v, float.NegativeInfinity, float.PositiveInfinity,
-            "Signed national treasury; negative values are debt. Percent effects add a share of its absolute value; mult and set are literal.");
+            "Cash on hand. Legacy negative balances migrate to public debt on the next economic settlement.");
+        NationField("public_debt", n => n.PublicDebt, (n, v) => n.PublicDebt = v, 0f, float.PositiveInfinity,
+            "Outstanding sovereign principal, separate from cash. Changing this does not issue cash.");
+        NationField("credit_confidence", n => n.CreditConfidence, (n, v) => n.CreditConfidence = v, 0f, 1f,
+            "Lenders' confidence, 0-1; affects credit access and the risk spread.");
+        NationField("debt_arrears", n => n.DebtArrears, (n, v) => n.DebtArrears = v, 0f, float.PositiveInfinity,
+            "Unpaid contractual interest, distinct from outstanding principal.");
+        NationField("payment_arrears", n => n.PaymentArrears, (n, v) => n.PaymentArrears = v, 0f, float.PositiveInfinity,
+            "Unpaid primary public spending; does not alone mean a contractual debt default.");
         // A movement's own figures (Movements). On a country that is not one they read nought
         // and writing them does nothing, so an event can be written for "all" without asking.
         NationField("movement.cadres", n => n.Movement?.Cadres ?? 0f,
@@ -88,6 +96,11 @@ public static class ScriptedEffects
             "Public willingness to sustain a war, 0-1.");
         NationField("standard_of_living", n => n.StandardOfLiving, (n, v) => n.StandardOfLiving = v, 0f, 1f,
             "National average standard of living, 0-1.");
+        NationField("social.expected_living", n => n.ExpectedLivingStandard,
+            (n, v) => n.ExpectedLivingStandard = v, 0f, 1f, "The population's established living-standard expectation, 0-1.");
+        NationField("social.domestic_incident", n => n.DomesticImage?.Incident ?? 0f,
+            (n, v) => { n.DomesticImage ??= new PublicImage(); n.DomesticImage.Incident = v; }, -1f, 1f,
+            "Pending domestic reputation impulse, -1 to 1; it is absorbed gradually, not an instant status label.");
         NationField("literacy", n => n.Literacy, (n, v) => n.Literacy = v, 0.05f, 0.999f,
             "Share of the population that is literate, 0-1.");
         // Money, which a script could previously neither read nor move - so a mod could add
@@ -179,7 +192,8 @@ public static class ScriptedEffects
 
     /// <summary>Every key content may write to, for documentation and console help.</summary>
     public static IEnumerable<(string Key, string Help)> Vocabulary =>
-        Fields.Values.OrderBy(field => field.Name, StringComparer.Ordinal).Select(field => (field.Name, field.Help));
+        Fields.Values.OrderBy(entry => entry.Name, StringComparer.Ordinal).Select(entry => (entry.Name, entry.Help))
+            .Concat(new[] { ("reputation.culture.ID", "Audience-scoped cultural narrative impulse, -1 to 1. Also reputation.nation.TAG and reputation.coalition.TARGET:DAY; suffixes work as usual.") });
 
     private static bool FeatureEffect(string key, out string id)
     {
@@ -198,16 +212,32 @@ public static class ScriptedEffects
         operation = Operation.Add;
         if (string.IsNullOrWhiteSpace(rawKey)) return false;
 
-        var key = rawKey.Trim().Replace('-', '_');
+        // Subject ids retain their spelling: a mod may declare a culture with a hyphen.
+        var key = rawKey.Trim();
         foreach (var (suffix, candidate) in Suffixes)
         {
             if (!key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
             var stem = key[..^suffix.Length];
-            if (!Fields.TryGetValue(stem, out field)) continue;
+            if (!FindField(stem, out field)) continue;
             operation = candidate;
             return true;
         }
-        return Fields.TryGetValue(key, out field);
+        return FindField(key, out field);
+    }
+
+    private static bool FindField(string key, out Field field)
+    {
+        if (Fields.TryGetValue(key.Replace('-', '_'), out field)) return true;
+        if (!key.StartsWith("reputation.", StringComparison.OrdinalIgnoreCase) || key.Length > 128) return false;
+        var parts = key.Split('.', 3);
+        if (parts.Length != 3 || parts[2].Length == 0 ||
+            !parts[2].All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-' or ':')) return false;
+        var kind = parts[1].ToLowerInvariant();
+        if (kind is not ("culture" or "nation" or "coalition")) return false;
+        var subject = kind + ":" + (kind == "nation" ? parts[2].ToUpperInvariant() : parts[2]);
+        field = new Field { Name = "reputation." + subject, Min = -1f, Max = 1f,
+            GetNation = n => SocialMemory.Image(n, subject)?.Incident ?? 0f };
+        return true;
     }
 
     /// <summary>One parsed entry, kept flat so applying an effect allocates nothing.</summary>
@@ -253,12 +283,31 @@ public static class ScriptedEffects
 
             foreach (var entry in _entries)
             {
+                if (!float.IsFinite(entry.Value)) continue;
                 if (FeatureEffect(entry.Key, out var feature))
                 {
                     campaign.SetFeature(feature, entry.Value >= .5f);
                     continue;
                 }
                 if (!Resolve(entry.Key, out var field, out var operation)) continue;
+                if (field.Name == "social.expected_living" && !SocialMemory.HabitsEnabled(campaign)) continue;
+                if (field.Name == "social.domestic_incident" && !SocialMemory.ImagesEnabled(campaign)) continue;
+
+                if (field.Name.StartsWith("reputation.", StringComparison.Ordinal))
+                {
+                    if (!SocialMemory.ImagesEnabled(campaign)) continue;
+                    var subject = field.Name[11..];
+                    if (subject.StartsWith("nation:", StringComparison.Ordinal) && campaign.NationByTag(subject[7..]) is null) continue;
+                    if (subject.StartsWith("culture:", StringComparison.Ordinal) && DemographyCatalog.Culture(subject[8..]) is null) continue;
+                    if (subject.StartsWith("coalition:", StringComparison.Ordinal) &&
+                        !campaign.Coalitions.Any(group => SocialMemory.CoalitionKey(group) == subject)) continue;
+                    var image = SocialMemory.Image(nation, subject, true);
+                    var pending = Combine(image.Incident, entry.Value, operation, field);
+                    image.Incident = pending;
+                    image.LastReason = "Scripted public narrative";
+                    image.LastIncidentDay = campaign.ElapsedDays;
+                    continue;
+                }
 
                 if (field.SetNation is not null)
                 {
@@ -435,7 +484,7 @@ public static class ScriptedEffects
                 continue;
             }
 
-            if (!property.Value.TryGetSingle(out var value))
+            if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetSingle(out var value) || !float.IsFinite(value))
             {
                 errors?.Add($"{context}: effect '{property.Name}' must be a number.");
                 continue;
@@ -478,13 +527,14 @@ public static class ScriptedEffects
                 continue;
             }
             if (!Resolve(entry.Key, out var field, out var operation)) continue;
-            var label = Loc.Get(Labels.GetValueOrDefault(field.Name, field.Name));
+            var narrative = field.Name.StartsWith("reputation.", StringComparison.Ordinal);
+            var label = narrative ? Loc.Format("Public narrative: {0}", field.Name[11..]) : Loc.Get(Labels.GetValueOrDefault(field.Name, field.Name));
             // The same word is a heading elsewhere - the top bar's STABILITY - and a table that
             // capitalised it there shouts it here. Put back into sentence case, unless it is a
             // short acronym like GDP, which is capitals in every language.
             if (label.Length > 4 && label == label.ToUpper(CultureInfo.CurrentCulture))
                 label = label[..1] + label[1..].ToLower(CultureInfo.CurrentCulture);
-            var fraction = Fractions.Contains(field.Name);
+            var fraction = narrative || Fractions.Contains(field.Name) || field.Name.StartsWith("social.", StringComparison.Ordinal);
             var culture = CultureInfo.CurrentCulture;
             var value = operation switch
             {

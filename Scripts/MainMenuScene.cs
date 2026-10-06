@@ -154,6 +154,7 @@ public partial class MainMenuScene : Control
         BuildCredits();
         BuildSettings();
         BuildArchive();
+        ExportVerification.AttachIfRequested(this);
     }
 
     /// <summary>

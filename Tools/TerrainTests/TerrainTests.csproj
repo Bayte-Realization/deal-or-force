@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>disable</Nullable></PropertyGroup>
-  <ItemGroup><Compile Include="../../Scripts/Simulation/**/*.cs"/><Compile Include="../../Scripts/LegacySourceMap/**/*.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Simulation/**/*.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/gfx/HydrologySurfaceData.cs" /></ItemGroup>
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
 </Project>

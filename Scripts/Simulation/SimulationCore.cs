@@ -162,6 +162,7 @@ public sealed partial class Nation
     // Additive save fields: older campaigns default to no proclamation.
     public string FormedNationId = "";
     public int FormedNationDay = -1;
+    public HashSet<string> FormedNationHistory = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The country's name as a player reads it.
@@ -708,10 +709,13 @@ public sealed partial class Campaign
             SupportCore.Tick(this);
             using (SimProfiler.Measure("militia")) MilitiaCore.Tick(this);
             using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
+            using (SimProfiler.Measure("social memory")) SocialMemory.Tick(this);
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
+            using (SimProfiler.Measure("alliances")) AllianceMaintenance.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
+            using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
             using (SimProfiler.Measure("movements"))
             {
                 using (SimProfiler.Measure("  mov:rules")) MovementRules.Tick(this);
@@ -952,6 +956,8 @@ public sealed partial class Campaign
         // back where their headquarters stand on a loaded one (Movements).
         Movements.Found(this);
         Movements.Place(this);
+        if (ElapsedDays == 0 && FeatureEnabled("national_courses"))
+            foreach (var nation in Nations) NationalCourses.Initialize(this, nation);
 
         MapRevision++;
 

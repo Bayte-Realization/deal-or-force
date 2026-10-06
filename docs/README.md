@@ -20,6 +20,7 @@ After that come the references, which you visit for a detail:
 | [PLAYER_GUIDE.md](PLAYER_GUIDE.md) | a player | controls, economy, the army, war, peace, emission, network multiplayer |
 | [NETWORK_MULTIPLAYER.md](NETWORK_MULTIPLAYER.md) | player/developer | LAN, direct IP, Radmin, UDP 7270 and the synchronisation model |
 | [MODDING_GUIDE.md](MODDING_GUIDE.md) | a modder | the Paradox-like mod structure, JSON, GDScript, C#, load order |
+| [SOCIAL_MEMORY.md](SOCIAL_MEMORY.md) | player/modder | 4.8 experimental historical norms, audience-dependent reputation and scripted narratives |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | a developer | how the simulation is built, a map of the code, ticks, commands, performance |
 | [BUILDING.md](BUILDING.md) | a developer | building, the Debug/Release configurations, release |
 | [SCENARIOS_AND_WORKSHOP.md](SCENARIOS_AND_WORKSHOP.md) | a scenario author | the world format, the data editor, map labels |

@@ -1,0 +1,16 @@
+// Additional regional identities for authored/modded population mixes. They are not
+// automatically assigned to all residents of a region or treated as independence votes.
+{
+  "bavarian":{"name":"Bavarian","group":"germanic","colour":"#7199b5","religion":{"catholic":0.6,"irreligion":0.4},"country":"Bavaria","country_regions":["de_by"]},
+  "alsatian":{"name":"Alsatian","group":"germanic","colour":"#ad6463","religion":{"catholic":0.6,"irreligion":0.4}},
+  "silesian":{"name":"Silesian","group":"west_slavic","colour":"#b79d59","religion":"catholic"},
+  "kashubian":{"name":"Kashubian","group":"west_slavic","colour":"#ba9c4a","religion":"catholic"},
+  "erzya":{"name":"Erzya","group":"uralic","colour":"#9f6d64","religion":{"orthodox":0.75,"animist":0.25}},
+  "moksha":{"name":"Moksha","group":"uralic","colour":"#8f675e","religion":{"orthodox":0.75,"animist":0.25}},
+  "vepsian":{"name":"Vepsian","group":"uralic","colour":"#4e8873","religion":"orthodox"},
+  "ingrian":{"name":"Ingrian","group":"uralic","colour":"#779653","religion":"protestant"},
+  "livonian":{"name":"Livonian","group":"uralic","colour":"#5b977a","religion":"protestant"},
+  "ladin":{"name":"Ladin","group":"latin","colour":"#7891a3","religion":"catholic"},
+  "friulian":{"name":"Friulian","group":"latin","colour":"#7494aa","religion":"catholic"},
+  "megleno_romanian":{"name":"Megleno-Romanian","group":"latin","colour":"#a17c56","religion":{"orthodox":0.7,"sunni":0.3}}
+}

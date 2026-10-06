@@ -10,6 +10,25 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
+        if (args.Contains("--social-only")) { SocialMemoryTests.Run(); return; }
+        if (args.Contains("--ui-icons-only")) { InterfaceIconTests.Run(); return; }
+        if (args.Contains("--worker-only")) { WorkerBackendTests.Run(); return; }
+        if (args.Contains("--civic-only")) { CivicCampaignTests.Run(); return; }
+        if (args.Contains("--alliances-only")) { DynamicAllianceTests.Run(); return; }
+        if (args.Contains("--finance-only")) { SovereignFinanceTests.Run(); return; }
+        if (args.Contains("--policies-only")) { PoliticalPolicyTests.Run(); return; }
+        if (args.Contains("--regional-content-only")) { RegionalContentTests.Run(); return; }
+        if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
+        if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
+        DynamicAllianceTests.Run();
+        SovereignFinanceTests.Run();
+        PoliticalPolicyTests.Run();
+        NationalCourseTests.Run();
+        RegionalContentTests.Run();
+        SocialMemoryTests.Run();
+        CivicCampaignTests.Run();
+        WorkerBackendTests.Run();
         if (args.Contains("--yaml-only")) { StructuredDataTests.Run(); return; }
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
         if (args.Contains("--fleet-localization-only")) { FleetNameLocalizationTests.Run(); return; }
@@ -28,7 +47,7 @@ static class Program
             NewsFeedTests.Run();
             return;
         }
-        if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
+        FlagModdingTests.Run();
         StructuredDataTests.Run();
         EventCadenceTests.Run();
         PresentationReloadTests.Run();
@@ -102,8 +121,8 @@ static class Program
         var korea = FormableNations.Find("united_korea");
         Check(!FormableNations.Evaluate(c, n, korea).CanForm, "map not ready blocks formation");
         MapRasterCatalog.ResetCatalog(); TerrainCatalog.ResetCatalog();
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
         Check(!FormableNations.Evaluate(c, n, korea).CanForm, "divided Korea blocked");
         c.Wars.Clear();

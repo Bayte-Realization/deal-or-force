@@ -3,8 +3,8 @@
   <!--
     Headless harness for the campaign simulation. The project's own performance contract
     says "full campaign tick and pure systems must be runnable outside a Godot Node" -
-    this is that claim made executable: it compiles Scripts/Simulation and the legacy map
-    tables on their own, with no Godot reference at all. If someone ever imports Godot
+    this is that claim made executable: it compiles Scripts/Simulation and reads external
+    world-map data, with no Godot reference at all. If someone ever imports Godot
     into the simulation layer, this project stops compiling, which is the point.
   -->
 
@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\Scripts\Simulation\**\*.cs" />
-    <Compile Include="..\..\Scripts\LegacySourceMap\**\*.cs" />
+
   </ItemGroup>
 
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />

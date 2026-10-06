@@ -76,6 +76,13 @@ public partial class DealOrForceGame
             Tr(TradePolicyRules.Name(player.TradePolicy)));
         ClearDetail();
 
+        if (_dossierTab == "Finance")
+        {
+            ShowSovereignFinance(player);
+            ApplyDossierTab();
+            return;
+        }
+
         // Before the first economic week closes every one of these is genuinely zero, and
         // three zeros on the screen a player opens first reads as a broken game rather than
         // as a week that has not happened yet.

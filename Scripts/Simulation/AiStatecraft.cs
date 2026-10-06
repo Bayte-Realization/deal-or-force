@@ -708,7 +708,7 @@ public static partial class AiStatecraft
             }
         // A decided war is negotiated whatever the scenario's opening lock says: the lock keeps the
         // wars on the map from ending in their first weeks, not a beaten country from surrendering.
-        if (campaign.ElapsedDays < war.AiNegotiationUnlockDay && MathF.Abs(war.WarScore) < defines.AiDecisiveWarScore) return;
+        if (CivilWarPersistence.NegotiationLocked(campaign, war)) return;
         if (campaign.ElapsedDays - war.StartedDay < defines.AiMinimumWarDays) return;
         if (campaign.ElapsedDays - war.LastPeaceProposalDay < defines.AiPeaceProposalInterval) return;
 
@@ -741,8 +741,12 @@ public static partial class AiStatecraft
 
         // Winning. Write the peace a country would actually write.
         var demand = new PeaceDemand { WarId = war.Id, ProposerId = nation.Id };
-        WriteDemand(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
-        ConsiderSubjugation(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
+        var decisive = WriteDecisiveSettlement(campaign, nation, war, ledger, demand);
+        if (!decisive)
+        {
+            WriteDemand(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
+            ConsiderSubjugation(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
+        }
 
         if (demand.Provinces.Count == 0 && demand.Subjugate.Length == 0)
         {

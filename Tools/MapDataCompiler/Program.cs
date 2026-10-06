@@ -1,5 +1,5 @@
 using DealOrForce.Simulation;
-using SourceEarthData = Globality.EarthData;
+using SourceEarthData = DealOrForce.Simulation.WorldMapSource;
 
 var projectRoot = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 var output = Path.Combine(projectRoot, "game", "map_data");

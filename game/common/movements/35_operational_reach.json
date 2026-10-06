@@ -1,0 +1,6 @@
+{
+  "hamas": { "outreach_km": 900, "diaspora_reach_km": 2500 },
+  "order_of_malta": { "outreach_km": 700, "diaspora_reach_km": 2500 },
+  "jewish_defense_league": { "outreach_km": 500, "diaspora_reach_km": 6000 },
+  "central_tibetan_administration": { "outreach_km": 1700, "diaspora_reach_km": 4000 }
+}

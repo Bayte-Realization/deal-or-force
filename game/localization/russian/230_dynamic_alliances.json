@@ -1,0 +1,19 @@
+{
+  "chronicle.alliance_strained": "Союз стран {0} и {1} переживает разногласия.",
+  "chronicle.alliance_ended": "{0} выходит из союза со страной {1}.",
+  "Alliance cohesion": "Прочность союза",
+  "At risk": "Под угрозой",
+  "Holding together": "Сохраняет единство",
+  "Reaffirm alliance": "Укрепить союз",
+  "Existing commitment": "Существующие обязательства",
+  "Mutual opinion": "Взаимное отношение",
+  "Political differences": "Политические различия",
+  "Reputation risk": "Репутационные риски",
+  "Shared trade": "Совместная торговля",
+  "Mutual assurances": "Взаимные гарантии",
+  "Sanctions against an ally": "Санкции против союзника",
+  "Fighting together": "Совместная война",
+  "Conflicting commitments": "Противоречивые обязательства",
+  "Bounded trust": "Предел доверия",
+  "Restore trust by {0:P0}. Available every {1} days; unresolved conflicts can weaken it again.": "Восстановить доверие на {0:P0}. Доступно раз в {1} дней; нерешённые конфликты могут снова ослабить союз."
+}

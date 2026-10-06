@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 using DealOrForce.Simulation;
-using Map = Globality.EarthData;
+using Map = DealOrForce.Simulation.WorldMapSource;
 
 // Stage into a separate folder. Never overwrite the live map or renumber world provinces.
 var output = Path.GetFullPath(args.Length > 0 ? args[0] : ".fennara/artifacts/south_ossetia_border");

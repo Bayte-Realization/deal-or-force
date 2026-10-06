@@ -86,13 +86,13 @@ public static class Program
 
     private static bool Attach(Campaign campaign)
     {
-        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-                Globality.EarthData.Width, Globality.EarthData.Height, out var topology, out var message))
+        if (!MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+                DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var topology, out var message))
         {
             Console.WriteLine("province map unavailable: " + message);
             return false;
         }
-        if (MapRasterCatalog.TryLoadHydrology(Globality.EarthData.Width, Globality.EarthData.Height,
+        if (MapRasterCatalog.TryLoadHydrology(DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height,
                 out var hydrology, out _))
             topology.AttachHydrology(hydrology);
         campaign.AttachProvinceTopology(topology);

@@ -61,7 +61,7 @@ public static class PeacefulFormation
         if (campaign is null || founder is null || partner is null || definition is null) return "Choose a founding country and a partner.";
         if (!definition.PeacefulAccession) return "This proclamation has no peaceful accession route.";
         if (!FormableNations.Eligible(founder, definition) || founder.Id == partner.Id || founder.IsSubject ||
-            !string.IsNullOrEmpty(founder.FormedNationId)) return "This country cannot lead the foundation.";
+            !FormableNations.CompatibleProclamation(founder, definition)) return "This country cannot lead the foundation.";
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return "Territorial map ready";
         if (!AtPeace(campaign, founder) || !AtPeace(campaign, partner)) return "Both countries must be at peace.";
         if (partner.Movement is not null || (partner.IsSubject && !partner.AnswersTo(founder.Id)))
@@ -113,7 +113,7 @@ public static class PeacefulFormation
     {
         // Recheck irreversible facts when an old, saved invitation is answered.
         if (founder is null || partner is null || definition is null || !definition.PeacefulAccession ||
-            !FormableNations.Eligible(founder, definition) || founder.IsSubject || founder.Id == partner.Id || !string.IsNullOrEmpty(founder.FormedNationId) ||
+            !FormableNations.Eligible(founder, definition) || founder.IsSubject || founder.Id == partner.Id || !FormableNations.CompatibleProclamation(founder, definition) ||
             founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability ||
             !AtPeace(campaign, founder) || !AtPeace(campaign, partner) ||
             (partner.IsSubject && !partner.AnswersTo(founder.Id)) || partner.Movement is not null ||

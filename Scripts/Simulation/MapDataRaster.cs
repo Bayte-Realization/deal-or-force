@@ -197,6 +197,7 @@ public static class MapRasterCatalog
         _resettingSources = true;
         try
         {
+        WorldMapTables.ResetCatalog();
         ProvincePath = null;
         DefinitionPath = null;
         RiverPath = null;
@@ -238,7 +239,7 @@ public static class MapRasterCatalog
         // its source files are unchanged. Changed files/paths still invalidate it.
         if (revision == _sourceRevision) return;
         _sourceRevision = revision;
-        Globality.EarthData.ReleaseDecodedGrids();
+        WorldMapSource.ReleaseDecodedGrids();
     }
 
     public static void ApplyDirectory(string directory, List<string> errors)
@@ -281,6 +282,7 @@ public static class MapRasterCatalog
         SourceControlPath = SourceFileFor("source_control", "source_control.png", SourceControlPath);
         SourceStatesPath = SourceFileFor("source_states", "source_states.png", SourceStatesPath);
         SourceDisputesPath = SourceFileFor("source_disputes", "source_disputes.png", SourceDisputesPath);
+        WorldMapTables.ApplyDirectory(directory, errors);
         RefreshSourceRevision();
 
         string SourceFileFor(string key, string fallback, string previous)
@@ -300,7 +302,7 @@ public static class MapRasterCatalog
             {
                 // Validate before committing a mod override. An invalid mod must not
                 // replace a working base layer or leak old decoded ids into a new map.
-                if (errors is not null) SourceMapGrid.Load(path, Globality.EarthData.Width, Globality.EarthData.Height);
+                if (errors is not null) SourceMapGrid.Load(path, WorldMapSource.Width, WorldMapSource.Height);
                 return path;
             }
             catch (Exception exception) when (errors is not null)

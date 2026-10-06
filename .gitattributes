@@ -1,2 +1,5 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+# A unified diff prefixes unchanged tab-indented lines with a space; that is
+# patch syntax, not source indentation or accidental trailing whitespace.
+Tools/LanguageAdapters/patches/*.patch whitespace=-space-before-tab,-blank-at-eol

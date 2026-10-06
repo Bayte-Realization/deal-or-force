@@ -29,6 +29,13 @@ public partial class ModApi : RefCounted
     public string get_date() => GetDate();
     public void log(string message) => Log(message);
     public bool feature_enabled(string id) => _campaign?.FeatureEnabled(id) == true;
+    // These are Godot-callable names, not the differently named worker commands.
+    public string[] get_capabilities() => new[]
+    {
+        "get_day", "get_date", "log", "feature_enabled", "set_feature",
+        "get_province_terrain", "get_nation", "set_nation_number", "get_politics",
+        "enact_policy", "manage_debt", "add_course_shock", "get_define", "set_define"
+    };
     public bool set_feature(string id, bool enabled) => _campaign?.SetFeature(id, enabled) == true;
 
     public Godot.Collections.Dictionary get_province_terrain(int provinceId)
@@ -63,6 +70,11 @@ public partial class ModApi : RefCounted
         result["stability"] = nation.Stability;
         result["war_support"] = nation.WarSupport;
         result["manpower"] = nation.ManpowerReserve;
+        result["public_debt"] = nation.PublicDebt;
+        result["debt_arrears"] = nation.DebtArrears;
+        result["payment_arrears"] = nation.PaymentArrears;
+        result["credit_confidence"] = nation.CreditConfidence;
+        result["debt_condition"] = nation.DebtCondition.ToString();
         return result;
     }
 
@@ -78,6 +90,10 @@ public partial class ModApi : RefCounted
         {
             case "population": nation.Population = Math.Max(0L, (long)value); break;
             case "treasury": nation.Treasury = number; break;
+            case "publicdebt": nation.PublicDebt = Math.Max(0, number); break;
+            case "debtarrears": nation.DebtArrears = Math.Max(0, number); break;
+            case "paymentarrears": nation.PaymentArrears = Math.Max(0, number); break;
+            case "creditconfidence": nation.CreditConfidence = Math.Clamp(number, 0, 1); break;
             case "gdp": nation.Gdp = Math.Max(0f, number); break;
             case "militaryspending": nation.MilitarySpending = Math.Clamp(number, 0f, 1f); break;
             case "taxrate": nation.TaxRate = Math.Clamp(number, 0f, 1f); break;
@@ -91,6 +107,39 @@ public partial class ModApi : RefCounted
     }
 
     public bool set_nation_number(string tag, string key, double value) => SetNationNumber(tag, key, value);
+
+    public Godot.Collections.Dictionary get_politics(string tag)
+    {
+        var result = new Godot.Collections.Dictionary();
+        if (_campaign?.NationByTag(tag) is not { } n) return result;
+        var course = n.NationalCourse;
+        var convictions = new Godot.Collections.Dictionary();
+        foreach (var p in course.Convictions) convictions[p.Key] = p.Value;
+        result["course"] = course.Dominant; result["course_initialized"] = course.Initialized;
+        result["inertia"] = course.Entrenchment; result["shock"] = course.Shock;
+        result["convictions"] = convictions;
+        var laws = new Godot.Collections.Array();
+        foreach (var p in n.Laws)
+            laws.Add(new Godot.Collections.Dictionary { ["slot"] = p.Key, ["id"] = p.Value.Id,
+                ["target_tag"] = p.Value.TargetTag, ["region"] = p.Value.Region });
+        result["laws"] = laws;
+        result["promise"] = n.Agenda?.Id ?? "";
+        result["promise_completed"] = n.Agenda?.Completed ?? false;
+        result["promise_succeeded"] = n.Agenda?.Succeeded ?? false;
+        return result;
+    }
+
+    // Trusted code mods use exactly the same prices, territory checks and cooldowns as the UI.
+    public bool enact_policy(string tag, string id, string targetTag = "", int region = 0, bool promise = false) =>
+        ModOperations.QueuePolicy(_campaign, tag, id, targetTag, region, promise);
+
+    public bool manage_debt(string tag, string action, double amount = 0) =>
+        ModOperations.QueueDebt(_campaign, tag, action, amount);
+
+    public bool add_course_shock(string tag, double strength, string reason)
+    {
+        return ModOperations.QueueCourseShock(_campaign, tag, strength, reason);
+    }
 
     public double GetDefine(string name, double fallback = 0)
     {

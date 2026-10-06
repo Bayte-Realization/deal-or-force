@@ -1,0 +1,82 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using DealOrForce.Simulation;
+
+static class CivicCampaignTests
+{
+    static void Check(bool ok, string label)
+    { if (!ok) throw new Exception(label); Console.WriteLine("PASS civic: " + label); }
+    public static void Run()
+    {
+        var c = Campaign.CreateBootstrap(803);
+        MapRasterCatalog.ResetCatalog(); TerrainCatalog.ResetCatalog();
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
+        c.AttachProvinceTopology(map);
+        var movement = c.NationByTag("SCV"); var parent = c.NationByTag("GBR");
+        Check(movement?.Movement is not null && c.NationByTag("WCV") is not null && c.NationByTag("QCV") is not null,
+            "three civic campaigns found from data");
+        var definition = Movements.DefinitionOf(movement);
+        var region = Movements.StateById(c, "gb_abd");
+        Check(!definition.CanStageUprising && !MovementActions.For(movement).Any(k => k.Id == "rise"),
+            "civic independence is not armed uprising");
+        Check(CivilIndependence.AwarenessTarget(c, definition, movement.Movement, region, parent) > 0,
+            "civic aspiration does not require poverty or exclude the parent's primary cultures");
+        foreach (var id in definition.Homeland)
+            if (Movements.StateById(c, id) is { } home) movement.Movement.Support[home.MapIndex] = .92f;
+        Check(CivilIndependence.StandingTarget(c, movement) >= c.Defines.CivilReferendumLegitimacy,
+            "a strong civic mandate can sustain referendum legitimacy without hundreds of foreign recognitions");
+        c.ConfigureSinglePlayer(parent.Id);
+        movement.Movement.Support[region.MapIndex] = .92f; movement.Movement.Legitimacy = .9f;
+        Check(CivilIndependence.Refusal(c, movement, region).Length > 0, "a human parent must agree explicitly");
+        Check(MovementDealings.Refusal(c, parent, movement, "authorise_referendum").Length == 0, "parent can permit a vote");
+        new MovementDealingCommand { IssuerId = parent.Id, MovementId = movement.Id, Action = "authorise_referendum" }.Apply(c);
+        Check(CivilIndependence.ParentConsents(c, movement, parent), "authorisation is an actual campaign command");
+        var votes = CivilIndependence.ResidentSupport(movement, region);
+        Check(votes > .5f, "majority uses all residents, not just a selected people's fraction");
+        var armies = c.Armies.Count; var wars = c.Wars.Count;
+        Check(CivilIndependence.Ratify(c, movement, region), "qualified agreed referendum transfers territory");
+        Check(region.NationMapIndex == movement.MapIndex && c.StatesOf(parent).Length > 0 &&
+            c.Armies.Count == armies && c.Wars.Count == wars, "peaceful transfer creates neither militia nor war and preserves parent");
+        Check(CampaignDiplomacy.Get(c, parent.Id, movement.Id).TruceUntil > c.ElapsedDays,
+            "settlement protects against immediate attack");
+        var options = new JsonSerializerOptions { IncludeFields = true, PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate };
+        var saved = JsonSerializer.Deserialize<MovementState>(JsonSerializer.Serialize(movement.Movement, options), options);
+        Check(saved.ReadyOnDay.ContainsKey(CivilIndependence.ConsentKey(parent.Id)), "referendum consent survives serialization");
+        Check(SecessionEvents.NameFor(c, "scottish", "us_ca", "California", parent) == "California",
+            "diaspora state uses a local name, not a remote homeland");
+        Check(SecessionEvents.NameFor(c, "scottish", "gb_hld", "Highlands", parent) == "Highlands",
+            "existing state name is not duplicated");
+        var war = new StrategicWar { CivilConflict = true, AiNegotiationUnlockDay = 540, WarScore = 95 };
+        Check(CivilWarPersistence.NegotiationLocked(c, war), "civil conflict cannot bargain away its future on an early score spike");
+        war.Id = c.Wars.Select(w => w.Id).DefaultIfEmpty().Max() + 1;
+        war.AttackerId = movement.Id; war.DefenderId = parent.Id;
+        war.AttackerLosses = 100;
+        war.AttackerFront.Add(MilitiaCore.Seat(c.ProvinceMap, c.ProvinceController,
+            (ushort)movement.MapIndex, (ushort)region.MapIndex).Province);
+        c.Wars.Add(war);
+        movement.ManpowerReserve = 100_000; movement.Treasury = 1;
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 90L * 24);
+        var reserveMen = movement.ManpowerReserve; var reserveMoney = movement.Treasury;
+        CivilWarPersistence.Tick(c);
+        Check(war.EscalationStage == 1 && c.Armies.Count == armies + 1 &&
+            movement.ManpowerReserve == reserveMen - MilitiaCore.Weights.Formation &&
+            Math.Abs(movement.Treasury - (reserveMoney - c.Defines.CivilWarReserveCost)) < .0001,
+            "active civil war mobilises one paid AI reserve on owned ground");
+        CivilWarPersistence.Tick(c);
+        Check(c.Armies.Count == armies + 1, "same escalation stage cannot mint repeated reserves");
+        Check(!c.Armies.Any(a => a.NationId == parent.Id && a.TemplateId == MilitiaCore.TemplateId),
+            "reserve automation does not spend a human player's resources");
+        var savedWar = JsonSerializer.Deserialize<StrategicWar>(JsonSerializer.Serialize(war, options), options);
+        Check(savedWar.CivilConflict && savedWar.EscalationStage == 1 && savedWar.AiNegotiationUnlockDay == 540,
+            "civil war duration and paid mobilisation stage survive serialization");
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 540L * 24);
+        Check(!CivilWarPersistence.NegotiationLocked(c, war) && CivilWarPersistence.StageDue(c, war) == 3,
+            "negotiation lock expires and escalation is capped");
+        c.SetFeature("militia", false);
+        Check(!MilitiaCore.Found(c, movement, region), "militia switch also gates external founding calls");
+    }
+}

@@ -69,6 +69,7 @@ public static class FlagCatalog
 {
     private static readonly List<FlagQualifier> Qualifiers = new();
     private static readonly List<string> Fallbacks = new();
+    private static readonly Dictionary<string, string[]> GenericCultures = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Families that outrank the country's own flag rather than standing in for it.
@@ -152,6 +153,7 @@ public static class FlagCatalog
     {
         Qualifiers.Clear();
         Fallbacks.Clear();
+        GenericCultures.Clear();
         Identities.Clear();
         Aliases.Clear();
         Native.Clear();
@@ -295,6 +297,11 @@ public static class FlagCatalog
 
         ReadFamilies(root, "identities", Identities, errors);
         ReadFamilies(root, "fallbacks", Fallbacks, errors);
+        if (root.TryGetProperty("generic_flag_cultures", out var rules) && rules.ValueKind == JsonValueKind.Object)
+            foreach (var rule in rules.EnumerateObject())
+                if (rule.Value.ValueKind == JsonValueKind.Array)
+                    GenericCultures[rule.Name] = rule.Value.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String)
+                        .Select(v => Slug(v.GetString())).ToArray();
     }
 
     /// <summary>One declared list of families, replacing whatever was there.</summary>
@@ -491,6 +498,10 @@ public static class FlagCatalog
         // answered for: better the wrong flag than a grey rectangle, and a player can see
         // that nothing has been drawn for this yet.
         if (!ownFlagStillFits) names.Add($"flag_{tag}");
+        // A specific historical emblem is not a universal ideology. Empty lists lift a mod's restriction.
+        var culture = ValueOf("culture", campaign, nation);
+        names.RemoveAll(name => GenericCultures.TryGetValue(name, out var accepted) && accepted.Length > 0 &&
+            !accepted.Contains(culture, StringComparer.OrdinalIgnoreCase));
         return names;
     }
 

@@ -1,0 +1,16 @@
+// Shared national colours where an ethnic group has no separate artwork.
+// These are fallbacks, not assertions of a historical separatist flag.
+{
+  "flag_culture_han": "res://game/gfx/flags/flag_chn.png",
+  "flag_culture_cantonese": "res://game/gfx/flags/flag_chn.png",
+  "flag_culture_hakka": "res://game/gfx/flags/flag_chn.png",
+  "flag_culture_hui": "res://game/gfx/flags/flag_chn.png",
+  "flag_culture_javanese": "res://game/gfx/flags/flag_idn.png",
+  "flag_culture_buginese": "res://game/gfx/flags/flag_idn.png",
+  "flag_culture_cebuano": "res://game/gfx/flags/flag_phl.png",
+  "flag_culture_ilocano": "res://game/gfx/flags/flag_phl.png",
+  "flag_culture_maronite": "res://game/gfx/flags/flag_lbn.png",
+  "flag_culture_bambara": "res://game/gfx/flags/flag_mli.png",
+  "flag_culture_ovambo": "res://game/gfx/flags/flag_nam.png",
+  "flag_culture_melanesian": "res://game/gfx/flags/flag_png.png"
+}

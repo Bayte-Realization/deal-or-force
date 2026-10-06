@@ -1,0 +1,11 @@
+{
+  "war_started": { "actor": -0.18, "target": 0.06, "name": "A new war" },
+  "peace_signed": { "actor": 0.10, "target": 0.08, "name": "Peace signed" },
+  "peaceful_independence": { "actor": 0.18, "target": 0.22, "name": "Peaceful independence" },
+  "accession_signed": { "actor": 0.10, "target": 0.10, "name": "Peaceful accession" },
+  "alliance_ended": { "actor": -0.05, "name": "An alliance ended" },
+  "aid_sent": { "actor": 0.15, "name": "Financial aid" },
+  "movement_crackdown": { "actor": -0.12, "target": 0.04, "name": "Crackdown on a movement" },
+  "movement_designated": { "target": -0.12, "name": "A movement designated" },
+  "denunciation": { "target": -0.05, "name": "Public denunciation" }
+}

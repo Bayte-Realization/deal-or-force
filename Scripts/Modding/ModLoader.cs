@@ -22,8 +22,13 @@ public sealed class ModManifest
     [JsonPropertyName("load_order")] public int LoadOrder { get; set; }
     [JsonPropertyName("dependencies")] public List<string> Dependencies { get; set; } = new();
     [JsonPropertyName("gdscript_entry")] public string GdscriptEntry { get; set; } = "";
+    [JsonPropertyName("engine_script_entry")] public string EngineScriptEntry { get; set; } = "";
     [JsonPropertyName("csharp_assembly")] public string CsharpAssembly { get; set; } = "";
     [JsonPropertyName("corecode_assembly")] public string CorecodeAssembly { get; set; } = "";
+    [JsonPropertyName("worker_executable")] public string WorkerExecutable { get; set; } = "";
+    [JsonPropertyName("worker_script")] public string WorkerScript { get; set; } = "";
+    [JsonPropertyName("worker_timeout_ms")] public int WorkerTimeoutMs { get; set; } = 500;
+    [JsonPropertyName("worker_interval_days")] public int WorkerIntervalDays { get; set; } = 7;
 }
 
 public sealed class ModPackage
@@ -54,6 +59,9 @@ public sealed class ModLoader
     private readonly List<ModPackage> _packages = new();
     private readonly List<(IGlobalityMod Instance, ModContext Context)> _csharp = new();
     private readonly List<(GodotObject Instance, string ModId)> _gdscript = new();
+    private readonly List<(RefCounted Instance, string ModId, Godot.Collections.Dictionary Api)> _engineScripts = new();
+    private readonly List<ManagedModLoadContext> _managedContexts = new();
+    private readonly List<WorkerModBackend> _workers = new();
     private readonly List<string> _log = new();
     private ModApi _api;
 
@@ -305,7 +313,13 @@ public sealed class ModLoader
         ("flags", () => FlagCatalog.ResetCatalog(), FlagCatalog.Merge),
         ("editor", () => ScenarioInspectorCatalog.ResetCatalog(), ScenarioInspectorCatalog.Merge),
         ("governance", () => GovernanceEvents.ResetCatalog(), GovernanceEvents.Merge),
-        ("formable_nations", () => FormableNations.ResetCatalog(), FormableNations.Merge)
+        ("formable_nations", () => FormableNations.ResetCatalog(), FormableNations.Merge),
+        ("social_memory", () => SocialIncidentCatalog.ResetCatalog(), SocialIncidentCatalog.Merge),
+        ("public_outreach", () => OutreachCatalog.ResetCatalog(), OutreachCatalog.Merge),
+        ("alliance_programs", () => AllianceProgramCatalog.ResetCatalog(), AllianceProgramCatalog.Merge),
+        ("laws", () => PoliticalPolicyCatalog.ResetCatalog(), PoliticalPolicyCatalog.MergeLaws),
+        ("agendas", () => { }, PoliticalPolicyCatalog.MergeAgendas),
+        ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>
@@ -526,18 +540,30 @@ public sealed class ModLoader
         _api = api;
         _api.Bind(campaign);
         _csharp.Clear();
+        foreach (var context in _managedContexts) context.Unload();
+        _managedContexts.Clear();
+        _workers.Clear();
         foreach (var (instance, _) in _gdscript) instance.Dispose();
         _gdscript.Clear();
+        foreach (var plugin in _engineScripts)
+        {
+            plugin.Instance.Dispose();
+            plugin.Api.Dispose();
+        }
+        _engineScripts.Clear();
 
         foreach (var package in _packages)
         {
             LoadCsharp(package, campaign);
             LoadGdscript(package, campaign);
+            LoadEngineScript(package, campaign);
+            LoadWorker(package, campaign);
         }
     }
 
     public void OnDayAdvanced(Campaign campaign)
     {
+        foreach (var worker in _workers) worker.Hook(campaign, "day_advanced");
         foreach (var plugin in _csharp)
         {
             plugin.Context.Campaign = campaign;
@@ -547,6 +573,21 @@ public sealed class ModLoader
         foreach (var plugin in _gdscript)
             if (plugin.Instance.HasMethod("on_day_advanced"))
                 Try(plugin.ModId, () => plugin.Instance.Call("on_day_advanced", _api));
+
+        for (var index = 0; index < _engineScripts.Count;)
+        {
+            var plugin = _engineScripts[index];
+            var healthy = false;
+            Try(plugin.ModId, () =>
+            {
+                EngineScriptMod.Invoke(plugin.Instance, "on_day_advanced", plugin.Api);
+                healthy = true;
+            });
+            if (healthy) { index++; continue; }
+            plugin.Instance.Dispose();
+            plugin.Api.Dispose();
+            _engineScripts.RemoveAt(index);
+        }
     }
 
     private void DiscoverRoot(string physicalRoot, string virtualRoot, Dictionary<string, ModPackage> candidates)
@@ -767,6 +808,10 @@ public sealed class ModLoader
             case "capitalname" when value.ValueKind == JsonValueKind.String: nation.CapitalName = value.GetString() ?? nation.CapitalName; return true;
             case "population" when value.TryGetInt64(out var population): nation.Population = Math.Max(0, population); return true;
             case "treasury" when value.TryGetSingle(out var treasury): nation.Treasury = treasury; return true;
+            case "publicdebt" when value.TryGetSingle(out var debt) && float.IsFinite(debt): nation.PublicDebt = Math.Max(0, debt); return true;
+            case "debtarrears" when value.TryGetSingle(out var arrears) && float.IsFinite(arrears): nation.DebtArrears = Math.Max(0, arrears); return true;
+            case "paymentarrears" when value.TryGetSingle(out var primary) && float.IsFinite(primary): nation.PaymentArrears = Math.Max(0, primary); return true;
+            case "creditconfidence" when value.TryGetSingle(out var confidence) && float.IsFinite(confidence): nation.CreditConfidence = Math.Clamp(confidence, 0, 1); return true;
             case "gdp" when value.TryGetSingle(out var gdp): nation.Gdp = Math.Max(0, gdp); return true;
             case "militaryspending" when value.TryGetSingle(out var spending): nation.MilitarySpending = Math.Clamp(spending, 0f, 1f); return true;
             case "taxrate" when value.TryGetSingle(out var tax): nation.TaxRate = Math.Clamp(tax, 0f, 1f); return true;
@@ -792,7 +837,9 @@ public sealed class ModLoader
 
         Try(package.Manifest.Id, () =>
         {
-            var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
+            var loadContext = new ManagedModLoadContext(path);
+            _managedContexts.Add(loadContext);
+            var assembly = loadContext.LoadFromAssemblyPath(path);
             var types = assembly.GetTypes().Where(type => !type.IsAbstract && typeof(IGlobalityMod).IsAssignableFrom(type));
             foreach (var type in types)
             {
@@ -826,6 +873,54 @@ public sealed class ModLoader
             if (instance.HasMethod("on_load")) instance.Call("on_load", _api);
             if (instance.HasMethod("on_campaign_created")) instance.Call("on_campaign_created", _api);
         });
+    }
+
+    private void LoadEngineScript(ModPackage package, Campaign campaign)
+    {
+        if (string.IsNullOrWhiteSpace(package.Manifest.EngineScriptEntry)) return;
+        if (campaign.HumanSeats.Count > 1)
+        { package.Errors.Add("Experimental engine-script mods are single-player only."); return; }
+        var path = SafePath(package, package.Manifest.EngineScriptEntry);
+        if (path is null || !File.Exists(path))
+        { package.Errors.Add("Engine script must exist inside the mod directory."); return; }
+        Try(package.Manifest.Id, () =>
+        {
+            var instance = EngineScriptMod.Load(path);
+            var retained = false;
+            Godot.Collections.Dictionary bridge = null;
+            try
+            {
+                bridge = EngineScriptMod.CreateApi(_api);
+                EngineScriptMod.Invoke(instance, "on_load", bridge);
+                EngineScriptMod.Invoke(instance, "on_campaign_created", bridge);
+                _engineScripts.Add((instance, package.Manifest.Id, bridge));
+                retained = true;
+            }
+            finally
+            {
+                if (!retained)
+                {
+                    instance.Dispose();
+                    bridge?.Dispose();
+                }
+            }
+            Write($"[{package.Manifest.Id}] engine script active: {Path.GetFileName(path)}");
+        });
+    }
+
+    private void LoadWorker(ModPackage package, Campaign campaign)
+    {
+        if (string.IsNullOrWhiteSpace(package.Manifest.WorkerExecutable)) return;
+        var path = SafePath(package, package.Manifest.WorkerExecutable);
+        var script = string.IsNullOrEmpty(package.Manifest.WorkerScript) ? "" : SafePath(package, package.Manifest.WorkerScript);
+        if (path is null || !File.Exists(path) || script is null || (script.Length > 0 && !File.Exists(script)))
+        { package.Errors.Add("Worker executable/script must exist inside the mod directory."); return; }
+        var worker = new WorkerModBackend(path, script.Length == 0 ? Array.Empty<string>() : new[] { script },
+            package.Manifest.WorkerTimeoutMs, package.Manifest.WorkerIntervalDays,
+            message => { Write($"[{package.Manifest.Id}] {message}"); if (message.StartsWith("Worker disabled:")) package.Errors.Add(message); });
+        _workers.Add(worker);
+        worker.Hook(campaign, "load");
+        worker.Hook(campaign, "campaign_created");
     }
 
     private static IEnumerable<string> DataFiles(ModPackage package, params string[] parts)

@@ -1,0 +1,12 @@
+{
+  "Features": { "public_debt": true },
+  "DebtBaseCapacity": 0.35,
+  "DebtConfidenceCapacity": 1.1,
+  "DebtWeeklyIssueShare": 0.0015,
+  "DebtMaximumSpread": 0.16,
+  "DebtDefaultGraceWeeks": 2,
+  "DebtInsolvencyWeeks": 12,
+  "DebtRestructuringWeeks": 26,
+  "DebtHaircut": 0.30,
+  "DebtRestructuringFeeShare": 0.00002
+}

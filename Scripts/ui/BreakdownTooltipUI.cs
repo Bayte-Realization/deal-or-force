@@ -25,7 +25,7 @@ public partial class ExplainedStat : VBoxContainer
     /// <summary>What to say when there is nothing to explain yet - the first week, mostly.</summary>
     public string Plain = "";
 
-    public override Control _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
+    public override GodotObject _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
 }
 
 /// <summary>
@@ -52,7 +52,7 @@ public partial class ExplainedRow : HBoxContainer
     /// <summary>The colour to fill with - the row's own value colour, so the two agree.</summary>
     public Color Fill = new(1, 1, 1);
 
-    public override Control _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
+    public override GodotObject _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
 
     public override void _Draw()
     {

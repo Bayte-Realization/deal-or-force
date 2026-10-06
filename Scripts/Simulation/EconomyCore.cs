@@ -755,6 +755,7 @@ public static class EconomySystem
         foreach (var nation in campaign.Nations)
         {
             if (!nation.IsHuman) continue;
+            SovereignFinance.Prepare(campaign, nation, false);
             var atWar = false;
             foreach (var war in campaign.Wars)
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
@@ -790,6 +791,7 @@ public static class EconomySystem
         foreach (var nation in campaign.Nations)
         {
             var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+            SovereignFinance.Prepare(campaign, nation);
             var weeklyOutput = nation.Gdp / 52f;
             // GDP is total economic activity, not the taxable budget base. Only a
             // calibrated share reaches the treasury; this keeps modern states near a
@@ -824,7 +826,11 @@ public static class EconomySystem
                 nation.Budget.Settle(nation.WeeklyBalance, Loc.Get("rounding"));
             }
 
-            nation.Treasury += nation.WeeklyBalance;
+            var interest = 0f;
+            foreach (var line in BudgetCore.All)
+                if (line.Charge == BudgetBasis.Debt && line.Side == BudgetSide.Expense)
+                    interest += BudgetCore.Amount(nation, line, weeklyOutput, atWar);
+            SovereignFinance.Settle(campaign, nation, nation.WeeklyBalance, interest);
 
             // What the week did to prices, before what prices do to the week. Placed here
             // on purpose: the budget has been worked out and paid, so the deficit inflation

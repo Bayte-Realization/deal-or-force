@@ -68,6 +68,7 @@ public static class MovementRules
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementRules))) return;
         if (campaign.ElapsedDays == 0) return;
+        MovementLifecycle.Tick(campaign);
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
         // What the world decides about who has fallen happens on the week, as it did.
         if (campaign.ElapsedDays % week == 0)
@@ -150,8 +151,10 @@ public static class MovementRules
         foreach (var region in campaign.States)
         {
             var own = PeopleOf(campaign, region, definition, out var faithful);
-            believers += faithful;
             if (own <= 0 && faithful <= 0) { state.Support.Remove(region.MapIndex); continue; }
+            var supportCeiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful);
+            if (supportCeiling <= 0f) { state.Support.Remove(region.MapIndex); continue; }
+            believers += faithful;
             var support = state.Support.GetValueOrDefault(region.MapIndex);
             var owner = OwnerOf(campaign, region);
             var foreign = false;
@@ -163,9 +166,11 @@ public static class MovementRules
             var foreignRule = foreign ? 0.12f : 0f;
             var grievance = M.Clamp01(region.Radicalism * 0.6f + (1f - region.Stability) * 0.25f +
                                       region.WarDamage * 0.4f + foreignRule);
-            var target = M.Clamp(0.05f + state.Legitimacy * 0.2f + grievance * 0.5f, 0f, 0.75f);
+            var civic = CivilIndependence.AwarenessTarget(campaign, definition, state, region, owner);
+            var reputation = SocialMemory.Esteem(campaign, owner, nation) * defines.SocialMovementWeight;
+            var target = M.Clamp(MathF.Max(civic, 0.05f + state.Legitimacy * 0.2f + grievance * 0.5f) + reputation, 0f, MathF.Min(.75f, supportCeiling));
             support += (target - support) * defines.MovementSupportDrift;
-            state.Support[region.MapIndex] = M.Clamp(support, 0f, MaxSupport);
+            state.Support[region.MapIndex] = M.Clamp(support, 0f, supportCeiling);
             supporters += (long)(own * support);
         }
         var fromFaith = (long)(believers * defines.MovementFaithShare * 0.1f);
@@ -253,6 +258,7 @@ public static class MovementRules
         var recognised = 0;
         foreach (var id in state.RecognisedBy) if (campaign.NationById(id) is not null) recognised++;
         var standing = 0.1f + recognised * (definition.Has("government_in_exile") ? 0.008f : 0.004f);
+        if (definition.Has("civic_independence")) standing = MathF.Max(standing, CivilIndependence.StandingTarget(campaign, nation));
         if (definition.Has("recognised_sovereign")) standing = MathF.Max(standing, 0.6f);
         state.Legitimacy = M.Clamp01(state.Legitimacy + (M.Clamp01(standing) - state.Legitimacy) * 0.01f);
 
@@ -369,7 +375,7 @@ public static class MovementRules
     }
 
     /// <summary>Whether a country is one its peoples would call their own.</summary>
-    private static bool OwnState(Nation owner, MovementDefinition definition)
+    internal static bool OwnState(Nation owner, MovementDefinition definition)
     {
         foreach (var people in definition.Peoples)
         {
@@ -528,7 +534,7 @@ public static class MovementRules
     }
 
     /// <summary>The region is its own: the ground, a capital, militia, and a war with the country it rose against.</summary>
-    internal static void TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner)
+    internal static void TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner, bool peacefully = false)
     {
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
@@ -570,7 +576,7 @@ public static class MovementRules
         var seat = campaign.StatesOf(nation).OrderByDescending(candidate => candidate.Population).FirstOrDefault();
         if (seat is not null) nation.CapitalStateMapIndex = seat.MapIndex;
         campaign.LocateCapitals();
-        nation.Government = "provisional_government";
+        nation.Government = peacefully ? definition.Government : "provisional_government";
         nation.PoliticsChangedDay = campaign.ElapsedDays;
 
         // The cadres become the country's militia, and so does the street: every supporter in the
@@ -585,6 +591,7 @@ public static class MovementRules
             (int)(street / MathF.Max(1f, defines.MovementMilitiaPerSupporters)) +
             (int)(hidden / MathF.Max(1f, perFormation * 0.5f)));
         if (definition.Has("nonviolence")) formations = Math.Min(formations, 1);
+        if (peacefully) formations = 0;
         var raised = 0;
         foreach (var held in campaign.StatesOf(nation))
             for (var attempt = 0; attempt < formations && raised < formations; attempt++)
@@ -596,7 +603,7 @@ public static class MovementRules
         var fromCadres = Math.Min(raised, (int)(state.Cadres / MathF.Max(1f, perFormation)));
         state.Cadres = MathF.Max(0f, state.Cadres - fromCadres * perFormation * 0.5f);
 
-        if (owner is not null)
+        if (owner is not null && !peacefully)
         {
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, owner.Id, nation.Id), "rose_against_us");
             CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, region.MapIndex, "uprising", onOwnInitiative: false);

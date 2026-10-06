@@ -26,6 +26,7 @@
 | [PLAYER_GUIDE_RU.md](PLAYER_GUIDE_RU.md) | игрок | управление, экономика, армия, война, мир, эмиссия, сетевой мультиплеер |
 | [NETWORK_MULTIPLAYER_RU.md](NETWORK_MULTIPLAYER_RU.md) | игрок/разработчик | LAN, direct IP, Radmin, UDP 7270 и модель синхронизации |
 | [MODDING_GUIDE_RU.md](MODDING_GUIDE_RU.md) | моддер | Paradox-подобная структура модов, JSON, GDScript, C#, порядок загрузки |
+| [SOCIAL_MEMORY_RU.md](SOCIAL_MEMORY_RU.md) | игрок/моддер | экспериментальный этап 4.8: историческая норма, общественная репутация и скриптовые нарративы |
 | [ARCHITECTURE_RU.md](ARCHITECTURE_RU.md) | разработчик | устройство симуляции, карта кода, тики, команды, производительность |
 | [BUILDING_RU.md](BUILDING_RU.md) | разработчик | сборка, конфигурации Debug/Release, выпуск |
 | [SCENARIOS_AND_WORKSHOP_RU.md](SCENARIOS_AND_WORKSHOP_RU.md) | автор сценариев | формат мира, редактор данных, подписи карты |

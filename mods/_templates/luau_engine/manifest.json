@@ -1,0 +1,7 @@
+{
+  "id": "example_luau_engine",
+  "name": "Luau ScriptLanguageExtension example (experimental)",
+  "version": "1.0.0",
+  "enabled": false,
+  "engine_script_entry": "corecode/main.lua"
+}

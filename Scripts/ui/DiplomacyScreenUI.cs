@@ -110,6 +110,11 @@ public partial class DealOrForceGame
         var title = Title("DIPLOMACY", 25, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
+        var ownCountry = ActionButton("My country", () => SelectDiplomacyNation(_campaign.Player), 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png");
+        ownCountry.Name = "DiplomacyMyCountry";
+        ownCountry.TooltipText = Ui.Tip(Tr("Open your own country's diplomacy dossier."));
+        header.AddChild(ownCountry);
         header.AddChild(ActionButton("×", CloseDiplomacyScreen, 38, 32));
 
         _diplomacySummary = Title("", 13, Ui.Colour("text.body_soft"));
@@ -134,13 +139,13 @@ public partial class DealOrForceGame
         list.AddThemeConstantOverride("separation", 6);
         body.AddChild(list);
 
-        _diplomacySearch = new LineEdit
+        _diplomacySearch = Placeholder(new LineEdit
         {
-            PlaceholderText = Tr("Find a country..."),
             CustomMinimumSize = new Vector2(0, 30),
             RightIcon = null,
             ClearButtonEnabled = true
-        };
+        }, "Find a country...");
+        _diplomacySearch.Name = "DiplomacySearch";
         _diplomacySearch.TextChanged += _ => RebuildDiplomacyList();
         list.AddChild(_diplomacySearch);
 
@@ -161,7 +166,7 @@ public partial class DealOrForceGame
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto
         };
         list.AddChild(listScroll);
-        _diplomacyListRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _diplomacyListRows = new VBoxContainer { Name = "DiplomacyListRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _diplomacyListRows.AddThemeConstantOverride("separation", 2);
         listScroll.AddChild(_diplomacyListRows);
 
@@ -428,15 +433,28 @@ public partial class DealOrForceGame
         inner.AddChild(row.Flag);
         row.Name = Title("", 13, Ui.Colour("text.body"));
         Fixed(row.Name, 0);
+        row.Name.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        row.Name.MaxLinesVisible = 3;
+        row.Name.VerticalAlignment = VerticalAlignment.Center;
         row.Name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         inner.AddChild(row.Name);
         row.Stance = Title("", 11, Ui.Colour("text.caption"));
         Fixed(row.Stance, 64);
+        row.Stance.VerticalAlignment = VerticalAlignment.Center;
         inner.AddChild(row.Stance);
         row.Opinion = Title("", 13, Ui.Colour("text.bright"));
         Fixed(row.Opinion, 44);
         row.Opinion.HorizontalAlignment = HorizontalAlignment.Right;
+        row.Opinion.VerticalAlignment = VerticalAlignment.Center;
         inner.AddChild(row.Opinion);
+
+        float lastNameWidth = -1;
+        row.Name.Resized += () =>
+        {
+            if (Math.Abs(row.Name.Size.X - lastNameWidth) < .5f) return;
+            lastNameWidth = row.Name.Size.X;
+            FitDiplomacyName(row);
+        };
 
         row.Select.Pressed += () => SelectDiplomacyNation(row.Nation);
         _diplomacyListRows.AddChild(row.Select);
@@ -449,6 +467,7 @@ public partial class DealOrForceGame
         SetFlag(row.Flag, nation.Tag, 18);
         row.Select.TooltipText = Ui.Tip(nation.DisplayName + " · " + nation.Tag);
         row.Name.Text = nation.DisplayName;
+        FitDiplomacyName(row);
         var relation = CampaignDiplomacy.Peek(_campaign, _campaign.Player.Id, nation.Id);
         var opinion = relation?.Opinion ?? 0;
         row.Opinion.Text = opinion == 0 ? "·" : opinion.ToString("+0;-0;0");
@@ -459,6 +478,24 @@ public partial class DealOrForceGame
         row.Select.Modulate = nation.Id == _diplomacySelectedId
             ? new Color(1.15f, 1.10f, 0.9f)
             : Colors.White;
+    }
+
+    // Use the label's shaped lines, not a separate font estimate: fallback glyphs,
+    // theme line spacing and the actual HBox width all affect the final height.
+    private static float ReserveWrappedLabelLines(Label label)
+    {
+        var lines = Math.Clamp(label.GetLineCount(), 1, Math.Max(1, label.MaxLinesVisible));
+        var height = Mathf.Ceil(Math.Max(14f, label.GetLineHeight()) * lines +
+            label.GetThemeConstant("line_spacing") * (lines - 1) + 2);
+        label.CustomMinimumSize = new Vector2(label.CustomMinimumSize.X, height);
+        return height;
+    }
+
+    private static void FitDiplomacyName(DiplomacyRow row)
+    {
+        var height = ReserveWrappedLabelLines(row.Name);
+        // A Button is not a container and ignores its child's minimum height.
+        row.Select.CustomMinimumSize = new Vector2(0, Math.Max(28f, height + 6f));
     }
 
     // ------------------------------------------------------------------ the page
@@ -685,6 +722,9 @@ public partial class DealOrForceGame
             return label;
         }
 
+        AddSocialMemoryDiplomacy(nation, player, Field);
+        if (_campaign.FeatureEnabled("national_courses") && nation.NationalCourse.Initialized)
+            Field("National agenda", Tr(NationalCourseCatalog.Find(nation.NationalCourse.Dominant)?.Name ?? nation.NationalCourse.Dominant));
         if (own)
         {
             _diplomacyActionRows.Visible = false;
@@ -723,15 +763,41 @@ public partial class DealOrForceGame
         var sides = new HBoxContainer();
         sides.AddThemeConstantOverride("separation", 10);
         sides.AddChild(new Control { CustomMinimumSize = new Vector2(100, 0) });
-        sides.AddChild(Right(Text(player.DisplayName, 11, Ui.Colour("text.caption"))));
-        sides.GetChild<Label>(1).CustomMinimumSize = new Vector2(96, 0);
-        sides.GetChild<Label>(1).ClipText = true;
+        var ourName = Right(Text(player.DisplayName, 11, Ui.Colour("text.caption")));
+        ourName.CustomMinimumSize = new Vector2(96, 0);
+        ourName.ClipText = true;
+        ourName.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        ourName.MaxLinesVisible = 3;
+        ourName.Name = "DiplomacyComparisonPlayer";
+        ourName.TooltipText = Ui.Tip(player.DisplayName);
+        float lastPlayerComparisonWidth = -1;
+        ourName.Resized += () =>
+        {
+            if (Math.Abs(ourName.Size.X - lastPlayerComparisonWidth) < .5f) return;
+            lastPlayerComparisonWidth = ourName.Size.X;
+            ReserveWrappedLabelLines(ourName);
+        };
+        sides.AddChild(ourName);
         sides.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
         var theirName = Text(nation.DisplayName, 11, Ui.Colour("text.caption"));
         theirName.CustomMinimumSize = new Vector2(96, 0);
         theirName.ClipText = true;
+        theirName.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        theirName.MaxLinesVisible = 3;
+        theirName.Name = "DiplomacyComparisonCountry";
+        float lastComparisonWidth = -1;
+        theirName.Resized += () =>
+        {
+            if (Math.Abs(theirName.Size.X - lastComparisonWidth) < .5f) return;
+            lastComparisonWidth = theirName.Size.X;
+            ReserveWrappedLabelLines(theirName);
+        };
+        theirName.TooltipText = Ui.Tip(nation.DisplayName);
         sides.AddChild(theirName);
         balance.AddChild(sides);
+        // Measure only after attachment: the UI's inherited font is unavailable off-tree.
+        ReserveWrappedLabelLines(theirName);
+        ReserveWrappedLabelLines(ourName);
 
         var divisions = DivisionsByNation();
         void Weigh(string caption, float ours, float others, string ourText, string theirText)
@@ -938,7 +1004,73 @@ public partial class DealOrForceGame
 
         var allies = AllianceSystem.AlliesOf(_campaign, nation);
         if (relation.Stance == DiplomaticStance.Allied)
+        {
             Pact(Tr("Alliance"), Tr("signed with you"), "state.positive");
+            var strained = relation.AllianceCohesion < _campaign.Defines.AllianceRuptureCohesion;
+            Pact(Tr("Alliance cohesion"), $"{relation.AllianceCohesion:P0} · " +
+                Tr(strained ? "At risk" : "Holding together"), strained ? "state.warning" : "state.positive");
+            var why = new Simulation.Breakdown();
+            AllianceMaintenance.Target(_campaign, relation, why);
+            var meter = new ProgressBar { MinValue = 0, MaxValue = 100,
+                Value = relation.AllianceCohesion * 100, ShowPercentage = false,
+                CustomMinimumSize = new Vector2(0, 12), MouseFilter = MouseFilterEnum.Stop };
+            meter.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.inset") });
+            meter.AddThemeStyleboxOverride("fill", new StyleBoxFlat
+                { BgColor = Ui.Colour(strained ? "state.warning" : "state.positive") });
+            meter.TooltipText = Ui.Tip(string.Join("\n", why.Entries.Select(e =>
+                $"{Tr(e.Source)}: {e.Value:+0%;-0%;0%}")));
+            _diplomacyPactRows.AddChild(meter);
+            var council = new PanelContainer { Name = "AllianceCouncil" };
+            council.AddThemeStyleboxOverride("panel", new StyleBoxFlat {
+                BgColor = Ui.Colour("surface.inset"), BorderColor = Ui.Colour("text.accent"),
+                BorderWidthLeft = 2, ContentMarginLeft = 10, ContentMarginRight = 10,
+                ContentMarginTop = 8, ContentMarginBottom = 8 });
+            _diplomacyPactRows.AddChild(council);
+            var agenda = new VBoxContainer(); agenda.AddThemeConstantOverride("separation", 6);
+            council.AddChild(agenda);
+            agenda.AddChild(Title(Tr("Alliance council"), 15, Ui.Colour("text.accent")));
+            var explanation = Title(Tr("Trust is earned by kept commitments, not repeated declarations."), 12, Ui.Colour("text.body_soft"));
+            explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            agenda.AddChild(explanation);
+            var ceiling = Title(Simulation.Loc.Format("Sustainable trust: {0:P0}", AllianceMaintenance.Target(_campaign, relation)), 12, Ui.Colour("text.body_soft"));
+            ceiling.TooltipText = meter.TooltipText; agenda.AddChild(ceiling);
+            if (AlliancePrograms.Active(relation))
+            {
+                var programme = AllianceProgramCatalog.Find(relation.AllianceProgram);
+                var sponsor = _campaign.NationById(relation.AllianceProgramSponsor);
+                var progress = Math.Clamp(_campaign.ElapsedDays - relation.AllianceProgramStarted, 0, relation.AllianceProgramDuration);
+                agenda.AddChild(Title(Tr(programme?.Name ?? relation.AllianceProgram), 13, Ui.Colour("text.accent")));
+                var terms = Title(Simulation.Loc.Format("Sponsor: {0} · {1}/{2} days · {3} per week",
+                    sponsor?.DisplayName ?? "—", progress, relation.AllianceProgramDuration, Fmt.Money(relation.AllianceProgramWeeklyCost)), 12, Ui.Colour("text.body_soft"));
+                terms.AutowrapMode = TextServer.AutowrapMode.WordSmart; agenda.AddChild(terms);
+                agenda.AddChild(new ProgressBar { MinValue = 0, MaxValue = Math.Max(1, relation.AllianceProgramDuration),
+                    Value = progress, ShowPercentage = false, CustomMinimumSize = new Vector2(0, 8) });
+                if (sponsor?.Id == player.Id)
+                {
+                    var cancel = ActionButton(Tr("End contribution"), () =>
+                    {
+                        _campaign.Commands.Enqueue(new ReaffirmAllianceCommand { IssuerId = player.Id, TargetId = nation.Id, Cancel = true });
+                        _campaign.Commands.ApplyAll(_campaign); ForceDiplomacyRefresh();
+                    }, 0, 32, iconPath: "res://game/gfx/interface/icons/icon_plan_erase.png");
+                    cancel.TooltipText = Ui.Tip(Tr("Ending an unfulfilled promise costs trust. Past payments are not refunded."));
+                    agenda.AddChild(cancel);
+                }
+            }
+            else foreach (var programme in AllianceProgramCatalog.All)
+            {
+                var button = ActionButton(Tr(programme.Name), () =>
+                {
+                    _campaign.Commands.Enqueue(new ReaffirmAllianceCommand {
+                        IssuerId = player.Id, TargetId = nation.Id, ProgramId = programme.Id });
+                    _campaign.Commands.ApplyAll(_campaign); ForceDiplomacyRefresh();
+                }, 0, 34, iconPath: "res://game/gfx/interface/icons/icon_alliance_commitment.png");
+                button.Disabled = !AlliancePrograms.CanStart(_campaign, player, nation, programme.Id, out var refusal);
+                button.TooltipText = Ui.Tip(button.Disabled ? Tr(refusal) : Simulation.Loc.Format(
+                    "{0} days · {1} per week · up to {2:P0} earned trust. First payment now; trust arrives weekly. Only your treasury pays.",
+                    programme.DurationDays, Fmt.Money(AlliancePrograms.Cost(player, programme)), programme.TrustBudget));
+                agenda.AddChild(button);
+            }
+        }
         if (AllianceSystem.OfferedTo(_campaign, nation) is { } offered && offered.Id == player.Id)
             Pact(Tr("Alliance"), Tr("they have offered; answer it here"), "state.info");
         if (relation.NonAggressionPact)

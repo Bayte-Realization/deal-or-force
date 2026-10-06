@@ -82,6 +82,9 @@ public static class TerritorialTopology
 
     private readonly record struct GeoPoint(float Longitude, float Latitude);
     private readonly record struct RegionSeed(float Longitude, float Latitude, int RadiusCells);
+    private readonly record struct CellTransfer(string Id, string FromIso, string ToIso,
+        string FromNation, string ToNation, GeoPoint[] Points);
+    private static readonly List<CellTransfer> CellTransfers = new();
 
     private static readonly AdjacencyRule[] DefaultAdjacencyRules =
     {
@@ -263,6 +266,7 @@ public static class TerritorialTopology
         LakeRegions.CreatedCount;
 
     private static HashSet<int> _shippedStateIndices;
+    public static void InvalidateSourceIndices() => _shippedStateIndices = null;
 
     /// <summary>
     /// Every region the state table already ships. A partition piece that reuses one of
@@ -275,7 +279,7 @@ public static class TerritorialTopology
         {
             if (_shippedStateIndices is not null) return _shippedStateIndices;
             _shippedStateIndices = new HashSet<int>();
-            foreach (var row in EarthData.StateRows)
+            foreach (var row in WorldMapTables.StateRows)
             {
                 var parts = row.Split('|');
                 if (parts.Length > 0 && int.TryParse(parts[0], out var index)) _shippedStateIndices.Add(index);
@@ -297,6 +301,7 @@ public static class TerritorialTopology
         RegionRules.Clear();
         RegionRules.AddRange(DefaultRegionRules);
         Partitions.Clear();
+        CellTransfers.Clear();
         LakeRegions.ResetCatalog();
         var file = GameDataLoader.DataFiles("map_data", "state_regions").FirstOrDefault();
         if (file is null) return;
@@ -366,6 +371,26 @@ public static class TerritorialTopology
                     value.TryGetProperty("polar", out var polar) && polar.ValueKind == JsonValueKind.True));
             }
             catch (Exception exception) { errors?.Add($"Invalid map_data partition: {exception.Message}"); }
+        }
+
+        if (document.RootElement.TryGetProperty("cell_transfers", out var transfers) && transfers.ValueKind == JsonValueKind.Array)
+        foreach (var value in transfers.EnumerateArray())
+        {
+            try
+            {
+                var points = value.GetProperty("points").EnumerateArray().Select(p =>
+                    new GeoPoint(p[0].GetSingle(), p[1].GetSingle())).ToArray();
+                if (points.Length == 0 || points.Any(p => !float.IsFinite(p.Longitude) ||
+                    !float.IsFinite(p.Latitude) || Math.Abs(p.Longitude) > 180 || Math.Abs(p.Latitude) > 90))
+                    throw new InvalidDataException("cell transfers require finite geographic points");
+                var rule = new CellTransfer(value.GetProperty("id").GetString() ?? "",
+                    value.GetProperty("from_iso").GetString() ?? "", value.GetProperty("to_iso").GetString() ?? "",
+                    value.GetProperty("from_nation").GetString() ?? "", value.GetProperty("to_nation").GetString() ?? "", points);
+                if (string.IsNullOrWhiteSpace(rule.Id)) throw new InvalidDataException("cell transfer needs an id");
+                CellTransfers.RemoveAll(r => r.Id == rule.Id);
+                CellTransfers.Add(rule);
+            }
+            catch (Exception exception) { errors?.Add($"Invalid map_data cell transfer: {exception.Message}"); }
         }
 
         if (document.RootElement.TryGetProperty("adjacency_repairs", out var adjacency) && adjacency.ValueKind == JsonValueKind.Array)
@@ -449,6 +474,27 @@ public static class TerritorialTopology
         foreach (var partition in Partitions)
             ApplyPartition(campaign, control, states, width, height, partition, summaries);
 
+        // Exact source-checked cells, not a bounding box that could absorb a neighbour.
+        // Existing regions only: this does not create regions or renumber provinces.
+        foreach (var rule in CellTransfers)
+        {
+            var from = StateIndexByIso(rule.FromIso);
+            var to = StateIndexByIso(rule.ToIso);
+            var source = campaign.NationByTag(rule.FromNation);
+            var destination = campaign.NationByTag(rule.ToNation);
+            if (from == 0 || to == 0 || source is null || destination is null) continue;
+            var changed = 0;
+            foreach (var point in rule.Points)
+            {
+                var cell = LatitudeToY(point.Latitude, height) * width + LongitudeToX(point.Longitude, width);
+                if (states[cell] != from || control[cell] != source.MapIndex) continue;
+                states[cell] = to;
+                control[cell] = (ushort)destination.MapIndex;
+                changed++;
+            }
+            if (changed > 0) summaries.Add(new RepairSummary(rule.Id, "CELL_TRANSFER", changed));
+        }
+
         // Water last, so a lake is carved out of whatever region ends up around it rather
         // than being divided along with the land. Every caller gets this - the map
         // compiler and the game reach the map through here, and the two of them drawing
@@ -500,7 +546,7 @@ public static class TerritorialTopology
         if (_stateIndexByIso is null)
         {
             _stateIndexByIso = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
-            foreach (var row in EarthData.StateRows)
+            foreach (var row in WorldMapTables.StateRows)
             {
                 var parts = row.Split('|');
                 if (parts.Length < 4) continue;

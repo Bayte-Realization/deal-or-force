@@ -1,0 +1,8 @@
+{
+  "MovementEmergenceReviewDays": 30,
+  "MovementRebirthDays": 365,
+  "MovementQuietDissolutionDays": 240,
+  "MovementEmergencePerReview": 2,
+  "MovementMinimumAudienceShare": 0.08,
+  "Features": { "movement_lifecycle": true }
+}

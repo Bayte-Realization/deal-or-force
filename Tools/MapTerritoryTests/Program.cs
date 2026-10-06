@@ -1,13 +1,28 @@
 using System;
 using System.Linq;
 using DealOrForce.Simulation;
-using Map = Globality.EarthData;
+using Map = DealOrForce.Simulation.WorldMapSource;
 
 var campaign = Campaign.CreateBootstrap(20260830);
 TerritorialTopology.Apply(campaign, Map.Control, Map.States, Map.Width, Map.Height);
+if (args.Contains("--region-fingerprint"))
+{
+    Console.WriteLine(MapRasterCatalog.RegionFingerprint(Map.States));
+    return;
+}
 if (!MapRasterCatalog.TryBuildProvinceTopology(Map.States, Map.Control, Map.Width, Map.Height, out var topology, out var message))
     throw new Exception(message);
 Console.WriteLine(message);
+if (args.Contains("--inspect-coast"))
+{
+    const int pocket = 21648;
+    Console.WriteLine($"Pocket {pocket}: region={topology.ProvinceToState[pocket]}, centre={topology.CenterOf(pocket)}");
+    Console.WriteLine($"Cells: {topology.CellToProvince.Count(p => p == pocket)}");
+    foreach (var neighbour in topology.Neighbors[pocket])
+        Console.WriteLine($"Neighbour {neighbour}: region={topology.ProvinceToState[neighbour]}, centre={topology.CenterOf(neighbour)}");
+    Console.WriteLine($"Region fingerprint: {MapRasterCatalog.RegionFingerprint(Map.States)}");
+    return;
+}
 var georgia = campaign.NationByTag("GEO").MapIndex;
 var abkhazia = campaign.NationByTag("ABK").MapIndex;
 var previousOwners = (ushort[])topology.ProvinceToNation.Clone();
@@ -49,10 +64,14 @@ Check(enclave.Latitude > 31.1 && enclave.Latitude < 31.3 && enclave.Longitude > 
     "Gaza correction targets the verified coastal pocket, not West Bank province 21320");
 Check(topology.ProvinceToNation[21648] == israel && campaign.ProvinceController[21648] == israel,
     "Gaza coastal pocket follows ISR ownership and control in the 2024 bookmark");
+Check(topology.ProvinceToState[21648] == 18 && campaign.States.First(s => s.MapIndex == 18).Iso == "IL-D",
+    "coastal pocket belongs to the eastern Southern district, not a splinter of West Bank");
+Check(topology.ProvinceToState[21563] == 1740 && topology.ProvinceToState[21320] == 19,
+    "Gaza Strip and the real West Bank retain their authored regions");
 Check(topology.ProvinceToNation[21320] == palestine, "West Bank remains PSE");
-var preservedStates = Globality.EarthData.States;
+var preservedStates = DealOrForce.Simulation.WorldMapSource.States;
 MapRasterCatalog.ResetCatalog();
-Check(ReferenceEquals(preservedStates, Globality.EarthData.States), "unchanged source refresh preserves the repaired region grid");
+Check(ReferenceEquals(preservedStates, DealOrForce.Simulation.WorldMapSource.States), "unchanged source refresh preserves the repaired region grid");
 Check(MapRasterCatalog.TryBuildProvinceTopology(Map.States, Map.Control, Map.Width, Map.Height, out _, out _),
     "province compile stamp still matches after a catalog refresh");
 foreach (var p in coastalPockets)

@@ -49,6 +49,7 @@ public partial class DealOrForceGame
             "Ledger" => _ledgerLayer?.Visible == true,
             "Wars" => _warLedgerLayer?.Visible == true,
             "Diplomacy" => _diplomacyLayer?.Visible == true,
+            "Laws" => _policyLayer?.Visible == true,
             "Trade" => _tradeScreenLayer?.Visible == true,
             "Production" => _productionLayer?.Visible == true,
             "Support" => _supportLayer?.Visible == true,
@@ -65,6 +66,7 @@ public partial class DealOrForceGame
         else if (screen == "Ledger") _ledgerLayer.Visible = false;
         else if (screen == "Wars") _warLedgerLayer.Visible = false;
         else if (screen == "Diplomacy") CloseDiplomacyScreen();
+        else if (screen == "Laws") ClosePolicyWorkspace();
         else if (screen == "Trade") CloseTradeScreen();
         else if (screen == "Production") CloseProductionScreen();
         else if (screen == "Support") CloseSupportScreen();
@@ -137,6 +139,8 @@ public partial class DealOrForceGame
                 else SelectDossierTab(captured);
             }, 0, InterfaceSkin.Metric("shell.tab_height", 34));
             button.ClipText = true;
+            // Five policy tabs share a narrow dossier; keep Russian labels readable.
+            if (screen == "Laws") button.AddThemeFontSizeOverride("font_size", 12);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             Tip(button, tab.Label);
             _dossierTabButtons.Add(tab.Id, button);
@@ -150,6 +154,7 @@ public partial class DealOrForceGame
         _dossierScroll.ScrollVertical = 0;
         if (_dossierScreen == "Economy") ShowEconomyScreen();
         if (_dossierScreen == "Decisions") ShowDecisionsScreen();
+        if (_dossierScreen == "Laws") SelectPolicyTab(tab);
         ApplyDossierTab();
     }
 
@@ -164,9 +169,9 @@ public partial class DealOrForceGame
         RefreshSideLinks(_dossierScreen);
         foreach (var (tab, button) in _dossierTabButtons) StyleButton(button, tab == _dossierTab);
         if (_sideDetail is null) return;
-        _sideDetail.Visible = _dossierScreen != "Economy" || _dossierTab == "Budget";
+        _sideDetail.Visible = _dossierScreen != "Economy" || _dossierTab is "Budget" or "Finance";
         if (_economyControls is not null)
-            _economyControls.Visible = _dossierScreen == "Economy" && _dossierTab != "Budget";
+            _economyControls.Visible = _dossierScreen == "Economy" && _dossierTab is not ("Budget" or "Finance");
         if (_economyBuildRows is not null) _economyBuildRows.Visible = _dossierTab == "Construction";
         if (_economyMarketRows is not null) _economyMarketRows.Visible = _dossierTab == "Market";
         foreach (var child in _sideDetail.GetChildren())

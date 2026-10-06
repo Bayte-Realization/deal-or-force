@@ -19,6 +19,17 @@ public static class CampaignUiCatalog
     private static readonly List<Navigation> NavigationRows = new();
     private static readonly Dictionary<string, string> Icons = new(StringComparer.Ordinal);
     public static string Icon(string role, string fallback) => Icons.GetValueOrDefault(role, fallback);
+    /// <summary>Explicit data-bound button icons; numeric/editor controls are never guessed.</summary>
+    public static string ActionIcon(string caption)
+    {
+        if (string.IsNullOrEmpty(caption)) return "";
+        if (Icons.TryGetValue("action." + caption, out var direct)) return direct;
+        // A few older call sites translate before constructing the button.
+        foreach (var entry in Icons)
+            if (entry.Key.StartsWith("action.", StringComparison.Ordinal) && Loc.Get(entry.Key[7..]) == caption)
+                return entry.Value;
+        return "";
+    }
     private static readonly Dictionary<string, Screen> Screens = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, string[]> DetailOrders = new();
     private static readonly Dictionary<string, string[]> HiddenDetails = new();
@@ -28,13 +39,14 @@ public static class CampaignUiCatalog
     public static string DetailLabel(string screen, string field, string fallback) =>
         DetailLabels.TryGetValue(screen, out var labels) ? labels.GetValueOrDefault(field, fallback) : fallback;
     public static readonly HashSet<string> Destinations = new(StringComparer.Ordinal)
-        { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "State Affairs", "Ledger", "Trade", "Production", "Research", "Support" };
+        { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "State Affairs", "Ledger", "Trade", "Production", "Research", "Support", "Laws" };
     private static readonly HashSet<string> Actions = new(StringComparer.Ordinal)
         { "government", "ledger", "wars", "diplomacy" };
     private static readonly Dictionary<string, string[]> AllowedTabs = new()
     {
         ["Nation"] = new[] { "Overview", "Government", "Society" },
-        ["Economy"] = new[] { "Budget", "Market", "Construction" },
+        ["Economy"] = new[] { "Budget", "Finance", "Market", "Construction" },
+        ["Laws"] = new[] { "National", "Regional", "Foreign", "Agendas", "Course" },
         ["Region"] = new[] { "Overview", "Population", "Province" },
         ["Ledger"] = new[] { "Overview", "Economy", "Market", "Population", "Military", "Rankings", "Chronicle", "Vulnerabilities" },
         ["Decisions"] = new[] { "Decisions", "Formables", "Opportunities" }

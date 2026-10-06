@@ -1,0 +1,5 @@
+{
+  "coordination": {"name": "Permanent diplomatic liaison", "duration_days": 84, "weekly_gdp_share": 0.00002, "trust_budget": 0.12},
+  "exercises": {"name": "Defence coordination programme", "duration_days": 112, "weekly_gdp_share": 0.00004, "trust_budget": 0.16},
+  "relief": {"name": "Allied reconstruction fund", "duration_days": 84, "weekly_gdp_share": 0.00006, "trust_budget": 0.14, "relief": true}
+}

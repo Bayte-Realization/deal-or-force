@@ -8,19 +8,29 @@
 
 config_version=5
 
+[GD-Sync]
+
+version="1.0.2"
+
+[addons]
+
+curved_lines_2d/fill_in_parent_shape_with_brush=false
+
 [application]
 
 config/name="Deal or Force"
 run/main_scene="res://Scenes/MainMenu.tscn"
 config/project_settings_override="user://graphics_override.cfg"
-config/features=PackedStringArray("4.7", "C#", "Forward Plus")
+config/features=PackedStringArray("4.8", "C#", "Forward Plus")
 config/icon="res://icon_small.png"
 
 [autoload]
 
 BootGuard="*res://Scripts/Boot/boot_guard.gd"
-_fennara_game_capture="*res://addons/fennara/runtime/game_capture_helper.gd"
-_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+
+[dialogue_manager]
+
+runtime/advanced/uses_dotnet=true
 
 [display]
 
@@ -36,7 +46,7 @@ project/assembly_name="DealOrForce"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
+enabled=PackedStringArray()
 
 [physics]
 
@@ -47,6 +57,157 @@ enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg")
 rendering_device/d3d12/max_resource_descriptors=131072.0
 textures/canvas_textures/default_texture_filter=2
 rendering_device/driver.windows="d3d12"
+
+[shader_globals]
+
+lit_light_data={
+"filter": "nearest",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_light_count={
+"type": "int",
+"value": 0
+}
+lit_viewport_size={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+lit_canvas_scale={
+"type": "float",
+"value": 1.0
+}
+lit_world_sdf={
+"filter": "linear",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_wsdf_basis={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_wsdf_origin={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+lit_ambient_color={
+"type": "color",
+"value": Color(1, 1, 1, 1)
+}
+lit_ambient_energy={
+"type": "float",
+"value": 1.0
+}
+lit_shadow_steps_max={
+"type": "int",
+"value": 64
+}
+lit_shadow_step_scaling={
+"type": "bool",
+"value": false
+}
+lit_tile_size={
+"type": "int",
+"value": 64
+}
+lit_tile_grid={
+"type": "ivec2",
+"value": Vector2i(0, 0)
+}
+lit_directional_count={
+"type": "int",
+"value": 0
+}
+lit_lighting_model={
+"type": "int",
+"value": 0
+}
+lit_tile_headers={
+"filter": "nearest",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_tile_indices={
+"filter": "nearest",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_cookie_atlas={
+"filter": "linear",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_ysort_enabled={
+"type": "bool",
+"value": false
+}
+lit_ysort_band={
+"type": "float",
+"value": 12.0
+}
+lit_occ_data={
+"filter": "nearest",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_occ_headers={
+"filter": "nearest",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_occ_indices={
+"filter": "nearest",
+"repeat": "disable",
+"type": "sampler2D",
+"value": ""
+}
+lit_gx_count={
+"type": "int",
+"value": 0
+}
+lit_gx_rect0={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_gx_rect1={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_gx_rect2={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_gx_rect3={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_ramp_count={
+"type": "int",
+"value": 0
+}
+lit_ramp_rect0={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_ramp_rect1={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_ramp_rect2={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+lit_ramp_rect3={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
 
 [window]
 

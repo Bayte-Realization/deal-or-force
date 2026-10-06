@@ -32,5 +32,11 @@ public sealed class ModContext
 
     public Nation Nation(string tag) => Campaign?.NationByTag(tag);
     public void Queue(ICampaignCommand command) => Campaign?.Commands.Enqueue(command);
+    public bool EnactPolicy(string issuerTag, string policyId, string targetTag = "", int region = 0, bool promise = false) =>
+        ModOperations.QueuePolicy(Campaign, issuerTag, policyId, targetTag, region, promise);
+    public bool ManageDebt(string issuerTag, string action, double amount = 0) =>
+        ModOperations.QueueDebt(Campaign, issuerTag, action, amount);
+    public bool AddCourseShock(string issuerTag, double strength, string reason) =>
+        ModOperations.QueueCourseShock(Campaign, issuerTag, strength, reason);
     public void Log(string message) => _logger?.Invoke(message);
 }

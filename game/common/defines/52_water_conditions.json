@@ -1,0 +1,5 @@
+{
+  "RiverSeasonalAmplitude": 0.20,
+  "LakeWinterLogisticsLoss": 0.65,
+  "Features": { "seasonal_water": true }
+}

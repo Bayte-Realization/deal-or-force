@@ -1,0 +1,6 @@
+{
+  "id": "native_adapter_validation",
+  "name": "Temporary native Luau regression fixture",
+  "enabled": true,
+  "engine_script_entry": "corecode/main.lua"
+}

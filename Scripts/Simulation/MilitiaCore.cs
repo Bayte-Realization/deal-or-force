@@ -237,7 +237,7 @@ public static class MilitiaCore
     /// are the weeks it may not be given.
     /// </summary>
     public static bool Found(Campaign campaign, Nation nation, ScenarioState state) =>
-        campaign?.ProvinceMap is not null && nation is not null && state is not null &&
+        campaign?.ProvinceMap is not null && campaign.FeatureEnabled("militia") && nation is not null && state is not null &&
         Raise(campaign, nation, state);
 
     /// <summary>

@@ -92,8 +92,8 @@ public static class Program
         var dealtOwner = campaign.States.ToDictionary(state => state.MapIndex, state => state.NationMapIndex);
         MapRasterCatalog.ResetCatalog();
         TerrainCatalog.ResetCatalog();
-        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-                Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message))
+        if (!MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+                DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message))
         {
             Console.WriteLine(message);
             return 1;

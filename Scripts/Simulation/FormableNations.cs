@@ -13,6 +13,8 @@ public sealed record FormableNation(string Id, string Name, string Description, 
     public bool PeacefulAccession { get; init; }
     public bool SubjectIntegration { get; init; }
     public bool AiFoundation { get; init; }
+    public string[] EligibleCultures { get; init; } = Array.Empty<string>();
+    public string[] Supersedes { get; init; } = Array.Empty<string>();
 }
 public sealed record FormationRequirement(string Label, bool Met);
 public sealed record FormationStatus(FormationRequirement[] Requirements, int Owned, int Total, float Cost)
@@ -33,8 +35,14 @@ public static class FormableNations
             using (doc) Merge(doc.RootElement, null);
     }
     public static FormableNation Find(string id) => id is not null ? Definitions.GetValueOrDefault(id) : null;
+    public static bool CompatibleProclamation(Nation nation, FormableNation definition) =>
+        nation is not null && definition is not null && !nation.FormedNationHistory.Contains(definition.Id) &&
+        (string.IsNullOrEmpty(nation.FormedNationId) || definition.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase));
     public static bool Eligible(Nation nation, FormableNation definition) =>
-        nation is not null && definition.EligibleTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase);
+        nation is not null && definition is not null &&
+        (definition.EligibleTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase) ||
+         definition.EligibleCultures.Any(c => DemographyCatalog.IsPrimary(nation.Tag, c) ||
+            nation.FoundedCultures.Contains(c, StringComparer.OrdinalIgnoreCase)));
     public static void Merge(JsonElement root, List<string> errors) => MergeInto(root, errors, Definitions);
 
     /// <summary>Validate an editor overlay against current data without changing the
@@ -72,6 +80,8 @@ public static class FormableNations
                     Ids("required_ideology", old?.RequiredIdeology), Ids("required_government", old?.RequiredGovernment),
                     Text("colour", old?.Colour ?? ""))
                 {
+                    EligibleCultures = Ids("eligible_cultures", old?.EligibleCultures),
+                    Supersedes = Ids("supersedes", old?.Supersedes),
                     PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
                         ? accession.GetBoolean() : old?.PeacefulAccession ?? false,
                     SubjectIntegration = e.TryGetProperty("subject_integration", out var integration)
@@ -79,11 +89,13 @@ public static class FormableNations
                     AiFoundation = e.TryGetProperty("ai_foundation", out var ai)
                         ? ai.GetBoolean() : old?.AiFoundation ?? false
                 };
-                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || d.EligibleTags.Length == 0 || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0) ||
+                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0) ||
                     d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
                     throw new FormatException("empty eligibility/territory or values outside 0..1");
                 if (d.RequiredIdeology.Any(id => !IdeologyCatalog.Knows(id)))
                     throw new FormatException("names an ideology nothing declares");
+                if (d.Supersedes.Contains(d.Id, StringComparer.OrdinalIgnoreCase))
+                    throw new FormatException("a state cannot supersede itself");
                 if (d.RequiredGovernment.Any(id => !GovernmentCatalog.Knows(id)))
                     throw new FormatException("names a form of government nothing declares");
                 definitions[entry.Name] = d;
@@ -98,7 +110,9 @@ public static class FormableNations
         var requirements = new List<FormationRequirement>
         {
             new(Loc.Get("Eligible founding country"), Eligible(nation, d)),
-            new(Loc.Get("No state already proclaimed"), string.IsNullOrEmpty(nation.FormedNationId)),
+            new(Loc.Get("This proclamation has not already been made"), !nation.FormedNationHistory.Contains(d.Id)),
+            new(Loc.Get("Compatible previous proclamation"), string.IsNullOrEmpty(nation.FormedNationId) ||
+                d.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase)),
             new(Loc.Get("At peace"), !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id))),
             new(Loc.Format("Stability: {0:P0} / {1:P0}", nation.Stability, d.MinimumStability), nation.Stability >= d.MinimumStability),
             new(Loc.Get("Territorial map ready"), map is not null && campaign.ProvinceController is not null)
@@ -153,6 +167,8 @@ public sealed class FormNationCommand : ICampaignCommand
         if (!status.CanForm) return;
         nation.Treasury -= status.Cost;
         PeacefulFormation.Integrate(campaign, nation, d);
+        if (!string.IsNullOrEmpty(nation.FormedNationId)) nation.FormedNationHistory.Add(nation.FormedNationId);
+        nation.FormedNationHistory.Add(d.Id);
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
         nation.Name = d.Name;

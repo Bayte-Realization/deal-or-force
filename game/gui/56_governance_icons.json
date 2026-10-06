@@ -1,0 +1,11 @@
+{
+ "campaign":{"icons":{
+   "field.Public debt":"public_debt", "field.Debt / GDP":"public_debt", "field.Credit confidence":"credit_confidence",
+   "field.Risk premium":"coins", "field.Debt service":"public_debt", "field.Debt arrears":"debt_default",
+   "field.Public payment arrears":"debt_default", "field.Debt condition":"debt_default", "field.Available new credit":"credit_confidence",
+   "field.Political promise":"agenda", "field.Term progress":"agenda", "field.Promise status":"agenda", "field.Days meeting the goal":"agenda",
+   "action.Announce promise":"agenda", "action.Enact law":"laws",
+   "field.Established course":"agenda", "field.Institutional inertia":"government", "field.Pressure for change":"stability",
+   "field.Last significant shock":"debt_default", "field.Emerging course":"agenda", "field.Time under this course":"agenda"
+ }}
+}

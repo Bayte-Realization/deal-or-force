@@ -11,6 +11,11 @@ Data catalogues accept `.json`, `.yaml` and `.yml` with the same schemas and fil
 overlay order. See the [YAML reference and current limits (Russian)](YAML_MODDING_RU.md).
 Package manifests, scenario descriptors/world snapshots and saves remain JSON.
 
+For executable mod logic, see the [verified language support matrix (Russian)](LANGUAGE_BACKENDS_RU.md)
+and [Go/Rust/Luau worker protocol, templates and security limits (Russian)](WORKER_MODS_RU.md).
+Workers are trusted, single-player extensions with a deliberately limited command API,
+not additional script languages integrated into the Godot editor.
+
 Modding is the game's public layer. The basic path resembles Paradox games: a mod is an
 ordinary folder with a manifest and subject catalogues. Changing the balance needs no IDE, no
 compiler and no engine sources.
@@ -1902,6 +1907,12 @@ countries fighting it take the `long_war` and `exhausted_by_war` modifiers
 `PeaceForcedEndLead`.
 
 ### The console and mod diagnostics
+
+An experimental native Luau adapter supports `engine_script_entry` and persistent
+Script instances, distinct from stateless workers. It passes an explicit read-only
+capability dictionary and requires `true` acknowledgements from hooks.
+Only Godot 4.7.2 / Windows x64 is verified; exports and GDScript closure interop
+are not supported claims. See [native Luau instructions (Russian)](LUAU_ADAPTER_RU.md).
 
 Hardware cursor SVG/PNG assets, hotspots and scale are mod-overridable through
 `gfx/interface/cursors` and `gui`. See [Cursor reference (Russian)](CURSORS_RU.md)

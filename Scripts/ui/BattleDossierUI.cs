@@ -128,9 +128,14 @@ public partial class DealOrForceGame
         _battleDetailControls.AddChild(BattleText(Loc.Format("Terrain: {0} · frontage {1:0}/{2:0}",
             Tr(terrain?.Name ?? "Unknown"), battle.AttackerWidth, battle.DefenderWidth)));
         if (battle.RiverCrossingStrength > 0)
+        {
             _battleDetailControls.AddChild(BattleText(Tr(battle.RiverCrossingStrength > .66f
                 ? "River crossing: major · defender advantage active"
                 : "River crossing: ordinary · defender advantage active"), 12, "state.warning"));
+            if (!battle.Ended)
+                _battleDetailControls.AddChild(BattleText(Loc.Format("River assault power retained: {0:P0}",
+                    WaterConditions.AttackMultiplier(_campaign, battle.RiverCrossingStrength, battle.ProvinceId)), 12, "text.body_soft"));
+        }
         _battleDetailControls.AddChild(BattleText(Loc.Format("Long-range fire: {0:0.#}/{1:0.#}",
             battle.AttackerSupport, battle.DefenderSupport)));
         var latest = battle.Rounds.LastOrDefault();

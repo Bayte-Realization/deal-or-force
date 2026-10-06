@@ -23,6 +23,8 @@ public sealed class WorldChronicle
         _entries.Add(new(_next++, campaign.ElapsedDays, campaign.Date, kind, actorId, targetId,
             actor.Name, campaign.NationById(targetId)?.Name ?? "", subject, place, isPublic));
         if (_entries.Count > Capacity) _entries.RemoveRange(0, _entries.Count - Capacity);
+        if (isPublic) SocialMemory.Witness(campaign, kind, actorId, targetId);
+        if (isPublic) NationalCourses.Witness(campaign, kind, actor, campaign.NationById(targetId));
     }
 
     public ChronicleEntry[] Read(int viewerId, int countryId, bool world) => _entries

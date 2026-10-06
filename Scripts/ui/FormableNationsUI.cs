@@ -47,7 +47,7 @@ public partial class DealOrForceGame
         {
             cards.AddChild(Title(Simulation.Loc.Format("Proclaimed: {0} · campaign day {1}", nation.DisplayName,
                 nation.FormedNationDay), 18, Ui.Colour("text.accent")));
-            cards.AddChild(Title("Each country may proclaim one new state in a campaign.", 13, Ui.Colour("text.body_soft")));
+            cards.AddChild(Title("Compatible foundations may progress to a broader state. Previous proclamations cannot be repeated for rewards.", 13, Ui.Colour("text.body_soft")));
         }
         var term = _formationSearch.Trim();
         var definitions = FormableNations.All.Where(d => (_showAllFormables || FormableNations.Eligible(nation, d)) &&
@@ -94,7 +94,7 @@ public partial class DealOrForceGame
                 CustomMinimumSize = new Vector2(0, Ui.Metric("formation.progress_height", 10)), ShowPercentage = false, MouseFilter = MouseFilterEnum.Ignore
             });
             card.AddChild(Title(Simulation.Loc.Format("Foundation territory secured: {0}/{1}", status.Owned, status.Total), 13, Ui.Colour("text.bright")));
-            if (d.PeacefulAccession && FormableNations.Eligible(nation, d) && string.IsNullOrEmpty(nation.FormedNationId))
+            if (d.PeacefulAccession && FormableNations.Eligible(nation, d) && FormableNations.CompatibleProclamation(nation, d))
                 AddFormationPartners(card, nation, d);
             // Successful technical checks are not UI content. Failed checks remain explicit.
             for (var i = 0; i < status.Requirements.Length; i++)

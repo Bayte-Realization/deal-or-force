@@ -20,7 +20,7 @@ public static class CapitalCatalog
 
 	static readonly Dictionary<string, Location> Locations = new()
 	{
-		// Breakaway regions use the three-letter tag EarthData.CountryTable falls back to
+		// Breakaway regions use the three-letter tag the external country table falls back to
 		// when a row has no real ISO code (see BaseContent.RegisterNations), not an actual
 		// ISO-3166 assignment - they get a seat here the same as any other capital.
 		[ "ABK" ] = new( "Sukhumi", 43.0033f, 41.0164f ),

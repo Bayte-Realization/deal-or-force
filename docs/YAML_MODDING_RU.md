@@ -13,6 +13,9 @@
 - `interface/`, `gui/`, `localization/`, `gfx/`, `fonts/`, `sound/`, `music/`.
 - Структурированные определения карты, включая типы местности, `terrain_settings.yaml`
   или `.yml` и переопределения местности провинций.
+- Новые `common/laws`, `common/agendas`, `common/national_courses`,
+  `common/alliance_programs`, `map_data/water_settings` и частичные
+  `map_data/source_tables.yaml/yml` с теми же проверками, что JSON.
 
 Не означает поддержку произвольных новых папок: категория должна иметь загрузчик.
 Расширение меняет способ чтения, а не добавляет несуществующую механику.
@@ -92,6 +95,9 @@ PNG остаётся отдельным редактируемым файлом.
 тем же Ctrl+Shift+R. Баланс и стартовая история требуют новой кампании, как JSON.
 
 Готовый отключённый пример: `mods/_templates/yaml-data/`.
+Законы и органические повестки: [пример и игровые правила](GOVERNANCE_FINANCE_2026_10_06_RU.md).
+Таблицы исходной географии требуют строковых ячеек, включая числовые ID:
+[формат таблиц и миграция](SOURCE_MAP_MIGRATION_RU.md).
 Проверка: `dotnet run --project Tools/FormableTests -- --yaml-only`.
 
 Парсер: закреплённая версия [YamlDotNet 18.1.0](https://www.nuget.org/packages/YamlDotNet/18.1.0),

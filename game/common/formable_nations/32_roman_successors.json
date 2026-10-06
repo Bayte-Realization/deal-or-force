@@ -1,0 +1,31 @@
+{
+  "byzantium": {
+    "name": "Eastern Roman Empire",
+    "description": "An alternate-history eastern Roman restoration around Constantinople, Greece and Cyprus. Any eligible founder may retain its political institutions; ownership, peace, stability and the founding cost are still required.",
+    "eligible_tags": ["GRC", "TUR", "ROU", "ITA", "ESP", "BGR", "SRB"],
+    "supersedes": ["greater_romania", "italia_unita", "iberian_union", "iberia_greater"],
+    "required_government": [],
+    "peaceful_accession": true,
+    "subject_integration": true
+  },
+  "western_roman_empire": {
+    "name": "Western Roman Empire",
+    "description": "An alternate-history western Roman restoration joining Italy, France, Spain and Tunisia. Consolidate the declared territories by control, loyal subjects or consenting accession partners. Proclamation never grants unowned land.",
+    "eligible_tags": ["ITA", "ESP", "ROU", "TUR", "FRA", "PRT", "GRC"],
+    "eligible_cultures": ["italian", "spanish", "romanian", "french", "portuguese"],
+    "required_tags": ["ITA", "FRA", "ESP", "TUN"],
+    "supersedes": ["italia_unita", "greater_romania", "iberian_union", "iberia_greater"],
+    "minimum_stability": 0.75,
+    "gdp_cost_share": 0.032,
+    "governance_gain": 0.035,
+    "productivity_gain": 0.015,
+    "colour": "#8b3540",
+    "peaceful_accession": true,
+    "subject_integration": true
+  },
+  "roman_restoration": {
+    "description": "A unified alternate-history Roman restoration across both Mediterranean cores: Italy, France, Spain, Greece, Turkey, Cyprus and Tunisia. Eastern or Western Roman foundations may progress to this state; each required territory must be secured or join by consent.",
+    "required_tags": ["ITA", "FRA", "ESP", "GRC", "TUR", "CYP", "TUN"],
+    "supersedes": ["italia_unita", "greater_romania", "iberian_union", "iberia_greater", "byzantium", "western_roman_empire"]
+  }
+}

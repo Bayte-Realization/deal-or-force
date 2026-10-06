@@ -39,6 +39,7 @@ public sealed class CityDefinition
 /// </summary>
 public static class CityCatalog
 {
+    public readonly record struct MapAnchor(int ProvinceId, float Latitude, float Longitude);
     private static List<CityDefinition> _all;
     private static readonly object Gate = new();
 
@@ -80,7 +81,7 @@ public static class CityCatalog
             {
                 _provinces = new int[cities.Count];
                 for (var index = 0; index < cities.Count; index++)
-                    _provinces[index] = ProvinceUnder(topology, cities[index].Latitude, cities[index].Longitude);
+                    _provinces[index] = AnchorOnLand(topology, cities[index].Latitude, cities[index].Longitude).ProvinceId;
                 _provincesOf = topology;
             }
             provinces = _provinces;
@@ -108,15 +109,47 @@ public static class CityCatalog
     }
 
     /// <summary>The province under a point of the globe, or 0 for none.</summary>
-    private static int ProvinceUnder(ProvinceTopology topology, float latitude, float longitude)
+    public static int ProvinceUnder(ProvinceTopology topology, float latitude, float longitude)
     {
-        if (topology.Width <= 0 || topology.Height <= 0) return 0;
+        if (topology is null || topology.Width <= 0 || topology.Height <= 0) return 0;
         var x = (int)MathF.Floor((longitude + 180f) / 360f * topology.Width);
         var y = (int)MathF.Floor((90f - latitude) / 180f * topology.Height);
         x = ((x % topology.Width) + topology.Width) % topology.Width;
         y = Math.Clamp(y, 0, topology.Height - 1);
         var province = topology.CellToProvince[y * topology.Width + x];
         return province > 0 && province <= topology.ProvinceCount && !topology.IsWater(province) ? province : 0;
+    }
+
+    /// <summary>Keep authored city coordinates unless raster rounding puts them in
+    /// water. Coastal correction is bounded to six cells, never a distant capital or
+    /// the centre of a large province. Ownership always comes from current geography.</summary>
+    public static MapAnchor AnchorOnLand(ProvinceTopology topology, float latitude, float longitude)
+    {
+        var province = ProvinceUnder(topology, latitude, longitude);
+        if (province > 0 || topology is null || topology.Width < 1 || topology.Height < 1)
+            return new(province, latitude, longitude);
+        var px = (longitude + 180f) / 360f * topology.Width;
+        var py = (90f - latitude) / 180f * topology.Height;
+        var x = (int)MathF.Floor(px); var y = (int)MathF.Floor(py);
+        var best = float.MaxValue; var result = new MapAnchor(0, latitude, longitude);
+        var scale = MathF.Max(.05f, MathF.Cos(latitude * MathF.PI / 180f));
+        for (var dy = -6; dy <= 6; dy++)
+        for (var dx = -6; dx <= 6; dx++)
+        {
+            var cy = y + dy;
+            if (cy < 0 || cy >= topology.Height) continue;
+            var cx = ((x + dx) % topology.Width + topology.Width) % topology.Width;
+            var candidate = topology.CellToProvince[cy * topology.Width + cx];
+            if (candidate <= 0 || candidate > topology.ProvinceCount || topology.IsWater(candidate)) continue;
+            var north = cy + .5f - py;
+            var east = (x + dx + .5f - px) * scale;
+            var distance = north * north + east * east;
+            if (distance >= best) continue;
+            best = distance;
+            result = new(candidate, 90f - (cy + .5f) / topology.Height * 180f,
+                (cx + .5f) / topology.Width * 360f - 180f);
+        }
+        return result;
     }
 
     public static List<CityDefinition> Parse(IEnumerable<JsonDocument> documents)

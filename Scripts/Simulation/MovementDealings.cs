@@ -58,6 +58,8 @@ public static class MovementDealings
 
     public static readonly IReadOnlyList<Kind> Kinds = new Kind[]
     {
+        new("authorise_referendum", "Authorise referendum", "Permit peaceful votes in this movement's claimed regions for one year. Independence still requires a majority of residents and public standing.", "movement_legitimacy"),
+        new("revoke_referendum", "Revoke referendum consent", "Withdraw permission for future votes; already agreed borders are not reversed.", "movement_legitimacy"),
         new("recognise", "Recognise", "Recognise it as the rightful voice of its people. Its standing rises; the country whose ground it claims will not forgive it.", "movement_legitimacy"),
         new("withdraw_recognition", "Withdraw recognition", "Stop recognising it. It will remember.", "movement_legitimacy"),
         new("sponsor", "Fund it", "Pay it every week out of the treasury. It thinks the world of whoever pays.", "movement_fundraise"),
@@ -80,6 +82,9 @@ public static class MovementDealings
         yield return Of(state.SponsoredBy.ContainsKey(country.Id) ? "stop_sponsoring" : "sponsor");
         yield return Of(state.DesignatedBy.Contains(country.Id) ? "lift_designation" : "designate");
         yield return Of("crack_down");
+        if (CivilIndependence.HasClaim(campaign, movement, country))
+            yield return Of(state.ReadyOnDay.GetValueOrDefault(CivilIndependence.ConsentKey(country.Id), -1) >= campaign.ElapsedDays
+                ? "revoke_referendum" : "authorise_referendum");
         if (state.Landless) yield return Of(Movements.HostOf(campaign, movement) == country ? "expel" : "offer_asylum");
     }
 
@@ -160,6 +165,10 @@ public static class MovementDealings
         var at = campaign.ElapsedDays;
         switch (action)
         {
+            case "authorise_referendum":
+            case "revoke_referendum":
+                return CivilIndependence.HasClaim(campaign, movement, country) && !country.IsSubject &&
+                    !CampaignDiplomacy.AtWar(campaign, country.Id, movement.Id) ? "" : Loc.Get("There is no peaceful homeland claim to negotiate.");
             case "recognise":
                 if (state.RecognisedBy.Contains(country.Id)) return Loc.Get("Already recognised.");
                 if (state.DesignatedBy.Contains(country.Id)) return Loc.Get("Take it off the terrorist list first.");
@@ -223,6 +232,15 @@ public static class MovementDealings
 
         switch (action)
         {
+            case "authorise_referendum":
+                state.ReadyOnDay[CivilIndependence.ConsentKey(country.Id)] = campaign.ElapsedDays +
+                    Math.Max(1, defines.CivilReferendumConsentDays);
+                state.LastReport = Loc.Format("{0} authorises negotiated independence votes for one year.", country.DisplayName);
+                break;
+            case "revoke_referendum":
+                state.ReadyOnDay.Remove(CivilIndependence.ConsentKey(country.Id));
+                state.LastReport = Loc.Format("{0} withdraws permission for future independence votes.", country.DisplayName);
+                break;
             case "recognise":
                 state.RecognisedBy.Add(country.Id);
                 state.Legitimacy = M.Clamp01(state.Legitimacy + 0.015f);
@@ -252,6 +270,7 @@ public static class MovementDealings
                 state.InvitedBy.Remove(country.Id);
                 state.Legitimacy = M.Clamp01(state.Legitimacy - 0.02f);
                 OpinionSystem.Remember(campaign, towards, "listed_us_as_terrorists");
+                campaign.Chronicle.Record(campaign, "movement_designated", country.Id, movement.Id);
                 state.LastReport = Loc.Format("{0} lists it as a terrorist organisation.", country.DisplayName);
                 // Listing a movement whose headquarters is here is throwing it out.
                 if (state.Landless && Movements.HostOf(campaign, movement) == country) MovementRules.Expel(campaign, movement);
@@ -275,6 +294,7 @@ public static class MovementDealings
                 if (hostsIt) state.Heat = M.Clamp01(state.Heat + 0.3f);
                 country.Stability = M.Clamp(country.Stability - defines.MovementCrackdownStability, 0.1f, 0.98f);
                 OpinionSystem.Remember(campaign, towards, "cracked_down_on_us");
+                campaign.Chronicle.Record(campaign, "movement_crackdown", country.Id, movement.Id);
                 state.LastReport = Loc.Format("{0} has cracked down on it in {1} region(s).", country.DisplayName, regions.Count + (hostsIt ? 1 : 0));
                 break;
             }

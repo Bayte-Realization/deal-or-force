@@ -1,0 +1,28 @@
+{
+    "sprites":  {
+                    "icon_laws":  {
+                                      "source_colour":  "#b48732"
+                                  },
+                    "icon_agenda":  {
+                                        "source_colour":  "#b48732"
+                                    },
+                    "icon_public_debt":  {
+                                             "source_colour":  "#b48732"
+                                         },
+                    "icon_debt_default":  {
+                                              "source_colour":  "#b48732"
+                                          },
+                    "icon_credit_confidence":  {
+                                                   "source_colour":  "#b48732"
+                                               },
+                    "icon_alliance_commitment":  {
+                                                     "source_colour":  "#b48732"
+                                                 },
+                    "icon_river_crossing":  {
+                                                "source_colour":  "#b48732"
+                                            },
+                    "icon_lake_logistics":  {
+                                                "source_colour":  "#b48732"
+                                            }
+                }
+}

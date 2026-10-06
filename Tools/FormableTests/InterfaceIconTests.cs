@@ -15,6 +15,18 @@ static class InterfaceIconTests
     public static void Run()
     {
         InterfaceSkin.ResetCatalog();
+        foreach (var file in new[] { "DiplomacyScreenUI.cs", "NationalCourseUI.cs", "PolicyWorkspaceUI.cs", "PolicyWorkspaceDetails.cs", "SovereignFinanceUI.cs" })
+        {
+            var source = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts", "ui", file);
+            var matches = System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(source), "Ui\\.Colour\\(\"([^\"]+)\"\\)");
+            Check(matches.All(m => InterfaceSkin.Has(m.Groups[1].Value)),
+                "governance UI uses declared palette tokens, not diagnostic magenta: " + file);
+        }
+        Check(CampaignUiCatalog.Icon("field.Public debt", "") == "public_debt" &&
+            CampaignUiCatalog.Icon("field.Established course", "") == "agenda",
+            "finance and national course field icons resolve from editable GUI data");
+        Check(CampaignUiCatalog.For("Economy").Tabs.Any(t => t.Id == "Finance") &&
+            CampaignUiCatalog.For("Laws").Tabs.Any(t => t.Id == "Course"), "dedicated finance and national course tabs are declared in data");
         Check(CampaignUiCatalog.Icon("map.Economy", "") == "gdp", "economic map uses output, not cash");
         Check(CampaignUiCatalog.Icon("hud.BALANCE", "") != CampaignUiCatalog.Icon("hud.STABILITY", ""),
             "balance and stability have distinct roles");
@@ -29,6 +41,42 @@ static class InterfaceIconTests
         InterfaceSkin.ResetCatalog();
         Check(CampaignUiCatalog.Icon("map.Economy", "") == "gdp", "reload clears old overrides");
         SpriteCatalog.Load();
+        PoliticalPolicyCatalog.ResetCatalog();
+        Check(PoliticalPolicyCatalog.AllLaws.Concat(PoliticalPolicyCatalog.AllAgendas).All(p =>
+            !string.IsNullOrWhiteSpace(p.Description) && SpriteCatalog.Has("icon_" + p.Icon)),
+            "every vanilla law and promise has an explanation and an existing sprite");
+        using (var actionDocument = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(GameDataLoader.DataFolder(), "gui", "31_action_icons.json"))))
+        {
+            var roles = actionDocument.RootElement.GetProperty("campaign").GetProperty("icons").EnumerateObject().ToArray();
+            Check(roles.Count(role => role.Name.StartsWith("action.", StringComparison.Ordinal)) == 35,
+                "thirty-five action roles are declared in moddable data");
+            Check(roles.Count(role => role.Name.StartsWith("social.", StringComparison.Ordinal)) == 7,
+                "seven social metric roles are declared separately from actions");
+            Check(roles.All(role => SpriteCatalog.Has("icon_" + role.Value.GetString())),
+                "every action and social metric resolves an existing PNG sprite");
+            Check(CampaignUiCatalog.ActionIcon("Improve relations") == "diplomacy" &&
+                CampaignUiCatalog.ActionIcon("Start programme") == "plan_execute",
+                "source captions resolve their semantic action icons");
+            Check(CampaignUiCatalog.ActionIcon("+10") == "" && CampaignUiCatalog.ActionIcon("Unknown mod action") == "",
+                "numeric and unknown captions do not receive guessed icons");
+            var originalLanguage = Loc.Language;
+            try
+            {
+                Loc.ResetCatalog(); Loc.Language = "russian";
+                Check(Loc.Get("Improve relations") != "Improve relations" &&
+                    CampaignUiCatalog.ActionIcon(Loc.Get("Improve relations")) == "diplomacy",
+                    "already-localised Russian buttons retain the same semantic icon");
+            }
+            finally { Loc.Language = originalLanguage; }
+            errors.Clear();
+            InterfaceSkin.Merge("{\"campaign\":{\"icons\":{\"action.Start programme\":\"clock\"}}}", "action-mod-test", errors);
+            Check(errors.Count == 0 && CampaignUiCatalog.ActionIcon("Start programme") == "clock" &&
+                CampaignUiCatalog.Icon("social.funding", "") == "treasury",
+                "action mod override preserves metric roles");
+            InterfaceSkin.ResetCatalog();
+            Check(CampaignUiCatalog.ActionIcon("Start programme") == "plan_execute", "action mappings restore on reload");
+        }
         var icons = new[] { "army_halt", "army_defend", "army_advance", "army_spearhead", "army_reserve",
             "army_withdraw", "plan_prepare", "plan_execute", "auto_deploy", "plan_front", "plan_attack",
             "plan_fallback", "plan_clear", "plan_erase", "stance_cautious", "stance_aggressive" };

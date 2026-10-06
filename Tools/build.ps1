@@ -17,11 +17,14 @@
 # refuses to hand you a folder that would do that.
 
 param(
-    [string]$Godot = "C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe",
+    [string]$Godot = $env:GODOT_EXECUTABLE,
     [string]$Preset = "Windows Desktop",
     [switch]$Debug,
     [switch]$NoZip,
-    [string]$OutputDirectory
+    [switch]$IncludeExperimentalNativeLuau,
+    [switch]$SkipRuntimeVerification,
+    [string]$OutputDirectory,
+    [switch]$ReplaceExistingOutput
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,15 +33,30 @@ $project = Split-Path -Parent $PSScriptRoot
 # the folder that goes into the archive whole - an archive whose entries sit at its root
 # empties 572 files into whatever directory it is opened next to, which is a poor first
 # impression and an easy way for somebody to end up running the game from their Downloads.
-$out = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $project "build\Deal or Force" }
+$stamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+$out = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $project "build\$stamp\Deal or Force" }
 $allowedBuildRoot = [IO.Path]::GetFullPath((Join-Path $project "build")) + [IO.Path]::DirectorySeparatorChar
 if (-not ([IO.Path]::GetFullPath($out)).StartsWith($allowedBuildRoot, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Export output must be a subdirectory of this project build folder.'
 }
 $exe = Join-Path $out "Deal or Force.exe"
 
-if (-not (Test-Path $Godot)) {
-    throw "Godot not found at $Godot. Pass -Godot <path to Godot_v4.7.2-stable_mono_win64.exe>."
+if (-not $Godot -or -not (Test-Path -LiteralPath $Godot)) {
+    throw "Pass -Godot <matching Godot .NET executable>, or set GODOT_EXECUTABLE. This branch requires the engine version declared in DealOrForce.csproj."
+}
+$engineVersion = (& $Godot --version | Select-Object -Last 1).Trim()
+$sdkVersion = ([xml](Get-Content (Join-Path $project 'DealOrForce.csproj') -Raw)).Project.Sdk
+if (($sdkVersion -match '/(?<major>\d+)\.(?<minor>\d+)') -and
+    -not $engineVersion.StartsWith("$($Matches.major).$($Matches.minor).", [StringComparison]::Ordinal)) {
+    throw "Engine $engineVersion does not match SDK $sdkVersion. Do not export the 4.8 branch with the 4.7 editor."
+}
+
+function Assert-BuildChild([string]$Target) {
+    $resolved = [IO.Path]::GetFullPath($Target)
+    if (-not $resolved.StartsWith($allowedBuildRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to modify a path outside the build folder: $resolved"
+    }
+    return $resolved
 }
 
 # Godot's .NET export wants a solution file named after `dotnet/project/assembly_name`, and
@@ -56,6 +74,10 @@ if (-not (Test-Path $solution)) {
 $sdk = "C:\Program Files\dotnet"
 if (Test-Path (Join-Path $sdk "dotnet.exe")) { $env:PATH = "$sdk;$env:PATH" }
 
+Write-Host '== checking source compilation before copying/exporting ==' -ForegroundColor Cyan
+& dotnet build (Join-Path $project 'DealOrForce.csproj') --nologo
+if ($LASTEXITCODE -ne 0) { throw 'Source compilation failed; no export was started.' }
+
 Write-Host "== exporting ($(if ($Debug) { 'debug' } else { 'release' })) ==" -ForegroundColor Cyan
 
 # The build output lands inside the project, which is convenient and would otherwise be a
@@ -68,7 +90,11 @@ New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 $ignore = Join-Path $buildRoot ".gdignore"
 if (-not (Test-Path $ignore)) { New-Item -ItemType File -Path $ignore | Out-Null }
 
-if (Test-Path $out) { Remove-Item -Recurse -Force $out }
+if (Test-Path -LiteralPath $out) {
+    if (-not $ReplaceExistingOutput) { throw "Output already exists: $out. Choose a new directory, or explicitly pass -ReplaceExistingOutput." }
+    $checkedOutput = Assert-BuildChild $out
+    Remove-Item -LiteralPath $checkedOutput -Recurse -Force
+}
 # Godot will not create the export directory itself: "Prepare Template: The given export
 # path doesn't exist."
 New-Item -ItemType Directory -Force -Path $out | Out-Null
@@ -83,21 +109,41 @@ $mode = if ($Debug) { "--export-debug" } else { "--export-release" }
 # player's log opens with a load failure on every single run. Development hooks also have no
 # business running inside somebody else's copy of the game.
 #
-# So the export runs against a project.godot with those lines taken out, and the file goes
-# back exactly as it was afterwards. Matching on res://addons/ rather than on the two names
-# means a third tool added later is held back too, without anybody remembering to do it.
-$projectFile = Join-Path $project "project.godot"
-$projectBackup = Get-Content -LiteralPath $projectFile -Raw
-$keptLines = $projectBackup -split "`r?`n" | Where-Object { $_ -notmatch '^\s*_\w+\s*=\s*"\*?res://addons/' }
-$heldBack = ($projectBackup -split "`r?`n").Count - $keptLines.Count
-$keptLines = $keptLines | ForEach-Object {
-    # An editor plugin can re-register its autoload during export. Hold plugins
-    # back as well; the exact developer project is restored in finally below.
-    if ($_ -match '^enabled=PackedStringArray\(') { 'enabled=PackedStringArray()' } else { $_ }
+# Export a dedicated staging copy. Live editors can keep saving project.godot;
+# there is no temporary mutation/restoration race and Godot owns serialization.
+$stage = Assert-BuildChild (Join-Path $buildRoot (".export-" + [Guid]::NewGuid().ToString('N')))
+New-Item -ItemType Directory -Path $stage | Out-Null
+foreach ($folder in @('Scripts', 'Scenes', 'game')) {
+    Copy-Item -LiteralPath (Join-Path $project $folder) -Destination $stage -Recurse
 }
-if ($heldBack -gt 0 -or ($keptLines -join "`r`n") -ne $projectBackup) {
-    Set-Content -LiteralPath $projectFile -Value ($keptLines -join "`r`n") -NoNewline
-    Write-Host "  $heldBack development autoload(s) held back from the export" -ForegroundColor DarkGray
+foreach ($file in @('DealOrForce.csproj', 'DealOrForce.sln', 'export_presets.cfg', 'icon.ico', 'icon_small.png')) {
+    Copy-Item -LiteralPath (Join-Path $project $file) -Destination $stage
+}
+foreach ($file in @('NuGet.Config', 'nuget.config', 'global.json', 'Directory.Build.props', 'Directory.Build.targets')) {
+    $source = Join-Path $project $file
+    if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination $stage -Force }
+}
+# The locally installed editor Luau DLL can load in a release template but
+# corrupt its heap during shutdown. Keep it available to the live editor, not
+# implicitly enabled in everybody's build. Workers/managed mods are unaffected.
+if (-not $IncludeExperimentalNativeLuau) {
+    $stagedLuau = Join-Path $stage 'game\extensions\luau'
+    if (Test-Path -LiteralPath $stagedLuau) {
+        Get-ChildItem -LiteralPath $stagedLuau -File -Force |
+            Where-Object { $_.Name -in @('luau_script.gdextension', 'luau_script.gdextension.uid') -or $_.Extension -eq '.dll' -or $_.Name.StartsWith('~') } |
+            ForEach-Object {
+                $checkedAdapterCopy = Assert-BuildChild $_.FullName
+                Remove-Item -LiteralPath $checkedAdapterCopy -Force
+            }
+        Write-Host '  experimental editor Luau binaries omitted from staging; live adapter unchanged' -ForegroundColor DarkGray
+    }
+}
+# Import remaps are identical because resource paths are identical. Reuse the
+# imported source assets but never editor/plugin state or native extension lists.
+$imported = Join-Path $project '.godot\imported'
+if (Test-Path -LiteralPath $imported) {
+    New-Item -ItemType Directory -Path (Join-Path $stage '.godot') | Out-Null
+    Copy-Item -LiteralPath $imported -Destination (Join-Path $stage '.godot') -Recurse
 }
 
 # Godot writes a good deal to stderr on a perfectly successful export - deprecation notes,
@@ -107,23 +153,21 @@ if ($heldBack -gt 0 -or ($keptLines -join "`r`n") -ne $projectBackup) {
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 try {
-    & $Godot --headless --path $project $mode $Preset $exe 2>&1 | Out-Host
+    & $Godot --headless --path $project --script res://Tools/prepare_export_project.gd -- (Join-Path $stage 'project.godot') 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to serialize the isolated export configuration.' }
+    & $Godot --headless --editor --path $stage --import 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'Isolated project import failed.' }
+    & $Godot --headless --path $stage $mode $Preset $exe 2>&1 | Out-Host
+    $exportExitCode = $LASTEXITCODE
 }
 finally {
-    # The finally is the point of the whole arrangement: an export that throws half way must
-    # not leave the project sitting there without its tooling.
     $ErrorActionPreference = $previousPreference
-    if (($keptLines -join "`r`n") -ne $projectBackup) {
-        Set-Content -LiteralPath $projectFile -Value $projectBackup -NoNewline
-        Write-Host "  project.godot put back" -ForegroundColor DarkGray
-    }
+    Write-Host "  isolated export project retained at $stage" -ForegroundColor DarkGray
 }
 
-# Godot's exit code is not worth believing here: a headless export that finished perfectly
-# well leaves $LASTEXITCODE empty, and one that failed to build the C# still reports its own
-# failure as a warning. So it is noted and not acted on - what decides whether this build is
-# any good is the three checks below, which look at what is actually in the folder.
-if ($LASTEXITCODE) { Write-Host "  (Godot exited with $LASTEXITCODE)" -ForegroundColor DarkGray }
+# Reject a failed engine process AND inspect the actual output. Godot may still
+# report an unsuccessful managed publish as an export warning rather than an error.
+if ($exportExitCode -ne 0) { throw "Godot export failed with exit code $exportExitCode." }
 if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
 
 # ---------------------------------------------------------------- somewhere to put a mod
@@ -138,7 +182,10 @@ if (Test-Path $modsSource) {
     # part of the template and they are not small.
     Get-ChildItem -Path (Join-Path $out "mods") -Recurse -Force -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -eq "bin" -or $_.Name -eq "obj" } |
-        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        ForEach-Object {
+            $checkedTemplateOutput = Assert-BuildChild $_.FullName
+            Remove-Item -LiteralPath $checkedTemplateOutput -Recurse -Force -ErrorAction SilentlyContinue
+        }
 }
 
 # ---------------------------------------------------------------------- no unreleased content
@@ -149,6 +196,18 @@ if (Test-Path $modsSource) {
 # The loader is untouched and still works - DlcLoader returns quietly when the folder is not
 # there - so the day there is something to sell, one line here puts it back.
 & (Join-Path $PSScriptRoot "build-launcher.ps1") -OutputDirectory $out
+
+# An opt-in native Luau adapter is exported by Godot, not by the .NET
+# Content globs. Its redistribution notices must travel with the binary too.
+if (Test-Path -LiteralPath (Join-Path $out 'libluau-script.windows.editor.x86_64.dll')) {
+    $adapterNotices = Join-Path $out 'licenses\godot-luau-script'
+    New-Item -ItemType Directory -Force -Path $adapterNotices | Out-Null
+    foreach ($notice in @('LICENSE.txt', 'COPYRIGHT.txt')) {
+        $noticeSource = Join-Path $project "game\extensions\luau\$notice"
+        if (-not (Test-Path -LiteralPath $noticeSource)) { throw "Native adapter is missing its redistribution notice: $notice" }
+        Copy-Item -LiteralPath $noticeSource -Destination $adapterNotices -Force
+    }
+}
 
 # ---------------------------------------------------------------- one folder of each
 # What .NET leaves behind is a folder of assemblies with the game's entire world inside it,
@@ -168,7 +227,9 @@ if ($dataDirectory) {
     $dataGame = Join-Path $dataDirectory.FullName "game"
     $rootGame = Join-Path $out "game"
     if (Test-Path $dataGame) {
-        if (Test-Path $rootGame) { Remove-Item -LiteralPath $rootGame -Recurse -Force }
+        if (Test-Path $rootGame) { throw 'Unexpected duplicate game folder in fresh export.' }
+        $null = Assert-BuildChild $dataGame
+        $null = Assert-BuildChild $rootGame
         Move-Item -LiteralPath $dataGame -Destination $rootGame -Force
         Write-Host "  game moved beside the executable" -ForegroundColor DarkGray
     }
@@ -177,11 +238,13 @@ if ($dataDirectory) {
     # unconditional: whatever put a dlc folder in here, it does not ship.
     $dataDlc = Join-Path $dataDirectory.FullName "dlc"
     if (Test-Path $dataDlc) {
+        $null = Assert-BuildChild $dataDlc
         Remove-Item -LiteralPath $dataDlc -Recurse -Force
         Write-Host "  dlc removed from the build" -ForegroundColor DarkGray
     }
     $dataMods = Join-Path $dataDirectory.FullName "mods"
     if ((Test-Path $dataMods) -and (Test-Path (Join-Path $out "mods"))) {
+        $null = Assert-BuildChild $dataMods
         Remove-Item -LiteralPath $dataMods -Recurse -Force
         Write-Host "  the second copy of mods removed" -ForegroundColor DarkGray
     }
@@ -224,9 +287,7 @@ Write-Host "  managed assembly present: $($assemblies.Directory.Name)" -Foregrou
 
 $missing = @()
 foreach ($item in $needed) {
-    $found = Get-ChildItem -Path $out -Recurse -Force -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -like "*\$item" } | Select-Object -First 1
-    if (-not $found) { $missing += $item }
+    if (-not (Test-Path -LiteralPath (Join-Path $out $item))) { $missing += $item }
 }
 
 if ($missing.Count -gt 0) {
@@ -260,11 +321,15 @@ $size = [math]::Round((Get-ChildItem -Path $out -Recurse -Force | Measure-Object
 Write-Host "  every data folder the game needs is in the build ($size MB)" -ForegroundColor Green
 Write-Host "  nothing in the build that should not be there" -ForegroundColor Green
 
+if (-not $SkipRuntimeVerification) {
+    Write-Host '== verifying the actual exported executable ==' -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot 'verify-build.ps1') -Executable $exe -LogDirectory (Join-Path $stage 'verification')
+}
+
 # ---------------------------------------------------------------- something to send
 if (-not $NoZip) {
-    $stamp = Get-Date -Format "yyyy-MM-dd"
     $zip = Join-Path $project "build\Deal or Force $stamp.zip"
-    if (Test-Path $zip) { Remove-Item -Force $zip }
+    if (Test-Path -LiteralPath $zip) { throw "Archive already exists: $zip" }
     Write-Host "== zipping ==" -ForegroundColor Cyan
     Compress-Archive -Path $out -DestinationPath $zip -CompressionLevel Optimal
     $zipSize = [math]::Round((Get-Item $zip).Length / 1MB, 1)

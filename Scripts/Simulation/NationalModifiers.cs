@@ -38,6 +38,9 @@ public static class NationalModifiers
         new("tax_efficiency", "Tax efficiency", "How much of what the taxes ask for actually arrives."),
         new("trade_reach", "Trade reach", "How far the country's goods travel, in the same shares as ports and railways add."),
         new("reconstruction_speed", "Reconstruction speed", "How fast regions the war has wrecked are rebuilt."),
+        new("credit_capacity", "Credit capacity", "Sustainable sovereign borrowing capacity."),
+        new("borrowing_cost", "Borrowing cost", "Sovereign risk premium, not the central bank policy rate.", HigherIsBetter: false),
+        new("movement_activity", "Civic mobilisation", "How readily regional grievances organise into civic movements."),
         // The army.
         new("army_attack", "Division attack", "The fire a division puts down in an attack."),
         new("army_defense", "Division defence", "The fire a division puts down holding ground."),
@@ -88,6 +91,8 @@ public static class NationalModifiers
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation is null) yield break;
+        foreach (var source in NationalCourses.Sources(nation)) yield return source;
+        foreach (var source in PoliticalPolicies.Sources(nation)) yield return source;
         foreach (var id in nation.Technologies)
             if (TechnologyCatalog.Of(id) is { } technology && technology.Effects.Count > 0)
                 yield return (technology.Name, technology.Effects);
@@ -118,6 +123,7 @@ public static class NationalModifiers
     public static void Tick(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(NationalModifiers))) return;
+        PoliticalPolicies.Tick(campaign);
         foreach (var nation in campaign.Nations)
         {
             nation.ModifierTotals = null;

@@ -1,0 +1,11 @@
+example_stability_pledge:
+  name: A year of stability
+  category: Agenda
+  icon: agenda
+  goal: stability
+  goal_value: 0.75
+  duration_days: 365
+  description: Meet the promised level for a sustained part of the term.
+  modifiers:
+    radicalism_weekly: -0.0001
+    tax_efficiency: -0.01

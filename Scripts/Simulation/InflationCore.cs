@@ -244,7 +244,7 @@ public static class InflationCore
 
         // What is owed, against what is earned in a year. Not the interest on it - that is a
         // budget line - but what the size of it does to confidence.
-        var debt = MathF.Max(0f, -nation.Treasury);
+        var debt = SovereignFinance.Outstanding(nation);
         if (debt > 0f && nation.Gdp > 0.0001f)
         {
             var fromDebt = M.Clamp(debt / nation.Gdp, 0f, 4f) * weights.Debt;

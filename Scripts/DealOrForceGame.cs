@@ -440,6 +440,8 @@ public partial class DealOrForceGame : Control
         // way it closes the ledger, rather than opening the pause menu over the top of them.
         else if (_diplomacyLayer is { Visible: true })
             CloseDiplomacyScreen();
+        else if (_policyLayer is { Visible: true })
+            ClosePolicyWorkspace();
         else if (_tradeScreenLayer is { Visible: true })
             CloseTradeScreen();
         else if (_productionLayer is { Visible: true })
@@ -849,6 +851,7 @@ public partial class DealOrForceGame : Control
         BuildStateAffairsInterface();
         BuildWarLedger();
         BuildDiplomacyScreen();
+        BuildPolicyWorkspace();
         BuildTradeScreen();
         BuildProductionScreen();
         BuildSupportScreen();
@@ -910,6 +913,7 @@ public partial class DealOrForceGame : Control
     private void OpenScreen(string screen)
     {
         if (!Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen)) return;
+        if (screen != "Laws" && _policyLayer is not null) _policyLayer.Visible = false;
         if (screen != "Support" && _supportLayer is { Visible: true }) CloseSupportScreen();
         if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         if (_researchLayer is not null) _researchLayer.Visible = false;
@@ -1026,6 +1030,9 @@ public partial class DealOrForceGame : Control
 
             case "Economy":
                 ShowEconomyScreen();
+                break;
+            case "Laws":
+                ShowPoliticalPolicies();
                 break;
 
             case "Military":
@@ -1251,7 +1258,13 @@ public partial class DealOrForceGame : Control
         _globe?.RefreshCountryNames();
 
         var player = _campaign.Player;
-        _identity.Text = player.DisplayName;
+        _identity.Text = CountryNames.Compact(player);
+        _identity.TooltipText = Ui.Tip(player.DisplayName);
+        var identityFont = _identity.GetThemeFont("font");
+        var identitySize = 18;
+        while (identitySize > 12 && identityFont.GetStringSize(_identity.Text, HorizontalAlignment.Left, -1, identitySize).X >
+               System.Math.Max(154, _identity.Size.X)) identitySize--;
+        _identity.AddThemeFontSizeOverride("font_size", identitySize);
         _identityTag.Text = _observerMode
             ? Tr("OBS · observer mode")
             : player.Tag + " · " + Tr("player nation");
@@ -1319,12 +1332,13 @@ public partial class DealOrForceGame : Control
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
         if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
         if (_diplomacyLayer is { Visible: true }) RefreshDiplomacyScreen();
+        if (_policyLayer is { Visible: true }) RefreshPolicyWorkspace();
         if (_tradeScreenLayer is { Visible: true }) RefreshTradeScreen();
         if (_productionLayer is { Visible: true }) RefreshProductionScreen();
         if (_supportLayer is { Visible: true }) RefreshSupportScreen();
         if (_researchLayer is { Visible: true }) RefreshResearchScreen();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
-        else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions")
+        else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions" or "Laws")
             OpenScreen(_openScreen);
     }
 
@@ -1557,7 +1571,7 @@ public partial class DealOrForceGame : Control
                 SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
                 SizeFlagsVertical = SizeFlags.ShrinkCenter,
                 MouseFilter = MouseFilterEnum.Ignore,
-                Modulate = Ui.Colour("text.faint")
+                Modulate = ArtColour("icon_" + symbol, "text.faint")
             });
 
         var label = Title(CampaignUiCatalog.DetailLabel(_dossierScreen, caption, caption), 14, Ui.Colour("text.body_soft"));
@@ -1624,7 +1638,7 @@ public partial class DealOrForceGame : Control
     private static string BuildingIcon(Simulation.BuildingKind building) =>
         "building_" + building.ToString().ToLowerInvariant();
 
-    private static string RowIcon(string caption) => caption switch
+    private static string RowIcon(string caption) => CampaignUiCatalog.Icon("field." + caption, caption switch
     {
         // ---- the country -------------------------------------------------------------
         "Population" or "Largest people" or "Largest minority" or "Minorities" => "population",
@@ -1673,7 +1687,7 @@ public partial class DealOrForceGame : Control
         "Non-aggression pact" or "Offered" => "treaty",
 
         _ => ""
-    };
+    });
 
     private void DetailHeading(string text)
     {
@@ -1750,6 +1764,7 @@ public partial class DealOrForceGame : Control
             _researchLayer is { Visible: true } ? "Research" :
             _tradeScreenLayer is { Visible: true } ? "Trade" :
             _diplomacyLayer is { Visible: true } ? "Diplomacy" :
+            _policyLayer is { Visible: true } ? "Laws" :
             _sidePanel is { Visible: true } ? _openScreen : "";
         foreach (var (screen, button) in _screenButtons)
         {
@@ -2000,12 +2015,18 @@ public partial class DealOrForceGame : Control
     private Button ActionButton(string text, System.Action callback, float width, float height,
         bool primary = false, string iconPath = "")
     {
+        if (string.IsNullOrWhiteSpace(iconPath))
+        {
+            var role = CampaignUiCatalog.ActionIcon(text);
+            if (role.Length > 0)
+                iconPath = SpriteCatalog.TextureOf("icon_" + role, $"res://game/gfx/interface/icons/icon_{role}.png");
+        }
         var button = new Button
         {
             Text = Tr(text),
             CustomMinimumSize = new Vector2(width, height)
         };
-        if (!string.IsNullOrWhiteSpace(iconPath))
+        if (!string.IsNullOrWhiteSpace(iconPath) && ResourceLoader.Exists(iconPath))
         {
             button.Icon = GD.Load<Texture2D>(iconPath);
             button.ExpandIcon = true;
@@ -2021,12 +2042,29 @@ public partial class DealOrForceGame : Control
         button.SetMeta(LocAppliedMeta, button.Text);
         StyleButton(button, primary);
         button.AddThemeFontSizeOverride("font_size", height >= 42 ? 15 : 13);
+        if (width <= 0 && button.Icon is not null && button.Text.Length > 0)
+        {
+            button.SetMeta("icon_caption_minimum", true);
+            ReserveButtonIconSpace(button);
+        }
         button.Pressed += () =>
         {
             PlayStrategicCue("ui_select");
             callback();
         };
         return button;
+    }
+
+    // ExpandIcon intentionally excludes the image from Godot's minimum size. A natural-
+    // width HBox button otherwise fits only its caption and silently shrinks the icon away.
+    private static void ReserveButtonIconSpace(Button button)
+    {
+        var caption = button.GetThemeFont("font").GetStringSize(button.Text,
+            fontSize: button.GetThemeFontSize("font_size")).X;
+        var padding = button.GetThemeStylebox("normal").GetMinimumSize().X;
+        button.CustomMinimumSize = new Vector2(Mathf.Ceil(caption + padding +
+            button.GetThemeConstant("icon_max_width") + button.GetThemeConstant("h_separation")),
+            button.CustomMinimumSize.Y);
     }
 
     /// <summary>
@@ -2112,6 +2150,12 @@ public partial class DealOrForceGame : Control
         // Dropdowns. An OptionButton item is a plain string with nothing attached, so each
         // list is re-filled by whoever owns it.
         RefreshBuildingPicker();
+        if (_policyLayer is { Visible: true }) { BuildPolicyTarget(); RebuildPolicyList(); _policyBuiltDay = -1; RefreshPolicyWorkspace(); }
+        if (_diplomacyLayer is { Visible: true })
+        {
+            RebuildDiplomacyList(force: true);
+            ForceDiplomacyRefresh();
+        }
         if (_supportLayer is { Visible: true }) RefreshSupportScreen();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
         if (_peaceLayer is { Visible: true })
@@ -2141,6 +2185,7 @@ public partial class DealOrForceGame : Control
             {
                 case Button button when applied is null || button.Text == applied:
                     button.Text = translated;
+                    if (button.HasMeta("icon_caption_minimum")) ReserveButtonIconSpace(button);
                     node.SetMeta(LocAppliedMeta, translated);
                     break;
                 case Label label when applied is null || label.Text == applied:

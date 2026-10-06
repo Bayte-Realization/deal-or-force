@@ -1,0 +1,17 @@
+# An existing definition inherits everything not specified here.
+fiscal_discipline:
+  cost_share: 0.00001
+  cooldown_days: 120
+
+# A new targeted regional law. The player chooses a governed region in the UI.
+example_community_services:
+  name: Community services
+  category: Community administration
+  scope: region
+  icon: population
+  cost_share: 0.00003
+  cooldown_days: 180
+  description: A targeted regional programme, not a national bonus.
+  modifiers:
+    radicalism_weekly: -0.0002
+    living_weekly: 0.0002

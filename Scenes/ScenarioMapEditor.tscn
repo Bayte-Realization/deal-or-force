@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dvyn2kkd7bkdx"]
 
-[ext_resource type="Script" path="res://Scripts/ui/ScenarioMapEditor.cs" id="1_fciyl"]
+[ext_resource type="Script" uid="uid://dl8pipw56peuj" path="res://Scripts/ui/ScenarioMapEditor.cs" id="1_fciyl"]
 
 [node name="ScenarioMapEditor" type="Control" unique_id=1691104835]
 layout_mode = 3

@@ -1,0 +1,8 @@
+{
+  "social_compact": { "name": "A new social compact", "category": "Agenda", "description": "Sustain living standards at or above the promised level for a meaningful part of the term.", "icon": "population", "goal": "living", "goal_value": 0.65, "duration_days": 180, "modifiers": { "living_weekly": 0.0002, "tax_efficiency": -0.02 } },
+  "national_reconciliation": { "name": "National reconciliation", "category": "Agenda", "icon": "population", "goal": "stability", "goal_value": 0.72, "duration_days": 180, "modifiers": { "radicalism_weekly": -0.0002, "movement_activity": 0.04 } },
+  "fiscal_recovery": { "name": "Restore fiscal credibility", "category": "Agenda", "icon": "treasury", "goal": "debt_ratio", "goal_value": 0.70, "duration_days": 180, "modifiers": { "tax_efficiency": 0.03, "construction_speed": -0.04 } },
+  "peace_dividend": { "name": "The peace dividend", "category": "Agenda", "icon": "treaty", "goal": "peace", "goal_value": 1, "duration_days": 180, "modifiers": { "reconstruction_speed": 0.06, "army_attack": -0.04 } },
+  "institutional_renewal": { "name": "Institutional renewal", "category": "Agenda", "icon": "government", "goal": "stability", "goal_value": 0.78, "duration_days": 270, "modifiers": { "credit_capacity": 0.04, "tax_efficiency": -0.02 } },
+  "shared_prosperity": { "name": "Shared prosperity", "category": "Agenda", "icon": "construction", "goal": "living", "goal_value": 0.75, "duration_days": 270, "modifiers": { "output": 0.03, "borrowing_cost": 0.04 } }
+}

@@ -297,9 +297,8 @@ public partial class DealOrForceGame
     /// Open the diplomacy screen with whoever owns a province, if that is somebody else.
     ///
     /// Right-clicking a country to see where you stand with it is the thing a player reaches
-    /// for and the game had no answer to. Own ground does nothing: a right click that opens
-    /// a window about yourself where you expected an order is a surprise, and a surprise on
-    /// the button that moves armies is the wrong place to put one.
+    /// for. With no formation selected, own ground opens one's own dossier too.
+    /// A selected formation keeps the right button for movement, never diplomacy.
     /// </summary>
     private void OpenDiplomacyWithOwnerOf(int provinceId)
     {
@@ -309,10 +308,8 @@ public partial class DealOrForceGame
         if (provinceId <= 0 || provinceId > topology.ProvinceCount) return;
 
         var owner = topology.ProvinceToNation[provinceId];
-        // Own ground, or none - so there is no country being asked about, and the last one
-        // stops being outlined. A highlight that outlived the question it answered would be
-        // the map asserting something about a country nobody is looking at.
-        if (owner == 0 || owner == (ushort)player.MapIndex)
+        // Unowned water still has no country dossier.
+        if (owner == 0)
         {
             _globe?.HighlightNation(-1);
             return;

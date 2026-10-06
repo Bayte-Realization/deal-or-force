@@ -313,6 +313,7 @@ public static class MovementFall
         var state = nation.Movement;
         if (state is null || state.Dissolved) return;
         state.Dissolved = true;
+        state.ReadyOnDay["lifecycle_rebirth"] = campaign.ElapsedDays + Math.Max(30, campaign.Defines.MovementRebirthDays);
         state.Support.Clear();
         state.Infiltrated.Clear();
         state.OnTheWay.Clear();
@@ -328,5 +329,6 @@ public static class MovementFall
             Attrition.Destroy(campaign, army, "movement dissolved", lost: false);
         campaign.MovementRevision++;
         campaign.MarkStrategicChange();
+        campaign.Chronicle.Record(campaign, "movement_dissolved", nation.Id);
     }
 }

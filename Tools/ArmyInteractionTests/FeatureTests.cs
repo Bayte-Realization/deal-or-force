@@ -18,8 +18,8 @@ static class FeatureTests
         var rus = c.NationByTag("RUS");
         c.ConfigureSinglePlayer(rus.Id);
         c.Defines.HoursPerTick = 24;
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var mapError), "campaign map loads: " + mapError);
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var mapError), "campaign map loads: " + mapError);
         c.AttachProvinceTopology(map);
         var wing = c.SupportFormations.First(f => f.NationId == rus.Id && SupportTypeCatalog.Get(f.TypeId).Kind == SupportKind.Air);
         var artillery = c.SupportFormations.First(f => f.NationId == rus.Id && SupportTypeCatalog.Get(f.TypeId).Kind == SupportKind.Ground);

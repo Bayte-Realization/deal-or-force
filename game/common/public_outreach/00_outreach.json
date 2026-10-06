@@ -1,0 +1,18 @@
+{
+  "cultural_exchange": {
+    "name": "Cultural exchange",
+    "duration_days": 120,
+    "cooldown_days": 240,
+    "gdp_cost_share": 0.00003,
+    "nation_impulse": 0.12,
+    "culture_impulse": 0.18
+  },
+  "public_dialogue": {
+    "name": "Public dialogue",
+    "duration_days": 90,
+    "cooldown_days": 180,
+    "gdp_cost_share": 0.00002,
+    "nation_impulse": 0.24,
+    "culture_impulse": 0
+  }
+}

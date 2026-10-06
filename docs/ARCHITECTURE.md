@@ -256,10 +256,12 @@ consolidating control for the treaty.
 
 ## The headless bench and the checks
 
-`Tools/SimBench` compiles `Scripts/Simulation` and `Scripts/LegacySourceMap` into a separate
+`Tools/SimBench` compiles `Scripts/Simulation` into a separate
 console project **with not one reference to Godot** — the fifth item of the performance
 contract ("a full campaign tick must run outside a Godot node") made executable: if anybody
 brings Godot into the simulation layer, the project simply stops building.
+WorldMapSource/WorldMapTables read external PNG and JSON/YAML data; the original
+codec is retained only in the offline SourceMapMigration tool, not the game assembly.
 
 ```bash
 dotnet run --project Tools/SimBench/SimBench.csproj -- 730

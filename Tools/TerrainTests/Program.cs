@@ -13,12 +13,36 @@ static class Program
     }
     static void Main()
     {
+        HydrologyPresentationTests.Run();
+        var hydroPixels = new byte[8 * 4 * 2];
+        hydroPixels[(1 * 8 + 3) * 2] = 255;
+        hydroPixels[(2 * 8 + 0) * 2 + 1] = 80;
+        var originalHydro = (byte[])hydroPixels.Clone();
+        var surface = DealOrForce.HydrologySurfaceData.Build(new(8, 4, hydroPixels, 1, 1));
+        Check(surface[(1 * 8 + 3) * 3] < 128 && surface[(1 * 8 + 4) * 3] > 128, "lake signed shore distance");
+        Check(surface[(2 * 8 + 7) * 3 + 1] == surface[(2 * 8 + 1) * 3 + 1], "river shoreline wraps longitude");
+        Check(surface[(2 * 8 + 0) * 3 + 2] == 80, "minor river importance survives visual smoothing");
+        Check(hydroPixels.SequenceEqual(originalHydro), "visual shoreline transform cannot change game hydrology");
         var campaign = Campaign.CreateBootstrap(20260906);
+        campaign.Date = new GameDate(2024, 4, 1);
+        var northernSpring = WaterConditions.CrossingDifficulty(campaign, 55);
+        var southernAutumn = WaterConditions.CrossingDifficulty(campaign, -55);
+        Check(northernSpring > 1 && southernAutumn < 1, "river seasons reverse across hemispheres");
+        Check(WaterConditions.CrossingDifficulty(campaign, 0) == 1, "temperate snowmelt is not invented at the equator");
+        campaign.Date = new GameDate(2024, 1, 1);
+        Check(WaterConditions.LakeAvailability(campaign, 60) < WaterConditions.LakeAvailability(campaign, -60), "winter reduces only lake logistics in the winter hemisphere");
+        campaign.SetFeature("seasonal_water", false);
+        Check(WaterConditions.CrossingDifficulty(campaign, 55) == 1 && WaterConditions.LakeAvailability(campaign, 60) == 1,
+            "scenario switch restores nonseasonal water rules");
+        Check(MathF.Abs(WaterConditions.AttackMultiplier(campaign, .9f, 0) - campaign.Defines.MajorRiverAttackMultiplier) < .00001f,
+            "disabled season preserves old major river combat multiplier");
+        campaign.SetFeature("seasonal_water", true);
         MapRasterCatalog.ResetCatalog();
         TerrainCatalog.ResetCatalog();
         Check(TerrainCatalog.All.Count == 12, "12 terrain types and source assets loaded");
-        Check(MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-            Globality.EarthData.Width, Globality.EarthData.Height, out var map, out var message), message);
+        Check(File.Exists(TerrainCatalog.Water.LakeTexture) && File.Exists(TerrainCatalog.Water.RiverTexture), "separate lake and river PNG materials resolve");
+        Check(MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+            DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
         campaign.AttachProvinceTopology(map);
         Check(map.TerrainByProvince.Length == map.ProvinceCount + 1 && map.TerrainByProvince.All(t => t is not null), "every province assigned");
         Check(map.TerrainSurfaceSlots.Length == map.Width * map.Height, "aligned surface layer");

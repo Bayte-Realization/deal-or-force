@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using DealOrForce.Simulation;
-using Map = Globality.EarthData;
+using Map = DealOrForce.Simulation.WorldMapSource;
+using Codec = Globality.EarthData;
 
 static class SourceGridTests
 {
@@ -11,8 +12,8 @@ static class SourceGridTests
         MapRasterCatalog.ResetCatalog();
         Check(File.Exists(MapRasterCatalog.SourceControlPath) && File.Exists(MapRasterCatalog.SourceStatesPath) &&
             File.Exists(MapRasterCatalog.SourceDisputesPath), "all vanilla source layers resolve to external files");
-        Check(Map.Control.AsSpan().SequenceEqual(Map.Unpack(Map.PackedControl, Map.CellCount)), "every country id preserved");
-        Check(Map.States.AsSpan().SequenceEqual(Map.Unpack(Map.PackedStates, Map.CellCount)), "every region id preserved");
+        Check(Map.Control.AsSpan().SequenceEqual(Codec.Unpack(Codec.PackedControl, Map.CellCount)), "every country id preserved");
+        Check(Map.States.AsSpan().SequenceEqual(Codec.Unpack(Codec.PackedStates, Map.CellCount)), "every region id preserved");
         var disputes = SourceMapGrid.Load(MapRasterCatalog.SourceDisputesPath, Map.Width, Map.Height);
         Check(MapRasterCatalog.RegionFingerprint(disputes) == 1727779104982673975UL, "all disputed cells preserved against export fingerprint");
         var folder = Path.Combine(Path.GetTempPath(), "dof-source-grid-" + Guid.NewGuid().ToString("N"));
@@ -37,7 +38,7 @@ static class SourceGridTests
             MapRasterCatalog.ApplyDirectory(folder, errors);
             Check(errors.Count == 0 && Map.States[cell] == replacement && !ReferenceEquals(states, Map.States),
                 "mod layer overrides region ids and invalidates decoded caches");
-            Check(Map.Control.AsSpan().SequenceEqual(Map.Unpack(Map.PackedControl, Map.CellCount)),
+            Check(Map.Control.AsSpan().SequenceEqual(Codec.Unpack(Codec.PackedControl, Map.CellCount)),
                 "partial override inherits the unchanged country layer");
             MapRasterCatalog.ResetCatalog();
             Check(Map.States[cell] == original, "removing mod restores vanilla source ids");
@@ -60,7 +61,7 @@ static class SourceGridTests
             errors.Clear();
             MapRasterCatalog.ApplyDirectory(emptyFolder, errors);
             var emptyValue = Map.DisputeAt(0);
-            var cacheField = typeof(Map).GetField("_disputeCells",
+            var cacheField = typeof(Map).GetField("_disputes",
                 System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
             var emptyCache = cacheField.GetValue(null);
             Check(errors.Count == 0 && emptyValue == 0 && Map.DisputeAt(Map.CellCount - 1) == 0 &&

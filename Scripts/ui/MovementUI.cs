@@ -241,7 +241,9 @@ public partial class DealOrForceGame
         figures.AddThemeConstantOverride("h_separation", 12);
         figures.AddThemeConstantOverride("v_separation", 8);
         _movementRows.AddChild(figures);
-        var behind = state.Support.Count(pair => pair.Value >= defines.MovementUprisingSupport);
+        var civic = definition?.Has("civic_independence") == true;
+        var behind = civic ? _campaign.States.Count(r => CivilIndependence.Refusal(_campaign, nation, r).Length == 0)
+            : state.Support.Count(pair => pair.Value >= defines.MovementUprisingSupport);
         figures.AddChild(MovementFigure("treasury", Fmt.Money(nation.Treasury), Tr("treasury"),
             Tr("Cash on hand: what every action is paid from.")));
         figures.AddChild(MovementFigure("income", Fmt.Money(state.IncomeWeekly * 52f), Tr("income a year"),
@@ -249,18 +251,24 @@ public partial class DealOrForceGame
                 Fmt.Money(state.DonationsWeekly * 52f), Fmt.Money(state.SponsorsWeekly * 52f)),
             state.IncomeWeekly > 0f ? "state.positive" : "text.bright"));
         figures.AddChild(MovementFigure("movement_cadres", Fmt.People(state.Cadres), Tr("cadres"),
-            Simulation.Loc.Format("Organisers and volunteers. An uprising takes {0} of them, and every {1} is a militia division.",
+            civic ? Tr("Organisers and volunteers for a civic campaign, not insurgent militia.") :
+                Simulation.Loc.Format("Organisers and volunteers. An uprising takes {0} of them, and every {1} is a militia division.",
                 Fmt.People(defines.MovementUprisingCadres), Fmt.People(defines.MovementMilitiaPerCadres))));
         figures.AddChild(MovementFigure("diplomacy", state.RecognisedBy.Count.ToString("N0"), Tr("recognitions"),
             Tr("Countries that recognise it. Each one lifts its standing a little every week.")));
-        figures.AddChild(MovementFigure("movement_support", behind.ToString("N0"), Tr("regions ready to rise"),
-            Simulation.Loc.Format("Regions where its support has reached {0}, enough to call an uprising.",
-                Fmt.Percent(defines.MovementUprisingSupport)), behind > 0 ? "text.accent" : "text.bright"));
-        figures.AddChild(MovementFigure("movement_legitimacy", Fmt.Percent(state.Legitimacy), Tr("standing"),
-            Tr("How far the world takes it seriously: its donations, its recognitions and the chance of every uprising.")));
+        figures.AddChild(MovementFigure("movement_support", behind.ToString("N0"),
+            Tr(civic ? "regions ready for a vote" : "regions ready to rise"),
+            civic ? Tr("A majority of all residents, public standing and the parent's consent are required.") :
+                Simulation.Loc.Format("Regions where its support has reached {0}, enough to call an uprising.",
+                    Fmt.Percent(defines.MovementUprisingSupport)), behind > 0 ? "text.accent" : "text.bright"));
+        if (civic) _movementRows.AddChild(MovementNotice("movement_legitimacy",
+            Tr("CIVIC PATH · Organise support → negotiate consent → hold a vote. No automatic uprising or war."), "state.info"));
+        var standingHelp = Tr(civic ? "Civic standing reflects support among homeland residents and recognition; it qualifies negotiated votes."
+            : "How far the world takes it seriously: its donations, its recognitions and the chance of every uprising.");
+        figures.AddChild(MovementFigure("movement_legitimacy", Fmt.Percent(state.Legitimacy), Tr("standing"), standingHelp));
 
         _movementRows.AddChild(MovementGauge("movement_legitimacy", Tr("Standing"), state.Legitimacy, -1f, "text.accent",
-            Tr("How far the world takes it seriously: its donations, its recognitions and the chance of every uprising.")));
+            standingHelp));
         var heatToken = state.Heat >= defines.MovementExpelHeat * 0.75f ? "state.negative"
             : state.Heat >= defines.MovementExpelHeat * 0.45f ? "state.warning" : "state.info";
         if (state.Landless)
@@ -416,7 +424,8 @@ public partial class DealOrForceGame
         if (refused) tip += "\n\n" + refusal;
         var captured = kind.Id;
         // The one that changes the map is the one drawn in brass, whenever it can be taken.
-        return MovementButton(ActionIcon(kind.Id), Tr(kind.Name), price, tip, refused, kind.Id == "rise", () =>
+        return MovementButton(kind.Id == "referendum" ? "movement_legitimacy" : ActionIcon(kind.Id),
+            Tr(kind.Name), price, tip, refused, kind.Id is "rise" or "referendum", () =>
         {
             _campaign.Commands.Enqueue(new MovementActionCommand
             {
@@ -430,8 +439,11 @@ public partial class DealOrForceGame
     private Button MovementFollowingRow(Nation nation, ScenarioState region, float support)
     {
         var defines = _campaign.Defines;
+        var civic = Movements.DefinitionOf(nation)?.Has("civic_independence") == true;
+        if (civic) support = CivilIndependence.ResidentSupport(nation, region);
         var chance = MovementRules.UprisingChance(_campaign, nation, region);
-        var ready = support >= defines.MovementUprisingSupport;
+        var threshold = civic ? defines.CivilReferendumMajority : defines.MovementUprisingSupport;
+        var ready = civic ? CivilIndependence.Refusal(_campaign, nation, region).Length == 0 : support >= threshold;
         var row = new Button
         {
             CustomMinimumSize = new Vector2(0, 30),
@@ -456,7 +468,7 @@ public partial class DealOrForceGame
         inner.AddChild(name);
         inner.AddChild(new MovementMeter
         {
-            Value = support, Mark = defines.MovementUprisingSupport,
+            Value = support, Mark = threshold,
             Fill = Ui.Colour(ready ? "text.accent" : "text.accent_dim"),
             Back = Ui.Colour("surface.inset"), MarkColour = Ui.Colour("text.body_soft"),
             CustomMinimumSize = new Vector2(92, 6),
@@ -471,9 +483,10 @@ public partial class DealOrForceGame
         odds.AddThemeConstantOverride("separation", 3);
         inner.AddChild(odds);
         var oddsToken = chance >= 0.5f ? "state.positive" : chance >= 0.25f ? "state.warning" : "text.faint";
-        if (Symbol("movement_uprising", 13, oddsToken) is { } mark) odds.AddChild(mark);
-        odds.AddChild(Ellipsed(Fmt.Percent(chance), 12, oddsToken));
-        row.TooltipText = Ui.Tip(Simulation.Loc.Format(
+        if (Symbol(civic ? "movement_legitimacy" : "movement_uprising", 13, civic ? "state.info" : oddsToken) is { } mark) odds.AddChild(mark);
+        odds.AddChild(Ellipsed(civic ? Tr(ready ? "Ready" : "Vote") : Fmt.Percent(chance), 12, civic ? "state.info" : oddsToken));
+        row.TooltipText = Ui.Tip(civic ? Simulation.Loc.Format("{0}: {1} of all residents support independence. {2}",
+            region.DisplayName, Fmt.Percent(support), ready ? Tr("Ready for an agreed vote.") : CivilIndependence.Refusal(_campaign, nation, region)) : Simulation.Loc.Format(
             "{0}: support {1}; an uprising takes {2}. An uprising here would stand {3}. Click to choose the region and look at it.",
             region.DisplayName, Fmt.Percent(support), Fmt.Percent(defines.MovementUprisingSupport), Fmt.Percent(chance)));
         var captured = region;
@@ -501,8 +514,8 @@ public partial class DealOrForceGame
             .ToList();
         var following = Movements.Active(_campaign)
             .Where(nation => !here.Contains(nation))
-            .Select(nation => (Nation: nation, Support: nation.Movement.Support.GetValueOrDefault(region.MapIndex)))
-            .Where(entry => entry.Support >= 0.1f)
+            .Select(nation => (Nation: nation, Support: MovementReach.ResidentSupport(_campaign, nation, region)))
+            .Where(entry => entry.Support >= 0.03f)
             .OrderByDescending(entry => entry.Support)
             .Take(3)
             .ToList();
@@ -524,7 +537,9 @@ public partial class DealOrForceGame
             button.ExpandIcon = false;
             button.AddThemeConstantOverride("icon_max_width", 20);
             button.AddThemeFontSizeOverride("font_size", 12);
-            button.TooltipText = Ui.Tip(Simulation.Loc.Get(Movements.DefinitionOf(nation)?.Description ?? ""));
+            button.TooltipText = Ui.Tip(Simulation.Loc.Get(Movements.DefinitionOf(nation)?.Description ?? "") + "\n" +
+                Simulation.Loc.Format("Local following: {0} of all residents. Recognition is not political support.",
+                    Fmt.Percent(MovementReach.ResidentSupport(_campaign, nation, region))));
             flow.AddChild(button);
         }
         foreach (var nation in here) Add(nation, Simulation.Loc.Format("HQ · {0}", nation.DisplayName));
@@ -699,6 +714,7 @@ public partial class DealOrForceGame
         }
         _topBarShowsMovement = true;
         var defines = _campaign.Defines;
+        var civic = Movements.DefinitionOf(player)?.Has("civic_independence") == true;
         _identityTag.Text = player.Tag + " · " + Tr("movement without land");
 
         var strongest = state.Support.OrderByDescending(pair => pair.Value).FirstOrDefault();
@@ -720,7 +736,8 @@ public partial class DealOrForceGame
             Simulation.Loc.Format("{0} a week: {1} donations, {2} sponsors and contracts", Fmt.MoneyExact(state.IncomeWeekly),
                 Fmt.Money(state.DonationsWeekly), Fmt.Money(state.SponsorsWeekly)),
             Tr("a week"), Fmt.Direction(state.IncomeWeekly, 0.0001d));
-        TopBarAs(_gdp, "movement_cadres", Tr("Organisers and volunteers: what an uprising is made of."));
+        TopBarAs(_gdp, "movement_cadres", Tr(civic ? "Organisers and volunteers for a civic campaign, not insurgent militia."
+            : "Organisers and volunteers: what an uprising is made of."));
         WriteStat(_gdp, Fmt.People(state.Cadres), Fmt.PeopleExact(state.Cadres), Tr("cadres"), 0);
         TopBarAs(_inflation, "movement_legitimacy", Tr("How far the world takes it seriously."));
         WriteStat(_inflation, Fmt.Percent(state.Legitimacy), Simulation.Loc.Format("Standing {0}", Fmt.Percent(state.Legitimacy)),
@@ -734,10 +751,20 @@ public partial class DealOrForceGame
             Simulation.Loc.Format("The host's temper · {0}", Movements.HostOf(_campaign, player)?.DisplayName ?? Tr("nobody")),
             Simulation.Loc.Format("expels at {0}", Fmt.Percent(defines.MovementExpelHeat)),
             state.Heat >= defines.MovementExpelHeat * 0.75f ? -1 : 0);
-        TopBarAs(_manpower, "movement_uprising", Tr("Its best chance of an uprising now, and where."));
-        WriteStat(_manpower, bestRegion is null ? "—" : Fmt.Percent(bestChance),
-            bestRegion is null ? Tr("No following anywhere yet.") : Simulation.Loc.Format("Chance in {0} now: {1}.", bestRegion.DisplayName, Fmt.Percent(bestChance)),
-            bestRegion?.DisplayName ?? "", bestChance >= 0.5f ? 1 : 0);
+        if (civic)
+        {
+            var ready = _campaign.States.Count(r => CivilIndependence.Refusal(_campaign, player, r).Length == 0);
+            TopBarAs(_manpower, "movement_legitimacy", Tr("A majority of all residents, public standing and the parent's consent are required."));
+            _manpower.Caption.Text = Tr("Vote readiness");
+            WriteStat(_manpower, ready.ToString("N0"), Tr("regions ready for a vote"), "", ready > 0 ? 1 : 0);
+        }
+        else
+        {
+            TopBarAs(_manpower, "movement_uprising", Tr("Its best chance of an uprising now, and where."));
+            WriteStat(_manpower, bestRegion is null ? "—" : Fmt.Percent(bestChance),
+                bestRegion is null ? Tr("No following anywhere yet.") : Simulation.Loc.Format("Chance in {0} now: {1}.", bestRegion.DisplayName, Fmt.Percent(bestChance)),
+                bestRegion?.DisplayName ?? "", bestChance >= 0.5f ? 1 : 0);
+        }
     }
 
     /// <summary>Give one top-bar place a movement's mark and tooltip, remembering the country's.</summary>

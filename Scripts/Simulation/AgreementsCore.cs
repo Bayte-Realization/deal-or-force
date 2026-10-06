@@ -306,6 +306,7 @@ public sealed class SendAidCommand : ICampaignCommand
         OpinionSystem.Remember(campaign, relation, "economic_aid", MathF.Min(1f, amount / full));
         relation.AidSentDay = campaign.ElapsedDays;
         Sent = amount;
+        campaign.Chronicle.Record(campaign, "aid_sent", IssuerId, TargetId);
         campaign.MarkStrategicChange();
     }
 }

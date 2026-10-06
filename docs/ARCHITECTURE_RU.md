@@ -140,7 +140,7 @@ input, sound, drawing                <-    state snapshots + Changed event
 
 ## Headless-бенч и проверки
 
-`Tools/SimBench` собирает `Scripts/Simulation` и `Scripts/LegacySourceMap` в отдельный консольный проект **без единой ссылки на Godot** — это пятый пункт контракта производительности («полный тик кампании должен запускаться вне Godot-узла»), сделанный исполняемым: если кто-то занесёт Godot в слой симуляции, проект просто перестанет собираться.
+`Tools/SimBench` собирает `Scripts/Simulation` в отдельный консольный проект **без единой ссылки на Godot** — это пятый пункт контракта производительности («полный тик кампании должен запускаться вне Godot-узла»), сделанный исполняемым: если кто-то занесёт Godot в слой симуляции, проект просто перестанет собираться. Карта читается через WorldMapSource/WorldMapTables из внешних PNG и JSON/YAML; старый кодек оставлен только в офлайн-инструменте SourceMapMigration.
 
 ```bash
 dotnet run --project Tools/SimBench/SimBench.csproj -- 730

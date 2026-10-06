@@ -119,7 +119,7 @@ public static class ScenarioCatalog
         var countryIdByMapIndex = new Dictionary<int, string>();
         var usedIds = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var row in EarthData.CountryRows)
+        foreach (var row in WorldMapTables.CountryRows)
         {
             var parts = row.Split('|');
             if (parts.Length < 10) continue;
@@ -174,7 +174,7 @@ public static class ScenarioCatalog
         }
 
         var usedStateIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var row in EarthData.StateRows)
+        foreach (var row in WorldMapTables.StateRows)
         {
             var parts = row.Split('|');
             if (parts.Length < 5) continue;
@@ -209,26 +209,23 @@ public static class ScenarioCatalog
         // markets and UI consume the scenario. This makes breakaway states such as
         // Abkhazia, Transnistria and Vatican City real simulation entities from tick zero.
         var importedStates = campaign.States.Count;
-        TerritorialTopology.Apply(campaign, Globality.EarthData.Control, Globality.EarthData.States,
-            Globality.EarthData.Width, Globality.EarthData.Height);
+        TerritorialTopology.Apply(campaign, WorldMapSource.Control, WorldMapSource.States,
+            WorldMapSource.Width, WorldMapSource.Height);
 
         // The guard is arithmetic rather than a remembered total: the source table must
         // still import whole, and every region correction must still have produced exactly
         // one state. Adding a correction is then an ordinary edit, while losing half the
         // source table is still caught before anything consumes the scenario.
         var correctedStates = campaign.States.Count - importedStates;
-        if (campaign.Nations.Count != 261 || importedStates != EarthData.StateRows.Length ||
+        if (campaign.Nations.Count != WorldMapTables.CountryRows.Length || importedStates != WorldMapTables.StateRows.Length ||
             correctedStates != TerritorialTopology.RegionRuleCount)
             throw new InvalidOperationException(
                 $"Base scenario import drifted: {campaign.Nations.Count} nations, " +
-                $"{importedStates} imported states (expected {EarthData.StateRows.Length}), " +
+                $"{importedStates} imported states (expected {WorldMapTables.StateRows.Length}), " +
                 $"{correctedStates} region corrections (expected {TerritorialTopology.RegionRuleCount}).");
 
-        var southKorea = campaign.NationByTag("KOR");
-        if (southKorea is null || string.IsNullOrWhiteSpace(southKorea.CapitalName))
-            throw new InvalidOperationException("Base scenario import is missing South Korea or its capital.");
-        if (Math.Abs(southKorea.Gdp - 1646.739f) > 0.01f)
-            throw new InvalidOperationException($"Base scenario GDP units drifted for KOR: {southKorea.Gdp}B.");
+        // Data-specific unit checks belong in fixtures, not runtime guards: a valid
+        // map package may change Korea's GDP or replace the countries altogether.
 
         campaign.InvalidateStateIndex();
         // Names, then the country's own figures, then the deal, then the corrections to it.
@@ -247,7 +244,7 @@ public static class ScenarioCatalog
         // Last of the history, because an alliance is between countries and they all have to
         // exist first.
         HistoryDataLoader.ApplyBaseDiplomacy(campaign);
-        campaign.SetPlayer(southKorea.Id);
+        campaign.SetPlayer((campaign.NationByTag("KOR") ?? campaign.Nations[0]).Id);
         MilitaryBootstrap.Seed(campaign);
         NavalBootstrap.Seed(campaign);
         WarBootstrap.Seed(campaign);

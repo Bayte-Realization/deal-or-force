@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\Scripts\Simulation\**\*.cs" />
-    <Compile Include="..\..\Scripts\LegacySourceMap\**\*.cs" />
+
   </ItemGroup>
 
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />

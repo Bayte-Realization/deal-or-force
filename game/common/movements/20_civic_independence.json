@@ -1,0 +1,32 @@
+// Scenario abstractions, not claims that a particular real-world party represents everyone.
+{
+  "scottish_civic_campaign": {
+    "tag": "SCV", "name": "Scottish independence campaign", "state_name": "Scotland",
+    "description": "A civic coalition debating Scotland's future through organisation and negotiated votes, not an armed insurgency.",
+    "colour": "#497da3", "peoples": ["scottish"], "headquarters": "gb_abd",
+    "homeland": ["gb_abd", "gb_agb", "gb_dgy", "gb_hld", "gb_pkn", "gb_scb"],
+    "support": {"gb_abd": 0.38, "gb_agb": 0.42, "gb_dgy": 0.35, "gb_hld": 0.4},
+    "treasury": 0.05, "cadres": 3500, "legitimacy": 0.55,
+    "government": "parliamentary_republic", "ideology": "social_democracy",
+    "traits": ["civic_independence", "nonviolence", "diaspora_lobby"]
+  },
+  "welsh_civic_campaign": {
+    "tag": "WCV", "name": "Welsh self-government campaign", "state_name": "Wales",
+    "description": "A civic campaign for self-government. Its support depends on residents, public debate and negotiated consent.",
+    "colour": "#4b9262", "peoples": ["welsh"], "headquarters": "gb_pow",
+    "homeland": ["gb_pow"], "support": {"gb_pow": 0.2},
+    "treasury": 0.03, "cadres": 1800, "legitimacy": 0.45,
+    "government": "parliamentary_republic", "ideology": "social_democracy",
+    "traits": ["civic_independence", "nonviolence", "diaspora_lobby"]
+  },
+  "quebec_civic_campaign": {
+    "tag": "QCV", "name": "Quebec sovereignty campaign", "state_name": "Quebec",
+    "description": "A civic sovereignty coalition pursuing political organisation and an agreed vote, without raising insurgent militia.",
+    "colour": "#658fb5", "peoples": ["quebecois"], "headquarters": "ca_qc",
+    "homeland": ["ca_qc"], "support": {"ca_qc": 0.35},
+    "treasury": 0.06, "cadres": 4000, "legitimacy": 0.55,
+    "government": "parliamentary_republic", "ideology": "social_democracy",
+    "traits": ["civic_independence", "nonviolence", "diaspora_lobby"]
+  },
+  "council_for_the_republic": {"traits": ["government_in_exile", "nonviolence", "civic_independence"]}
+}

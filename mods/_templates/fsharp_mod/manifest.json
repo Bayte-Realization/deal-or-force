@@ -6,5 +6,5 @@
   "enabled": false,
   "load_order": 200,
   "dependencies": [],
-  "corecode_assembly": "corecode/bin/Debug/net8.0/ExampleFSharpMod.dll"
+  "corecode_assembly": "corecode/bin/Debug/net10.0/ExampleFSharpMod.dll"
 }

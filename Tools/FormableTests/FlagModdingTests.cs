@@ -29,6 +29,16 @@ static class FlagModdingTests
         }
         Check(tested > 150, "real scenario coverage, not an empty catalogue");
         var china = campaign.NationByTag("CHN");
+        Check(!FlagCatalog.Candidates(campaign, china.FlagPoliticsPreview("theocracy", "traditionalism"))
+            .Contains("flag_ideology_traditionalism"), "Asian traditionalism does not borrow a Spanish historical cross");
+        foreach (var culture in new[] { "han", "cantonese", "hakka", "hui", "javanese", "buginese",
+                     "cebuano", "ilocano", "maronite", "bambara", "ovambo", "melanesian" })
+        {
+            var texture = SpriteCatalog.TextureOf("flag_culture_" + culture);
+            var physical = texture.StartsWith("res://game/", StringComparison.Ordinal)
+                ? System.IO.Path.Combine(GameDataLoader.DataFolder(), texture["res://game/".Length..]) : texture;
+            Check(System.IO.File.Exists(physical), "fallback artwork exists: " + culture);
+        }
         var fingerprint = CampaignFingerprint.Of(campaign);
         foreach (var ideology in IdeologyCatalog.All)
             Check(FlagCatalog.ResolvePreview(campaign, china, ideology: ideology.Id) ==
@@ -37,6 +47,9 @@ static class FlagModdingTests
         Check(fingerprint == CampaignFingerprint.Of(campaign), "previews never mutate campaign politics");
         try
         {
+            FlagCatalog.Merge("""{"generic_flag_cultures":{"flag_ideology_traditionalism":[]}}""");
+            Check(FlagCatalog.Candidates(campaign, china.FlagPoliticsPreview("theocracy", "traditionalism"))
+                .Contains("flag_ideology_traditionalism"), "a mod can explicitly lift a historical emblem restriction");
             Check(FlagCatalog.Chain("ideology", "socialism").Contains("communism"), "base alias present");
             FlagCatalog.Merge("""{"also_answers_to":{"ideology":{"socialism":[]}}}""");
             Check(FlagCatalog.Chain("ideology", "socialism").SequenceEqual(new[] { "socialism" }),

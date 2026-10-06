@@ -13,7 +13,7 @@ public sealed record TerrainDefinition(
     float MovementSpeed = 1, float Attack = 1, float Defense = 1,
     float CombatWidth = 1, float Supply = 1, string TextureRelative = "");
 
-public static class TerrainCatalog
+public static partial class TerrainCatalog
 {
     private static readonly Dictionary<string, TerrainDefinition> Definitions = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<int, string> Overrides = new();
@@ -58,6 +58,7 @@ public static class TerrainCatalog
         TileRepeat = 180;
         ReliefStrength = .8f;
         ReliefColorOpacity = 0;
+        Water = new WaterAppearance();
         var root = GameDataLoader.DataFolder();
         var errors = new List<string>();
         if (root is not null) ApplyDirectory(root, errors);
@@ -68,6 +69,7 @@ public static class TerrainCatalog
     /// <summary>Ordered per-field overlays. Paths belong to the package that declares them.</summary>
     public static void ApplyDirectory(string root, List<string> errors)
     {
+        ApplyWaterDirectory(root, errors);
         foreach (var previous in Definitions.Values.ToArray())
             if (!string.IsNullOrEmpty(previous.TextureRelative) && File.Exists(LocalPath(root, previous.TextureRelative)))
                 Definitions[previous.Id] = previous with { Texture = Asset(root, previous.TextureRelative) };

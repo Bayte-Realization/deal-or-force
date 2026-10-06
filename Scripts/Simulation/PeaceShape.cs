@@ -14,6 +14,8 @@ public sealed partial class Defines
     public bool PeaceShapeAllowCoastalBridgeheads { get; set; } = true;
     /// <summary>How far across the sea from the winner's own coast such a landing may be, in km; 0 for any distance.</summary>
     public float PeaceShapeBridgeheadKm { get; set; } = 600f;
+    /// <summary>Preference for filling a common frontier rather than extending narrow salients.</summary>
+    public float PeaceShapeCompactnessWeight { get; set; } = 3f;
 }
 
 /// <summary>
@@ -53,6 +55,7 @@ public static class PeaceShape
         public readonly Dictionary<int, List<int>> Provinces = new();
         public readonly HashSet<int> Coastal = new();
         public readonly List<int> CoastalProvinces = new();
+        public readonly Dictionary<(int Region, int Other), int> SharedEdges = new();
     }
 
     private static ProvinceTopology _builtFor;
@@ -77,6 +80,8 @@ public static class PeaceShape
                 int other = topology.ProvinceToState[neighbour];
                 if (other == 0 || other == region) continue;
                 regions.Next[region].Add(other);
+                var edge = (region, other);
+                regions.SharedEdges[edge] = regions.SharedEdges.GetValueOrDefault(edge) + 1;
             }
         }
         foreach (var province in SeaLanes.CoastalProvinces(topology))
@@ -311,6 +316,18 @@ public static class PeaceShape
                 var joined = anchors.Contains(region) || Touching(graph, region).Any(chosen.Contains);
                 if (!joined) continue;
                 var score = value / MathF.Pow(MathF.Max(0.01f, CostOf(region)), 0.8f);
+                var totalEdges = 0;
+                var sharedEdges = 0;
+                foreach (var neighbour in Touching(graph, region))
+                {
+                    var length = graph.SharedEdges.GetValueOrDefault((region, neighbour), 1);
+                    totalEdges += length;
+                    if (winnerRegions.Contains(neighbour) || chosen.Contains(neighbour)) sharedEdges += length;
+                }
+                // Land contact alone permits a cross-shaped treaty. A broad shared frontier
+                // makes a compact addition; a single narrow connection makes a costly salient.
+                score *= .35f + MathF.Max(0f, defines.PeaceShapeCompactnessWeight) *
+                    sharedEdges / Math.Max(1f, totalEdges);
                 if (score <= bestScore) continue;
                 bestScore = score;
                 best = region;

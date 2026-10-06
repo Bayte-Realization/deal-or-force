@@ -40,7 +40,7 @@ its stack, goes to `errors.log`. Where the logs live is described in `LOGS.md`.
 - `Scripts/LoadingScreen.cs` — the look, the responsive layout and the error screen.
 - `Scripts/LoadingScreenUI.cs` — the shared operation coordinator, repeat blocking, frame
   waiting and logging.
-- `Scripts/GlobePresentation.cs` — the map's real readiness and the stages of handing layers
+- `Scripts/gfx/GlobePresentation.cs` — the map's real readiness and the stages of handing layers
   to the GPU.
 - `game/localization/{english,russian}/10_loading.json` — the translatable strings; mods
   override them the usual way.

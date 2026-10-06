@@ -1,0 +1,5 @@
+{
+  "id": "example_luau_worker", "name": "Luau worker example", "version": "1.0.0", "enabled": false,
+  "worker_executable": "corecode/deal-or-force-luau.exe", "worker_script": "corecode/main.luau",
+  "worker_interval_days": 7, "worker_timeout_ms": 500
+}

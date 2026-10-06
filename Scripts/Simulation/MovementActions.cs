@@ -43,6 +43,7 @@ public static class MovementActions
         new("recruit", "Recruit", "Pay to train organisers and volunteers: cadres, which uprisings are made of.", false, false),
         new("recognition", "Seek recognition", "Ask a country to recognise it. One that thinks well enough of it does, and the movement's standing rises with every one.", false, true),
         new("rise", "Rise up", "Call the following into the streets in a region. If it succeeds, the region is its own: a capital, militia, and a war with the country it rose against.", true, false),
+        new("referendum", "Negotiate referendum", "Seek a peaceful vote in the homeland. Requires a majority of residents, standing and the parent's consent; no militia or automatic war.", true, false, "civic_independence"),
         new("infiltrate", "Send fighters in", "Smuggle fighters out of the headquarters into a region where its people will hide them. They take days on the road by distance, and an uprising there is stronger for every one that arrives.", true, false),
         new("call_to_arms", "Call to arms", "Hand out rifles in a region it holds: militia out of its supporters there, the more the more of them there are.", true, false),
         new("lobby", "Lobby the host", "Friends in the host's parliament and press: the host thinks better of it and its temper cools.", false, false, "diaspora_lobby"),
@@ -107,6 +108,7 @@ public static class MovementActions
 
     private static int CooldownDays(Defines defines, string action) => action switch
     {
+        "referendum" => defines.CivilReferendumDays,
         "campaign" or "services" => defines.MovementCampaignDays,
         "fundraise" => defines.MovementFundraiseDays,
         "recruit" => defines.MovementRecruitDays,
@@ -145,6 +147,7 @@ public static class MovementActions
 
         switch (action)
         {
+            case "referendum": return CivilIndependence.Refusal(campaign, nation, region);
             case "move":
             {
                 if (!state.Landless) return Loc.Get("A country with ground of its own is governed from its capital.");
@@ -165,6 +168,10 @@ public static class MovementActions
             {
                 var own = MovementRules.PeopleOf(region, definition, out var faithful);
                 if (action != "hospital" && own + faithful <= 0) return Loc.Get("None of its peoples live there.");
+                if (!MovementReach.CanOperate(campaign, nation, region, definition))
+                    return Loc.Get("There is no local network or permission for this operation.");
+                if (action == "hospital" && region.WarDamage < .02f && region.StandardOfLiving >= .8f)
+                    return Loc.Get("This region has no urgent need for a field hospital.");
                 return "";
             }
             case "recognition":
@@ -251,8 +258,11 @@ public static class MovementActions
             case "campaign":
             case "services":
             {
+                var own = MovementRules.PeopleOf(region, definition, out var faithful);
+                var ceiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful);
                 var gain = defines.MovementCampaignSupport * (action == "services" ? 1.6f : 1f);
                 MovementRules.Win(state, region.MapIndex, gain);
+                state.Support[region.MapIndex] = MathF.Min(ceiling, state.Support[region.MapIndex]);
                 if (action == "services") region.StandardOfLiving = M.Clamp01(region.StandardOfLiving + 0.01f);
                 state.Heat = M.Clamp01(state.Heat + defines.MovementCampaignHeat * (inHost ? 1f : 0.4f) *
                                        (definition.Has("armed_wing") ? 1.3f : 1f));
@@ -276,6 +286,9 @@ public static class MovementActions
                 state.LastReport = Loc.Format("It now has {0} cadres.", Fmt.People(state.Cadres));
                 break;
 
+            case "referendum":
+                CivilIndependence.Ratify(campaign, nation, region);
+                break;
             case "recognition":
             {
                 var opinion = CampaignDiplomacy.Get(campaign, target.Id, nation.Id).Opinion;
@@ -318,7 +331,7 @@ public static class MovementActions
             case "hospital":
                 region.StandardOfLiving = M.Clamp01(region.StandardOfLiving + 0.02f);
                 region.WarDamage = MathF.Max(0f, region.WarDamage - 0.02f);
-                state.Legitimacy = M.Clamp01(state.Legitimacy + 0.03f);
+                state.Legitimacy = M.Clamp01(state.Legitimacy + 0.03f * (1f - state.Legitimacy));
                 state.LastReport = Loc.Format("A field hospital has opened in {0}.", region.DisplayName);
                 break;
 

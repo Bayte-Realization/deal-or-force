@@ -2,7 +2,10 @@
 
 # Deal or Force
 
-A grand strategy game about the whole world, in Godot 4.7 and .NET 8.
+A grand strategy game about the whole world. This experimental branch uses Godot 4.8 dev7 .NET and .NET 10; the separate 4.7 project is not replaced.
+
+World rendering scripts now live in
+[`Scripts/gfx`](Scripts/gfx/README.md), separately from UI and simulation rules.
 
 It opens on 1 January 2024 with 261 countries, 1 850 regions and 38 018 provinces, and
 after that nothing is scripted. Prices come out of what is produced and shipped. A war moves

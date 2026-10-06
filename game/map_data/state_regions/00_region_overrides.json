@@ -231,6 +231,17 @@
     }
 
   ],
+  "cell_transfers": [
+    {
+      // One residual raster cell south of the Gaza contour, not part of the West Bank.
+      // The user-requested eastern-region option: retain ISR bookmark ownership and
+      // join Southern district. Province colour/ID and the Gaza contour stay unchanged.
+      "id": "gaza_coastal_cell_to_southern_district",
+      "from_iso": "PS-WBK", "to_iso": "IL-D",
+      "from_nation": "PSE", "to_nation": "ISR",
+      "points": [[34.28125, 31.21875]]
+    }
+  ],
   "partitions": [
     {
       // Hebei wraps around Beijing and Tianjin, which are carved out of it in reality, so

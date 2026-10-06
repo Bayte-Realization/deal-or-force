@@ -56,6 +56,22 @@ public sealed class DiplomaticRelation
 
     /// <summary>When the current alliance was signed, for the screen that shows it.</summary>
     public int AllianceSinceDay = -9999;
+    public float AllianceCohesion = 0.75f;
+    public int AllianceAssessmentDay = -9999;
+    public int AllianceStrainedDays;
+    public int AllianceReaffirmedDay = -9999;
+    // One sponsor-funded contribution per bilateral alliance. These terms are captured
+    // at signature, so editing a catalogue cannot rewrite an existing saved promise.
+    public string AllianceProgram = "";
+    public int AllianceProgramSponsor = -1;
+    public int AllianceProgramStarted = -1;
+    public int AllianceProgramLastPaid = -1;
+    public int AllianceProgramDuration;
+    public int AllianceProgramPaidWeeks;
+    public float AllianceProgramWeeklyCost;
+    public float AllianceProgramTrustBudget;
+    public bool AllianceProgramRelief;
+    public int AllianceProgramPausedDay = -1;
 
     /// <summary>When one of them last asked the other to answer to it and was told no (SubmissionSystem).</summary>
     public int SubmissionAskedDay = -9999;
@@ -114,8 +130,14 @@ public static class CampaignDiplomacy
             : null;
     }
 
-    public static bool AtWar(Campaign campaign, int a, int b) =>
-        campaign.Wars.Any(war => !war.Ended && war.Opposes(a, b));
+    public static bool AtWar(Campaign campaign, int a, int b)
+    {
+        // Called inside many diplomatic pair/third-country loops. Avoid allocating
+        // a captured predicate for every query; preserve list order and exact rules.
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.Opposes(a, b)) return true;
+        return false;
+    }
 
     /// <summary>The war these two are fighting each other in, or null.</summary>
     public static StrategicWar WarBetween(Campaign campaign, int a, int b)
@@ -250,6 +272,9 @@ public static class CampaignDiplomacy
             AttackerId = attackerId,
             DefenderId = defenderId,
             StartedDay = campaign.ElapsedDays,
+            CivilConflict = justification is "secession" or "uprising",
+            AiNegotiationUnlockDay = justification is "secession" or "uprising"
+                ? campaign.ElapsedDays + Math.Max(0, campaign.Defines.CivilWarNegotiationDays) : 0,
             ClaimedStateMapIndex = ResolveWarGoal(campaign, defender.MapIndex, claimedStateMapIndex)
         };
         campaign.Wars.Add(war);
@@ -395,6 +420,7 @@ public sealed class DenounceCommand : ICampaignCommand
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         if (relation is null || campaign.ElapsedDays - relation.LastActionDay < 14) return;
         OpinionSystem.Remember(campaign, relation, "denounced");
+        campaign.Chronicle.Record(campaign, "denunciation", IssuerId, TargetId);
         relation.LastActionDay = campaign.ElapsedDays;
         if (relation.Opinion <= -35f &&
             relation.Stance is (DiplomaticStance.Neutral or DiplomaticStance.Friendly))

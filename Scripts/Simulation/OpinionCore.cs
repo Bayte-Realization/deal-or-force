@@ -223,6 +223,12 @@ public static class OpinionSystem
                 Loc.Get(affinity >= 0f ? "Politics we recognise" : "Politics we do not share"), affinity);
         }
 
+        var memory = SocialMemory.OpinionEffect(campaign, relation);
+        if (MathF.Abs(memory) >= 0.05f)
+        {
+            total += memory;
+            relation.OpinionDrivers.Add(Loc.Get("Accumulated public reputation"), memory);
+        }
         relation.Opinion = M.Clamp(total, -100f, 100f);
         relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
     }

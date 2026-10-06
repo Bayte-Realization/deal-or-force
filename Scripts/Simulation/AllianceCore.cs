@@ -172,6 +172,9 @@ public static class AllianceSystem
 
         var willingness = relation.Opinion / 100f;
         why?.Add("How we regard them", relation.Opinion / 100f);
+        var image = SocialMemory.Esteem(campaign, asked, asking) * defines.SocialAllianceWeight;
+        willingness += image;
+        if (MathF.Abs(image) >= 0.001f) why?.Add(Loc.Get("Their standing in our society"), image);
 
         // An alliance with a country already at war is a war, and everybody knows it.
         foreach (var war in campaign.Wars)
@@ -413,6 +416,9 @@ public static class AllianceSystem
         relation.AllianceOfferedBy = 0;
         relation.AllianceOfferedDay = -9999;
         relation.AllianceSinceDay = campaign.ElapsedDays;
+        relation.AllianceCohesion = 0.75f;
+        relation.AllianceStrainedDays = 0;
+        relation.AllianceAssessmentDay = campaign.ElapsedDays;
         relation.LastActionDay = campaign.ElapsedDays;
         OpinionSystem.Remember(campaign, relation, "alliance");
         campaign.MarkStrategicChange();
@@ -440,7 +446,10 @@ public static class AllianceSystem
         }
 
         relation.Stance = DiplomaticStance.Neutral;
+        AlliancePrograms.Clear(relation);
         relation.AllianceSinceDay = -9999;
+        relation.AllianceRefusedDay = campaign.ElapsedDays;
+        relation.AllianceStrainedDays = 0;
         relation.LastActionDay = campaign.ElapsedDays;
         OpinionSystem.Forget(campaign, relation, "alliance");
         OpinionSystem.Remember(campaign, relation, "broke_our_alliance");

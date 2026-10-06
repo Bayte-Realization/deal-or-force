@@ -185,6 +185,8 @@ public static class HistoryDataLoader
             }
             var value = entry.Value;
             SetFloat(value, "treasury", number => nation.Treasury = number);
+            SetFloat(value, "public_debt", number => nation.PublicDebt = MathF.Max(0, number));
+            SetFloat(value, "credit_confidence", number => nation.CreditConfidence = M.Clamp01(number));
             SetFloat(value, "gdp", number => nation.Gdp = Math.Max(0.01f, number));
             SetLong(value, "population", number => nation.Population = Math.Max(0, number));
             SetFloat(value, "tax_rate", number => nation.TaxRate = M.Clamp(number, 0.05f, 0.55f));

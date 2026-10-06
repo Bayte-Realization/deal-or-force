@@ -13,36 +13,50 @@ they are not installed by default.
 In the editor: **Editor → Manage Export Templates… → Download and Install**.
 
 The version has to match **exactly**, the word `mono` included: the engine here is
-`C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe`, so the templates must be
-`4.7.2.stable.mono`. Templates from a plain build will not do for a .NET build, and the
+`C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe`, so the templates must be
+`4.8.dev7.mono`. This experimental branch targets .NET 10 and SDK 4.8.0-dev.7.
+The separate 4.7 checkout needs its own matching templates. Templates from a plain build will not do for a .NET build, and the
 error when they do not will be unhelpful.
 
 To check they arrived: the folder
-`C:\Users\<name>\AppData\Roaming\Godot\export_templates\4.7.2.stable.mono\` should exist and
+`C:\Users\<name>\AppData\Roaming\Godot\export_templates\4.8.dev7.mono\` should exist and
 not be empty.
 
 ## Every time: build
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Tools\build.ps1
+powershell -ExecutionPolicy Bypass -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe"
 ```
 
-The script exports to `build\Deal or Force\`, verifies the build (see below) and leaves
-`build\Deal or Force <date>.zip` beside it — that is the thing to send.
+The script checks C#, exports a separate staging copy to `build\<timestamp>\Deal or Force\`,
+verifies the build and leaves `build\Deal or Force <timestamp>.zip` beside it.
+Alternatively set `GODOT_EXECUTABLE`. The live editor configuration is never temporarily
+rewritten; development autoloads are removed only from the staging configuration.
 
 Switches: `-Debug` builds the debug version (it has a console and detailed errors, which
 helps when a tester catches a crash), `-NoZip` skips the archive, `-Godot <path>` if the
-engine moves.
+engine moves. `-OutputDirectory` selects a fresh child of `build/`; existing output is
+preserved unless `-ReplaceExistingOutput` is explicitly supplied.
 
 The same thing by hand, if the script does not suit for some reason:
 
 ```powershell
-& "C:\GodotEngineNet\Godot_v4.7.2-stable_mono_win64.exe" --headless `
-    --path "D:\Godot Projects\by-deal-or-force" `
-    --export-release "Windows Desktop" "D:\Godot Projects\by-deal-or-force\build\Deal or Force\Deal or Force.exe"
+& "C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe" --headless `
+    --path "D:\Godot Projects\deal-or-force-godot-4-8\build\<staging-copy>" `
+    --export-release "Windows Desktop" "D:\Godot Projects\deal-or-force-godot-4-8\build\<new-build>\Deal or Force\Deal or Force.exe"
 ```
 
 ### Export preset and loose mod templates
+
+Verify the actual executable after building:
+
+```powershell
+& "build\<timestamp>\Deal or Force\Deal or Force.exe" --headless -- --verify-build
+```
+
+This opt-in probe checks the menu, a fresh unsaved campaign, laws and resources.
+Success is `EXPORT_VERIFY failures=0` and exit 0. For screenshots omit `--headless`
+and supply `--verify-build-output <directory>` after `--`.
 
 The tracked `export_presets.cfg` supplies the `Windows Desktop` preset. Its export path is
 relative and signing is disabled; do not put credentials in this shared file.
@@ -192,15 +206,15 @@ every pack on disk as owned, which is for testing and should stay `false` anywhe
   they can be separated with export filters, but that is worth doing with a working build in
   hand rather than before one.
 - **Windows only.** There is one preset. Linux is a second preset and the same templates.
-- **Editor add-ons ship in the build.** The startup log shows
-  `Error loading GDExtension … ziva_agent.gdextension` — an editor extension with no business
-  being in the game. Not fatal, but it is extra weight and extra red lines in somebody else's
-  log; an exclusion filter in the preset clears it.
+- **Native adapters.** Editor add-ons are excluded. The experimental editor Luau DLL is
+  omitted by default: a 4.8 dev7 release-template test found heap corruption on shutdown.
+  `-IncludeExperimentalNativeLuau` explicitly opts in, with redistribution notices;
+  revalidate such packages separately. The Luau worker remains available.
 
 ## Size
 
-The folder is 359 MB and the archive 232 MB. Half of that is the double packing of the
-rasters: Godot imports 319 pngs into the `.pck`, and the same files sit beside it as ordinary
+Sizes change between versions; the build script prints current measurements. Part of the size
+is the double packing of the rasters: Godot imports pngs into the `.pck`, and the same files sit beside it as ordinary
 files because some of the code reads them directly. Among friends, for a test, that is
 tolerable; for wider distribution it is worth separating them — but carefully, and with a
 working build in hand, because some of the images are read through `res://` and some through

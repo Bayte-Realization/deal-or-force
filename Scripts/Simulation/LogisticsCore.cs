@@ -194,7 +194,7 @@ public static class LogisticsSystem
             var congestion = M.Clamp(capacity / demand, 0.08f, 1f);
             var traceRange = Math.Max(1, campaign.Defines.SupplyTraceRange);
             var distanceFactor = M.Clamp(1f - distance[province] / (float)traceRange * 0.62f, 0.22f, 1f);
-            var lakeMultiplier = topology.HasLakeAccess(province) ? 1f + campaign.Defines.LakeSupplyBonus : 1f;
+            var lakeMultiplier = WaterConditions.LakeSupplyMultiplier(campaign, province);
 
             // A fleet sitting off the coast takes what arrives by sea. This is the one
             // thing a navy does that a land player feels immediately: an army on a

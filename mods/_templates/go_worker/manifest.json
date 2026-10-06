@@ -1,0 +1,4 @@
+{
+  "id": "example_go_worker", "name": "Go worker example", "version": "1.0.0", "enabled": false,
+  "worker_executable": "corecode/example-go.exe", "worker_interval_days": 7, "worker_timeout_ms": 500
+}

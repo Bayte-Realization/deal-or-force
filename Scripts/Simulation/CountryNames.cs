@@ -99,4 +99,13 @@ public static class CountryNames
         }
         return map ? Resolve(nation, false) : Loc.Get(nation.Name);
     }
+
+    /// <summary>Optional localized short identity for narrow HUD columns. A formed
+    /// state's identity wins over its founder; full names remain in dossiers/tooltips.</summary>
+    public static string Compact(Nation nation)
+    {
+        if (nation is null) return "";
+        var identity = string.IsNullOrEmpty(nation.FormedNationId) ? "country." + nation.Tag : "formable." + nation.FormedNationId;
+        return Loc.GetOr(identity + ".short_name", nation.DisplayName);
+    }
 }

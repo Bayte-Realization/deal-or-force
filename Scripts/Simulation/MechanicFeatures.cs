@@ -15,7 +15,9 @@ public sealed partial class Defines
         ["recruitment"] = true, ["decisions"] = true, ["events"] = true,
         ["politics"] = true, ["movements"] = true, ["colonisation"] = true,
         ["subjects"] = true, ["formable_nations"] = true, ["secession"] = true,
-        ["war_damage"] = true, ["war_weariness"] = true
+        ["war_damage"] = true, ["war_weariness"] = true, ["militia"] = true,
+        ["historical_norms"] = true, ["public_reputation"] = true, ["seasonal_water"] = true, ["movement_lifecycle"] = true,
+        ["public_debt"] = true, ["laws"] = true, ["political_agendas"] = true, ["national_courses"] = true
     };
 
     // Feature -> named common/scripted_triggers condition. Empty string removes a rule.
@@ -34,12 +36,13 @@ public sealed partial class Defines
         ["GovernanceEvents"] = "politics", ["MovementRules"] = "movements", ["MovementAi"] = "movements",
         ["ColonisationCore"] = "colonisation", ["SubjectSystem"] = "subjects", ["SubmissionSystem"] = "subjects",
         ["PeacefulFormationAi"] = "formable_nations", ["SecessionEvents"] = "secession",
-        ["WarDamage"] = "war_damage", ["WarWeariness"] = "war_weariness"
+        ["WarDamage"] = "war_damage", ["WarWeariness"] = "war_weariness",
+        ["MilitiaCore"] = "militia", ["CivilWarPersistence"] = "militia"
     };
     public Dictionary<string, string> FeatureScreens { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Research"] = "research", ["Navy"] = "navy", ["Decisions"] = "decisions",
-        ["State Affairs"] = "politics", ["Movements"] = "movements"
+        ["State Affairs"] = "politics", ["Movements"] = "movements", ["Laws"] = "laws"
     };
 }
 
@@ -63,7 +66,23 @@ public sealed partial class Campaign
         if (!MechanicFeatures.ValidId(id)) return false;
         var before = FeatureEnabled(id);
         FeatureOverrides[id] = enabled;
+        if (id.Equals("public_debt", StringComparison.OrdinalIgnoreCase))
+            foreach (var n in Nations) n.DebtMechanicActive = enabled;
+        if (id.Equals("national_courses", StringComparison.OrdinalIgnoreCase))
+            foreach (var n in Nations)
+            {
+                n.NationalCourseActive = enabled; n.NationalCourse.LastReviewDay = ElapsedDays;
+                NationalModifiers.Invalidate(n);
+            }
+        if (id.Equals("laws", StringComparison.OrdinalIgnoreCase) || id.Equals("political_agendas", StringComparison.OrdinalIgnoreCase))
+            foreach (var n in Nations)
+            {
+                n.LawsActive = FeatureEnabled("laws"); n.AgendasActive = FeatureEnabled("political_agendas");
+                NationalModifiers.Invalidate(n);
+            }
+        if (!enabled && !SocialMemory.ImagesEnabled(this)) PublicOutreachActions.Suspend(this);
         if (before == enabled) return true;
+        if (enabled) SocialMemory.Resume(this, id);
         SupportCore.IndexReach(this); // also safe while paused, before the next battle tick
         SupportExposure.Clear();
         MarkStrategicChange();
@@ -92,7 +111,8 @@ public static class MechanicFeatures
         "long_range_forces", "aviation", "drones", "artillery", "air_defence", "navy",
         "research", "construction", "recruitment", "decisions", "events", "politics",
         "movements", "colonisation", "subjects", "formable_nations", "secession",
-        "war_damage", "war_weariness"
+        "war_damage", "war_weariness", "militia", "historical_norms", "public_reputation", "seasonal_water", "movement_lifecycle", "public_debt",
+        "laws", "political_agendas", "national_courses"
     };
 
     public static Dictionary<string, string> CommandDefaults()
@@ -111,6 +131,8 @@ public static class MechanicFeatures
         Bind("subjects", "OfferSubmissionCommand");
         Bind("formable_nations", "FormNationCommand", "InviteFormationCommand");
         Bind("war_damage", "RebuildRegionCommand");
+        Bind("public_reputation", "StartPublicOutreachCommand");
+        Bind("public_debt", "ManageDebtCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;
     }

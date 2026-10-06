@@ -58,6 +58,9 @@ public static class MovementAi
 
         // The host first: a movement that is thrown out loses a fifth of its people.
         if (state.Heat >= 0.6f) Try("lobby");
+        if (definition.Has("civic_independence"))
+            foreach (var id in definition.Homeland)
+                if (Movements.StateById(campaign, id) is { } home && Try("referendum", home.MapIndex)) break;
         if (state.Landless && state.Heat >= 0.72f)
         {
             var refuge = MovementRules.BestRefuge(campaign, nation, Movements.HostOf(campaign, nation));
@@ -146,7 +149,7 @@ public static class MovementAi
             var need = float.MinValue;
             foreach (var region in campaign.States)
             {
-                if (region.Population <= 0) continue;
+                if (region.Population <= 0 || MovementActions.Refusal(campaign, nation, "hospital", region.MapIndex, -1).Length > 0) continue;
                 var score = region.WarDamage * 2f + (1f - region.StandardOfLiving);
                 if (score <= need) continue;
                 need = score;
@@ -170,7 +173,7 @@ public static class MovementAi
         {
             if (region.NationMapIndex == nation.MapIndex) continue;
             var people = MovementRules.PeopleOf(campaign, region, definition, out _);
-            if (people <= 0) continue;
+            if (people <= 0 || !MovementReach.CanOperate(campaign, nation, region, definition)) continue;
             var score = people * (1f - state.Support.GetValueOrDefault(region.MapIndex)) *
                         (MovementDefinition.Listed(definition.Homeland, region.Id) ? 3f : 1f);
             if (score <= groundScore) continue;

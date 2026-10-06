@@ -33,7 +33,8 @@ public static class Program
         // coin flip dressed up as a check - it passed on one map and handed Ukraine to
         // Russia on another - so being able to ask for the same scenario under a different
         // seed is how the front's budget gets set from measurement rather than from luck.
-        var seed = args.Length > 1 && int.TryParse(args[1], NumberStyles.Integer,
+        var seed = args.Length > 1 && int.TryParse(args[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out _) &&
+            int.TryParse(args[1], NumberStyles.Integer,
             CultureInfo.InvariantCulture, out var chosen)
             ? chosen
             : 20260830;
@@ -117,6 +118,30 @@ public static class Program
         if (Array.IndexOf(args, "--loc") >= 0)
             return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
         // Fast data/UI checks, without the multi-year simulation fixtures.
+        if (Array.IndexOf(args, "--localization-audit") >= 0)
+        {
+            var scripts = FindScripts();
+            if (scripts is null) return 2;
+            var captions = VisibleCaptionIndex(scripts);
+            var english = ReadLocalizationTable("english");
+            var russian = ReadLocalizationTable("russian");
+            var absentEnglish = captions.Where(k => !english.ContainsKey(k)).ToArray();
+            var absentRussian = captions.Where(k => !russian.ContainsKey(k)).ToArray();
+            Console.WriteLine(JsonSerializer.Serialize(new { absentEnglish, absentRussian }, new JsonSerializerOptions { WriteIndented = true }));
+            return absentEnglish.Length == 0 && absentRussian.Length == 0 ? 0 : 1;
+        }
+        var indexAt = Array.IndexOf(args, "--write-localization-index");
+        if (indexAt >= 0 && indexAt + 1 < args.Length)
+        {
+            var scripts = FindScripts();
+            if (scripts is null) return 2;
+            var english = ReadLocalizationTable("english");
+            var missing = VisibleCaptionIndex(scripts).Where(k => !english.ContainsKey(k)).ToDictionary(k => k, k => k);
+            File.WriteAllText(args[indexAt + 1], JsonSerializer.Serialize(missing, new JsonSerializerOptions { WriteIndented = true,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }) + "\n");
+            Console.WriteLine($"Indexed {missing.Count} new captions without replacing existing translations.");
+            return 0;
+        }
         if (Array.IndexOf(args, "--prepare-front-only") >= 0)
             return Check("an attack forms up along its actual assigned front", AnAttackFormsUpAlongItsFront());
         if (Array.IndexOf(args, "--templates-only") >= 0)
@@ -1538,8 +1563,8 @@ public static class Program
     private static int WriteGoreMaps(string folder)
     {
         Directory.CreateDirectory(folder);
-        var width = Globality.EarthData.Width;
-        var height = Globality.EarthData.Height;
+        var width = DealOrForce.Simulation.WorldMapSource.Width;
+        var height = DealOrForce.Simulation.WorldMapSource.Height;
 
         foreach (var tidy in new[] { true, false })
         {
@@ -1592,14 +1617,14 @@ public static class Program
     {
         MapRasterCatalog.ResetCatalog();
         HydrologyCatalog.ResetCatalog();
-        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-                Globality.EarthData.Width, Globality.EarthData.Height, out var topology, out var message))
+        if (!MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+                DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var topology, out var message))
         {
             Console.WriteLine($"  province map unavailable: {message}");
             Console.WriteLine("  warfare, logistics and combat will not be exercised by this run.");
             return false;
         }
-        if (MapRasterCatalog.TryLoadHydrology(Globality.EarthData.Width, Globality.EarthData.Height,
+        if (MapRasterCatalog.TryLoadHydrology(DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height,
                 out var hydrology, out _))
             topology.AttachHydrology(hydrology);
         campaign.AttachProvinceTopology(topology);
@@ -3397,8 +3422,8 @@ public static class Program
 
         // The restored campaign has no province graph until one is attached, exactly as in
         // the game. Attaching it is what replays the saved political layer.
-        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States, Globality.EarthData.Control,
-                Globality.EarthData.Width, Globality.EarthData.Height, out var freshTopology, out var message))
+        if (!MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States, DealOrForce.Simulation.WorldMapSource.Control,
+                DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var freshTopology, out var message))
             return $"could not rebuild the province graph: {message}";
         restored.AttachProvinceTopology(freshTopology);
 
@@ -4531,8 +4556,8 @@ public static class Program
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var cell = topology.ProvinceCenterCell[province];
-            if (cell < 0 || cell >= Globality.EarthData.Control.Length) continue;
-            var ground = Globality.EarthData.Control[cell];
+            if (cell < 0 || cell >= DealOrForce.Simulation.WorldMapSource.Control.Length) continue;
+            var ground = DealOrForce.Simulation.WorldMapSource.Control[cell];
             var owner = topology.ProvinceToNation[province];
             if (unclaimed.Contains(topology.ProvinceToState[province]))
             {
@@ -4841,8 +4866,8 @@ public static class Program
     {
         MapRasterCatalog.ResetCatalog();
         HydrologyCatalog.ResetCatalog();
-        if (!MapRasterCatalog.TryBuildProvinceTopology(Globality.EarthData.States,
-                Globality.EarthData.Control, Globality.EarthData.Width, Globality.EarthData.Height,
+        if (!MapRasterCatalog.TryBuildProvinceTopology(DealOrForce.Simulation.WorldMapSource.States,
+                DealOrForce.Simulation.WorldMapSource.Control, DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height,
                 out var topology, out _))
             return "";
 
@@ -6768,13 +6793,7 @@ public static class Program
         // straight to one of the three lookups. A caption that arrives through a parameter,
         // or is assembled from a country's name and a number, cannot be found this way and
         // is not expected to be - which is why this check is one-directional.
-        var captions = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
-        {
-            if (file.Contains("LegacySourceMap")) continue;
-            foreach (var caption in Captions(File.ReadAllText(file)))
-                if (caption.Length > 0) captions.Add(caption);
-        }
+        var captions = VisibleCaptionIndex(scripts);
         if (captions.Count == 0) return "found no interface captions in the source at all";
 
         // And the captions that are not in the source at all any more.
@@ -6803,7 +6822,8 @@ public static class Program
             "common/settings", "common/goods", "common/buildings", "common/terrain",
             "common/professions", "common/religions", "common/cultures", "common/decisions",
             "common/modifiers", "common/opinion_modifiers", "common/trade", "common/support",
-            "common/programme", "events"
+            "common/programme", "common/laws", "common/agendas", "common/national_courses",
+            "common/alliance_programs", "common/formable_nations", "common/movements", "events"
         };
         foreach (var folder in folders)
         {
@@ -6873,6 +6893,10 @@ public static class Program
         ("RowLabel(", new[] { 0 }),
         ("SliderRow(", new[] { 0 }),
         ("StateSection(", new[] { 1, 2 }),
+        ("PolicyHeading(", new[] { 1 }),
+        ("PolicyText(", new[] { 1 }),
+        ("PolicyStat(", new[] { 1 }),
+        ("Placeholder(", new[] { 1 }),
         ("Loc.Get(", new[] { 0 }),
         ("Loc.Format(", new[] { 0 }),
         // A sentence that counts hands its singular key to Plural.Key and gets back one of
@@ -6895,6 +6919,41 @@ public static class Program
         ("Cell(", new[] { 0 }),
         ("Button(", new[] { 0 })
     };
+
+    // Reused by CI and the opt-in translator index generator. Expanding a workspace
+    // must expand its localization coverage too; empty descriptions are not keys.
+    private static SortedSet<string> VisibleCaptionIndex(string scripts)
+    {
+        var result = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
+        {
+            var source = File.ReadAllText(file);
+            foreach (var caption in Captions(source))
+                if (caption.Length > 0) result.Add(caption);
+            // Event captions are addressed indirectly by recorded kind, including
+            // both branches of a ternary. They must not leak raw chronicle.* IDs.
+            foreach (System.Text.RegularExpressions.Match call in System.Text.RegularExpressions.Regex.Matches(source,
+                         @"Chronicle\.Record\([^,]+,\s*([^,]+),"))
+                foreach (System.Text.RegularExpressions.Match kind in System.Text.RegularExpressions.Regex.Matches(
+                             call.Groups[1].Value, "\"([a-z_]+)\""))
+                    result.Add("chronicle." + kind.Groups[1].Value);
+        }
+        var common = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common");
+        foreach (var folder in new[] { "budget", "government_focus", "trade_policies", "governments", "ideologies", "countries",
+                     "units", "settings", "goods", "buildings", "terrain", "professions", "religions", "cultures", "decisions",
+                     "modifiers", "opinion_modifiers", "trade", "support", "programme", "laws", "agendas", "national_courses",
+                     "alliance_programs", "formable_nations", "movements" })
+        {
+            var directory = Path.Combine(common, folder);
+            if (!Directory.Exists(directory)) continue;
+            foreach (var file in Directory.EnumerateFiles(directory, "*.json"))
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(file), GameDataLoader.ForgivingJson);
+                CollectDeclaredNames(document.RootElement, result);
+            }
+        }
+        return result;
+    }
 
     /// <summary>
     /// Every `name`, `short_name` and `description` a data file gives something, at any
@@ -7934,7 +7993,7 @@ public static class Program
     {
         if (string.IsNullOrWhiteSpace(MapRasterCatalog.StampPath))
             return "game/map_data/compiled.json is missing - recompile with Tools/MapDataCompiler";
-        var fingerprint = MapRasterCatalog.RegionFingerprint(Globality.EarthData.States);
+        var fingerprint = MapRasterCatalog.RegionFingerprint(DealOrForce.Simulation.WorldMapSource.States);
         var stamped = System.Text.Json.JsonDocument.Parse(File.ReadAllText(MapRasterCatalog.StampPath))
             .RootElement.GetProperty("regions").GetUInt64();
         if (stamped != fingerprint)
@@ -10284,7 +10343,6 @@ public static class Program
             var relative = Path.GetRelativePath(scripts, file).Replace('\\', '/');
             if (relative.StartsWith("Simulation/", StringComparison.OrdinalIgnoreCase)) continue;
             if (relative.StartsWith("Modding/", StringComparison.OrdinalIgnoreCase)) continue;
-            if (relative.StartsWith("LegacySourceMap/", StringComparison.OrdinalIgnoreCase)) continue;
 
             var lines = File.ReadAllLines(file);
             for (var index = 0; index < lines.Length; index++)

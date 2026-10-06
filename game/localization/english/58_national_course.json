@@ -1,0 +1,8 @@
+{
+ "Internal tab":"Internal", "Regional tab":"Regions", "External tab":"External", "Course tab":"Course",
+ "Construction tab":"Build",
+ "course.shock.war_started":"War begins", "course.shock.sovereign_default":"Sovereign default", "course.shock.sovereign_insolvency":"Persistent state insolvency", "course.shock.peace_signed":"Peace settlement", "course.shock.peaceful_independence":"Peaceful separation", "course.shock.institutional_change":"Institutional upheaval", "course.shock.territorial_loss":"Territorial change", "course.shock.living_collapse":"Sharp collapse of living standards",
+ "chronicle.national_course_changed":"A new societal course takes root in {0}: {2}.", "chronicle.law_enacted":"{0} enacts {2}.", "chronicle.agenda_announced":"The government of {0} promises: {2}.", "chronicle.agenda_fulfilled":"The government of {0} fulfils its promise: {2}.", "chronicle.agenda_failed":"The government of {0} fails to fulfil its promise: {2}.",
+ "chronicle.sovereign_default":"{0} defaults on debt payments.", "chronicle.sovereign_insolvency":"{0} enters a persistent insolvency crisis.", "chronicle.debt_negotiations":"{0} begins negotiating a sovereign debt settlement.", "chronicle.debt_restructured":"{0} completes a partial debt restructuring.", "chronicle.movement_emerged":"A new civic organisation emerges: {0}.", "chronicle.movement_dissolved":"{0} ceases its activity.",
+ "chronicle.alliance_program_started":"{0} starts {2} in its alliance with {1}.", "chronicle.alliance_program_completed":"{0} fulfils {2} with {1}.", "chronicle.alliance_program_lapsed":"{0} stops fulfilling {2} with {1}."
+}
