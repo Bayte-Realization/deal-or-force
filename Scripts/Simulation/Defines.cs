@@ -692,6 +692,15 @@ public sealed partial class Defines
 	public float PeaceRoundUpShare { get; set; } = 0.50f;
 
 	/// <summary>
+	/// Whether a treaty hands over whole regions only. True is the rule above: a region goes whole
+	/// or it does not go, and the map keeps its regions. False lets every treaty - the AI's as
+	/// much as a player's - take the provinces it names, part of a region at a time; the border
+	/// then runs where the armies stopped, and every region it cuts is split for good. Also the
+	/// campaign option "Peace by provinces".
+	/// </summary>
+	public bool PeaceWholeRegions { get; set; } = true;
+
+	/// <summary>
 	/// And below this share of a region, a settlement lets it go rather than keep a sliver.
 	///
 	/// The other half of the same rule. A country that ends a war owning three provinces of

@@ -265,23 +265,23 @@ public static class InterfaceSkin
         // the new arrangement and only a modder copying the defaults would have met the
         // old one. They are the shipped numbers now.
         ("hud.top",            new PanelRect(0f, 0f, 1f, 0f,       8f, 6f, -8f, 80f)),
-        ("hud.navigation",     new PanelRect(0f, 0f, 0f, 1f,       8f, 90f, 74f, -60f)),
-        ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 526f, -60f)),
+        ("hud.navigation",     new PanelRect(0f, 0f, 0f, 1f,       8f, 90f, 98f, -60f)),
+        ("hud.side_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 548f, -60f)),
         ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -660f, -52f, -8f, -8f)),
-        ("hud.resource_atlas", new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 514f, -62f)),
+        ("hud.resource_atlas", new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 536f, -62f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
         ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -300f, 90f, -8f, 620f)),
-        ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 590f, -60f)),
+        ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 612f, -60f)),
         // Top-anchored and as tall as what it holds, rather than stretched to the bottom of
         // the screen: a fleet panel is a dozen lines, and the rest of the column was empty.
-        ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 610f)),
+        ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      106f, 90f, 548f, 610f)),
         // What a left click on the map selects: the country, as tall as what it holds, and
         // its region and province along the bottom, clear of the map controls.
-        ("hud.country_card",   new PanelRect(0f, 0f, 0f, 0f,      84f, 90f, 526f, 760f)),
-        ("hud.region_card",    new PanelRect(0f, 1f, 0f, 1f,     530f, -262f, 1350f, -8f)),
+        ("hud.country_card",   new PanelRect(0f, 0f, 0f, 0f,      106f, 90f, 548f, 760f)),
+        ("hud.region_card",    new PanelRect(0f, 1f, 0f, 1f,     552f, -262f, 1290f, -8f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
-        ("hud.hotseat",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 365f, -6f)),
-        ("hud.network",        new PanelRect(0f, 1f, 0f, 1f,      84f, -54f, 425f, -6f)),
+        ("hud.hotseat",        new PanelRect(0f, 1f, 0f, 1f,      106f, -54f, 365f, -6f)),
+        ("hud.network",        new PanelRect(0f, 1f, 0f, 1f,      106f, -54f, 425f, -6f)),
 
         // Full-screen and modal panels
         ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -270f, -400f, 270f, 400f)),
@@ -313,7 +313,7 @@ public static class InterfaceSkin
         ("modal.support",      new PanelRect(0.045f, 0.115f, 0.795f, 0.73f, 0f, 0f, 0f, 0f)),
         // The long-range forces panel docks beside the map, the way the army panel does: its
         // orders are given looking at the bases and their reach, so the map stays in view.
-        ("hud.support_panel",  new PanelRect(0f, 0f, 0f, 1f,      84f, 90f, 690f, -60f)),
+        ("hud.support_panel",  new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 712f, -60f)),
         ("modal.research",     new PanelRect(0.055f, 0.10f, 0.975f, 0.94f, 0f, 0f, 0f, 0f)),
 
         // The lobby and the workshop. These three were laid out in game/gui only - named in

@@ -97,6 +97,11 @@ public partial class DealOrForceGame
                     _campaign.Defines.AutosaveIntervalDays = Whole("autosave_interval");
                 break;
 
+            case "peace_by_provinces":
+                if (_campaign is not null)
+                    _campaign.Defines.PeaceWholeRegions = !SettingsCatalog.Flag("peace_by_provinces");
+                break;
+
             case "save_format":
                 if (_campaign is not null)
                     _campaign.Defines.SaveTextFormat = SettingsCatalog.Chosen("save_format") != "false";

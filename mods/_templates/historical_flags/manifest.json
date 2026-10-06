@@ -1,0 +1,11 @@
+{
+  "id": "example_historical_flags",
+  "name": "Example: historical flags for dependencies and regimes",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 150,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

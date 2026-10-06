@@ -326,40 +326,11 @@ public partial class DealOrForceGame
 
         // ------------------------------------------------------------------------- the rest --
         //
-        // Jokes that do arithmetic. Every one of these is computed from the world in front of
-        // you rather than printed from a list, because a console that answers a silly question
-        // with something true about your own country is the best advertisement this game has.
-        Add("blame", "FUN", "blame",
-            "Find out whose fault it is. Names the country that actually dislikes you most and " +
-            "what they say it is about.", _ => ConsoleBlame(), "whodunnit");
-        Add("vibe", "FUN", "vibe",
-            "How the country is doing, in one sentence, at the register the figures deserve.",
-            _ => ConsoleVibe(), "mood");
-        Add("doomsday", "FUN", "doomsday",
-            "When stability reaches nothing, at the rate it has actually been falling. " +
-            "Arithmetic, not prophecy.", _ => ConsoleDoomsday(), "deathclock");
-        Add("ratio", "FUN", "ratio",
-            "You against whoever you are fighting, figure by figure, with a verdict.",
-            _ => ConsoleRatio());
-        Add("idle", "FUN", "idle",
-            "Every division of yours that nobody has told to do anything. Usually more than you think.",
-            _ => ConsoleIdleArmies(), "slackers");
-        Add("flip", "FUN", "flip [question]",
-            "A coin, flipped out of the campaign's own seed - so it is the same coin twice, which " +
-            "is either reassuring or the worst possible property for a coin.", ConsoleFlip, "8ball");
-        Add("coffee", "FUN", "coffee",
-            "The treasury buys a coffee. It costs one, and it goes on the books.",
-            _ => ConsoleCoffee(), "tea");
-        Add("whoami", "FUN", "whoami",
-            "Everything the simulation knows about you, which is less than you would like.",
-            _ => ConsoleWhoAmI());
+        // One joke, kept on purpose: it takes its own advice. The rest of the console is tools.
         Add("touchgrass", "FUN", "touchgrass",
             "A verse, and eight seconds later the game closes. It does not save first. " +
             "The verse is in game/common/console.",
             _ => ConsoleTouchGrass());
-        Add("sudo", "FUN", "sudo [anything]",
-            "There is nobody above you to ask.", ConsoleSudo);
-        Add("xyzzy", "FUN", "xyzzy", "Nothing happens.", _ => ConsoleXyzzy());
 
         _consoleCommands = table;
         _consoleByName = new Dictionary<string, ConsoleCommand>(StringComparer.OrdinalIgnoreCase);

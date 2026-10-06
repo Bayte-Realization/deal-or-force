@@ -78,6 +78,13 @@ public sealed class SubjectType
 
     /// <summary>And how contented it has to be to go quietly.</summary>
     public float AnnexBelowLiberty = 0.25f;
+
+    /// <summary>
+    /// Whether it is governed the way its overlord is. A leased territory has no politics of
+    /// its own to speak of: Baikonur is run by the people who run Russia, and a Baikonur that
+    /// stayed a liberal parliamentary republic while Russia changed was a fiction.
+    /// </summary>
+    public bool SharesOverlordPolitics;
 }
 
 /// <summary>The numbers that decide how a dependency ages, all of them from the same file.</summary>
@@ -159,6 +166,7 @@ public static class SubjectCatalog
             Flag(value2, "dragged_into_wars", v => type.DraggedIntoWars = v);
             Flag(value2, "may_declare_war", v => type.MayDeclareWar = v);
             Flag(value2, "overlord_defends", v => type.OverlordDefends = v);
+            Flag(value2, "shares_overlord_politics", v => type.SharesOverlordPolitics = v);
             Read(value2, "demand_cost", v => type.DemandCost = Math.Max(0f, v));
             Read(value2, "annex_below_liberty", v => type.AnnexBelowLiberty = M.Clamp01(v));
             if (value2.TryGetProperty("annex_after_days", out var absorb) && absorb.TryGetInt32(out var after))
@@ -437,6 +445,14 @@ public static class SubjectSystem
                 overlord.Treasury += tribute;
                 subject.TributePaidWeekly += tribute;
                 overlord.TributeTakenWeekly += tribute;
+            }
+
+            if (type.SharesOverlordPolitics &&
+                (subject.Government != overlord.Government || subject.Ideology != overlord.Ideology))
+            {
+                subject.Government = overlord.Government;
+                subject.Ideology = overlord.Ideology;
+                subject.PoliticsChangedDay = campaign.ElapsedDays;
             }
 
             var levy = Math.Max(0f, subject.ManpowerReserve) * type.Manpower * 0.01f;

@@ -706,6 +706,14 @@ public static partial class AiStatecraft
                 PeaceOffers.Put(campaign, war, beaten, victor, PeaceTerms.Capitulate);
                 return;
             }
+        // A breakaway beaten in the field gives itself up, lock or no lock: most of its ground
+        // held by the state it left, or nobody left in it who believes in the war (Reintegration).
+        if (war.PendingOfferFromId < 0 && Reintegration.ShouldSurrender(campaign, war, nation) &&
+            campaign.NationById(war.EnemyLeaderOf(nation.Id)) is { } government)
+        {
+            PeaceOffers.Put(campaign, war, nation, government, PeaceTerms.Capitulate);
+            return;
+        }
         // A decided war is negotiated whatever the scenario's opening lock says: the lock keeps the
         // wars on the map from ending in their first weeks, not a beaten country from surrendering.
         if (CivilWarPersistence.NegotiationLocked(campaign, war)) return;
@@ -724,6 +732,10 @@ public static partial class AiStatecraft
         var ledger = new PeaceLedger(campaign, war, nation.Id);
         if (ledger.Budget < defines.AiPeaceMinimumBudget)
         {
+            // A state that is ahead against its own breakaway does not offer to stop: the
+            // ground is its own, and a white peace would hand back what it has retaken.
+            var ownScore = war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore;
+            if (ownScore > 0f && Reintegration.Reclaiming(campaign, war, nation.Id)) return;
             // Not winning - which is not the same as wanting to stop. A country only walks
             // away from a war it started or is defending when the country itself has had
             // enough, and that takes years rather than a bad season. Otherwise the map
@@ -742,6 +754,10 @@ public static partial class AiStatecraft
         // Winning. Write the peace a country would actually write.
         var demand = new PeaceDemand { WarId = war.Id, ProposerId = nation.Id };
         var decisive = WriteDecisiveSettlement(campaign, nation, war, ledger, demand);
+        // A state winning against its own breakaway is not selling it anything - an indemnity, a
+        // client government - for the ground. It writes all of it back once the war is decided,
+        // and until then it fights for the rest (Reintegration).
+        if (!decisive && Reintegration.Reclaiming(campaign, war, nation.Id)) return;
         if (!decisive)
         {
             WriteDemand(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);

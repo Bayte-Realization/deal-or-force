@@ -136,6 +136,43 @@ public static class HistoryDataLoader
                 OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
             }
 
+        // Who already answered to whom: Baikonur leased to Russia, the states in free association
+        // with the United States and New Zealand, the breakaways that live on a patron's money and
+        // garrison. `{"overlord": "RUS", "subject": "KAB", "type": "leased_territory"}`. Set as a
+        // standing fact rather than through SubjectSystem.Subjugate, which is the verb for a
+        // country being made one and leaves the grievance of it.
+        if (root.TryGetProperty("subjects", out var subjects) && subjects.ValueKind == JsonValueKind.Array)
+            foreach (var entry in subjects.EnumerateArray())
+            {
+                var overlordTag = entry.TryGetProperty("overlord", out var by) ? by.GetString() ?? "" : "";
+                var subjectTag = entry.TryGetProperty("subject", out var who) ? who.GetString() ?? "" : "";
+                var kind = entry.TryGetProperty("type", out var typeValue) ? typeValue.GetString() ?? "" : "";
+                var overlord = campaign.NationByTag(overlordTag);
+                var subject = campaign.NationByTag(subjectTag);
+                if (overlord is null || subject is null || overlord.Id == subject.Id)
+                {
+                    errors?.Add($"Unknown or identical countries '{overlordTag}' and '{subjectTag}' in subjects.");
+                    continue;
+                }
+                if (!SubjectCatalog.Knows(kind))
+                {
+                    errors?.Add($"No such kind of dependency as '{kind}' for {subjectTag}.");
+                    continue;
+                }
+                if (overlord.AnswersTo(subject.Id)) continue;
+                subject.OverlordId = overlord.Id;
+                subject.SubjectType = kind;
+                subject.SubjectSinceDay = campaign.ElapsedDays - 3650;
+                subject.LibertyDesire = 0f;
+                if (SubjectCatalog.Of(kind) is { SharesOverlordPolitics: true })
+                {
+                    subject.Government = overlord.Government;
+                    subject.Ideology = overlord.Ideology;
+                }
+                var tie = CampaignDiplomacy.Get(campaign, overlord.Id, subject.Id);
+                OpinionSystem.Remember(campaign, tie, "historic_friendship");
+            }
+
         // What the two of them already thought of each other. Without this the world opened on
         // two hundred and sixty countries that had never met: India and Pakistan neutral, Iran
         // and Israel neutral, and the first thing the AI did was sign them into alliances. A

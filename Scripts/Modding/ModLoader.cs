@@ -319,7 +319,8 @@ public sealed class ModLoader
         ("alliance_programs", () => AllianceProgramCatalog.ResetCatalog(), AllianceProgramCatalog.Merge),
         ("laws", () => PoliticalPolicyCatalog.ResetCatalog(), PoliticalPolicyCatalog.MergeLaws),
         ("agendas", () => { }, PoliticalPolicyCatalog.MergeAgendas),
-        ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge)
+        ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge),
+        ("news", () => NewsFeed.ResetCatalog(), NewsFeed.Merge)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>

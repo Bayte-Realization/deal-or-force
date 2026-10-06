@@ -17,6 +17,8 @@
   "DemolitionRefund": 0.25,
   "PeaceRoundUpShare": 0.50,
   "PeaceRoundDownShare": 0.50,
+  // false: every treaty takes the provinces it names, part of a region at a time (campaign option "Peace by provinces").
+  "PeaceWholeRegions": true,
   // Ambient popups: 125 days instead of 75 = 40% fewer over a long campaign.
   // <= 0 disables ambient draws only. Secession/union/scripted requests still work.
   "EventIntervalDays": 125,

@@ -1,0 +1,23 @@
+// Who already answered to whom on 1 January 2024. `overlord`, `subject` and the kind of
+// dependency from common/subjects. A later file naming the same subject replaces the row.
+{
+  "subjects": [
+    // The Baikonur Cosmodrome and its town, leased by Russia from Kazakhstan.
+    { "overlord": "RUS", "subject": "KAB", "type": "leased_territory" },
+
+    // The Compacts of Free Association.
+    { "overlord": "USA", "subject": "MHL", "type": "associated_state" },
+    { "overlord": "USA", "subject": "FSM", "type": "associated_state" },
+    { "overlord": "USA", "subject": "PLW", "type": "associated_state" },
+
+    // Free association with New Zealand.
+    { "overlord": "NZL", "subject": "COK", "type": "associated_state" },
+    { "overlord": "NZL", "subject": "NIU", "type": "associated_state" },
+
+    // Breakaways that exist on a patron's garrison and budget.
+    { "overlord": "RUS", "subject": "ABK", "type": "associated_state" },
+    { "overlord": "RUS", "subject": "OST", "type": "associated_state" },
+    { "overlord": "RUS", "subject": "PMR", "type": "associated_state" },
+    { "overlord": "TUR", "subject": "CYN", "type": "associated_state" }
+  ]
+}

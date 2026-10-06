@@ -8,7 +8,12 @@ namespace DealOrForce.Simulation;
 /// <summary>Safe, engine-neutral UI composition. Data chooses existing capabilities, never CLR methods.</summary>
 public static class CampaignUiCatalog
 {
-    public sealed record Navigation(string Screen, string Label, string Icon, string Help);
+    /// <summary>
+    /// One button of the screen rail: the screen, its name, its icon, what it is for, the word
+    /// printed under the icon (`short`, the name when absent) and the group it is filed in.
+    /// </summary>
+    public sealed record Navigation(string Screen, string Label, string Icon, string Help,
+        string Short = "", string Group = "");
     public sealed record Tab(string Id, string Label, string[] Groups);
     public sealed record Link(string Label, string Action, string Context, string Tab, string Help);
     public sealed record Screen(Tab[] Tabs, Link[] Links);
@@ -88,7 +93,9 @@ public static class CampaignUiCatalog
                     if (e.ValueKind != JsonValueKind.Object) { errors?.Add("navigation: expected object"); continue; }
                     var id = Text(e, "screen");
                     if (!Destinations.Contains(id) || NavigationRows.Any(n => n.Screen == id)) { errors?.Add($"navigation: invalid/duplicate screen '{id}'"); continue; }
-                    NavigationRows.Add(new(id, Text(e, "label", id), Text(e, "icon"), Text(e, "help", id)));
+                    var label = Text(e, "label", id);
+                    NavigationRows.Add(new(id, label, Text(e, "icon"), Text(e, "help", id),
+                        Text(e, "short", label), Text(e, "group")));
                 }
             }
         }

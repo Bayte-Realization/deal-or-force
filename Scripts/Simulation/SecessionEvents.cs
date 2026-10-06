@@ -513,6 +513,7 @@ public static class SecessionEvents
         var born = Found(campaign, parent, leaving, culture, people);
         if (born is null) return null;
         born.FoundedInRevolt = revolt;
+        born.SecededFromId = parent.Id;
 
         var going = new HashSet<int>();
         foreach (var piece in leaving) going.Add(piece.MapIndex);
@@ -558,11 +559,24 @@ public static class SecessionEvents
             // reach them. That is an acceptance whatever the cabinet thinks, and recording
             // it as one keeps the state of the world honest.
             if (war is null) outcome = SecessionOutcome.Accepted;
+            else
+            {
+                // Part of the garrison standing on the ground goes over: the war is fought by
+                // soldiers who were the state's last week, not by four companies of militia.
+                var defected = Reintegration.Defect(campaign, parent, born, provinces.ToHashSet());
+                if (defected > 0)
+                {
+                    FrontPlanner.ReassignAi(campaign, war);
+                    DiagnosticLogs.Write("simulation", $"SECESSION_DEFECTION born={born.Tag} formations={defected}");
+                }
+            }
         }
         if (outcome == SecessionOutcome.Accepted)
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, born.Id, parent.Id), "let_us_go");
         OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, parent.Id, born.Id), "seceded_from_us");
 
+        campaign.Chronicle.Record(campaign, outcome == SecessionOutcome.Contested ? "secession_contested" : "secession",
+            born.Id, parent.Id, place: leaving[0].Name);
         campaign.MarkStrategicChange();
         DiagnosticLogs.Write("simulation",
             $"SECESSION parent={parent.Tag} born={born.Tag} culture={culture} " +

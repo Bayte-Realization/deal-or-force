@@ -628,14 +628,8 @@ Money and cadence:
   thinks in days but runs on every step);
 - `plural [key]` — what forms a counting phrase takes in the loaded language.
 
-And a few unserious ones — each of which still counts something real about your own world:
-
-- `blame` — who exactly dislikes you and what they say about it;
-- `vibe` — how it is going, in one sentence, in the register the figures have earned;
-- `doomsday` — when stability reaches zero along the line it is actually falling on;
-- `ratio` — you against whoever you are fighting, figure by figure, with a verdict;
-- `idle` — every division of yours that nobody has told anything;
-- `flip`, `coffee`, `whoami`, `touchgrass`, `sudo`, `xyzzy`.
+And one unserious one: `touchgrass` prints a verse and closes the game eight seconds later,
+without saving.
 
 Type `help` to see the current short reference in the game itself.
 

@@ -2,16 +2,16 @@
 {
   "layout": {
     "hud.top": { "anchors": [0,0,1,0], "offsets": [8,6,-8,80] },
-    "hud.navigation": { "anchors": [0,0,0,1], "offsets": [8,90,74,-60] },
-    "hud.side_panel": { "anchors": [0,0,0,1], "offsets": [84,90,526,-60] },
-    "hud.army_panel": { "anchors": [0,0,0,1], "offsets": [84,90,590,-60] },
-    "hud.support_panel": { "anchors": [0,0,0,1], "offsets": [84,90,690,-60] },
-    "hud.fleet_panel": { "anchors": [0,0,0,0], "offsets": [84,90,526,610] },
-    "hud.country_card": { "anchors": [0,0,0,0], "offsets": [84,90,526,760] },
-    "hud.region_card": { "anchors": [0,1,0,1], "offsets": [530,-262,1350,-8] },
+    "hud.navigation": { "anchors": [0,0,0,1], "offsets": [8,90,98,-60] },
+    "hud.side_panel": { "anchors": [0,0,0,1], "offsets": [106,90,548,-60] },
+    "hud.army_panel": { "anchors": [0,0,0,1], "offsets": [106,90,612,-60] },
+    "hud.support_panel": { "anchors": [0,0,0,1], "offsets": [106,90,712,-60] },
+    "hud.fleet_panel": { "anchors": [0,0,0,0], "offsets": [106,90,548,610] },
+    "hud.country_card": { "anchors": [0,0,0,0], "offsets": [106,90,548,760] },
+    "hud.region_card": { "anchors": [0,1,0,1], "offsets": [552,-262,1290,-8] },
     "hud.map_controls": { "anchors": [1,1,1,1], "offsets": [-620,-52,-8,-8] },
     "hud.outliner": { "anchors": [1,0,1,0], "offsets": [-300,90,-8,620] },
-    "hud.hotseat": { "anchors": [0,1,0,1], "offsets": [84,-54,365,-6] },
-    "hud.network": { "anchors": [0,1,0,1], "offsets": [84,-54,425,-6] }
+    "hud.hotseat": { "anchors": [0,1,0,1], "offsets": [106,-54,365,-6] },
+    "hud.network": { "anchors": [0,1,0,1], "offsets": [106,-54,425,-6] }
   }
 }

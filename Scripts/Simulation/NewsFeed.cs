@@ -19,6 +19,74 @@ public static class NewsFeed
 {
     public sealed record Line(long Sequence, int Day, string Kind, string Text, int ActorId, int TargetId);
 
+    private static Dictionary<string, int> _importance;
+    private static int _railMinimum = 2;
+
+    /// <summary>
+    /// How much a kind of news matters, 0 to 3 (common/news): 0 is routine - aid sent, a building
+    /// finished - and 3 is a war, a peace, a country born or gone. The rail beside the map shows
+    /// what reaches <see cref="RailMinimum"/>, and anything that concerns the player's own country.
+    /// The full feed in the reports shows everything.
+    /// </summary>
+    public static int Importance(string kind)
+    {
+        _importance ??= Load();
+        return kind is not null && _importance.TryGetValue(kind, out var level) ? level : 1;
+    }
+
+    public static int RailMinimum
+    {
+        get
+        {
+            _importance ??= Load();
+            return _railMinimum;
+        }
+    }
+
+    /// <summary>Read the base game's table again; mods layer over it through <see cref="Merge"/>.</summary>
+    public static void ResetCatalog()
+    {
+        _importance = Load();
+    }
+
+    private static Dictionary<string, int> Load()
+    {
+        _importance = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+        _railMinimum = 2;
+        foreach (var document in GameDataLoader.DataDocuments("common", "news"))
+            using (document)
+                Merge(document.RootElement, null);
+        return _importance;
+    }
+
+    public static void Merge(System.Text.Json.JsonElement root, List<string> errors)
+    {
+        _importance ??= new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
+        if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+        if (root.TryGetProperty("rail_minimum", out var minimum) && minimum.TryGetInt32(out var level))
+            _railMinimum = System.Math.Clamp(level, 0, 3);
+        if (!root.TryGetProperty("importance", out var kinds) || kinds.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+        foreach (var entry in kinds.EnumerateObject())
+        {
+            if (entry.Value.TryGetInt32(out var value)) _importance[entry.Name] = System.Math.Clamp(value, 0, 3);
+            else errors?.Add($"common/news: '{entry.Name}' needs a whole number from 0 to 3.");
+        }
+    }
+
+    /// <summary>The lines worth the rail: important enough, or about the player's own country.</summary>
+    public static IEnumerable<Line> Headlines(Campaign campaign, int take)
+    {
+        var playerId = campaign?.Player?.Id ?? -1;
+        var minimum = RailMinimum;
+        var emitted = 0;
+        foreach (var line in Lines(campaign))
+        {
+            if (Importance(line.Kind) < minimum && line.ActorId != playerId && line.TargetId != playerId) continue;
+            yield return line;
+            if (take > 0 && ++emitted >= take) yield break;
+        }
+    }
+
     /// <summary>
     /// Public entries newer than `since`, newest first. Private entries - a country's own
     /// decisions, its construction - are somebody's ledger rows, not world news.

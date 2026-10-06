@@ -180,6 +180,15 @@ public static class Program
         }
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
+        // `--war-ledger [TAG]`: every war of the run, its length and its end (WarLedgerReport).
+        // `--secession-war REGION [CULTURE]`: one region breaks away and the war is watched (SecessionWarReport).
+        var secessionAt = Array.IndexOf(args, "--secession-war");
+        if (secessionAt >= 0 && secessionAt + 1 < args.Length)
+            return SecessionWarReport.Run(campaign, days, args[secessionAt + 1],
+                secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
+        var ledgerAt = Array.IndexOf(args, "--war-ledger");
+        if (ledgerAt >= 0)
+            return WarLedgerReport.Run(campaign, days, ledgerAt + 1 < args.Length && !args[ledgerAt + 1].StartsWith("--") ? args[ledgerAt + 1] : "");
         // `--land` watches the map change hands: land taken far from the taker, land taken
         // from an ally, and occupations nobody is at war over (LandReport).
         if (Array.IndexOf(args, "--land") >= 0) return mapped ? LandReport.Run(campaign, days) : 2;
@@ -5451,9 +5460,10 @@ public static class Program
                 return "Ceylon stopped answering to anybody and did not go back to its own flag";
         }
 
-        // And politics does not get to overrule it. China has a fascist flag on disk and a
-        // puppet flag on disk, and a fascist puppet is a puppet: that is what the order in
-        // common/flags is for.
+        // And no colonial ensign or wartime puppet banner comes back. The base game ships none
+        // (they live in mods/_templates/historical_flags): Palestine under Russian protection
+        // used to fly the ensign of the British Mandate. A fascist puppet China flies China's
+        // flag, because nothing else on disk is China's.
         if (china is not null && britain is not null)
         {
             var heldOverlord = china.OverlordId;
@@ -5464,9 +5474,19 @@ public static class Program
             china.SubjectType = "puppet";
             china.Ideology = "fascism";
             var installed = FlagCatalog.Resolve(campaign, china);
-            if (installed != "flag_chn_puppet")
-                return $"a fascist puppet China flew '{installed}' rather than the flag of a " +
-                       "government somebody else installed";
+            if (installed != "flag_chn")
+                return $"a fascist puppet China flew '{installed}' rather than its own flag";
+            var palestine = campaign.NationByTag("PSE");
+            if (palestine is not null)
+            {
+                var heldPalestine = (palestine.OverlordId, palestine.SubjectType);
+                palestine.OverlordId = britain.Id;
+                palestine.SubjectType = "protectorate";
+                var mandate = FlagCatalog.Resolve(campaign, palestine);
+                (palestine.OverlordId, palestine.SubjectType) = heldPalestine;
+                if (mandate != "flag_pse")
+                    return $"a protected Palestine flew '{mandate}' rather than the Palestinian flag";
+            }
 
             china.OverlordId = heldOverlord;
             china.SubjectType = heldKind;

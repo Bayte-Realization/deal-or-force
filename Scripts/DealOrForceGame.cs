@@ -741,20 +741,39 @@ public partial class DealOrForceGame : Control
         nav.AddThemeConstantOverride("separation", 6);
         navScroll.AddChild(nav);
 
-        // Each screen says what it is for. A player who has never opened one of these games
-        // should be able to learn the interface by resting on it rather than by clicking
-        // everything to find out.
+        // Each screen says what it is, under its icon, and what it is for when rested on. The
+        // rail used to be thirteen bare pictures: a player new to the game had to hover every
+        // one to find the budget. The buttons are filed in groups - the country, its economy,
+        // its forces, the world - with the group's name above them.
         _screenButtons.Clear();
-        foreach (var (screen, label, icon, help) in CampaignUiCatalog.NavigationItems)
+        var lastGroup = "";
+        foreach (var item in CampaignUiCatalog.NavigationItems)
         {
-            var captured = screen;
-            var navSize = Mathf.Clamp(InterfaceSkin.Metric("shell.navigation_size", 54), 28, 96);
-            var button = ActionButton("", () => ToggleCampaignScreen(captured), navSize, navSize,
-                false, SpriteCatalog.TextureOf($"icon_{icon}",
-                    $"res://game/gfx/interface/icons/icon_{icon}.png"));
-            button.Name = "Nav" + screen.Replace(" ", "");
-            Tip(button, Tr(label) + "\n" + Tr(help));
-            button.AccessibilityName = Tr(label);
+            var captured = item.Screen;
+            var navWidth = Mathf.Clamp(InterfaceSkin.Metric("shell.navigation_size", 70), 28, 120);
+            var navHeight = Mathf.Clamp(InterfaceSkin.Metric("shell.navigation_height", 50), 28, 96);
+            if (item.Group.Length > 0 && item.Group != lastGroup)
+            {
+                var caption = Title(item.Group, 9, Ui.Colour("text.caption"));
+                caption.HorizontalAlignment = HorizontalAlignment.Center;
+                caption.SetMeta(LocUpperMeta, true);
+                caption.Text = caption.Text.ToUpperInvariant();
+                caption.Name = "NavGroup" + item.Group.Replace(" ", "");
+                if (lastGroup.Length > 0) nav.AddChild(new HSeparator { CustomMinimumSize = new Vector2(0, 4) });
+                nav.AddChild(caption);
+                lastGroup = item.Group;
+            }
+            var button = ActionButton(item.Short, () => ToggleCampaignScreen(captured), navWidth, navHeight,
+                false, SpriteCatalog.TextureOf($"icon_{item.Icon}",
+                    $"res://game/gfx/interface/icons/icon_{item.Icon}.png"));
+            button.Name = "Nav" + item.Screen.Replace(" ", "");
+            button.SetMeta("icon_above", true);
+            StyleButton(button, false);
+            button.AddThemeFontSizeOverride("font_size", 10);
+            button.AddThemeConstantOverride("icon_max_width", (int)Mathf.Clamp(navHeight * 0.46f, 14f, 30f));
+            button.ClipText = true;
+            Tip(button, Tr(item.Label) + "\n" + Tr(item.Help));
+            button.AccessibilityName = Tr(item.Label);
             _screenButtons[captured] = button;
             nav.AddChild(button);
         }
@@ -2290,19 +2309,21 @@ public partial class DealOrForceGame : Control
         // screen as open - UpdateScreenButtons calls this on every refresh - cannot quietly
         // put the offset back.
         var iconOnly = button.Icon is not null && string.IsNullOrEmpty(button.Text);
-        button.IconAlignment = iconOnly ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        button.VerticalIconAlignment = VerticalAlignment.Center;
+        // A rail button carries its picture above its word (`icon_above`).
+        var above = button.HasMeta("icon_above") && button.GetMeta("icon_above").AsBool();
+        button.IconAlignment = iconOnly || above ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        button.VerticalIconAlignment = above ? VerticalAlignment.Top : VerticalAlignment.Center;
 
-        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly));
-        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly));
-        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly));
+        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly, above));
+        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly, above));
+        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly, above));
         // `primary` survives into the disabled look, and that is the whole of telling
         // "this is what we are" apart from "you may not have this". The politics screen
         // disables the form of government and the ideology a country already has - you
         // cannot adopt what you already are - and with a flat grey disabled style that made
         // the country's own ideology look exactly like one the game was refusing.
-        button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly));
-        button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1, iconOnly));
+        button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly, above));
+        button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1, iconOnly, above));
         button.AddThemeColorOverride("font_color", primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text"));
         button.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
@@ -2321,7 +2342,7 @@ public partial class DealOrForceGame : Control
         button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }
 
-    private static StyleBoxFlat ButtonStyle(bool primary, int state, bool iconOnly = false)
+    private static StyleBoxFlat ButtonStyle(bool primary, int state, bool iconOnly = false, bool narrow = false)
     {
         var background = state switch
         {
@@ -2357,8 +2378,8 @@ public partial class DealOrForceGame : Control
             ShadowColor = new Color(0f, 0f, 0f, state == 3 ? 0.18f : 0.58f),
             ShadowSize = state == 2 ? 1 : 3,
             ShadowOffset = new Vector2(0, state == 2 ? 0 : 2),
-            ContentMarginLeft = 10,
-            ContentMarginRight = 10,
+            ContentMarginLeft = narrow ? 2 : 10,
+            ContentMarginRight = narrow ? 2 : 10,
             // A caption rests a pixel high and travels two pixels down when the button is
             // pressed; a picture rests dead centre and travels the same two.
             ContentMarginTop = iconOnly ? (state == 2 ? 9 : 7) : (state == 2 ? 7 : 6),

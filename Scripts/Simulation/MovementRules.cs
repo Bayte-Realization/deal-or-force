@@ -605,6 +605,7 @@ public static class MovementRules
 
         if (owner is not null && !peacefully)
         {
+            if (nation.SecededFromId < 0) nation.SecededFromId = owner.Id;
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, owner.Id, nation.Id), "rose_against_us");
             CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, region.MapIndex, "uprising", onOwnInitiative: false);
         }

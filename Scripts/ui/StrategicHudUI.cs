@@ -163,8 +163,9 @@ public partial class DealOrForceGame
         AddOutlinerHeader("WORLD");
         // This rail is rebuilt, not appended. Read a bounded snapshot rather than a delta:
         // otherwise collapsing a group or changing language erases the already read news.
-        foreach (var line in NewsFeed.Lines(_campaign,
-                     take: (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 6), 1, 20)))
+        // What matters, not everything: aid sent and buildings finished stay in the reports.
+        foreach (var line in NewsFeed.Headlines(_campaign,
+                     (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 6), 1, 20)))
         {
             var actor = line.ActorId > 0 ? _campaign.NationById(line.ActorId) : null;
             NewsFeed.Line captured = line;

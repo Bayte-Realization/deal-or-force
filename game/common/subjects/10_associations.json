@@ -1,0 +1,41 @@
+// Two kinds of dependency the world of 2024 actually has and the first file has no word for.
+// The grammar is the one in 00_subjects.json; `shares_overlord_politics` makes the subject
+// governed the way its overlord is, every week.
+{
+  // Land one state rents from another and runs as its own: Baikonur, leased to Russia from
+  // Kazakhstan until 2050, with a Russian administration, Russian law and the rouble. On the
+  // map a country, in every way that matters a part of the one renting it.
+  "leased_territory": {
+    "name": "Leased territory",
+    "description": "Rented land, run and defended by the state that rents it. A country on the map, a district in practice.",
+    "tribute": 0.0,
+    "manpower": 0.0,
+    "joins_wars": true,
+    "dragged_into_wars": true,
+    "may_declare_war": false,
+    "overlord_defends": true,
+    "liberty_desire": 0.0,
+    "grace_days": 36500,
+    "demand_cost": 20,
+    "annex_after_days": -1,
+    "shares_overlord_politics": true
+  },
+
+  // A state in free association, or one living on a patron's money and garrison: the Compact
+  // states with the United States, the Cook Islands and Niue with New Zealand, the breakaways
+  // Russia and Turkey keep. Its own government, its own name, and somebody else's army.
+  "associated_state": {
+    "name": "Associated state",
+    "description": "Its own government and its own name; its defence and much of its money come from its patron.",
+    "tribute": 0.0,
+    "manpower": 0.0,
+    "joins_wars": true,
+    "dragged_into_wars": false,
+    "may_declare_war": false,
+    "overlord_defends": true,
+    "liberty_desire": 0.05,
+    "grace_days": 3650,
+    "demand_cost": 30,
+    "annex_after_days": -1
+  }
+}

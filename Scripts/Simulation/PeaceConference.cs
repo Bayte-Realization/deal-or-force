@@ -372,6 +372,8 @@ public static class PeaceConference
         if (topology is null || controllers is null || wanted.Count == 0) return wanted.ToList();
 
         var defines = campaign.Defines;
+        // Province by province, when the campaign says so: what was named is what is signed.
+        if (!defines.PeaceWholeRegions) return wanted.ToList();
         var up = roundUp ? M.Clamp01(defines.PeaceRoundUpShare) : 0f;
         var down = M.Clamp01(defines.PeaceRoundDownShare);
         if (up <= 0f && down <= 0f) return wanted.ToList();
@@ -615,6 +617,15 @@ public sealed class PeaceLedger
         if (held && secured) { cost *= defines.PeaceCostSecuredFactor; reason = "occupied and secure"; }
         else if (held) { cost *= defines.PeaceCostHeldFactor; reason = "occupied but not secure"; }
         else { cost *= defines.PeaceCostUnheldFactor; reason = "never taken"; }
+
+        // Its own ground, held by the people who broke away with it: the state is not
+        // conquering anything, and a peace that writes it back is cheap.
+        if (_enemies.TryGetValue(topology.ProvinceToNation[province], out var holder) &&
+            Reintegration.IsBreakawayOf(holder, _proposer))
+        {
+            cost *= defines.PeaceCostReclaimFactor;
+            reason += ", our own land held by a breakaway";
+        }
 
         var stateMapIndex = topology.ProvinceToState[province];
         if (_war.ClaimedStateMapIndex >= 0 && stateMapIndex == _war.ClaimedStateMapIndex)

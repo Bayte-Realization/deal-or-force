@@ -1,0 +1,46 @@
+// How much each kind of world news matters, 0 to 3. The rail beside the map shows the kinds at
+// `rail_minimum` or above, and anything about the player's own country whatever its level;
+// the reports screen shows everything. A kind not named here is 1. A mod that adds a kind of
+// news names it here as well, or leaves it at 1.
+{
+  "rail_minimum": 2,
+  "importance": {
+    "war_started": 3,
+    "peace_signed": 3,
+    "state_formed": 3,
+    "peaceful_independence": 3,
+    "secession": 3,
+    "secession_contested": 3,
+    "accession_signed": 3,
+    "sovereign_default": 3,
+    "movement_emerged": 2,
+    "movement_dissolved": 2,
+    "movement_crackdown": 2,
+    "movement_designated": 2,
+    "civil_war_escalated": 2,
+    "alliance_ended": 2,
+    "embargo_started": 2,
+    "embargo_ended": 1,
+    "ultimatum_accepted": 2,
+    "ultimatum_refused": 2,
+    "sovereign_insolvency": 2,
+    "debt_restructured": 2,
+    "accession_declined": 2,
+    "militia_raised": 1,
+    "denunciation": 1,
+    "alliance_strained": 1,
+    "national_course_changed": 1,
+    "law_enacted": 1,
+    "agenda_announced": 1,
+    "agenda_fulfilled": 1,
+    "agenda_failed": 1,
+    "debt_negotiations": 1,
+    "alliance_program_started": 0,
+    "alliance_program_completed": 0,
+    "alliance_program_lapsed": 0,
+    "aid_sent": 0,
+    "construction_completed": 0,
+    "decision_taken": 0,
+    "militia_stood_down": 0
+  }
+}

@@ -158,9 +158,11 @@ public static class PeaceNegotiation
             duration / MathF.Max(1f, defines.PeaceTimePressureDays));
 
         var definition = PeaceTermCatalog.Of(terms);
-        // And the weariness of a long war, on both sides of it (WarWeariness).
+        // And the weariness of a long war, on both sides of it (WarWeariness) - less, for a state
+        // winning back its own breakaway, whatever it is offered short of the ground (Reintegration).
         return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight +
-                       exhaustion + timePressure + WarWeariness.Weariness(campaign, war), 0f, 100f);
+                       exhaustion + timePressure + WarWeariness.Weariness(campaign, war) -
+                       Reintegration.CompromisePenalty(campaign, war, proposerId, terms), 0f, 100f);
     }
 
     public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
@@ -260,7 +262,21 @@ public static class PeaceNegotiation
             var winner = campaign.NationById(winnerId);
             var kept = new List<int>();
 
-            foreach (var pair in war.OriginalController)
+            // A breakaway that surrenders goes back whole: every province it owns, held or not,
+            // returns to the state it broke from. It is not a conquest.
+            var beaten = terms == PeaceTerms.Capitulate ? campaign.NationById(proposerId) : null;
+            if (winner is not null && Reintegration.IsBreakawayOf(beaten, winner))
+            {
+                foreach (var pair in war.OriginalController)
+                    if (campaign.ProvinceMap.ProvinceToNation[pair.Key] != beaten.MapIndex)
+                        campaign.SetProvinceController(pair.Key, pair.Value);
+                var whole = Reintegration.Everything(campaign, beaten);
+                foreach (var province in whole) campaign.SetProvinceController(province, (ushort)winner.MapIndex);
+                var rejoined = StatePartition.Annex(campaign, whole, winner, asConquest: false);
+                war.AnnexedProvinces = whole.Count;
+                war.CreatedStates = rejoined.Count;
+            }
+            else foreach (var pair in war.OriginalController)
             {
                 var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
                 var inGoal = terms != PeaceTerms.EnforceWarGoal ||

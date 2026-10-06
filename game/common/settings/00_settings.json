@@ -32,6 +32,12 @@
     "labels": ["Never", "Weekly", "Monthly", "Quarterly", "Yearly"],
     "default": "30"
   },
+  "peace_by_provinces": {
+    "category": "game", "scope": "campaign", "order": 105, "kind": "toggle",
+    "name": "Peace by provinces",
+    "description": "Off: a peace treaty hands over whole regions only, so borders follow the map's regions. On: every treaty, the computer's as well as yours, takes exactly the provinces it names, and the border runs where the armies stopped. Regions cut in two stay cut.",
+    "default": false
+  },
   "pause_on_event": {
     "category": "game", "order": 110, "kind": "toggle",
     "name": "Pause when something happens",
