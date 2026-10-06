@@ -41,7 +41,7 @@
 
   // Просьба к союзнику прийти и его ответ.
   "CALLING FOR HELP": "ЗОВ О ПОМОЩИ",
-  "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.": "Попросить {0} вступить в эту войну. Они не обязаны — наступательный зов это одолжение, и отказ стоит расположения, а не союза.",
+  "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.": "Попросить {0} вступить в эту войну. Они не обязаны: наступательный призыв — это просьба об одолжении. Отказ испортит отношения, но союз сохранится.",
   "You are not in that war.": "Вы не участвуете в этой войне.",
   "That war is over.": "Эта война уже окончена.",
   "{0} cannot join against {1}: {2}": "{0} не может выступить против {1}: {2}",

@@ -13,7 +13,7 @@
   "Our endurance balance: {0:P0}": "Наша доля боевой устойчивости: {0:P0}",
   "Attacker endurance balance: {0:P0}": "Доля боевой устойчивости атакующих: {0:P0}",
   "The first combat round has not resolved yet.": "Первый боевой раунд ещё не завершён.",
-  "Endurance balance, not victory probability. Compares time left before organisation breaks at the recent loss rate. Reinforcements, supply and orders can change it.": "Баланс устойчивости, а не шанс победы. Сравнивает время до истощения организации при недавнем темпе потерь. Подкрепления, снабжение и приказы могут изменить оценку.",
+  "Endurance balance, not victory probability. Compares time left before organisation breaks at the recent loss rate. Reinforcements, supply and orders can change it.": "Показывает, кто дольше продержится при нынешнем темпе потерь, по времени до истощения организации. Подкрепления, снабжение и приказы могут изменить расклад.",
   "ATTACKER": "АТАКУЮЩИЕ",
   "DEFENDER": "ОБОРОНЯЮЩИЕСЯ",
   "Organisation": "Организация",

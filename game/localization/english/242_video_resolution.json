@@ -1,0 +1,8 @@
+{
+  // Window size and map render resolution.
+  "Window size": "Window size",
+  "The size of the window in Windowed mode. Fullscreen and Borderless always use the monitor's own resolution.": "The size of the window in Windowed mode. Fullscreen and Borderless always use the monitor's own resolution.",
+  "Map render resolution": "Map render resolution",
+  "How many of the screen's pixels the map is drawn with. Native is the sharpest. Lower values are scaled up and help a weak graphics card.": "How many of the screen's pixels the map is drawn with. Native is the sharpest. Lower values are scaled up and help a weak graphics card.",
+  "Native": "Native"
+}

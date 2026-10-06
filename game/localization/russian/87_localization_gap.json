@@ -56,7 +56,7 @@
   "Text saves open in any editor: change a number, load the campaign again, carry on - and there is no checksum to argue with. Compressed saves are smaller and quicker to write, which a five-year history written every month will notice.": "Текстовые сохранения открываются в любом редакторе: поменяйте число, загрузите кампанию снова и продолжайте — никакой контрольной суммы, с которой можно спорить. Сжатые сохранения меньше и пишутся быстрее, что заметно на истории в пять лет, записываемой каждый месяц.",
   "These units are reserved by other lines. Release them there first.": "Эти юниты зарезервированы другими линиями. Сначала освободите их там.",
   "This brush does not split provinces or recalculate population, armies or the economy. Review those data in the content editor.": "Эта кисть не делит провинции и не пересчитывает население, армии и экономику. Эти данные проверяются в редакторе контента.",
-  "This company takes contracts, not territory.": "Эта компания берёт контракты, а не территорию.",
+  "This company takes contracts, not territory.": "Эта компания берёт контракты. Территории ей не нужны.",
   "Total": "Итого",
   "Units {0}–{1} / {2}": "Юниты {0}–{1} / {2}",
   "{0:+0.000;-0.000;0.000} pp/week": "{0:+0.000;-0.000;0.000} пп/нед",

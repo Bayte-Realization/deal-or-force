@@ -176,7 +176,14 @@ public partial class DealOrForceGame
 
             // ---- what it looks like --------------------------------------------------
             case "window_mode":
+            case "window_size":
                 ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
+                break;
+
+            case "render_scale":
+                if (_globe is not null &&
+                    float.TryParse(SettingsCatalog.Chosen("render_scale"), NumberStyles.Float, CultureInfo.InvariantCulture, out var share))
+                    _globe.RenderScale = share;
                 break;
 
             case "vsync":
@@ -223,6 +230,25 @@ public partial class DealOrForceGame
     /// which has no campaign behind it, applies it through the same code rather than a
     /// second copy that drifts.
     /// </summary>
+    /// <summary>
+    /// The windowed size, "2560x1440", kept inside the screen the window is on and centred
+    /// there. A size bigger than the screen is the screen's usable area.
+    /// </summary>
+    internal static void ApplyWindowSize(string size)
+    {
+        var parts = (size ?? "").ToLowerInvariant().Split('x');
+        if (parts.Length != 2 ||
+            !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var width) ||
+            !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var height))
+            return;
+        var screen = DisplayServer.WindowGetCurrentScreen();
+        var usable = DisplayServer.ScreenGetUsableRect(screen);
+        width = Math.Clamp(width, 640, Math.Max(640, usable.Size.X));
+        height = Math.Clamp(height, 360, Math.Max(360, usable.Size.Y));
+        DisplayServer.WindowSetSize(new Vector2I(width, height));
+        DisplayServer.WindowSetPosition(usable.Position + (usable.Size - new Vector2I(width, height)) / 2);
+    }
+
     internal static void ApplyWindowMode(string mode)
     {
         switch (mode.ToLowerInvariant())
@@ -234,6 +260,7 @@ public partial class DealOrForceGame
             case "windowed":
                 DisplayServer.WindowSetMode(DisplayServer.WindowMode.Windowed);
                 DisplayServer.WindowSetFlag(DisplayServer.WindowFlags.Borderless, false);
+                ApplyWindowSize(SettingsCatalog.Chosen("window_size"));
                 break;
             default:
                 // Borderless fullscreen: the picture of exclusive fullscreen with the

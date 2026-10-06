@@ -12,7 +12,7 @@
   "{0}: stability {1:P0}, living {2:P0}, prices {3:P1}{4}. {5}": "{0}: стабильность {1:P0}, уровень жизни {2:P0}, цены {3:P1}{4}. {5}",
   "Not enough history yet. Come back in a month and be disappointed properly.": "Истории пока мало. Возвращайтесь через месяц и разочаруйтесь как следует.",
   "Stability {0:P0} and holding or rising. No doom available at this time.": "Стабильность {0:P0}, держится или растёт. Обречённости в наличии нет.",
-  "Stability {0:P0}, falling {1:P2} a week. On that line it reaches nothing in {2:N0} week(s) - about {3:N0} year(s). This is arithmetic, not prophecy.": "Стабильность {0:P0}, падает на {1:P2} в неделю. По этой линии она дойдёт до нуля через {2:N0} нед. — это примерно {3:N0} г. Это арифметика, а не пророчество.",
+  "Stability {0:P0}, falling {1:P2} a week. On that line it reaches nothing in {2:N0} week(s) - about {3:N0} year(s). This is arithmetic, not prophecy.": "Стабильность {0:P0}, падает на {1:P2} в неделю. Если так пойдёт дальше, она дойдёт до нуля через {2:N0} нед. — примерно {3:N0} г. Это простой расчёт; жизнь может пойти иначе.",
   "You are at peace. There is nobody to be better than.": "У вас мир. Быть лучше некого.",
   "Your enemy appears to be nobody in particular.": "Ваш противник, судя по всему, никто конкретно.",
   "Output": "Выпуск",

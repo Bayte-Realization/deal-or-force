@@ -387,7 +387,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _Ready()
     {
-        Stretch = true;
+        // Not stretched, and the globe's viewport is not this container's child. A stretched
+        // container sizes its viewport to its own size in interface units - 1920 by 1080 with
+        // the interface laid out for 1080p - so on a 1440p screen the globe was drawn at 1080p
+        // and blown up by a third: soft, on exactly the monitors that should look best. The
+        // viewport now renders at the window's pixels, its 2D size is overridden to the
+        // interface units every camera projection and overlay is written in, and a picture of
+        // it fills the container behind the container's own overlays.
+        Stretch = false;
         MouseFilter = MouseFilterEnum.Stop;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
 
@@ -396,10 +403,29 @@ public sealed partial class GlobePresentation : SubViewportContainer
             TransparentBg = true,
             HandleInputLocally = false,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
-            Size = ViewportSize()
+            Size2DOverrideStretch = true,
+            Scaling3DMode = Viewport.Scaling3DModeEnum.Bilinear
         };
-        AddChild(_viewport);
+        var host = new Node { Name = "GlobeViewportHost" };
+        AddChild(host);
+        host.AddChild(_viewport);
+        _picture = new TextureRect
+        {
+            Name = "GlobePicture",
+            Texture = _viewport.GetTexture(),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            MouseFilter = MouseFilterEnum.Ignore,
+            ShowBehindParent = true
+        };
+        _picture.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(_picture);
+        ResizeViewport();
+        Resized += ResizeViewport;
         GetViewport().SizeChanged += ResizeViewport;
+        if (float.TryParse(Simulation.SettingsCatalog.Chosen("render_scale"), System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var renderShare))
+            RenderScale = renderShare;
 
         var world = new Node3D { Name = "GlobeWorld" };
         _viewport.AddChild(world);
@@ -1739,10 +1765,38 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return new Vector2I(Math.Max(1, (int)size.X), Math.Max(1, (int)size.Y));
     }
 
+    private TextureRect _picture = null!;
+
+    /// <summary>
+    /// What share of the window's pixels the globe's 3D is drawn at, set from the video
+    /// settings (`render_scale`): 1 is native, and a weaker graphics card can draw fewer and
+    /// let them be scaled up.
+    /// </summary>
+    public float RenderScale
+    {
+        get => IsInstanceValid(_viewport) ? _viewport.Scaling3DScale : 1f;
+        set
+        {
+            if (IsInstanceValid(_viewport)) _viewport.Scaling3DScale = Mathf.Clamp(value, 0.25f, 2f);
+        }
+    }
+
+    /// <summary>
+    /// The viewport at the window's pixels for the area the globe covers, and its 2D size in
+    /// interface units, so `UnprojectPosition`, `ProjectRayOrigin` and every overlay keep the
+    /// units they were written in while the picture gets every pixel the screen has.
+    /// </summary>
     private void ResizeViewport()
     {
-        if (IsInstanceValid(_viewport) && !Stretch)
-            _viewport.Size = ViewportSize();
+        if (!IsInstanceValid(_viewport)) return;
+        var logical = Size.X >= 1f && Size.Y >= 1f ? Size : GetViewport().GetVisibleRect().Size;
+        var toScreen = GetViewport().GetScreenTransform().Scale;
+        var pixels = new Vector2I(
+            Math.Max(1, (int)MathF.Round(logical.X * MathF.Abs(toScreen.X))),
+            Math.Max(1, (int)MathF.Round(logical.Y * MathF.Abs(toScreen.Y))));
+        var units = new Vector2I(Math.Max(1, (int)MathF.Round(logical.X)), Math.Max(1, (int)MathF.Round(logical.Y)));
+        if (_viewport.Size != pixels) _viewport.Size = pixels;
+        if (_viewport.Size2DOverride != units) _viewport.Size2DOverride = units;
     }
 
     private void CreateGlobe(Node3D world)

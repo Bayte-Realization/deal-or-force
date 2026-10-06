@@ -1,0 +1,8 @@
+{
+  // Размер окна и разрешение отрисовки карты.
+  "Window size": "Размер окна",
+  "The size of the window in Windowed mode. Fullscreen and Borderless always use the monitor's own resolution.": "Размер окна в оконном режиме. Полноэкранный режим и режим без рамки всегда используют родное разрешение монитора.",
+  "Map render resolution": "Разрешение отрисовки карты",
+  "How many of the screen's pixels the map is drawn with. Native is the sharpest. Lower values are scaled up and help a weak graphics card.": "Сколько пикселей экрана использует карта. «Родное» даёт самую чёткую картинку. Меньшие значения растягиваются и разгружают слабую видеокарту.",
+  "Native": "Родное"
+}

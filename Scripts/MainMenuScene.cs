@@ -514,6 +514,7 @@ public partial class MainMenuScene : Control
                 break;
 
             case "window_mode":
+            case "window_size":
                 DealOrForceGame.ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
                 break;
 

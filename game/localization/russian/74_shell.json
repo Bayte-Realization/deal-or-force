@@ -17,7 +17,7 @@
   "Drawing a {0} — {1:N0} provinces.": "Рисуется {0} — провинций: {1:N0}.",
   "Click the same button again to commit.": "Нажмите ту же кнопку ещё раз, чтобы подтвердить.",
   "Press Execute when the plan is ready.": "Нажмите «Выполнять», когда план готов.",
-  "They will spread over the places worth holding rather than along an edge.": "Они рассредоточатся по местам, которые стоит удерживать, а не вдоль кромки.",
+  "They will spread over the places worth holding rather than along an edge.": "Они рассредоточатся по позициям, которые стоит удерживать, и не будут растягиваться вдоль кромки.",
   "Objective reached": "Цель достигнута",
   "Executing": "Выполняется",
   "Prepared / paused": "Подготовлено / пауза",

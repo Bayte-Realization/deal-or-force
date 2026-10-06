@@ -32,7 +32,7 @@
   "Factories: {0} civilian / {1} military · each provides {2} units. Earlier lines have priority when capacity is lost.": "Фабрики: {0} гражданских / {1} военных · каждая даёт {2} ед. При потере мощности верхние линии получают её первыми.",
   "Each square is one unit. Gold: assigned. Dark: available. Dimmed: reserved by other lines. Free units serve the ordinary economy.": "Одна ячейка — одна единица. Золотые назначены; тёмные доступны; неактивные заняты другими линиями. Свободные единицы работают на обычную экономику.",
   "Convert civilian units into military capacity. Conversion rounds down; existing line assignments may be reduced.": "Переоборудовать гражданские единицы в военные. Результат округляется вниз; назначения на существующих линиях могут уменьшиться.",
-  "Output below includes the whole economy, not just assigned factories. Changes appear after the next economic tick.": "Выпуск ниже учитывает всю экономику, а не только назначенные фабрики. Изменения видны после следующего экономического расчёта.",
+  "Output below includes the whole economy, not just assigned factories. Changes appear after the next economic tick.": "Выпуск ниже учитывает всю экономику, включая заводы без назначения. Изменения видны после следующего экономического расчёта.",
   "{0} assigned / {1} available": "Назначено {0} / доступно {1}",
   " · {0} suspended": " · приостановлено {0}",
   "Assign {0} units to this line.": "Назначить на эту линию {0} единиц.",

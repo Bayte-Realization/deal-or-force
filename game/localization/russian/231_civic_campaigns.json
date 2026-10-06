@@ -1,6 +1,6 @@
 {
   "Vote readiness": "Готовность к голосованию",
-  "Organisers and volunteers for a civic campaign, not insurgent militia.": "Организаторы и добровольцы гражданской кампании, а не повстанческое ополчение.",
+  "Organisers and volunteers for a civic campaign, not insurgent militia.": "Организаторы и добровольцы гражданской кампании. Оружия у них нет.",
   "Civic standing reflects support among homeland residents and recognition; it qualifies negotiated votes.": "Общественный авторитет зависит от поддержки жителей родины и признания; он необходим для согласованного голосования.",
   "chronicle.peaceful_independence": "{0} получает независимость от страны {1} после согласованного голосования в регионе {2}.",
   "chronicle.civil_war_escalated": "Гражданский конфликт между странами {0} и {1} усиливается: мобилизованы резервные формирования.",
@@ -8,7 +8,7 @@
   "Scottish independence campaign": "Шотландская кампания за независимость",
   "Welsh self-government campaign": "Валлийская кампания за самоуправление",
   "Quebec sovereignty campaign": "Квебекская кампания за суверенитет",
-  "A civic coalition debating Scotland's future through organisation and negotiated votes, not an armed insurgency.": "Гражданская коалиция обсуждает будущее Шотландии через общественную организацию и согласованные голосования, а не вооружённое восстание.",
+  "A civic coalition debating Scotland's future through organisation and negotiated votes, not an armed insurgency.": "Гражданская коалиция добивается своего видения будущего Шотландии через общественную организацию и согласованные голосования, без оружия.",
   "A civic campaign for self-government. Its support depends on residents, public debate and negotiated consent.": "Гражданская кампания за самоуправление. Поддержка зависит от жителей, общественных дебатов и согласия на переговоры.",
   "A civic sovereignty coalition pursuing political organisation and an agreed vote, without raising insurgent militia.": "Гражданская коалиция за суверенитет, стремящаяся к общественной организации и согласованному голосованию без создания повстанческого ополчения.",
   "Authorise referendum": "Разрешить референдум",

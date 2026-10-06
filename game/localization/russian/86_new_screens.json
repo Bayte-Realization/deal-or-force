@@ -3,7 +3,7 @@
   // и производства. Каждый ключ повторяет английский один в один; перевод старается
   // говорить тем же голосом, что и остальная таблица.
   "WAR INDUSTRY": "ВОЕННАЯ ПРОМЫШЛЕННОСТЬ",
-  "How much of the civilian economy has been turned over to arms and ammunition. A converted plant makes worse arms than a purpose-built one, and everything it used to make stops being made, so the slider is a trade rather than a gift.": "Какая доля гражданской экономики переведена на выпуск оружия и боеприпасов. Переоборудованный завод делает оружие хуже специализированного, а всё, что он делал раньше, перестаёт делаться вовсе — так что ползунок это обмен, а не подарок.",
+  "How much of the civilian economy has been turned over to arms and ammunition. A converted plant makes worse arms than a purpose-built one, and everything it used to make stops being made, so the slider is a trade rather than a gift.": "Какая доля гражданской экономики переведена на выпуск оружия и боеприпасов. Переоборудованный завод делает оружие хуже специализированного, а всё, что он выпускал раньше, перестаёт выпускаться — ползунок меняет одно на другое.",
   "PRODUCTION LINES": "ПРОИЗВОДСТВЕННЫЕ ЛИНИИ",
   "What the civilian industry is for, line by line. A line claims a share of the whole for one good; every good without a line makes do with what the lines have left. Lines are declared in common/programme, so a mod can name its own.": "На что работает гражданская промышленность — линия за линией. Линия забирает долю всей промышленности под один товар; всем товарам без линии достаётся то, что осталось. Линии объявлены в common/programme — мод может добавить свои.",
   "THE MARKET THIS WEEK": "РЫНОК НА ЭТОЙ НЕДЕЛЕ",

@@ -575,7 +575,7 @@
 
   // Торговые инструкции, которые может отдать страна; объявлены в common/trade.
   "Import priority": "Приоритет импорта",
-  "How far up the queue this country stands when the world is short of this good. Buyers are served in order of how badly they need it; this weighs that need. It decides who is served first, not how much arrives.": "Насколько высоко страна стоит в очереди, когда товара в мире не хватает. Покупателей обслуживают по остроте нехватки; это вес к ней. Решает, кого обслужат раньше, а не сколько придёт.",
+  "How far up the queue this country stands when the world is short of this good. Buyers are served in order of how badly they need it; this weighs that need. It decides who is served first, not how much arrives.": "Место страны в очереди, когда товара в мире не хватает. Покупателей обслуживают по остроте нехватки, и это вес к ней. Влияет на то, кого обслужат раньше; объём от этого не меняется.",
   "Import ceiling": "Потолок импорта",
   "The most of a shortfall this country is willing to cover by buying it in. Below one it goes short on purpose rather than depend on anybody for the rest.": "Какую долю нехватки страна готова закрыть покупкой. Ниже единицы она намеренно недоедает, лишь бы не зависеть от других.",
   "Export reserve": "Резерв экспорта",
