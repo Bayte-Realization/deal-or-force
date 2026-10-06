@@ -334,19 +334,56 @@ public static class SupportCore
         var map = campaign.ProvinceMap;
         if (nation is null || map is null) return -1;
         var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
-        var centre = Vector3.Zero;
         var candidates = new List<int>();
         for (var province = 1; province <= map.ProvinceCount; province++)
         {
             if (map.ProvinceToState[province] != stateMapIndex) continue;
             if (controllers[province] != nation.MapIndex) continue;
             candidates.Add(province);
-            centre += BaseDirection(map.CenterOf(province));
         }
-        if (candidates.Count == 0) return -1;
+        return ChooseBase(map, candidates);
+    }
+
+    /// <summary>
+    /// Where a region's wings and batteries stand: on the region's main ground - the largest
+    /// run of its held provinces that touch one another - at the leading city there, or at
+    /// the middle of that ground when it has no city. The province nearest the centroid of
+    /// all of them used to be chosen, and a region with islands off its coast has a centroid
+    /// at sea: Gyeonggi's air wings stood on Yeonpyeong, a dot off the North Korean coast,
+    /// and drew their reach from there.
+    /// </summary>
+    public static int ChooseBase(ProvinceTopology map, IReadOnlyList<int> candidates)
+    {
+        if (map is null || candidates is null || candidates.Count == 0) return -1;
+        if (candidates.Count == 1) return candidates[0];
+        var held = new HashSet<int>(candidates);
+        var ground = new List<int>();
+        var seen = new HashSet<int>();
+        var queue = new Queue<int>();
+        foreach (var start in candidates)
+        {
+            if (!seen.Add(start)) continue;
+            var run = new List<int>();
+            queue.Enqueue(start);
+            while (queue.Count > 0)
+            {
+                var province = queue.Dequeue();
+                run.Add(province);
+                foreach (var next in map.Neighbors[province])
+                    if (held.Contains(next) && seen.Add(next)) queue.Enqueue(next);
+            }
+            if (run.Count > ground.Count) ground = run;
+        }
+        var cities = CityCatalog.All;
+        var under = CityCatalog.ProvincesOf(map);
+        var onGround = new HashSet<int>(ground);
+        for (var index = 0; index < cities.Count && index < under.Length; index++)
+            if (onGround.Contains(under[index]) && cities[index].Tier <= 2) return under[index];
+        var centre = Vector3.Zero;
+        foreach (var province in ground) centre += BaseDirection(map.CenterOf(province));
         var best = -1;
         var bestScore = float.NegativeInfinity;
-        foreach (var province in candidates)
+        foreach (var province in ground)
         {
             var score = Vector3.Dot(BaseDirection(map.CenterOf(province)), centre);
             if (score <= bestScore) continue;
@@ -677,24 +714,17 @@ public static class SupportCore
         if (campaign.ProvinceMap is null) return;
         var map = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
-        var bases = new Dictionary<(int Nation, int State), int>();
-        var centroids = new Dictionary<(int Nation, int State), Vector3>();
-        var scores = new Dictionary<(int Nation, int State), float>();
+        var held = new Dictionary<(int Nation, int State), List<int>>();
         for (var province = 1; province <= map.ProvinceCount; province++)
         {
             var key = ((int)controllers[province], (int)map.ProvinceToState[province]);
             if (key.Item1 <= 0 || key.Item2 <= 0) continue;
-            centroids[key] = centroids.GetValueOrDefault(key) + BaseDirection(map.CenterOf(province));
+            if (!held.TryGetValue(key, out var list)) held[key] = list = new List<int>();
+            list.Add(province);
         }
-        for (var province = 1; province <= map.ProvinceCount; province++)
-        {
-            var key = ((int)controllers[province], (int)map.ProvinceToState[province]);
-            if (!centroids.TryGetValue(key, out var centre)) continue;
-            var score = Vector3.Dot(BaseDirection(map.CenterOf(province)), centre);
-            if (bases.ContainsKey(key) && score <= scores[key]) continue;
-            bases[key] = province;
-            scores[key] = score;
-        }
+        var bases = new Dictionary<(int Nation, int State), int>();
+        foreach (var (key, list) in held)
+            if (ChooseBase(map, list) is var chosen and > 0) bases[key] = chosen;
         foreach (var nation in campaign.Nations)
         {
             var states = campaign.States

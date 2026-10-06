@@ -149,7 +149,7 @@
 - `map.globe_cluster_distance`: обзорное объединение после дистанции 6.2;
 - `map.globe_cluster_radius_km`: максимальное расстояние до ведущей карточки,
   140 км по умолчанию (допустимо 30–300);
-- `support.globe_slot_spacing`: шаг визуальных слотов базы, 0.14 единицы;
+- `support.globe_slot_spacing`: шаг слотов базы в ширинах карточки, 1.08;
 - `support.reach_width_pixels` / `support.reach_idle_width_pixels`: толщина
   выбранного / фонового контура дальности, 1.2 / 0.7 пикселя (пределы 0.5–3).
 

@@ -59,12 +59,25 @@ public static class ProvinceOwnership
     /// Kentucky was Chinese, Ashgabat was American, and the interface faithfully reported
     /// it. Existing outputs are outputs, not inputs.
     /// </summary>
-    public static void Clear() => Entries.Clear();
+    public static void Clear()
+    {
+        Entries.Clear();
+        PointEntries.Clear();
+    }
+
+    /// <summary>
+    /// Rows keyed by a point on the map - `@40.65625,43.09375` - rather than a province id. A
+    /// correction written against one numbering went to whichever province the next recut gave
+    /// that number to; a point names the same ground whatever the numbering. Applied after the
+    /// rows keyed by id.
+    /// </summary>
+    private static readonly List<(float Longitude, float Latitude, string Owner, string Controller)> PointEntries = new();
 
     /// <summary>Reload the base-game political map. Mods layer on top afterwards.</summary>
     public static void ResetCatalog()
     {
         Entries.Clear();
+        PointEntries.Clear();
         var directory = FindDirectory();
         if (directory is not null) LoadDirectory(directory, null);
     }
@@ -100,6 +113,27 @@ public static class ProvinceOwnership
             if (parts.Length < 2)
             {
                 errors?.Add($"{context}:{line}: expected province;owner[;controller]");
+                continue;
+            }
+            if (parts[0].TrimStart().StartsWith('@'))
+            {
+                var at = parts[0].Trim()[1..].Split(',');
+                if (at.Length != 2 ||
+                    !float.TryParse(at[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var longitude) ||
+                    !float.TryParse(at[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var latitude) ||
+                    MathF.Abs(longitude) > 180f || MathF.Abs(latitude) > 90f)
+                {
+                    errors?.Add($"{context}:{line}: '{parts[0]}' is not a point - write @longitude,latitude");
+                    continue;
+                }
+                var pointOwner = parts[1].Trim();
+                if (pointOwner.Length == 0)
+                {
+                    errors?.Add($"{context}:{line}: the point {parts[0].Trim()} has no owner");
+                    continue;
+                }
+                PointEntries.Add((longitude, latitude, pointOwner,
+                    parts.Length > 2 && parts[2].Trim().Length > 0 ? parts[2].Trim() : pointOwner));
                 continue;
             }
             if (!int.TryParse(parts[0].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var province) ||
@@ -162,7 +196,7 @@ public static class ProvinceOwnership
     /// </summary>
     public static int Apply(Campaign campaign, ProvinceTopology topology, ushort[] controllers)
     {
-        if (Entries.Count == 0 || topology is null) return 0;
+        if (Entries.Count == 0 && PointEntries.Count == 0 || topology is null) return 0;
         var byTag = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
         foreach (var nation in campaign.Nations) byTag[nation.Tag] = (ushort)nation.MapIndex;
 
@@ -178,6 +212,19 @@ public static class ProvinceOwnership
             topology.ProvinceToNation[entry.Province] = owner;
             if (controllers is not null && entry.Province < controllers.Length)
                 controllers[entry.Province] = byTag.TryGetValue(entry.Controller, out var held) ? held : owner;
+            applied++;
+        }
+        foreach (var (longitude, latitude, ownerTag, controllerTag) in PointEntries)
+        {
+            var column = (int)((longitude + 180f) / 360f * topology.Width);
+            var row = (int)((90f - latitude) / 180f * topology.Height);
+            column = (column % topology.Width + topology.Width) % topology.Width;
+            row = Math.Clamp(row, 0, topology.Height - 1);
+            var province = topology.CellToProvince[row * topology.Width + column];
+            if (province <= 0 || topology.IsWater(province) || !byTag.TryGetValue(ownerTag, out var owner)) continue;
+            topology.ProvinceToNation[province] = owner;
+            if (controllers is not null && province < controllers.Length)
+                controllers[province] = byTag.TryGetValue(controllerTag, out var held) ? held : owner;
             applied++;
         }
         return applied;

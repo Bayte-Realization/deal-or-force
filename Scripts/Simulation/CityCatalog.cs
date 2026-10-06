@@ -74,18 +74,7 @@ public static class CityCatalog
     {
         if (topology is null || province <= 0 || province > topology.ProvinceCount) return null;
         var cities = All;
-        int[] provinces;
-        lock (Gate)
-        {
-            if (_provinces is null || !ReferenceEquals(_provincesOf, topology) || _provinces.Length != cities.Count)
-            {
-                _provinces = new int[cities.Count];
-                for (var index = 0; index < cities.Count; index++)
-                    _provinces[index] = AnchorOnLand(topology, cities[index].Latitude, cities[index].Longitude).ProvinceId;
-                _provincesOf = topology;
-            }
-            provinces = _provinces;
-        }
+        var provinces = ProvincesOf(topology);
         var region = topology.ProvinceToState[province];
         var (latitude, longitude) = topology.CenterOf(province);
         var scale = MathF.Cos(latitude * MathF.PI / 180f);
@@ -106,6 +95,26 @@ public static class CityCatalog
             best = city;
         }
         return best;
+    }
+
+    /// <summary>
+    /// The province each city of <see cref="All"/> stands in, index for index (0 for none),
+    /// worked out once per map.
+    /// </summary>
+    public static int[] ProvincesOf(ProvinceTopology topology)
+    {
+        var cities = All;
+        lock (Gate)
+        {
+            if (_provinces is null || !ReferenceEquals(_provincesOf, topology) || _provinces.Length != cities.Count)
+            {
+                _provinces = new int[cities.Count];
+                for (var index = 0; index < cities.Count; index++)
+                    _provinces[index] = AnchorOnLand(topology, cities[index].Latitude, cities[index].Longitude).ProvinceId;
+                _provincesOf = topology;
+            }
+            return _provinces;
+        }
     }
 
     /// <summary>The province under a point of the globe, or 0 for none.</summary>

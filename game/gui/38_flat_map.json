@@ -2,7 +2,7 @@
   "metrics": {
     "map.globe_counter_pixels": 56,
     "map.globe_counter_world_width": 0.06,
-    "support.globe_slot_spacing": 0.14,
+    "support.globe_slot_spacing": 1.08,
     "map.flat_province_full_zoom": 0.95,
     "map.flat_province_hide_zoom": 3.8,
     "map.flat_province_border_width": 1.1,

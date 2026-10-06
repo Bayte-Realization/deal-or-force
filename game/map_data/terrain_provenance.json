@@ -6,20 +6,20 @@
   "source_year": 2009,
   "land_pixels": 5489569,
   "nearest_landcover_fallback_pixels": 89267,
-  "provinces": 38018,
+  "provinces": 35295,
   "province_distribution": {
-    "desert": 2447,
-    "farmland": 3087,
-    "forest": 5249,
-    "hills": 6688,
-    "ice": 10984,
-    "jungle": 1424,
-    "marsh": 223,
-    "mountains": 1372,
-    "plains": 2744,
-    "steppe": 1924,
-    "tundra": 1855,
-    "urban": 21
+    "desert": 2329,
+    "farmland": 2704,
+    "forest": 4816,
+    "hills": 6052,
+    "ice": 10632,
+    "jungle": 1303,
+    "marsh": 208,
+    "mountains": 1234,
+    "plains": 2523,
+    "steppe": 1789,
+    "tundra": 1689,
+    "urban": 16
   },
   "classification": {
     "cover_classes": {

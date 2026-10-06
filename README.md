@@ -2,12 +2,12 @@
 
 # Deal or Force
 
-A grand strategy game about the whole world. This experimental branch uses Godot 4.8 dev7 .NET and .NET 10; the separate 4.7 project is not replaced.
+A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10.
 
 World rendering scripts now live in
 [`Scripts/gfx`](Scripts/gfx/README.md), separately from UI and simulation rules.
 
-It opens on 1 January 2024 with 261 countries, 1 850 regions and 38 018 provinces, and
+It opens on 1 January 2024 with 261 countries, 1 850 regions and 35 295 provinces, and
 after that nothing is scripted. Prices come out of what is produced and shipped. A war moves
 a front province by province and has to be supplied along it. A country that governs badly
 loses regions to people who would rather leave. You can play any country on the map.
@@ -82,8 +82,8 @@ examples at all three levels: JSON, GDScript, compiled C#. The rest is in
 **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) is the full account**, written for
 somebody who has never opened this project. The short version:
 
-You need **Godot 4.7.2 in its .NET build** — the plain download will open the project and
-find no scripts — and the **.NET SDK 8**.
+You need **Godot 4.8 in its .NET build** (4.8 dev7 or later) — the plain download will open
+the project and find no scripts — and the **.NET SDK 10**.
 
 ```bash
 git clone https://github.com/Bayte-Realization/deal-or-force.git
@@ -95,9 +95,6 @@ Then open the folder in Godot and press **F5**. The game opens on `Scenes/MainMe
 which is a scene of its own and comes up immediately; the world is built when you ask for a
 campaign, which takes ten to thirty seconds.
 
-On a fresh clone Godot will report two missing autoloads (`fennara`, `godot_ai`). They belong
-to editor plugins that are not in the repository and the game does not use them — remove them
-in *Project → Project Settings → Autoload*.
 
 **Before trusting a change**, play a campaign without the engine and check it against about a
 hundred invariants: that the economy adds up, that two identical worlds stay identical, that

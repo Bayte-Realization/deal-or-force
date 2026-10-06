@@ -1,16 +1,3 @@
 [remap]
 
-importer="csv_translation"
-type="Translation"
-uid="uid://dg2d0pgfpc3d2"
-
-[deps]
-
-source_file="res://game/history/provinces/zz_abkhazia_coastal_pockets.csv"
-
-[params]
-
-compress=1
-delimiter=0
-unescape_keys=false
-unescape_translations=true
+importer="keep"

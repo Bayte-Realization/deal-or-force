@@ -13,9 +13,14 @@ if (args.Contains("--region-fingerprint"))
 if (!MapRasterCatalog.TryBuildProvinceTopology(Map.States, Map.Control, Map.Width, Map.Height, out var topology, out var message))
     throw new Exception(message);
 Console.WriteLine(message);
+// Every province below is found by a cell of it rather than by its number: a recut of the
+// map renumbers every province, and a test pinned to numbers checks whichever province the
+// recut happened to give that number to.
+int ProvinceAtCell(double longitude, double latitude) => topology.CellToProvince[
+    (int)((90 - latitude) / 180 * Map.Height) * Map.Width + (int)((longitude + 180) / 360 * Map.Width)];
 if (args.Contains("--inspect-coast"))
 {
-    const int pocket = 21648;
+    var pocket = ProvinceAtCell(34.28125, 31.21875);
     Console.WriteLine($"Pocket {pocket}: region={topology.ProvinceToState[pocket]}, centre={topology.CenterOf(pocket)}");
     Console.WriteLine($"Cells: {topology.CellToProvince.Count(p => p == pocket)}");
     foreach (var neighbour in topology.Neighbors[pocket])
@@ -46,8 +51,10 @@ Check(visited.Count == ossetianProvinces.Count, "all South Ossetian provinces fo
 var shapeBefore = (ushort[])Map.States.Clone(); var ownersBefore = (ushort[])Map.Control.Clone();
 TerritorialTopology.Apply(campaign, Map.Control, Map.States, Map.Width, Map.Height);
 Check(shapeBefore.AsSpan().SequenceEqual(Map.States) && ownersBefore.AsSpan().SequenceEqual(Map.Control), "reapplying the contour repair is idempotent");
-Check(topology.ProvinceCount == 38018, "local border repair preserves every shipped province ID and total count");
-var coastalPockets = new[] { 18115, 18133 };
+var shipped = System.IO.File.ReadLines(GameDataLoader.FindDataFile("map_data", "definition.csv")).Count(line => line.Length > 0) - 1;
+Check(topology.ProvinceCount == shipped, $"local border repair preserves every shipped province ID and total count ({shipped:N0})");
+// The two Georgian-drawn scraps on the Abkhazian coast, by a cell of each.
+var coastalPockets = new[] { ProvinceAt(40.65625, 43.09375), ProvinceAt(40.90625, 43.03125) };
 foreach (var p in coastalPockets)
 {
     var centre = topology.CenterOf(p);
@@ -59,16 +66,22 @@ foreach (var p in coastalPockets)
 campaign.AttachProvinceTopology(topology);
 var israel = campaign.NationByTag("ISR").MapIndex;
 var palestine = campaign.NationByTag("PSE").MapIndex;
-var enclave = topology.CenterOf(21648);
-Check(enclave.Latitude > 31.1 && enclave.Latitude < 31.3 && enclave.Longitude > 34.1 && enclave.Longitude < 34.4,
-    "Gaza correction targets the verified coastal pocket, not West Bank province 21320");
-Check(topology.ProvinceToNation[21648] == israel && campaign.ProvinceController[21648] == israel,
-    "Gaza coastal pocket follows ISR ownership and control in the 2024 bookmark");
-Check(topology.ProvinceToState[21648] == 18 && campaign.States.First(s => s.MapIndex == 18).Iso == "IL-D",
-    "coastal pocket belongs to the eastern Southern district, not a splinter of West Bank");
-Check(topology.ProvinceToState[21563] == 1740 && topology.ProvinceToState[21320] == 19,
+// The one-cell scrap south of Gaza: part of Israel's Southern district, and no longer a
+// province of its own - it is folded into the district's province beside it.
+var scrap = ProvinceAt(34.28125, 31.21875);
+var gaza = ProvinceAt(34.40625, 31.40625);
+var westBank = ProvinceAt(35.21875, 31.96875);
+Check(topology.ProvinceToNation[scrap] == israel && campaign.ProvinceController[scrap] == israel,
+    "the coastal scrap south of Gaza is Israel's, owned and held, in the 2024 bookmark");
+Check(campaign.States.First(s => s.MapIndex == topology.ProvinceToState[scrap]).Iso == "IL-D",
+    "it belongs to the Southern district, not a splinter of the West Bank");
+Check(topology.CellToProvince.Count(p => p == scrap) > 1,
+    "and it is part of a real province rather than a province one cell wide");
+Check(topology.ProvinceToState[gaza] == 1740 && topology.ProvinceToState[westBank] == 19,
     "Gaza Strip and the real West Bank retain their authored regions");
-Check(topology.ProvinceToNation[21320] == palestine, "West Bank remains PSE");
+Check(topology.ProvinceToNation[gaza] == israel && campaign.ProvinceController[gaza] == israel,
+    "the Gaza Strip is Israel's in the 2024 bookmark");
+Check(topology.ProvinceToNation[westBank] == palestine, "West Bank remains PSE");
 var preservedStates = DealOrForce.Simulation.WorldMapSource.States;
 MapRasterCatalog.ResetCatalog();
 Check(ReferenceEquals(preservedStates, DealOrForce.Simulation.WorldMapSource.States), "unchanged source refresh preserves the repaired region grid");
@@ -83,7 +96,8 @@ foreach (var p in coastalPockets)
 }
 var otherGeorgia = Enumerable.Range(1, topology.ProvinceCount).Where(p => previousOwners[p] == georgia && !coastalPockets.Contains(p)).ToArray();
 Check(otherGeorgia.Length > 0 && otherGeorgia.All(p => topology.ProvinceToNation[p] == georgia), "other Georgian territory remains Georgian");
-Check(topology.ProvinceToNation[18086] == georgia && topology.ProvinceToNation[18333] == georgia,
+Check(topology.ProvinceToNation[ProvinceAt(42.6875, 42.78125)] == georgia &&
+      topology.ProvinceToNation[ProvinceAt(41.96875, 42.34375)] == georgia,
     "nearby genuine Georgian coastal and eastern regions are not taken");
 var saved = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(campaign, "abkhazia-pockets"), "abkhazia-pockets");
 Check(saved.Success, "corrected campaign snapshot loads");
@@ -91,11 +105,11 @@ saved.Campaign.AttachProvinceTopology(topology);
 Check(coastalPockets.All(p => topology.ProvinceToNation[p] == abkhazia && saved.Campaign.ProvinceController[p] == abkhazia),
     "corrected ownership survives save/load");
 // The new bookmark must not overwrite a played save or an independent authored scenario.
-StatePartition.Annex(saved.Campaign, new[] { 18115 }, saved.Campaign.NationByTag("GEO"), false);
+StatePartition.Annex(saved.Campaign, new[] { coastalPockets[0] }, saved.Campaign.NationByTag("GEO"), false);
 var edited = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(saved.Campaign, "edited"), "edited");
 Check(edited.Success, "player-edited campaign snapshot loads");
 edited.Campaign.AttachProvinceTopology(topology);
-Check(topology.ProvinceToNation[18115] == georgia, "a player's later conquest is not overwritten by the bookmark correction");
+Check(topology.ProvinceToNation[coastalPockets[0]] == georgia, "a player's later conquest is not overwritten by the bookmark correction");
 var independent = Campaign.CreateBootstrap(20260830);
 independent.ScenarioId = "independent-territory-test";
 if (!MapRasterCatalog.TryBuildProvinceTopology(Map.States, Map.Control, Map.Width, Map.Height, out var ownMap, out message))

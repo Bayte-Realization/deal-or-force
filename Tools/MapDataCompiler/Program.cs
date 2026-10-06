@@ -11,6 +11,9 @@ HydrologyCatalog.ResetCatalog();
 var repairs = TerritorialTopology.Apply(campaign, SourceEarthData.Control, SourceEarthData.States, SourceEarthData.Width, SourceEarthData.Height);
 var provinces = ProvinceTopology.Build(SourceEarthData.States, SourceEarthData.Control,
     SourceEarthData.Width, SourceEarthData.Height, cell => SourceEarthData.DisputeAt(cell) != 0);
+var grown = provinces.ProvinceCount;
+provinces = provinces.AbsorbSlivers();
+Console.WriteLine($"Folded {grown - provinces.ProvinceCount:N0} leftover pockets under {ProvinceTopology.MinimumProvinceCells} cells into their neighbours");
 provinces = provinces.RelaxShapes(SourceEarthData.States, SourceEarthData.Control);
 
 // The compiler deliberately builds physical pixels from the vector sources. Existing

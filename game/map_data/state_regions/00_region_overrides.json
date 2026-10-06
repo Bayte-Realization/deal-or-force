@@ -194,13 +194,17 @@
       "seed_points": [[45.71875, 39.53125, 1], [45.90625, 39.28125, 1]]
     },
     {
-      // The Gaza Strip. Palestinian ground: its northern half used to be drawn inside an
-      // Israeli province together with Beersheba and its southern half inside the West Bank,
-      // which is neither. Israel holds it on the first day: "controller" in its region
-      // history, history/states/2024/PSE.json.
+      // The Gaza Strip: its northern half used to be drawn inside an Israeli province
+      // together with Beersheba and its southern half inside the West Bank, which is neither.
+      // Israel's in the 2024 bookmark, the way the Russian-held regions of Ukraine are
+      // Russia's - written here, in the region's own rule, so that recutting the map keeps it
+      // rather than a line in history/provinces/ownership.csv that a recut renumbers away.
+      // Its people and buildings are still in history/states/2024/PSE.json.
       "map_index": 1740,
-      "nation": "PSE",
-      "source_nation": "ISR",
+      "nation": "ISR",
+      // Painted over ground of either country: the northern half is Israel's, the southern
+      // half was the West Bank's.
+      "source_nation": "PSE",
       "name": "Gaza Strip",
       "iso": "PS-GZA",
       "kind": "Territory",

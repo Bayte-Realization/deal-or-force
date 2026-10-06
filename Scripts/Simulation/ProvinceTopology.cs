@@ -20,6 +20,12 @@ public sealed class ProvinceTopology
     public const int DisputedCellsPerProvince = 54;
 
     /// <summary>
+    /// A province grown from fewer cells than this, beside a province of the same region and
+    /// owner, is a leftover of the growth rather than a place - see <see cref="AbsorbSlivers"/>.
+    /// </summary>
+    public const int MinimumProvinceCells = 24;
+
+    /// <summary>
     /// Which province each cell of the source raster belongs to.
     ///
     /// Sixteen and a half million cells, so the element type is the whole cost: as an int
@@ -311,6 +317,107 @@ public sealed class ProvinceTopology
         var wide = new int[cells.Length];
         for (var cell = 0; cell < cells.Length; cell++) wide[cell] = cells[cell];
         return wide;
+    }
+
+    /// <summary>
+    /// Fold the leftovers of growth into their neighbours.
+    ///
+    /// Seeds are scattered over the planet and each province grows until it reaches its size or
+    /// runs out of its region; whatever pocket of a region the growth walks around is seeded
+    /// later and becomes a province of its own. One in thirteen provinces came out under twenty
+    /// cells and sixteen hundred under five - a single cell south of Gaza was a province with a
+    /// name and an owner. Each such pocket joins the neighbour of the same region and owner it
+    /// shares the longest border with, smallest first, and the provinces are numbered again in
+    /// the order they had. A pocket with no such neighbour - an islet, an exclave - stays.
+    /// </summary>
+    public ProvinceTopology AbsorbSlivers(int minimumCells = MinimumProvinceCells)
+    {
+        if (minimumCells <= 1) return this;
+        var cells = Unpack(CellToProvince);
+        var count = ProvinceCount;
+        var members = new List<int>[count + 1];
+        for (var province = 0; province <= count; province++) members[province] = new List<int>();
+        for (var cell = 0; cell < cells.Length; cell++)
+            if (cells[cell] > 0) members[cells[cell]].Add(cell);
+        var parent = new int[count + 1];
+        for (var province = 0; province <= count; province++) parent[province] = province;
+        int Find(int province)
+        {
+            while (parent[province] != province)
+            {
+                parent[province] = parent[parent[province]];
+                province = parent[province];
+            }
+            return province;
+        }
+
+        var order = new List<int>(count);
+        for (var province = 1; province <= count; province++) order.Add(province);
+        order.Sort((left, right) =>
+        {
+            var bySize = members[left].Count.CompareTo(members[right].Count);
+            return bySize != 0 ? bySize : left.CompareTo(right);
+        });
+
+        var shared = new Dictionary<int, int>();
+        var absorbed = 0;
+        foreach (var province in order)
+        {
+            var root = Find(province);
+            if (root != province || members[root].Count >= minimumCells) continue;
+            shared.Clear();
+            foreach (var cell in members[root])
+            {
+                var x = cell % Width;
+                var y = cell / Width;
+                for (var oy = -1; oy <= 1; oy++)
+                for (var ox = -1; ox <= 1; ox++)
+                {
+                    if ((ox == 0 && oy == 0) || y + oy < 0 || y + oy >= Height) continue;
+                    var next = (y + oy) * Width + (x + ox + Width) % Width;
+                    var owner = cells[next];
+                    if (owner <= 0) continue;
+                    var other = Find(owner);
+                    if (other == root || ProvinceToState[other] != ProvinceToState[root] ||
+                        ProvinceToNation[other] != ProvinceToNation[root]) continue;
+                    shared[other] = shared.GetValueOrDefault(other) + 1;
+                }
+            }
+            var best = -1;
+            var bestShared = 0;
+            foreach (var (other, border) in shared)
+            {
+                if (border > bestShared ||
+                    border == bestShared && best > 0 && (members[other].Count > members[best].Count ||
+                                                         members[other].Count == members[best].Count && other < best))
+                {
+                    best = other;
+                    bestShared = border;
+                }
+            }
+            if (best < 0) continue;
+            parent[root] = best;
+            members[best].AddRange(members[root]);
+            members[root].Clear();
+            absorbed++;
+        }
+        if (absorbed == 0) return this;
+
+        // Numbered again in the order the survivors had, so the map keeps its shape of ids.
+        var renumber = new int[count + 1];
+        var states = new List<ushort> { 0 };
+        var nations = new List<ushort> { 0 };
+        for (var province = 1; province <= count; province++)
+        {
+            if (Find(province) != province) continue;
+            renumber[province] = states.Count;
+            states.Add(ProvinceToState[province]);
+            nations.Add(ProvinceToNation[province]);
+        }
+        for (var cell = 0; cell < cells.Length; cell++)
+            if (cells[cell] > 0) cells[cell] = renumber[Find(cells[cell])];
+        BuildGraph(cells, states.Count, Width, Height, out var centers, out var neighbors);
+        return new ProvinceTopology(Pack(cells), states.ToArray(), nations.ToArray(), centers, neighbors, Width, Height);
     }
 
     public ProvinceTopology RelaxShapes(ushort[] states, ushort[] control, int iterations = 3)

@@ -22,6 +22,8 @@ public sealed partial class GlobePresentation
         public float Longitude;
         public Vector3 Normal;
         public int Slot;
+        /// <summary>How many formations share this base, so the group can be centred on it.</summary>
+        public int AtBase = 1;
         public Vector2 DisplayOffset;
     }
 
@@ -259,6 +261,8 @@ public sealed partial class GlobePresentation
             PlaceSupportMarker(marker);
             PaintSupportMarker(marker, formation);
         }
+        foreach (var placed in _supportMapMarkers.Values)
+            placed.AtBase = Math.Max(1, withinBase.GetValueOrDefault(placed.Formation.BaseProvinceId, 1));
         if (!_supportMapMarkers.ContainsKey(_selectedSupportId)) _selectedSupportId = -1;
         _selectedSupportIds.RemoveWhere(id => !_supportMapMarkers.ContainsKey(id));
         RefreshSupportMarkerSelection();
@@ -361,17 +365,27 @@ public sealed partial class GlobePresentation
                         if (marker.Node.Position != position) marker.Node.Position = position;
                         continue;
                     }
-                    // A base has local east/north slots, not a camera-facing spread.
-                    // Keep every wing on the sphere and never make the base drift as
-                    // the player rotates or zooms the camera.
+                    // A base's wings sit side by side on the ground around it, in rows of three,
+                    // the group centred on the base and spaced by the card's own size. The
+                    // spacing used to be a fixed 0.14 of a world unit while the cards shrink
+                    // as the camera comes down to keep their size on screen, so close in the
+                    // cards stood a degree or more from their base - out at sea, over the
+                    // neighbour's border - and the group read as nobody's.
+                    if (marker.Node.Position != position) marker.Node.Position = position;
+                    var card = SurfaceCounterWidth(marker.Node, "support");
+                    var aspect = marker.Plate.Texture is { } face && face.GetWidth() > 0
+                        ? face.GetHeight() / (float)face.GetWidth() : 56f / 96f;
+                    var spacing = Math.Clamp(Ui.Metric("support.globe_slot_spacing", 1.08f), 1f, 3f);
+                    var rows = (marker.AtBase + 2) / 3;
+                    var row = marker.Slot / 3;
+                    var inRow = Math.Min(3, marker.AtBase - row * 3);
                     var basis = CountryLabelSurfaceBasis(marker.Latitude, marker.Longitude, 1f, 0f);
-                    var width = Math.Clamp(Ui.Metric("support.globe_slot_spacing", .14f), .06f, .4f);
-                    var offset = basis.X * ((marker.Slot % 3) - 1) * width +
-                        basis.Y * (.6f - (marker.Slot / 3) * .65f) * width;
+                    var offset = basis.X * ((marker.Slot % 3) - (inRow - 1) * .5f) * card * spacing +
+                                 basis.Y * ((rows - 1) * .5f - row) * card * aspect * spacing;
                     position = (position + offset).Normalized() * SurfaceMarkerRadius * 1.0004f;
                     if (marker.Node.Position != position) marker.Node.Position = position;
                     OrientSurfaceCounter(marker.Node, position.Normalized());
-                    marker.Node.Scale = Vector3.One * SurfaceCounterWidth(marker.Node, "support");
+                    marker.Node.Scale = Vector3.One * card;
                 }
             }
         if (forceLayout) RefreshSupportMarkerSelection();
