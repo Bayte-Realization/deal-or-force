@@ -149,6 +149,7 @@ public partial class DealOrForceGame
                     image.SetPixel(x, y, fill);
         }
 
+        image.GenerateMipmaps();
         var texture = ImageTexture.CreateFromImage(image);
         FlagCache[key] = texture;
         return texture;
@@ -219,6 +220,9 @@ public partial class DealOrForceGame
         var frame = new PanelContainer
         {
             CustomMinimumSize = new Vector2(Mathf.Round(width) + 2, Mathf.Round(height) + 2),
+            // Its own width, never the column's: in a vertical list a badge took the whole
+            // column, and the deal composer drew Poland as two bands half a screen wide.
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
             TooltipText = Ui.Tip(tooltip)
         };
@@ -236,7 +240,11 @@ public partial class DealOrForceGame
         {
             Texture = texture,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.Scale,
+            // And in its own proportions whatever the frame is given; filtered through its
+            // mipmaps, because a flag stored 512 pixels high and drawn 24 high is otherwise a
+            // field of jagged pixels.
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+            TextureFilter = TextureFilterEnum.LinearWithMipmaps,
             CustomMinimumSize = new Vector2(Mathf.Round(width), Mathf.Round(height))
         };
         frame.AddChild(rect);

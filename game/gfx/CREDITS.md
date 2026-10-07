@@ -441,12 +441,10 @@ else was skipped rather than used.
 | `flag_mwi_nationalism.png` | [Flag of Malawi (2010-2012).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Malawi_(2010%E2%80%932012).svg) | Public domain | Fornax, Zscout370, Phlegmatic |
 | `flag_ncl_absolute_monarchy.png` | [Flag of the Kingdom of Mudwan.png](https://commons.wikimedia.org/wiki/File:Flag_of_the_Kingdom_of_Mudwan.png) | CC BY-SA 4.0 | Yohgui |
 | `flag_nic_federation.png` | [Flag of the Federal Republic of Central America.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Federal_Republic_of_Central_America.svg) | CC BY-SA 2.5 | Huhsunqu |
-| `flag_nic_socialism.png` | [Flag of the FSLN.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_FSLN.svg) | Public domain | User:Inti; User:Stannered |
 | `flag_nld_absolute_monarchy.png` | [Royal Standard of the Netherlands.svg](https://commons.wikimedia.org/wiki/File:Royal_Standard_of_the_Netherlands.svg) | CC BY-SA 3.0 | TRAJAN 117 This W3C-unspecified vector image was created with Inkscape . |
 | `flag_nld_parliamentary_republic.png` | [Flag of the Batavian Republic.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Batavian_Republic.svg) | CC0 | Tom Lemmens |
 | `flag_nor_absolute_monarchy.png` | [Royal Standard of Norway.svg](https://commons.wikimedia.org/wiki/File:Royal_Standard_of_Norway.svg) | Public domain | Ssolbergj |
 | `flag_nzl_traditionalism.png` | [Flag of the United Tribes of New Zealand.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_United_Tribes_of_New_Zealand.svg) | CC BY-SA 2.5 | No machine-readable author provided. Greentubing assumed (based on copyright claims). |
-| `flag_omn_absolute_monarchy.png` | [Flag of Muscat.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Muscat.svg) | Public domain | Wikimedia Commons |
 | `flag_pak_theocratic_rule.png` | [Jamaat-e-Islami Pakistan Flag.svg](https://commons.wikimedia.org/wiki/File:Jamaat-e-Islami_Pakistan_Flag.svg) | Public domain | SVG by Ali Zifan |
 | `flag_pan_traditionalism.png` | [Flag of Gran Colombia.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Gran_Colombia.svg) | CC BY-SA 3.0 | Milenioscuro |
 | `flag_per_federation.png` | [Flag of the Peru-Bolivian Confederation.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Peru-Bolivian_Confederation.svg) | CC BY-SA 2.5 | No machine-readable author provided. Huhsunqu assumed (based on copyright claims). |
@@ -465,7 +463,6 @@ else was skipped rather than used.
 | `flag_rus_absolute_monarchy.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
 | `flag_rus_communism.png` | [Flag of the Russian Soviet Federative Socialist Republic (1954–1991).svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_Russian_Soviet_Federative_Socialist_Republic_(1954%E2%80%931991).svg) | Public domain | Pianist |
 | `flag_rus_traditionalism.png` | [Flag of Russia (1914–1917).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Russia_%281914%E2%80%931917%29.svg) | Public domain | Srg36 |
-| `flag_sau_traditionalism.png` | [Flag of Hejaz (1920).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hejaz_(1920).svg) | Public domain | Orange Tuesday at English Wikipedia (Original text: Orange Tuesday (talk)) |
 | `flag_sdn_liberalism.png` | [Flag of Sudan (1956–1970).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sudan_(1956%E2%80%931970).svg) | Public domain | Mysid |
 | `flag_sdn_traditionalism.png` | [Flag of Sudan (1956-1970).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Sudan_(1956%E2%80%931970).svg) | Public domain | Mysid |
 | `flag_sen_federation.png` | [Flag of Mali (1959–1961).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Mali_(1959%E2%80%931961).svg) | Public domain | SKopp |

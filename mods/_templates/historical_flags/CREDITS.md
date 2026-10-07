@@ -78,3 +78,6 @@ files keep their attribution and share-alike terms wherever they are used.
 | `flag_yem_protectorate.png` | [Flag of Aden (1937–1963).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Aden_%281937%E2%80%931963%29.svg) | Public domain | O |
 | `flag_zaf_protectorate.png` | [Red Ensign of South Africa (1912–1951).svg](https://commons.wikimedia.org/wiki/File:Red_Ensign_of_South_Africa_(1912%E2%80%931951).svg) | CC BY-SA 3.0 | Fornax |
 | `flag_zwe_protectorate.png` | [Flag of Southern Rhodesia (1924–1964).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Southern_Rhodesia_%281924%E2%80%931964%29.svg) | Public domain | Greentubing |
+| `flag_nic_socialism.png` | [Flag of the FSLN.svg](https://commons.wikimedia.org/wiki/File:Flag_of_the_FSLN.svg) | Public domain | User:Inti; User:Stannered |
+| `flag_omn_absolute_monarchy.png` | [Flag of Muscat.svg](https://commons.wikimedia.org/wiki/File:Flag_of_Muscat.svg) | Public domain | Wikimedia Commons |
+| `flag_sau_traditionalism.png` | [Flag of Hejaz (1920).svg](https://commons.wikimedia.org/wiki/File:Flag_of_Hejaz_(1920).svg) | Public domain | Orange Tuesday at English Wikipedia (Original text: Orange Tuesday (talk)) |

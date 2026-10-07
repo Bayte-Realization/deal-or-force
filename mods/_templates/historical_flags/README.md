@@ -14,6 +14,13 @@ What is in `gfx/flags/`:
 - `flag_<tag>_fascism*.png` and `flag_ideology_fascism.png` - flags of historical fascist and
   authoritarian regimes;
 - `flag_jpn_at_war.png` - the Rising Sun ensign.
+- `flag_omn_absolute_monarchy.png` - the plain red flag of Muscat and Oman before 1970. In the base
+  game it outranked the modern flag, because Oman is an absolute monarchy today.
+- `flag_sau_traditionalism.png` - the flag of the Arab Revolt and the Kingdom of Hejaz;
+- `flag_nic_socialism.png` - the flag of the Sandinista front, a party's rather than the state's;
+- `flag_grc_parliamentary_republic.png` - the Greek land flag, the cross alone, flown until 1978.
+  Each outranked the country's modern flag in the base game, because each country is what the
+  file is named for in 2024.
 
 To use them, copy this folder out of `_templates`, give it and its manifest a unique id and set
 `"enabled": true`. The flag rules are in the base game's `common/flags/00_flags.json`: a file
