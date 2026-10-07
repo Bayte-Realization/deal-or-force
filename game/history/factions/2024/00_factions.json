@@ -185,10 +185,239 @@
       "relation": "war", "war_name": "M23 Offensive",
       "army_share": 0.0, "fighters": 10000, "militia": 3, "stability": 0.45, "war_support": 0.85,
       "patrons": ["RWA"], "listed_by": ["USA", "GBR", "FRA", "BEL"]
+    },
+    {
+      "id": "united_wa_state_army",
+      "tag": "UWS",
+      "name": "United Wa State Army",
+      "description": "The largest non-state army in Myanmar, heir to the Communist Party of Burma's army. Since a ceasefire in 1989 it has governed the Wa hills on the Chinese border as a state of its own, with its own schools, currency in yuan and a capital at Pangkham; Myanmar's officials do not go there.",
+      "parent": "MMR",
+      "colour": "#7b5e3b",
+      "capital": "Pangkham",
+      "capital_at": [
+        99.17,
+        22.17
+      ],
+      "government": "one_party_state",
+      "ideology": "socialism",
+      "peoples": [
+        "wa"
+      ],
+      "areas": [[[98.39, 22.83], [98.79, 22.83], [98.79, 23.23], [98.39, 23.23]],
+        [[98.77, 21.39], [99.17, 21.39], [99.17, 21.79], [98.77, 21.79]]],
+        "relation": "peace",
+      "army_share": 0.0,
+      "fighters": 30000,
+      "militia": 2,
+      "stability": 0.65,
+      "war_support": 0.4,
+      "patrons": [
+        "CHN"
+      ]
+    },
+    {
+      "id": "myanmar_national_democratic_alliance_army",
+      "tag": "MND",
+      "name": "Myanmar National Democratic Alliance Army",
+      "description": "The army of the Kokang, the Chinese-speaking people of the northern Shan hills. In Operation 1027, launched in October 2023 with the Ta'ang and the Arakan Army, it took back the Kokang region it had lost in 2009; its capital Laukkai fell to it in the first days of January 2024.",
+      "parent": "MMR",
+      "colour": "#6d4c8c",
+      "capital": "Laukkai",
+      "capital_at": [
+        98.76,
+        23.69
+      ],
+      "government": "military_junta",
+      "ideology": "nationalism",
+      "peoples": [
+        "kokang"
+      ],
+      "areas": [[[97.96, 23.46], [98.36, 23.46], [98.36, 23.86], [97.96, 23.86]]],
+        "parent_modifier": "junta_overstretched",
+      "relation": "war",
+      "war_name": "Operation 1027",
+      "army_share": 0.0,
+      "fighters": 8000,
+      "militia": 2,
+      "stability": 0.45,
+      "war_support": 0.85
+    },
+    {
+      "id": "taang_national_liberation_army",
+      "tag": "TNL",
+      "name": "Ta'ang National Liberation Army",
+      "description": "The army of the Ta'ang (Palaung), a mountain people of northern Shan State, and a member of the Three Brotherhood Alliance. In Operation 1027 it took Namhsan, its people's heartland, and the towns on the road from Mandalay to China.",
+      "parent": "MMR",
+      "colour": "#2e7d6b",
+      "capital": "Namhsan",
+      "capital_at": [
+        97.16,
+        22.97
+      ],
+      "government": "one_party_state",
+      "ideology": "nationalism",
+      "peoples": [
+        "taang"
+      ],
+      "areas": [[[97.33, 22.39], [97.73, 22.39], [97.73, 22.79], [97.33, 22.79]]],
+        "parent_modifier": "junta_overstretched",
+      "relation": "war",
+      "war_name": "Operation 1027",
+      "army_share": 0.0,
+      "fighters": 8000,
+      "militia": 2,
+      "stability": 0.45,
+      "war_support": 0.85
+    },
+    {
+      "id": "southern_transitional_council",
+      "tag": "STC",
+      "name": "Southern Transitional Council",
+      "description": "The movement for an independent South Yemen, which took Aden from the government in 2019 and holds the south's port and its hinterland with forces paid by the United Arab Emirates. It sits in the government's Presidential Leadership Council against the Houthis and has never given up the south's independence.",
+      "parent": "YEM",
+      "colour": "#1e88e5",
+      "capital": "Aden",
+      "capital_at": [
+        45.03,
+        12.8
+      ],
+      "government": "provisional_government",
+      "ideology": "nationalism",
+      "peoples": [
+        "arab_yemeni"
+      ],
+      "regions": [
+        "ye_la",
+        "ye_ab"
+      ],
+      "relation": "peace",
+      "army_share": 0.0,
+      "fighters": 40000,
+      "militia": 2,
+      "stability": 0.5,
+      "war_support": 0.6,
+      "patrons": [
+        "ARE"
+      ]
+    },
+    {
+      "id": "splm_north_al_hilu",
+      "tag": "SPN",
+      "name": "SPLM-North (al-Hilu)",
+      "description": "The Sudan People's Liberation Movement-North of Abdelaziz al-Hilu, which has held the Nuba Mountains of South Kordofan against Khartoum since 2011 and wants a secular Sudan or the right to leave it. Its seat is Kauda.",
+      "parent": "SDN",
+      "colour": "#c62828",
+      "capital": "Kauda",
+      "capital_at": [
+        30.52,
+        11.08
+      ],
+      "government": "one_party_state",
+      "ideology": "socialism",
+      "peoples": [
+        "nuba"
+      ],
+      "areas": [
+        [
+          [
+            29.8,
+            10.55
+          ],
+          [
+            30.95,
+            10.55
+          ],
+          [
+            31.25,
+            11.3
+          ],
+          [
+            30.6,
+            11.85
+          ],
+          [
+            29.75,
+            11.5
+          ]
+        ]
+      ],
+      "relation": "truce",
+      "truce_days": 540,
+      "army_share": 0.0,
+      "fighters": 20000,
+      "militia": 2,
+      "stability": 0.5,
+      "war_support": 0.6
+    },
+    {
+      "id": "kurdistan_region",
+      "tag": "KRG",
+      "name": "Kurdistan Region",
+      "description": "The autonomous Kurdish region of northern Iraq, with its own parliament in Erbil, its own Peshmerga and its own oil sales. It voted for independence in 2017 and lost Kirkuk to the federal army weeks later; it is part of Iraq on paper and nowhere else.",
+      "parent": "IRQ",
+      "colour": "#e6b422",
+      "capital": "Erbil",
+      "capital_at": [
+        44.01,
+        36.19
+      ],
+      "government": "parliamentary_republic",
+      "ideology": "conservatism",
+      "peoples": [
+        "kurdish"
+      ],
+      "regions": [
+        "iq_ar",
+        "iq_su"
+      ],
+      "relation": "peace",
+      "army_share": 0.0,
+      "fighters": 60000,
+      "militia": 2,
+      "stability": 0.6,
+      "war_support": 0.5,
+      "patrons": [
+        "USA"
+      ]
+    },
+    {
+      "id": "puntland",
+      "tag": "PNT",
+      "name": "Puntland",
+      "description": "The autonomous state of north-eastern Somalia, governed from Garowe since 1998 with its own army, its own ports and its own elections. It has fought al-Shabaab and the Islamic State in its mountains, and in 2024 stopped recognising the federal government's authority.",
+      "parent": "SOM",
+      "colour": "#4e79a7",
+      "capital": "Garowe",
+      "capital_at": [
+        48.48,
+        8.4
+      ],
+      "government": "presidential_republic",
+      "ideology": "conservatism",
+      "peoples": [
+        "somali"
+      ],
+      "regions": [
+        "so_br",
+        "so_nu"
+      ],
+      "relation": "peace",
+      "army_share": 0.0,
+      "fighters": 10000,
+      "militia": 2,
+      "stability": 0.55,
+      "war_support": 0.5
     }
   ],
 
   "tensions": [
+    {"between": ["STC", "HTH"], "structural": 50, "tension": 66, "grievance": [40, 30]},
+    {"between": ["STC", "YEM"], "structural": 30, "tension": 45},
+    {"between": ["SPN", "SDN"], "structural": 45, "tension": 58, "grievance": [35, 20]},
+    {"between": ["KRG", "IRQ"], "structural": 25, "tension": 38, "grievance": [20, 0]},
+    {"between": ["PNT", "SOM"], "structural": 20, "tension": 42},
+    {"between": ["PNT", "SHB"], "structural": 40, "tension": 60, "grievance": [20, 20]},
+    {"between": ["UWS", "MMR"], "structural": 25, "tension": 35},
     { "between": ["HTH", "USA"], "structural": 30, "tension": 68, "grievance": [30, 25] },
     { "between": ["HTH", "ISR"], "structural": 45, "tension": 72, "grievance": [40, 25] },
     { "between": ["HTH", "SAU"], "structural": 40, "tension": 48, "grievance": [45, 30] },

@@ -53,8 +53,10 @@ It never arms a faction it lists as a terrorist or sanctioned organisation (`lis
 Real organisations that held and governed ground of their own on 1 January 2024 without being
 recognised states: the Rapid Support Forces, Ansar Allah, the Syrian Interim and Salvation
 governments, North and East Syria, the Libyan National Army, Myanmar's National Unity
-Government, Arakan Army and Kachin Independence Organisation, al-Shabaab, the Alliance Fleuve
-Congo. They are countries on the map from the first day, cut out of the state whose ground
+Government, Arakan Army and Kachin Independence Organisation, the United Wa State Army and the
+Kokang and Ta'ang armies of Operation 1027, al-Shabaab, Puntland, the Alliance Fleuve Congo, the
+Southern Transitional Council in Aden, the SPLM-North in the Nuba Mountains and the Kurdistan
+Region. They are countries on the map from the first day, cut out of the state whose ground
 they hold - whole regions, and where the front ran through a region, by province.
 
 A faction is a breakaway to the rules (`Reintegration`): the state it holds ground of can write
