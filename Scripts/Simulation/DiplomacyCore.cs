@@ -349,6 +349,19 @@ public static class CampaignDiplomacy
     /// <summary>How many times the border table has been rebuilt. Diagnostic only.</summary>
     public static int Rebuilds;
 
+    /// <summary>
+    /// The table is a day old by design, which is wrong exactly once: the moment a country is
+    /// born on somebody's ground. A region that seceded or rose that morning bordered nobody
+    /// until the next day, so the war its parent declared on it was refused for want of a
+    /// front - "no shared land front, and no fleet to reach them with" - and recorded as the
+    /// parent letting it go. Every war of independence for fifteen years went that way.
+    /// </summary>
+    public static void ForgetBorders()
+    {
+        _borderDay = -1;
+        _borderRevision = -1;
+    }
+
     private static Dictionary<int, HashSet<int>> Borders(Campaign campaign)
     {
         // At most once a day, and only if the map actually moved.

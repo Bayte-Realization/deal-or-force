@@ -24,7 +24,10 @@
   "BaseOrganisationDamage": 0.048,
   "MinOrganisationDamage": 0.010,
   "MaxOrganisationDamage": 0.130,
-  "CasualtiesPerOrganisationPoint": 0.075,
+  // A third of what it was: at 0.075 Russia lost 1.8 million men in 2024 and Ukraine 0.7 million,
+  // four times the Western estimates (some 430 000 Russian dead and wounded), and the side that
+  // attacked bled itself out of the war. At 0.025 the year costs Russia about 0.55 million.
+  "CasualtiesPerOrganisationPoint": 0.025,
   "BrokenCasualtyMultiplier": 2.4,
   "AttackerCasualtyMultiplier": 2.4,
   "EntrenchmentBonus": 1.80,

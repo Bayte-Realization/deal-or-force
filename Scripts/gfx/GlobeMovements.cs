@@ -13,10 +13,12 @@ namespace DealOrForce;
 /// so both read on any country's colour - a ring in the movement's own green vanished on a green
 /// map.
 ///
-/// Headquarters stand on a province (Movements.SeatOf), and several often share one: Doha, Abu
-/// Dhabi and London are where such offices are. Those are drawn as one row, fanned out side by
-/// side around the city, with each name directly under its own medallion. Names remain visible
-/// with their headquarters, without camera-dependent collision hiding or displacement.
+/// Headquarters stand on a province (Movements.SeatOf), and several often share a city: Doha, Abu
+/// Dhabi, London and Kyiv are where such offices are. Every headquarters within RowDegrees of
+/// another is drawn in one row, fanned out side by side around the first of them, with each name
+/// directly under its own medallion - two offices in two provinces of Kyiv were two rows drawn on
+/// top of each other. Names remain visible with their headquarters, without camera-dependent
+/// collision hiding or displacement.
 ///
 /// A headquarters is the one place such a country is, so it is drawn at every distance, where
 /// a capital is only drawn close up.
@@ -48,9 +50,17 @@ public sealed partial class GlobePresentation
         private const float Spacing = 138f;
         private const float LabelPixelSize = 0.00021f;
         /// <summary>How close the camera has to be before headquarters carry their names.</summary>
-        private const float LabelDistance = 8.5f;
+        private const float LabelDistance = 7.5f;
+        /// <summary>Headquarters this close, in degrees of arc, share one row.</summary>
+        private const float RowDegrees = 1.6f;
         private const float LabelLine = 40f;
         private const float LabelDrop = 80f;
+        /// <summary>
+        /// How far under its seat a row stands, in sprite pixels: the seat is a city, usually a
+        /// capital, and a row drawn on it took the room of the city's own star and name - Kyiv
+        /// lost its name to the Mejlis.
+        /// </summary>
+        private const float RowSink = 80f;
         private const float PickRadius = 20f;
 
         private readonly GlobePresentation _globe;
@@ -71,6 +81,11 @@ public sealed partial class GlobePresentation
             public float Offset;
             /// <summary>Its name, anchored directly under its own medallion.</summary>
             public Label3D Label;
+            /// <summary>How far under (positive) or over (negative) the medallion its name stands.</summary>
+            public float Drop = LabelDrop;
+            /// <summary>Where its row stands: the first headquarters of the row.</summary>
+            public float Latitude;
+            public float Longitude;
         }
 
         public MovementLayer(GlobePresentation globe) => _globe = globe;
@@ -105,7 +120,7 @@ public sealed partial class GlobePresentation
                     // camera depth on the globe. Match its screen scale in both projections.
                     marker.Node.Scale = Vector3.One * (_globe._flatMap && IsInstanceValid(camera)
                         ? 1f / Mathf.Tan(Mathf.DegToRad(camera.Fov * 0.5f)) : 1f);
-                    marker.Node.Position = _globe.PresentationPoint(state.HeadquartersLatitude, state.HeadquartersLongitude,
+                    marker.Node.Position = _globe.PresentationPoint(marker.Latitude, marker.Longitude,
                         SurfaceMarkerRadius * 1.002f);
                     // On the globe, only the side that faces the camera.
                     if (!_globe._flatMap && IsInstanceValid(camera))
@@ -133,7 +148,9 @@ public sealed partial class GlobePresentation
                 var at = marker.Node.GlobalPosition;
                 if (camera.IsPositionBehind(at)) continue;
                 var size = FixedWorldScale(camera, at) * marker.Node.Scale.X;
-                var centre = camera.UnprojectPosition(at + right * (marker.Offset * PixelSize * size));
+                var down = -camera.GlobalBasis.Y.Normalized();
+                var centre = camera.UnprojectPosition(at + right * (marker.Offset * PixelSize * size) +
+                                                      down * (RowSink * PixelSize * size));
                 var distance = centre.DistanceTo(position);
                 if (distance >= bestDistance) continue;
                 bestDistance = distance;
@@ -155,22 +172,22 @@ public sealed partial class GlobePresentation
             _mark ??= GD.Load<Texture2D>(SpriteCatalog.TextureOf("icon_movement_headquarters",
                 "res://game/gfx/interface/icons/icon_movement_headquarters.png"));
 
-            // Headquarters sharing a province are one row. Every name follows its own
+            // Headquarters near each other are one row. Every name follows its own
             // medallion; their screen bounds reserve room in the city-label layout.
-            var groups = Movements.Active(campaign)
-                .Where(nation => Standing(nation.Movement))
-                .GroupBy(nation => nation.Movement.HeadquartersProvinceId > 0
-                    ? nation.Movement.HeadquartersProvinceId
-                    : -nation.Movement.HeadquartersStateMapIndex)
-                .ToList();
+            var groups = Rows(Movements.Active(campaign).Where(nation => Standing(nation.Movement)));
             foreach (var group in groups)
             {
                 // A translation must not rearrange offices sharing the same headquarters.
                 var members = group.OrderBy(nation => nation.Tag, StringComparer.Ordinal).ToList();
+                var anchor = group[0].Movement;
                 for (var index = 0; index < members.Count; index++)
                 {
                     var nation = members[index];
                     var offset = (index - (members.Count - 1) / 2f) * Spacing;
+                    // In a row, every other name stands a line lower: two long names side by side -
+                    // the Mejlis and Ichkeria in Kyiv - were one unreadable line. Both under the
+                    // medallions, never over them, where the city's own star and name are.
+                    var drop = members.Count > 1 && index % 2 == 1 ? LabelDrop + LabelLine * 0.95f : LabelDrop;
                     var colour = Color.FromHtml(string.IsNullOrWhiteSpace(nation.Color) ? "#808080" : nation.Color);
                     var node = new Node3D { Name = $"Headquarters_{nation.Tag}" };
                     var roundel = Roundel(nation);
@@ -181,7 +198,8 @@ public sealed partial class GlobePresentation
                     node.AddChild(Medallion(_ring, PixelSize, colour.Lightened(0.2f), 22, offset));
                     var label = new Label3D
                     {
-                        Text = Simulation.Loc.Format("HQ · {0}", nation.DisplayName),
+                        // The medallion already says it is a headquarters; the name says whose.
+                        Text = nation.DisplayName,
                         FixedSize = true,
                         PixelSize = LabelPixelSize,
                         FontSize = 34,
@@ -191,13 +209,44 @@ public sealed partial class GlobePresentation
                         RenderPriority = 23,
                         Modulate = Ui.Colour("globe.label"),
                         OutlineModulate = Ui.Colour("globe.label_outline", 0.95f),
-                        Offset = new Vector2(offset * PixelSize / LabelPixelSize, -LabelDrop)
+                        Offset = new Vector2(offset * PixelSize / LabelPixelSize, -drop - RowSink * PixelSize / LabelPixelSize)
                     };
                     node.AddChild(label);
                     AddChild(node);
-                    _markers.Add(new Marker { Node = node, Nation = nation, Offset = offset, Label = label });
+                    _markers.Add(new Marker
+                    {
+                        Node = node, Nation = nation, Offset = offset, Label = label, Drop = drop,
+                        Latitude = anchor.HeadquartersLatitude, Longitude = anchor.HeadquartersLongitude
+                    });
                 }
             }
+        }
+
+        /// <summary>
+        /// The headquarters in rows: each joins the first row whose first headquarters is within
+        /// RowDegrees of its own, in tag order so the rows are the same on every machine.
+        /// </summary>
+        private static List<List<Simulation.Nation>> Rows(IEnumerable<Simulation.Nation> seats)
+        {
+            var rows = new List<List<Simulation.Nation>>();
+            foreach (var nation in seats.OrderBy(nation => nation.Tag, StringComparer.Ordinal))
+            {
+                var state = nation.Movement;
+                var row = rows.FirstOrDefault(candidate =>
+                    Arc(candidate[0].Movement, state) <= RowDegrees);
+                if (row is null) rows.Add(new List<Simulation.Nation> { nation });
+                else row.Add(nation);
+            }
+            return rows;
+        }
+
+        private static float Arc(MovementState a, MovementState b)
+        {
+            var la = Mathf.DegToRad(a.HeadquartersLatitude);
+            var lb = Mathf.DegToRad(b.HeadquartersLatitude);
+            var dl = Mathf.DegToRad(a.HeadquartersLongitude - b.HeadquartersLongitude);
+            var cosine = MathF.Sin(la) * MathF.Sin(lb) + MathF.Cos(la) * MathF.Cos(lb) * MathF.Cos(dl);
+            return Mathf.RadToDeg(MathF.Acos(Math.Clamp(cosine, -1f, 1f)));
         }
 
         // Never resolve a collision by displacing the name. An accumulated row offset made
@@ -245,11 +294,12 @@ public sealed partial class GlobePresentation
                 // The medallion: a 128-pixel sprite at its own pixel size, moved along its row.
                 var sprite = scale * PixelSize / LabelPixelSize;
                 var radius = 64f * sprite;
-                _medallions.Add(new Rect2(origin.X + marker.Offset * sprite - radius, origin.Y - radius, radius * 2f, radius * 2f));
+                var sunk = RowSink * sprite;
+                _medallions.Add(new Rect2(origin.X + marker.Offset * sprite - radius, origin.Y + sunk - radius, radius * 2f, radius * 2f));
                 if (!named) continue;
                 var width = marker.Label.Text.Length * marker.Label.FontSize * 0.56f * scale;
                 var box = new Rect2(origin.X + marker.Offset * sprite - width / 2f,
-                    origin.Y + (LabelDrop - LabelLine / 2f) * scale, width, LabelLine * scale);
+                    origin.Y + sunk + (marker.Drop - LabelLine / 2f) * scale, width, LabelLine * scale);
                 _placed.Add(box);
             }
         }
@@ -307,7 +357,7 @@ public sealed partial class GlobePresentation
             NoDepthTest = true,
             RenderPriority = priority,
             Modulate = modulate,
-            Offset = new Vector2(offset, 0f)
+            Offset = new Vector2(offset, -RowSink * PixelSize / pixelSize)
         };
 
         /// <summary>A white disc or ring with a soft edge, for a colour to tint.</summary>

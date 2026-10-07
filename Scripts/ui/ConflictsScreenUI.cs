@@ -314,6 +314,11 @@ public partial class DealOrForceGame
         Add("Opposite sides of other wars", d.Proxy);
         Add("Opposed politics", d.Ideology);
         lines.Add(Simulation.Loc.Format("Distance and treaties multiply it by {0:0.00}.", d.Factor));
+        if (MathF.Abs(d.Baseline) >= 0.5f)
+            lines.Add($"  {Tr("Where it stood in January 2024 (fading)")}: {(d.Baseline > 0f ? "+" : "")}{d.Baseline:0}");
+        if (Escalation.StageOf(relation) < TensionStage.Clashes &&
+            Escalation.Deterred(_campaign, _campaign.NationById(relation.A), _campaign.NationById(relation.B)))
+            lines.Add(Tr("Neither side would fire first - outmatched by the other and the friends behind it, held back by its own government, or busy with a war elsewhere - so it stops short of shooting."));
         return string.Join("\n", lines);
     }
 

@@ -12,9 +12,21 @@ hostility, grievance (land lost in the last war, decaying over decades), rivalry
 an ideological gap, backing the other's enemy. Alliances, pacts and trade pull it down. A
 **structural** part - an armistice line, a disputed border - never decays.
 
+A standoff the history writes (`history/conflicts`) starts where it stood on 1 January 2024
+and stays there until something changes: on the first review the game measures the gap between
+the history's tension and what the drivers alone give, and keeps it as a **baseline** that
+fades over `TensionBaselineHalfLifeYears` (10). Russia and Poland, whose hostility, rivalry and
+opposite sides in Ukraine add up to armed clashes, were a crisis in 2024; the baseline is the
+deterrence and diplomacy the drivers cannot see. The Conflicts screen lists it as "Where it
+stood in January 2024".
+
 Tension moves through stages: Calm, Friction (25), Crisis (50), Clashes (75), and war. At
 Clashes the border shoots: both sides take losses every week, war support rises, and the
-`border_clashes` modifier applies. Incidents (`common/escalation`) fire at random under tension
+`border_clashes` modifier applies. Shooting needs a side that would **fire first**: one that
+could stand up to the other and the friends behind it, whose government is not restrained by a
+parliament and an election (`AiDemocraticPeaceRestraint`), and that is not already fighting a
+major war elsewhere. When neither would, the standoff stays a crisis however high it goes -
+which is why Russia and Finland, or Ukraine and Belarus, do not shoot across their borders. Incidents (`common/escalation`) fire at random under tension
 and move it. The computer weighs tension when it decides whether to go to war; a country can
 **hold talks** (Conflicts screen) to cool a crisis for a price.
 

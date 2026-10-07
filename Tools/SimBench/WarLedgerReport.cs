@@ -17,11 +17,42 @@ internal static class WarLedgerReport
     {
         c.IsPaused = false;
         var tags = c.Nations.ToDictionary(n => n.Id, n => n.Tag);
+        // The ground of the Russo-Ukrainian war, which a war score cannot show: whose provinces
+        // each side's soldiers stand in, on the first day and the last.
+        var russia = c.NationByTag("RUS");
+        var ukraine = c.NationByTag("UKR");
+        (int RusInUkr, int UkrInRus) Ground()
+        {
+            if (russia is null || ukraine is null || c.ProvinceMap is null || c.ProvinceController is null) return (0, 0);
+            var map = c.ProvinceMap;
+            int rusInUkr = 0, ukrInRus = 0;
+            for (var province = 1; province <= map.ProvinceCount; province++)
+            {
+                var owner = map.ProvinceToNation[province];
+                var held = c.ProvinceController[province];
+                if (owner == ukraine.MapIndex && held == russia.MapIndex) rusInUkr++;
+                if (owner == russia.MapIndex && held == ukraine.MapIndex) ukrInRus++;
+            }
+            return (rusInUkr, ukrInRus);
+        }
+        var groundBefore = Ground();
+        string Forces(Nation n)
+        {
+            if (n is null) return "";
+            var strength = c.Armies.Where(a => a.NationId == n.Id).Sum(a => a.Divisions * a.Strength);
+            var formations = c.Armies.Count(a => a.NationId == n.Id);
+            return $"{n.Tag} {formations} formations {strength:0} division-strengths reserve {n.ManpowerReserve:0}";
+        }
+        var forcesBefore = $"{Forces(russia)} | {Forces(ukraine)}";
         for (var day = 1; day <= days; day++)
         {
             c.TickDay();
             foreach (var nation in c.Nations) tags.TryAdd(nation.Id, nation.Tag);
         }
+        var groundAfter = Ground();
+        Console.WriteLine($"FRONT RUS holds {groundBefore.RusInUkr} -> {groundAfter.RusInUkr} Ukrainian provinces, " +
+                          $"UKR holds {groundBefore.UkrInRus} -> {groundAfter.UkrInRus} Russian; " +
+                          $"forces {forcesBefore} -> {Forces(russia)} | {Forces(ukraine)}");
         string Tag(int id) => tags.TryGetValue(id, out var t) ? t : $"#{id}";
         bool Concerns(StrategicWar w) => string.IsNullOrEmpty(tag) ||
             new[] { w.AttackerId, w.DefenderId }.Concat(w.AttackerAllies).Concat(w.DefenderAllies)

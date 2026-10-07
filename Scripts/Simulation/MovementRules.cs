@@ -617,6 +617,8 @@ public static class MovementRules
         {
             if (nation.SecededFromId < 0) nation.SecededFromId = owner.Id;
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, owner.Id, nation.Id), "rose_against_us");
+            // It holds ground of its own since this morning, which the day's border table cannot know.
+            CampaignDiplomacy.ForgetBorders();
             CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, region.MapIndex, "uprising", onOwnInitiative: false);
         }
         campaign.MovementRevision++;

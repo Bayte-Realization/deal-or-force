@@ -527,6 +527,7 @@ public static class SecessionEvents
         // Not a conquest. It is standing on the ground it already lived on, and a state born
         // an international pariah for that would be the wrong answer twice over.
         StatePartition.Annex(campaign, provinces, born, asConquest: false);
+        CampaignDiplomacy.ForgetBorders();
         SecessionResearch.Inherit(campaign, parent, born, departedStates, was);
 
         foreach (var piece in leaving)
@@ -558,7 +559,12 @@ public static class SecessionEvents
             // Refused, and unable to do anything about it - a truce, an alliance, no way to
             // reach them. That is an acceptance whatever the cabinet thinks, and recording
             // it as one keeps the state of the world honest.
-            if (war is null) outcome = SecessionOutcome.Accepted;
+            if (war is null)
+            {
+                CampaignDiplomacy.CanDeclareWar(campaign, parent.Id, born.Id, out var refusal);
+                reason += $"; could not go to war: {refusal}";
+                outcome = SecessionOutcome.Accepted;
+            }
             else
             {
                 // Part of the garrison standing on the ground goes over: the war is fought by

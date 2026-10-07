@@ -170,6 +170,12 @@ static class ColonisationTests
         // --- E: the countries nobody plays -------------------------------------------------
         c.Defines.AiColonisationChancePerMonth = 1f;
         foreach (var nation in c.Nations) nation.Treasury = Math.Max(nation.Treasury, 10_000f);
+        // Under the Antarctic Treaty they do not go at all, however rich and however able.
+        for (var day = 0; day < 30; day++) ColonisationCore.Tick(c);
+        Check(lands.All(s => ColonisationCore.Colonist(c, s) is null or { IsHuman: true }),
+            "under the Antarctic Treaty nobody the computer plays sets out for the ice");
+        // With the treaty a mod has torn up, they do.
+        c.Defines.AiColonisesTreatyLand = true;
         for (var day = 0; day < 30; day++) ColonisationCore.Tick(c);
         // Antarctica is its lands, and a country goes for the cheapest it can reach - its own
         // claim cheapest of all - so which land is settled first is the AI's to choose.

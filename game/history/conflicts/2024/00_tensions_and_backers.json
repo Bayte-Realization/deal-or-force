@@ -83,7 +83,10 @@
   // Who was arming whom in the war being fought. Levels: 1 advisers and money, 2 weapons,
   // 3 weapons at scale and volunteers; capped by the size of the sponsor's economy.
   "sponsorships": [
-    { "sponsor": "USA", "client": "UKR", "war": ["RUS", "UKR"], "level": 3 },
+    // Weapons, not volunteers, and a third of a percent of American output a year: about the
+    // $25-30 billion of military aid the Kiel Institute counts for 2024. Nothing new arrived
+    // until Congress passed the supplemental on 24 April 2024, day 114.
+    { "sponsor": "USA", "client": "UKR", "war": ["RUS", "UKR"], "level": 2, "held_days": 114 },
     { "sponsor": "GBR", "client": "UKR", "war": ["RUS", "UKR"], "level": 2 },
     { "sponsor": "DEU", "client": "UKR", "war": ["RUS", "UKR"], "level": 2 },
     { "sponsor": "POL", "client": "UKR", "war": ["RUS", "UKR"], "level": 2 },

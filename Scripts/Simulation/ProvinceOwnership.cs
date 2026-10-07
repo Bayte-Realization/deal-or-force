@@ -254,6 +254,14 @@ public static class ProvinceOwnership
         return result;
     }
 
+    /// <summary>Every province a row of the political map names, by id or by place.</summary>
+    public static HashSet<int> Decided(ProvinceTopology topology)
+    {
+        var result = new HashSet<int>(Entries.Keys);
+        result.UnionWith(PointCorrections(topology).Keys);
+        return result;
+    }
+
     private static string FindDirectory()
     {
         foreach (var root in CandidateRoots())

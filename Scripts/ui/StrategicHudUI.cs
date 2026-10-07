@@ -134,6 +134,21 @@ public partial class DealOrForceGame
                 Simulation.Loc.Format("Stability is low enough for officers to start plotting. Above {0} nobody plots.",
                     Fmt.Percent(_campaign.Defines.CoupStabilityThreshold)));
 
+        // The standoff likeliest to become our next war, while it is still a standoff.
+        var standoff = Simulation.Escalation.Hottest(_campaign, _campaign.Defines.TensionCrisisAt)
+            .FirstOrDefault(relation => (relation.A == player.Id || relation.B == player.Id) &&
+                                        !Simulation.CampaignDiplomacy.AtWar(_campaign, relation.A, relation.B));
+        if (standoff is not null && _campaign.NationById(standoff.A == player.Id ? standoff.B : standoff.A) is { } rival)
+        {
+            var clashing = (Simulation.TensionStage)standoff.TensionStage >= Simulation.TensionStage.Clashes;
+            AddAlert(clashing ? AlertLevel.Critical : AlertLevel.Warning, "unrest",
+                Simulation.Loc.Format(clashing ? "Clashes with {0}" : "Crisis with {0}", CountryNames.Compact(rival)),
+                () => { _conflictTab = 2; OpenConflictsScreen(); },
+                clashing
+                    ? Tr("Shooting on the border every week. A border that keeps shooting for months can become a border war; talks in the Conflicts screen cool it.")
+                    : Tr("A crisis between us. It can grow into armed clashes; talks in the Conflicts screen cool it."));
+        }
+
         if (player.ShortageIndex > 0.10f)
             AddAlert(AlertLevel.Critical, "trade",
                 Simulation.Loc.Format("Shortages: {0}", Fmt.Percent(player.ShortageIndex)),
@@ -288,16 +303,26 @@ public partial class DealOrForceGame
                     worstGood.Production, worstGood.Demand, worstGood.Imports, worstGood.Exports));
         }
 
+        // One row a kind of building, not one a site: five "Civilian industry · 0 %" rows in a
+        // column read as the same row five times. The count, the furthest along of them, and
+        // every site in the tooltip; a click opens the furthest along.
         AddOutlinerHeader("CONSTRUCTION");
-        foreach (var project in construction.OrderBy(project => project.Id))
+        foreach (var kind in construction.GroupBy(project => project.Building)
+                     .OrderByDescending(group => group.Max(project => project.Progress))
+                     .ThenBy(group => group.Min(project => project.Id)))
         {
-            var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == project.StateMapIndex);
-            AddOutlinerButton($"{Tr(BuildingCatalog.Get(project.Building).Name)} · {project.Progress:P0}", () =>
+            var lead = kind.OrderByDescending(project => project.Progress).ThenBy(project => project.Id).First();
+            var state = _campaign.States.FirstOrDefault(candidate => candidate.MapIndex == lead.StateMapIndex);
+            var count = kind.Count();
+            var name = Tr(BuildingCatalog.Get(lead.Building).Name);
+            var sites = string.Join(System.Environment.NewLine, kind.OrderBy(project => project.Id).Select(project =>
+                $"{_campaign.States.FirstOrDefault(candidate => candidate.MapIndex == project.StateMapIndex)?.DisplayName ?? Tr("Construction project")} · {Fmt.Percent(project.Progress)}"));
+            AddOutlinerButton(count > 1 ? $"{name} ×{count} · {Fmt.Percent(lead.Progress)}" : $"{name} · {Fmt.Percent(lead.Progress)}", () =>
             {
                 _selectedState = state;
                 OpenScreen("Economy");
                 SelectDossierTab("Construction");
-            }, state?.DisplayName ?? Tr("Construction project"));
+            }, sites);
         }
 
         // One line where there used to be four. A country at peace, with no battles, no

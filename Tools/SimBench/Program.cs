@@ -157,7 +157,16 @@ public static class Program
         // A coastal correction can give ABK residents from a Georgian region; their
         // existing professions must be preserved rather than recalibrated on transfer.
         var authoredStatistics = TheStatedStatisticsCameTrue(campaign);
+        void DebugRegion(string when)
+        {
+            var probe = Environment.GetEnvironmentVariable("CLAUDE_REGION_PROBE");
+            if (string.IsNullOrEmpty(probe)) return;
+            foreach (var s in campaign.States.Where(s => s.Id == probe))
+                Console.WriteLine($"PROBE {when}: {s.Id} map {s.MapIndex} owner {s.NationMapIndex} '{s.NationId}' unclaimed {s.Unclaimed} pop {s.Population}");
+        }
+        DebugRegion("before map");
         var mapped = AttachMap(campaign);
+        DebugRegion("after map");
         if (Array.IndexOf(args, "--authored-world") >= 0)
             return Check("authored national statistics", authoredStatistics) +
                 Check("province ownership matches ground and explicit corrections", ProvincesSitWhereTheirOwnerIs(campaign)) +
@@ -239,6 +248,29 @@ public static class Program
         // `--militia` runs the one check of who rises, where, and whether it goes home again.
         if (Array.IndexOf(args, "--militia") >= 0)
             return Check("people take up arms for a country they think is theirs", MilitiaRisesWhereItIsWanted());
+        // `--political-map` plays the run and asks only whether the shipped political map still
+        // names every province somebody owns.
+        if (Array.IndexOf(args, "--political-map") >= 0)
+        {
+            if (!mapped) return 2;
+            campaign.IsPaused = false;
+            for (var day = 0; day < days; day++) campaign.TickDay();
+            return Check("the political map is data a mod can override", ThePoliticalMapIsData(campaign));
+        }
+        // `--world-balance` plays the run and asks only whether the world makes what it needs.
+        if (Array.IndexOf(args, "--world-balance") >= 0)
+        {
+            campaign.IsPaused = false;
+            for (var day = 0; day < days; day++) campaign.TickDay();
+            return Check("the world makes what the world needs", TheWorldMakesWhatItNeeds(campaign));
+        }
+        // `--secession` runs the fifteen years of the world's secessions alone.
+        if (Array.IndexOf(args, "--secession") >= 0)
+            return Check("a country can lose a part of itself, and it is a country afterwards",
+                RegionsThatAreNotTheirsCanLeave());
+        // `--counts-cost` asks one strong country about one weak neighbour, with and without a reason.
+        if (Array.IndexOf(args, "--counts-cost") >= 0)
+            return Check("a country counts the cost before it declares", ACountryCountsTheCost());
 
         var frontsAt = Array.IndexOf(args, "--fronts");
         if (frontsAt >= 0) return FrontsReport(campaign,
@@ -3689,11 +3721,19 @@ public static class Program
         if (strong is null || weak is null)
             return "no country in the world is three times its neighbour's strength";
 
+        // Weakness alone is not a reason. China looking at Bhutan and seeing an army a
+        // twenty-thousandth of its own is not a war in anybody's 2024; a China that remembers
+        // Bhutan taking a valley of its own is the case the AI has to take seriously.
+        var unprovoked = AiStatecraft.JudgeWarFor(campaign, strong, weak);
+        OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, strong.Id, weak.Id), "took_our_land");
         var wanted = AiStatecraft.JudgeWarFor(campaign, strong, weak);
         if (wanted <= 0f)
-            return $"{strong.Tag} is {bestGap:0.0} times {weak.Tag}'s strength and still would not " +
-                   $"consider a war ({wanted:0.00}); the AI has stopped being dangerous rather than " +
-                   "started being careful";
+            return $"{strong.Tag} is {bestGap:0.0} times {weak.Tag}'s strength, has a reason, and still " +
+                   $"would not consider a war ({wanted:0.00}); the AI has stopped being dangerous rather " +
+                   "than started being careful";
+        if (unprovoked >= wanted)
+            return $"{strong.Tag} wants a war on {weak.Tag} as much without a reason as with one " +
+                   $"({unprovoked:0.00} against {wanted:0.00}); a casus belli is decoration";
 
         // Now give them a real economic relationship and ask again.
         strong.TradePartners[weak.Id] = 100f;
@@ -3722,7 +3762,7 @@ public static class Program
                    $"({wanted:0.00} against {withFriends:0.00}); a guarantee deters nobody";
 
         Console.WriteLine($"  restraint: {strong.Tag} is {bestGap:0.0}x stronger than {weak.Tag} and rates " +
-                          $"the war at {wanted:0.00}. Half its trade running through {weak.Tag} takes that " +
+                          $"the war at {unprovoked:0.00} for no reason and {wanted:0.00} with one. Half its trade running through {weak.Tag} takes that " +
                           $"to {withTrade:0.00}; a guarantee from {shelter.Tag} takes it to {withFriends:0.00}.");
         return "";
     }
@@ -5080,7 +5120,10 @@ public static class Program
     /// </summary>
     private static string OrdersHoldLongEnoughToBeObeyed()
     {
-        var campaign = Campaign.CreateBootstrap(20241111);
+        // One seed is as chaotic as the war; ORDERS_SEED runs the same probe on another, so a
+        // change can be judged on the mean of several rather than on 20241111 alone.
+        var campaign = Campaign.CreateBootstrap(
+            int.TryParse(Environment.GetEnvironmentVariable("ORDERS_SEED"), out var ordersSeed) ? ordersSeed : 20241111);
         if (!AttachMap(campaign)) return "";
         campaign.IsPaused = false;
 
@@ -5227,6 +5270,7 @@ public static class Program
         // is the big wars; a hundred small states at war with nobody nearby is not a bug.
         var byNation = new Dictionary<string, int>();
         var byOrder = new Dictionary<string, int>();
+        var byPlace = new Dictionary<string, int>();
         var frontless = 0;
         foreach (var (armyId, stood) in idleDays)
         {
@@ -5237,6 +5281,17 @@ public static class Program
             var tag = owner?.Tag ?? "??";
             byNation[tag] = byNation.GetValueOrDefault(tag) + 1;
             byOrder[army.OrderKind.ToString()] = byOrder.GetValueOrDefault(army.OrderKind.ToString()) + 1;
+            if (army.ProvinceId > 0 && army.ProvinceId < campaign.ProvinceMap.ProvinceToState.Length)
+            {
+                var standing = campaign.States.Find(state => state.MapIndex == campaign.ProvinceMap.ProvinceToState[army.ProvinceId]);
+                // And why the front staff did not call it up (FrontManager.CallUpIdle).
+                var why = army.TemplateId == MilitiaCore.TemplateId ? "militia"
+                    : army.FrontLineId >= 0 ? "on a line"
+                    : army.AssignedWarId >= 0 ? "assigned"
+                    : army.DirectOrder ? "direct order" : "unassigned";
+                var where = $"{tag} {army.OrderKind} in {standing?.Name ?? "?"} ({why})";
+                byPlace[where] = byPlace.GetValueOrDefault(where) + 1;
+            }
 
             // Is there a front for it to be on at all?
             var onFront = false;
@@ -5251,6 +5306,8 @@ public static class Program
             byNation.OrderByDescending(e => e.Value).Take(8).Select(e => $"{e.Key} {e.Value}")));
         Console.WriteLine($"    idle by order: " + string.Join(", ",
             byOrder.OrderByDescending(e => e.Value).Select(e => $"{e.Key} {e.Value}")));
+        Console.WriteLine($"    idle where: " + string.Join(", ",
+            byPlace.OrderByDescending(e => e.Value).Take(10).Select(e => $"{e.Key} {e.Value}")));
         Console.WriteLine($"    of those, {frontless:N0} belong to a war with no front at all");
         // Orders changed under a division that had not got where it was last sent.
         var churn = retargets.Values.Sum();
@@ -5263,6 +5320,26 @@ public static class Program
         Console.WriteLine($"    orders: {churn:N0} re-target(s) of a division that had not arrived, " +
                           $"against {arrived:N0} arrival(s) - worst division re-tasked {worstChurn:N0} times " +
                           $"({campaign.NationById(churned?.NationId ?? -1)?.Tag}, {churned?.OrderKind})");
+        // By country, because a world with a dozen civil wars in it is a dozen armies being
+        // commanded, and one of them can carry the whole figure.
+        var churnBy = new Dictionary<string, (int Retargets, int Arrivals)>();
+        string TagOfArmy(int armyId) =>
+            campaign.NationById(campaign.Armies.Find(a => a.Id == armyId)?.NationId ?? -1)?.Tag ?? "gone";
+        foreach (var (armyId, count) in retargets)
+        {
+            var tag = TagOfArmy(armyId);
+            var was = churnBy.GetValueOrDefault(tag);
+            churnBy[tag] = (was.Retargets + count, was.Arrivals);
+        }
+        foreach (var (armyId, count) in arrivals)
+        {
+            var tag = TagOfArmy(armyId);
+            var was = churnBy.GetValueOrDefault(tag);
+            churnBy[tag] = (was.Retargets, was.Arrivals + count);
+        }
+        Console.WriteLine("    orders by country: " + string.Join(", ", churnBy
+            .OrderByDescending(pair => pair.Value.Retargets).Take(8)
+            .Select(pair => $"{pair.Key} {pair.Value.Retargets}/{pair.Value.Arrivals}")));
 
         // Walking in circles: a province entered again and again is a formation being sent
         // back somewhere it has just left.
@@ -6010,11 +6087,14 @@ public static class Program
         OpinionSystem.Settle(campaign, relation);
         // Two countries with no history of each other are not strangers any more: they can
         // see what the other is. So what is left when the reasons are cleared has to be
-        // exactly what their politics are worth to each other, and nothing else.
+        // exactly what their politics are worth to each other and what its public has come to
+        // think of the other's (SocialMemory, which is a reputation rather than a reason and
+        // is not cleared with them), and nothing else.
         var politics = PoliticsCore.Affinity(campaign, first.Id, second.Id);
-        if (Math.Abs(relation.Opinion - politics) > 0.01f)
+        var reputation = SocialMemory.OpinionEffect(campaign, relation);
+        if (Math.Abs(relation.Opinion - Math.Clamp(politics + reputation, -100f, 100f)) > 0.01f)
             return $"a country with no history of another has an opinion of {relation.Opinion:0.0}, " +
-                   $"where its politics account for {politics:0.0}";
+                   $"where its politics account for {politics:0.0} and its public's view of the other for {reputation:0.0}";
 
         OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
         var remembered = relation.Opinion;
@@ -6179,9 +6259,11 @@ public static class Program
         // ten under a state that governs itself, so this is that with room for the state to
         // govern itself unusually well.
         var born = new List<SecessionReport>();
+        var bornOn = new Dictionary<SecessionReport, int>();
         for (var day = 0; day < 365 * 15; day++)
         {
             campaign.TickDay();
+            foreach (var report in SecessionEvents.Recent) bornOn.TryAdd(report, campaign.ElapsedDays);
             born.AddRange(SecessionEvents.Recent);
         }
 
@@ -6242,6 +6324,9 @@ public static class Program
         Console.WriteLine($"  secession: {born.Count} founded, {contested} contested, " +
                           $"{foughtOver} met a war of independence, {stillFighting} of those " +
                           $"were still being fought at the end.");
+        foreach (var report in born)
+            Console.WriteLine($"    day {bornOn.GetValueOrDefault(report)}: {report.Seceded?.Tag} out of {report.Parent?.Tag} " +
+                              $"({report.Pieces.Count} region(s), {report.Population:N0} people) - {report.Reason}");
         if (contested == 0)
             return $"{born.Count} countries were born and every single parent let them go, " +
                    "so nothing is ever put down by force";
@@ -6527,7 +6612,11 @@ public static class Program
             Compare("income_tax", output * nation.TaxRate * 0.24f * (0.72f + nation.Stability * 0.22f) *
                 NationalModifiers.Factor(nation, "tax_efficiency")),
             Compare("tariffs", nation.WeeklyTariffIncome),
-            Compare("trade", nation.WeeklyTradeBalance),
+            // A surplus whole and a tenth of a deficit: a country's trade deficit is its
+            // importers' bill, and only the fuel and food subsidies are the state's.
+            Compare("trade", nation.WeeklyTradeBalance >= 0f
+                ? nation.WeeklyTradeBalance
+                : nation.WeeklyTradeBalance * 0.10f),
             Compare("administration", output * 0.030f),
             Compare("armed_forces", output * nation.MilitarySpending * 0.22f),
             Compare("welfare", output * nation.WelfareSpending * 0.18f),
@@ -7868,12 +7957,45 @@ public static class Program
         if (!ProvinceOwnership.HasData)
             return "no political map was loaded; game/history/provinces is missing or empty";
 
+        // Every owned province is one a row names. Counted by province rather than by row: a
+        // province named twice, or named and given to nobody, is not two provinces decided.
+        var decided = ProvinceOwnership.Decided(topology);
         var owned = 0;
+        var strays = new Dictionary<string, int>();
+        var firstStray = new Dictionary<string, int>();
+        var ownedWater = 0;
+        var colonised = 0;
         for (var province = 1; province <= topology.ProvinceCount; province++)
-            if (topology.ProvinceToNation[province] != 0) owned++;
-        if (campaign.PoliticalOverridesApplied < owned)
-            return $"the shipped political map decides {campaign.PoliticalOverridesApplied:N0} provinces " +
-                   $"but {owned:N0} are owned; the file and the map have drifted apart";
+        {
+            if (topology.ProvinceToNation[province] == 0) continue;
+            // Water is nobody's whatever the raster painted under it, and the file says
+            // nothing about it (ProvinceOwnership.Apply skips a row that names water).
+            if (topology.IsWater(province)) { ownedWater++; continue; }
+            owned++;
+            if (decided.Contains(province)) continue;
+            var holder = campaign.Nations.FirstOrDefault(nation => nation.MapIndex == topology.ProvinceToNation[province]);
+            var region = campaign.States.FirstOrDefault(state => state.MapIndex == topology.ProvinceToState[province]);
+            // Land nobody owned that somebody has since settled is the colonisation working,
+            // not the file drifting (ColonisationCore).
+            if (region is { ColonisedDay: >= 0 }) { colonised++; continue; }
+            var key = $"{holder?.Tag ?? "?"} in {region?.Name ?? "?"}";
+            strays[key] = strays.GetValueOrDefault(key) + 1;
+            firstStray.TryAdd(key, province);
+        }
+        string Where(string key)
+        {
+            var province = firstStray[key];
+            var (latitude, longitude) = topology.CenterOf(province);
+            var index = topology.ProvinceToNation[province];
+            var sharing = string.Join("/", campaign.Nations.Where(nation => nation.MapIndex == index).Select(nation => nation.Tag));
+            var region = campaign.States.FirstOrDefault(state => state.MapIndex == topology.ProvinceToState[province]);
+            return $"{key} ×{strays[key]} (province {province} at {latitude:0.0}, {longitude:0.0}, water {topology.IsWater(province)}, " +
+                   $"map index {index} held by {sharing}, region {region?.Id} owned by index {region?.NationMapIndex} unclaimed {region?.Unclaimed})";
+        }
+        if (strays.Count > 0)
+            return $"{strays.Values.Sum():N0} of {owned:N0} owned provinces are named by no row of the political map, " +
+                   "so the file and the map have drifted apart: " +
+                   string.Join(", ", strays.OrderByDescending(pair => pair.Value).Take(8).Select(pair => Where(pair.Key)));
 
         // A mod's line has to win, and only over the province it names.
         var subject = 1;
@@ -7914,7 +8036,9 @@ public static class Program
             "bench", null);
 
         Console.WriteLine($"  political map: {ProvinceOwnership.Count:N0} provinces are decided by " +
-                          $"game/history/provinces, and a one-line mod override moved exactly one of them.");
+                          $"game/history/provinces, and a one-line mod override moved exactly one of them" +
+                          (ownedWater > 0 ? $"; {ownedWater:N0} water province(s) still carry an owner from the raster" : "") +
+                          (colonised > 0 ? $"; {colonised:N0} province(s) were settled since." : "."));
         return "";
     }
 

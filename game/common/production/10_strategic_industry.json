@@ -1,5 +1,8 @@
 // Independent recipes: existing chains are inherited, not replaced wholesale.
 // needs uses last week's supply; demand is an abstract input bill, not a stoichiometric balance.
+// The bills are scaled so the world makes a little more of each than it asks for at the 2024
+// start (SimBench "the world makes what the world needs"): phosphates were asked for at four
+// times what the mines give, which put every country on Earth short of them for good.
 {
   "copper_chain": {
     "good": "Copper", "output": { "deposit:Copper*extraction_efficiency": 1.0 },
@@ -19,7 +22,7 @@
   },
   "phosphates_chain": {
     "good": "Phosphates", "output": { "deposit:Phosphates*extraction_efficiency": 1.0 },
-    "demand": { "ChemicalPlant": 0.20, "Agriculture": 0.05 }
+    "demand": { "ChemicalPlant": 0.04, "Agriculture": 0.01 }
   },
   "silica_chain": {
     "good": "Silica", "output": { "deposit:Silica*extraction_efficiency": 1.0 },
@@ -35,12 +38,12 @@
   },
   "steel_chain": {
     "good": "Steel", "output": { "Smelter": 2.0, "CivilianIndustry": 0.50 },
-    "demand": { "CivilianIndustry": 0.10, "ArmsIndustry": 0.28, "Shipyard": 0.40 },
+    "demand": { "CivilianIndustry": 0.065, "ArmsIndustry": 0.18, "Shipyard": 0.26 },
     "needs": { "IronOre": 0.50, "Coal": 0.65, "Energy": 0.60 }
   },
   "battery_chain": {
     "good": "Batteries", "output": { "ElectronicsPlant": 0.80, "CivilianIndustry": 0.35 },
-    "demand": { "population*urbanization": 0.03, "CivilianIndustry": 0.05, "PowerPlant": 0.10 },
+    "demand": { "population*urbanization": 0.017, "CivilianIndustry": 0.028, "PowerPlant": 0.056 },
     "needs": { "Lithium": 0.55, "Nickel": 0.75, "Cobalt": 0.85, "Copper": 0.75, "Energy": 0.70 }
   },
   "semiconductor_chain": {
@@ -50,7 +53,7 @@
   },
   "motor_vehicle_chain": {
     "good": "MotorVehicles", "output": { "CivilianIndustry": 0.65 },
-    "demand": { "population*urbanization": 0.045, "raw:Infrastructure": 0.025 },
+    "demand": { "population*urbanization": 0.036, "raw:Infrastructure": 0.02 },
     "needs": { "Steel": 0.60, "Rubber": 0.65, "Batteries": 0.85, "Semiconductors": 0.75 }
   },
   "ammunition_chain": {
@@ -67,7 +70,7 @@
   "precision_chemical_bill": { "good": "Chemicals", "demand": { "ElectronicsPlant": 0.18, "ArmsIndustry": 0.12 } },
   "phosphate_fertiliser_link": { "good": "Fertiliser", "output": { "ChemicalPlant": 0.30 }, "needs": { "Phosphates": 0.45, "Sulfur": 0.65 } },
   "electronics_chip_dependency": { "good": "Electronics", "output": { "ElectronicsPlant": 0.25 }, "shortfall": { "Semiconductors": 0.75 } },
-  "construction_steel_bill": { "scope": "nation", "good": "Steel", "demand": { "projects": 0.45 } },
-  "army_ammunition_bill": { "scope": "nation", "good": "Ammunition", "demand": { "divisions": 0.04, "divisions_at_war": 0.12, "hulls": 0.01 } },
+  "construction_steel_bill": { "scope": "nation", "good": "Steel", "demand": { "projects": 0.29 } },
+  "army_ammunition_bill": { "scope": "nation", "good": "Ammunition", "demand": { "divisions": 0.016, "divisions_at_war": 0.048, "hulls": 0.004 } },
   "army_transport_bill": { "scope": "nation", "good": "MotorVehicles", "demand": { "divisions": 0.01, "divisions_at_war": 0.02 } }
 }

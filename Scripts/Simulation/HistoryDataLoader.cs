@@ -425,6 +425,9 @@ public static class HistoryDataLoader
                     if (claim.ValueKind == JsonValueKind.String && claim.GetString() is { Length: > 0 } tag)
                         state.Claims.Add(tag);
             }
+            // The treaty the land is held under (ColonisationCore): the Antarctic Treaty.
+            if (value.TryGetProperty("treaty", out var treaty) && treaty.ValueKind == JsonValueKind.String)
+                state.Treaty = treaty.GetString() ?? "";
             // A scenario may open on a region already in ruins (WarDamage).
             SetFloat(value, "war_damage", number => state.WarDamage = M.Clamp01(number));
             // Who holds it on the first day when that is not its owner (HeldGround): Gaza.

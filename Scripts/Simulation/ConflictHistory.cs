@@ -56,7 +56,12 @@ public static class ConflictHistory
                 var relation = CampaignDiplomacy.Get(campaign, first.Id, second.Id);
                 if (relation is null) continue;
                 if (Number(row, "structural") is { } structural) relation.StructuralTension = M.Clamp(structural, 0f, 100f);
-                if (Number(row, "tension") is { } tension) relation.Tension = M.Clamp(tension, 0f, 100f);
+                if (Number(row, "tension") is { } tension)
+                {
+                    relation.Tension = M.Clamp(tension, 0f, 100f);
+                    // And where it is to stay until something changes (DiplomaticRelation.TensionBaseline).
+                    relation.TensionAnchor = relation.Tension;
+                }
                 if (row.TryGetProperty("grievance", out var grievance) && grievance.ValueKind == JsonValueKind.Array)
                 {
                     var index = 0;
@@ -101,7 +106,9 @@ public static class ConflictHistory
                 {
                     Id = campaign.NextSponsorshipId++, SponsorId = sponsor.Id, ClientId = client.Id, WarId = war.Id,
                     Level = level, StartedDay = campaign.ElapsedDays,
-                    CommittedUntilDay = campaign.ElapsedDays + Math.Max(0, campaign.Defines.ProxyHistoricCommitmentDays)
+                    CommittedUntilDay = campaign.ElapsedDays + Math.Max(0, campaign.Defines.ProxyHistoricCommitmentDays),
+                    // "held_days": promised on the first day, delivered from this many days on.
+                    HeldUntilDay = Number(row, "held_days") is { } held ? campaign.ElapsedDays + (int)held : -1
                 });
                 OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, sponsor.Id, client.Id), "armed_us");
                 foreach (var enemyId in war.EnemiesOf(client.Id))

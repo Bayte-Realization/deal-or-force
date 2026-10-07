@@ -235,6 +235,7 @@ public static partial class AiStatecraft
         var worth = WarValue(campaign, nation, other, value);
         var cost = WarPrice(campaign, nation, other, price);
         var cause = Statecraft.CasusBelli(campaign, nation, other);
+        if (Statecraft.AllyUnderAttack(campaign, nation, other) is { } ward) cause += $" ({ward.Tag})";
         return $"{nation.Tag}->{other.Tag} value={worth:0.00} [{string.Join(", ", value.Select(p => p.Amount == 0f ? p.Part : $"{p.Part} {p.Amount:0.00}"))}] " +
                $"price={cost:0.00} [{string.Join(", ", price.Select(p => $"{p.Part} {p.Amount:0.00}"))}] " +
                $"judgement={(worth <= 0f ? -10f : worth - cost):0.00} cause='{cause}'";

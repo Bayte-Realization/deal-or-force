@@ -34,6 +34,11 @@ public sealed partial class Defines
     public float IncidentChance { get; set; } = 0.05f;
     /// <summary>A grievance halves in this many years: long enough for a war to be the next generation's.</summary>
     public float GrievanceHalfLifeYears { get; set; } = 30f;
+    /// <summary>
+    /// How fast where a standoff stood on the first day stops mattering: the difference between
+    /// the history's tension and what the reasons alone give halves in this many years.
+    /// </summary>
+    public float TensionBaselineHalfLifeYears { get; set; } = 10f;
     public float GrievancePerProvinceLost { get; set; } = 1.5f;
     public float GrievancePerLossShare { get; set; } = 2500f;
     public float GrievanceCap { get; set; } = 100f;
@@ -92,6 +97,16 @@ public sealed partial class DiplomaticRelation
     public int LastIncidentBy = -1;
     /// <summary>The men both sides have lost to shooting short of a war.</summary>
     public float ClashLosses;
+    /// <summary>
+    /// Where the standoff stood on the first day, by history, against what its reasons alone
+    /// give: Russia and Poland were a crisis in 2024 and not a border that shot every week,
+    /// though hostility, the war in Ukraine and a rivalry add up to more than that. What the
+    /// reasons cannot see - deterrence, an alliance's weight, back channels - is this, and it
+    /// fades (TensionBaselineHalfLifeYears). The history's level waits in TensionAnchor until
+    /// the first review, when every reason is in place to measure it against.
+    /// </summary>
+    public float TensionBaseline;
+    public float TensionAnchor = -1f;
     /// <summary>Talks under way: who asked for them and until when, and when they last were.</summary>
     public int TalksBy = -1;
     public int TalksUntilDay = -1;
@@ -218,7 +233,7 @@ public static class IncidentCatalog
 /// <summary>What puts two countries where they are, for the screen that explains it.</summary>
 public readonly record struct TensionDrivers(
     float Structural, float Hostility, float Grievance, float LostLand, float Rivalry,
-    float Proxy, float Ideology, float Factor, float Target);
+    float Proxy, float Ideology, float Factor, float Target, float Baseline = 0f);
 
 /// <summary>
 /// How small things become wars.
@@ -325,9 +340,22 @@ public static class Escalation
 
         if (CampaignDiplomacy.AtWar(c, a.Id, b.Id))
         {
+            relation.TensionAnchor = -1f;
             relation.Tension = 100f;
             SetStage(c, relation, a, b, TensionStage.War);
             return;
+        }
+
+        if (relation.TensionAnchor >= 0f)
+        {
+            relation.TensionBaseline = 0f;
+            relation.TensionBaseline = relation.TensionAnchor - Drivers(c, relation).Target;
+            relation.TensionAnchor = -1f;
+        }
+        else if (relation.TensionBaseline != 0f)
+        {
+            relation.TensionBaseline *= MathF.Pow(0.5f, days / (365f * MathF.Max(0.5f, defines.TensionBaselineHalfLifeYears)));
+            if (MathF.Abs(relation.TensionBaseline) < 0.05f) relation.TensionBaseline = 0f;
         }
 
         var drivers = Drivers(c, relation);
@@ -337,12 +365,23 @@ public static class Escalation
         if (relation.TalksUntilDay > c.ElapsedDays)
             relation.Tension -= defines.TalksTensionPerWeek * days / 7f;
         relation.Tension = M.Clamp(relation.Tension, 0f, 100f);
+        // Shooting needs somebody willing to shoot first. Russia does not fire across a border
+        // with the whole of NATO behind the Finns, Finland's parliament does not fire across one
+        // at all, and Ukraine, fighting for its life against Russia, does not open a second front
+        // on Belarus. A standoff in which neither side would fire first stays a crisis however
+        // bad it gets.
+        var deterred = relation.Tension >= defines.TensionClashesAt && StageOf(relation) < TensionStage.Clashes &&
+                       Deterred(c, a, b);
+        if (deterred) relation.Tension = defines.TensionClashesAt - 0.5f;
 
         var border = CampaignDiplomacy.SharesLandBorder(c, a.MapIndex, b.MapIndex);
         SetStage(c, relation, a, b, StageFor(defines, relation));
 
         if (StageOf(relation) >= TensionStage.Clashes) Clash(c, relation, a, b, border, days);
         MaybeIncident(c, relation, a, b, border, days);
+        // An incident does not get it past the line either: a crisis that reads 82 is a crisis
+        // that says it is about to shoot.
+        if (deterred) relation.Tension = MathF.Min(relation.Tension, defines.TensionClashesAt - 0.5f);
         MaybeBorderWar(c, relation, a, b, border, days);
     }
 
@@ -402,9 +441,11 @@ public static class Escalation
         if (relation.GuaranteeByA || relation.GuaranteeByB) factor *= 0.4f;
         if (a.AnswersTo(b.Id) || b.AnswersTo(a.Id)) factor *= 0.2f;
         // Structural tension is not softened by distance: an armistice line is an armistice line.
-        var target = M.Clamp(structural * MathF.Max(factor, MathF.Min(1f, factor * 2f)) +
-                             (hostility + grievance + lostLand + rivalry + proxy + ideology) * factor, 0f, 100f);
-        return new TensionDrivers(structural, hostility, grievance, lostLand, rivalry, proxy, ideology, factor, target);
+        var reasons = structural * MathF.Max(factor, MathF.Min(1f, factor * 2f)) +
+                      (hostility + grievance + lostLand + rivalry + proxy + ideology) * factor;
+        var target = M.Clamp(reasons + relation.TensionBaseline, 0f, 100f);
+        return new TensionDrivers(structural, hostility, grievance, lostLand, rivalry, proxy, ideology, factor, target,
+            relation.TensionBaseline);
     }
 
     /// <summary>Shooting short of a war: a few hundred men a week, and a people rallying on both sides.</summary>
@@ -692,6 +733,25 @@ public static class Escalation
         war.Name = $"{attacker.Name}–{defender.Name} Border War";
         c.Chronicle.Record(c, "border_war", attacker.Id, defender.Id);
         DiagnosticLogs.Write("simulation", $"BORDER_WAR attacker={attacker.Tag} defender={defender.Tag} tension={relation.Tension:0}");
+    }
+
+    /// <summary>Whether neither of the two would open fire on the other (<see cref="WouldFireFirst"/>).</summary>
+    public static bool Deterred(Campaign c, Nation a, Nation b) =>
+        a is not null && b is not null && !WouldFireFirst(c, a, b) && !WouldFireFirst(c, b, a);
+
+    /// <summary>
+    /// A government that would start shooting at a border: one that could stand up to the other
+    /// side and the friends behind it, that answers to nobody who would stop it - a parliament,
+    /// a press and an election restrain as much as the democratic peace does (AiStatecraft.Restraint) -
+    /// and that is not already fighting a major war somewhere else.
+    /// </summary>
+    private static bool WouldFireFirst(Campaign c, Nation shooter, Nation target)
+    {
+        if (!CanFace(c, shooter, target)) return false;
+        if (AiStatecraft.Restraint(c, shooter) >= c.Defines.AiDemocraticPeaceRestraint) return false;
+        foreach (var war in c.Wars)
+            if (!war.Ended && war.Intensity >= 1 && war.Involves(shooter.Id) && !war.Involves(target.Id)) return false;
+        return true;
     }
 
     private static bool CanFace(Campaign c, Nation attacker, Nation defender) =>

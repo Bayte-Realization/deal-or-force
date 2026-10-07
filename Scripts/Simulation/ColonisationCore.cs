@@ -29,6 +29,17 @@ public sealed partial class ScenarioState
     /// every claimant.
     /// </summary>
     public List<string> Claims = new();
+
+    /// <summary>
+    /// The treaty the land is held under, if any ("antarctic"), from history ("treaty"). A
+    /// government nobody plays does not break it (Defines.AiColonisesTreatyLand): left to the
+    /// colonisation roll, Iran had settled Graham Land within two years and the computer had
+    /// colonised three and a half thousand provinces of Antarctica in twenty.
+    /// </summary>
+    public string Treaty = "";
+
+    /// <summary>The day a colony was founded here, or -1 for land that was never anybody's to settle.</summary>
+    public int ColonisedDay = -1;
 }
 
 public sealed partial class Defines
@@ -74,6 +85,9 @@ public sealed partial class Defines
 
     /// <summary>How much dearer a country nobody plays reckons land somebody else claims: the price of the quarrel.</summary>
     public float AiColonisationForeignClaimWeight { get; set; } = 2.5f;
+
+    /// <summary>Whether a country nobody plays settles land a treaty holds for nobody (ScenarioState.Treaty).</summary>
+    public bool AiColonisesTreatyLand { get; set; } = false;
 }
 
 /// <summary>
@@ -266,6 +280,7 @@ public static class ColonisationCore
         state.NationMapIndex = nation.MapIndex;
         state.NationId = nation.Tag;
         state.Unclaimed = false;
+        state.ColonisedDay = campaign.ElapsedDays;
         state.ColonistMapIndex = 0;
         state.ColonisationProgress = 0f;
 
@@ -312,7 +327,8 @@ public static class ColonisationCore
     /// </summary>
     private static void ThinkAboutColonies(Campaign campaign)
     {
-        var open = campaign.States.Where(state => IsUnclaimed(state) && state.ColonistMapIndex == 0).ToList();
+        var open = campaign.States.Where(state => IsUnclaimed(state) && state.ColonistMapIndex == 0 &&
+                                                  (campaign.Defines.AiColonisesTreatyLand || string.IsNullOrEmpty(state.Treaty))).ToList();
         if (open.Count == 0) return;
         var defines = campaign.Defines;
         var month = campaign.ElapsedDays / 30;

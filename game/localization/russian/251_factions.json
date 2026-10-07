@@ -68,5 +68,12 @@
   "{0} and {1} more": "{0} и ещё {1}",
   "Hottest standoff": "Самое горячее противостояние",
   "The country this one is likeliest to fight next, and how far the tension between them has gone. The Conflicts screen has the rest.": "Страна, с которой эта, скорее всего, будет воевать следующей, и насколько далеко зашла напряжённость. Остальное - на экране «Конфликты».",
-  "{0} · {1:0}": "{0} · {1:0}"
+  "{0} · {1:0}": "{0} · {1:0}",
+  "Clashes with {0}": "Столкновения: {0}",
+  "Crisis with {0}": "Кризис: {0}",
+  "Shooting on the border every week. A border that keeps shooting for months can become a border war; talks in the Conflicts screen cool it.": "Каждую неделю на границе стреляют. Граница, где стреляют месяцами, может обернуться пограничной войной; переговоры на экране «Конфликты» остужают её.",
+  "A crisis between us. It can grow into armed clashes; talks in the Conflicts screen cool it.": "Между нами кризис. Он может перерасти в вооружённые столкновения; переговоры на экране «Конфликты» его остужают.",
+  "Where it stood in January 2024 (fading)": "Как обстояло дело в январе 2024 года (слабеет)",
+  "Neither side would fire first - outmatched by the other and the friends behind it, held back by its own government, or busy with a war elsewhere - so it stops short of shooting.": "Ни одна из сторон не выстрелит первой: одну превосходят противник и его друзья, другую сдерживает собственное правительство или уже идущая война, - поэтому до стрельбы не доходит.",
+  "Observer mode": "Режим наблюдателя"
 }

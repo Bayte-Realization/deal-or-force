@@ -321,6 +321,7 @@ public sealed partial class GlobePresentation
             var geo = GeographicFromNormal(normal);
             var position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
             if (node.Position != position) node.Position = position;
+            OrientSurfaceCounter(node, normal);
         }
         foreach (var (node, normal) in _fleetMarkers)
         {
@@ -360,7 +361,11 @@ public sealed partial class GlobePresentation
         }
 
         foreach (var (node, normal) in _capitalMarkers)
-            if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
+            if (IsInstanceValid(node))
+            {
+                node.Position = normal * SurfaceMarkerRadius;
+                OrientSurfaceCounter(node, normal);
+            }
         foreach (var (node, normal) in _fleetMarkers)
             if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
         ReprojectSupportMarkers();

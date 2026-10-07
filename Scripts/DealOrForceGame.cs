@@ -1352,8 +1352,9 @@ public partial class DealOrForceGame : Control
         while (identitySize > 12 && identityFont.GetStringSize(_identity.Text, HorizontalAlignment.Left, -1, identitySize).X >
                System.Math.Max(154, _identity.Size.X)) identitySize--;
         _identity.AddThemeFontSizeOverride("font_size", identitySize);
+        // No tag for nobody: "OBS" read in Russian as "НАБ", a word nobody could place.
         _identityTag.Text = _observerMode
-            ? Tr("OBS · observer mode")
+            ? Tr("Observer mode")
             : player.Tag + " · " + Tr("player nation");
         SetFlag(_identityFlag, player.Tag, 34);
         // The clock, whenever the campaign is running on something shorter than a day. At a

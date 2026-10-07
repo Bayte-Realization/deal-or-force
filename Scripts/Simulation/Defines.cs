@@ -585,7 +585,7 @@ public sealed partial class Defines
 	public float MaxOrganisationDamage { get; set; } = 0.130f;
 
 	/// <summary>Share of a formation lost as casualties per point of organisation spent.</summary>
-	public float CasualtiesPerOrganisationPoint { get; set; } = 0.075f;
+	public float CasualtiesPerOrganisationPoint { get; set; } = 0.025f;
 
 	/// <summary>How much faster a formation with no organisation left bleeds.</summary>
 	public float BrokenCasualtyMultiplier { get; set; } = 2.4f;

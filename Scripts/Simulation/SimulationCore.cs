@@ -904,6 +904,15 @@ public sealed partial class Campaign
         ProvinceController = (ushort[])topology.ProvinceToNation.Clone();
         var politicalOverrides = ScenarioId == "2024" ? ProvinceOwnership.Apply(this, topology, ProvinceController) : 0;
         if (politicalOverrides > 0) PoliticalOverridesApplied = politicalOverrides;
+        // Water is nobody's, which the file already says by naming none of it - but the raster
+        // still painted an owner under sixty-seven sea provinces off the South Orkneys, and it
+        // was Iran's.
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            if (topology.ProvinceToNation[province] == 0 || !topology.IsWater(province)) continue;
+            topology.ProvinceToNation[province] = 0;
+            if (province < ProvinceController.Length) ProvinceController[province] = 0;
+        }
         // And where history says nobody owns the land, nobody does - whatever the raster
         // painted there. Before the region list is reconciled with the ground below, which
         // would otherwise hand the region straight back to the raster's owner.

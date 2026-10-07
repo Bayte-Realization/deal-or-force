@@ -3978,13 +3978,16 @@ void fragment() {
                 Texture = _capitalTexture,
                 PixelSize = 0.00016f,
                 FixedSize = true,
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                // On the map, not on the window: a star that turned to face the camera spun with
+                // every turn of the globe, like a sticker on the lens rather than a place.
+                Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Modulate = Ui.Colour("globe.selection")
             };
 
             marker.Position = SurfacePoint(nation.CapitalLatitude, nation.CapitalLongitude, SurfaceMarkerRadius);
+            OrientSurfaceCounter(marker, marker.Position.Normalized());
             _capitalRoot.AddChild(marker);
             _capitalMarkers.Add((marker, marker.Position.Normalized()));
         }

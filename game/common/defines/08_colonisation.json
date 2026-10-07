@@ -16,5 +16,8 @@
   "ColonistsOnFounding": 2000,
   "MaxColoniesAtOnce": 1,
   "AiColonisationChancePerMonth": 0.0015,
-  "AiColonisationTreasuryMultiple": 4
+  "AiColonisationTreasuryMultiple": 4,
+  // Whether a country nobody plays settles land a treaty holds for nobody - Antarctica, under
+  // the 1959 Treaty. A player still may, and every claimant remembers it.
+  "AiColonisesTreatyLand": false
 }

@@ -32,6 +32,8 @@
   "IncidentChance": 0.05,
   // A grievance halves in this many years: long enough for a war to be the next generation's.
   "GrievanceHalfLifeYears": 30,
+  // Where a standoff stood on 1 January 2024 fades from it: the gap halves in this many years.
+  "TensionBaselineHalfLifeYears": 10,
   "GrievancePerProvinceLost": 1.5,
   "GrievancePerLossShare": 2500,
   "GrievanceCap": 100,

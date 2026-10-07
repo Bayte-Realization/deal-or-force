@@ -17,6 +17,7 @@
   // (USA) at the Pole; the coal of the Beardmore Glacier and the chromium and platinum of the
   // Dufek Massif under the ice. Every claimant's sector meets here.
   "aq_x01": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -28,6 +29,7 @@
   // Novolazarevskaya (Russia), Maitri (India), Princess Elisabeth (Belgium), and the DROMLAN air
   // network that joins them to Cape Town. Claimed by Norway.
   "aq_qml": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -38,6 +40,7 @@
   // Enderby Land - Syowa (Japan) and the old Soviet Molodyozhnaya; the oldest rock on the
   // continent, in the Napier Complex. Australia claims it; Norway claims its western coast.
   "aq_end": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -48,6 +51,7 @@
   // Mac. Robertson Land - Mawson (Australia), the oldest station still open on the continent.
   // Claimed by Australia.
   "aq_mrl": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -60,6 +64,7 @@
   // Shelf: iron formations a thousand metres thick and Permian coal. The Prydz Bay shelf may hold
   // oil. Claimed by Australia.
   "aq_pel": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -69,6 +74,7 @@
   },
   // Queen Mary Land - Mirny (Russia) on the Davis Sea. Claimed by Australia.
   "aq_qma": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -79,6 +85,7 @@
   // Wilkes Land - Casey (Australia) and the Wilkins runway, and inland Concordia (France and
   // Italy) on Dome C. The Sabrina Coast shelf may hold gas. Claimed by Australia.
   "aq_wil": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -89,6 +96,7 @@
   // Adelie Land - Dumont d'Urville (France), and Mawson's huts at Cape Denison, the windiest place
   // at sea level on Earth. Claimed by France.
   "aq_ade": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -98,6 +106,7 @@
   },
   // George V Land - a coast of glaciers and nobody. Claimed by Australia.
   "aq_geo": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -110,6 +119,7 @@
   // Nova Bay. The Dry Valleys, the Beacon coal measures of the Transantarctic Mountains, and the
   // Ross Sea shelf. Claimed by New Zealand.
   "aq_vic": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -120,6 +130,7 @@
   // Marie Byrd Land - the one land nobody claims, and the old Byrd station's ice. The Amundsen Sea
   // shelf may hold oil.
   "aq_mbl": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -129,6 +140,7 @@
   // Ellsworth Land - the Vinson Massif, the continent's highest mountain, and the Union Glacier
   // camp where the private flights land. Claimed by Chile and Britain.
   "aq_ell": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -139,6 +151,7 @@
   // Palmer Land - the southern peninsula and the Larsen basin under its ice shelves. Claimed by
   // Britain, Chile and Argentina.
   "aq_pal": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -151,6 +164,7 @@
   // (Ukraine), Palmer (USA). The krill of the Scotia Sea is the Southern Ocean's fishery. Claimed
   // by Britain, Chile and Argentina.
   "aq_x02": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -161,6 +175,7 @@
   // Coats Land - Halley VI (Britain) on the Brunt Ice Shelf and Belgrano II (Argentina), and the
   // Weddell Sea shelf. Claimed by Britain and Argentina.
   "aq_coa": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -172,6 +187,7 @@
   // Kunlun opens in summer; Japan's Dome Fuji on its flank. Four kilometres of ice over anything
   // there is. Claimed by Australia and Norway.
   "aq_doa": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,
@@ -182,6 +198,7 @@
   // Vostok - the Russian station over Lake Vostok, four kilometres down and sealed for fifteen
   // million years. Claimed by Australia.
   "aq_vos": {
+    "treaty": "antarctic",
     "owner": "none",
     "population": 0,
     "urbanization": 0.0,

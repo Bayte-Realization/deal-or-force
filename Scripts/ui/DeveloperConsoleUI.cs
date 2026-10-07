@@ -429,7 +429,7 @@ public partial class DealOrForceGame
         _campaign.HumanSeats.Clear();
         ClearArmySelectionAndClose();
         FrontPlanner.AssignAi(_campaign);
-        _identityTag.Text = Tr("OBS · observer mode");
+        _identityTag.Text = Tr("Observer mode");
         return "Observer mode enabled. Country AI controls every nation; use tag TAG to return.";
     }
 

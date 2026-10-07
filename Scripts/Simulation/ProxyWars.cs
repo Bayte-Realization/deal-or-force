@@ -55,6 +55,12 @@ public sealed class Sponsorship
     /// to it - which is a fact about the opinion table, not about Abu Dhabi.
     /// </summary>
     public int CommittedUntilDay = -1;
+    /// <summary>
+    /// Promised and not yet sent: nothing arrives before this day. The American package for
+    /// Ukraine was stuck in Congress from the autumn of 2023 to 24 April 2024, and the winter
+    /// of Avdiivka was fought on what was left.
+    /// </summary>
+    public int HeldUntilDay = -1;
     public bool Ended;
     public int EndedDay = -1;
     public string EndReason = "";
@@ -228,6 +234,7 @@ public static class ProxyWars
             if (sponsor is null || client is null || sponsor.Population <= 0 || client.Population <= 0 && client.Movement is null)
             { End(c, s, "gone"); continue; }
             if (s.WarId >= 0 && (war is null || war.Ended)) { End(c, s, "war over"); continue; }
+            if (s.HeldUntilDay > c.ElapsedDays) continue;
             if (war is not null && !war.Involves(client.Id)) { End(c, s, "client out"); continue; }
             if (war is not null && war.Involves(sponsor.Id)) { End(c, s, "joined the war"); continue; }
             if (CampaignDiplomacy.AtWar(c, sponsor.Id, client.Id)) { End(c, s, "at war"); continue; }

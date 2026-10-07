@@ -251,17 +251,32 @@ public static class Statecraft
 
         // They are already fighting somebody we are bound to. Joining a war on the side of
         // an ally is the least controversial reason there is.
+        if (AllyUnderAttack(campaign, attacker, defender) is not null) return "defence_of_an_ally";
+
+        return "";
+    }
+
+    /// <summary>
+    /// The ally or ward of ours the defender is attacking, if any.
+    ///
+    /// Not in a civil war. A state that has gone to war with its own rebels has not attacked
+    /// anybody's ally, whatever the rebels have signed: a bond China had made with one of the
+    /// powers fighting the junta was read as Myanmar attacking China's ally, and China invaded
+    /// Myanmar within a year in every run. A patron of rebels arms them (ProxyWars); it does not
+    /// get to march in on their behalf.
+    /// </summary>
+    public static Nation AllyUnderAttack(Campaign campaign, Nation attacker, Nation defender)
+    {
         foreach (var war in campaign.Wars)
         {
-            if (war.Ended || !war.Involves(defender.Id)) continue;
+            if (war.Ended || war.CivilConflict || !war.Involves(defender.Id)) continue;
             var victimId = war.AttackerId == defender.Id ? war.DefenderId : -1;
             if (victimId < 0) continue;
             var bond = CampaignDiplomacy.Peek(campaign, attacker.Id, victimId);
             if (bond is not null && (bond.Stance == DiplomaticStance.Allied || bond.GuaranteedBy(attacker.Id)))
-                return "defence_of_an_ally";
+                return campaign.NationById(victimId);
         }
-
-        return "";
+        return null;
     }
 
     /// <summary>

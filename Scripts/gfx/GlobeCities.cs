@@ -345,6 +345,8 @@ public sealed partial class GlobePresentation
             var pin = CityPinAt(used++);
             if (pin.City != index || pin.Name.Text != name) SetUpCityPin(pin, index, name, font, fontSize);
             pin.Node.Position = local;
+            pin.Node.Quaternion = _flatMap ? Quaternion.Identity
+                : CountryLabelSurfaceBasis(_cityAnchors[index].Latitude, _cityAnchors[index].Longitude, 1f, 0f).GetRotationQuaternion();
             var pixel = _flatMap ? 1f : fixedPixel;
             pin.Node.Scale = _flatMap ? Vector3.One * flatPixel : Vector3.One;
             pin.Name.PixelSize = pixel * tierPixels / fontSize;
@@ -458,7 +460,8 @@ public sealed partial class GlobePresentation
             var node = new Node3D { Name = $"City{_cityPins.Count}", Visible = false };
             var dot = new Sprite3D
             {
-                Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+                // The dot lies on the ground like the capital's star; only the name turns to be read.
+                Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 NoDepthTest = true,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Disabled,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
