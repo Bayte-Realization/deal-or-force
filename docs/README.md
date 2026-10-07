@@ -19,6 +19,7 @@ After that come the references, which you visit for a detail:
 |---|---|---|
 | [PLAYER_GUIDE.md](PLAYER_GUIDE.md) | a player | controls, economy, the army, war, peace, emission, network multiplayer |
 | [NETWORK_MULTIPLAYER.md](NETWORK_MULTIPLAYER.md) | player/developer | LAN, direct IP, Radmin, UDP 7270 and the synchronisation model |
+| [CONFLICTS_AND_FACTIONS.md](CONFLICTS_AND_FACTIONS.md) | player/modder | tension and border wars, proxy wars, the de facto powers of 2024, coups and the fall of capitals |
 | [MODDING_GUIDE.md](MODDING_GUIDE.md) | a modder | the Paradox-like mod structure, JSON, GDScript, C#, load order |
 | [SOCIAL_MEMORY.md](SOCIAL_MEMORY.md) | player/modder | 4.8 experimental historical norms, audience-dependent reputation and scripted narratives |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | a developer | how the simulation is built, a map of the code, ticks, commands, performance |
@@ -43,7 +44,7 @@ Every document now exists in both languages, with two exceptions:
 
 | Document | 🇬🇧 | 🇷🇺 |
 |---|:--:|:--:|
-| PLAYER_GUIDE, TUTORIAL, MODDING_GUIDE, MODDING_QUICKSTART,<br>CSHARP_GUIDE, ARCHITECTURE, BUILDING, GETTING_STARTED,<br>NETWORK_MULTIPLAYER, SCENARIOS_AND_WORKSHOP,<br>MODDABLE_CAMPAIGN_UI, LAUNCHER, DIAGNOSTICS, FOG_OF_WAR,<br>OFFENSIVE_PLANS, LOADING_SCREEN, INTERFACE_AUDIO, UI_REDESIGN | ✅ | ✅ |
+| PLAYER_GUIDE, TUTORIAL, MODDING_GUIDE, MODDING_QUICKSTART,<br>CSHARP_GUIDE, ARCHITECTURE, BUILDING, GETTING_STARTED,<br>NETWORK_MULTIPLAYER, SCENARIOS_AND_WORKSHOP,<br>MODDABLE_CAMPAIGN_UI, LAUNCHER, DIAGNOSTICS, FOG_OF_WAR,<br>OFFENSIVE_PLANS, LOADING_SCREEN, INTERFACE_AUDIO, UI_REDESIGN,<br>CONFLICTS_AND_FACTIONS | ✅ | ✅ |
 | MIGRATION — the log of the port from s&box | ✅ | — |
 | `*_2026-09-*.md` — a work journal rather than documentation | — | ✅ |
 

@@ -129,5 +129,25 @@
   "AiCivilWarRestraint": 0.6,
   // How much of a neighbour's weakness a government counts toward a war it has no reason it
   // could give for: weakness makes a war possible, it does not make it wanted.
-  "AiWeaknessWithoutCause": 0.3
+  "AiWeaknessWithoutCause": 0.3,
+  // The share of a government's ground a faction claiming the state must hold, with the
+  // capital, for the government to fall to it.
+  "FactionTakeOverShare": 0.5,
+
+  // Military coups (Coups.cs). How often officers are asked whether they have had enough; the
+  // stability below which they plot, the chance of a plot at no stability at all (it falls in
+  // proportion to how far below the line a country is), and how long a plot takes to ripen.
+  "CoupReviewDays": 30,
+  "CoupStabilityThreshold": 0.35,
+  "CoupBaseChance": 0.04,
+  "CoupPlotDays": 60,
+  // A coup next door for three years after it, and a war being lost, make it likelier.
+  "CoupContagion": 1.6,
+  "CoupContagionDays": 1095,
+  "CoupLosingWar": 2,
+  // The brief order a junta brings, the day it takes power.
+  "CoupStabilityGain": 0.12,
+  "CoupWarSupportGain": 0.05,
+  // How long a junta that has just taken power is left alone by its own officers.
+  "CoupGraceDays": 730
 }

@@ -516,6 +516,33 @@ asking to stop. Now an offer arrives — listing what is being demanded of you, 
 drawn on the map behind the panel. Refusing costs nothing but time; an unanswered offer
 expires after 60 days.
 
+## The handbook and first steps
+
+Press **F1**, or the **Handbook** button in the top bar, for the game's own manual: some forty
+short articles from the top bar to coups, in the language you play in. Every screen has a **?**
+in its corner that opens the article about it. The situation rail opens with **first steps** -
+let time run, read the budget, choose research, build, look at the neighbours, order a
+division, open the handbook - each ticked once done; Settings can hide them.
+
+## Conflicts, de facto powers and coups
+
+The **Conflicts** screen (left rail, World) lists every standoff in the world, hottest first,
+and every war with the countries backing each side. Tension between two countries rises
+through friction and crisis to armed clashes; at clashes the border shoots every week, and a
+border that keeps shooting for months can become a **border war** - a few weeks' fighting
+between the two alone, ending in a ceasefire on the old lines. **Hold talks** to cool a
+standoff; **back a side** of somebody else's war with money, weapons or volunteers.
+
+Some countries on the map are **de facto powers** rather than recognised states: the Rapid
+Support Forces, the Houthis, Idlib, north-eastern Syria, the east of Libya, Myanmar's
+resistance, al-Shabaab, the M23. Their dossier says so. Their wars are civil wars: allies are
+not called, friends arm a side instead, and a faction that takes the government's capital and
+half its ground takes the whole country.
+
+A government below **35% stability** can face a military plot. The situation rail warns you
+the day it begins; get stability back above the line within two months or the army takes power.
+The country's dossier shows the coup risk at any time.
+
 ## Government and the social budget
 
 `Ledger → Government` sets the cabinet's direction: balanced development, growth, social

@@ -1,0 +1,14 @@
+# Natural Earth draws a handful of disputed patches as countries of their own. Nobody governs
+# them as one: they go to whoever held them on 1 January 2024. Written by a point on the map so
+# a recut keeps them; a mod can override any line.
+#
+# The Siachen Glacier: held by India since 1984 (Operation Meghdoot); Pakistan claims it.
+# The Southern Patagonian Ice Field: its border was never demarcated; the piece the map draws
+# lies inside Argentina's Santa Cruz and goes with it.
+# Bir Tawil: claimed by neither Egypt nor Sudan, each of which claims the Hala'ib Triangle
+# instead - land nobody owns.
+province;owner;controller
+@77.16,35.41;IND;IND
+@77.72,35.47;IND;IND
+@-73.09,-49.28;ARG;ARG
+@33.66,21.91;none;none

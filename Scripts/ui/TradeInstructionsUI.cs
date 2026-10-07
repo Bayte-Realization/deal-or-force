@@ -77,9 +77,7 @@ public partial class DealOrForceGame
         StateSection(rows, "TRADE INSTRUCTIONS",
             "What this country has told its traders to do - first about a good, then about another " +
             "country. A row that has been moved is lit and in force; a row still at its default is " +
-            "dimmed and doing nothing. Every control here is declared in common/trade, so a mod can " +
-            "change the limits, the defaults, the names and the wording of all of them. A change " +
-            "takes effect at the next weekly clearing.");
+            "dimmed and doing nothing. A change takes effect at the next weekly clearing.");
 
         _tradeInstructionRows = new VBoxContainer();
         _tradeInstructionRows.AddThemeConstantOverride("separation", 10);

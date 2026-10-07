@@ -26,6 +26,15 @@ tribute, bring their own obligations in war, and drift towards wanting out at th
 pace. NATO, the CSTO and a dozen standing guarantees are on the map from the first morning,
 because they were.
 
+The wars of 2024 that were not between states are on the map from the first day: the Rapid
+Support Forces in Darfur and Khartoum, the Houthis in Sanaa, Idlib, north-eastern Syria, the
+east of Libya, Myanmar's resistance, al-Shabaab, the M23 - each a country with its own ground
+and fighters, in the war, truce or peace it had that morning. A civil war is fought by its
+two sides, and their friends arm them rather than join them; a faction that takes the capital
+takes the state. Between the wars every pair of countries carries a tension that rises
+through crisis to armed clashes, and a border that keeps shooting can become a few weeks'
+border war ending in a ceasefire. Unstable governments face military coups.
+
 Regions secede when nobody is governing them. Governments fall and are replaced. Armies grow
 when a country has reason to arm and are sent home when it does not, instead of staying the
 size they started. A threatened region raises its own militia, in its largest town and under
@@ -144,6 +153,7 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | how it is built |
 | [CSHARP_GUIDE](docs/CSHARP_GUIDE.md) | **C# from scratch, taught on this game's own code** |
 | [NETWORK_MULTIPLAYER](docs/NETWORK_MULTIPLAYER.md) | LAN and direct IP |
+| [CONFLICTS_AND_FACTIONS](docs/CONFLICTS_AND_FACTIONS.md) | tension, border wars, proxy wars, de facto powers, coups |
 
 ## Known debts
 
@@ -169,20 +179,19 @@ Godot itself is MIT, which GPL accepts.
 The flags in `game/gfx/flags` come from Wikimedia Commons. [`game/gfx/CREDITS.md`](game/gfx/CREDITS.md)
 lists 632 of them file by file with their source, licence and author; the national flags, which
 were rendered from the public-domain drawings Wikipedia uses, are not listed one by one yet, and
-21 variants have no source recorded - [`LICENSE-ASSETS.md`](LICENSE-ASSETS.md) says which. A flag
+21 variants have no source recorded - [`game/THIRD_PARTY_NOTICES.md`](game/THIRD_PARTY_NOTICES.md) says which. A flag
 as a symbol is usually public domain; a particular drawing of it need not be, which is why
 the file exists.
 
 The map is built from open data: land cover from ESA GlobCover, relief and the sea floor from
 NASA Earth Observatory's topography and bathymetry (GEBCO data), rivers, lakes and cities from
-Natural Earth. `LICENSE-ASSETS.md` gives each with its terms.
+Natural Earth. [`game/THIRD_PARTY_NOTICES.md`](game/THIRD_PARTY_NOTICES.md) gives each with its terms.
 
-**Code and art are not under the same terms**, and the split is written down in
-[`LICENSE-ASSETS.md`](LICENSE-ASSETS.md): the code is GPL, the original artwork and audio
-are not - the soundtrack and the interface sounds were generated for the game and are its
-own. The flags keep whichever Creative Commons or public-domain terms they arrived
-with — 128 of them are share-alike and can never be closed, which is exactly why the
-credits file exists.
+**Code and art are under the same terms.** Everything made for the game - the code, the
+data, the artwork, the soundtrack and the interface sounds - is GPL: use it as you like. The
+flags and the map data keep whichever Creative Commons or public-domain terms they arrived
+with, listed in [`game/THIRD_PARTY_NOTICES.md`](game/THIRD_PARTY_NOTICES.md) — 128 flags are
+share-alike, which is exactly why the credits file exists.
 
 **Steam.** GPLv3 and the proprietary Steamworks SDK cannot both be satisfied at once, so an
 additional permission under GPL §7 is granted for linking against it — see

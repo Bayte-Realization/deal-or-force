@@ -188,6 +188,8 @@ public static class Program
                 secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
         // `--factions`: the de facto powers of 2024 at the start and after the run (FactionReport).
         if (Array.IndexOf(args, "--factions") >= 0) return mapped ? FactionReport.Run(campaign, days) : 2;
+        var stabilityAt = Array.IndexOf(args, "--stability");
+        if (stabilityAt >= 0 && stabilityAt + 1 < args.Length) return mapped ? StabilityReport.Run(campaign, days, args[stabilityAt + 1]) : 2;
         var judgeAt = Array.IndexOf(args, "--judge");
         if (judgeAt >= 0 && judgeAt + 1 < args.Length) return mapped ? FactionReport.Judge(campaign, days, args[judgeAt + 1]) : 2;
         var provincesAt = Array.IndexOf(args, "--provinces");
@@ -1505,6 +1507,9 @@ public static class Program
     /// </summary>
     private static readonly string[] SubPixelTerritories = { "CSI", "PGA" };
 
+    /// <summary>Patches Natural Earth draws as countries and the bookmark gives to whoever held them (history/provinces/zz_micro_entities.csv).</summary>
+    private static readonly string[] HandedOverTerritories = { "KAS", "SPI", "BRT" };
+
     /// <summary>
     /// A country with a seat in the table and no cell on the map cannot be picked, fought
     /// over or negotiated with - it is a row, not a state. Vatican City, Northern Cyprus
@@ -1518,6 +1523,7 @@ public static class Program
             // have nobody to simulate, so ground for them would be ground nothing stands on.
             .Where(nation => nation.Population > 0)
             .Where(nation => !SubPixelTerritories.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase))
+            .Where(nation => !HandedOverTerritories.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase))
             .Where(nation => campaign.StatesOf(nation).Length == 0)
             .Select(nation => nation.Tag)
             .OrderBy(tag => tag, StringComparer.Ordinal)
@@ -4563,6 +4569,10 @@ public static class Program
         {
             [18115] = ("GEO", "ABK"), [18133] = ("GEO", "ABK"), [21648] = ("PSE", "ISR")
         };
+        // Corrections written by a point on the map (history/provinces, "@longitude,latitude"):
+        // reviewed one by one and kept through recuts, unlike a province id - the Abkhazian
+        // coastal pockets, Siachen, Bir Tawil.
+        var points = ProvinceOwnership.PointCorrections(topology);
         var nobodys = 0;
         var checkedProvinces = 0;
         var wrong = new List<string>();
@@ -4587,6 +4597,11 @@ public static class Program
             if (deliberate.TryGetValue(topology.ProvinceToState[province], out var handed) && owner == handed) continue;
             if (coastalRepairs.TryGetValue(province, out var repair) &&
                 Tag(ground) == repair.Ground && Tag(owner) == repair.Owner) continue;
+            if (points.TryGetValue(province, out var pointOwner) &&
+                (owner == 0 ? pointOwner == "none" : Tag(owner) == pointOwner)) continue;
+            // A de facto power of 2024 stands on the ground of the state it holds it of (Factions).
+            if (campaign.Nations.Find(nation => nation.MapIndex == owner) is { FactionId.Length: > 0 } faction &&
+                campaign.NationById(faction.SecededFromId) is { } parent && parent.MapIndex == ground) continue;
             wrong.Add(wrong.Count < 4 ? $"province {province:N0} stands on {Tag(ground)} ground and belongs to {Tag(owner)}" : "");
         }
 
@@ -4629,8 +4644,9 @@ public static class Program
         foreach (var nation in campaign.Nations)
         {
             if (string.IsNullOrWhiteSpace(nation.Tag)) continue;
-            // Movements are declared in common/movements, not common/countries.
-            if (nation.Movement is not null) continue;
+            // Movements are declared in common/movements, not common/countries; the de facto
+            // powers of 2024 in history/factions.
+            if (nation.Movement is not null || nation.FactionId.Length > 0) continue;
             if (!shipped.TryGetValue(nation.Tag, out var entry)) { missing.Add(nation.Tag); continue; }
             if (!string.Equals(entry.Name, nation.Name, StringComparison.Ordinal))
                 drifted.Add($"{nation.Tag} name: file '{entry.Name}', game '{nation.Name}'");
@@ -8753,9 +8769,12 @@ public static class Program
         if (theirQuarrel.Opinion > campaign.Defines.AiRivalryThreshold)
             return $"the check could not give CHN a reason to mind IND: opinion {theirQuarrel.Opinion:0}";
 
-        // A bully worth being afraid of, and a protector heavier than the bully.
+        // A bully worth being afraid of, and a protector heavier than the bully. Both are
+        // staged: the estimate is the real order of battle now (CampaignIntel), so an India
+        // with three times its army is heavier than China unless China grows with it.
         foreach (var army in campaign.Armies)
             if (army.NationId == bully.Id) army.Divisions *= 3f;
+            else if (army.NationId == power.Id) army.Divisions *= 4f;
         var bullyStrength = CampaignIntel.EstimatedStrength(campaign, small.Id, bully);
         var powerStrength = CampaignIntel.EstimatedStrength(campaign, small.Id, power);
         if (bullyStrength <= AiStatecraft.StrengthOf(campaign, small) * campaign.Defines.AiCounterweightFear)
@@ -10438,6 +10457,16 @@ public static class Program
         DiagnosticLogs.ResetCatalog();
         InterfaceSkin.ResetCatalog();
         ScenarioInspectorCatalog.ResetCatalog();
+        // And the catalogues read the first time something needs them - the handbook when F1 is
+        // pressed, the news weights at the first headline, the coups at the first review - so a
+        // bench that has not happened to need them yet does not report their folders as dead.
+        HandbookCatalog.ResetCatalog();
+        NewsFeed.ResetCatalog();
+        AllianceProgramCatalog.ResetCatalog();
+        OutreachCatalog.ResetCatalog();
+        IncidentCatalog.ResetCatalog();
+        Coups.ResetCatalog();
+        Coups.GovernmentRisk(new Nation());
         if (ConsoleVerse.TouchGrass("english").Length == 0) return "the console's verse came back empty";
 
         var asked = new HashSet<string>(GameDataLoader.Asked, StringComparer.OrdinalIgnoreCase);
@@ -10451,7 +10480,10 @@ public static class Program
             "gfx", "fonts", "sound", "music", "localization", "interface", "map_data",
             "history", "events", "scenarios",
             // Prose for whoever opens the folder, shipped on purpose and read by nobody.
-            "documentation"
+            "documentation",
+            // Native script extensions, loaded by the engine through their .gdextension file
+            // (EngineScriptMod) rather than by the data loader.
+            "extensions"
         };
 
         var unread = new List<string>();

@@ -723,14 +723,22 @@ public partial class DealOrForceGame
             return label;
         }
 
-        AddSocialMemoryDiplomacy(nation, player, Field);
-        if (_campaign.FeatureEnabled("national_courses") && nation.NationalCourse.Initialized)
-            Field("National agenda", Tr(NationalCourseCatalog.Find(nation.NationalCourse.Dominant)?.Name ?? nation.NationalCourse.Dominant));
+        // What a society thinks and what it has got used to come after what a player opens this
+        // page for - who is bound to whom, who is at war, what is between us. They used to open
+        // the page, and the first thing a player read about their own country was that its
+        // reputation "has not formed yet" and its habit of its institutions stood at 0%.
+        void Society()
+        {
+            AddSocialMemoryDiplomacy(nation, player, Field);
+            if (_campaign.FeatureEnabled("national_courses") && nation.NationalCourse.Initialized)
+                Field("National agenda", Tr(NationalCourseCatalog.Find(nation.NationalCourse.Dominant)?.Name ?? nation.NationalCourse.Dominant));
+        }
         if (own)
         {
             _diplomacyActionRows.Visible = false;
             aside.AddChild(Right(RowLabel("YOUR COUNTRY", 11, Ui.Colour("text.accent"))));
             RefreshOwnDiplomacy(player, Field, Text, Giving, Bar);
+            Society();
             return;
         }
         _diplomacyActionRows.Visible = true;
@@ -882,6 +890,7 @@ public partial class DealOrForceGame
         if (_diplomacyPactRows.GetChildCount() == 0)
             _diplomacyPactRows.AddChild(Text(Tr("No treaty, no tie and no trade between us."), 12, Ui.Colour("text.muted")));
 
+        Society();
         RefreshDiplomacyActions(player, nation);
     }
 
@@ -927,6 +936,43 @@ public partial class DealOrForceGame
             .ToList();
         if (guaranteed.Count > 0)
             field("WE HAVE PROMISED TO DEFEND", "", null).AddChild(DiplomacyChips(guaranteed, ""));
+        // And the other way round, which is often the more important half: South Korea has no
+        // alliance on this screen and the United States' promise to fight for it.
+        var guarantors = _campaign.Nations
+            .Where(other => other.Id != player.Id &&
+                            CampaignDiplomacy.Peek(_campaign, player.Id, other.Id) is { } tie && tie.GuaranteedBy(other.Id))
+            .ToList();
+        if (player.IsSubject && _campaign.NationById(player.OverlordId) is { } overlord &&
+            SubjectCatalog.Of(player.SubjectType) is { OverlordDefends: true } && !guarantors.Contains(overlord))
+            guarantors.Add(overlord);
+        if (guarantors.Count > 0)
+            field("PROMISED TO DEFEND US", "", null).AddChild(DiplomacyChips(guarantors, ""));
+
+        // The standoffs we are in, hottest first: what is likeliest to become our next war.
+        var standoffs = Escalation.Hottest(_campaign, 25f)
+            .Where(relation => relation.A == player.Id || relation.B == player.Id)
+            .Take(4).ToList();
+        if (standoffs.Count > 0)
+        {
+            var hot = field("STANDOFFS", "", null);
+            foreach (var relation in standoffs)
+            {
+                var other = _campaign.NationById(relation.A == player.Id ? relation.B : relation.A);
+                if (other is null) continue;
+                var stage = (Simulation.TensionStage)relation.TensionStage;
+                var row = new HBoxContainer();
+                row.AddThemeConstantOverride("separation", 8);
+                row.AddChild(FlagBadge(other.Tag, 18));
+                var name = text(other.DisplayName, 13, Ui.Colour("text.bright"));
+                name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                row.AddChild(name);
+                row.AddChild(text(Simulation.Loc.Format("{0} · {1:0}", Tr(StageName(stage)), relation.Tension), 12,
+                    stage >= Simulation.TensionStage.Clashes ? Ui.Colour("state.critical") :
+                    stage >= Simulation.TensionStage.Crisis ? Ui.Colour("state.warning") : Ui.Colour("text.caption")));
+                hot.AddChild(row);
+            }
+            hot.AddChild(ActionButton("Open conflicts", () => { CloseDiplomacyScreen(); OpenConflictsScreen(); }, 0, 30));
+        }
 
         var wars = _campaign.Wars.Where(candidate => !candidate.Ended && candidate.Involves(player.Id)).ToList();
         var fighting = field("OUR WARS", wars.Count == 0 ? Tr("at peace") : "", Ui.Colour("text.muted"));

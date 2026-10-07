@@ -1,8 +1,8 @@
 # The soundtrack
 
 Four tracks, generated for Deal or Force with Creative Claw and encoded to Ogg Vorbis
-(44.1 kHz stereo). They are the game's own and fall under section (a) of
-[`LICENSE-ASSETS.md`](../../../LICENSE-ASSETS.md), like the interface sounds made the same way.
+(44.1 kHz stereo). Like the interface sounds made the same way and everything else made for the
+game, they are under the GPL ([`LICENSE`](../../../LICENSE)): use them as you like.
 
 | Track | Plays | Length |
 | --- | --- | ---: |

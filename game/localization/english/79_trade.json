@@ -1,7 +1,7 @@
 {
   "ABOUT ONE GOOD": "ABOUT ONE GOOD",
   "ABOUT ONE COUNTRY": "ABOUT ONE COUNTRY",
-  "What this country has told its traders to do - first about a good, then about another country. A row that has been moved is lit and in force; a row still at its default is dimmed and doing nothing. Every control here is declared in common/trade, so a mod can change the limits, the defaults, the names and the wording of all of them. A change takes effect at the next weekly clearing.": "What this country has told its traders to do - first about a good, then about another country. A row that has been moved is lit and in force; a row still at its default is dimmed and doing nothing. Every control here is declared in common/trade, so a mod can change the limits, the defaults, the names and the wording of all of them. A change takes effect at the next weekly clearing.",
+  "What this country has told its traders to do - first about a good, then about another country. A row that has been moved is lit and in force; a row still at its default is dimmed and doing nothing. A change takes effect at the next weekly clearing.": "What this country has told its traders to do - first about a good, then about another country. A row that has been moved is lit and in force; a row still at its default is dimmed and doing nothing. A change takes effect at the next weekly clearing.",
   "nothing decided here": "nothing decided here",
   "no partner selected": "no partner selected",
   "{0:N0} in force": "{0:N0} in force",

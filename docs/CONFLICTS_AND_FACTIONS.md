@@ -110,6 +110,21 @@ The province map is coarse where these wars are fought - Syria is thirty provinc
 drawing rings, and `SimBench <days> <seed> --factions` to see what each faction got and what
 became of it.
 
+## Power changing hands (`Coups.cs`, `Factions.Tick`)
+
+**Coups.** A country whose stability is below `CoupStabilityThreshold` (35%) risks a plot every
+`CoupReviewDays`: `CoupBaseChance` times the square of how far below the line it is, times its
+government's risk (`common/coups/00_coups.json`, `government_risk`), doubled when it is losing a
+war and `CoupContagion` times after a coup next door. A plot ripens in `CoupPlotDays`: a
+government back above the line has seen it off, one that is not becomes what `installs` says
+(a military junta), gains `CoupStabilityGain` stability, and is remembered by the governments of
+the `disapproving_ideologies`. A player is warned on the situation rail the day the plot begins.
+
+**The fall of a capital.** A faction with `"claims_state": true` that holds the government's
+capital and `FactionTakeOverShare` of its ground takes the state: every province, its name, its
+seat and its colour. The government's other wars end; the government itself falls the way any
+country that loses its last ground does - into exile, or gone (`MovementFall`).
+
 ## Tuning
 
 | define | default | what it does |

@@ -33,7 +33,6 @@
   "Opposite sides of other wars": "Opposite sides of other wars",
   "Opposed politics": "Opposed politics",
   "Distance and treaties multiply it by {0:0.00}.": "Distance and treaties multiply it by {0:0.00}.",
-  "Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. A crisis argues for war; talks bring it down.": "Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. A crisis argues for war; talks bring it down.",
   "{0:0} / 100 · {1}": "{0:0} / 100 · {1}",
   "WHY": "WHY",
   "WHAT THEY HOLD AGAINST EACH OTHER": "WHAT THEY HOLD AGAINST EACH OTHER",
@@ -64,5 +63,7 @@
   "You now back {0} at level {1}.": "You now back {0} at level {1}.",
   "Stop": "Stop",
   "You no longer back {0}.": "You no longer back {0}.",
-  "border war": "border war"
+  "border war": "border war",
+  "Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. Armed clashes argue for war, and a border that keeps shooting can become a short border war; talks bring it down.": "Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. Armed clashes argue for war, and a border that keeps shooting can become a short border war; talks bring it down.",
+  "Open conflicts": "Open conflicts"
 }

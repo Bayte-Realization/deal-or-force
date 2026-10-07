@@ -38,8 +38,7 @@ public partial class DealOrForceGame
         StateSection(rows, "CENTRAL BANK",
             "What borrowing costs, who decides it, and what it is being aimed at. The bank holds " +
             "the rate against its own target unless the government takes it away - and a government " +
-            "that holds the rate below what the bank wanted pays for the cheap money in prices. " +
-            "Everything here is declared in common/inflation and common/budget.");
+            "that holds the rate below what the bank wanted pays for the cheap money in prices.");
 
         _centralBankCard = new VBoxContainer();
         _centralBankCard.AddThemeConstantOverride("separation", 6);

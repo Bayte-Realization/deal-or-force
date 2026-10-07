@@ -1,0 +1,51 @@
+// Deal or Force - how settled the fragile states of 2024 were (stability, 0..1).
+//
+// Every country without a stated figure opens near 0.7, which is right for most of the world
+// and wrong for the thirty in this file: Somalia and Norway were not equally settled countries.
+// The figures follow the tiers of the Fragile States Index 2023, compressed into the top of
+// the danger band - "very high alert" just above 0.35, "high alert" around 0.4, "alert"
+// 0.45-0.5 - so that what tips such a state over is a war being lost or a crisis, as it was,
+// rather than the morning itself. Adjusted where a regime was harder or softer than its state:
+// Eritrea and Afghanistan's governments were not about to fall; Haiti's had already fallen,
+// and Sudan and Myanmar were juntas losing wars. Below 0.35 officers may start plotting
+// (Coups.cs); below a third radicalism starts to bite.
+{
+  "SOM": { "stability": 0.36 },
+  "YEM": { "stability": 0.36 },
+  "SSD": { "stability": 0.36 },
+  "SYR": { "stability": 0.38 },
+  "COD": { "stability": 0.38 },
+  "AFG": { "stability": 0.44 },
+  "SDN": { "stability": 0.34 },
+  "CAF": { "stability": 0.36 },
+  "TCD": { "stability": 0.37 },
+  "HTI": { "stability": 0.30 },
+  "ETH": { "stability": 0.40 },
+  "MLI": { "stability": 0.38 },
+  "BFA": { "stability": 0.36 },
+  "NER": { "stability": 0.38 },
+  "GIN": { "stability": 0.40 },
+  "LBY": { "stability": 0.37 },
+  "MMR": { "stability": 0.34 },
+  "LBN": { "stability": 0.40 },
+  "IRQ": { "stability": 0.46 },
+  "VEN": { "stability": 0.42 },
+  "NGA": { "stability": 0.45 },
+  "CMR": { "stability": 0.44 },
+  "BDI": { "stability": 0.42 },
+  "MOZ": { "stability": 0.45 },
+  "ZWE": { "stability": 0.46 },
+  "ERI": { "stability": 0.52 },
+  "PAK": { "stability": 0.46 },
+  "GAB": { "stability": 0.48 },
+  "BGD": { "stability": 0.47 },
+  "GNB": { "stability": 0.40 },
+  "SLE": { "stability": 0.50 },
+  "MDG": { "stability": 0.48 },
+  "NIC": { "stability": 0.50 },
+  "PNG": { "stability": 0.50 },
+  "COG": { "stability": 0.48 },
+  "TGO": { "stability": 0.50 },
+  "MRT": { "stability": 0.50 },
+  "PSE": { "stability": 0.32 }
+}

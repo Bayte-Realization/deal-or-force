@@ -15,5 +15,6 @@
   "prisoner_exchange": { "name": "Exchanged prisoners", "opinion": 6, "days": 540, "decays": true, "max_stacks": 2 },
   "held_talks": { "name": "Held talks with us", "opinion": 8, "days": 365, "decays": true },
   "armed_us": { "name": "Arms us in our war", "opinion": 25, "days": 1825, "decays": true },
-  "armed_our_enemy": { "name": "Arms our enemy", "opinion": -30, "days": 1825, "decays": true }
+  "armed_our_enemy": { "name": "Arms our enemy", "opinion": -30, "days": 1825, "decays": true },
+  "seized_power_by_coup": { "name": "Took power in a coup", "opinion": -20, "days": 1825, "decays": true }
 }

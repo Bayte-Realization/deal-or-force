@@ -717,6 +717,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
             using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
             using (SimProfiler.Measure("escalation")) Escalation.Tick(this);
+            using (SimProfiler.Measure("factions")) Factions.Tick(this);
+            using (SimProfiler.Measure("coups")) Coups.Tick(this);
             using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
             using (SimProfiler.Measure("movements"))
             {

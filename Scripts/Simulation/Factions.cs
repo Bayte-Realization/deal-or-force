@@ -75,6 +75,12 @@ public sealed class FactionDefinition
     public string ParentModifier = "";
     /// <summary>Whether it fights on after losing most of its ground while it has an army: an insurgency, not a state.</summary>
     public bool Insurgency = true;
+    /// <summary>
+    /// Whether it means to rule the whole country rather than its own part of it: the Rapid
+    /// Support Forces, the Houthis, the National Unity Government. Such a faction that takes the
+    /// government's capital and most of its ground takes the state (Factions.TakeOver).
+    /// </summary>
+    public bool ClaimsState;
 }
 
 /// <summary>
@@ -205,6 +211,8 @@ public static class Factions
             definition.ParentModifier = Text(row, "parent_modifier");
             if (row.TryGetProperty("insurgency", out var insurgency) && insurgency.ValueKind is JsonValueKind.True or JsonValueKind.False)
                 definition.Insurgency = insurgency.GetBoolean();
+            if (row.TryGetProperty("claims_state", out var claims) && claims.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                definition.ClaimsState = claims.GetBoolean();
             definition.Areas = Rings(row, "areas");
             definition.Except = Rings(row, "except");
             definition.Holds = Rings(row, "holds");
@@ -248,6 +256,105 @@ public static class Factions
         campaign.MarkStrategicChange();
         campaign.MarkMapChanged();
         return founded.Count;
+    }
+
+    // ------------------------------------------------------------------ the fall of a capital
+
+    /// <summary>
+    /// The week a faction that claims the state has the government's capital and most of its
+    /// ground, the government falls: Kabul in August 2021, Damascus in December 2024. The faction
+    /// takes every province the government still had, its name, its seat and its colour, and the
+    /// civil war is over; the government that fell goes into exile or is gone the way any
+    /// country that loses the last of its ground does (MovementFall). The state's other wars end
+    /// with it - the side that won one war does not inherit the loser's others.
+    /// </summary>
+    public static void Tick(Campaign campaign)
+    {
+        if (campaign?.ProvinceMap is null || campaign.ElapsedDays % 7 != 4 ||
+            !campaign.FeatureEnabled("de_facto_factions")) return;
+        foreach (var faction in campaign.Nations.ToArray())
+        {
+            if (Of(faction) is not { ClaimsState: true } || campaign.Fallen.Contains(faction.Id)) continue;
+            var parent = campaign.NationById(faction.SecededFromId);
+            if (parent is null || campaign.Fallen.Contains(parent.Id) || parent.Movement is not null) continue;
+            var war = campaign.Wars.FirstOrDefault(w => !w.Ended && w.Involves(faction.Id) && w.Involves(parent.Id) &&
+                                                       w.Opposes(faction.Id, parent.Id));
+            if (war is null) continue;
+            if (!HoldsTheState(campaign, faction, parent)) continue;
+            TakeOver(campaign, faction, parent, war);
+        }
+    }
+
+    /// <summary>Whether the faction stands in the government's capital and on most of the government's ground.</summary>
+    public static bool HoldsTheState(Campaign campaign, Nation faction, Nation parent)
+    {
+        var map = campaign.ProvinceMap;
+        var control = campaign.ProvinceController;
+        if (map is null || control is null || parent.CapitalProvinceId <= 0 || parent.CapitalProvinceId > map.ProvinceCount) return false;
+        if (control[parent.CapitalProvinceId] != (ushort)faction.MapIndex) return false;
+        var owned = 0;
+        var held = 0;
+        for (var province = 1; province <= map.ProvinceCount; province++)
+        {
+            if (map.ProvinceToNation[province] != (ushort)parent.MapIndex || map.IsWater(province)) continue;
+            owned++;
+            if (control[province] == (ushort)faction.MapIndex) held++;
+        }
+        return owned > 0 && held >= owned * campaign.Defines.FactionTakeOverShare;
+    }
+
+    public static void TakeOver(Campaign campaign, Nation faction, Nation parent, StrategicWar war)
+    {
+        var map = campaign.ProvinceMap;
+        var whole = Reintegration.Everything(campaign, parent);
+        foreach (var province in whole) campaign.SetProvinceController(province, (ushort)faction.MapIndex);
+        StatePartition.Annex(campaign, whole, faction, asConquest: false);
+
+        war.Ended = true;
+        war.EndedDay = campaign.ElapsedDays;
+        war.WinnerId = faction.Id;
+        war.AnnexedProvinces = whole.Count;
+        war.PeaceSummary = $"{faction.Name} took power in all of {parent.Name}.";
+
+        // The fallen government's other wars end with it. What its enemies held of its ground they
+        // give back to the new government, which never fought them.
+        foreach (var other in campaign.Wars)
+        {
+            if (other.Ended || !other.Involves(parent.Id)) continue;
+            foreach (var (province, was) in other.OriginalController)
+                campaign.SetProvinceController(province, was == (ushort)parent.MapIndex ? (ushort)faction.MapIndex : was);
+            other.Ended = true;
+            other.EndedDay = campaign.ElapsedDays;
+            other.WinnerId = -1;
+            other.PeaceSummary = $"Ended with the fall of the government of {parent.Name}.";
+            foreach (var enemyId in other.EnemiesOf(parent.Id))
+                if (CampaignDiplomacy.Peek(campaign, faction.Id, enemyId) is { Stance: DiplomaticStance.AtWar } stance &&
+                    !campaign.Wars.Any(w => !w.Ended && w.Opposes(faction.Id, enemyId)))
+                    stance.Stance = DiplomaticStance.Neutral;
+        }
+
+        // It is the state now: its name, its seat, its colour, and the peoples it is for.
+        var formerName = faction.Name;
+        faction.Name = parent.Name;
+        faction.Color = parent.Color;
+        faction.CapitalName = parent.CapitalName;
+        faction.CapitalLatitude = parent.CapitalLatitude;
+        faction.CapitalLongitude = parent.CapitalLongitude;
+        faction.SecededFromId = -1;
+        faction.FactionId = "";
+        faction.PoliticsChangedDay = campaign.ElapsedDays;
+        foreach (var people in parent.FoundedCultures)
+            if (!faction.FoundedCultures.Contains(people, StringComparer.OrdinalIgnoreCase)) faction.FoundedCultures.Add(people);
+        if (faction.FoundedCultures.Count > 0) DemographyCatalog.Declare(faction.Tag, faction.FoundedCultures);
+        faction.Treasury += MathF.Max(0f, parent.Treasury) * 0.5f;
+        parent.Treasury *= 0.5f;
+
+        campaign.LocateCapitals();
+        Warfare.RebuildFronts(campaign);
+        campaign.Chronicle.Record(campaign, "regime_change", faction.Id, parent.Id, place: formerName);
+        campaign.MarkStrategicChange();
+        campaign.MarkMapChanged();
+        DiagnosticLogs.Write("simulation", $"TAKEOVER faction={faction.Tag} former={formerName} state={parent.Tag} provinces={whole.Count}");
     }
 
     /// <summary>Whether that state lists this faction as a terrorist or sanctioned organisation.</summary>

@@ -173,10 +173,13 @@ public partial class DealOrForceGame
             var active = tech.Id == nation.CurrentResearch;
             var available = ResearchSystem.Available(nation, tech);
             var colour = Ui.Colour(known ? "state.positive" : active ? "state.info" : available ? "text.accent" : "text.muted");
-            var state = Tr(known ? "Researched" : active ? "Researching" : available ? "Available" : "Prerequisites missing");
+            // A locked card says nothing about being locked: the colour says it, the tooltip says
+            // what it needs, and "Prerequisites missing" on sixty cards out of sixty-seven was the
+            // loudest line on the screen.
+            var state = known ? Tr("Researched") : active ? Tr("Researching") : available ? Tr("Available") : "";
             var invested = nation.ResearchProgress.GetValueOrDefault(tech.Id);
             var total = ResearchSystem.CostFor(_campaign, nation, tech);
-            var caption = Tr(tech.Name) + "\n" + state + (known ? "" : $"\n{invested:0.#} / {total:0.#}");
+            var caption = Tr(tech.Name) + (state.Length > 0 ? "\n" + state : "") + (known ? "" : $"\n{invested:0.#} / {total:0.#}");
             var button = ActionButton(caption, () => SelectResearchTechnology(tech.Id), 0, 0, tech.Id == _researchSelected);
             button.Name = "Technology_" + tech.Id;
             button.Position = new(16 + node.Column * (width + gapX), 16 + node.Row * (height + gapY));

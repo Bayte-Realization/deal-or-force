@@ -123,6 +123,17 @@ public partial class DealOrForceGame
                 Simulation.Loc.Format("Peace offer: {0}", peaceOffers), () => RefreshPeaceOfferInterface(),
                 Tr("Another government has put a settlement to you and is waiting on an answer."));
 
+        // The army is the one opponent a player cannot see on the map.
+        if (player.CoupPlotDay >= 0)
+            AddAlert(AlertLevel.Critical, "unrest", Tr("Coup plot"), () => OpenScreen("Nation"),
+                Simulation.Loc.Format("Officers are plotting against your government. Raise stability above {0} within {1} days - spending, laws, a war ended - or the army takes power.",
+                    Fmt.Percent(_campaign.Defines.CoupStabilityThreshold),
+                    Math.Max(0, _campaign.Defines.CoupPlotDays - (_campaign.ElapsedDays - player.CoupPlotDay))));
+        else if (Simulation.Coups.Outlook(_campaign, player) == "high")
+            AddAlert(AlertLevel.Warning, "unrest", Tr("Coup risk"), () => OpenScreen("Nation"),
+                Simulation.Loc.Format("Stability is low enough for officers to start plotting. Above {0} nobody plots.",
+                    Fmt.Percent(_campaign.Defines.CoupStabilityThreshold)));
+
         if (player.ShortageIndex > 0.10f)
             AddAlert(AlertLevel.Critical, "trade",
                 Simulation.Loc.Format("Shortages: {0}", Fmt.Percent(player.ShortageIndex)),

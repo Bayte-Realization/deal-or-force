@@ -1068,11 +1068,36 @@ public partial class DealOrForceGame : Control
                 DetailRow("Treasury", Fmt.Money(nation.Treasury), Fmt.MoneyExact(nation.Treasury),
                     nation.Treasury < 0f ? "state.negative" : "text.bright");
                 DetailRow("Tax rate", Fmt.Percent(nation.TaxRate));
+                // What a player opening a country first wants to know: is it at war, and with
+                // whom is it likeliest to be next.
+                DetailHeading("SITUATION");
+                var wars = _campaign.Wars.Where(war => !war.Ended && war.Involves(nation.Id)).ToList();
+                DetailRow("Wars", wars.Count == 0 ? Tr("at peace")
+                        : wars.Count == 1 ? WarNames.Of(_campaign, wars[0])
+                        : Simulation.Loc.Format("{0} and {1} more", WarNames.Of(_campaign, wars[0]), wars.Count - 1),
+                    string.Join("\n", wars.Select(war => WarNames.Of(_campaign, war))),
+                    wars.Count == 0 ? "text.bright" : "state.negative");
+                var standoff = Escalation.Hottest(_campaign, 25f)
+                    .FirstOrDefault(relation => (relation.A == nation.Id || relation.B == nation.Id) &&
+                                                !CampaignDiplomacy.AtWar(_campaign, relation.A, relation.B));
+                if (standoff is not null && _campaign.NationById(standoff.A == nation.Id ? standoff.B : standoff.A) is { } rival)
+                {
+                    var stage = (TensionStage)standoff.TensionStage;
+                    DetailRow("Hottest standoff", Simulation.Loc.Format("{0} · {1}", CountryNames.Compact(rival), Tr(StageName(stage))),
+                        Tr("The country this one is likeliest to fight next, and how far the tension between them has gone. The Conflicts screen has the rest."),
+                        stage >= TensionStage.Clashes ? "state.critical" : stage >= TensionStage.Crisis ? "state.warning" : "text.bright");
+                }
                 DetailHeading("GOVERNMENT");
                 DetailRow("Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name),
                     Tr(PoliticsCore.GovernmentOf(nation).Description));
                 DetailRow("Ideology", Tr(PoliticsCore.IdeologyOf(nation).Name),
                     Tr(PoliticsCore.IdeologyOf(nation).Description));
+                var coup = Coups.Outlook(_campaign, nation);
+                DetailRow("Coup risk",
+                    Tr(coup switch { "plot" => "a plot is under way", "high" => "high", "low" => "low", _ => "none" }),
+                    Simulation.Loc.Format("Below {0} stability officers may start plotting, the more the lower it falls - most of all against a junta or a provisional government, when a war is being lost, or after a coup next door. A plot ripens in {1} days unless stability is back above the line.",
+                        Fmt.Percent(_campaign.Defines.CoupStabilityThreshold), _campaign.Defines.CoupPlotDays),
+                    coup switch { "plot" => "state.critical", "high" => "state.warning", _ => "text.bright" });
                 if (nation != _campaign.Player)
                     DetailRow("Politics", PoliticsCore.Affinity(_campaign, _campaign.Player.Id, nation.Id) >= 0f
                             ? Tr("close to ours") : Tr("unlike ours"),

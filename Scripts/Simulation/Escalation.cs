@@ -622,7 +622,9 @@ public static class Escalation
                 war.Intensity = due;
                 war.IntensityDay = c.ElapsedDays;
                 c.Chronicle.Record(c, due == 2 ? "war_total" : "war_major", war.AttackerId, war.DefenderId, war.Name);
-                if (due == 2) Statecraft.CallToArms(c, war);
+                // A total war mobilises the countries in it; it does not call in new ones. It used
+                // to ask the allies and the coalition again, and three countries joined Ukraine
+                // in the war's second year in every run - the escalation 2024 to 2026 did not have.
             }
             if (war.Intensity <= 0) continue;
             var modifier = war.Intensity >= 2 ? "total_war" : "major_war";

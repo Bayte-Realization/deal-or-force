@@ -199,6 +199,9 @@ public static class ProvinceOwnership
         if (Entries.Count == 0 && PointEntries.Count == 0 || topology is null) return 0;
         var byTag = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
         foreach (var nation in campaign.Nations) byTag[nation.Tag] = (ushort)nation.MapIndex;
+        // "none" is land nobody owns - map index 0 - the way Bir Tawil is: neither Egypt nor Sudan
+        // will have it. It is settled like any other unclaimed land (ColonisationCore).
+        byTag["none"] = 0;
 
         var applied = 0;
         foreach (var entry in Entries.Values)
@@ -228,6 +231,27 @@ public static class ProvinceOwnership
             applied++;
         }
         return applied;
+    }
+
+    /// <summary>
+    /// The provinces the point rows name, and the owner each names: corrections written by a
+    /// place on the map rather than by an id, reviewed one by one and kept through recuts. For
+    /// the bench, which accepts them as deliberate where it would reject a stale id.
+    /// </summary>
+    public static Dictionary<int, string> PointCorrections(ProvinceTopology topology)
+    {
+        var result = new Dictionary<int, string>();
+        if (topology is null) return result;
+        foreach (var (longitude, latitude, ownerTag, _) in PointEntries)
+        {
+            var column = (int)((longitude + 180f) / 360f * topology.Width);
+            var row = (int)((90f - latitude) / 180f * topology.Height);
+            column = (column % topology.Width + topology.Width) % topology.Width;
+            row = Math.Clamp(row, 0, topology.Height - 1);
+            var province = topology.CellToProvince[row * topology.Width + column];
+            if (province > 0) result[province] = ownerTag;
+        }
+        return result;
     }
 
     private static string FindDirectory()

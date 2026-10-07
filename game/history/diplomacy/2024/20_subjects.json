@@ -50,7 +50,6 @@
     { "overlord": "FRA", "subject": "BLM", "type": "dependent_territory" },
     { "overlord": "FRA", "subject": "MAF", "type": "dependent_territory" },
     { "overlord": "FRA", "subject": "ATF", "type": "dependent_territory" },
-    { "overlord": "FRA", "subject": "CLP", "type": "dependent_territory" },
 
     // Constituent countries of the Kingdom of the Netherlands in the Caribbean.
     { "overlord": "NLD", "subject": "ABW", "type": "dependent_territory" },
@@ -70,9 +69,6 @@
 
     // Australian external territories.
     { "overlord": "AUS", "subject": "NFK", "type": "dependent_territory" },
-    { "overlord": "AUS", "subject": "HMD", "type": "dependent_territory" },
-    { "overlord": "AUS", "subject": "CSI", "type": "dependent_territory" },
-    { "overlord": "AUS", "subject": "ATC", "type": "dependent_territory" },
     { "overlord": "AUS", "subject": "IOA", "type": "dependent_territory" },
 
     // Breakaways that exist on a patron's garrison and budget.

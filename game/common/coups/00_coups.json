@@ -1,0 +1,24 @@
+// Military coups (Scripts/Simulation/Coups.cs). The timing and the chance are defines
+// (common/defines/57_conflicts.json); this is what a coup is against and what it makes.
+{
+  // How much more or less likely each form of government is to be overthrown by its own army
+  // when it is unstable. A junta is the likeliest: a coup's officers are the next coup's targets
+  // (Burkina Faso, January and September 2022). Parliaments and crowns are the least.
+  "government_risk": {
+    "military_junta": 1.6,
+    "provisional_government": 1.8,
+    "presidential_republic": 1.0,
+    "technocracy": 0.7,
+    "theocracy": 0.5,
+    "absolute_monarchy": 0.5,
+    "federation": 0.5,
+    "one_party_state": 0.4,
+    "parliamentary_republic": 0.35,
+    "constitutional_monarchy": 0.3,
+    "direct_democracy": 0.3
+  },
+  // What the army installs.
+  "installs": { "government": "military_junta", "ideology": "nationalism" },
+  // Whose governments remember it against the junta (opinion "seized_power_by_coup").
+  "disapproving_ideologies": ["liberalism", "social_democracy", "conservatism", "libertarianism"]
+}

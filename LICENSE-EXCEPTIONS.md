@@ -74,5 +74,5 @@ is opened to contributions — not after.
 
 *This file puts a standard, widely used mechanism in place and explains what it does. It is
 not legal advice. Before money changes hands — a Steam release included — it is worth having
-a lawyer read this file, [`LICENSE-ASSETS.md`](LICENSE-ASSETS.md) and the Steamworks
+a lawyer read this file, [`game/THIRD_PARTY_NOTICES.md`](game/THIRD_PARTY_NOTICES.md) and the Steamworks
 agreement together.*

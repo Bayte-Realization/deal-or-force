@@ -323,7 +323,8 @@ public sealed class ModLoader
         ("news", () => NewsFeed.ResetCatalog(), NewsFeed.Merge),
         ("handbook", () => HandbookCatalog.ResetCatalog(), HandbookCatalog.Merge),
         ("escalation", () => IncidentCatalog.ResetCatalog(), (root, errors) => IncidentCatalog.Merge(root.GetRawText(), errors)),
-        ("factions", () => Factions.ResetCatalog(), Factions.Merge)
+        ("factions", () => Factions.ResetCatalog(), Factions.Merge),
+        ("coups", () => Coups.ResetCatalog(), Coups.Merge)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>

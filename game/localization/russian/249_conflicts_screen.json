@@ -33,7 +33,6 @@
   "Opposite sides of other wars": "Разные стороны чужих войн",
   "Opposed politics": "Противоположная политика",
   "Distance and treaties multiply it by {0:0.00}.": "Расстояние и договоры умножают её на {0:0.00}.",
-  "Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. A crisis argues for war; talks bring it down.": "Выберите противостояние или войну слева. Напряжённость растёт от враждебности, обид прошлых войн, чужой земли во владении, соперничества и войн, в которых две страны поддерживают разные стороны. С её ростом страны проходят через трения, кризис и вооружённые столкновения, и инциденты случаются всё чаще. Кризис подталкивает к войне, переговоры его гасят.",
   "{0:0} / 100 · {1}": "{0:0} / 100 · {1}",
   "WHY": "ПОЧЕМУ",
   "WHAT THEY HOLD AGAINST EACH OTHER": "ЧТО ОНИ ДРУГ ДРУГУ ПОМНЯТ",
@@ -64,5 +63,7 @@
   "You now back {0} at level {1}.": "Теперь вы поддерживаете страну {0} на уровне {1}.",
   "Stop": "Прекратить",
   "You no longer back {0}.": "Вы больше не поддерживаете страну {0}.",
-  "border war": "пограничная война"
+  "border war": "пограничная война",
+  "Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. Armed clashes argue for war, and a border that keeps shooting can become a short border war; talks bring it down.": "Выберите противостояние или войну слева. Напряжённость растёт от враждебности, обид прошлых войн, чужой земли во владении, соперничества и войн, в которых две страны поддерживают разные стороны. С её ростом страны проходят через трения, кризис и вооружённые столкновения, и инциденты случаются всё чаще. Вооружённые столкновения подталкивают к войне, а граница, на которой продолжают стрелять, может обернуться короткой пограничной войной; переговоры гасят напряжённость.",
+  "Open conflicts": "Открыть конфликты"
 }

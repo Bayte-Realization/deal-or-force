@@ -16,6 +16,8 @@
 //                   as the faction's own "seasoned insurgency"
 //   listed_by    the states that list it as a terrorist or sanctioned organisation: they never arm it
 //   fighters     its own men under arms, stood up as formations of 15 000
+//   claims_state it means to rule the whole country: with the government's capital and half
+//                its ground in hand, the government falls and the faction becomes the state
 //
 // The lines are the lines of that morning, at the resolution of the province map: the
 // Euphrates through Deir ez-Zor, the Sirte-Jufra line in Libya, the Hudaydah coast.
@@ -33,6 +35,7 @@
       "holds": [
         [[23.6, 13.4], [24.9, 13.3], [25.0, 14.0], [24.6, 14.6], [23.7, 14.5]]
       ],
+      "claims_state": true,
       "relation": "war", "war_name": "Sudanese Civil War",
       "army_share": 0.0, "fighters": 90000, "militia": 4, "stability": 0.35, "war_support": 0.8,
       "patrons": ["ARE"], "listed_by": ["USA", "GBR", "FRA", "DEU", "CAN"]
@@ -51,6 +54,7 @@
       "except": [
         [[42.6, 12.6], [43.6, 12.6], [43.6, 13.95], [42.6, 13.95]]
       ],
+      "claims_state": true,
       "relation": "truce", "truce_days": 540,
       "army_share": 0.0, "fighters": 60000, "militia": 3, "stability": 0.5, "war_support": 0.85,
       "patrons": ["IRN"], "listed_by": ["USA", "SAU", "ARE", "ISR", "GBR"]
@@ -66,6 +70,7 @@
         [[37.0, 36.55], [37.05, 36.68], [37.45, 36.67], [37.7, 36.7], [38.05, 36.86], [38.0, 36.7], [37.8, 36.62], [37.7, 36.4], [37.55, 36.27], [37.3, 36.3], [37.12, 36.43]],
         [[38.75, 36.72], [39.45, 36.72], [40.1, 36.88], [40.25, 36.82], [40.15, 36.5], [39.3, 36.42], [38.85, 36.45]]
       ],
+      "claims_state": true,
       "relation": "truce", "truce_days": 730,
       "army_share": 0.0, "fighters": 30000, "militia": 2, "stability": 0.35, "war_support": 0.7,
       "overlord": "TUR", "subject_type": "client"
@@ -79,6 +84,7 @@
       "areas": [
         [[36.1, 36.05], [36.35, 36.3], [36.55, 36.27], [36.67, 36.24], [36.85, 36.26], [36.95, 36.15], [36.8, 36.0], [36.72, 35.85], [36.62, 35.68], [36.45, 35.62], [36.3, 35.7], [36.25, 35.82], [36.12, 35.92]]
       ],
+      "claims_state": true,
       "relation": "truce", "truce_days": 365,
       "army_share": 0.0, "fighters": 25000, "militia": 2, "stability": 0.45, "war_support": 0.8,
       "listed_by": ["USA", "GBR", "TUR", "RUS", "CAN", "FRA", "DEU", "ARE", "SAU"]
@@ -106,6 +112,7 @@
       "capital": "Benghazi", "capital_at": [20.07, 32.12],
       "government": "military_junta", "ideology": "nationalism", "peoples": ["arab_maghrebi"],
       "regions": ["ly_mj", "ly_aj", "ly_qb", "ly_bu", "ly_kf", "ly_sr", "ly_ju", "ly_sb", "ly_ws", "ly_mq", "ly_wd", "ly_gt"],
+      "claims_state": true,
       "relation": "truce", "truce_days": 720,
       "army_share": 0.0, "fighters": 45000, "militia": 2, "stability": 0.5, "war_support": 0.6,
       "patrons": ["ARE", "EGY", "RUS"]
@@ -120,6 +127,7 @@
         [[94.5, 22.3], [95.25, 22.3], [95.7, 22.45], [95.9, 22.8], [95.8, 23.3], [95.5, 23.9], [94.9, 24.1], [94.5, 23.6], [94.35, 22.9]]
       ],
       "parent_modifier": "junta_overstretched",
+      "claims_state": true,
       "relation": "war", "war_name": "Myanmar Civil War",
       "army_share": 0.0, "fighters": 30000, "militia": 3, "stability": 0.35, "war_support": 0.85
     },
@@ -159,6 +167,7 @@
       "areas": [
         [[42.0, 0.5], [42.4, 0.2], [43.0, 0.6], [43.6, 1.4], [44.2, 1.7], [44.3, 2.3], [43.6, 2.5], [43.0, 2.4], [42.4, 1.6], [42.0, 1.0]]
       ],
+      "claims_state": true,
       "relation": "war", "war_name": "Somali Civil War",
       "army_share": 0.0, "fighters": 12000, "militia": 4, "stability": 0.4, "war_support": 0.85,
       "listed_by": ["USA", "GBR", "FRA", "DEU", "CAN", "AUS", "ARE", "SAU", "TUR", "KEN", "ETH"]
@@ -172,6 +181,7 @@
       "areas": [
         [[28.75, -1.55], [29.15, -1.6], [29.45, -1.5], [29.62, -1.35], [29.62, -1.05], [29.45, -0.85], [29.1, -0.95], [28.8, -1.15]]
       ],
+      "claims_state": true,
       "relation": "war", "war_name": "M23 Offensive",
       "army_share": 0.0, "fighters": 10000, "militia": 3, "stability": 0.45, "war_support": 0.85,
       "patrons": ["RWA"], "listed_by": ["USA", "GBR", "FRA", "BEL"]

@@ -1,7 +1,7 @@
 {
   "ABOUT ONE GOOD": "ПРО ОДИН ТОВАР",
   "ABOUT ONE COUNTRY": "ПРО ОДНУ СТРАНУ",
-  "What this country has told its traders to do - first about a good, then about another country. A row that has been moved is lit and in force; a row still at its default is dimmed and doing nothing. Every control here is declared in common/trade, so a mod can change the limits, the defaults, the names and the wording of all of them. A change takes effect at the next weekly clearing.": "Что страна велела своим торговцам — сначала про товар, потом про другую страну. Сдвинутая строка горит и действует; строка на значении по умолчанию приглушена и не делает ничего. Каждый регулятор объявлен в common/trade, так что мод может изменить пределы, значения по умолчанию, названия и формулировки любого из них. Изменение вступает в силу на следующем недельном расчёте.",
+  "What this country has told its traders to do - first about a good, then about another country. A row that has been moved is lit and in force; a row still at its default is dimmed and doing nothing. A change takes effect at the next weekly clearing.": "Что страна велела своим торговцам — сначала про товар, потом про другую страну. Сдвинутая строка горит и действует; строка на значении по умолчанию приглушена и не делает ничего. Изменение вступает в силу на следующем недельном расчёте.",
   "nothing decided here": "здесь ничего не решено",
   "no partner selected": "страна не выбрана",
   "{0:N0} in force": "действует {0:N0}",

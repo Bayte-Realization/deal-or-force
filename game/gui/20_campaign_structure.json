@@ -21,7 +21,7 @@
     ],
     "screens": {
       "Nation": {
-        "tabs":[{"id":"Overview","groups":["STATE","ECONOMY"]},{"id":"Government","groups":["GOVERNMENT"]},{"id":"Society","groups":["SOCIETY"]}],
+        "tabs":[{"id":"Overview","groups":["STATE","ECONOMY","SITUATION"]},{"id":"Government","groups":["GOVERNMENT"]},{"id":"Society","groups":["SOCIETY"]}],
         "links":[{"label":"Govern this country","action":"government","context":"own","tab":"Government"},{"label":"Charts and history","action":"ledger","tab":"Overview"},{"label":"How they see us","action":"diplomacy","context":"foreign","tab":"Government"}]
       },
       "Economy": {"tabs":[{"id":"Budget"},{"id":"Finance","label":"Debt"},{"id":"Market"},{"id":"Construction","label":"Construction tab"}],"links":[{"label":"Set the budget","action":"government","tab":"Budget"},{"label":"Economic history","action":"ledger","tab":"Budget"}]},

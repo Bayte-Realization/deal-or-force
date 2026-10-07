@@ -333,7 +333,7 @@ public partial class DealOrForceGame
             ShowTensionPage(relation);
             return;
         }
-        var intro = Title("Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. A crisis argues for war; talks bring it down.",
+        var intro = Title("Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. Armed clashes argue for war, and a border that keeps shooting can become a short border war; talks bring it down.",
             14, Ui.Colour("text.body_soft"));
         _conflictsPage.AddChild(intro);
     }

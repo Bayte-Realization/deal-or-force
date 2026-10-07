@@ -24,13 +24,18 @@ category, and never the executable.
         ai_strategy/     how the AI weighs war, courtship and its budget
         buildings/       what can be built, what it costs, what it gives
         countries/       what a country IS: name, map colour, capital
+        coups/           what a coup is against, what it installs, who disapproves
         cultures/        the peoples of the world, and what each of them believes
         professions/     what people do for a living, and which class each trade belongs to
         religions/       the faiths
         decisions/       the buttons a government may press
         defines/         every tuning number in the simulation
+        escalation/      the incidents that happen under tension between two countries
+        factions/        (a mod's) de facto powers, in the format of history/factions
+        handbook/        the in-game handbook (F1): its topics and articles
         goods/           the commodities the market trades
         modifiers/       timed effects that can be granted to a country or region
+        news/            how much each kind of headline matters
         opinion_modifiers/   why one country thinks what it does of another
         scripted_effects/    named consequences, referred to by "use"
         scripted_modifiers/  named scores: how much an AI wants something
@@ -45,8 +50,11 @@ category, and never the executable.
       gui/               where the panels sit - anchors and offsets
       interface/         what the game is made of - the colour palette and its metrics
       history/           what was true when the bookmark opens
+        conflicts/2024/  the tensions and the foreign backers of the bookmark's wars
         countries/2024/  money, people, armies, politics - and how each country lives:
-                         literacy, urbanisation, the share of it working the land
+                         literacy, urbanisation, the share of it working the land,
+                         how settled the fragile states were
+        factions/2024/   the de facto powers of 2024: the RSF, the Houthis, Idlib...
         pops/            who lived where in 2024, by people and by faith
         provinces/       the political map: one line per province
         states/          regional starting values
@@ -65,6 +73,9 @@ category, and never the executable.
       documentation/     this file
 
     dlc/                 content packs that ship with the game - see dlc/README.md
+
+How tension, border wars, proxy wars, factions and coups work, and every field of their
+files, is in `docs/CONFLICTS_AND_FACTIONS.md`.
 
 `common/` says what may exist; `history/` says what was true in 2024. A total conversion
 usually wants one without the other, which is why they are apart.

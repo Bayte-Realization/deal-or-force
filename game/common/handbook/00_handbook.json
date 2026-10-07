@@ -331,6 +331,16 @@
         "laws"
       ]
     },
+    "coups": {
+      "topic": "society",
+      "order": 5,
+      "screen": "Nation",
+      "related": [
+        "stability",
+        "factions",
+        "laws"
+      ]
+    },
     "secession": {
       "topic": "society",
       "order": 10,

@@ -28,6 +28,8 @@ public sealed partial class Defines
     public float AiCivilWarRestraint { get; set; } = 0.6f;
     /// <summary>How much of a neighbour's weakness a government counts toward a war it has no reason it could give for.</summary>
     public float AiWeaknessWithoutCause { get; set; } = 0.3f;
+    /// <summary>The share of a government's ground a faction claiming the state must hold, with the capital, for the government to fall.</summary>
+    public float FactionTakeOverShare { get; set; } = 0.5f;
 }
 
 public sealed partial class Nation
