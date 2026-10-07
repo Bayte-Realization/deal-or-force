@@ -100,6 +100,37 @@ public static class CountryNames
         return map ? Resolve(nation, false) : Loc.Get(nation.Name);
     }
 
+    private static Dictionary<string, CityDefinition> _citiesByName;
+    private static IReadOnlyList<CityDefinition> _citiesFrom;
+
+    /// <summary>
+    /// A country's capital in the reader's language: its own row ("capital.&lt;name&gt;"), else the
+    /// city of that name, whose translation the map already reads (city.&lt;id&gt;.name), else the
+    /// name as a key. The dossier said "Warsaw" under a map that said "Варшава", and the capital
+    /// of Guernsey stood on the Russian map as "Saint Peter Port".
+    /// </summary>
+    public static string Capital(Nation nation)
+    {
+        if (nation is null || string.IsNullOrWhiteSpace(nation.CapitalName)) return "";
+        var name = nation.CapitalName;
+        if (Loc.Has("capital." + name)) return Loc.Get("capital." + name);
+        var cities = CityCatalog.All;
+        if (!ReferenceEquals(cities, _citiesFrom) || _citiesByName is null)
+        {
+            var byName = new Dictionary<string, CityDefinition>(StringComparer.OrdinalIgnoreCase);
+            foreach (var city in cities)
+                if (!byName.TryGetValue(city.Name, out var known) || !known.IsNationalCapital && city.IsNationalCapital)
+                    byName[city.Name] = city;
+            _citiesByName = byName;
+            _citiesFrom = cities;
+        }
+        // The city's translation when it has one; otherwise the name itself as a key, which is
+        // how the capitals' own table (41_capitals) translates the rest.
+        return _citiesByName.TryGetValue(name, out var found) && Loc.Has($"city.{found.Id}.name")
+            ? found.DisplayName
+            : Loc.Get(name);
+    }
+
     /// <summary>Optional localized short identity for narrow HUD columns. A formed
     /// state's identity wins over its founder; full names remain in dossiers/tooltips.</summary>
     public static string Compact(Nation nation)

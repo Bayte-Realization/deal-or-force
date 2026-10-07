@@ -336,7 +336,7 @@ public partial class DealOrForceGame
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text = Tr(location);
         DetailHeading("COUNTRY");
-        DetailRow("Capital", nation.CapitalName);
+        DetailRow("Capital", CountryNames.Capital(nation));
         DetailRow("Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name));
         if (CanInspectNation(nation.Id))
         {

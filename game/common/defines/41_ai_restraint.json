@@ -26,6 +26,9 @@
   // How wrong one general staff's estimate of another country's forces can be, either way:
   // the real order of battle, which is published, off by up to this share.
   "IntelEstimateError": 0.25,
+  // How often, in days, the world reassesses a country's forces: a mobilisation in secret is
+  // in nobody's estimate until the next assessment.
+  "IntelAssessmentDays": 180,
   "AiWorthRegions": 4,
   "AiWorthFloor": 0.15
 }

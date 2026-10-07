@@ -143,6 +143,7 @@ public static class CampaignFingerprint
             MixFloat(nation.ManpowerReserve);
             // When it last came apart, which is what decides whether it may again.
             Mix(nation.LastSecessionDay);
+            Mix(nation.AssessedDay); MixFloat(nation.AssessedStrength);
             MixText(nation.RememberedInstitutions); Mix(nation.InstitutionAgeDays);
             Mix(nation.LastInstitutionReviewDay); Mix(nation.LastSocialReviewDay);
             MixFloat(nation.InstitutionalHabit); MixFloat(nation.ExpectedLivingStandard);

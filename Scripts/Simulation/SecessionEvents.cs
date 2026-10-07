@@ -810,7 +810,9 @@ public static class SecessionEvents
             !campaign.Nations.Any(n => string.Equals(n.Name, country, StringComparison.OrdinalIgnoreCase) &&
                 campaign.StatesOf(n).Length > 0)) return country;
         if (!string.IsNullOrWhiteSpace(seat)) return seat;
-        var people = DemographyCatalog.CultureName(culture);
+        // The English name, which is a key: the reader's own language is applied on screen, and a
+        // country named in Russian would stay Russian in an English game loaded from the save.
+        var people = DemographyCatalog.CultureKey(culture);
         return string.IsNullOrWhiteSpace(people) ? parent?.Name ?? "" : people;
     }
 

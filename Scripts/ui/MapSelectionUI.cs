@@ -300,7 +300,7 @@ public partial class DealOrForceGame
             _countryCardStanding.Text = Tr("Your country");
             _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
             _countryCardStanding.TooltipText = "";
-            CardRow(_countryCardRows, "Capital", nation.CapitalName);
+            CardRow(_countryCardRows, "Capital", CountryNames.Capital(nation));
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));
             CardRow(_countryCardRows, "Treasury", Fmt.Money(nation.Treasury), null,
                 nation.Treasury < 0f ? "state.negative" : "text.bright");
@@ -338,7 +338,7 @@ public partial class DealOrForceGame
             .Take(5)
             .Select(entry => $"{Tr(entry.Source)} {entry.Value:+0.0;-0.0;0.0}")));
 
-        CardRow(_countryCardRows, "Capital", nation.CapitalName);
+        CardRow(_countryCardRows, "Capital", CountryNames.Capital(nation));
         if (CanInspectNation(nation.Id))
         {
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));

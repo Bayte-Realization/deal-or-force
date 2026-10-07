@@ -27,7 +27,7 @@ public partial class DealOrForceGame
             Alignment = BoxContainer.AlignmentMode.Begin,
             ClipContents = true
         };
-        row.AddThemeConstantOverride("separation", 5);
+        row.AddThemeConstantOverride("separation", 4);
         margin.AddChild(row);
 
         _projectionButton = ActionButton("3D GLOBE", ToggleProjection, 104, 34, true);
@@ -74,7 +74,7 @@ public partial class DealOrForceGame
         foreach (var pair in _mapModeButtons)
         {
             var tip = Tr(pair.Key.ToString()) + " \u2014 " + Tr(MapModeHelp(pair.Key));
-            if (pair.Key is StrategicMapMode.Diplomatic or StrategicMapMode.Wars && subject is not null)
+            if (pair.Key is StrategicMapMode.Diplomatic or StrategicMapMode.Wars or StrategicMapMode.Tension && subject is not null)
                 tip += "\n" + Simulation.Loc.Format(
                     "Seen from {0}. Pick another country on the map to see it from theirs; close the panel to come back to your own.",
                     subject.DisplayName);
@@ -98,6 +98,9 @@ public partial class DealOrForceGame
         StrategicMapMode.Economy => "gdp",
         StrategicMapMode.Terrain => "terrain",
         StrategicMapMode.Resources => "industry",
+        StrategicMapMode.Stability => "stability",
+        StrategicMapMode.Unrest => "unrest",
+        StrategicMapMode.Tension => "war",
         _ => "relief"
     });
 
@@ -111,13 +114,16 @@ public partial class DealOrForceGame
         StrategicMapMode.Economy => "Total GDP by country, not treasury or regional output. Brighter means a larger economy; unknown countries stay neutral.",
         StrategicMapMode.Terrain => "The ground itself, with no politics on it. Hover a province for what it does to a march and a battle.",
         StrategicMapMode.Resources => "Regional resource potential. Choose a raw material and locate its deposits.",
+        StrategicMapMode.Stability => "Every region's stability: green holds, amber wavers, red is coming apart. A capital in the red is how coups and civil wars start.",
+        StrategicMapMode.Unrest => "Radicalism and the pull to leave, region by region: grey is quiet, amber restless, red close to rising or declaring independence.",
+        StrategicMapMode.Tension => "How close each country is to shooting with this one: amber is friction and crisis, red is armed clashes, dark red is war. Talks in the Conflicts screen cool it.",
         _ => "Height and shade, from the moddable relief layer."
     };
 
     private void AddMode(Container row, StrategicMapMode mode)
     {
         var icon = MapModeIcon(mode);
-        var button = ActionButton("", () => _globe.SetMapMode(mode), 40, 34,
+        var button = ActionButton("", () => _globe.SetMapMode(mode), 32, 34,
             mode == StrategicMapMode.Political,
             Simulation.SpriteCatalog.TextureOf("icon_" + icon,
                 $"res://game/gfx/interface/icons/icon_{icon}.png"));
@@ -138,7 +144,9 @@ public partial class DealOrForceGame
             var selected = pair.Key == active;
             pair.Value.Text = selected && showLabel
                 ? Tr(pair.Key == StrategicMapMode.Diplomatic ? "Diplomacy" : pair.Key.ToString()) : "";
-            pair.Value.CustomMinimumSize = new Vector2(selected && showLabel ? 142 : 40, 34);
+            // Eleven layers and the globe in one strip: a narrower mark, a label that fits
+            // "Напряжённость" and nothing wider, or the strip ran off the right of the screen.
+            pair.Value.CustomMinimumSize = new Vector2(selected && showLabel ? 140 : 32, 34);
             pair.Value.SetPressedNoSignal(selected);
             StyleButton(pair.Value, selected);
         }

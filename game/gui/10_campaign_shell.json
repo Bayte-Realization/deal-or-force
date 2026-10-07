@@ -9,7 +9,7 @@
     "hud.fleet_panel": { "anchors": [0,0,0,0], "offsets": [106,90,548,610] },
     "hud.country_card": { "anchors": [0,0,0,0], "offsets": [106,90,548,760] },
     "hud.region_card": { "anchors": [0,1,0,1], "offsets": [552,-262,1290,-8] },
-    "hud.map_controls": { "anchors": [1,1,1,1], "offsets": [-620,-52,-8,-8] },
+    "hud.map_controls": { "anchors": [1,1,1,1], "offsets": [-720,-52,-8,-8] },
     "hud.outliner": { "anchors": [1,0,1,0], "offsets": [-300,90,-8,620] },
     "hud.hotseat": { "anchors": [0,1,0,1], "offsets": [106,-54,365,-6] },
     "hud.network": { "anchors": [0,1,0,1], "offsets": [106,-54,425,-6] }

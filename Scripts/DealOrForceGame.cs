@@ -1058,7 +1058,7 @@ public partial class DealOrForceGame : Control
                             Tr("States that keep it going with money, weapons or soldiers on the ground. A country thinking of attacking it counts them."));
                 }
                 DetailHeading("STATE");
-                DetailRow("Capital", Tr(nation.CapitalName));
+                DetailRow("Capital", CountryNames.Capital(nation));
                 DetailRow("States held", _campaign.StatesOf(nation).Length.ToString("N0"));
                 DetailRow("Population", Fmt.People(nation.Population), Fmt.PeopleExact(nation.Population));
                 DetailHeading("ECONOMY");

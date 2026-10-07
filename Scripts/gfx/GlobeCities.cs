@@ -586,8 +586,7 @@ public sealed partial class GlobePresentation
     /// <summary>What the country calls its capital, as the country picker says it.</summary>
     private static string StarCapitalName(Nation nation)
     {
-        if (nation is null || string.IsNullOrWhiteSpace(nation.CapitalName)) return "";
-        return Loc.GetOr("capital." + nation.CapitalName, Loc.Get(nation.CapitalName));
+        return CountryNames.Capital(nation);
     }
 
     /// <summary>Whether a drawn capital star stands on this city, which then needs no dot of its own.</summary>

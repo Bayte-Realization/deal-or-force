@@ -1,7 +1,7 @@
 {
   "layout": {
     "hud.resource_atlas": { "anchors": [0,0,0,1], "offsets": [106,90,536,-62] },
-    "hud.map_controls": { "anchors": [1,1,1,1], "offsets": [-660,-52,-8,-8] }
+    "hud.map_controls": { "anchors": [1,1,1,1], "offsets": [-720,-52,-8,-8] }
   },
   "colours": {
     "resources.none": "#1c2b35",

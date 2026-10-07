@@ -170,13 +170,17 @@ public static class DemographyCatalog
     public static ReligionDefinition Religion(string id) =>
         id is not null && ReligionById.TryGetValue(id, out var found) ? found : null;
 
-    public static string CultureName(string id) => Culture(id)?.Name ?? Titled(id);
-    public static string ReligionName(string id) => Religion(id)?.Name ?? Titled(id);
+    // In the reader's language: the tables translate the peoples by their English name, and the
+    // region panel said "Largest people: Danish" in Russian because nothing asked them.
+    public static string CultureName(string id) => Loc.Get(CultureKey(id));
+    /// <summary>The people's name as the tables key it, in English: for names that are stored, not shown.</summary>
+    public static string CultureKey(string id) => Culture(id)?.Name ?? Titled(id);
+    public static string ReligionName(string id) => Loc.Get(Religion(id)?.Name ?? Titled(id));
 
     public static ProfessionDefinition Profession(string id) =>
         ProfessionList.FirstOrDefault(entry => string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
 
-    public static string ProfessionName(string id) => Profession(id)?.Name ?? Titled(id);
+    public static string ProfessionName(string id) => Loc.Get(Profession(id)?.Name ?? Titled(id));
 
     /// <summary>
     /// The peoples a state is for, as a set - or null for a state that is for nobody. For a

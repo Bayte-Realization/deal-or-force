@@ -15,7 +15,12 @@ public enum StrategicMapMode
     Economy,
     Terrain,
     Relief,
-    Resources
+    Resources,
+    // What the mechanics are doing, where: every region's stability, the unrest and the pull to
+    // leave in it, and how close the country it is seen from is to shooting with every other.
+    Stability,
+    Unrest,
+    Tension
 }
 
 public sealed partial class GlobePresentation
@@ -404,7 +409,7 @@ public sealed partial class GlobePresentation
         var id = nation is null || nation == _campaign?.Player ? -1 : nation.Id;
         if (id == _mapModeSubjectId) return;
         _mapModeSubjectId = id;
-        if (_mapMode is StrategicMapMode.Diplomatic or StrategicMapMode.Wars) RefreshMapModePalette();
+        if (_mapMode is StrategicMapMode.Diplomatic or StrategicMapMode.Wars or StrategicMapMode.Tension) RefreshMapModePalette();
         MapModeSubjectChanged?.Invoke(MapModeSubject);
     }
 
@@ -425,6 +430,17 @@ public sealed partial class GlobePresentation
         if (_mapMode == StrategicMapMode.Resources)
         {
             RefreshResourcePalette();
+            return;
+        }
+        if (_mapMode == StrategicMapMode.Stability)
+        {
+            RefreshRegionalPalette(state => StabilityRamp(state.Stability));
+            return;
+        }
+        if (_mapMode == StrategicMapMode.Unrest)
+        {
+            // Whichever is worse: how radical the region is, or how far it is towards leaving.
+            RefreshRegionalPalette(state => UnrestRamp(MathF.Max(state.Radicalism, Math.Clamp(state.SecessionPressure, 0f, 1f))));
             return;
         }
         if (_mapMode is StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief)
@@ -496,9 +512,76 @@ public sealed partial class GlobePresentation
             case StrategicMapMode.Economy:
                 return EconomicRamp((float)((Math.Log10(Math.Max(0.01, nation.Gdp)) - minGdp) /
                     Math.Max(0.001, maxGdp - minGdp)));
+            case StrategicMapMode.Tension:
+                if (nation == player) return Ui.Colour("map.player");
+                if (CampaignDiplomacy.AtWar(_campaign, player.Id, nation.Id)) return Ui.Colour("map.at_war");
+                var standoff = CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id);
+                return Escalation.StageOf(standoff) switch
+                {
+                    TensionStage.Clashes => Ui.Colour("state.critical"),
+                    TensionStage.Crisis => Ui.Colour("state.warning"),
+                    TensionStage.Friction => Ui.Colour("map.neutral").Lerp(Ui.Colour("state.warning"), 0.45f),
+                    _ => Ui.Colour("map.neutral")
+                };
             default:
                 return new Color(nation.Color);
         }
+    }
+
+    /// <summary>
+    /// A layer drawn region by region rather than country by country, through the same
+    /// per-province palette the resource layer uses. Land nobody owns stays neutral.
+    /// </summary>
+    private void RefreshRegionalPalette(Func<ScenarioState, Color> colour)
+    {
+        var pixels = new byte[256 * 256 * 4];
+        var map = _campaign.ProvinceMap;
+        if (map is not null)
+        {
+            var byRegion = new Dictionary<int, Color>();
+            var hidden = Ui.Colour("map.neutral");
+            foreach (var state in _campaign.States)
+            {
+                var owner = state.NationMapIndex == 0 ? null : _campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
+                // Every country's: how settled a region is, and how restless, is the news, not a
+                // secret - the dossier of every country already says it.
+                byRegion[state.MapIndex] = owner is null ? hidden : colour(state);
+            }
+            for (var p = 1; p <= map.ProvinceCount && p < 65536; p++)
+            {
+                if (map.WaterByProvince[p]) continue;
+                var tone = byRegion.TryGetValue(map.ProvinceToState[p], out var found) ? found : hidden;
+                var i = p * 4;
+                pixels[i] = (byte)Mathf.RoundToInt(tone.R * 255);
+                pixels[i + 1] = (byte)Mathf.RoundToInt(tone.G * 255);
+                pixels[i + 2] = (byte)Mathf.RoundToInt(tone.B * 255);
+                pixels[i + 3] = 255;
+            }
+        }
+        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(image);
+        else _resourceTexture.Update(image);
+        _globeMaterial.SetShaderParameter("resource_colors", _resourceTexture);
+        _globeMaterial.SetShaderParameter("map_mode", 0f);
+        _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
+    }
+
+    /// <summary>Red where a region is coming apart, amber in between, green where it holds.</summary>
+    private static Color StabilityRamp(float stability)
+    {
+        stability = Mathf.Clamp(stability, 0f, 1f);
+        return stability < 0.5f
+            ? Ui.Colour("state.critical").Lerp(Ui.Colour("state.warning"), stability * 2f)
+            : Ui.Colour("state.warning").Lerp(Ui.Colour("state.positive"), (stability - 0.5f) * 2f);
+    }
+
+    /// <summary>Quiet regions grey, restless ones amber, those close to rising or leaving red.</summary>
+    private static Color UnrestRamp(float unrest)
+    {
+        unrest = Mathf.Clamp(unrest, 0f, 1f);
+        return unrest < 0.5f
+            ? Ui.Colour("map.neutral").Lerp(Ui.Colour("state.warning"), unrest * 2f)
+            : Ui.Colour("state.warning").Lerp(Ui.Colour("state.critical"), (unrest - 0.5f) * 2f);
     }
 
     private static Color HeatRamp(float value)
@@ -520,6 +603,8 @@ public sealed partial class GlobePresentation
     private void UpdateMapModePaletteIfNeeded()
     {
         if (_mapMode is StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief || _campaign is null) return;
-        if (_campaign.ElapsedDays - _lastMapModeDay >= 30) RefreshMapModePalette();
+        // The mechanics' layers move weekly; the census and the economy are monthly figures.
+        var every = _mapMode is StrategicMapMode.Stability or StrategicMapMode.Unrest or StrategicMapMode.Tension ? 7 : 30;
+        if (_campaign.ElapsedDays - _lastMapModeDay >= every) RefreshMapModePalette();
     }
 }
