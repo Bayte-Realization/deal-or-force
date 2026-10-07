@@ -898,8 +898,11 @@ public static class EconomySystem
             }
             if (states.Length > 0) nation.Population = totalPopulation;
             var focusSol = cabinet.Living + government.Living + ideology.Living;
+            // The same tolerance growth and prices already forgive: a market 94% supplied is a
+            // working market, and charging every point of it to how people live took five
+            // hundredths a year off the living standard of every poor country, whose markets run 80% supplied.
             nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + annualGrowth * 0.004f -
-                nation.ShortageIndex * campaign.Defines.ShortageSolWeeklyPenalty +
+                MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance) * campaign.Defines.ShortageSolWeeklyPenalty +
                 budget.Living + focusSol);
             var focusLiteracy = cabinet.Literacy + government.Literacy + ideology.Literacy;
             nation.Literacy = M.Clamp(nation.Literacy + budget.Literacy + focusLiteracy,

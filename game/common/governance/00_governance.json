@@ -111,13 +111,19 @@
     },
 
     // ----------------------------------------------------------- the crown, both ways --
+    // Only where a crown was lost within living memory and a claimant still stands: Libya's
+    // Senussi, Afghanistan, Iran's Pahlavis, Iraq, Ethiopia, Egypt, the Balkan houses,
+    // Romania, Bulgaria, Greece, Italy, Laos, Burundi, Rwanda, Nepal, Yemen, Albania. A junta
+    // with no throne behind it does not discover one - Myanmar's last king was deposed in 1885.
     "restoration": {
       "name": "The monarchy restored",
       "government": "constitutional_monarchy",
       "ideology": "traditionalism",
+      "countries": ["LBY", "AFG", "IRN", "IRQ", "ETH", "EGY", "SRB", "MNE", "ROU", "BGR", "GRC",
+                    "ITA", "LAO", "BDI", "RWA", "NPL", "YEM", "ALB"],
       "from_government": ["provisional_government", "military_junta", "absolute_monarchy"],
       "stability_below": 0.45,
-      "weight": 0.8
+      "weight": 0.25
     },
 
     "abdication": {

@@ -8,6 +8,12 @@ namespace DealOrForce.Simulation;
 public sealed class GovernanceTransition
 {
     public string Id = "";
+    /// <summary>
+    /// The countries the transition can happen in at all, by tag; empty for every country. A
+    /// crown can only be restored where there was one to restore: the junta in Ouagadougou
+    /// and the government of Palestine were becoming constitutional monarchies.
+    /// </summary>
+    public readonly List<string> Countries = new();
 
     /// <summary>What a player is told happened. Blank means the id, tidied up.</summary>
     public string Name = "";
@@ -146,6 +152,7 @@ public static class GovernanceEvents
                     case "losing_war": transition.LosingWar = Flag(field.Value); break;
                     case "from_government": Fill(transition.FromGovernment, field.Value); break;
                     case "from_ideology": Fill(transition.FromIdeology, field.Value); break;
+                    case "countries": Fill(transition.Countries, field.Value); break;
                     default:
                         errors?.Add($"common/governance: '{entry.Name}' reads '{field.Name}', " +
                                     "which is not something this game understands.");
@@ -299,6 +306,7 @@ public static class GovernanceEvents
         if (transition.AtWar >= 0 && (transition.AtWar == 1) != atWar) return false;
         if (transition.LosingWar >= 0 && (transition.LosingWar == 1) != losing) return false;
 
+        if (transition.Countries.Count > 0 && !Holds(transition.Countries, nation.Tag)) return false;
         if (transition.FromGovernment.Count > 0 && !Holds(transition.FromGovernment, nation.Government))
             return false;
         if (transition.FromIdeology.Count > 0 && !Holds(transition.FromIdeology, nation.Ideology))

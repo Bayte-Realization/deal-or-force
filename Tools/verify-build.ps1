@@ -15,6 +15,10 @@ $stderrPath = Join-Path $LogDirectory 'verification.stderr.log'
 $verificationProcess = Start-Process -FilePath $verificationExecutable -ArgumentList '--headless', '--', '--verify-build' `
     -WorkingDirectory (Split-Path -Parent $verificationExecutable) -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+# Touch the handle now: a process started with -PassThru and waited on with WaitForExit(ms)
+# reports no exit code at all unless its handle was taken while it was running, and a
+# clean run then fails as "exit ".
+$null = $verificationProcess.Handle
 $verificationTimer = [Diagnostics.Stopwatch]::StartNew()
 while (-not $verificationProcess.WaitForExit(1000)) {
     if ($verificationTimer.Elapsed.TotalSeconds -ge $TimeoutSeconds) {

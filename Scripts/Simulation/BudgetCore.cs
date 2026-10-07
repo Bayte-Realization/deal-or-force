@@ -85,6 +85,13 @@ public sealed class BudgetLine
     public BudgetStore Store = BudgetStore.Policy;
 
     public float Yield = 1f;
+    /// <summary>
+    /// For a line that may be a loss, what one point of rate is worth when it is one; the
+    /// ordinary yield when unset. The state does not pay for its country's trade deficit -
+    /// importers, remittances and the money that comes in to pay for it do - and charging all
+    /// of it to the treasury emptied every importing country's treasury within half a year.
+    /// </summary>
+    public float LossYield = float.NaN;
     public float Constant = 1f;
     public int[] Factors = Array.Empty<int>();
     public float[] Weights = Array.Empty<float>();
@@ -366,6 +373,9 @@ public static class BudgetCore
                 case "yield":
                     line.Yield = Number(field.Value, line.Yield);
                     break;
+                case "loss_yield":
+                    line.LossYield = Number(field.Value, line.Yield);
+                    break;
                 case "order":
                     line.Order = (int)Number(field.Value, line.Order);
                     break;
@@ -561,6 +571,9 @@ public static class BudgetCore
         Slots[SlotInflation] = nation.Inflation;
     }
 
+    private static float YieldOf(Nation nation, BudgetLine line, float weeklyOutput) =>
+        !float.IsNaN(line.LossYield) && BasisOf(nation, line, weeklyOutput) < 0f ? line.LossYield : line.Yield;
+
     private static float BasisOf(Nation nation, BudgetLine line, float weeklyOutput) => line.Charge switch
     {
         BudgetBasis.Debt => SovereignFinance.Outstanding(nation),
@@ -639,7 +652,7 @@ public static class BudgetCore
     {
         if (nation is null || line is null) return 0f;
         FillSlots(nation, atWar);
-        var amount = BasisOf(nation, line, weeklyOutput) * rate * line.Yield * ScaleOf(line);
+        var amount = BasisOf(nation, line, weeklyOutput) * rate * YieldOf(nation, line, weeklyOutput) * ScaleOf(line);
         if (nation.DebtMechanicActive && line.Id == "debt_interest")
             amount += nation.PublicDebt * nation.DebtSpreadAnnual / 52f;
         // At the rate being asked about, not the one the country has set - otherwise the
@@ -651,7 +664,7 @@ public static class BudgetCore
     private static float AmountFromSlots(Nation nation, BudgetLine line, float weeklyOutput,
         float compliance)
     {
-        var amount = BasisOf(nation, line, weeklyOutput) * RateOf(nation, line) * line.Yield * ScaleOf(line);
+        var amount = BasisOf(nation, line, weeklyOutput) * RateOf(nation, line) * YieldOf(nation, line, weeklyOutput) * ScaleOf(line);
         if (nation.DebtMechanicActive && line.Id == "debt_interest")
             amount += nation.PublicDebt * nation.DebtSpreadAnnual / 52f;
         if (IsLevy(line)) amount *= compliance * NationalModifiers.Factor(nation, "tax_efficiency");

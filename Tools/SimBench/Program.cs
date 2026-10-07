@@ -5496,8 +5496,12 @@ public static class Program
             china.SubjectType = "puppet";
             china.Ideology = "fascism";
             var installed = FlagCatalog.Resolve(campaign, china);
-            if (installed != "flag_chn")
-                return $"a fascist puppet China flew '{installed}' rather than its own flag";
+            // One of China's own flags - the national one or a variant of it, such as the
+            // Republic's, which a puppet answering to a liberal overlord reaches for - and never
+            // a puppet banner or a fascist one, which the base game no longer ships.
+            if (!installed.StartsWith("flag_chn", StringComparison.Ordinal) ||
+                installed.Contains("puppet") || installed.Contains("protectorate") || installed.Contains("fascism"))
+                return $"a fascist puppet China flew '{installed}' rather than one of its own flags";
             var palestine = campaign.NationByTag("PSE");
             if (palestine is not null)
             {

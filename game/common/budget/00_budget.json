@@ -89,6 +89,8 @@
       "order": 30,
       "basis": "trade_balance",
       "yield": 1.0,
+      "//loss": "A surplus is the state's: export duties, state firms, royalties. A deficit mostly is not - importers, remittances, aid and investment pay for it - and charging all of it to the treasury emptied every importing country's within half a year. The state carries a tenth: the fuel and food subsidies.",
+      "loss_yield": 0.10,
       "scale": { "constant": 1.0 },
       "rate": { "default": 1.0, "player": false }
     },
