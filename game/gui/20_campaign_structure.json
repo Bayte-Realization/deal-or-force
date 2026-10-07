@@ -1,7 +1,7 @@
 {
   "campaign": {
     "top_stats":["TREASURY","BALANCE","GDP","INFLATION","POPULATION","STABILITY","MANPOWER"],
-    "outliner_order":["WORLD","WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
+    "outliner_order":["FIRST STEPS","WORLD","WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
     "hidden_outliner":[],
     "navigation": [
       {"screen": "Nation", "short": "Country", "group": "COUNTRY", "icon": "nation", "help": "Capital, people and institutions."},
@@ -16,6 +16,7 @@
       {"screen": "Support", "label": "Long-range forces", "short": "Long-range", "group": "FORCES", "icon": "artillery", "help": "Artillery, aviation, drones and air defence: bases, training and missions."},
       {"screen": "Wars", "short": "Wars", "group": "FORCES", "icon": "wars", "help": "Wars and peace negotiations."},
       {"screen": "Diplomacy", "short": "Diplomacy", "group": "WORLD", "icon": "diplomacy", "help": "Relations with the selected country."},
+      {"screen": "Conflicts", "short": "Conflicts", "group": "WORLD", "icon": "unrest", "help": "Standoffs and crises between countries, every war and the countries backing each side."},
       {"screen": "Ledger", "short": "Reports", "group": "WORLD", "icon": "ledger", "help": "Charts, history and rankings."}
     ],
     "screens": {

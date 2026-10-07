@@ -61,7 +61,10 @@ public static class MovementAi
         if (definition.Has("civic_independence"))
             foreach (var id in definition.Homeland)
                 if (Movements.StateById(campaign, id) is { } home && Try("referendum", home.MapIndex)) break;
-        if (state.Landless && state.Heat >= 0.72f)
+        // A civic campaign lives where its voters do: it lobbies its way out of a host's temper,
+        // and never packs up for a country on the other side of the world. The Quebec campaign
+        // used to move to India when Ottawa grew tired of it.
+        if (state.Landless && state.Heat >= 0.72f && !definition.Has("civic_independence"))
         {
             var refuge = MovementRules.BestRefuge(campaign, nation, Movements.HostOf(campaign, nation));
             if (refuge is not null) Try("move", refuge.MapIndex);

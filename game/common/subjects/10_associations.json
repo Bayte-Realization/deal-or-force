@@ -18,7 +18,28 @@
     "grace_days": 36500,
     "demand_cost": 20,
     "annex_after_days": -1,
+    "imposable": false,
     "shares_overlord_politics": true
+  },
+
+  // A territory of another state with a government of its own: the British Overseas
+  // Territories and Crown Dependencies, the French and Dutch overseas collectivities, Puerto
+  // Rico and Guam, the Faroes and Greenland, Hong Kong and Macau. On the map a country; in
+  // law and in war a part of the state it belongs to.
+  "dependent_territory": {
+    "name": "Dependent territory",
+    "description": "A territory of another state, with a government of its own. Its defence and its foreign policy are the sovereign's.",
+    "tribute": 0.0,
+    "manpower": 0.0,
+    "joins_wars": true,
+    "dragged_into_wars": true,
+    "may_declare_war": false,
+    "overlord_defends": true,
+    "liberty_desire": 0.02,
+    "grace_days": 7300,
+    "demand_cost": 25,
+    "annex_after_days": -1,
+    "imposable": false
   },
 
   // A state in free association, or one living on a patron's money and garrison: the Compact
@@ -36,6 +57,7 @@
     "liberty_desire": 0.05,
     "grace_days": 3650,
     "demand_cost": 30,
-    "annex_after_days": -1
+    "annex_after_days": -1,
+    "imposable": false
   }
 }

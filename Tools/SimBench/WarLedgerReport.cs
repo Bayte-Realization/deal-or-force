@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 
@@ -48,6 +49,32 @@ internal static class WarLedgerReport
                               $"losses={w.AttackerLosses:0.000}/{w.DefenderLosses:0.000} score={w.WarScore:0.00} " +
                               $"winner={winner} \"{w.Name}\" {w.PeaceSummary}");
         }
+        // What happened short of wars: incidents, crises, backers (Escalation, ProxyWars).
+        var kinds = new[] { "incident", "incident_calm", "tension_crisis", "tension_clashes", "tension_eased",
+            "war_major", "war_total", "proxy_started", "proxy_ended", "secession", "secession_contested", "war_started" };
+        Console.WriteLine("CHRONICLE " + string.Join(" ", kinds.Select(k => $"{k}={c.Chronicle.Entries.Count(e => e.Kind == k)}")));
+        foreach (var s in c.Sponsorships.Where(s => !s.Ended).OrderByDescending(s => s.Delivered).Take(20))
+        {
+            var war = c.Wars.FirstOrDefault(w => w.Id == s.WarId);
+            var sponsor = c.NationById(s.SponsorId);
+            var client = c.NationById(s.ClientId);
+            var enemy = war is null ? null : c.NationById(war.EnemyLeaderOf(s.ClientId));
+            var why = war is null || sponsor is null || client is null || enemy is null ? "" :
+                $" stake={ProxyWars.HasStake(c, sponsor, client, enemy, war)} interest={ProxyWars.Interest(c, sponsor, client, enemy, war):0.00} gdp={sponsor.Gdp:0}";
+            Console.WriteLine($" BACKING {Tag(s.SponsorId)}->{Tag(s.ClientId)} level {s.Level} since day {s.StartedDay} sent ${s.Delivered:0.0}B war {war?.Name}{why}");
+        }
+        foreach (var m in c.Nations.Where(n => n.Movement is not null).OrderBy(n => n.Tag))
+        {
+            var s = m.Movement;
+            var top = s.Support.Count == 0 ? 0f : s.Support.Values.Max();
+            var best = c.States.Where(r => s.Support.GetValueOrDefault(r.MapIndex) > 0.05f)
+                .Select(r => (Region: r, Chance: MovementRules.UprisingChance(c, m, r)))
+                .OrderByDescending(x => x.Chance).FirstOrDefault();
+            Console.WriteLine($" MOVEMENT {m.Tag} landless={s.Landless} dissolved={s.Dissolved} cadres={s.Cadres:0} support_max={top:0.00} heat={s.Heat:0.00} regions={c.StatesOf(m).Length} treasury={m.Treasury:0.00} best_rising={best.Region?.Id}:{best.Chance:0.00} last=\"{s.LastReport}\"");
+        }
+        var hot = Escalation.Hottest(c, 49f).Take(15).ToArray();
+        foreach (var r in hot)
+            Console.WriteLine($" TENSION {Tag(r.A)}-{Tag(r.B)} {r.Tension:0} {Escalation.StageOf(r)} grievance {r.GrievanceA:0}/{r.GrievanceB:0} clashes {r.ClashLosses:0}");
         return 0;
     }
 }

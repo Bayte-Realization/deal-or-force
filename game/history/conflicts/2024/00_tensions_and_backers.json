@@ -1,0 +1,101 @@
+// The tensions and the backers the world opened with on 1 January 2024 (ConflictHistory.cs).
+// `structural` is the part no week of good behaviour removes; `tension` where it stands on
+// the first day; `grievance` what each of the two holds against the other, in order.
+{
+  "tensions": [
+    // An armistice since 1953; on 5 January 2024 the North fired two hundred shells near Yeonpyeong.
+    { "between": ["KOR", "PRK"], "structural": 55, "tension": 66, "grievance": [20, 20] },
+    { "between": ["PRK", "USA"], "structural": 40, "tension": 60 },
+    // Missiles over Japanese waters.
+    { "between": ["PRK", "JPN"], "structural": 30, "tension": 55 },
+    // Across the strait, with an election in Taiwan on 13 January 2024.
+    { "between": ["CHN", "TWN"], "structural": 60, "tension": 64 },
+    { "between": ["CHN", "USA"], "structural": 30, "tension": 55 },
+    // Water cannon and rammings at the Second Thomas Shoal.
+    { "between": ["CHN", "PHL"], "structural": 25, "tension": 55 },
+    // The Line of Actual Control, since Galwan in 2020.
+    { "between": ["CHN", "IND"], "structural": 30, "tension": 45, "grievance": [0, 15] },
+    { "between": ["CHN", "JPN"], "structural": 20, "tension": 38 },
+    { "between": ["CHN", "VNM"], "structural": 15, "tension": 25 },
+    // Kashmir.
+    { "between": ["IND", "PAK"], "structural": 50, "tension": 56, "grievance": [30, 30] },
+    // The Durand Line and the Pakistani Taliban.
+    { "between": ["AFG", "PAK"], "structural": 30, "tension": 50, "grievance": [0, 10] },
+    { "between": ["IRN", "ISR"], "structural": 50, "tension": 70 },
+    // Fire across the Lebanese border every day since October 2023.
+    { "between": ["ISR", "LBN"], "structural": 40, "tension": 76, "grievance": [0, 10] },
+    // Air strikes, and the Golan.
+    { "between": ["ISR", "SYR"], "structural": 35, "tension": 55, "grievance": [0, 15] },
+    { "between": ["IRN", "USA"], "structural": 40, "tension": 65 },
+    // On 16 and 18 January 2024 the two struck each other's territory.
+    { "between": ["IRN", "PAK"], "structural": 15, "tension": 42 },
+    { "between": ["IRN", "SAU"], "structural": 10, "tension": 28 },
+    { "between": ["IRN", "AZE"], "structural": 15, "tension": 35 },
+    // Nagorno-Karabakh fell to Azerbaijan in September 2023.
+    { "between": ["ARM", "AZE"], "structural": 45, "tension": 60, "grievance": [50, 20] },
+    { "between": ["RUS", "USA"], "structural": 40, "tension": 70 },
+    { "between": ["RUS", "GBR"], "structural": 30, "tension": 65 },
+    { "between": ["RUS", "POL"], "structural": 35, "tension": 64 },
+    { "between": ["RUS", "LTU"], "structural": 30, "tension": 60 },
+    { "between": ["RUS", "LVA"], "structural": 30, "tension": 58 },
+    { "between": ["RUS", "EST"], "structural": 30, "tension": 58 },
+    { "between": ["RUS", "FIN"], "structural": 20, "tension": 50 },
+    { "between": ["RUS", "DEU"], "structural": 25, "tension": 55 },
+    { "between": ["RUS", "FRA"], "structural": 20, "tension": 50 },
+    { "between": ["RUS", "MDA"], "structural": 25, "tension": 50, "grievance": [0, 10] },
+    // The 2008 war and the two breakaways.
+    { "between": ["RUS", "GEO"], "structural": 30, "tension": 45, "grievance": [0, 40] },
+    { "between": ["BLR", "POL"], "structural": 25, "tension": 55 },
+    { "between": ["BLR", "LTU"], "structural": 20, "tension": 50 },
+    { "between": ["BLR", "UKR"], "structural": 30, "tension": 62, "grievance": [0, 20] },
+    // The Banjska attack of September 2023.
+    { "between": ["SRB", "KOS"], "structural": 45, "tension": 60, "grievance": [40, 10] },
+    { "between": ["GRC", "TUR"], "structural": 20, "tension": 25 },
+    { "between": ["CYP", "TUR"], "structural": 35, "tension": 40, "grievance": [20, 0] },
+    { "between": ["TUR", "SYR"], "structural": 30, "tension": 50 },
+    // Venezuela voted in December 2023 to annex most of Guyana.
+    { "between": ["VEN", "GUY"], "structural": 35, "tension": 65 },
+    { "between": ["ETH", "ERI"], "structural": 30, "tension": 45, "grievance": [25, 25] },
+    // On 1 January 2024 Ethiopia signed a port deal with Somaliland.
+    { "between": ["ETH", "SOM"], "structural": 20, "tension": 52, "grievance": [0, 15] },
+    { "between": ["SOM", "SOL"], "structural": 35, "tension": 45, "grievance": [20, 0] },
+    // The Grand Ethiopian Renaissance Dam.
+    { "between": ["EGY", "ETH"], "structural": 25, "tension": 45 },
+    { "between": ["SDN", "SSD"], "structural": 20, "tension": 30 },
+    { "between": ["TCD", "SDN"], "structural": 15, "tension": 30 },
+    { "between": ["MAR", "DZA"], "structural": 35, "tension": 50 },
+    { "between": ["MAR", "ESH"], "structural": 50, "tension": 55, "grievance": [0, 30] },
+    // The M23 rebellion in North Kivu.
+    { "between": ["RWA", "COD"], "structural": 40, "tension": 70, "grievance": [0, 30] },
+    { "between": ["RWA", "BDI"], "structural": 20, "tension": 45 },
+    // The border war of 2022.
+    { "between": ["KGZ", "TJK"], "structural": 30, "tension": 45, "grievance": [15, 15] },
+    { "between": ["MLI", "DZA"], "structural": 15, "tension": 35 },
+    { "between": ["NER", "BEN"], "structural": 15, "tension": 40 },
+    { "between": ["NER", "FRA"], "structural": 25, "tension": 50 },
+    { "between": ["MLI", "FRA"], "structural": 20, "tension": 45 },
+    { "between": ["BFA", "FRA"], "structural": 20, "tension": 40 },
+    { "between": ["USA", "CUB"], "structural": 25, "tension": 35 },
+    { "between": ["USA", "VEN"], "structural": 25, "tension": 45 },
+    { "between": ["THA", "KHM"], "structural": 10, "tension": 20 }
+  ],
+
+  // Who was arming whom in the war being fought. Levels: 1 advisers and money, 2 weapons,
+  // 3 weapons at scale and volunteers; capped by the size of the sponsor's economy.
+  "sponsorships": [
+    { "sponsor": "USA", "client": "UKR", "war": ["RUS", "UKR"], "level": 3 },
+    { "sponsor": "GBR", "client": "UKR", "war": ["RUS", "UKR"], "level": 2 },
+    { "sponsor": "DEU", "client": "UKR", "war": ["RUS", "UKR"], "level": 2 },
+    { "sponsor": "POL", "client": "UKR", "war": ["RUS", "UKR"], "level": 2 },
+    { "sponsor": "FRA", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "NLD", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "DNK", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "SWE", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "NOR", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "CAN", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "JPN", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "IRN", "client": "RUS", "war": ["RUS", "UKR"], "level": 2 },
+    { "sponsor": "PRK", "client": "RUS", "war": ["RUS", "UKR"], "level": 1 },
+    { "sponsor": "BLR", "client": "RUS", "war": ["RUS", "UKR"], "level": 1 }
+  ]
+}

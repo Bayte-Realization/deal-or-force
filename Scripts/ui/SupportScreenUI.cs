@@ -114,6 +114,7 @@ public partial class DealOrForceGame
         var title = Title("LONG-RANGE FORCES", 21, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
+        header.AddChild(HandbookButton("long_range"));
         header.AddChild(ActionButton("×", CloseSupportScreen, 34, 30));
 
         _supportSummary = Title("", 12, Ui.Colour("text.body_soft"));

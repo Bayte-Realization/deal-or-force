@@ -1,0 +1,41 @@
+// What tension and war do to the countries in them (Escalation.cs) and what foreign backing does
+// for a country at war (ProxyWars.cs). Granted every review and lapse a fortnight after it stops.
+// The same grammar as 00_modifiers.json.
+{
+  "border_clashes": {
+    "name": "Border clashes",
+    "description": "Shooting along the border every week. The army is on alert and the country rallies behind it.",
+    "days": 14, "positive": false,
+    "modifiers": { "stability_weekly": -0.001, "war_support_weekly": 0.002, "militia_readiness": 0.15 }
+  },
+  "major_war": {
+    "name": "A major war",
+    "description": "The war has become a war of armies and of the whole economy behind them.",
+    "days": 14, "positive": false,
+    "modifiers": { "recruitment_speed": 0.15, "reinforcement_rate": 0.10, "output": -0.01 }
+  },
+  "total_war": {
+    "name": "Total war",
+    "description": "Everything for the front. Call-ups, rationing, factories on war footing.",
+    "days": 14, "positive": false,
+    "modifiers": { "recruitment_speed": 0.35, "reinforcement_rate": 0.25, "output": -0.03, "stability_weekly": -0.0015, "war_support_weekly": 0.001 }
+  },
+  "foreign_backing_1": {
+    "name": "Foreign advisers",
+    "description": "Advisers, money and spare parts from abroad.",
+    "days": 14, "positive": true,
+    "modifiers": { "organisation_recovery": 0.05, "supply": 0.03 }
+  },
+  "foreign_backing_2": {
+    "name": "Foreign arms",
+    "description": "Weapons and ammunition arrive from abroad every week.",
+    "days": 14, "positive": true,
+    "modifiers": { "organisation_recovery": 0.06, "supply": 0.05, "army_defense": 0.03, "reinforcement_rate": 0.08 }
+  },
+  "foreign_backing_3": {
+    "name": "Heavy foreign backing",
+    "description": "Arms at scale, intelligence and volunteers: powerful patrons want this war won.",
+    "days": 14, "positive": true,
+    "modifiers": { "organisation_recovery": 0.08, "supply": 0.08, "army_defense": 0.05, "army_attack": 0.02, "reinforcement_rate": 0.15 }
+  }
+}

@@ -61,6 +61,7 @@ public partial class DealOrForceGame
         var title = Title("PRODUCTION", 23, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
+        header.AddChild(HandbookButton("production"));
         header.AddChild(ActionButton("×", CloseProductionScreen, 38, 32));
         _productionSummary = ProductionLabel("", 12, "text.caption");
         _productionSummary.Name = "ProductionPools";

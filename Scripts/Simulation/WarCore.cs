@@ -155,6 +155,31 @@ public sealed partial class StrategicWar
     private static readonly HashSet<int> EmptyFront = new();
 }
 
+/// <summary>
+/// What a war is called on screen, in the language being played.
+///
+/// A war's name is written once, in English, the day it starts - a history name ("Sudanese Civil
+/// War") or the two countries' names ("Turkey–North and East Syria War") - and the Russian
+/// interface printed it as it was written. A history name is a translation key; a pair name is
+/// rebuilt from the two countries' names as they are shown now.
+/// </summary>
+public static class WarNames
+{
+    public static string Of(Campaign campaign, StrategicWar war)
+    {
+        if (war is null) return "";
+        if (war.Name.Length > 0 && Loc.Has(war.Name)) return Loc.Get(war.Name);
+        var attacker = campaign?.NationById(war.AttackerId);
+        var defender = campaign?.NationById(war.DefenderId);
+        if (attacker is not null && defender is not null &&
+            (war.Name.Length == 0 || war.Name == $"{attacker.Name}–{defender.Name} War"))
+            return Loc.Format("{0}–{1} War", attacker.DisplayName, defender.DisplayName);
+        if (attacker is not null && defender is not null && war.Name == $"{attacker.Name}–{defender.Name} Border War")
+            return Loc.Format("{0}–{1} Border War", attacker.DisplayName, defender.DisplayName);
+        return war.Name;
+    }
+}
+
 public static class WarBootstrap
 {
     public static void Seed(Campaign campaign)

@@ -1,0 +1,133 @@
+{
+  // Conflicts between the wars: escalation, proxy wars, breakaways and the de facto powers.
+  // Every value here is the compiled default; docs/CONFLICTS_AND_FACTIONS.md says what they do.
+
+  // Tension between countries and how wars grow (Escalation.cs).
+  // How often the tension between two countries is weighed, in days.
+  "EscalationReviewDays": 7,
+  // The share of the way to where tension is heading that it covers in a review, rising and
+  // falling.
+  "TensionRiseRate": 0.10,
+  "TensionFallRate": 0.06,
+  // Where the stages begin: friction, crisis, armed clashes. Leaving a stage takes the
+  // hysteresis less.
+  "TensionFrictionAt": 25,
+  "TensionCrisisAt": 50,
+  "TensionClashesAt": 75,
+  "TensionHysteresis": 6,
+  // What each reason adds to where tension is heading, in points of 100.
+  "TensionFromHostility": 0.20,
+  "TensionFromGrievance": 0.35,
+  "TensionFromLostLand": 12,
+  "TensionFromRivalry": 10,
+  "TensionFromProxy": 10,
+  "TensionFromIdeology": 8,
+  // Neighbours feel all of it; countries an ocean apart feel this much of it.
+  "TensionBorderFactor": 1.0,
+  "TensionDistantFactor": 0.5,
+  "TensionAllianceFactor": 0.15,
+  "TensionPactFactor": 0.6,
+  "TensionTradeFactor": 0.85,
+  // The weekly chance of an incident at full tension; it falls with the square of tension.
+  "IncidentChance": 0.05,
+  // A grievance halves in this many years: long enough for a war to be the next generation's.
+  "GrievanceHalfLifeYears": 30,
+  "GrievancePerProvinceLost": 1.5,
+  "GrievancePerLossShare": 2500,
+  "GrievanceCap": 100,
+  // Men lost on each side a week while two countries are exchanging fire, and the rally it
+  // brings.
+  "ClashLossesPerWeek": 12,
+  "ClashWarSupportPerWeek": 0.001,
+  // How much a crisis argues for a war in the AI's sum, at full tension.
+  "AiEscalationAppetite": 0.9,
+  // How long a shared border has to be shooting before a border war can come of it, the chance
+  // of one a week after that, and how long it is fought before the ceasefire.
+  "BorderWarAfterDays": 120,
+  "BorderWarChancePerWeek": 0.007,
+  // How strong a side has to be, against the other and the friends behind it, to open one.
+  "BorderWarStrengthRatio": 0.6,
+  "BorderWarDays": 45,
+  // Talks: how long, how much they cost, how much tension they take off a week, how often.
+  "TalksDays": 120,
+  "TalksCost": 0.25,
+  "TalksTensionPerWeek": 2.5,
+  "TalksCooldownDays": 365,
+  // How a war grows: the age and the losses, as a share of the people, at which it becomes a
+  // major war and then a total one.
+  "WarMajorDays": 150,
+  "WarMajorLossShare": 0.0012,
+  "WarTotalDays": 420,
+  "WarTotalLossShare": 0.006,
+  // What a larger war takes off the acceptance of a compromise peace, per stage: the dead have
+  // to have been for something.
+  "WarSunkCostAcceptance": 7,
+  // How much longer a stalled war goes on before the side not winning asks to stop, per stage,
+  // and for a civil war.
+  "WarStageStalemateDays": 180,
+  "CivilWarStalemateDays": 730,
+  // The call-up of a total war: extra men a week as a share of the people, while under the
+  // ceiling.
+  "TotalWarMobilisation": 0.0002,
+
+  // Backing other people's wars (ProxyWars.cs).
+  // How often sponsorships deliver, in days.
+  "ProxyReviewDays": 7,
+  // What a level of support costs the sponsor a week, as a share of its GDP, and at least.
+  "ProxyCostShare": 0.000012,
+  "ProxyMinimumCost": 0.01,
+  // The share of it that arrives as money; the rest arrives as weapons.
+  "ProxyMoneyShare": 0.35,
+  // What it costs, in billions, to bring one division from no equipment to full.
+  "ProxyEquipmentValue": 0.60,
+  // Volunteers a week at the highest level, as a share of the sponsor's people, and at most.
+  "ProxyVolunteerShare": 0.0000015,
+  "ProxyVolunteersCap": 1500,
+  // Weeks a sponsor may fail to pay before the support lapses.
+  "ProxyUnpaidWeeks": 6,
+  // The AI: how often each country looks at the wars it might back, how wealthy it must be, and
+  // the case it needs.
+  "ProxyAiReviewDays": 30,
+  "ProxyAiMinimumGdp": 60,
+  "ProxyAiInterest": 1.35,
+  "ProxyAiStopInterest": 0.45,
+  // How long a backing the bookmark opens with is kept whatever the computer thinks of it.
+  "ProxyHistoricCommitmentDays": 730,
+  "ProxyAiGdpPerSponsorship": 1500,
+  // The most backers the AI lets one side of a war have.
+  "ProxyAiBackersPerSide": 6,
+
+  // A state taking its breakaway back, and the de facto powers of 2024 (Reintegration.cs, Factions.cs).
+  // What a province of a breakaway costs the state it broke from at a peace, against an ordinary
+  // one.
+  "PeaceCostReclaimFactor": 0.25,
+  // The war score, or the share of the breakaway's land held securely, at which its old state
+  // writes the whole of it back in.
+  "ReclaimDecisiveScore": 40,
+  "ReclaimSecuredShare": 0.5,
+  // What a state winning against its own breakaway takes off any compromise it is offered, at
+  // full strength.
+  "ReclaimCompromisePenalty": 80,
+  // The share of its land a breakaway can lose before it gives up, and the war support at which
+  // it gives up sooner.
+  "BreakawaySurrenderOccupied": 0.6,
+  "BreakawaySurrenderSupport": 0.05,
+  // The share of the old state's formations standing in a seceding region that go over to it
+  // when the state fights.
+  "SecessionDefectionShare": 0.45,
+  // A de facto faction that has lost most of its ground fights on while it keeps this many
+  // formations and this much war support.
+  "FactionFightOnFormations": 2,
+  "FactionFightOnSupport": 0.2,
+  // How long a faction's "seasoned insurgency" lasts from the first day.
+  "FactionSeasonedDays": 1460,
+  // How much of a faction's patron's strength a country thinking of attacking it counts against
+  // itself.
+  "FactionPatronDeterrence": 0.25,
+  // What a war with a country whose only wars are with its own rebels is worth less to the
+  // computer: they are backed, not invaded.
+  "AiCivilWarRestraint": 0.6,
+  // How much of a neighbour's weakness a government counts toward a war it has no reason it
+  // could give for: weakness makes a war possible, it does not make it wanted.
+  "AiWeaknessWithoutCause": 0.3
+}

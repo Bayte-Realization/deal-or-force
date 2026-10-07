@@ -834,7 +834,7 @@ public static partial class AiStatecraft
         var left = budget - ledger.Cost(demand);
         SubjectType best = null;
         var bestCost = 0f;
-        foreach (var kind in SubjectCatalog.All)
+        foreach (var kind in SubjectCatalog.Imposable)
         {
             var cost = PeaceConference.SubjugationCost(campaign, nation, loser, kind.Id);
             if (cost > left || cost <= bestCost) continue;
@@ -973,6 +973,15 @@ public static partial class AiStatecraft
             if (army.NationId == nation.Id)
                 strength += army.Divisions * army.Strength * M.Max(.15f, army.Organisation);
         return strength;
+    }
+
+    /// <summary>A country's strength from today's cache when it is this campaign's, and counted afresh when it is not.</summary>
+    internal static float CachedStrength(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return 0f;
+        if (ReferenceEquals(_cacheCampaign, campaign) && _cacheDay == campaign.ElapsedDays &&
+            StrengthCache.TryGetValue(nation.Id, out var value)) return value;
+        return StrengthOf(campaign, nation);
     }
 
     private static float Strength(Campaign campaign, Nation nation) =>

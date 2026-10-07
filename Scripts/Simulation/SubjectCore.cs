@@ -85,6 +85,14 @@ public sealed class SubjectType
     /// stayed a liberal parliamentary republic while Russia changed was a fiction.
     /// </summary>
     public bool SharesOverlordPolitics;
+
+    /// <summary>
+    /// Whether a peace can make a country this. False for the arrangements history writes and no
+    /// treaty does - a lease, an overseas territory, a free association: a peace that ended a
+    /// war in Kachin State by making Myanmar a "dependent territory" of the United States read
+    /// like a parody of the game.
+    /// </summary>
+    public bool Imposable = true;
 }
 
 /// <summary>The numbers that decide how a dependency ages, all of them from the same file.</summary>
@@ -112,6 +120,9 @@ public static class SubjectCatalog
 
     public static SubjectWeights Weights { get; private set; } = new();
     public static IReadOnlyCollection<SubjectType> All => Types.Values;
+
+    /// <summary>The kinds a peace or a demand can make a country: every kind but the ones only history writes.</summary>
+    public static IEnumerable<SubjectType> Imposable => Types.Values.Where(type => type.Imposable);
 
     static SubjectCatalog() => ResetCatalog();
 
@@ -167,6 +178,7 @@ public static class SubjectCatalog
             Flag(value2, "may_declare_war", v => type.MayDeclareWar = v);
             Flag(value2, "overlord_defends", v => type.OverlordDefends = v);
             Flag(value2, "shares_overlord_politics", v => type.SharesOverlordPolitics = v);
+            Flag(value2, "imposable", v => type.Imposable = v);
             Read(value2, "demand_cost", v => type.DemandCost = Math.Max(0f, v));
             Read(value2, "annex_below_liberty", v => type.AnnexBelowLiberty = M.Clamp01(v));
             if (value2.TryGetProperty("annex_after_days", out var absorb) && absorb.TryGetInt32(out var after))

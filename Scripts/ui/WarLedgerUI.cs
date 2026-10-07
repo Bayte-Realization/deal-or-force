@@ -106,6 +106,7 @@ public partial class DealOrForceGame
         header.AddChild(_warFilterAll);
         _warFilterMine = ActionButton("Mine", () => SetWarLedgerFilter(true), 78, 30);
         header.AddChild(_warFilterMine);
+        header.AddChild(HandbookButton("wars"));
         header.AddChild(ActionButton("×", CloseWarLedger, 34, 30));
 
         // ------------------------------------------------------------------ the world
@@ -540,7 +541,7 @@ public partial class DealOrForceGame
             row.Button.AddThemeStyleboxOverride("pressed", WarCardStyle(mine, true));
             row.Button.AddThemeStyleboxOverride("focus", WarCardStyle(mine, true));
         }
-        row.Button.TooltipText = Ui.Tip(war.Name + "\n" + Tr("click a war for its own page"));
+        row.Button.TooltipText = Ui.Tip(WarNames.Of(_campaign, war) + "\n" + Tr("click a war for its own page"));
 
         SetFlag(row.AttackerFlag, attacker?.Tag ?? "", 30);
         SetFlag(row.DefenderFlag, defender?.Tag ?? "", 30);
@@ -555,7 +556,7 @@ public partial class DealOrForceGame
         row.DefenderSide.Text = WarSideLine(war, false);
 
         var objective = WarObjective(war);
-        row.Heading.Text = (war.Name.Length > 0 ? war.Name.ToUpperInvariant() : Tr("WAR")) + "  ·  " +
+        row.Heading.Text = WarNames.Of(_campaign, war).ToUpperInvariant() + "  ·  " +
                            (objective is null ? Tr("no claim on ground") : Simulation.Loc.Format("for {0}", objective.DisplayName));
 
         // The ground between them in each side's own colour, and the front line where the war
@@ -698,7 +699,7 @@ public partial class DealOrForceGame
         var attackerColour = WarSideColour(attacker);
         var defenderColour = WarSideColour(defender);
 
-        _warLedgerTitle.Text = war.Name.Length > 0 ? war.Name.ToUpperInvariant() : Tr("WARS OF THE WORLD");
+        _warLedgerTitle.Text = WarNames.Of(_campaign, war) is { Length: > 0 } title ? title.ToUpperInvariant() : Tr("WARS OF THE WORLD");
         _warLedgerSummary.Text =
             (objective is null ? Tr("no claim on ground") : Simulation.Loc.Format("for {0}", objective.DisplayName)) + "  ·  " +
             (war.Ended ? Tr("settled") : Simulation.Loc.Format("{0:N0} day(s) of fighting", days)) +

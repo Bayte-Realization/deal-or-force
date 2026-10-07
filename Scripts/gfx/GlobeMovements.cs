@@ -47,6 +47,8 @@ public sealed partial class GlobePresentation
         private const float PixelSize = 0.00018f;
         private const float Spacing = 138f;
         private const float LabelPixelSize = 0.00021f;
+        /// <summary>How close the camera has to be before headquarters carry their names.</summary>
+        private const float LabelDistance = 8.5f;
         private const float LabelLine = 40f;
         private const float LabelDrop = 80f;
         private const float PickRadius = 20f;
@@ -226,7 +228,12 @@ public sealed partial class GlobePresentation
                 if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || marker.Label is null)
                     continue;
                 var at = marker.Node.GlobalPosition;
-                marker.Label.Visible = true;
+                // Names from the regional view in, medallions at every distance. From the whole
+                // hemisphere thirty "HQ" names sat on top of each other across Europe and South
+                // Asia; the flag in the ring says whose it is, and coming closer says the rest.
+                // Tied to the zoom alone, never to what else is on the screen, so it cannot blink.
+                var named = _globe.ViewDistance <= LabelDistance;
+                if (marker.Label.Visible != named) marker.Label.Visible = named;
                 if (camera.IsPositionBehind(at)) continue;
                 // Measure exactly the projection-dependent scale used by FixedSize, including
                 // the flat-map compensation. Depth is not the scale for an orthographic camera.
@@ -239,6 +246,7 @@ public sealed partial class GlobePresentation
                 var sprite = scale * PixelSize / LabelPixelSize;
                 var radius = 64f * sprite;
                 _medallions.Add(new Rect2(origin.X + marker.Offset * sprite - radius, origin.Y - radius, radius * 2f, radius * 2f));
+                if (!named) continue;
                 var width = marker.Label.Text.Length * marker.Label.FontSize * 0.56f * scale;
                 var box = new Rect2(origin.X + marker.Offset * sprite - width / 2f,
                     origin.Y + (LabelDrop - LabelLine / 2f) * scale, width, LabelLine * scale);

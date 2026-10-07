@@ -320,7 +320,10 @@ public sealed class ModLoader
         ("laws", () => PoliticalPolicyCatalog.ResetCatalog(), PoliticalPolicyCatalog.MergeLaws),
         ("agendas", () => { }, PoliticalPolicyCatalog.MergeAgendas),
         ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge),
-        ("news", () => NewsFeed.ResetCatalog(), NewsFeed.Merge)
+        ("news", () => NewsFeed.ResetCatalog(), NewsFeed.Merge),
+        ("handbook", () => HandbookCatalog.ResetCatalog(), HandbookCatalog.Merge),
+        ("escalation", () => IncidentCatalog.ResetCatalog(), (root, errors) => IncidentCatalog.Merge(root.GetRawText(), errors)),
+        ("factions", () => Factions.ResetCatalog(), Factions.Merge)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>

@@ -101,6 +101,7 @@ public partial class DealOrForceGame
         var title = Title("TRADE", 25, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
+        header.AddChild(HandbookButton("trade"));
         header.AddChild(ActionButton("×", CloseTradeScreen, 38, 32));
 
         _tradeScreenSummary = Title("", 13, Ui.Colour("text.body_soft"));

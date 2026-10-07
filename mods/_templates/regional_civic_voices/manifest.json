@@ -1,0 +1,11 @@
+{
+  "id": "example_regional_civic_voices",
+  "name": "Example: invented regional civic movements",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 145,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

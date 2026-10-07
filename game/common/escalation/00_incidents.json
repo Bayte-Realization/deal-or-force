@@ -1,0 +1,69 @@
+// What happens between two countries short of a war (Escalation.cs). Each review, a pair in
+// friction or worse may have an incident, likelier the higher its tension and likelier between
+// neighbours. One is drawn from those that fit, by weight.
+//
+//   name, description   what the news calls it and what it is (localisation keys are the English)
+//   stage, max_stage    the lowest and highest stage it happens at: 1 friction, 2 crisis, 3 clashes
+//   weight              how often, against the others that fit
+//   tension             what it does to the tension (negative calms it)
+//   grievance           what it adds to the victim's grievance
+//   losses              men lost on each side
+//   war_support         what it does to the victim's war support - the rally
+//   opinion             the opinion reason it leaves (common/opinion_modifiers)
+//   border / naval      needs a land border; needs both to have a navy
+//
+// A mod adds an incident with a new key, changes one by naming it, removes one with "remove": true.
+{
+  "border_shooting": {
+    "name": "Shooting at the border", "description": "Border guards exchanged fire. Nobody agrees who started.",
+    "stage": 1, "max_stage": 3, "weight": 3, "tension": 3, "grievance": 0.3, "losses": 4,
+    "war_support": 0.005, "opinion": "border_incident", "border": true
+  },
+  "airspace_violation": {
+    "name": "Airspace violation", "description": "Military aircraft crossed into the other's airspace and were met by fighters.",
+    "stage": 1, "max_stage": 3, "weight": 2, "tension": 2, "opinion": "airspace_violation"
+  },
+  "naval_standoff": {
+    "name": "Naval standoff", "description": "Warships shadowed each other for days at close range; one of them rammed.",
+    "stage": 1, "max_stage": 3, "weight": 2, "tension": 3, "opinion": "naval_standoff", "naval": true
+  },
+  "diplomats_expelled": {
+    "name": "Diplomats expelled", "description": "Embassy staff were declared persona non grata, and the other side answered in kind.",
+    "stage": 1, "max_stage": 3, "weight": 2, "tension": 2, "opinion": "diplomats_expelled"
+  },
+  "cyber_attack": {
+    "name": "Cyber attack", "description": "Ministries and a power grid were taken down for hours. The trail leads abroad.",
+    "stage": 1, "max_stage": 3, "weight": 1.5, "tension": 2, "opinion": "cyber_attack"
+  },
+  "sabotage": {
+    "name": "Sabotage", "description": "A pipeline, a depot or a rail bridge was blown up. Saboteurs were caught - or so it is said.",
+    "stage": 2, "max_stage": 3, "weight": 1.5, "tension": 4, "grievance": 0.5, "opinion": "sabotage"
+  },
+  "assassination": {
+    "name": "Assassination", "description": "A commander or an official was killed on the other's orders, by every account but theirs.",
+    "stage": 2, "max_stage": 3, "weight": 0.5, "tension": 7, "grievance": 2, "war_support": 0.02, "opinion": "assassination"
+  },
+  "artillery_duel": {
+    "name": "Artillery duel", "description": "Guns on both sides of the line fired for hours. Villages were hit.",
+    "stage": 3, "max_stage": 3, "weight": 3, "tension": 3, "grievance": 0.5, "losses": 25,
+    "war_support": 0.01, "opinion": "artillery_duel", "border": true
+  },
+  "cross_border_raid": {
+    "name": "Cross-border raid", "description": "A raiding party crossed the line, struck a post and withdrew.",
+    "stage": 3, "max_stage": 3, "weight": 2, "tension": 4, "grievance": 1, "losses": 40,
+    "war_support": 0.015, "opinion": "cross_border_raid", "border": true
+  },
+  "missile_strike": {
+    "name": "Missile strike", "description": "Missiles or drones struck military targets on the other's territory.",
+    "stage": 3, "max_stage": 3, "weight": 1.5, "tension": 5, "grievance": 1, "losses": 20,
+    "war_support": 0.02, "opinion": "missile_strike"
+  },
+  "hotline_call": {
+    "name": "Hotline call", "description": "The two governments spoke directly and agreed to pull back.",
+    "stage": 1, "max_stage": 3, "weight": 2.5, "tension": -6, "opinion": "hotline_call"
+  },
+  "prisoner_exchange": {
+    "name": "Prisoner exchange", "description": "Detainees were exchanged across the line, after months of mediated talks.",
+    "stage": 2, "max_stage": 3, "weight": 1.5, "tension": -5, "opinion": "prisoner_exchange"
+  }
+}

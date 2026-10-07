@@ -10,6 +10,13 @@ static class RegionalContentTests
     { if (!ok) throw new Exception(label); Console.WriteLine("PASS regional content: " + label); }
     public static void Run()
     {
+        // The invented regional voices are a mod template now (the base world is the real one),
+        // loaded here the way a mod is so the civic-movement lifecycle they exercise stays tested.
+        var templateRoot = Path.GetFullPath(Path.Combine(GameDataLoader.DataFolder(), "..", "mods", "_templates", "regional_civic_voices"));
+        using (var template = StructuredData.ReadDocument(Path.Combine(templateRoot, "common", "movements", "30_regional_voices.json")))
+            MovementCatalog.Merge(template.RootElement, null);
+        Check(!File.Exists(Path.Combine(GameDataLoader.DataFolder(), "common", "movements", "30_regional_voices.json")),
+            "the base game ships no invented regional movement");
         var c = Campaign.CreateBootstrap(601);
         // Production startup founds movements after attaching geography, not at bootstrap.
         Movements.Found(c);
@@ -39,8 +46,9 @@ static class RegionalContentTests
         Check(c.NationByTag("UDV").Id == idBefore && !born.Movement.Dissolved && c.Nations.Count == countBefore,
             "reactivation reuses saved identity rather than allocating duplicate countries");
         SpriteCatalog.Load(); FlagCatalog.ResetCatalog();
-        Check(SpriteCatalog.Has("flag_formable_roman_restoration") && SpriteCatalog.Has("flag_udv") && SpriteCatalog.Has("icon_laws"),
-            "new flags and governance icon resolve through the sprite registry");
+        Check(SpriteCatalog.Has("flag_formable_roman_restoration") && SpriteCatalog.Has("icon_laws") &&
+              File.Exists(Path.Combine(templateRoot, "gfx", "flags", "flag_udv.png")),
+            "new flags and governance icon resolve through the sprite registry; the voices' flags travel with their template");
         foreach (var d in FormableNations.All)
             foreach (var tag in d.RequiredTags)
                 Check(ProvinceOwnership.ProvincesOf(tag).Length > 0, "formable territory resolves " + d.Id + ":" + tag);

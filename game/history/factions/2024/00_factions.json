@@ -1,0 +1,210 @@
+// Deal or Force - the de facto powers of 1 January 2024 (Scripts/Simulation/Factions.cs).
+//
+// Real organisations that held and governed ground of their own that morning without being
+// recognised states. Each is cut out of the state it holds ground of: whole regions, and
+// where a front ran through the middle of one, the provinces whose middle lies inside an
+// area ring ([longitude, latitude] points). A province goes to the first faction that asks
+// for it, so the narrow Turkish-held strips are written before the north-east that
+// surrounds them.
+//
+//   relation     war / truce / peace with the parent on the first day
+//   holds        the parent's ground it holds at war without owning it (occupied)
+//   army_share   the share of the parent's formations that are really the faction's
+//   patrons      the states that keep it going; the backers in a war are "sponsorships" below
+//   parent_capital  where the parent government actually sat, when the war had moved it
+//   parent_modifier a condition the war had put on the parent (common/modifiers), for as long
+//                   as the faction's own "seasoned insurgency"
+//   listed_by    the states that list it as a terrorist or sanctioned organisation: they never arm it
+//   fighters     its own men under arms, stood up as formations of 15 000
+//
+// The lines are the lines of that morning, at the resolution of the province map: the
+// Euphrates through Deir ez-Zor, the Sirte-Jufra line in Libya, the Hudaydah coast.
+{
+  "factions": [
+    {
+      "id": "rapid_support_forces", "tag": "RSF", "name": "Rapid Support Forces",
+      "description": "The Sudanese paramilitary force of Mohamed Hamdan Dagalo, Hemedti, grown out of the Janjaweed militias of Darfur. Since April 2023 it has fought the Sudanese army for power; it is accused of mass atrocities in Darfur.",
+      "parent": "SDN", "colour": "#8d6e63",
+      "capital": "Nyala", "capital_at": [24.88, 12.05],
+      "parent_capital": "Port Sudan", "parent_capital_at": [37.22, 19.62],
+      "government": "military_junta", "ideology": "nationalism", "peoples": ["arab_sudanese"],
+      "regions": ["sd_dw", "sd_de", "sd_ds", "sd_ds_858"],
+      "holds_regions": ["sd_kh", "sd_gz"],
+      "holds": [
+        [[23.6, 13.4], [24.9, 13.3], [25.0, 14.0], [24.6, 14.6], [23.7, 14.5]]
+      ],
+      "relation": "war", "war_name": "Sudanese Civil War",
+      "army_share": 0.0, "fighters": 90000, "militia": 4, "stability": 0.35, "war_support": 0.8,
+      "patrons": ["ARE"], "listed_by": ["USA", "GBR", "FRA", "DEU", "CAN"]
+    },
+    {
+      "id": "ansar_allah", "tag": "HTH", "name": "Ansar Allah",
+      "description": "The Zaydi Houthi movement, which has held Sanaa and north-western Yemen since 2014. Iran backs it; since November 2023 it has attacked shipping in the Red Sea.",
+      "parent": "YEM", "colour": "#4e7d3a",
+      "capital": "Sanaa", "capital_at": [44.21, 15.35],
+      "parent_capital": "Aden", "parent_capital_at": [45.03, 12.79],
+      "government": "theocracy", "ideology": "theocratic_rule", "peoples": ["arab_yemeni"],
+      "regions": ["ye_sn", "ye_sd", "ye_hj", "ye_dh", "ye_ja", "ye_hu"],
+      "areas": [
+        [[43.85, 14.45], [44.6, 14.6], [45.3, 14.55], [46.0, 14.4], [45.95, 13.85], [45.4, 13.75], [44.6, 13.7], [44.2, 13.62], [43.85, 13.75]]
+      ],
+      "except": [
+        [[42.6, 12.6], [43.6, 12.6], [43.6, 13.95], [42.6, 13.95]]
+      ],
+      "relation": "truce", "truce_days": 540,
+      "army_share": 0.0, "fighters": 60000, "militia": 3, "stability": 0.5, "war_support": 0.85,
+      "patrons": ["IRN"], "listed_by": ["USA", "SAU", "ARE", "ISR", "GBR"]
+    },
+    {
+      "id": "syrian_interim_government", "tag": "SIG", "name": "Syrian Interim Government",
+      "description": "The opposition government of the Syrian National Coalition, seated in Azaz. Its Syrian National Army holds the strips of the north that Turkey took in its operations of 2016, 2018 and 2019, under Turkish protection and Turkish pay.",
+      "parent": "SYR", "colour": "#2e7d32",
+      "capital": "Azaz", "capital_at": [37.04, 36.59],
+      "government": "provisional_government", "ideology": "conservatism", "peoples": ["arab_levantine", "turkmen_iraqi"],
+      "areas": [
+        [[36.55, 36.45], [36.65, 36.83], [36.95, 36.8], [37.05, 36.6], [36.95, 36.4], [36.75, 36.35]],
+        [[37.0, 36.55], [37.05, 36.68], [37.45, 36.67], [37.7, 36.7], [38.05, 36.86], [38.0, 36.7], [37.8, 36.62], [37.7, 36.4], [37.55, 36.27], [37.3, 36.3], [37.12, 36.43]],
+        [[38.75, 36.72], [39.45, 36.72], [40.1, 36.88], [40.25, 36.82], [40.15, 36.5], [39.3, 36.42], [38.85, 36.45]]
+      ],
+      "relation": "truce", "truce_days": 730,
+      "army_share": 0.0, "fighters": 30000, "militia": 2, "stability": 0.35, "war_support": 0.7,
+      "overlord": "TUR", "subject_type": "client"
+    },
+    {
+      "id": "syrian_salvation_government", "tag": "HTS", "name": "Syrian Salvation Government",
+      "description": "The administration Hayat Tahrir al-Sham runs in Idlib, the last province of north-western Syria outside the government's hands. The group grew out of al-Qaeda's Syrian branch and broke with it in 2017; the United Nations, the United States and many others list it as a terrorist organisation.",
+      "parent": "SYR", "colour": "#d8d8d0",
+      "capital": "Idlib", "capital_at": [36.63, 35.93],
+      "government": "theocracy", "ideology": "theocratic_rule", "peoples": ["arab_levantine"],
+      "areas": [
+        [[36.1, 36.05], [36.35, 36.3], [36.55, 36.27], [36.67, 36.24], [36.85, 36.26], [36.95, 36.15], [36.8, 36.0], [36.72, 35.85], [36.62, 35.68], [36.45, 35.62], [36.3, 35.7], [36.25, 35.82], [36.12, 35.92]]
+      ],
+      "relation": "truce", "truce_days": 365,
+      "army_share": 0.0, "fighters": 25000, "militia": 2, "stability": 0.45, "war_support": 0.8,
+      "listed_by": ["USA", "GBR", "TUR", "RUS", "CAN", "FRA", "DEU", "ARE", "SAU"]
+    },
+    {
+      "id": "north_and_east_syria", "tag": "SDF", "name": "North and East Syria",
+      "description": "The Autonomous Administration of North and East Syria and its Syrian Democratic Forces, the Kurdish-led alliance of Kurdish, Arab and Assyrian forces that defeated the Islamic State east of the Euphrates. American troops stand with it; Turkey counts it the same organisation as the PKK.",
+      "parent": "SYR", "colour": "#f2c94c",
+      "capital": "Raqqa", "capital_at": [39.01, 35.95],
+      "government": "direct_democracy", "ideology": "socialism", "peoples": ["kurdish", "arab_levantine", "assyrian"],
+      "regions": ["sy_ha", "sy_ra"],
+      "areas": [
+        [[39.5, 35.95], [39.9, 35.7], [40.2, 35.4], [40.5, 35.07], [40.75, 34.75], [40.98, 34.45], [41.4, 34.75], [42.4, 35.6], [42.4, 37.4], [39.5, 37.0]],
+        [[38.1, 36.6], [38.15, 36.95], [38.75, 36.85], [38.75, 36.5], [38.4, 36.45]],
+        [[37.75, 36.4], [37.85, 36.65], [38.1, 36.75], [38.2, 36.45], [38.0, 36.3]]
+      ],
+      "relation": "peace",
+      "army_share": 0.0, "fighters": 60000, "militia": 3, "stability": 0.5, "war_support": 0.7,
+      "patrons": ["USA"], "listed_by": ["TUR"]
+    },
+    {
+      "id": "libyan_national_army", "tag": "LNA", "name": "Libyan National Army",
+      "description": "The armed forces of eastern Libya under Khalifa Haftar, answering to the House of Representatives in Tobruk. They have stood against the government in Tripoli since 2014, tried to take the capital in 2019-2020, and hold the east and the south behind the Sirte-Jufra line.",
+      "parent": "LBY", "colour": "#5d4037",
+      "capital": "Benghazi", "capital_at": [20.07, 32.12],
+      "government": "military_junta", "ideology": "nationalism", "peoples": ["arab_maghrebi"],
+      "regions": ["ly_mj", "ly_aj", "ly_qb", "ly_bu", "ly_kf", "ly_sr", "ly_ju", "ly_sb", "ly_ws", "ly_mq", "ly_wd", "ly_gt"],
+      "relation": "truce", "truce_days": 720,
+      "army_share": 0.0, "fighters": 45000, "militia": 2, "stability": 0.5, "war_support": 0.6,
+      "patrons": ["ARE", "EGY", "RUS"]
+    },
+    {
+      "id": "national_unity_government_of_myanmar", "tag": "NUG", "name": "National Unity Government of Myanmar",
+      "description": "The parallel government formed by the lawmakers ousted in the coup of 2021 and their allies. Its People's Defence Forces hold much of the countryside of Sagaing against the junta.",
+      "parent": "MMR", "colour": "#d4af37",
+      "capital": "Kanbalu", "capital_at": [95.51, 23.2],
+      "government": "federation", "ideology": "liberalism", "peoples": ["burmese", "chin"],
+      "areas": [
+        [[94.5, 22.3], [95.25, 22.3], [95.7, 22.45], [95.9, 22.8], [95.8, 23.3], [95.5, 23.9], [94.9, 24.1], [94.5, 23.6], [94.35, 22.9]]
+      ],
+      "parent_modifier": "junta_overstretched",
+      "relation": "war", "war_name": "Myanmar Civil War",
+      "army_share": 0.0, "fighters": 30000, "militia": 3, "stability": 0.35, "war_support": 0.85
+    },
+    {
+      "id": "arakan_army", "tag": "ARA", "name": "Arakan Army",
+      "description": "The armed wing of the United League of Arakan, the Rakhine insurgent organisation. Since November 2023 it has been on the offensive against Myanmar's military government in Rakhine State.",
+      "parent": "MMR", "colour": "#b71c1c",
+      "capital": "Kyauktaw", "capital_at": [92.95, 20.85],
+      "government": "one_party_state", "ideology": "nationalism", "peoples": ["rakhine"],
+      "areas": [
+        [[92.4, 21.7], [93.5, 21.7], [93.9, 20.9], [93.9, 20.1], [93.2, 20.0], [92.5, 20.4], [92.3, 21.0]]
+      ],
+      "parent_modifier": "junta_overstretched",
+      "relation": "war", "war_name": "Arakan Offensive",
+      "army_share": 0.0, "fighters": 30000, "militia": 4, "stability": 0.5, "war_support": 0.9
+    },
+    {
+      "id": "kachin_independence_organisation", "tag": "KIO", "name": "Kachin Independence Organisation",
+      "description": "The Kachin political organisation and its Kachin Independence Army, at war with Myanmar's central government since 1961. Its headquarters is Laiza on the Chinese border.",
+      "parent": "MMR", "colour": "#1b5e20",
+      "capital": "Laiza", "capital_at": [97.55, 24.77],
+      "government": "one_party_state", "ideology": "nationalism", "peoples": ["kachin"],
+      "areas": [
+        [[97.4, 25.2], [98.0, 24.9], [98.7, 25.6], [98.8, 27.2], [98.0, 27.3], [97.5, 26.1]]
+      ],
+      "parent_modifier": "junta_overstretched",
+      "relation": "war", "war_name": "Kachin Conflict",
+      "army_share": 0.0, "fighters": 15000, "militia": 3, "stability": 0.5, "war_support": 0.8
+    },
+    {
+      "id": "al_shabaab", "tag": "SHB", "name": "Al-Shabaab",
+      "description": "The Somali Islamist group allied to al-Qaeda. It controls much of the countryside of southern and central Somalia, where it taxes and runs courts, and its seat is Jilib in the Juba valley. The United Nations, the United States and many others list it as a terrorist organisation.",
+      "parent": "SOM", "colour": "#3a3a3a",
+      "capital": "Jilib", "capital_at": [42.77, 0.49],
+      "government": "theocracy", "ideology": "theocratic_rule", "peoples": ["somali"],
+      "regions": ["so_jd"],
+      "areas": [
+        [[42.0, 0.5], [42.4, 0.2], [43.0, 0.6], [43.6, 1.4], [44.2, 1.7], [44.3, 2.3], [43.6, 2.5], [43.0, 2.4], [42.4, 1.6], [42.0, 1.0]]
+      ],
+      "relation": "war", "war_name": "Somali Civil War",
+      "army_share": 0.0, "fighters": 12000, "militia": 4, "stability": 0.4, "war_support": 0.85,
+      "listed_by": ["USA", "GBR", "FRA", "DEU", "CAN", "AUS", "ARE", "SAU", "TUR", "KEN", "ETH"]
+    },
+    {
+      "id": "alliance_fleuve_congo", "tag": "AFC", "name": "Alliance Fleuve Congo",
+      "description": "The political-military alliance formed in December 2023 around the M23, the Tutsi-led rebellion that has held Rutshuru and Masisi in North Kivu since 2022. United Nations experts say Rwanda commands and arms it; Rwanda denies it.",
+      "parent": "COD", "colour": "#1565c0",
+      "capital": "Bunagana", "capital_at": [29.6, -1.28],
+      "government": "military_junta", "ideology": "nationalism", "peoples": ["tutsi"],
+      "areas": [
+        [[28.75, -1.55], [29.15, -1.6], [29.45, -1.5], [29.62, -1.35], [29.62, -1.05], [29.45, -0.85], [29.1, -0.95], [28.8, -1.15]]
+      ],
+      "relation": "war", "war_name": "M23 Offensive",
+      "army_share": 0.0, "fighters": 10000, "militia": 3, "stability": 0.45, "war_support": 0.85,
+      "patrons": ["RWA"], "listed_by": ["USA", "GBR", "FRA", "BEL"]
+    }
+  ],
+
+  "tensions": [
+    { "between": ["HTH", "USA"], "structural": 30, "tension": 68, "grievance": [30, 25] },
+    { "between": ["HTH", "ISR"], "structural": 45, "tension": 72, "grievance": [40, 25] },
+    { "between": ["HTH", "SAU"], "structural": 40, "tension": 48, "grievance": [45, 30] },
+    { "between": ["HTH", "YEM"], "structural": 60, "tension": 55, "grievance": [40, 50] },
+    { "between": ["HTH", "ARE"], "structural": 30, "tension": 40 },
+    { "between": ["HTH", "GBR"], "structural": 20, "tension": 55 },
+    { "between": ["HTS", "SYR"], "structural": 60, "tension": 62, "grievance": [50, 40] },
+    { "between": ["HTS", "RUS"], "structural": 35, "tension": 50 },
+    { "between": ["SDF", "TUR"], "structural": 55, "tension": 68, "grievance": [45, 40] },
+    { "between": ["SIG", "SDF"], "structural": 55, "tension": 70, "grievance": [30, 45] },
+    { "between": ["SIG", "SYR"], "structural": 55, "tension": 55, "grievance": [50, 35] },
+    { "between": ["SDF", "SYR"], "structural": 30, "tension": 35 },
+    { "between": ["LNA", "LBY"], "structural": 50, "tension": 45, "grievance": [30, 30] },
+    { "between": ["LNA", "TUR"], "structural": 30, "tension": 35 },
+    { "between": ["RSF", "EGY"], "structural": 20, "tension": 40 }
+  ],
+
+  "sponsorships": [
+    { "sponsor": "ARE", "client": "RSF", "war": ["SDN", "RSF"], "level": 2 },
+    { "sponsor": "EGY", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
+    { "sponsor": "TUR", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
+    { "sponsor": "IRN", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
+    { "sponsor": "USA", "client": "SOM", "war": ["SOM", "SHB"], "level": 1 },
+    { "sponsor": "TUR", "client": "SOM", "war": ["SOM", "SHB"], "level": 1 },
+    { "sponsor": "RUS", "client": "MMR", "war": ["MMR", "NUG"], "level": 1 },
+    { "sponsor": "RWA", "client": "AFC", "war": ["COD", "AFC"], "level": 1 },
+    { "sponsor": "ZAF", "client": "COD", "war": ["COD", "AFC"], "level": 1 }
+  ]
+}

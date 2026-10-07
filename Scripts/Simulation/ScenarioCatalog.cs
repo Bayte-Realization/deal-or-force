@@ -248,6 +248,8 @@ public static class ScenarioCatalog
         MilitaryBootstrap.Seed(campaign);
         NavalBootstrap.Seed(campaign);
         WarBootstrap.Seed(campaign);
+        // The tensions and the backers the world opens with, once its wars exist.
+        ConflictHistory.Apply(campaign);
         MarketSystem.Seed(campaign);
 
         // Last, because it needs states, buildings, pops and armies to already exist: it

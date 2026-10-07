@@ -82,6 +82,7 @@ public partial class DealOrForceGame
         _armyPanelCount.ClipText = true;
         _armyPanelCount.CustomMinimumSize = new Vector2(84, 0);
         header.AddChild(_armyPanelCount);
+        header.AddChild(HandbookButton("orders"));
         header.AddChild(ActionButton("×", ClearArmySelectionAndClose, 32, 28));
 
         // The descriptive line gets the complete safe width instead of fighting the

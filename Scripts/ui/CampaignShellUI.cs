@@ -54,6 +54,7 @@ public partial class DealOrForceGame
             "Production" => _productionLayer?.Visible == true,
             "Support" => _supportLayer?.Visible == true,
             "Research" => _researchLayer?.Visible == true,
+            "Conflicts" => _conflictsLayer?.Visible == true,
             _ => _sidePanel?.Visible == true && _openScreen == screen
         };
         if (!open)
@@ -71,6 +72,7 @@ public partial class DealOrForceGame
         else if (screen == "Production") CloseProductionScreen();
         else if (screen == "Support") CloseSupportScreen();
         else if (screen == "Research") CloseResearchScreen();
+        else if (screen == "Conflicts") CloseConflictsScreen();
         else CloseSidePanel();
         UpdateScreenButtons();
     }

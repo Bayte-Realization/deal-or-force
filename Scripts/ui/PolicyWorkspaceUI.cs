@@ -40,6 +40,7 @@ public partial class DealOrForceGame
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
         header.AddChild(ActionButton("My country", () => OpenScreen("Nation"), 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_nation.png"));
+        header.AddChild(HandbookButton("laws"));
         var close = ActionButton("×", ClosePolicyWorkspace, 38, 32);
         close.Name = "ClosePolicyWorkspace"; close.TooltipText = Ui.Tip(Tr("Close")); header.AddChild(close);
         _policySummary = Title("", 13, Ui.Colour("text.body_soft")); rows.AddChild(_policySummary);

@@ -16,7 +16,7 @@ public partial class DealOrForceGame
         var war = DiplomaticPeaceWar(target);
         button.Visible = war is not null;
         button.TooltipText = war is null ? "" : Ui.Tip(Loc.Format(
-            "Open negotiations for {0}. Review the terms before proposing peace; opening this window does not end the war.", war.Name));
+            "Open negotiations for {0}. Review the terms before proposing peace; opening this window does not end the war.", WarNames.Of(_campaign, war)));
     }
 
     private void OpenDiplomaticPeace(Nation target)
@@ -62,6 +62,6 @@ public partial class DealOrForceGame
         var ended = _campaign.Wars.Where(war => war.Ended).OrderByDescending(war => war.EndedDay).Take(4).ToArray();
         if (ended.Length == 0) return "";
         return "\n\nRECENT PEACE SETTLEMENTS\n\n" + string.Join("\n\n", ended.Select(war =>
-            $"{war.Name} · day {war.EndedDay:N0}\n{war.PeaceSummary}"));
+            $"{WarNames.Of(_campaign, war)} · day {war.EndedDay:N0}\n{war.PeaceSummary}"));
     }
 }

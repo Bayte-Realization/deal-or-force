@@ -23,6 +23,9 @@
   "AiFriendshipCaution": 1.5,
   // How many regions a target has to hold before its weakness is worth all it can be: one
   // region (the Vatican, San Marino) is a quarter of it, never less than the floor.
+  // How wrong one general staff's estimate of another country's forces can be, either way:
+  // the real order of battle, which is published, off by up to this share.
+  "IntelEstimateError": 0.25,
   "AiWorthRegions": 4,
   "AiWorthFloor": 0.15
 }

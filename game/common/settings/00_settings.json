@@ -38,6 +38,12 @@
     "description": "Off: a peace treaty hands over whole regions only, so borders follow the map's regions. On: every treaty, the computer's as well as yours, takes exactly the provinces it names, and the border runs where the armies stopped. Regions cut in two stay cut.",
     "default": false
   },
+  "show_first_steps": {
+    "category": "interface", "order": 205, "kind": "toggle",
+    "name": "First steps",
+    "description": "The short list of things to try first on the situation rail: let time run, read the budget, choose research, build, look at the neighbours, order a division, open the handbook. Each is ticked once done.",
+    "default": true
+  },
   "pause_on_event": {
     "category": "game", "order": 110, "kind": "toggle",
     "name": "Pause when something happens",
@@ -84,6 +90,14 @@
     "name": "Country names on the map",
     "description": "Draw each country's name across its territory.",
     "default": true
+  },
+  "map_divisions": {
+    "category": "interface", "order": 232, "kind": "choice",
+    "name": "Divisions on the map",
+    "description": "Which armies the map draws. Ours, allies and wars: your own, your allies' and dependencies', and every country that is fighting - a quiet country's barracks are not news, and two hundred countries' peacetime garrisons buried Europe in counters. All: every division in the world. Ours only: your own.",
+    "values": ["relevant", "all", "ours"],
+    "labels": ["Ours, allies and wars", "All", "Ours only"],
+    "default": "relevant"
   },
   "city_names": {
     "category": "interface", "order": 235, "kind": "toggle",

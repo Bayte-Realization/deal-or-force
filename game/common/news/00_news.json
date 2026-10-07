@@ -41,6 +41,17 @@
     "aid_sent": 0,
     "construction_completed": 0,
     "decision_taken": 0,
-    "militia_stood_down": 0
+    "militia_stood_down": 0,
+    "tension_crisis": 2,
+    "tension_clashes": 3,
+    "border_war": 3,
+    "tension_eased": 2,
+    "incident": 2,
+    "incident_calm": 1,
+    "war_major": 2,
+    "war_total": 3,
+    "talks_opened": 1,
+    "proxy_started": 2,
+    "proxy_ended": 1
   }
 }

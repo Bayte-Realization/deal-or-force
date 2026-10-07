@@ -3246,6 +3246,42 @@ void fragment() {
     /// is built, and one whose armies have all left is freed. In a normal second that is a
     /// handful of nodes rather than four thousand.
     /// </summary>
+    private readonly HashSet<int> _shownNations = new();
+
+    /// <summary>
+    /// Whose divisions the map draws (setting "map_divisions"). By default the player's own,
+    /// their allies' and dependencies', and everybody who is at war: the garrisons of two
+    /// hundred countries at peace buried Europe in counters, and none of them was anything a
+    /// player had to act on. A country the player has selected is drawn too, so looking at a
+    /// neighbour's army is one click.
+    /// </summary>
+    private void RefreshShownNations(Simulation.Campaign campaign)
+    {
+        _shownNations.Clear();
+        var mode = Simulation.SettingsCatalog.Chosen("map_divisions");
+        var player = campaign.Player;
+        foreach (var nation in campaign.Nations)
+        {
+            if (mode == "all") { _shownNations.Add(nation.Id); continue; }
+            if (player is not null && nation.Id == player.Id) { _shownNations.Add(nation.Id); continue; }
+            if (mode == "ours") continue;
+            if (player is not null && (nation.AnswersTo(player.Id) || player.AnswersTo(nation.Id) ||
+                    Simulation.CampaignDiplomacy.Peek(campaign, player.Id, nation.Id) is { Stance: Simulation.DiplomaticStance.Allied }))
+                _shownNations.Add(nation.Id);
+            if (nation.Id == ShownCountryId) _shownNations.Add(nation.Id);
+        }
+        if (mode == "all" || mode == "ours") return;
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended) continue;
+            foreach (var id in war.Side(true)) _shownNations.Add(id);
+            foreach (var id in war.Side(false)) _shownNations.Add(id);
+        }
+    }
+
+    /// <summary>The country the interface is looking at, whose army is drawn whatever the setting says.</summary>
+    public int ShownCountryId { get; set; } = -1;
+
     private void ReconcileArmyMarkers(Simulation.Campaign campaign)
     {
         if (!MilitaryMarkersEnabled || !IsInstanceValid(_armyRoot) || _divisionTexture is null) return;
@@ -3256,10 +3292,11 @@ void fragment() {
             marker.Stack.Clear();
         }
 
+        RefreshShownNations(campaign);
         foreach (var army in campaign.Armies)
         {
             var bucket = ArmyPresentationBucket(campaign, army);
-            if (!CanShowArmy(army)) continue;
+            if (!CanShowArmy(army) || !_shownNations.Contains(army.NationId)) continue;
             if (!_armyStacks.TryGetValue(bucket, out var marker))
             {
                 marker = new ArmyStackMarker();

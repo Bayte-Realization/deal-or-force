@@ -17,7 +17,8 @@ public sealed partial class Defines
         ["subjects"] = true, ["formable_nations"] = true, ["secession"] = true,
         ["war_damage"] = true, ["war_weariness"] = true, ["militia"] = true,
         ["historical_norms"] = true, ["public_reputation"] = true, ["seasonal_water"] = true, ["movement_lifecycle"] = true,
-        ["public_debt"] = true, ["laws"] = true, ["political_agendas"] = true, ["national_courses"] = true
+        ["public_debt"] = true, ["laws"] = true, ["political_agendas"] = true, ["national_courses"] = true,
+        ["escalation"] = true, ["proxy_wars"] = true, ["de_facto_factions"] = true
     };
 
     // Feature -> named common/scripted_triggers condition. Empty string removes a rule.
@@ -37,7 +38,8 @@ public sealed partial class Defines
         ["ColonisationCore"] = "colonisation", ["SubjectSystem"] = "subjects", ["SubmissionSystem"] = "subjects",
         ["PeacefulFormationAi"] = "formable_nations", ["SecessionEvents"] = "secession",
         ["WarDamage"] = "war_damage", ["WarWeariness"] = "war_weariness",
-        ["MilitiaCore"] = "militia", ["CivilWarPersistence"] = "militia"
+        ["MilitiaCore"] = "militia", ["CivilWarPersistence"] = "militia",
+        ["Escalation"] = "escalation", ["ProxyWars"] = "proxy_wars", ["Factions"] = "de_facto_factions"
     };
     public Dictionary<string, string> FeatureScreens { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -112,7 +114,7 @@ public static class MechanicFeatures
         "research", "construction", "recruitment", "decisions", "events", "politics",
         "movements", "colonisation", "subjects", "formable_nations", "secession",
         "war_damage", "war_weariness", "militia", "historical_norms", "public_reputation", "seasonal_water", "movement_lifecycle", "public_debt",
-        "laws", "political_agendas", "national_courses"
+        "laws", "political_agendas", "national_courses", "escalation", "proxy_wars", "de_facto_factions"
     };
 
     public static Dictionary<string, string> CommandDefaults()
@@ -133,6 +135,8 @@ public static class MechanicFeatures
         Bind("war_damage", "RebuildRegionCommand");
         Bind("public_reputation", "StartPublicOutreachCommand");
         Bind("public_debt", "ManageDebtCommand");
+        Bind("escalation", "HoldTalksCommand");
+        Bind("proxy_wars", "SponsorWarCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;
     }

@@ -73,6 +73,7 @@ public partial class DealOrForceGame
         }, 124, 32);
         selectedView.TooltipText = Ui.Tip(Tr("Compare the country most recently selected on the map. Policies remain read-only for foreign countries."));
         header.AddChild(selectedView);
+        header.AddChild(HandbookButton("reports"));
         header.AddChild(ActionButton("×", CloseLedger, 38, 32));
 
         var tabs = new HFlowContainer();
@@ -413,7 +414,7 @@ public partial class DealOrForceGame
         _ledgerBarsB.SetData("Active wars", "Signed score is shown from this country's perspective", wars.Select(war =>
         {
             var score = war.AttackerId == nation.Id ? war.WarScore : -war.WarScore;
-            return new StrategicBarEntry(war.Name, score, score >= 0f ? Green : Red,
+            return new StrategicBarEntry(WarNames.Of(_campaign, war), score, score >= 0f ? Green : Red,
                 Simulation.Loc.Format("Support {0:P0}",
                     war.AttackerId == nation.Id ? war.AttackerWarSupport : war.DefenderWarSupport));
         }).ToArray(), StrategicChartFormat.Number);

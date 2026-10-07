@@ -115,6 +115,7 @@ public partial class DealOrForceGame
         ownCountry.Name = "DiplomacyMyCountry";
         ownCountry.TooltipText = Ui.Tip(Tr("Open your own country's diplomacy dossier."));
         header.AddChild(ownCountry);
+        header.AddChild(HandbookButton("diplomacy"));
         header.AddChild(ActionButton("×", CloseDiplomacyScreen, 38, 32));
 
         _diplomacySummary = Title("", 13, Ui.Colour("text.body_soft"));
@@ -857,7 +858,7 @@ public partial class DealOrForceGame
         {
             var attacking = war.IsAttacking(player.Id);
             var score = attacking ? war.WarScore : -war.WarScore;
-            var front = Field("AT WAR", war.Name, negative);
+            var front = Field("AT WAR", WarNames.Of(_campaign, war), negative);
             var tug = Bar(18);
             tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), ourColour, theirColour);
             front.AddChild(tug);
@@ -937,7 +938,7 @@ public partial class DealOrForceGame
             var enemy = war.EnemiesOf(player.Id).Select(id => _campaign.NationById(id)).FirstOrDefault(other => other is not null);
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 10);
-            row.AddChild(giving(text(war.Name, 13, Ui.Colour("text.bright"))));
+            row.AddChild(giving(text(WarNames.Of(_campaign, war), 13, Ui.Colour("text.bright"))));
             var tug = bar(12, 200);
             tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), WarSideColour(player), WarSideColour(enemy));
             row.AddChild(tug);

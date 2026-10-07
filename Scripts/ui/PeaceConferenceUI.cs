@@ -151,7 +151,7 @@ public partial class DealOrForceGame
         // One row for each kind in common/subjects, so a mod that adds an arrangement gets
         // a way to demand it without touching the interface. They exclude each other: a
         // country answers to you one way or not at all.
-        foreach (var kind in SubjectCatalog.All)
+        foreach (var kind in SubjectCatalog.Imposable)
             AddPeaceTerm(terms, "subject:" + kind.Id,
                 Simulation.Loc.Format("Make them a {0}", Tr(kind.Name).ToLowerInvariant()),
                 kind.Description);
@@ -201,7 +201,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void RecaptionSubjectTerms()
     {
-        foreach (var kind in SubjectCatalog.All)
+        foreach (var kind in SubjectCatalog.Imposable)
             if (_peaceTermButtons.TryGetValue("subject:" + kind.Id, out var button) && IsInstanceValid(button))
                 button.Text = Simulation.Loc.Format("Make them a {0}", Tr(kind.Name).ToLowerInvariant());
     }

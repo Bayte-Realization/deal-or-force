@@ -14,6 +14,67 @@
     { "overlord": "NZL", "subject": "COK", "type": "associated_state" },
     { "overlord": "NZL", "subject": "NIU", "type": "associated_state" },
 
+    // United States territories, and the Guantanamo base on land leased from Cuba.
+    { "overlord": "USA", "subject": "ASM", "type": "dependent_territory" },
+    { "overlord": "USA", "subject": "GUM", "type": "dependent_territory" },
+    { "overlord": "USA", "subject": "MNP", "type": "dependent_territory" },
+    { "overlord": "USA", "subject": "PRI", "type": "dependent_territory" },
+    { "overlord": "USA", "subject": "VIR", "type": "dependent_territory" },
+    { "overlord": "USA", "subject": "UMI", "type": "dependent_territory" },
+    { "overlord": "USA", "subject": "USG", "type": "leased_territory" },
+
+    // British Overseas Territories, Crown Dependencies and the Sovereign Base Areas on Cyprus.
+    { "overlord": "GBR", "subject": "AIA", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "BMU", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "CYM", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "FLK", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "GIB", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "IOT", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "MSR", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "PCN", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "SGS", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "SHN", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "TCA", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "VGB", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "GGY", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "JEY", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "IMN", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "ESB", "type": "dependent_territory" },
+    { "overlord": "GBR", "subject": "WSB", "type": "dependent_territory" },
+
+    // French overseas collectivities and territories.
+    { "overlord": "FRA", "subject": "NCL", "type": "dependent_territory" },
+    { "overlord": "FRA", "subject": "PYF", "type": "dependent_territory" },
+    { "overlord": "FRA", "subject": "SPM", "type": "dependent_territory" },
+    { "overlord": "FRA", "subject": "WLF", "type": "dependent_territory" },
+    { "overlord": "FRA", "subject": "BLM", "type": "dependent_territory" },
+    { "overlord": "FRA", "subject": "MAF", "type": "dependent_territory" },
+    { "overlord": "FRA", "subject": "ATF", "type": "dependent_territory" },
+    { "overlord": "FRA", "subject": "CLP", "type": "dependent_territory" },
+
+    // Constituent countries of the Kingdom of the Netherlands in the Caribbean.
+    { "overlord": "NLD", "subject": "ABW", "type": "dependent_territory" },
+    { "overlord": "NLD", "subject": "CUW", "type": "dependent_territory" },
+    { "overlord": "NLD", "subject": "SXM", "type": "dependent_territory" },
+
+    // The Faroe Islands and Greenland, within the Danish Realm.
+    { "overlord": "DNK", "subject": "FRO", "type": "dependent_territory" },
+    { "overlord": "DNK", "subject": "GRL", "type": "dependent_territory" },
+
+    // The autonomous Aland Islands.
+    { "overlord": "FIN", "subject": "ALA", "type": "dependent_territory" },
+
+    // The Special Administrative Regions.
+    { "overlord": "CHN", "subject": "HKG", "type": "dependent_territory" },
+    { "overlord": "CHN", "subject": "MAC", "type": "dependent_territory" },
+
+    // Australian external territories.
+    { "overlord": "AUS", "subject": "NFK", "type": "dependent_territory" },
+    { "overlord": "AUS", "subject": "HMD", "type": "dependent_territory" },
+    { "overlord": "AUS", "subject": "CSI", "type": "dependent_territory" },
+    { "overlord": "AUS", "subject": "ATC", "type": "dependent_territory" },
+    { "overlord": "AUS", "subject": "IOA", "type": "dependent_territory" },
+
     // Breakaways that exist on a patron's garrison and budget.
     { "overlord": "RUS", "subject": "ABK", "type": "associated_state" },
     { "overlord": "RUS", "subject": "OST", "type": "associated_state" },

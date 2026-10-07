@@ -432,6 +432,13 @@ public static class MovementRules
         foreach (var id in Movements.DefinitionOf(nation)?.Homeland ?? new List<string>())
             if (Movements.StateById(campaign, id) is { } claimed && OwnerOf(campaign, claimed) is { } holder && holder.Id != nation.Id)
                 claimants.Add(holder.Id);
+        // Where it is from: the middle of the first homeland region, if it has one. A refuge is
+        // chosen near that rather than wherever the warmest welcome happens to be - exiles go to
+        // the neighbours and to their own part of the world, London and Warsaw, not Havana.
+        (float Latitude, float Longitude)? home = null;
+        var homeland = Movements.DefinitionOf(nation)?.Homeland;
+        if (homeland is { Count: > 0 } && Movements.StateById(campaign, homeland[0]) is { } homeRegion)
+            home = Movements.CentreOf(campaign, homeRegion);
         ScenarioState best = null;
         var bestScore = float.MinValue;
         foreach (var candidate in campaign.Nations)
@@ -440,7 +447,10 @@ public static class MovementRules
             if (CampaignDiplomacy.AtWar(campaign, candidate.Id, nation.Id)) continue;
             var states = campaign.StatesOf(candidate);
             if (states.Length == 0) continue;
-            var score = MovementFall.Warmth(campaign, candidate, nation, claimants) +
+            var distancePenalty = home is { } at
+                ? MathF.Min(60f, NavalOperations.Distance(at.Latitude, at.Longitude, candidate.CapitalLatitude, candidate.CapitalLongitude) * 0.9f)
+                : 0f;
+            var score = MovementFall.Warmth(campaign, candidate, nation, claimants) - distancePenalty +
                         (Movements.DefinitionOf(nation)?.Sponsors.ContainsKey(candidate.Tag) == true ? 60f : 0f) +
                         (nation.Movement?.InvitedBy.Contains(candidate.Id) == true ? 40f : 0f);
             if (score <= bestScore) continue;

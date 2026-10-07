@@ -86,7 +86,10 @@ public partial class DealOrForceGame
         // Before the first economic week closes every one of these is genuinely zero, and
         // three zeros on the screen a player opens first reads as a broken game rather than
         // as a week that has not happened yet.
-        var settled = _campaign.ElapsedDays >= _campaign.Defines.EconomyTickDays;
+        // The same test the top bar uses: a budget that has been drawn up has figures, and the
+        // two places a player reads the week from must not disagree - the bar said -$845M a
+        // week on the first morning while this screen said "-".
+        var settled = _campaign.ElapsedDays >= _campaign.Defines.EconomyTickDays || player.Budget.HasEntries;
         string Weekly(float value) => settled ? Fmt.Money(value) : "—";
 
         DetailHeading("THE WEEK");

@@ -339,6 +339,8 @@ public partial class DealOrForceGame : Control
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (key.Keycode == Key.F1 && _campaign is not null && _hudLayer is { Visible: true })
+        { ToggleHandbook(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F5) { QuickSave(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F6 && _campaign is not null && _hudLayer is { Visible: true })
         {
@@ -426,7 +428,9 @@ public partial class DealOrForceGame : Control
         if (_handoverLayer is { Visible: true }) return;
         if (_eventLayer is { Visible: true }) return;
 
-        if (_peaceLayer is { Visible: true })
+        if (_handbookLayer is { Visible: true })
+            CloseHandbook();
+        else if (_peaceLayer is { Visible: true })
             ClosePeaceConference();
         else if (_pauseMenuLayer is { Visible: true })
             HidePauseMenu();
@@ -440,6 +444,8 @@ public partial class DealOrForceGame : Control
         // way it closes the ledger, rather than opening the pause menu over the top of them.
         else if (_diplomacyLayer is { Visible: true })
             CloseDiplomacyScreen();
+        else if (_conflictsLayer is { Visible: true })
+            CloseConflictsScreen();
         else if (_policyLayer is { Visible: true })
             ClosePolicyWorkspace();
         else if (_tradeScreenLayer is { Visible: true })
@@ -715,6 +721,10 @@ public partial class DealOrForceGame : Control
         // Labelled rather than drawn. This was a hamburger glyph, and the one tester who
         // plays grand strategy for an audience reported that the game had no way out to the
         // main menu - it had two, Escape and this, and neither of them said so.
+        var handbook = ActionButton("Handbook", () => OpenHandbook(), 0, 28);
+        handbook.Name = "OpenHandbook";
+        handbook.TooltipText = Ui.Tip(Tr("What every screen is for and what its figures mean (F1)."));
+        speeds.AddChild(handbook);
         var menu = ActionButton("Menu", ShowPauseMenu, 62, 28);
         menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
         speeds.AddChild(menu);
@@ -801,6 +811,10 @@ public partial class DealOrForceGame : Control
         _sideBackToOrders.TooltipText = Ui.Tip(Tr("Back to the orders of the divisions this dossier was opened from (Esc)."));
         _sideBackToOrders.Visible = false;
         header.AddChild(_sideBackToOrders);
+        var dossierHelp = ActionButton("?", () => OpenHandbook(HandbookCatalog.ForScreen(_openScreen)), 34, 34);
+        dossierHelp.Name = "DossierHandbook";
+        Tip(dossierHelp, "Open the handbook at the page about this screen (F1).");
+        header.AddChild(dossierHelp);
         header.AddChild(ActionButton("×", CloseSidePanel, 38, 34));
 
         _dossierTabs = new HBoxContainer();
@@ -875,6 +889,8 @@ public partial class DealOrForceGame : Control
         BuildProductionScreen();
         BuildSupportScreen();
         BuildResearchScreen();
+        BuildHandbook();
+        BuildConflictsScreen();
         BuildMapControls();
         BuildStrategicHud();
         Resized += LayoutCampaignShell;
@@ -932,6 +948,14 @@ public partial class DealOrForceGame : Control
     private void OpenScreen(string screen)
     {
         if (!Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen)) return;
+        if (screen == "Diplomacy") MarkFirstStep("diplomacy");
+        if (screen != "Conflicts" && _conflictsLayer is not null) _conflictsLayer.Visible = false;
+        if (screen == "Conflicts")
+        {
+            OpenConflictsScreen();
+            return;
+        }
+        if (screen == "State Affairs") MarkFirstStep("budget");
         if (screen != "Laws" && _policyLayer is not null) _policyLayer.Visible = false;
         if (screen != "Support" && _supportLayer is { Visible: true }) CloseSupportScreen();
         if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
@@ -1016,8 +1040,25 @@ public partial class DealOrForceGame : Control
             case "Nation":
                 _sideBody.Text = Simulation.Loc.Format("{0} ({1}) · {2}, {3}", nation.DisplayName, nation.Tag,
             Tr(nation.Region), Tr(nation.Continent));
+                if (Factions.Of(nation) is { } faction)
+                {
+                    // A de facto power says what it is before anything else: the Houthis are not
+                    // a country the way Oman is, and a player clicking Sanaa should be told so.
+                    _sideBody.Text += "\n\n" + Simulation.Loc.Get(faction.Description);
+                    DetailHeading("DE FACTO POWER");
+                    DetailRow("Recognition", Tr("not recognised as a state"),
+                        Tr("A real organisation that held and governed ground of its own on 1 January 2024 without being a recognised state. It is at war, in a truce or at peace with the state it holds ground of, as it was that morning; that state can take the ground back whole if it wins."),
+                        "state.warning");
+                    if (_campaign.NationById(nation.SecededFromId) is { } holdsOf)
+                        DetailRow("Holds ground of", holdsOf.DisplayName);
+                    var patrons = faction.Patrons.Select(tag => _campaign.NationByTag(tag)?.DisplayName)
+                        .Where(name => !string.IsNullOrEmpty(name)).ToArray();
+                    if (patrons.Length > 0)
+                        DetailRow("Backed by", string.Join(", ", patrons),
+                            Tr("States that keep it going with money, weapons or soldiers on the ground. A country thinking of attacking it counts them."));
+                }
                 DetailHeading("STATE");
-                DetailRow("Capital", nation.CapitalName);
+                DetailRow("Capital", Tr(nation.CapitalName));
                 DetailRow("States held", _campaign.StatesOf(nation).Length.ToString("N0"));
                 DetailRow("Population", Fmt.People(nation.Population), Fmt.PeopleExact(nation.Population));
                 DetailHeading("ECONOMY");
@@ -1139,6 +1180,8 @@ public partial class DealOrForceGame : Control
         _selectedNation = pick.Nation;
         _selectedState = pick.State;
         _selectedProvinceId = pick.ProvinceId;
+        // Its army is drawn while it is the country being looked at, whatever the map shows otherwise.
+        _globe.ShownCountryId = pick.Nation?.Id ?? -1;
         if (_pickerLayer.Visible)
         {
             SetPickerNation(pick.Nation, false);
@@ -1352,6 +1395,7 @@ public partial class DealOrForceGame : Control
         if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
         if (_diplomacyLayer is { Visible: true }) RefreshDiplomacyScreen();
         if (_policyLayer is { Visible: true }) RefreshPolicyWorkspace();
+        if (_conflictsLayer is { Visible: true }) RefreshConflictsScreen();
         if (_tradeScreenLayer is { Visible: true }) RefreshTradeScreen();
         if (_productionLayer is { Visible: true }) RefreshProductionScreen();
         if (_supportLayer is { Visible: true }) RefreshSupportScreen();
@@ -1783,6 +1827,7 @@ public partial class DealOrForceGame : Control
             _researchLayer is { Visible: true } ? "Research" :
             _tradeScreenLayer is { Visible: true } ? "Trade" :
             _diplomacyLayer is { Visible: true } ? "Diplomacy" :
+            _conflictsLayer is { Visible: true } ? "Conflicts" :
             _policyLayer is { Visible: true } ? "Laws" :
             _sidePanel is { Visible: true } ? _openScreen : "";
         foreach (var (screen, button) in _screenButtons)

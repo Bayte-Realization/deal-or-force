@@ -39,6 +39,7 @@ public partial class DealOrForceGame
         _researchFocus = ActionButton("Show current research", () => SelectResearchTechnology(_campaign.Player.CurrentResearch, true), 0, 32);
         _researchFocus.Name = "FocusCurrentResearch";
         header.AddChild(_researchFocus);
+        header.AddChild(HandbookButton("research"));
         header.AddChild(ActionButton("×", CloseResearchScreen, 38, 32));
         _researchSummary = Title("", 14, Ui.Colour("text.body"));
         _researchSummary.Name = "ResearchSummary";

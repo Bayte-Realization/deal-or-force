@@ -162,7 +162,8 @@ public static class PeaceNegotiation
         // winning back its own breakaway, whatever it is offered short of the ground (Reintegration).
         return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight +
                        exhaustion + timePressure + WarWeariness.Weariness(campaign, war) -
-                       Reintegration.CompromisePenalty(campaign, war, proposerId, terms), 0f, 100f);
+                       Reintegration.CompromisePenalty(campaign, war, proposerId, terms) -
+                       Escalation.SunkCost(campaign, war), 0f, 100f);
     }
 
     public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
@@ -360,6 +361,8 @@ public static class PeaceNegotiation
         war.AttackerFront.Clear();
         war.DefenderFront.Clear();
         war.UnopposedProgress.Clear();
+        // What the war leaves between them: the grievance of the side that lost (Escalation).
+        Escalation.Settle(campaign, war);
         // Everybody who was fighting everybody. A coalition war ends for all of it at
         // once - that is what makes it one war rather than a folder of them - so every pair
         // across the two sides gets the truce, not just the two that started it.

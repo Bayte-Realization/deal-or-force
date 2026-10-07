@@ -636,6 +636,10 @@ public static class SaveSystem
         public List<Fleet> Fleets = new();
         public List<StrategicWar> Wars = new();
 
+        /// <summary>Who is backing whom in somebody else's war (ProxyWars). Absent in older saves.</summary>
+        public List<Sponsorship> Sponsorships = new();
+        public int NextSponsorshipId = 1;
+
         /// <summary>Who the world has agreed to contain. Notoriety rides along on the nations.</summary>
         public List<Coalition> Coalitions = new();
 
@@ -727,6 +731,8 @@ public static class SaveSystem
             ArmyGroups = new List<ArmyGroup>(campaign.ArmyGroups),
             Fleets = new List<Fleet>(campaign.Fleets),
             Wars = new List<StrategicWar>(campaign.Wars),
+            Sponsorships = new List<Sponsorship>(campaign.Sponsorships),
+            NextSponsorshipId = campaign.NextSponsorshipId,
             Coalitions = new List<Coalition>(campaign.Coalitions),
             FrontLines = new List<DrawnFrontLine>(campaign.FrontLines),
             NextFrontLineId = campaign.NextFrontLineId,
@@ -773,6 +779,9 @@ public static class SaveSystem
             Replace(campaign.ArmyGroups, ArmyGroups);
             Replace(campaign.Fleets, Fleets);
             Replace(campaign.Wars, Wars);
+            Replace(campaign.Sponsorships, Sponsorships);
+            campaign.NextSponsorshipId = Math.Max(NextSponsorshipId,
+                campaign.Sponsorships.Count == 0 ? 1 : campaign.Sponsorships.Max(s => s.Id) + 1);
             Replace(campaign.Coalitions, Coalitions);
             Replace(campaign.FrontLines, FrontLines);
             // Never below what the restored lines already use, or the next drawn line would

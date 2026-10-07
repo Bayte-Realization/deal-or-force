@@ -58,7 +58,7 @@ public static partial class AiStatecraft
 
         // Annexation can be too expensive. Leaving a dependent state intact is a genuine
         // alternative, not a last-minute extra after reparations consumed its price.
-        var kind = SubjectCatalog.All
+        var kind = SubjectCatalog.Imposable
             .Where(k => PeaceConference.SubjugationCost(campaign, winner, loser, k.Id) <= ledger.Budget)
             .OrderByDescending(k => k.DemandCost).ThenBy(k => k.Id, StringComparer.Ordinal).FirstOrDefault();
         if (kind is null) return false;

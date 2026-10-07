@@ -716,6 +716,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
             using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
+            using (SimProfiler.Measure("escalation")) Escalation.Tick(this);
+            using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
             using (SimProfiler.Measure("movements"))
             {
                 using (SimProfiler.Measure("  mov:rules")) MovementRules.Tick(this);
@@ -950,6 +952,10 @@ public sealed partial class Campaign
         // campaign it did not create: a flag in memory says "not yet" about a world that was
         // calibrated on the host an hour ago, and recalibrating a world at war writes the
         // war into every country's institutions.
+        // The de facto powers of 2024 - the Houthis, the Rapid Support Forces, Idlib - cut out of
+        // the states they hold ground of, before stability is calibrated so their institutions
+        // are measured from the world they open in. A new world only (Factions).
+        Factions.Found(this);
         if (!StabilityCore.IsCalibrated(this)) StabilityCore.Calibrate(this);
 
         // The countries without land: founded on a new world once its regions exist, and put

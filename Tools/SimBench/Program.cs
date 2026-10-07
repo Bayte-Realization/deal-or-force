@@ -186,6 +186,12 @@ public static class Program
         if (secessionAt >= 0 && secessionAt + 1 < args.Length)
             return SecessionWarReport.Run(campaign, days, args[secessionAt + 1],
                 secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
+        // `--factions`: the de facto powers of 2024 at the start and after the run (FactionReport).
+        if (Array.IndexOf(args, "--factions") >= 0) return mapped ? FactionReport.Run(campaign, days) : 2;
+        var judgeAt = Array.IndexOf(args, "--judge");
+        if (judgeAt >= 0 && judgeAt + 1 < args.Length) return mapped ? FactionReport.Judge(campaign, days, args[judgeAt + 1]) : 2;
+        var provincesAt = Array.IndexOf(args, "--provinces");
+        if (provincesAt >= 0 && provincesAt + 1 < args.Length) return FactionReport.Provinces(campaign, args[provincesAt + 1]);
         var ledgerAt = Array.IndexOf(args, "--war-ledger");
         if (ledgerAt >= 0)
             return WarLedgerReport.Run(campaign, days, ledgerAt + 1 < args.Length && !args[ledgerAt + 1].StartsWith("--") ? args[ledgerAt + 1] : "");

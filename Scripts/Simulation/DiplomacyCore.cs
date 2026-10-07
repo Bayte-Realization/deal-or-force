@@ -14,7 +14,7 @@ public enum DiplomaticStance
     Truce
 }
 
-public sealed class DiplomaticRelation
+public sealed partial class DiplomaticRelation
 {
     public int A;
     public int B;
@@ -229,12 +229,24 @@ public static class CampaignDiplomacy
     /// Everybody it is now fighting learns about it, because a stance is a fact between two
     /// countries and the war is only where the fighting is organised.
     /// </summary>
+    /// <summary>
+    /// Who may fight in a civil war besides the two sides: a state that the side answers to, or
+    /// one that answers to it. Everybody else backs a side instead (ProxyWars).
+    /// </summary>
+    public static bool MayJoinCivilWar(Campaign campaign, StrategicWar war, Nation joiner, bool defending)
+    {
+        var leader = campaign.NationById(defending ? war.DefenderId : war.AttackerId);
+        if (leader is null || joiner is null) return false;
+        return leader.AnswersTo(joiner.Id) || joiner.AnswersTo(leader.Id);
+    }
+
     public static bool JoinWar(Campaign campaign, StrategicWar war, int nationId, bool defending,
         string opinionNote = null)
     {
         if (campaign is null || war is null || war.Ended) return false;
         var joiner = campaign.NationById(nationId);
         if (joiner is null || war.Involves(nationId)) return false;
+        if ((war.CivilConflict || war.Limited) && !MayJoinCivilWar(campaign, war, joiner, defending)) return false;
 
         (defending ? war.DefenderAllies : war.AttackerAllies).Add(nationId);
 
@@ -255,7 +267,8 @@ public static class CampaignDiplomacy
     }
 
     public static StrategicWar DeclareWar(Campaign campaign, int attackerId, int defenderId,
-        int claimedStateMapIndex = -1, string justification = null, bool onOwnInitiative = true)
+        int claimedStateMapIndex = -1, string justification = null, bool onOwnInitiative = true,
+        bool limited = false)
     {
         if (!CanDeclareWar(campaign, attackerId, defenderId, out _, onOwnInitiative)) return null;
         var attacker = campaign.NationById(attackerId);
@@ -275,7 +288,8 @@ public static class CampaignDiplomacy
             CivilConflict = justification is "secession" or "uprising",
             AiNegotiationUnlockDay = justification is "secession" or "uprising"
                 ? campaign.ElapsedDays + Math.Max(0, campaign.Defines.CivilWarNegotiationDays) : 0,
-            ClaimedStateMapIndex = ResolveWarGoal(campaign, defender.MapIndex, claimedStateMapIndex)
+            ClaimedStateMapIndex = ResolveWarGoal(campaign, defender.MapIndex, claimedStateMapIndex),
+            Limited = limited
         };
         campaign.Wars.Add(war);
         campaign.Chronicle.Record(campaign, "war_started", attackerId, defenderId);

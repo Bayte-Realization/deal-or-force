@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -320,7 +321,12 @@ public static class Statecraft
         if (attacker is null || defender is null) return 0;
 
         Candidates.Clear();
-        foreach (var relation in campaign.Relations.Values)
+        // A civil war is not what an alliance is for. The friends of either side back it -
+        // money, weapons, volunteers (ProxyWars) - and only a state the side answers to, or
+        // that answers to it, fights in it: the United States was not at war in Sudan, and a
+        // Sudan that made peace by becoming an American client state was the alliance table
+        // fighting somebody else's civil war for them.
+        foreach (var relation in war.CivilConflict || war.Limited ? Enumerable.Empty<DiplomaticRelation>() : campaign.Relations.Values)
         {
             if (relation.A != defender.Id && relation.B != defender.Id) continue;
             var friendId = relation.Other(defender.Id);
@@ -345,7 +351,7 @@ public static class Statecraft
         }
 
         // And the coalition, if the attacker is what it was formed about.
-        var coalition = CoalitionAgainst(campaign, attacker.Id);
+        var coalition = war.CivilConflict || war.Limited ? null : CoalitionAgainst(campaign, attacker.Id);
         if (coalition is not null)
             foreach (var memberId in coalition.MemberIds)
                 if (memberId != defender.Id && !Candidates.Contains(memberId))

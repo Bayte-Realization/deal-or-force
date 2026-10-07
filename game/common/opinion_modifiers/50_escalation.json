@@ -1,0 +1,19 @@
+// What an incident leaves between two countries, and what backing the other side of a war does
+// to an opinion (Escalation.cs, ProxyWars.cs).
+{
+  "border_incident": { "name": "Shot at our border guards", "opinion": -4, "days": 365, "decays": true, "max_stacks": 2 },
+  "airspace_violation": { "name": "Violated our airspace", "opinion": -3, "days": 365, "decays": true, "max_stacks": 2 },
+  "naval_standoff": { "name": "Rammed our ships", "opinion": -4, "days": 365, "decays": true, "max_stacks": 2 },
+  "diplomats_expelled": { "name": "Expelled our diplomats", "opinion": -5, "days": 365, "decays": true, "max_stacks": 2 },
+  "cyber_attack": { "name": "Attacked our networks", "opinion": -4, "days": 365, "decays": true, "max_stacks": 2 },
+  "sabotage": { "name": "Sabotage on our ground", "opinion": -8, "days": 540, "decays": true, "max_stacks": 2 },
+  "assassination": { "name": "Killed one of ours", "opinion": -25, "days": 1825, "decays": true, "max_stacks": 2 },
+  "artillery_duel": { "name": "Shelled our villages", "opinion": -6, "days": 540, "decays": true, "max_stacks": 3 },
+  "cross_border_raid": { "name": "Raided across the border", "opinion": -8, "days": 540, "decays": true, "max_stacks": 2 },
+  "missile_strike": { "name": "Struck our territory", "opinion": -10, "days": 730, "decays": true, "max_stacks": 2 },
+  "hotline_call": { "name": "Talked it down", "opinion": 5, "days": 365, "decays": true, "max_stacks": 2 },
+  "prisoner_exchange": { "name": "Exchanged prisoners", "opinion": 6, "days": 540, "decays": true, "max_stacks": 2 },
+  "held_talks": { "name": "Held talks with us", "opinion": 8, "days": 365, "decays": true },
+  "armed_us": { "name": "Arms us in our war", "opinion": 25, "days": 1825, "decays": true },
+  "armed_our_enemy": { "name": "Arms our enemy", "opinion": -30, "days": 1825, "decays": true }
+}

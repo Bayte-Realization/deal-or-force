@@ -17,6 +17,17 @@ public sealed partial class Defines
     public float BreakawaySurrenderSupport { get; set; } = 0.05f;
     /// <summary>The share of the old state's formations standing in a seceding region that go over to it when the state fights.</summary>
     public float SecessionDefectionShare { get; set; } = 0.45f;
+    /// <summary>A de facto faction that has lost most of its ground fights on while it keeps this many formations and this much war support.</summary>
+    public int FactionFightOnFormations { get; set; } = 2;
+    public float FactionFightOnSupport { get; set; } = 0.2f;
+    /// <summary>How long a faction's "seasoned insurgency" lasts from the first day.</summary>
+    public int FactionSeasonedDays { get; set; } = 1460;
+    /// <summary>How much of a faction's patron's strength a country thinking of attacking it counts against itself.</summary>
+    public float FactionPatronDeterrence { get; set; } = 0.25f;
+    /// <summary>What a war with a country whose only wars are with its own rebels is worth less to the computer: they are backed, not invaded.</summary>
+    public float AiCivilWarRestraint { get; set; } = 0.6f;
+    /// <summary>How much of a neighbour's weakness a government counts toward a war it has no reason it could give for.</summary>
+    public float AiWeaknessWithoutCause { get; set; } = 0.3f;
 }
 
 public sealed partial class Nation
@@ -101,6 +112,7 @@ public static class Reintegration
         if (war.EnemyLeaderOf(government.Id) != breakaway.Id) return false;
         var defines = c.Defines;
         var held = HeldShare(c, breakaway, government);
+        if (held >= defines.BreakawaySurrenderOccupied * 0.5f && Factions.FightsOn(c, breakaway, held)) return false;
         return held >= defines.BreakawaySurrenderOccupied ||
                breakaway.WarSupport <= defines.BreakawaySurrenderSupport && held >= defines.BreakawaySurrenderOccupied * 0.5f;
     }

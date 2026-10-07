@@ -229,7 +229,9 @@ public static class WarWeariness
     {
         var defines = campaign.Defines;
         var age = campaign.ElapsedDays - war.StartedDay;
-        if (age >= defines.AiWearyDays) return true;
-        return !winning && war.Stalled && age >= defines.AiStalemateDays;
+        // A larger war and a civil war take longer to give up on (Escalation).
+        var delay = Escalation.StalemateDelay(campaign, war);
+        if (age >= defines.AiWearyDays + delay) return true;
+        return !winning && war.Stalled && age >= defines.AiStalemateDays + delay;
     }
 }

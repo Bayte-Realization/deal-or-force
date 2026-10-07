@@ -1,0 +1,406 @@
+// The handbook (F1): its topics and articles, in order. The words are localisation:
+// handbook.<id>.title, handbook.<id>.body and handbook.topic.<id>. A body is paragraphs
+// separated by blank lines; "## " starts a heading and "- " a point. `screen` is the
+// screen the article explains (its "?" opens it here and the article can open the screen);
+// `related` are the articles linked at the bottom. A mod adds an article with a new id.
+{
+  "topics": {
+    "basics": 0,
+    "map": 10,
+    "country": 20,
+    "economy": 30,
+    "forces": 40,
+    "world": 50,
+    "society": 60
+  },
+  "articles": {
+    "first_steps": {
+      "topic": "basics",
+      "order": 0,
+      "related": [
+        "top_bar",
+        "time_and_saves",
+        "situation_rail",
+        "budget"
+      ]
+    },
+    "top_bar": {
+      "topic": "basics",
+      "order": 10,
+      "related": [
+        "budget",
+        "central_bank",
+        "stability",
+        "army"
+      ]
+    },
+    "time_and_saves": {
+      "topic": "basics",
+      "order": 20,
+      "related": [
+        "first_steps",
+        "top_bar"
+      ]
+    },
+    "situation_rail": {
+      "topic": "basics",
+      "order": 30,
+      "related": [
+        "first_steps",
+        "market",
+        "budget"
+      ]
+    },
+    "map_controls": {
+      "topic": "map",
+      "order": 0,
+      "related": [
+        "map_modes",
+        "regions_provinces",
+        "orders"
+      ]
+    },
+    "map_modes": {
+      "topic": "map",
+      "order": 10,
+      "related": [
+        "map_controls",
+        "diplomacy",
+        "wars",
+        "economy_overview"
+      ]
+    },
+    "regions_provinces": {
+      "topic": "map",
+      "order": 20,
+      "related": [
+        "population",
+        "construction",
+        "stability"
+      ]
+    },
+    "nation_screen": {
+      "topic": "country",
+      "order": 0,
+      "screen": "Nation",
+      "related": [
+        "budget",
+        "laws",
+        "stability",
+        "population"
+      ]
+    },
+    "budget": {
+      "topic": "country",
+      "order": 10,
+      "screen": "State Affairs",
+      "related": [
+        "central_bank",
+        "public_debt",
+        "top_bar"
+      ]
+    },
+    "central_bank": {
+      "topic": "country",
+      "order": 20,
+      "screen": "State Affairs",
+      "related": [
+        "budget",
+        "public_debt",
+        "top_bar"
+      ]
+    },
+    "public_debt": {
+      "topic": "country",
+      "order": 30,
+      "screen": "Economy",
+      "related": [
+        "budget",
+        "central_bank"
+      ]
+    },
+    "laws": {
+      "topic": "country",
+      "order": 40,
+      "screen": "Laws",
+      "related": [
+        "stability",
+        "budget",
+        "reputation"
+      ]
+    },
+    "decisions": {
+      "topic": "country",
+      "order": 50,
+      "screen": "Decisions",
+      "related": [
+        "laws",
+        "stability",
+        "alliances"
+      ]
+    },
+    "economy_overview": {
+      "topic": "economy",
+      "order": 0,
+      "screen": "Economy",
+      "related": [
+        "market",
+        "construction",
+        "production",
+        "budget"
+      ]
+    },
+    "market": {
+      "topic": "economy",
+      "order": 10,
+      "screen": "Economy",
+      "related": [
+        "trade",
+        "production",
+        "economy_overview"
+      ]
+    },
+    "trade": {
+      "topic": "economy",
+      "order": 20,
+      "screen": "Trade",
+      "related": [
+        "market",
+        "diplomacy",
+        "alliances"
+      ]
+    },
+    "production": {
+      "topic": "economy",
+      "order": 30,
+      "screen": "Production",
+      "related": [
+        "market",
+        "army",
+        "long_range"
+      ]
+    },
+    "construction": {
+      "topic": "economy",
+      "order": 40,
+      "screen": "Economy",
+      "related": [
+        "economy_overview",
+        "regions_provinces",
+        "budget"
+      ]
+    },
+    "research": {
+      "topic": "economy",
+      "order": 50,
+      "screen": "Research",
+      "related": [
+        "economy_overview",
+        "army"
+      ]
+    },
+    "army": {
+      "topic": "forces",
+      "order": 0,
+      "screen": "Military",
+      "related": [
+        "orders",
+        "supply",
+        "long_range",
+        "wars"
+      ]
+    },
+    "orders": {
+      "topic": "forces",
+      "order": 10,
+      "screen": "Military",
+      "related": [
+        "army",
+        "supply",
+        "wars"
+      ]
+    },
+    "supply": {
+      "topic": "forces",
+      "order": 20,
+      "screen": "Military",
+      "related": [
+        "army",
+        "orders",
+        "construction"
+      ]
+    },
+    "long_range": {
+      "topic": "forces",
+      "order": 30,
+      "screen": "Support",
+      "related": [
+        "army",
+        "wars",
+        "production"
+      ]
+    },
+    "navy": {
+      "topic": "forces",
+      "order": 40,
+      "related": [
+        "army",
+        "orders",
+        "wars"
+      ]
+    },
+    "wars": {
+      "topic": "forces",
+      "order": 50,
+      "screen": "Wars",
+      "related": [
+        "peace",
+        "war_weariness",
+        "orders",
+        "alliances"
+      ]
+    },
+    "peace": {
+      "topic": "forces",
+      "order": 60,
+      "screen": "Wars",
+      "related": [
+        "wars",
+        "war_weariness",
+        "subjects"
+      ]
+    },
+    "war_weariness": {
+      "topic": "forces",
+      "order": 70,
+      "screen": "Wars",
+      "related": [
+        "wars",
+        "peace",
+        "stability"
+      ]
+    },
+    "diplomacy": {
+      "topic": "world",
+      "order": 0,
+      "screen": "Diplomacy",
+      "related": [
+        "alliances",
+        "subjects",
+        "trade",
+        "reputation"
+      ]
+    },
+    "alliances": {
+      "topic": "world",
+      "order": 10,
+      "screen": "Diplomacy",
+      "related": [
+        "diplomacy",
+        "wars",
+        "subjects"
+      ]
+    },
+    "subjects": {
+      "topic": "world",
+      "order": 20,
+      "screen": "Diplomacy",
+      "related": [
+        "diplomacy",
+        "peace",
+        "alliances"
+      ]
+    },
+    "movements": {
+      "topic": "world",
+      "order": 30,
+      "related": [
+        "stability",
+        "secession",
+        "diplomacy"
+      ]
+    },
+    "stability": {
+      "topic": "society",
+      "order": 0,
+      "screen": "Nation",
+      "related": [
+        "secession",
+        "movements",
+        "population",
+        "laws"
+      ]
+    },
+    "secession": {
+      "topic": "society",
+      "order": 10,
+      "related": [
+        "stability",
+        "movements",
+        "war_weariness"
+      ]
+    },
+    "population": {
+      "topic": "society",
+      "order": 20,
+      "screen": "Nation",
+      "related": [
+        "regions_provinces",
+        "stability",
+        "economy_overview"
+      ]
+    },
+    "reputation": {
+      "topic": "society",
+      "order": 30,
+      "screen": "Diplomacy",
+      "related": [
+        "diplomacy",
+        "laws",
+        "stability"
+      ]
+    },
+    "reports": {
+      "topic": "society",
+      "order": 40,
+      "screen": "Ledger",
+      "related": [
+        "top_bar",
+        "economy_overview",
+        "situation_rail"
+      ]
+    },
+    "tensions": {
+      "topic": "world",
+      "order": 40,
+      "screen": "Conflicts",
+      "related": [
+        "proxy_wars",
+        "diplomacy",
+        "wars",
+        "war_weariness"
+      ]
+    },
+    "factions": {
+      "topic": "world",
+      "order": 35,
+      "screen": "Conflicts",
+      "related": [
+        "movements",
+        "secession",
+        "wars",
+        "proxy_wars"
+      ]
+    },
+    "proxy_wars": {
+      "topic": "world",
+      "order": 50,
+      "screen": "Conflicts",
+      "related": [
+        "tensions",
+        "wars",
+        "trade"
+      ]
+    }
+  }
+}

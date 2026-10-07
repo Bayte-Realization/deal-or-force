@@ -290,6 +290,7 @@ public static class PeaceConference
         war.WinnerId = winner.Id;
         war.PeaceSummary = Summary(campaign, war, demand, winner, loser);
         campaign.Chronicle.Record(campaign, "peace_signed", winner.Id, loser.Id);
+        Escalation.Settle(campaign, war);
         war.AttackerFront.Clear();
         war.DefenderFront.Clear();
         war.UnopposedProgress.Clear();

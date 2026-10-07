@@ -1,0 +1,6 @@
+// The handbook window (HandbookUI): where it sits. Its articles are common/handbook.
+{
+  "layout": {
+    "modal.handbook": { "anchors": [0.10, 0.10, 0.90, 0.92], "offsets": [0, 0, 0, 0] }
+  }
+}

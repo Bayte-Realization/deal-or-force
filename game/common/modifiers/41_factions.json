@@ -1,0 +1,16 @@
+// What years of fighting on its own ground give a de facto faction (Factions.cs). Granted on
+// the first day for FactionSeasonedDays; the same grammar as 00_modifiers.json.
+{
+  "seasoned_insurgency": {
+    "name": "Seasoned insurgency",
+    "description": "Years of war on its own ground: fighters who know every road, supply from the villages, and a habit of coming back after every defeat.",
+    "days": 1460, "positive": true,
+    "modifiers": { "army_defense": 0.15, "organisation_recovery": 0.10, "supply": 0.06, "reinforcement_rate": 0.10, "militia_readiness": 0.30 }
+  },
+  "junta_overstretched": {
+    "name": "Overstretched army",
+    "description": "Fighting on every frontier at once after the offensives of late 2023: battalions surrendering whole, officers deserting, conscripts who do not want to be there.",
+    "days": 1460, "positive": false,
+    "modifiers": { "army_attack": -0.15, "army_defense": -0.08, "organisation_recovery": -0.10, "stability_weekly": -0.0005 }
+  }
+}

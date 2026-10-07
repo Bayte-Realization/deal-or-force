@@ -160,6 +160,8 @@ public partial class DealOrForceGame
 
         FlushAlerts();
 
+        AddFirstStepsToOutliner();
+
         AddOutlinerHeader("WORLD");
         // This rail is rebuilt, not appended. Read a bounded snapshot rather than a delta:
         // otherwise collapsing a group or changing language erases the already read news.

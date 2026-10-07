@@ -84,6 +84,16 @@ public static class CampaignFingerprint
             MixFloat(r.AllianceProgramWeeklyCost); MixFloat(r.AllianceProgramTrustBudget);
             Mix(r.AllianceProgramRelief ? 1 : 0);
             Mix(r.AllianceProgramPausedDay);
+            // How close the two are to fighting, and what they hold against each other (Escalation).
+            MixFloat(r.Tension); MixFloat(r.StructuralTension); MixFloat(r.GrievanceA); MixFloat(r.GrievanceB);
+            Mix(r.TensionStage); Mix(r.LastIncidentDay); Mix(r.TalksUntilDay); Mix(r.LastTalksDay);
+        }
+        // Who is arming whom in other people's wars (ProxyWars).
+        Mix(campaign.Sponsorships.Count); Mix(campaign.NextSponsorshipId);
+        foreach (var s in campaign.Sponsorships)
+        {
+            Mix(s.Id); Mix(s.SponsorId); Mix(s.ClientId); Mix(s.WarId); Mix(s.Level); Mix(s.Ended ? 1 : 0);
+            Mix(s.UnpaidWeeks); MixFloat(s.Delivered);
         }
 
         foreach (var nation in Ordered(campaign.Nations, nation => nation.Id))

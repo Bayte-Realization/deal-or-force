@@ -85,6 +85,7 @@ public partial class DealOrForceGame
         }, 148, 32);
         toLedger.TooltipText = Ui.Tip(Tr("The figures behind these decisions: charts, history and rankings, for any country."));
         header.AddChild(toLedger);
+        header.AddChild(HandbookButton("budget"));
         header.AddChild(ActionButton("×", CloseStateAffairs, 38, 32));
 
         _stateAffairsSummary = Title("", 13, Ui.Colour("text.body_soft"));
@@ -140,6 +141,7 @@ public partial class DealOrForceGame
 
     private void OpenStateAffairs()
     {
+        MarkFirstStep("budget");
         _openScreen = "State Affairs";
         _sidePanel.Visible = false;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
