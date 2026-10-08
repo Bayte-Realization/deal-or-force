@@ -88,6 +88,7 @@ static class SovereignFinanceTests
         c.SetFeature("public_debt", true);
         Check(n.PublicDebt == dormantPrincipal + 4, "repeating the feature switch is idempotent");
         VerifyWorldMigration();
+        VerifyAccountOperations();
     }
 
     static void VerifyWorldMigration()
@@ -122,5 +123,45 @@ static class SovereignFinanceTests
         p.Treasury = float.NegativeInfinity; SovereignFinance.NormalizeAccounts(c, p);
         Check(float.IsNegativeInfinity(p.Treasury) && p.PublicDebt == debt,
             "migration leaves corrupt nonfinite values visible to numeric-integrity protection");
+    }
+
+    static void VerifyAccountOperations()
+    {
+        var c = new Campaign(715);
+        var a = new Nation { Id = 0, Tag = "FIN", Gdp = 100, Treasury = 4, PublicDebt = 50,
+            DebtArrears = 3, PaymentArrears = 5, DebtCondition = DebtCondition.Default, DebtMissedWeeks = 6 };
+        var b = new Nation { Id = 1, Tag = "JOIN", Gdp = 50, Treasury = -2, PublicDebt = 10,
+            DebtArrears = 1, PaymentArrears = 2, DebtCondition = DebtCondition.Restructuring,
+            DebtRestructuringProgress = 25, CreditConfidence = .2f, DebtIssuedWeekly = .1f };
+        c.Nations.Add(a); c.Nations.Add(b); SovereignFinance.NormalizeAccounts(c);
+        Check(SovereignFinance.PayArrears(a, 4) == 4 && a.DebtArrears == 0 && a.PaymentArrears == 4 &&
+            a.PublicDebt == 50 && a.Treasury == 0, "manual overdue payment prioritizes interest without repaying principal or printing money");
+        Check(SovereignFinance.PayArrears(a, float.NaN) == 0 && SovereignFinance.PayArrears(a, 100) == 0,
+            "overdue payments respect finite requests and actual cash");
+        a.Treasury = 4;
+        SovereignFinance.MergeAccounts(c, a, b);
+        Check(a.PublicDebt == 62 && a.DebtArrears == 1 && a.PaymentArrears == 6 && a.Treasury == 4 &&
+            b.PublicDebt == 0 && b.DebtArrears == 0 && b.PaymentArrears == 0 && b.Treasury == 0,
+            "state union conserves debt, both arrears ledgers and savings including legacy deficits");
+        Check(a.DebtCondition == DebtCondition.Default && a.DebtMissedWeeks == 6 &&
+            a.DebtRestructuringProgress == 0 && a.CreditConfidence == .2f && a.DebtIssuedWeekly == .1f,
+            "union retains credit distress and cannot inherit a nearly completed free haircut");
+        var effect = new ScriptedEffects.Effect(); effect.Add("treasury", -6); effect.Add("treasury", 2);
+        effect.Apply(c, a);
+        Check(a.Treasury == 0 && a.PublicDebt == 62, "compound charges and refunds finish before any overdraft conversion");
+        effect = new ScriptedEffects.Effect(); effect.Add("treasury", -3); effect.Apply(c, a);
+        Check(a.Treasury == 0 && a.PublicDebt == 65 && a.DebtIssuedWeekly == .1f,
+            "legacy cash effects convert immediately without resetting the bond issuance allowance");
+        var before = CampaignFingerprint.Of(c);
+        var sheet = SovereignBalanceSheet.Read(c, a);
+        Check(before == CampaignFingerprint.Of(c) && sheet.Principal == 65 && sheet.Obligations == 72,
+            "inspecting the financial projection is read-only and distinguishes principal from unpaid bills");
+        sheet = new SovereignBalanceSheet(2, 50, 1, 3, -5, 1, 4, 100, 1, 0);
+        Check(sheet.FinancingNeed == 3 && sheet.ExpectedNewPrincipal == 1 && sheet.UnfundedNextWeek == 2 &&
+            sheet.PrimaryBalance == -4 && sheet.CashRunwayWeeks == .4f && sheet.ServiceRatio == .25f,
+            "liquidity, primary deficit, interest burden and the funding gap have distinct units");
+        sheet = sheet with { BudgetBalance = 0 };
+        Check(sheet.CashRunwayWeeks is null && sheet.FinancingNeed == 0,
+            "a balanced budget reports no exhaustion horizon instead of infinity");
     }
 }

@@ -55,7 +55,7 @@ public static class ScriptedEffects
     static ScriptedEffects()
     {
         NationField("treasury", n => n.Treasury, (n, v) => n.Treasury = v, float.NegativeInfinity, float.PositiveInfinity,
-            "Cash on hand. Legacy negative balances migrate to public debt on the next economic settlement.");
+            "Cash on hand. An overdrawn balance is imported into sovereign principal after the complete scripted effect.");
         NationField("public_debt", n => n.PublicDebt, (n, v) => n.PublicDebt = v, 0f, float.PositiveInfinity,
             "Outstanding sovereign principal, separate from cash. Changing this does not issue cash.");
         NationField("credit_confidence", n => n.CreditConfidence, (n, v) => n.CreditConfidence = v, 0f, 1f,
@@ -331,6 +331,10 @@ public static class ScriptedEffects
                 foreach (var state in owned)
                     field.SetState(state, Combine(field.GetState(state), entry.Value, operation, field));
             }
+            // Keep compound scripts ordered: charges and refunds in one effect cancel
+            // before legacy overdrafts are imported. This is a balance-sheet adjustment,
+            // not an ordinary bond issue and not a weekly settlement.
+            SovereignFinance.NormalizeAccounts(campaign, nation);
         }
 
         private static float Combine(float current, float value, Operation operation, Field field)

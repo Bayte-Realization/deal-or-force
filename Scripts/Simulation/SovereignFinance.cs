@@ -118,13 +118,7 @@ public static class SovereignFinance
         var missedInterest = MathF.Min(unpaid, n.DebtInterestWeekly);
         n.DebtArrears += missedInterest;
         n.PaymentArrears += unpaid - missedInterest;
-        float Pay(float owed)
-        {
-            var paid = MathF.Min(n.Treasury, owed);
-            n.Treasury -= paid; return MathF.Max(0, owed - paid);
-        }
-        n.DebtArrears = Pay(n.DebtArrears);
-        n.PaymentArrears = Pay(n.PaymentArrears);
+        PayArrears(n, n.Treasury);
         var tolerance = MathF.Max(.000001f, n.Gdp * .0000001f);
         n.DebtMissedWeeks = n.DebtArrears > tolerance ? n.DebtMissedWeeks + 1 : 0;
         var crisis = n.DebtArrears + n.PaymentArrears > tolerance;
@@ -186,6 +180,40 @@ public static class SovereignFinance
         n.PublicDebt -= paid; n.Treasury -= paid;
         return paid;
     }
+
+    /// <summary>Service overdue interest first, then unpaid primary bills; never issue cash.</summary>
+    public static float PayArrears(Nation n, float requested)
+    {
+        if (!float.IsFinite(requested) || requested <= 0) return 0;
+        var available = MathF.Min(requested, MathF.Max(0, n.Treasury));
+        var interest = MathF.Min(available, MathF.Max(0, n.DebtArrears));
+        var bills = MathF.Min(available - interest, MathF.Max(0, n.PaymentArrears));
+        var paid = interest + bills;
+        n.DebtArrears -= interest; n.PaymentArrears -= bills; n.Treasury -= paid;
+        return paid;
+    }
+
+    /// <summary>A voluntary whole-state union inherits obligations as well as savings.</summary>
+    public static void MergeAccounts(Campaign c, Nation successor, Nation absorbed)
+    {
+        NormalizeAccounts(c, successor); NormalizeAccounts(c, absorbed);
+        successor.Treasury += absorbed.Treasury; absorbed.Treasury = 0;
+        successor.PublicDebt += absorbed.PublicDebt; absorbed.PublicDebt = 0;
+        successor.DebtArrears += absorbed.DebtArrears; absorbed.DebtArrears = 0;
+        successor.PaymentArrears += absorbed.PaymentArrears; absorbed.PaymentArrears = 0;
+        successor.DebtIssuedWeekly += absorbed.DebtIssuedWeekly; absorbed.DebtIssuedWeekly = 0;
+        successor.DebtMissedWeeks = Math.Max(successor.DebtMissedWeeks, absorbed.DebtMissedWeeks);
+        successor.DebtCrisisWeeks = Math.Max(successor.DebtCrisisWeeks, absorbed.DebtCrisisWeeks);
+        successor.CreditConfidence = MathF.Min(successor.CreditConfidence, absorbed.CreditConfidence);
+        successor.DebtSpreadAnnual = MathF.Max(successor.DebtSpreadAnnual, absorbed.DebtSpreadAnnual);
+        // A restructuring agreement is specific to its debtor. A union must negotiate
+        // its new balance sheet again rather than inheriting nearly-complete free relief.
+        var incoming = absorbed.DebtCondition == DebtCondition.Restructuring ? DebtCondition.Default : absorbed.DebtCondition;
+        var existing = successor.DebtCondition == DebtCondition.Restructuring ? DebtCondition.Default : successor.DebtCondition;
+        successor.DebtCondition = incoming > existing ? incoming : existing;
+        successor.DebtRestructuringProgress = 0;
+        successor.DebtRestructuringLastDay = Math.Max(successor.DebtRestructuringLastDay, absorbed.DebtRestructuringLastDay);
+    }
 }
 
 public sealed class ManageDebtCommand : ICampaignCommand
@@ -200,6 +228,7 @@ public sealed class ManageDebtCommand : ICampaignCommand
         SovereignFinance.NormalizeAccounts(c, n);
         if (Action == "borrow") SovereignFinance.Borrow(c, n, Amount);
         else if (Action == "repay") SovereignFinance.Repay(n, Amount);
+        else if (Action == "arrears") SovereignFinance.PayArrears(n, Amount);
         else if (Action == "restructure") SovereignFinance.StartRestructuring(c, n);
         c.MarkStrategicChange();
     }
