@@ -11,9 +11,23 @@ public static class PeacefulFormation
     public static string ConsentKey(int founder, string formable) => "union_consent/" + founder + "/" + formable;
     private static string OfferKey(int founder, string formable) => "union_offer/" + founder + "/" + formable;
     public static IEnumerable<int> Territory(Campaign campaign, FormableNation definition) =>
-        definition.RequiredProvinces.Concat(definition.RequiredTags.SelectMany(tag =>
+        definition.RequiredProvinces.Concat(RegionProvinces(campaign, definition)).Concat(definition.RequiredTags.SelectMany(tag =>
             campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :
                 campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>()))).Distinct();
+
+    /// <summary>The provinces of a formable's named regions, and of the pieces a border has
+    /// since cut out of them.</summary>
+    public static IEnumerable<int> RegionProvinces(Campaign campaign, FormableNation definition)
+    {
+        if (definition.RequiredRegions.Length == 0 || campaign?.ProvinceMap is null) yield break;
+        var named = campaign.States.Where(s => definition.RequiredRegions.Contains(s.Id, StringComparer.OrdinalIgnoreCase))
+            .Select(s => s.MapIndex).ToHashSet();
+        var wanted = campaign.States.Where(s => named.Contains(s.MapIndex) || named.Contains(s.ParentMapIndex))
+            .Select(s => s.MapIndex).ToHashSet();
+        var map = campaign.ProvinceMap;
+        for (var p = 1; p <= map.ProvinceCount; p++)
+            if (wanted.Contains(map.ProvinceToState[p])) yield return p;
+    }
 
     private static bool AtPeace(Campaign campaign, Nation nation) =>
         !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
@@ -152,7 +166,7 @@ public static class PeacefulFormation
             partner.Population = remaining;
             if (campaign.StatesOf(partner).Length > 0) continue;
             // Joining is not defeat. Keep people, savings, equipment, training and research.
-            founder.Treasury += partner.Treasury; partner.Treasury = 0;
+            SovereignFinance.MergeAccounts(campaign, founder, partner);
             founder.ManpowerReserve += partner.ManpowerReserve; partner.ManpowerReserve = 0;
             founder.ConvertedCivilianUnits = (int)Math.Min(int.MaxValue, (long)founder.ConvertedCivilianUnits + partner.ConvertedCivilianUnits);
             foreach (var line in partner.ProductionLines.Where(l => l is not null))

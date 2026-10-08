@@ -19,6 +19,7 @@ public partial class DealOrForceGame : Control
     private Label _identity = null!;
     private Label _identityTag = null!;
     private StatReadout _treasury = null!;
+    private StatReadout _publicDebt;
     private StatReadout _balance = null!;
     private StatReadout _stability = null!;
     private StatReadout _manpower = null!;
@@ -254,6 +255,15 @@ public partial class DealOrForceGame : Control
         // only toggles time, and outside a campaign it is deliberately consumed.
         if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key)
             return;
+        if (_sovereignFinanceLayer is { Visible: true } && _handbookLayer is not { Visible: true } &&
+            _developerConsoleLayer is not { Visible: true } &&
+            _pauseMenuLayer is not { Visible: true } && _settingsLayer is not { Visible: true } &&
+            _saveLoadLayer is not { Visible: true })
+        {
+            if (key.Keycode == Key.Escape) { CloseSovereignFinance(); GetViewport().SetInputAsHandled(); return; }
+            if (key.Keycode is Key.Space or Key.F2 or Key.F3 or Key.F7 or Key.F10)
+            { GetViewport().SetInputAsHandled(); return; }
+        }
 
         // Reload is also available while typing in the console or searching a country.
         if (key.CtrlPressed && key.ShiftPressed && Letter(key) == Key.R)
@@ -405,6 +415,7 @@ public partial class DealOrForceGame : Control
         if (_isLoading || !_startupComplete) return;
         if (inputEvent is InputEventKey && GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return;
         if (_developerConsoleLayer is { Visible: true }) return;
+        if (_sovereignFinanceLayer is { Visible: true }) return;
         HandleProjectionHotkey(inputEvent);
         if (GetViewport().IsInputHandled()) return;
 
@@ -471,6 +482,8 @@ public partial class DealOrForceGame : Control
             HidePauseMenu();
         else if (_stateAffairsLayer is { Visible: true })
             CloseStateAffairs();
+        else if (_sovereignFinanceLayer is { Visible: true })
+            CloseSovereignFinance();
         else if (_ledgerLayer is { Visible: true })
             CloseLedger();
         else if (_warLedgerLayer is { Visible: true })
@@ -726,12 +739,16 @@ public partial class DealOrForceGame : Control
         identityBox.AddChild(_identityTag);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        stats.AddThemeConstantOverride("separation", 12);
+        stats.AddThemeConstantOverride("separation", 7);
         row.AddChild(stats);
         foreach (var field in CampaignUiCatalog.TopStats)
             switch (field)
             {
                 case "TREASURY": _treasury = Stat(stats, field, "Cash on hand. The line below is the change over the last week of campaign time."); break;
+                case "DEBT":
+                    _publicDebt = Stat(stats, field, "Borrowed principal, separate from cash. Open sovereign finance to inspect interest, overdue bills and credit access.");
+                    BindDebtHeadline();
+                    break;
                 case "BALANCE": _balance = Stat(stats, field, "What the treasury gains or loses each week, and everything that goes into it.", () => _campaign?.Player?.Budget); break;
                 case "GDP": _gdp = Stat(stats, field, "Annual gross domestic product, as it emerges from what your economy actually produces."); break;
                 case "POPULATION": _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week."); break;
@@ -978,10 +995,12 @@ public partial class DealOrForceGame : Control
         if (_handoverLayer is not null) _handoverLayer.Visible = false;
         if (_networkLayer is not null) _networkLayer.Visible = false;
         if (_networkHud is not null) _networkHud.Visible = false;
+        if (_sovereignFinanceLayer is not null) _sovereignFinanceLayer.Visible = false;
     }
 
     private void OpenScreen(string screen)
     {
+        if (_sovereignFinanceLayer is not null) _sovereignFinanceLayer.Visible = false;
         if (!Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen)) return;
         _sideScreenBuiltKey = $"{screen}|{_dossierTab}|{_campaign?.Player?.Id}|" +
             (_campaign is null ? 0 : _campaign.ElapsedDays / SideScreenInterval(screen));
@@ -1406,6 +1425,7 @@ public partial class DealOrForceGame : Control
 
         WriteStat(_treasury, Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
             Fmt.MoneyDelta((float)_treasuryTrend.Delta), Fmt.Direction(_treasuryTrend.Delta, 0.005d));
+        RefreshDebtHeadline(player);
         WriteStat(_gdp, Fmt.Money(player.Gdp), Fmt.MoneyExact(player.Gdp),
             Fmt.MoneyDelta((float)_gdpTrend.Delta), Fmt.Direction(_gdpTrend.Delta, 0.005d));
         WriteStat(_population, Fmt.People(player.Population), Fmt.PeopleExact(player.Population),
@@ -1455,6 +1475,7 @@ public partial class DealOrForceGame : Control
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
         RefreshRecruitment();
         if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
+        if (_sovereignFinanceLayer is { Visible: true }) RefreshSovereignFinanceWorkspace();
         if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
         if (_diplomacyLayer is { Visible: true }) RefreshDiplomacyScreen();
         if (_policyLayer is { Visible: true }) RefreshPolicyWorkspace();
@@ -1505,6 +1526,7 @@ public partial class DealOrForceGame : Control
         internal Label Caption = null!;
         internal TextureRect Glyph;
         internal string CountryCaption = "";
+        internal Control Box;
     }
 
 
@@ -1517,6 +1539,7 @@ public partial class DealOrForceGame : Control
     private static string StatIcon(string caption) => CampaignUiCatalog.Icon("hud." + caption, caption switch
     {
         "TREASURY" => "treasury",
+        "DEBT" => "coins",
         "BALANCE" => "balance",
         "GDP" => "gdp",
         "INFLATION" => "inflation",
@@ -1533,7 +1556,8 @@ public partial class DealOrForceGame : Control
         // show; an ordinary tooltip when there are not.
         var box = new ExplainedStat
         {
-            CustomMinimumSize = new Vector2(84, 0),
+            Name = "HudStat_" + caption.Replace(' ', '_'),
+            CustomMinimumSize = new Vector2(68, 0),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             Explain = explain,
             Plain = explain is null ? "" : Tr(tooltip)
@@ -1582,6 +1606,7 @@ public partial class DealOrForceGame : Control
             Caption = statCaption,
             Glyph = glyph,
             CountryCaption = caption,
+            Box = box,
             Value = Title("—", 17, Ui.Colour("text.bright")),
             Delta = Title("", 11, Ui.Colour("text.faint"))
         };
@@ -1608,6 +1633,13 @@ public partial class DealOrForceGame : Control
     {
         if (stat is null) return;
         stat.Value.Text = compact;
+        // Fit the whole amount instead of silently clipping its last digits on a narrow HUD.
+        var availableWidth = stat.Value.Size.X;
+        var font = stat.Value.GetThemeFont("font");
+        var fontSize = 17;
+        while (availableWidth > 0 && fontSize > 11 &&
+               font.GetStringSize(compact, HorizontalAlignment.Left, -1, fontSize).X > availableWidth) fontSize--;
+        stat.Value.AddThemeFontSizeOverride("font_size", fontSize);
         stat.Value.TooltipText = Ui.Tip(exact);
         stat.Value.MouseFilter = MouseFilterEnum.Stop;
         stat.Delta.Text = delta;
@@ -1907,6 +1939,7 @@ public partial class DealOrForceGame : Control
     private void UpdateScreenButtons()
     {
         var open =
+            _sovereignFinanceLayer is { Visible: true } ? "Economy" :
             _stateAffairsLayer is { Visible: true } ? "State Affairs" :
             _ledgerLayer is { Visible: true } ? "Ledger" :
             _warLedgerLayer is { Visible: true } ? "Wars" :
@@ -2302,6 +2335,7 @@ public partial class DealOrForceGame : Control
         // Dropdowns. An OptionButton item is a plain string with nothing attached, so each
         // list is re-filled by whoever owns it.
         RefreshBuildingPicker();
+        if (_sovereignFinanceLayer is { Visible: true }) RefreshSovereignFinanceWorkspace();
         if (_policyLayer is { Visible: true }) { BuildPolicyTarget(); RebuildPolicyList(); _policyBuiltDay = -1; RefreshPolicyWorkspace(); }
         if (_diplomacyLayer is { Visible: true })
         {

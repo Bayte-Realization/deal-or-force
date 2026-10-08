@@ -304,5 +304,14 @@
   "country.YEM.name": "Йемен",
   "country.ZAF.name": "Южно-Африканская Республика",
   "country.ZMB.name": "Замбия",
-  "country.ZWE.name": "Зимбабве"
+  "country.ZWE.name": "Зимбабве",
+  "country.BVC.name": "Баварская партия",
+  "name.form.communism": "Народная Республика {0}",
+  "name.form.fascism": "Национальное государство {0}",
+  "name.form.kingdom": "Королевство {0}",
+  "name.form.islamic_republic": "Исламская Республика {0}",
+  "name.form.holy_state": "Священное государство {0}",
+  "name.form.federation": "Федерация {0}",
+  "name.form.technate": "Технократия {0}",
+  "name.form.provisional": "Временное правительство ({0})"
 }

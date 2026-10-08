@@ -77,6 +77,7 @@ public partial class ExportVerification : Node
                     game.Call("RefreshLocalisedText");
                     Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
                 }
+                await VerifySovereignFinance(game);
                 game.Call("OpenScreen", "Laws");
                 await Wait(.25);
                 Check(game.FindChild("PolicySearch", true, false) is not null, "laws workspace is available");
@@ -149,9 +150,88 @@ public partial class ExportVerification : Node
         GetTree().Root.Size = new(1920, 1080);
     }
 
+    private async Task VerifySovereignFinance(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        game.VerificationEnableFinancialOrders();
+        var n = world.Player;
+        n.PublicDebt = 33; n.DebtArrears = .03f; n.PaymentArrears = .02f;
+        game.Call("Refresh"); await Wait(.15);
+        var unmigrated = world.Nations.Where(x => x.Movement is null && (!x.DebtInitialized || x.Treasury < 0)).ToArray();
+        Check(unmigrated.Length == 0,
+            "initial nonplayer sovereign accounts contain no unmigrated overdrafts: " +
+            string.Join(", ", unmigrated.Select(x => x.Tag)));
+        foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+        {
+            GetTree().Root.Size = size; game.Call("Refresh"); await Wait(.2); game.Call("Refresh"); await Wait(.1);
+            var debt = game.FindChild("HudStat_DEBT", true, false) as Control;
+            Check(debt is { Visible: true, FocusMode: Control.FocusModeEnum.All }, "public debt headline is visible and keyboard reachable");
+            CheckFits(game.FindChild("CampaignTopBar", true, false) as Control, "eight-metric top bar " + size.X);
+            if (debt is not null)
+                Check(GetTree().Root.GetVisibleRect().Encloses(debt.GetGlobalRect()), "debt amount stays on screen at " + size.X);
+            await Capture("debt-hud-" + size.X);
+        }
+        var headline = game.FindChild("HudStat_DEBT", true, false) as Control;
+        headline.GrabFocus();
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.Enter, Pressed = true }); await Wait(.15);
+        Check((game.FindChild("SovereignFinanceWorkspace", true, false) as Control)?.Visible == true,
+            "Enter on the debt headline opens the financial workspace");
+        var before = CampaignFingerprint.Of(world);
+        foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+        {
+            GetTree().Root.Size = size; await Wait(.2);
+            CheckFits(game.FindChild("SovereignFinancePanel", true, false) as Control, "financial workspace " + size.X);
+            var title = game.FindChild("FinanceTitle", true, false) as Label;
+            Check(title is { Text.Length: > 0 } && title.GetGlobalRect().Size.Y >= 20 &&
+                title.GetGlobalRect().Size.X >= 200 && title.IsVisibleInTree(),
+                "financial workspace title has readable geometry at " + size.X);
+            Check((game.FindChild("FinancePrincipal", true, false) as Label)?.Text == Fmt.Money(33), "workspace reports the actual saved principal");
+            await Capture("sovereign-finance-" + size.X);
+        }
+        Check(before == CampaignFingerprint.Of(world), "reading debt, limits and forecasts changes no campaign state");
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.Space, Pressed = true }); await Wait(.1);
+        Check(world.IsPaused, "the finance modal blocks the map's time hotkey");
+        var amount = game.FindChild("FinanceAmount", true, false) as SpinBox;
+        var issue = game.FindChild("FinanceAction_borrow", true, false) as Button;
+        amount.Value = .01; await Wait(.1);
+        var cash = n.Treasury; var principal = n.PublicDebt; var issued = n.DebtIssuedWeekly;
+        Check(issue is { Disabled: false }, "solvent country can review an affordable bond issue");
+        issue?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+        Check(n.Treasury == cash && n.PublicDebt == principal, "first issue click only reviews the operation");
+        issue?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+        Check(Math.Abs(n.Treasury - cash - .01f) < .0001f && Math.Abs(n.PublicDebt - principal - .01f) < .0001f &&
+            n.DebtIssuedWeekly > issued, "confirmed bond issue raises cash and principal through the real bounded command");
+        amount.Value = Math.Max(1, n.Gdp); await Wait(.1);
+        Check(issue.Disabled, "an oversized issue is disabled with an explicit reason");
+        amount.Value = .01; await Wait(.1);
+        var pay = game.FindChild("FinanceAction_arrears", true, false) as Button;
+        var debtArrears = n.DebtArrears; var spendingArrears = n.PaymentArrears; cash = n.Treasury;
+        pay.EmitSignal(BaseButton.SignalName.Pressed); pay.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+        Check(Math.Abs(n.DebtArrears - debtArrears + .01f) < .0001f && n.PaymentArrears == spendingArrears &&
+            Math.Abs(n.Treasury - cash + .01f) < .0001f, "the UI services overdue interest before primary bills");
+        (game.FindChild("CloseSovereignFinance", true, false) as Button)?.GrabFocus();
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, Pressed = true }); await Wait(.1);
+        Check((game.FindChild("SovereignFinanceWorkspace", true, false) as Control)?.Visible == false,
+            "Escape closes the financial modal");
+        game.Call("OpenScreen", "State Affairs"); await Wait(.1);
+        (game.FindChild("BudgetOpenSovereignFinance", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, Pressed = true }); await Wait(.1);
+        Check((game.FindChild("StateAffairs", true, false) as Control)?.Visible == true,
+            "finance opened from the budget returns to the budget on Escape");
+        game.Call("OpenScreen", "Nation");
+        GetTree().Root.Size = new(1920, 1080);
+    }
+
     private async Task VerifyDealWorkspace(DealOrForceGame game)
     {
         game.Call("ConsoleTag", "USA");
+        // Changing the player reapplies their saved UI preferences. A language probe
+        // overrides those in this process only, without changing the preference file.
+        var args = OS.GetCmdlineUserArgs();
+        var languageAt = Array.IndexOf(args, "--verify-language");
+        if (languageAt >= 0 && languageAt + 1 < args.Length)
+        { Loc.Language = args[languageAt + 1]; game.Call("RefreshLocalisedText"); }
         var world = game.VerificationWorld;
         world.IsPaused = true;
         var player = world.Player;
@@ -298,6 +378,7 @@ public partial class DealOrForceGame
 {
     // A narrow internal test seam; not a script-callable command or saved state.
     internal Campaign VerificationWorld => _campaign;
+    internal void VerificationEnableFinancialOrders() { if (_observerMode) ToggleObserverMode(); }
     internal void VerificationShowMovement(Nation movement) => ShowMovement(movement);
     internal void VerificationCloseMovement() => _movementPanel.Visible = false;
 }

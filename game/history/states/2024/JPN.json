@@ -51,7 +51,7 @@
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 0.963, "Coal": 0.356, "Oil": 0.402, "IronOre": 0.386, "RareEarths": 0.051, "NaturalGas": 0.758, "Timber": 3.384, "Bauxite": 0.107, "Uranium": 0.013 }
   },
-  // Gunma Prefecture
+  // Kantō: Tokyo, Kanagawa, Saitama, Chiba, Gunma and the plain around them, one region on this map
   "jp_10": {
     "population": 33946906,
     "urbanization": 0.97,

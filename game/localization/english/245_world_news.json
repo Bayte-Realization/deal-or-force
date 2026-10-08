@@ -5,5 +5,18 @@
   "rising.salvation_front": "National Salvation Front of {0}",
   "rising.transitional_council": "Transitional Council of {0}",
   "rising.revolutionary_front": "Revolutionary Front of {0}",
-  "{0} Civil War": "{0} Civil War"
+  "{0} Civil War": "{0} Civil War",
+  "The movement has not taken up arms.": "The movement has not taken up arms.",
+  "Peaceful campaign": "Peaceful campaign",
+  "Militant activism": "Militant activism",
+  "Armed struggle": "Armed struggle",
+  "Terror": "Terror",
+  "It has turned to {0}.": "It has turned to {0}.",
+  "It has turned back to {0}.": "It has turned back to {0}.",
+  "Methods · {0}{1}": "Methods · {0}{1}",
+  " · hardening": " · hardening",
+  " · softening": " · softening",
+  "How far the movement will go: a peaceful campaign, militant activism, armed struggle or terror. Its followers' radicalism, crackdowns and backers' weapons push it towards violence; standing in the world and ground it governs pull it back. Past the mark it can rise in arms.": "How far the movement will go: a peaceful campaign, militant activism, armed struggle or terror. Its followers' radicalism, crackdowns and backers' weapons push it towards violence; standing in the world and ground it governs pull it back. Past the mark it can rise in arms.",
+  "chronicle.movement_radicalised": "{0} hardens its methods: {2}.",
+  "chronicle.movement_moderated": "{0} softens its methods: {2}."
 }

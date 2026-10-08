@@ -14,6 +14,9 @@ public sealed record FormableNation(string Id, string Name, string Description, 
     public bool SubjectIntegration { get; init; }
     public bool AiFoundation { get; init; }
     public string[] EligibleCultures { get; init; } = Array.Empty<string>();
+    /// <summary>Regions by id, for a state whose ground the scenario writes under other
+    /// countries' tags - a Kurdistan of Erbil, Duhok and Sulaymaniyah.</summary>
+    public string[] RequiredRegions { get; init; } = Array.Empty<string>();
     public string[] Supersedes { get; init; } = Array.Empty<string>();
 }
 public sealed record FormationRequirement(string Label, bool Met);
@@ -81,6 +84,7 @@ public static class FormableNations
                     Text("colour", old?.Colour ?? ""))
                 {
                     EligibleCultures = Ids("eligible_cultures", old?.EligibleCultures),
+                    RequiredRegions = Ids("required_regions", old?.RequiredRegions),
                     Supersedes = Ids("supersedes", old?.Supersedes),
                     PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
                         ? accession.GetBoolean() : old?.PeacefulAccession ?? false,
@@ -89,7 +93,7 @@ public static class FormableNations
                     AiFoundation = e.TryGetProperty("ai_foundation", out var ai)
                         ? ai.GetBoolean() : old?.AiFoundation ?? false
                 };
-                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0) ||
+                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0 && d.RequiredRegions.Length == 0) ||
                     d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
                     throw new FormatException("empty eligibility/territory or values outside 0..1");
                 if (d.RequiredIdeology.Any(id => !IdeologyCatalog.Knows(id)))
@@ -118,6 +122,7 @@ public static class FormableNations
             new(Loc.Get("Territorial map ready"), map is not null && campaign.ProvinceController is not null)
         };
         var provinces = new HashSet<int>(d.RequiredProvinces);
+        provinces.UnionWith(PeacefulFormation.RegionProvinces(campaign, d));
         foreach (var tag in d.RequiredTags)
         {
             var authored = campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :

@@ -13,8 +13,12 @@ public sealed partial class Defines
     /// CivilWarCoupMemoryDays doubles it.
     /// </summary>
     public bool CivilWarOutbreaks { get; set; } = true;
-    public float CivilWarStabilityThreshold { get; set; } = 0.34f;
-    public float CivilWarWeeklyChance { get; set; } = 0.012f;
+    public float CivilWarStabilityThreshold { get; set; } = 0.30f;
+    public float CivilWarWeeklyChance { get; set; } = 0.010f;
+    /// <summary>The most civil wars the whole world begins in a year. A century-old campaign
+    /// whose stability has drifted down everywhere began thirteen in one year - Japan and
+    /// Spain among them - without it.</summary>
+    public int CivilWarWorldPerYear { get; set; } = 3;
     public int CivilWarCoupMemoryDays { get; set; } = 365;
     public int CivilWarEarliestDay { get; set; } = 120;
     public int CivilWarCooldownDays { get; set; } = 1825;
@@ -57,13 +61,15 @@ public static class CivilWarOutbreak
         if (d is null || !d.CivilWarOutbreaks || campaign.ProvinceMap is null) return;
         if (!MechanicFeatures.SystemEnabled(campaign, "SecessionEvents")) return;
         if (campaign.ElapsedDays < d.CivilWarEarliestDay || campaign.ElapsedDays % 7 != 3) return;
+        var thisYear = campaign.Chronicle.Entries.Count(e => e.Kind == "civil_war" && campaign.ElapsedDays - e.Day < 365);
         foreach (var nation in campaign.Nations.ToArray())
         {
+            if (thisYear >= d.CivilWarWorldPerYear) return;
             if (!Eligible(campaign, nation)) continue;
             var chance = Chance(campaign, nation);
             if (!float.IsFinite(chance) || chance <= 0f) continue;
             if (Escalation.Roll(campaign.Seed, nation.Id, 0xC1C, campaign.ElapsedDays, 0x3) >= chance) continue;
-            Break(campaign, nation);
+            if (Break(campaign, nation) is not null) thisYear++;
         }
     }
 

@@ -25,6 +25,7 @@ static class Program
         if (args.Contains("--civic-only")) { CivicCampaignTests.Run(); return; }
         if (args.Contains("--alliances-only")) { DynamicAllianceTests.Run(); return; }
         if (args.Contains("--finance-only")) { SovereignFinanceTests.Run(); return; }
+        if (args.Contains("--methods-only")) { MovementMethodsTests.Run(); return; }
         if (args.Contains("--policies-only")) { PoliticalPolicyTests.Run(); return; }
         if (args.Contains("--regional-content-only")) { RegionalContentTests.Run(); return; }
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
@@ -37,6 +38,7 @@ static class Program
         DismantlementTests.Run();
         DomesticCrisesTests.Run();
         SovereignFinanceTests.Run();
+        MovementMethodsTests.Run();
         PoliticalPolicyTests.Run();
         NationalCourseTests.Run();
         RegionalContentTests.Run();

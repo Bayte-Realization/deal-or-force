@@ -156,6 +156,10 @@ public static class CampaignFingerprint
             foreach (var origin in nation.RenouncedTerritoryOrigins.OrderBy(id => id)) Mix(origin);
             Mix(-17);
             MixFloat(nation.Gdp);
+            MixFloat(nation.LivingOffset);
+            MixText(nation.StartGovernment); MixText(nation.StartIdeology);
+            Mix(nation.Movement is null ? 0 : 1);
+            if (nation.Movement is { } movement) MixFloat(movement.Militancy);
             Mix(nation.ProductionReferenceInitialized ? 1 : 0);
             MixFloat(nation.ProductionReferenceGdp); Mix(nation.ProductionReferencePopulation);
             Mix(nation.LastCivilWarDay);

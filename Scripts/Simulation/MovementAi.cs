@@ -73,7 +73,7 @@ public static class MovementAi
         // Rise where it would win, and not in the first year of the world - and never, for one
         // that does not take up arms (the humanitarian trait: an order of knights runs hospitals).
         if (campaign.ElapsedDays >= defines.MovementAiUprisingAfterDays && !definition.Has("humanitarian") &&
-            definition.CanStageUprising)
+            MovementMethods.WillRise(campaign, nation, definition))
         {
             // The homeland first, then the likeliest.
             var forHire = definition.Has("for_hire");

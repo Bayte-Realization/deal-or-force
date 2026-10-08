@@ -85,6 +85,10 @@ public partial class DealOrForceGame
         }, 148, 32);
         toLedger.TooltipText = Ui.Tip(Tr("The figures behind these decisions: charts, history and rankings, for any country."));
         header.AddChild(toLedger);
+        var debt = ActionButton("Public debt", OpenSovereignFinance, 0, 32);
+        debt.Name = "BudgetOpenSovereignFinance";
+        debt.TooltipText = Ui.Tip(Tr("Cash, borrowing, overdue bills and restructuring in one financial workspace."));
+        header.AddChild(debt);
         header.AddChild(HandbookButton("budget"));
         header.AddChild(ActionButton("×", CloseStateAffairs, 38, 32));
 
@@ -212,7 +216,8 @@ public partial class DealOrForceGame
 
         _stateAffairsTitle.Text = Simulation.Loc.Format("STATE AFFAIRS · {0}", nation.DisplayName.ToUpperInvariant());
         _stateAffairsSummary.Text =
-            Simulation.Loc.Format("Treasury {0}  ·  balance {1} a week  ·  stability {2:P0}  ·  war support {3:P0}  ·  literacy {4:P0}  ·  standard of living {5:P0}", Fmt.Money(nation.Treasury), Fmt.Money(nation.WeeklyBalance), nation.Stability, nation.WarSupport, nation.Literacy, nation.StandardOfLiving);
+            Simulation.Loc.Format("Treasury {0} · public debt {1} · balance {2} a week · stability {3:P0} · standard of living {4:P0}",
+                Fmt.Money(nation.Treasury), Fmt.Money(SovereignFinance.Outstanding(nation)), Fmt.MoneyDelta(nation.WeeklyBalance), nation.Stability, nation.StandardOfLiving);
         var spirits = DescribeModifiers(nation);
         if (!string.IsNullOrEmpty(spirits)) _stateAffairsSummary.Text += "\n" + spirits;
 

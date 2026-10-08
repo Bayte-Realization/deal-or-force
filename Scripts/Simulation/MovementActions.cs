@@ -57,13 +57,13 @@ public static class MovementActions
     public static Kind Of(string id) => Kinds.FirstOrDefault(kind => string.Equals(kind.Id, id, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The actions this movement has: the common ones and its traits' own.</summary>
-    public static IEnumerable<Kind> For(Nation nation)
+    public static IEnumerable<Kind> For(Nation nation, Campaign campaign = null)
     {
         var definition = Movements.DefinitionOf(nation);
         if (definition is null) yield break;
         foreach (var kind in Kinds)
             if ((kind.Trait is null || definition.Has(kind.Trait)) &&
-                (kind.Id != "rise" || definition.CanStageUprising)) yield return kind;
+                (kind.Id != "rise" || MovementMethods.WillRise(campaign, nation, definition))) yield return kind;
     }
 
     /// <summary>What it costs now, in billions.</summary>
@@ -129,8 +129,9 @@ public static class MovementActions
         var kind = Of(action);
         if (state is null || definition is null || kind is null) return Loc.Get("Only a movement can do this.");
         if (state.Dissolved) return Loc.Get("The movement is no more.");
-        if (action == "rise" && !definition.CanStageUprising)
-            return Loc.Get("This company takes contracts, not territory.");
+        if (action == "rise" && !MovementMethods.WillRise(campaign, nation, definition))
+            return Loc.Get(definition.Has("for_hire") ? "This company takes contracts, not territory." :
+                "The movement has not taken up arms.");
         if (kind.Trait is not null && !definition.Has(kind.Trait)) return Loc.Get("This movement does not do that.");
         var defines = campaign.Defines;
         var region = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);

@@ -41,6 +41,16 @@ public static class Program
 
         var setup = Stopwatch.StartNew();
         var campaign = Campaign.CreateBootstrap(seed);
+        // `--load <folder> <slot>`: the reports below run on a saved campaign instead of 2024 -
+        // a player's century-old world, where the faults that only age shows are.
+        var loadAt = Array.IndexOf(args, "--load");
+        if (loadAt >= 0 && loadAt + 2 < args.Length)
+        {
+            var loaded = SaveSystem.Load(args[loadAt + 1], args[loadAt + 2], "");
+            if (loaded.Campaign is null) { Console.WriteLine("  load: " + loaded.Warning); return 1; }
+            campaign = loaded.Campaign;
+            Console.WriteLine($"  loaded {args[loadAt + 2]}: day {campaign.ElapsedDays}, {campaign.Date}");
+        }
         setup.Stop();
         Console.WriteLine($"Campaign created in {setup.ElapsedMilliseconds} ms: " +
                           $"{campaign.Nations.Count} nations, {campaign.States.Count} states.");
@@ -201,6 +211,26 @@ public static class Program
                 secessionAt + 2 < args.Length && !args[secessionAt + 2].StartsWith("--") ? args[secessionAt + 2] : "");
         // `--factions`: the de facto powers of 2024 at the start and after the run (FactionReport).
         if (Array.IndexOf(args, "--factions") >= 0) return mapped ? FactionReport.Run(campaign, days) : 2;
+        // `--world-stability`: every five years, the spread of stability and living standards of
+        // the countries of a million people or more - the drift a century can hide.
+        if (Array.IndexOf(args, "--world-stability") >= 0 && mapped)
+        {
+            campaign.IsPaused = false;
+            for (var day = 1; day <= days; day++)
+            {
+                campaign.TickDay();
+                if (day % 1825 != 0 && day != days) continue;
+                var big = campaign.Nations.Where(n => n.Population > 1_000_000 && n.Movement is null).ToList();
+                float Q(IEnumerable<float> values, float q) { var s = values.OrderBy(v => v).ToList(); return s.Count == 0 ? 0 : s[(int)(q * (s.Count - 1))]; }
+                Console.WriteLine($"  year {day / 365,3}: stability p10 {Q(big.Select(n => n.Stability), .1f):0.00} median {Q(big.Select(n => n.Stability), .5f):0.00} " +
+                                  $"p90 {Q(big.Select(n => n.Stability), .9f):0.00} | living p10 {Q(big.Select(n => n.StandardOfLiving), .1f):0.00} " +
+                                  $"median {Q(big.Select(n => n.StandardOfLiving), .5f):0.00} p90 {Q(big.Select(n => n.StandardOfLiving), .9f):0.00} | " +
+                                  $"civil wars on {campaign.Wars.Count(w => !w.Ended && w.CivilConflict)}, wars on {campaign.Wars.Count(w => !w.Ended && !w.CivilConflict)} | " +
+                                  string.Join(" ", new[] { "JPN", "DEU", "IND", "CHN", "USA", "NGA", "BRA" }.Select(tag => campaign.NationByTag(tag))
+                                      .Where(n => n is not null).Select(n => $"{n.Tag}:{n.Stability:0.00}/{n.StandardOfLiving:0.00}")));
+            }
+            return 0;
+        }
         var stabilityAt = Array.IndexOf(args, "--stability");
         if (stabilityAt >= 0 && stabilityAt + 1 < args.Length) return mapped ? StabilityReport.Run(campaign, days, args[stabilityAt + 1]) : 2;
         var judgeAt = Array.IndexOf(args, "--judge");
@@ -766,6 +796,8 @@ public static class Program
         Console.WriteLine($"  divisions of countries at war serving no war, summed over {bare.Count} samples: {idle:N0}.");
         Console.WriteLine($"  the staff re-posted {FrontManager.Reposts:N0} division(s) in {days} day(s).");
         Console.WriteLine($"  at peace, {ThreatPosture.Moves:N0} division(s) were moved to the borders their countries fear.");
+        Console.WriteLine($"  the disposition moved {ArmyDisposition.Relieved:N0} starving formation(s) to ground that could feed them " +
+                          $"and garrisoned {ArmyDisposition.Garrisoned:N0} region(s) from idle heaps.");
         return 0;
     }
 

@@ -53,6 +53,9 @@ public sealed partial class Defines
     /// <summary>How strong a side has to be, against the other and the friends behind it, to open a border war.</summary>
     public float BorderWarStrengthRatio { get; set; } = 0.6f;
     public int BorderWarDays { get; set; } = 45;
+    /// <summary>How long after one border war the same two countries can have another: India and
+    /// Pakistan were fighting the same seven-week war every five years for a century.</summary>
+    public int BorderWarCooldownDays { get; set; } = 2920;
     /// <summary>Talks: how long, how much they cost, how much tension they take off a week, how often.</summary>
     public int TalksDays { get; set; } = 120;
     public float TalksCost { get; set; } = 0.25f;
@@ -710,6 +713,9 @@ public static class Escalation
             relation.NonAggressionPact || relation.TalksUntilDay > c.ElapsedDays) return;
         if (a.AnswersTo(b.Id) || b.AnswersTo(a.Id) || a.Movement is not null || b.Movement is not null) return;
         if (Roll(c.Seed, relation.A, relation.B, c.ElapsedDays, 0x60D) >= defines.BorderWarChancePerWeek * days / 7f) return;
+        foreach (var past in c.Wars)
+            if (past.Limited && past.Ended && c.ElapsedDays - past.EndedDay < defines.BorderWarCooldownDays &&
+                past.Involves(a.Id) && past.Involves(b.Id)) return;
 
         // Who fires first: the side with the larger grievance, and between equals the stronger.
         var aFirst = relation.GrievanceOf(a.Id) > relation.GrievanceOf(b.Id) + 5f ||

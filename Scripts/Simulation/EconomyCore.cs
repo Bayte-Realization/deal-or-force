@@ -440,6 +440,10 @@ public sealed class CancelConstructionCommand : ICampaignCommand
 
 public static class EconomySystem
 {
+    /// <summary>The living standard an economy of this size per head carries, 0.28 to 0.90.</summary>
+    public static float EconomicLiving(Nation nation) =>
+        M.Clamp(0.34f + MathF.Log10(Math.Max(0.1f, nation.Gdp * 1_000_000_000f / Math.Max(1, nation.Population))) * 0.07f, 0.28f, 0.90f);
+
     public static void Seed(Campaign campaign)
     {
         // Every country opens at the rate a settled economy rests at, not at zero and not
@@ -465,8 +469,10 @@ public static class EconomySystem
             if (!nation.StatedFigures.Contains("literacy")) nation.Literacy = developed;
             nation.LiteracyOffset = developed - nation.Literacy;
             if (!nation.StatedFigures.Contains("standard_of_living"))
-                nation.StandardOfLiving = M.Clamp(0.34f + MathF.Log10(Math.Max(0.1f,
-                    nation.Gdp * 1_000_000_000f / Math.Max(1, nation.Population))) * 0.07f, 0.28f, 0.90f);
+                nation.StandardOfLiving = EconomicLiving(nation);
+            // What history wrote, against what the economy alone would say: kept, so the
+            // weekly pull towards the economy pulls towards this country's own level of it.
+            nation.LivingOffset = nation.StandardOfLiving - EconomicLiving(nation);
             nation.Productivity = 0.72f + nation.HumanCapital * 0.50f;
             if (!nation.StatedFigures.Contains("stability"))
                 nation.Stability = 0.58f + nation.StandardOfLiving * 0.25f;
@@ -921,6 +927,14 @@ public static class EconomySystem
             nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving + annualGrowth * 0.004f -
                 MathF.Max(0f, nation.ShortageIndex - campaign.Defines.ScarcityTolerance) * campaign.Defines.ShortageSolWeeklyPenalty +
                 budget.Living + focusSol);
+            // And back towards what the economy can carry. The terms above were added up for
+            // ever and pulled towards nothing, so a century of small leanings ran every
+            // country to an end of the scale: Japan, India and Bangladesh at nought, the
+            // stability that reads it at a twentieth, and a civil war in every other country.
+            // Policy still moves a country off its economy - by about a tenth, not to ruin.
+            var anchor = M.Clamp01(EconomicLiving(nation) + nation.LivingOffset);
+            nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving +
+                (anchor - nation.StandardOfLiving) * campaign.Defines.LivingReversionPerWeek);
             var focusLiteracy = cabinet.Literacy + government.Literacy + ideology.Literacy;
             nation.Literacy = M.Clamp(nation.Literacy + budget.Literacy + focusLiteracy,
                 0.05f, 0.999f);
@@ -1488,4 +1502,17 @@ public static class ConstructionSystem
         if (project.Building == BuildingKind.Hospital)
             state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + 0.018f);
     }
+}
+
+public sealed partial class Defines
+{
+    /// <summary>The weekly share of the gap between a country's living standard and what its
+    /// economy carries that closes (EconomySystem.EconomicLiving): about a year and a third to halve it.</summary>
+    public float LivingReversionPerWeek { get; set; } = 0.01f;
+}
+
+public sealed partial class Nation
+{
+    /// <summary>The living standard history wrote, less what the economy alone would give.</summary>
+    public float LivingOffset;
 }

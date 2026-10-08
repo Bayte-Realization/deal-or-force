@@ -489,7 +489,7 @@ public static class MovementRules
     {
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        if (state is null || definition is null || region is null || !definition.CanStageUprising ||
+        if (state is null || definition is null || region is null || !MovementMethods.WillRise(campaign, nation, definition) ||
             !MovementReach.CanClaimTerritory(campaign, nation, region)) return 0f;
         var support = state.Support.GetValueOrDefault(region.MapIndex);
         if (!float.IsFinite(support) || !float.IsFinite(state.Cadres) || !float.IsFinite(state.Legitimacy) ||
@@ -529,7 +529,7 @@ public static class MovementRules
     {
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        if (state is null || definition is null || region is null || !definition.CanStageUprising) return false;
+        if (state is null || definition is null || region is null || !MovementMethods.WillRise(campaign, nation, definition)) return false;
         var defines = campaign.Defines;
         var chance = UprisingChance(campaign, nation, region);
         if (!float.IsFinite(chance) || chance <= 0f || !float.IsFinite(nation.Treasury) ||

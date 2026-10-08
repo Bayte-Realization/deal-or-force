@@ -55,6 +55,7 @@ public partial class DealOrForceGame
             "Support" => _supportLayer?.Visible == true,
             "Research" => _researchLayer?.Visible == true,
             "Conflicts" => _conflictsLayer?.Visible == true,
+            "Economy" when _sovereignFinanceLayer?.Visible == true => true,
             _ => _sidePanel?.Visible == true && _openScreen == screen
         };
         if (!open)
@@ -73,6 +74,7 @@ public partial class DealOrForceGame
         else if (screen == "Support") CloseSupportScreen();
         else if (screen == "Research") CloseResearchScreen();
         else if (screen == "Conflicts") CloseConflictsScreen();
+        else if (screen == "Economy" && _sovereignFinanceLayer?.Visible == true) CloseSovereignFinance();
         else CloseSidePanel();
         UpdateScreenButtons();
     }

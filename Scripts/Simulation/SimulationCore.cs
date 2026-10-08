@@ -732,6 +732,7 @@ public sealed partial class Campaign
             {
                 using (SimProfiler.Measure("  mov:rules")) MovementRules.Tick(this);
                 using (SimProfiler.Measure("  mov:ai")) MovementAi.Tick(this);
+                using (SimProfiler.Measure("  mov:methods")) MovementMethods.Tick(this);
             }
             using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
             using (SimProfiler.Measure("shipbuilding")) Shipbuilding.Tick(this);
@@ -748,6 +749,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("secession")) SecessionEvents.Tick(this);
             // And whether any country has lost its government's grip on part of itself.
             using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
+            CountryNames.Remember(this);
 
             // And whether any country has stopped being what it was. After secession
             // because a state that has just lost a province is a state in exactly the
@@ -1164,6 +1166,9 @@ public sealed partial class Campaign
         nation.IsPlayer = player;
         nation.IsHuman = player;
         Nations.Add(nation);
+        // Initial civil-war factions and later emergent states are added after the
+        // bookmark's financial migration. They need the same books immediately.
+        SovereignFinance.NormalizeAccounts(this, nation);
         if (player)
         {
             Player = nation;

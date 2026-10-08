@@ -308,5 +308,14 @@
   "country.YEM.name": "Yemen",
   "country.ZAF.name": "South Africa",
   "country.ZMB.name": "Zambia",
-  "country.ZWE.name": "Zimbabwe"
+  "country.ZWE.name": "Zimbabwe",
+  "country.BVC.name": "Bavaria Party",
+  "name.form.communism": "People's Republic of {0}",
+  "name.form.fascism": "National State of {0}",
+  "name.form.kingdom": "Kingdom of {0}",
+  "name.form.islamic_republic": "Islamic Republic of {0}",
+  "name.form.holy_state": "Holy State of {0}",
+  "name.form.federation": "Federation of {0}",
+  "name.form.technate": "Technate of {0}",
+  "name.form.provisional": "Provisional Government of {0}"
 }

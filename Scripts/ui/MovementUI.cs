@@ -271,6 +271,19 @@ public partial class DealOrForceGame
 
         _movementRows.AddChild(MovementGauge("movement_legitimacy", Tr("Standing"), state.Legitimacy, -1f, "text.accent",
             standingHelp));
+        // How far it will go, and which way it is moving (MovementMethods).
+        var stage = MovementMethods.StageOf(_campaign, nation);
+        var methodsToken = stage switch
+        {
+            MovementStage.Civic => "state.positive", MovementStage.Militant => "state.warning",
+            MovementStage.Armed => "state.negative", _ => "state.critical"
+        };
+        var leaning = MovementMethods.Target(_campaign, nation, Movements.DefinitionOf(nation)) - MovementMethods.Of(nation);
+        _movementRows.AddChild(MovementGauge("movement_legitimacy",
+            Simulation.Loc.Format("Methods · {0}{1}", Tr(MovementMethods.StageName(stage)),
+                Math.Abs(leaning) < 0.05f ? "" : leaning > 0f ? Tr(" · hardening") : Tr(" · softening")),
+            MovementMethods.Of(nation), defines.MovementArmedAt, methodsToken,
+            Tr("How far the movement will go: a peaceful campaign, militant activism, armed struggle or terror. Its followers' radicalism, crackdowns and backers' weapons push it towards violence; standing in the world and ground it governs pull it back. Past the mark it can rise in arms.")));
         var heatToken = state.Heat >= defines.MovementExpelHeat * 0.75f ? "state.negative"
             : state.Heat >= defines.MovementExpelHeat * 0.45f ? "state.warning" : "state.info";
         if (state.Landless)
@@ -320,7 +333,7 @@ public partial class DealOrForceGame
         grid.AddThemeConstantOverride("h_separation", 6);
         grid.AddThemeConstantOverride("v_separation", 6);
         _movementRows.AddChild(grid);
-        foreach (var kind in MovementActions.For(nation))
+        foreach (var kind in MovementActions.For(nation, _campaign))
             grid.AddChild(MovementActionButton(nation, kind, target, targetNation));
     }
 

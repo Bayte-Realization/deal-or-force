@@ -14,8 +14,7 @@ public readonly record struct SovereignBalanceSheet(
     public float ServiceRatio => RevenuePerWeek > 0 ? InterestPerWeek / RevenuePerWeek : 0;
     public float PrimaryBalance => BudgetBalance + InterestPerWeek;
     public float FinancingNeed => MathF.Max(0, -BudgetBalance - Cash);
-    public float UnfundedNextWeek => MathF.Max(0, FinancingNeed - NewCredit);
-    public float CashAfterWeek => MathF.Max(0, Cash + BudgetBalance);
+    public float FundingGapAtCurrentLimits => MathF.Max(0, FinancingNeed - NewCredit);
     public float ExpectedNewPrincipal => MathF.Min(FinancingNeed, NewCredit);
     public float? CashRunwayWeeks => BudgetBalance < 0 ? Cash / -BudgetBalance : null;
 

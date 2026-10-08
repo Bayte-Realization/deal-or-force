@@ -8,7 +8,7 @@
 // 2024 ground of every piece, so it is done by treaty or by war, never by a button.
 //
 // Below them, the kin unions the year argued about - Serbia and Montenegro again, Albania and
-// Kosovo.
+// Kosovo - and a Kurdistan for the Kurdistan Region and the Kurdish movements.
 //
 // The last block opens the Arab projects to every Arab side, not only to the recognised
 // states: Hamas or a Syrian faction that holds the ground can proclaim them as Egypt could.
@@ -58,6 +58,11 @@
     "name": "Palestine", "description": "The West Bank and Gaza under one Palestinian government - Fatah's, Hamas's or another's.",
     "eligible_tags": ["PSE", "HMS"], "eligible_cultures": ["palestinian"], "required_tags": ["PSE"],
     "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#007a3d"
+  },
+  "kurdistan": {
+    "name": "Kurdistan", "description": "A Kurdish state from the Kurdistan Region's three provinces - Erbil, Duhok and Sulaymaniyah - the oldest unfinished state of the Middle East.",
+    "eligible_tags": ["KRG", "SDF", "PKK"], "eligible_cultures": ["kurdish"], "required_regions": ["iq_ar", "iq_di", "iq_su"],
+    "minimum_stability": 0.4, "gdp_cost_share": 0.015, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#e8b830"
   },
   "serbia_montenegro": {
     "name": "Serbia and Montenegro", "description": "The state union of 2003 to 2006 again: Belgrade and Podgorica under one president and one army.",

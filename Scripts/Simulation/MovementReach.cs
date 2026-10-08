@@ -75,7 +75,7 @@ public static class MovementReach
         var definition = Movements.DefinitionOf(nation);
         if (c?.ProvinceMap is null || nation?.Movement is not { Dissolved: false } movement ||
             region is null || region.Unclaimed || region.Population <= 0 || definition is null ||
-            !definition.CanStageUprising) return false;
+            !(definition.CanStageUprising || MovementMethods.WillRise(c, nation, definition))) return false;
         if ((definition.Has("humanitarian") || definition.Has("diaspora_lobby")) &&
             !definition.Has("territorial_ambition")) return false;
         // Return to a remembered homeland, including a partition of it. A refuge abroad

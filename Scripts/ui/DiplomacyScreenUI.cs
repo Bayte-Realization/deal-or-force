@@ -407,6 +407,8 @@ public partial class DealOrForceGame
         for (var index = 0; index < matches.Length; index++)
         {
             if (index >= _diplomacyRows.Count) _diplomacyRows.Add(BuildDiplomacyRow());
+            // A stable name per place in the list, for tests and tours to press.
+            _diplomacyRows[index].Select.Name = "DiplomacyRow" + index;
             RepaintDiplomacyRow(_diplomacyRows[index], matches[index]);
             _diplomacyListRows.MoveChild(_diplomacyRows[index].Select, index);
         }

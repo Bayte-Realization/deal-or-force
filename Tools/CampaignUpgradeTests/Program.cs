@@ -110,6 +110,9 @@ static class Program
         partner.ProductionLines.Add(new ProductionLine { Good = Commodity.Arms, Units = 2 });
         partner.ResearchProgress["union_test_progress"] = .4f;
         partner.Technologies.Add("union_test_technology");
+        founder.PublicDebt = 70; partner.PublicDebt = 30;
+        partner.DebtArrears = 2; partner.PaymentArrears = 3;
+        partner.DebtCondition = DebtCondition.Default; partner.DebtMissedWeeks = 8;
         var rawAnnual = founder.Gdp / founder.OutputScale + partner.Gdp / partner.OutputScale;
         var population = campaign.States.Sum(s => s.Population);
         var treasury = founder.Treasury + partner.Treasury;
@@ -123,6 +126,10 @@ static class Program
         Check(founder.FormedNationId == definition.Id, "treaty route proclaims the new state");
         Check(campaign.States.Sum(s => s.Population) == population, "integration conserves all regional population");
         Check(MathF.Abs(founder.Treasury - (treasury - cost)) < .02f && partner.Treasury == 0, "integration conserves savings minus the displayed cost");
+        Check(founder.PublicDebt == 100 && founder.DebtArrears == 2 && founder.PaymentArrears == 3 &&
+            partner.PublicDebt == 0 && partner.DebtArrears == 0 && partner.PaymentArrears == 0 &&
+            founder.DebtCondition == DebtCondition.Default && founder.DebtMissedWeeks == 8,
+            "the real peaceful formation command inherits public obligations without erasing default");
         Check(MathF.Abs(founder.ManpowerReserve - reserve) < 8f && partner.ManpowerReserve == 0, "integration conserves available manpower");
         Check(campaign.Armies.Count == formations && campaign.SupportFormations.Count == support && campaign.Fleets.Count == fleets, "integration deletes no military assets");
         Check(partnerArmyIds.All(id => campaign.Armies.Any(a => a.Id == id && a.NationId == founder.Id)), "partner formations retain identity and join the founder");

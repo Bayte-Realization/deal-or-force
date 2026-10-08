@@ -254,6 +254,22 @@ public static class Statecraft
         // an ally is the least controversial reason there is.
         if (AllyUnderAttack(campaign, attacker, defender) is not null) return "defence_of_an_ally";
 
+        // Months of shooting across the border: the clashes are the war's first act, and the
+        // border war that may come of them is the second (Escalation).
+        if (relation is not null && Escalation.StageOf(relation) == TensionStage.Clashes &&
+            campaign.ElapsedDays - relation.TensionStageDay >= campaign.Defines.AiClashesCauseAfterDays)
+            return "border_clashes";
+
+        // They are fighting a rising we are already arming: going in is the end of a road the
+        // money started down (ProxyWars).
+        foreach (var backing in campaign.Sponsorships)
+        {
+            if (backing.Ended || backing.SponsorId != attacker.Id) continue;
+            var war = campaign.Wars.Find(w => w.Id == backing.WarId);
+            if (war is { Ended: false, CivilConflict: true } && war.Opposes(backing.ClientId, defender.Id))
+                return "intervention";
+        }
+
         return "";
     }
 
@@ -615,4 +631,11 @@ public static class Statecraft
             if (nation.MapIndex == mapIndex) return nation;
         return null;
     }
+}
+
+public sealed partial class Defines
+{
+    /// <summary>How long two countries must have been exchanging fire before it is a reason for a
+    /// war rather than only for a border war.</summary>
+    public int AiClashesCauseAfterDays { get; set; } = 180;
 }

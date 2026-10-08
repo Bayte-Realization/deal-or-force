@@ -5,5 +5,18 @@
   "rising.salvation_front": "Фронт национального спасения ({0})",
   "rising.transitional_council": "Переходный совет ({0})",
   "rising.revolutionary_front": "Революционный фронт ({0})",
-  "{0} Civil War": "Гражданская война ({0})"
+  "{0} Civil War": "Гражданская война ({0})",
+  "The movement has not taken up arms.": "Движение не взялось за оружие.",
+  "Peaceful campaign": "Мирная кампания",
+  "Militant activism": "Радикальный активизм",
+  "Armed struggle": "Вооружённая борьба",
+  "Terror": "Террор",
+  "It has turned to {0}.": "Оно перешло к: {0}.",
+  "It has turned back to {0}.": "Оно вернулось к: {0}.",
+  "Methods · {0}{1}": "Методы · {0}{1}",
+  " · hardening": " · ожесточается",
+  " · softening": " · смягчается",
+  "How far the movement will go: a peaceful campaign, militant activism, armed struggle or terror. Its followers' radicalism, crackdowns and backers' weapons push it towards violence; standing in the world and ground it governs pull it back. Past the mark it can rise in arms.": "Как далеко готово зайти движение: мирная кампания, радикальный активизм, вооружённая борьба или террор. Радикализм сторонников, репрессии и оружие покровителей толкают к насилию; признание в мире и собственная земля возвращают назад. За отметкой оно может поднять восстание.",
+  "chronicle.movement_radicalised": "{0} ужесточает методы: {2}.",
+  "chronicle.movement_moderated": "{0} смягчает методы: {2}."
 }

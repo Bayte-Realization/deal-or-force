@@ -205,6 +205,10 @@ public sealed class MovementState
     /// <summary>How much its host wants it gone, 0 to 1. At the top the host expels it.</summary>
     public float Heat;
 
+    /// <summary>How far it will go, 0 (a peaceful campaign) to 1 (terror); -1 until the first
+    /// scheduled review. Reads use its initial traits without changing the saved value.</summary>
+    public float Militancy = -1f;
+
     /// <summary>Support among its peoples, by region map index, 0 to 1.</summary>
     public readonly Dictionary<int, float> Support = new();
 

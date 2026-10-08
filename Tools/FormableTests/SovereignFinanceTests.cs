@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text.Json;
 using DealOrForce.Simulation;
 
@@ -88,7 +89,11 @@ static class SovereignFinanceTests
         c.SetFeature("public_debt", true);
         Check(n.PublicDebt == dormantPrincipal + 4, "repeating the feature switch is idempotent");
         VerifyWorldMigration();
+        var late = c.AddNation(new Nation { Tag = "LATE", Treasury = -2, PublicDebt = 3 });
+        Check(late.DebtInitialized && late.Treasury == 0 && late.PublicDebt == 5,
+            "a state created after bookmark initialization immediately receives separate sovereign books");
         VerifyAccountOperations();
+        VerifyWorkspaceTranslations();
     }
 
     static void VerifyWorldMigration()
@@ -157,11 +162,43 @@ static class SovereignFinanceTests
         Check(before == CampaignFingerprint.Of(c) && sheet.Principal == 65 && sheet.Obligations == 72,
             "inspecting the financial projection is read-only and distinguishes principal from unpaid bills");
         sheet = new SovereignBalanceSheet(2, 50, 1, 3, -5, 1, 4, 100, 1, 0);
-        Check(sheet.FinancingNeed == 3 && sheet.ExpectedNewPrincipal == 1 && sheet.UnfundedNextWeek == 2 &&
+        Check(sheet.FinancingNeed == 3 && sheet.ExpectedNewPrincipal == 1 && sheet.FundingGapAtCurrentLimits == 2 &&
             sheet.PrimaryBalance == -4 && sheet.CashRunwayWeeks == .4f && sheet.ServiceRatio == .25f,
             "liquidity, primary deficit, interest burden and the funding gap have distinct units");
         sheet = sheet with { BudgetBalance = 0 };
         Check(sheet.CashRunwayWeeks is null && sheet.FinancingNeed == 0,
             "a balanced budget reports no exhaustion horizon instead of infinity");
+        var orders = new Campaign(716);
+        var mover = orders.AddNation(new Nation { Tag = "OFFICE", Gdp = 100, Treasury = 1,
+            Movement = new MovementState { Landless = true } });
+        new ManageDebtCommand { IssuerId = mover.Id, Action = "borrow", Amount = .02f }.Apply(orders);
+        Check(mover.PublicDebt == 0 && mover.Treasury == 1,
+            "the real command rejects sovereign issuance by a landless movement, not just its UI");
+        mover.Movement = null;
+        orders.Defines.FeatureCommands[nameof(ManageDebtCommand)] = "finance_orders";
+        orders.SetFeature("finance_orders", false);
+        new ManageDebtCommand { IssuerId = mover.Id, Action = "borrow", Amount = .02f }.Apply(orders);
+        Check(mover.PublicDebt == 0 && mover.Treasury == 1,
+            "financial commands respect an author's additional feature gate");
+    }
+
+    static void VerifyWorkspaceTranslations()
+    {
+        var language = Loc.Language;
+        try
+        {
+            Loc.ResetCatalog(); Loc.Language = "russian";
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
+                "localization", "russian", "152_sovereign_workspace.json")));
+            var count = 0;
+            foreach (var entry in doc.RootElement.EnumerateObject())
+            {
+                Check(Loc.Get(entry.Name) == entry.Value.GetString() && entry.Name != entry.Value.GetString(),
+                    "financial workspace translation resolves: " + entry.Name.Split('\n')[0]);
+                count++;
+            }
+            Check(count >= 50, "headline, cash-flow explanations, action previews and refusal reasons are localized");
+        }
+        finally { Loc.Language = language; }
     }
 }

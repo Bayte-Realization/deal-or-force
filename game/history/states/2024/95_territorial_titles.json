@@ -1,6 +1,8 @@
 // Scenario homeland titles do not alter de facto ownership or military control.
 // UN A/RES/68/262 and ES-11/4; see docs/TERRITORIAL_CLAIMS_RU.md.
 {
+  // Transnistria: its own homeland, and under international law part of Moldova.
+  "pmr_x01": {"cores": ["PMR", "MDA"]},
   "ua_43": {"cores": ["UKR"]}, "ua_71": {"cores": ["UKR"]},
   "ua_74": {"cores": ["UKR"]}, "ua_12": {"cores": ["UKR"]},
   "ua_14": {"cores": ["UKR"]}, "ua_26": {"cores": ["UKR"]},

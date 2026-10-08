@@ -224,7 +224,8 @@ public sealed class ManageDebtCommand : ICampaignCommand
     public void Apply(Campaign c)
     {
         var n = c.NationById(IssuerId);
-        if (n is null || !c.FeatureEnabled("public_debt")) return;
+        if (n is null || n.Movement is { Landless: true } || !c.FeatureEnabled("public_debt") ||
+            !MechanicFeatures.Allows(c, this)) return;
         SovereignFinance.NormalizeAccounts(c, n);
         if (Action == "borrow") SovereignFinance.Borrow(c, n, Amount);
         else if (Action == "repay") SovereignFinance.Repay(n, Amount);

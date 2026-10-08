@@ -487,8 +487,16 @@ public sealed partial class GlobePresentation
                 if (nation == player) return Ui.Colour("map.player");
                 var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
                 if (CampaignDiplomacy.AtWar(_campaign, player.Id, nation.Id)) return Ui.Colour("map.at_war");
+                // A defence bloc is an alliance on the map whatever the treaty table says: NATO's
+                // members are bound through the organization, not forty bilateral pacts.
+                if (InternationalOrganizations.DefencePartners(_campaign, player.Id).Contains(nation.Id))
+                    return Ui.Colour("map.allied");
+                var together = relation.Stance != DiplomaticStance.Rival &&
+                    InternationalOrganizations.Memberships(_campaign, player.Id).Any(o => o.Members.Contains(nation.Id));
                 return relation.Stance switch
                 {
+                    _ when together && relation.Stance != DiplomaticStance.Allied && relation.Stance != DiplomaticStance.Friendly =>
+                        Ui.Colour("map.friendly").Lerp(Ui.Colour("map.neutral"), 0.45f),
                     DiplomaticStance.Allied => Ui.Colour("map.allied"),
                     DiplomaticStance.Friendly => Ui.Colour("map.friendly"),
                     DiplomaticStance.Rival => Ui.Colour("map.rival"),

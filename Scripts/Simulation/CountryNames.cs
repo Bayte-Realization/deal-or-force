@@ -88,8 +88,7 @@ public static class CountryNames
         var role = map ? ".map" : ".name";
         Variants.TryGetValue(nation.Tag ?? "", out var variant);
         foreach (var key in new[] { identity + ".government." + nation.Government + ".ideology." + nation.Ideology + role,
-                     identity + ".government." + nation.Government + role, identity + ".ideology." + nation.Ideology + role,
-                     identity + role })
+                     identity + ".government." + nation.Government + role, identity + ".ideology." + nation.Ideology + role })
         {
             // The variant is asked at each level rather than ahead of all of them, so a
             // country that has become something else is still called what it became: a
@@ -97,7 +96,20 @@ public static class CountryNames
             if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
             if (Loc.Has(key)) return Loc.Get(key);
         }
-        if (map) return Resolve(nation, false);
+        // No name written for what it has become: the name it had, in the form its new
+        // politics give a state - a France gone communist is a People's Republic. Not on the
+        // map, where the short name is the label.
+        var plain = Plain(nation, map, identity + role, variant);
+        if (!map && Form(nation) is { Length: > 0 } form) return Loc.Format(form, plain);
+        return plain;
+    }
+
+    /// <summary>The name with no form of state in it: the country's row, or its own name.</summary>
+    private static string Plain(Nation nation, bool map, string key, string variant)
+    {
+        if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
+        if (Loc.Has(key)) return Loc.Get(key);
+        if (map) return Plain(nation, false, key[..^".map".Length] + ".name", variant);
         // An armed opposition is named for what it wants and the country it wants it in:
         // "rising:salvation_front:ETH" reads "National Salvation Front of Ethiopia" in the
         // reader's own language, with the country's own translated name (CivilWarOutbreak).
@@ -111,6 +123,55 @@ public static class CountryNames
             }
         }
         return Loc.Get(nation.Name);
+    }
+
+    /// <summary>
+    /// The form of state a change of politics gives a name ("name.form.*" rows), or nothing.
+    /// Only a change: a country is called what it was called in 2024 until it becomes
+    /// something else, and Spain is not renamed the Kingdom of Spain on the first morning.
+    /// </summary>
+    public static string Form(Nation nation)
+    {
+        if (nation is null || nation.Movement is not null || !string.IsNullOrEmpty(nation.FormedNationId) ||
+            nation.Name.StartsWith("rising:", StringComparison.Ordinal) || string.IsNullOrEmpty(nation.StartGovernment)) return "";
+        string Row(string form) => Loc.Has("name.form." + form) ? "name.form." + form : "";
+        if (nation.Ideology != nation.StartIdeology)
+        {
+            if (nation.Ideology == "communism") return Row("communism");
+            if (nation.Ideology == "fascism") return Row("fascism");
+        }
+        if (nation.Government == nation.StartGovernment) return "";
+        static bool Monarchy(string government) => government is "absolute_monarchy" or "constitutional_monarchy";
+        if (Monarchy(nation.Government)) return Monarchy(nation.StartGovernment) ? "" : Row("kingdom");
+        return nation.Government switch
+        {
+            "theocracy" => Row(Muslim(nation) ? "islamic_republic" : "holy_state"),
+            "federation" => Row("federation"),
+            "technocracy" => Row("technate"),
+            "provisional_government" => Row("provisional"),
+            _ => ""
+        };
+    }
+
+    private static bool Muslim(Nation nation)
+    {
+        var culture = DemographyCatalog.Culture(DemographyCatalog.PrimaryCulture(nation.Tag));
+        if (culture is null) return false;
+        var share = 0f;
+        foreach (var (faith, weight) in culture.Religions)
+            if (faith is "sunni" or "shia" or "ibadi" or "sufi") share += weight;
+        return share >= 0.5f;
+    }
+
+    /// <summary>What every country was on the day it was first seen, for <see cref="Form"/>.</summary>
+    public static void Remember(Campaign campaign)
+    {
+        foreach (var nation in campaign.Nations)
+        {
+            if (!string.IsNullOrEmpty(nation.StartGovernment)) continue;
+            nation.StartGovernment = nation.Government ?? "";
+            nation.StartIdeology = nation.Ideology ?? "";
+        }
     }
 
     private static Dictionary<string, CityDefinition> _citiesByName;
@@ -152,4 +213,11 @@ public static class CountryNames
         var identity = string.IsNullOrEmpty(nation.FormedNationId) ? "country." + nation.Tag : "formable." + nation.FormedNationId;
         return Loc.GetOr(identity + ".short_name", nation.DisplayName);
     }
+}
+
+public sealed partial class Nation
+{
+    /// <summary>The government and ideology the country had when first seen (CountryNames.Form).</summary>
+    public string StartGovernment = "";
+    public string StartIdeology = "";
 }
