@@ -54,7 +54,26 @@ public static class Delegation
     /// </summary>
     public const string Army = "army";
 
-    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade, Army, Navy };
+    /// <summary>
+    /// The general staff in the field: the formations at liberty. At peace it lays them out -
+    /// the capital, the largest regions, the borders worth fearing (ArmyDisposition,
+    /// ThreatPosture); at war it fills the holes in the line from the free reserve
+    /// (FrontManager) and moves a starving formation to ground that can feed it. Fronts the
+    /// player drew and orders the player gave are never touched. Off unless handed over:
+    /// a player's army does not walk anywhere on its own.
+    /// </summary>
+    public const string Command = "command";
+
+    /// <summary>The foreign ministry: the weekly round every other government makes of its
+    /// neighbours - drawing closer to friends, cooler to rivals, alliances and guarantees asked
+    /// and given. It never declares a war and never accepts a peace; those stay the player's.</summary>
+    public const string Diplomacy = "diplomacy";
+
+    /// <summary>The cabinet: the decisions the computer takes for its own countries, when they
+    /// are worth taking.</summary>
+    public const string Cabinet = "cabinet";
+
+    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade, Army, Command, Navy, Diplomacy, Cabinet };
 
     /// <summary>Whether this country has handed that portfolio over.</summary>
     public static bool Holds(Nation nation, string portfolio) =>
@@ -81,6 +100,7 @@ public static class Delegation
         if (campaign is null || nation is null || nation.Delegated.Count == 0) return;
         if (Holds(nation, Budget)) AiStatecraft.GovernTheBudget(campaign, nation);
         if (Holds(nation, Trade)) RunTheTradeDesk(campaign, nation);
+        if (Holds(nation, Cabinet)) AiStatecraft.RunTheCabinet(campaign, nation);
     }
 
     /// <summary>The instruction key a delegated desk writes, so its work can be told apart.</summary>

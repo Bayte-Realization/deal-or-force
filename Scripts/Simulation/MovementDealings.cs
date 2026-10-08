@@ -113,7 +113,7 @@ public static class MovementDealings
             var region = Movements.StateById(campaign, id);
             var holder = region is null ? null : campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex);
             if (holder is null || holder.Id == movement.Id) continue;
-            if (holder.Id == country.Id || CampaignDiplomacy.Get(campaign, country.Id, holder.Id).Stance == DiplomaticStance.Allied) return true;
+            if (holder.Id == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holder.Id)?.Stance == DiplomaticStance.Allied) return true;
         }
         return false;
     }
@@ -134,7 +134,7 @@ public static class MovementDealings
             var holder = region is null ? null : campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex);
             if (holder is null || holder.Id == movement.Id) continue;
             // Somebody that close is not a rival to be weakened but a side to be on.
-            if (holder.Id == country.Id || CampaignDiplomacy.Get(campaign, country.Id, holder.Id).Stance == DiplomaticStance.Allied)
+            if (holder.Id == country.Id || CampaignDiplomacy.Peek(campaign, country.Id, holder.Id)?.Stance == DiplomaticStance.Allied)
                 return null;
             if (found is not null) continue;
             if (Opinion(campaign, country.Id, holder.Id) <= campaign.Defines.AiIncitementRivalOpinion ||

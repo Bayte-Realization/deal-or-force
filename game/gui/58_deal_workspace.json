@@ -1,0 +1,13 @@
+{
+  "layout": {
+    "modal.deal": { "anchors": [0.055, 0.115, 0.945, 0.9], "offsets": [0, 0, 0, 0] }
+  },
+  "campaign": {
+    "icons": {
+      "action.Review deal": "diplomacy",
+      "action.CONFIRM AND SEND": "decisions",
+      "action.Review response": "agenda",
+      "action.Confirm response": "decisions"
+    }
+  }
+}

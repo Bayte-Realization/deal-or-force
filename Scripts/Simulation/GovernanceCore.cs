@@ -69,6 +69,7 @@ public sealed partial class Campaign
         // has a perfectly good enum value that `Enum.IsDefined` has never heard of.
         if (nation is null || !GovernmentFocusCatalog.Knows(focus)) return;
         nation.GovernmentFocus = focus;
+        NationalModifiers.Invalidate(nation);
         Changed?.Invoke();
     }
 
@@ -121,6 +122,7 @@ public sealed partial class Campaign
         foreach (var state in StatesOf(nation))
             state.Radicalism = M.Clamp01(state.Radicalism + cost * 0.5f);
 
+        NationalModifiers.Invalidate(nation);
         Changed?.Invoke();
         return true;
     }

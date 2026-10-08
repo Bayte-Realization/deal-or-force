@@ -312,12 +312,13 @@ public sealed partial class GlobePresentation
         /// <summary>The complete flag or emblem, fitted inside the ring without cropping.</summary>
         private Texture2D Roundel(Simulation.Nation nation)
         {
-            var key = nation.Tag.ToLowerInvariant();
+            // The same flag the interface flies for it - resolved by the flag catalogue, with
+            // the provisional flag for a movement no artist has drawn yet. Looking only for
+            // `flag_<tag>` left every such movement as a headquarters icon beside the others' flags.
+            var key = nation.Tag.ToLowerInvariant() + "|" + DealOrForceGame.FlagSpriteFor(nation.Tag);
             if (_roundels.TryGetValue(key, out var cached)) return cached;
-            var sprite = _insignia && SpriteCatalog.Has($"flag_{key}_insignia") ? $"flag_{key}_insignia" : $"flag_{key}";
             Texture2D made = null;
-            var path = SpriteCatalog.TextureOf(sprite, $"res://game/gfx/flags/{sprite}.png");
-            if (!string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path) && GD.Load<Texture2D>(path) is { } flag)
+            if (DealOrForceGame.FlagTextureFor(nation.Tag) is { } flag)
             {
                 var image = flag.GetImage();
                 if (image is not null)

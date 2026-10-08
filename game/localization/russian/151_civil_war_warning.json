@@ -1,0 +1,17 @@
+{
+  "CIVIL-WAR WARNING": "РИСК ГРАЖДАНСКОЙ ВОЙНЫ",
+  "Weekly outbreak chance": "Риск вспышки за неделю",
+  "This is a weekly risk, not a countdown. Low stability, recent coups and defeats raise it. Armed opposition can take only connected governed territory; a foreign office does not grant land.": "Это недельный риск, не обратный отсчёт. Его повышают низкая стабильность, недавние перевороты и поражения. Вооружённая оппозиция получает связную управляемую территорию; иностранный штаб не даёт права на землю.",
+  "An outbreak is possible. Restore institutional stability before the next weekly review.": "Возможна вспышка войны. Восстановите стабильность институтов до следующей недельной проверки.",
+  "No governed country selected.": "Управляемая страна не выбрана.",
+  "Civil-war outbreaks are disabled.": "Вспышки гражданских войн отключены.",
+  "This actor is not an independent established government.": "Этот участник не является самостоятельным действующим правительством.",
+  "Random outbreaks in player countries are disabled in campaign settings.": "Случайные вспышки в странах игроков отключены в настройках кампании.",
+  "The campaign is still in its initial protection period.": "Начальный защитный период кампании ещё не закончился.",
+  "The country is protected from another outbreak during recovery.": "Во время восстановления страна защищена от повторной вспышки.",
+  "An existing civil war must end before another outbreak.": "Повторная вспышка невозможна до завершения текущей гражданской войны.",
+  "Too few residents or governed regions for a territorial civil war.": "Для территориальной гражданской войны недостаточно жителей или управляемых регионов.",
+  "Institutions remain above the civil-war instability threshold.": "Стабильность институтов выше порога гражданской войны.",
+  "Civil-war outbreaks in player countries": "Гражданские войны в странах игроков",
+  "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.": "Разрешает в Вашей стране те же недельные вспышки из-за нестабильности, что и в других государствах. Раздел кризисов окна законов и повесток показывает текущий риск и защиту на время восстановления. Это не гарантированный обратный отсчёт."
+}

@@ -29,6 +29,8 @@ public sealed class PeaceDemand
 
     /// <summary>Provinces the proposer wants to keep, permanently.</summary>
     public readonly HashSet<int> Provinces = new();
+    /// <summary>Establish one independent country in these complete, connected regions instead of annexing them.</summary>
+    public bool ReleaseRegions;
 
     /// <summary>An indemnity scaled to the loser's economy.</summary>
     public bool Reparations;
@@ -135,6 +137,16 @@ public static class PeaceConference
         if (rounded.Provinces.Any(province => !enemyOwners.Contains(topology.ProvinceToNation[province])))
             return Loc.Get("The demand includes ground that is not theirs to give");
 
+        if (demand.ReleaseRegions)
+        {
+            if (demand.Subjugate.Length > 0) return Loc.Get("Independence and subjugation cannot be combined in one settlement.");
+            var regions = rounded.Provinces.Select(p => (int)topology.ProvinceToState[p]).Distinct().OrderBy(id => id).ToArray();
+            var releaseBlock = Dismantlement.Refusal(campaign, loser, regions, peace: true);
+            if (releaseBlock.Length > 0) return releaseBlock;
+            if (regions.SelectMany(id => ProvincesOfState(topology, id)).Any(p => !rounded.Provinces.Contains(p)))
+                return Loc.Get("Release requires entire regions, not occupied fragments.");
+        }
+
         if (demand.Subjugate.Length > 0)
         {
             if (!SubjectCatalog.Knows(demand.Subjugate))
@@ -181,6 +193,7 @@ public static class PeaceConference
             WarId = demand.WarId,
             ProposerId = demand.ProposerId,
             Subjugate = demand.Subjugate,
+            ReleaseRegions = demand.ReleaseRegions,
             Reparations = demand.Reparations,
             LongTruce = demand.LongTruce,
             TradeConcessions = demand.TradeConcessions,
@@ -242,9 +255,18 @@ public static class PeaceConference
         if (demand.Provinces.Count > 0)
         {
             var cededOwners = demand.Provinces.Select(province => campaign.ProvinceMap.ProvinceToNation[province]).ToHashSet();
-            var created = StatePartition.Annex(campaign, demand.Provinces, winner);
-            war.AnnexedProvinces = demand.Provinces.Count;
-            war.CreatedStates = created.Count;
+            if (demand.ReleaseRegions)
+            {
+                var regions = demand.Provinces.Select(p => (int)campaign.ProvinceMap.ProvinceToState[p]).Distinct().OrderBy(id => id).ToArray();
+                Dismantlement.Apply(campaign, loser, regions, voluntary: false);
+                war.AnnexedProvinces = 0; war.CreatedStates = 0;
+            }
+            else
+            {
+                var created = StatePartition.Annex(campaign, demand.Provinces, winner);
+                war.AnnexedProvinces = demand.Provinces.Count;
+                war.CreatedStates = created.Count;
+            }
 
             // Losing ground is not a one-day event. The country goes on naming the land
             // for years, which is quieter than a humiliation and lasts longer.
@@ -491,20 +513,21 @@ public static class PeaceConference
                 .Where(name => !string.IsNullOrEmpty(name))
                 .Take(4)
                 .ToList();
-            var named = states.Count == 0 ? "territory" : string.Join(", ", states);
-            parts.Add($"{winner.Name} took {demand.Provinces.Count} province(s) in {named}" +
-                      (war.CreatedStates > 0 ? $", splitting {war.CreatedStates} region(s)" : ""));
+            var named = states.Count == 0 ? Loc.Get("territory") : string.Join(", ", states.Select(Loc.Get));
+            parts.Add(demand.ReleaseRegions ? Loc.Format("An independent country was established in {0}", named)
+                : Loc.Format("{0} took {1} provinces in {2}", winner.DisplayName, demand.Provinces.Count, named) +
+                  (war.CreatedStates > 0 ? Loc.Format(", splitting {0} regions", war.CreatedStates) : ""));
         }
-        if (demand.Reparations) parts.Add($"${war.Reparations:0.00}B in reparations changed hands");
-        if (demand.TradeConcessions) parts.Add("a trade agreement was imposed");
-        if (demand.Demilitarise) parts.Add($"the {loser.Name} armed forces were partially demobilised");
-        if (demand.Humiliate) parts.Add($"{loser.Name} was publicly humbled");
-        if (demand.LongTruce) parts.Add("a ten-year truce was signed");
+        if (demand.Reparations) parts.Add(Loc.Format("{0} in reparations changed hands", Fmt.Money(war.Reparations)));
+        if (demand.TradeConcessions) parts.Add(Loc.Get("a trade agreement was imposed"));
+        if (demand.Demilitarise) parts.Add(Loc.Format("the {0} armed forces were partially demobilised", loser.DisplayName));
+        if (demand.Humiliate) parts.Add(Loc.Format("{0} was publicly humbled", loser.DisplayName));
+        if (demand.LongTruce) parts.Add(Loc.Get("a ten-year truce was signed"));
         if (demand.Subjugate.Length > 0 && loser.AnswersTo(winner.Id))
-            parts.Add($"{loser.Name} became a " +
-                      $"{SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate} of {winner.Name}");
+            parts.Add(Loc.Format("{0} became a {1} of {2}", loser.DisplayName,
+                Loc.Get(SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate), winner.DisplayName));
         return parts.Count == 0
-            ? $"{winner.Name} and {loser.Name} made peace on no terms at all."
+            ? Loc.Format("{0} and {1} made peace on no terms at all.", winner.DisplayName, loser.DisplayName)
             : char.ToUpperInvariant(parts[0][0]) + parts[0][1..] +
               (parts.Count > 1 ? "; " + string.Join("; ", parts.Skip(1)) : "") + ".";
     }
@@ -629,6 +652,13 @@ public sealed class PeaceLedger
         }
 
         var stateMapIndex = topology.ProvinceToState[province];
+        if (holder is not null && !Reintegration.IsBreakawayOf(holder, _proposer) &&
+            _campaign.States.Find(s => s.MapIndex == stateMapIndex) is { } titleRegion &&
+            TerritorialClaims.TitleOf(_campaign, _proposer, titleRegion) == TerritorialTitle.Homeland)
+        {
+            cost *= Math.Clamp(defines.PeaceCostHomelandFactor, .1f, 1f);
+            reason += ", remembered homeland";
+        }
         if (_war.ClaimedStateMapIndex >= 0 && stateMapIndex == _war.ClaimedStateMapIndex)
         {
             cost *= defines.PeaceCostWarGoalFactor;

@@ -26,7 +26,9 @@ public static class CivilIndependence
         if (!definition.Has("civic_independence") || owner is null ||
             !MovementDefinition.Listed(definition.Homeland, region.Id) ||
             string.Equals(owner.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase)) return 0f;
-        return M.Clamp(0.14f + region.Literacy * c.Defines.CivilAwarenessWeight + movement.Legitimacy * 0.24f, 0f, 0.75f);
+        var awareness = c.FeatureEnabled("resident_awareness")
+            ? ResidentAwareness.Of(c, region) : M.Clamp01(region.Literacy);
+        return M.Clamp(0.14f + awareness * c.Defines.CivilAwarenessWeight + movement.Legitimacy * 0.24f, 0f, 0.75f);
     }
 
     public static bool HasClaim(Campaign c, Nation movement, Nation owner) =>
@@ -68,6 +70,9 @@ public static class CivilIndependence
             return Loc.Get("A referendum must be in this movement's homeland.");
         var owner = c.Nations.FirstOrDefault(n => n.MapIndex == region.NationMapIndex);
         if (owner is null || owner.Id == movement.Id || c.ProvinceMap is null) return Loc.Get("There is no parent state to negotiate with.");
+        if (!float.IsFinite(ResidentSupport(movement, region)) || !float.IsFinite(movement.Movement.Legitimacy) ||
+            !float.IsFinite(region.Stability) || !float.IsFinite(owner.Stability) || !float.IsFinite(movement.Treasury))
+            return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
         if (CampaignDiplomacy.AtWar(c, movement.Id, owner.Id) || owner.IsSubject)
             return Loc.Get("Not during war or without a sovereign parent.");
         var held = c.StatesOf(owner);
@@ -85,7 +90,7 @@ public static class CivilIndependence
         if (Refusal(c, movement, region).Length != 0) return false;
         var owner = c.Nations.First(n => n.MapIndex == region.NationMapIndex);
         var place = region.DisplayName;
-        MovementRules.TakeRegion(c, movement, region, owner, peacefully: true);
+        if (!MovementRules.TakeRegion(c, movement, region, owner, peacefully: true)) return false;
         var relation = CampaignDiplomacy.Get(c, owner.Id, movement.Id);
         relation.Stance = DiplomaticStance.Truce;
         relation.TruceUntil = c.ElapsedDays + Math.Max(1, c.Defines.CivilReferendumTruceDays);

@@ -1,0 +1,10 @@
+{
+  "articles": {
+    "territory_release": {"topic":"world", "order":46, "screen":"Conflicts", "related":["deals","territorial_titles","wars"]},
+    "deals": {"topic":"world", "order":35, "related":["diplomacy","territorial_titles","tensions"]},
+    "domestic_crises": {"topic":"country", "order":45, "screen":"Laws", "related":["laws","stability","coups"]},
+    "territorial_titles": {"topic":"world", "order":45, "screen":"Conflicts", "related":["deals","tensions","wars"]},
+    "organizations": {"topic":"world", "order":50, "screen":"Conflicts", "related":["diplomacy","deals","wars"]},
+    "households": {"topic":"economy", "order":45, "screen":"Economy", "related":["budget","population","trade"]}
+  }
+}

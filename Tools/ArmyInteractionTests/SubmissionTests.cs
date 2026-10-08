@@ -95,7 +95,12 @@ static class SubmissionTests
                 if (n.Id < other.Id && CampaignDiplomacy.Peek(c, n.Id, other.Id) is { } r && !CampaignDiplomacy.AtWar(c, n.Id, other.Id))
                     r.Opinion = MathF.Max(r.Opinion, 60f);
         var randomBefore = c.Random.State;
-        for (var day = 0; day < 30; day++) SubmissionSystem.Tick(c);
+        for (var day = 0; day < 30; day++)
+        {
+            // A month's scheduling cannot be tested by repeating the same calendar day.
+            typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, day * 24L);
+            SubmissionSystem.Tick(c);
+        }
         var gained = c.Nations.Count(n => n.IsSubject) - subjectsBefore;
         Console.WriteLine($"  in a month of eager asking, {gained} country(ies) chose an overlord");
         Check(gained > 0, "a country nobody plays does ask, and is sometimes told yes");

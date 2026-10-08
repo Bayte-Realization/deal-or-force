@@ -12,6 +12,7 @@ public partial class DealOrForceGame
 
     private void ShowPolicyOptions()
     {
+        if (_policyTab == "Crises") { ShowDomesticCrisisWorkspace(); return; }
         ClearPolicyRows(_policyOptions);
         _policyConfirmation = "";
         if (_policyTab == "Course")
@@ -51,6 +52,7 @@ public partial class DealOrForceGame
     private void RefreshPolicyPreview()
     {
         if (_policyPreview is null || _campaign?.Player is not { } n) return;
+        if (_policyTab == "Crises") return;
         ClearPolicyRows(_policyPreview); _policyEnact = null;
         if (_policyTab == "Course")
         {

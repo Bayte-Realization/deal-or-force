@@ -1,0 +1,28 @@
+{
+  "Features": { "resident_awareness": true, "domestic_crises": true },
+  // Awareness means education/civic networks, not anger or willingness to fight.
+  "ResidentAwarenessLiteracyWeight": 0.60,
+  "ResidentAwarenessUrbanWeight": 0.20,
+  "ResidentAwarenessChangePerDay": 0.0015,
+  // Coups need BOTH persistent pressure and an eligible data-authored transition.
+  "CoupPressureThreshold": 0.78,
+  "CoupRequiredPressureDays": 35,
+  "CoupPressureRisePerDay": 0.006,
+  "CoupPressureRecoveryPerDay": 0.008,
+  "CoupAftermathCooldownDays": 365,
+  "CoupInstabilityWeight": 0.65,
+  "CoupRadicalismWeight": 0.30,
+  "CoupCapitalUnrestWeight": 0.10,
+  "CoupDefeatWeight": 0.25,
+  "CoupDefaultWeight": 0.10,
+  "CoupPoliticalMismatchWeight": 0.05,
+  // Paid responses run over time; their cooldown begins after completion.
+  "CrisisResponseDurationDays": 90,
+  "CrisisResponseCooldownDays": 180,
+  "CrisisResponseCostShare": 0.0006,
+  "CrisisResponseCostFloor": 0.015,
+  "CrisisDialoguePressureRelief": 0.12,
+  "CrisisReviewPressureRelief": 0.18,
+  "CrisisDialogueRadicalismPerDay": 0.00045,
+  "CrisisReviewInstitutionsPerDay": 0.00025
+}

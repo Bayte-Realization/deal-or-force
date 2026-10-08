@@ -11,7 +11,15 @@ static class Program
     static void Main(string[] args)
     {
         if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
+        if (args.Contains("--integrity-only")) { CampaignIntegrityTests.Run(); return; }
+        if (args.Contains("--deals-only")) { DealTests.Run(); return; }
+        if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
+        if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
+        if (args.Contains("--households-only")) { HouseholdTests.Run(); return; }
+        if (args.Contains("--release-only")) { DismantlementTests.Run(); return; }
+        if (args.Contains("--deals-bench")) { DealTests.Benchmark(); return; }
         if (args.Contains("--social-only")) { SocialMemoryTests.Run(); return; }
+        if (args.Contains("--crises-only")) { DomesticCrisesTests.Run(); return; }
         if (args.Contains("--ui-icons-only")) { InterfaceIconTests.Run(); return; }
         if (args.Contains("--worker-only")) { WorkerBackendTests.Run(); return; }
         if (args.Contains("--civic-only")) { CivicCampaignTests.Run(); return; }
@@ -22,6 +30,12 @@ static class Program
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
         if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
         DynamicAllianceTests.Run();
+        CampaignIntegrityTests.Run();
+        TerritorialClaimsTests.Run();
+        OrganizationTests.Run();
+        HouseholdTests.Run();
+        DismantlementTests.Run();
+        DomesticCrisesTests.Run();
         SovereignFinanceTests.Run();
         PoliticalPolicyTests.Run();
         NationalCourseTests.Run();
@@ -52,6 +66,7 @@ static class Program
         EventCadenceTests.Run();
         PresentationReloadTests.Run();
         UltimatumTests.Run();
+        DealTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();
         var terrainErrors = new List<string>();

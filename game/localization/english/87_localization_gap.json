@@ -64,5 +64,6 @@
   "{0} factories · {1} units each": "{0} factories · {1} units each",
   "{0} free": "{0} free",
   "{0} units suspended": "{0} units suspended",
-  "{0} — {1}": "{0} — {1}"
+  "{0} — {1}": "{0} — {1}",
+  "Compressed saves are a tenth of the size and quicker to write, which a century of history written every month will notice. Text saves open in any editor: change a number, load the campaign again, carry on - and there is no checksum to argue with.": "Compressed saves are a tenth of the size and quicker to write, which a century of history written every month will notice. Text saves open in any editor: change a number, load the campaign again, carry on - and there is no checksum to argue with."
 }

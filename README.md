@@ -7,8 +7,9 @@ A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 
 World rendering scripts now live in
 [`Scripts/gfx`](Scripts/gfx/README.md), separately from UI and simulation rules.
 
-It opens on 1 January 2024 with 261 countries, 1 850 regions and 35 295 provinces, and
-after that nothing is scripted. Prices come out of what is produced and shipped. A war moves
+It opens on 1 January 2024 with hundreds of countries and movements, thousands of regions
+and 35 295 provinces. Authored history sets the starting conditions; simulation rules and
+events then shape the campaign. Prices come out of what is produced and shipped. A war moves
 a front province by province and has to be supplied along it. A country that governs badly
 loses regions to people who would rather leave. You can play any country on the map.
 
@@ -154,6 +155,12 @@ Everything below exists in English and in Russian; a `_RU` suffix is the Russian
 | [CSHARP_GUIDE](docs/CSHARP_GUIDE.md) | **C# from scratch, taught on this game's own code** |
 | [NETWORK_MULTIPLAYER](docs/NETWORK_MULTIPLAYER.md) | LAN and direct IP |
 | [CONFLICTS_AND_FACTIONS](docs/CONFLICTS_AND_FACTIONS.md) | tension, border wars, proxy wars, de facto powers, coups |
+| [October 8 changes](docs/RELEASE_2026_10_08_RU.md) | verified changes and limitations (Russian) |
+| [Development roadmap](docs/DEVELOPMENT_ROADMAP_2026_10_08_RU.md) | coherent redesign, remaining work and acceptance criteria (Russian) |
+| [Campaign integrity](docs/CAMPAIGN_INTEGRITY_RU.md) | overflow cause, autosave protection, compression and compatibility (Russian) |
+| [Institutions](docs/INTERNATIONAL_ORGANIZATIONS_RU.md) | organizational charters, fund, votes and defence (Russian) |
+| [Territory and independence](docs/TERRITORY_AND_RELEASE_RU.md) | homeland titles, treaty releases and Bir Tawil (Russian) |
+| [Households](docs/HOUSEHOLD_ECONOMY_RU.md) | employment, basic needs and demographic dynamics (Russian) |
 
 ## Known debts
 
@@ -187,11 +194,17 @@ The map is built from open data: land cover from ESA GlobCover, relief and the s
 NASA Earth Observatory's topography and bathymetry (GEBCO data), rivers, lakes and cities from
 Natural Earth. [`game/THIRD_PARTY_NOTICES.md`](game/THIRD_PARTY_NOTICES.md) gives each with its terms.
 
-**Code and art are under the same terms.** Everything made for the game - the code, the
-data, the artwork, the soundtrack and the interface sounds - is GPL: use it as you like. The
-flags and the map data keep whichever Creative Commons or public-domain terms they arrived
-with, listed in [`game/THIRD_PARTY_NOTICES.md`](game/THIRD_PARTY_NOTICES.md) — 128 flags are
-share-alike, which is exactly why the credits file exists.
+**Original artwork and audio are freely reusable.** Bayte Realization grants everyone
+permission to use, copy, modify, distribute and sell the project's original artwork and
+audio, including outside this game, without asking permission or paying royalties.
+Attribution is appreciated, not required. This permission includes original interface
+icons, textures, generated music/sounds and original flag illustrations. There is no
+separate restrictive asset licence. The code's GPL terms are unchanged.
+
+This grant covers only rights held by Bayte Realization. Third-party flags, fonts and map
+inputs retain their own notices and licence conditions. Sources and unresolved provenance
+are documented in [third-party media notices](docs/THIRD_PARTY_MEDIA.md) and
+[flag credits](game/gfx/CREDITS.md). Reusing a logo does not imply endorsement by its author.
 
 **Steam.** GPLv3 and the proprietary Steamworks SDK cannot both be satisfied at once, so an
 additional permission under GPL §7 is granted for linking against it — see

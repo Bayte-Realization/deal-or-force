@@ -123,14 +123,7 @@ public static class MovementRules
 
         // Land lost is land lost: a movement that had a country and has had it taken back
         // goes on as what it was before - somewhere to be governed from, and a following.
-        var holds = campaign.StatesOf(nation).Length > 0;
-        if (!holds && !state.Landless) BecomeLandless(campaign, nation);
-        if (holds && state.Landless)
-        {
-            state.Landless = false;
-            if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
-            campaign.MovementRevision++;
-        }
+        SynchroniseTerritory(campaign, nation);
 
         // The headquarters arrives where it was going.
         if (state.MovingToStateMapIndex >= 0 && campaign.ElapsedDays >= state.ArrivesOnDay)
@@ -471,6 +464,21 @@ public static class MovementRules
         Movements.Place(campaign);
     }
 
+    /// <summary>Keep the status and refuge together when a treaty changes real ownership.</summary>
+    internal static void SynchroniseTerritory(Campaign campaign, Nation nation)
+    {
+        if (nation?.Movement is not { } state) return;
+        var landless = !campaign.HasOwnedLand(nation);
+        if (state.Landless == landless) return;
+        if (landless) BecomeLandless(campaign, nation);
+        else
+        {
+            state.Landless = false;
+            if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
+        }
+        campaign.MovementRevision++;
+    }
+
     internal static string RegionName(Campaign campaign, int mapIndex) =>
         campaign.States.Find(state => state.MapIndex == mapIndex)?.DisplayName ?? "";
 
@@ -481,8 +489,11 @@ public static class MovementRules
     {
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        if (state is null || definition is null || region is null || !definition.CanStageUprising) return 0f;
+        if (state is null || definition is null || region is null || !definition.CanStageUprising ||
+            !MovementReach.CanClaimTerritory(campaign, nation, region)) return 0f;
         var support = state.Support.GetValueOrDefault(region.MapIndex);
+        if (!float.IsFinite(support) || !float.IsFinite(state.Cadres) || !float.IsFinite(state.Legitimacy) ||
+            !float.IsFinite(region.Stability)) return 0f;
         var own = PeopleOf(region, definition, out _);
         var share = region.Population > 0 ? own / (float)region.Population : 0f;
         // A plain search, not the weekly table: the interface asks this too, from its own thread.
@@ -510,7 +521,7 @@ public static class MovementRules
         // region is: the chance grows with the support towards that line and is whole from it
         // on. A contract army needs no following, and is not held to one.
         else chance *= MathF.Min(1f, support / MathF.Max(0.01f, campaign.Defines.MovementUprisingSupport));
-        return M.Clamp(chance, 0.02f, 0.9f);
+        return float.IsFinite(chance) ? M.Clamp(chance, 0.02f, 0.9f) : 0f;
     }
 
     /// <summary>Rise in this region. True when it now holds it.</summary>
@@ -521,6 +532,8 @@ public static class MovementRules
         if (state is null || definition is null || region is null || !definition.CanStageUprising) return false;
         var defines = campaign.Defines;
         var chance = UprisingChance(campaign, nation, region);
+        if (!float.IsFinite(chance) || chance <= 0f || !float.IsFinite(nation.Treasury) ||
+            nation.Treasury < defines.MovementUprisingCost) return false;
         var roll = Roll(campaign.Seed, nation.Id, campaign.ElapsedDays, region.MapIndex);
         var owner = campaign.Nations.Find(candidate => candidate.MapIndex == region.NationMapIndex);
         nation.Treasury -= defines.MovementUprisingCost;
@@ -538,14 +551,20 @@ public static class MovementRules
             return false;
         }
 
-        TakeRegion(campaign, nation, region, owner);
+        if (!TakeRegion(campaign, nation, region, owner)) return false;
         state.LastReport = Loc.Format("The uprising in {0} succeeded: it is ours.", region.DisplayName);
         return true;
     }
 
     /// <summary>The region is its own: the ground, a capital, militia, and a war with the country it rose against.</summary>
-    internal static void TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner, bool peacefully = false)
+    internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner, bool peacefully = false)
     {
+        if (peacefully && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
+        if (!peacefully && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
+        if (campaign?.ProvinceMap is null || nation?.Movement is null || region is null ||
+            !float.IsFinite(region.Stability) || !float.IsFinite(region.StandardOfLiving) ||
+            !float.IsFinite(region.Literacy) || !float.IsFinite(nation.Gdp) ||
+            owner is not null && !float.IsFinite(owner.Gdp)) return false;
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
         var defines = campaign.Defines;
@@ -564,6 +583,13 @@ public static class MovementRules
         var heldStates = campaign.StatesOf(nation);
         nation.Population = heldStates.Sum(s => s.Population);
         nation.Gdp = MathF.Max(.01f, previousGdp + regionalGdp);
+        // Donations are not industrial capacity. The first real tax base provides the
+        // reference; subsequent price changes must never rebase it each economic week.
+        if (wasLandless)
+        {
+            nation.ProductionReferenceInitialized = false;
+            ProductionCapacity.Initialize(nation);
+        }
         // Blend calibration for successive acquisitions, preserving the inherited
         // production value instead of converging from a fictitious tiny economy.
         var rawAnnual = previousGdp / MathF.Max(.0001f, nation.OutputScale) +
@@ -623,6 +649,7 @@ public static class MovementRules
         }
         campaign.MovementRevision++;
         campaign.MarkStrategicChange();
+        return true;
     }
 
     internal static float Roll(int seed, int nationId, int day, int salt)

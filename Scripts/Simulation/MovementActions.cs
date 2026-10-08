@@ -193,7 +193,12 @@ public static class MovementActions
             case "rise":
             {
                 if (region.NationMapIndex == nation.MapIndex) return Loc.Get("The region is already its own.");
+                if (!MovementReach.CanClaimTerritory(campaign, nation, region))
+                    return Loc.Get("Offices and foreign support do not grant a territorial mandate here.");
                 var support = state.Support.GetValueOrDefault(region.MapIndex);
+                if (!float.IsFinite(support) || !float.IsFinite(state.Cadres) || !float.IsFinite(state.Legitimacy) ||
+                    !float.IsFinite(region.Stability) || !float.IsFinite(nation.Treasury))
+                    return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
                 if (!definition.Has("for_hire") && support < defines.MovementUprisingSupport)
                     return Loc.Format("Support there is {0}; it takes {1}.", Fmt.Percent(support), Fmt.Percent(defines.MovementUprisingSupport));
                 if (definition.Has("for_hire") && region.Stability > 0.35f)

@@ -1,5 +1,8 @@
 {
   "generic_flag_cultures": {
     "flag_ideology_traditionalism": ["spanish", "basque"]
+  },
+  "generic_flag_tags": {
+    "flag_ideology_theocratic_rule": ["VAT"]
   }
 }

@@ -72,7 +72,7 @@ public sealed partial class Defines
 	/// and load it again - so text is the default and compression is the opt-out for the
 	/// machine that would rather not write a five-year history as prose. Old compressed
 	/// saves load either way: the reader tells them apart by their first two bytes.</summary>
-	public bool SaveTextFormat { get; set; } = true;
+	public bool SaveTextFormat { get; set; } = false;
 
 	/// <summary>
 	/// Real seconds per in-game day at speed 1.

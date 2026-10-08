@@ -505,19 +505,43 @@ public static class SecessionEvents
         return Secede(campaign, parent, new List<SecessionPiece> { piece }, culture, state.Population);
     }
 
-    private static SecessionReport Secede(Campaign campaign, Nation parent,
-        List<SecessionPiece> leaving, string culture, long people)
+    /// <summary>
+    /// A civil war: part of the country under an armed opposition of its own people, not a
+    /// nation leaving. The same founding as a secession - ground, militia, defecting
+    /// garrisons - but nobody is asked and nobody lets it go: it is a war from the first day,
+    /// and the side that rose is named for what it wants rather than for whom it is
+    /// (CivilWarOutbreak).
+    /// </summary>
+    internal static SecessionReport Uprising(Campaign campaign, Nation parent, IReadOnlyList<ScenarioState> regions,
+        Action<Nation> shape)
     {
+        if (campaign?.ProvinceMap is null || parent is null || regions is null || regions.Count == 0) return null;
+        var leaving = regions.Select(state => new SecessionPiece
+        {
+            MapIndex = state.MapIndex, Name = state.Name, Population = state.Population, Cause = SecessionCause.Discontent
+        }).ToList();
+        var report = Secede(campaign, parent, leaving, "", regions.Sum(state => state.Population), shape, fight: true);
+        if (report is not null) Recent.Add(report);
+        return report;
+    }
+
+    private static SecessionReport Secede(Campaign campaign, Nation parent,
+        List<SecessionPiece> leaving, string culture, long people, Action<Nation> shape = null, bool fight = false)
+    {
+        if (!RegionalResourcePartition.ValidAccounts(parent)) return null;
         var was = parent.Population;
         var revolt = RevoltKind(parent, leaving, culture, people);
         var born = Found(campaign, parent, leaving, culture, people);
         if (born is null) return null;
         born.FoundedInRevolt = revolt;
         born.SecededFromId = parent.Id;
+        shape?.Invoke(born);
 
         var going = new HashSet<int>();
         foreach (var piece in leaving) going.Add(piece.MapIndex);
         var departedStates = campaign.States.Where(state => going.Contains(state.MapIndex)).ToArray();
+        var share = Dismantlement.Share(campaign, parent, going.ToArray());
+        RegionalResourcePartition.Transfer(parent, born, share);
 
         var topology = campaign.ProvinceMap;
         var provinces = new List<int>();
@@ -527,6 +551,7 @@ public static class SecessionEvents
         // Not a conquest. It is standing on the ground it already lived on, and a state born
         // an international pariah for that would be the wrong answer twice over.
         StatePartition.Annex(campaign, provinces, born, asConquest: false);
+        RegionalResourcePartition.RecountResidents(campaign, parent, born);
         CampaignDiplomacy.ForgetBorders();
         SecessionResearch.Inherit(campaign, parent, born, departedStates, was);
 
@@ -549,13 +574,14 @@ public static class SecessionEvents
         // A country nobody is playing answers the way it always has. A country somebody is
         // playing is asked, because this is the largest thing that happens to a state and
         // rolling for it is the game playing that turn instead of the player.
-        var outcome = parent.IsHuman
-            ? Ask(campaign, parent, born, leaving, people, was, out var reason)
+        var reason = "";
+        var outcome = fight ? SecessionOutcome.Contested : parent.IsHuman
+            ? Ask(campaign, parent, born, leaving, people, was, out reason)
             : SecessionCore.Response(campaign, parent, leaving, out reason);
         if (outcome == SecessionOutcome.Contested)
         {
             var war = CampaignDiplomacy.DeclareWar(campaign, parent.Id, born.Id,
-                leaving[0].MapIndex, "secession");
+                leaving[0].MapIndex, fight ? "uprising" : "secession", onOwnInitiative: !fight);
             // Refused, and unable to do anything about it - a truce, an alliance, no way to
             // reach them. That is an acceptance whatever the cabinet thinks, and recording
             // it as one keeps the state of the world honest.
@@ -581,7 +607,7 @@ public static class SecessionEvents
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, born.Id, parent.Id), "let_us_go");
         OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, parent.Id, born.Id), "seceded_from_us");
 
-        campaign.Chronicle.Record(campaign, outcome == SecessionOutcome.Contested ? "secession_contested" : "secession",
+        campaign.Chronicle.Record(campaign, fight ? "civil_war" : outcome == SecessionOutcome.Contested ? "secession_contested" : "secession",
             born.Id, parent.Id, place: leaving[0].Name);
         campaign.MarkStrategicChange();
         DiagnosticLogs.Write("simulation",
@@ -613,6 +639,13 @@ public static class SecessionEvents
     /// it is, what it can produce, what a week of its economy is worth - because those are
     /// facts about the ground rather than about the flag that was over it.
     /// </summary>
+    internal static bool CanFoundSettlement(Campaign c, Nation parent, string culture) =>
+        FreeTag(c, culture, parent.Tag).Length > 0 && FreeMapIndex(c) > 0;
+
+    internal static Nation FoundSettlement(Campaign c, Nation parent, IReadOnlyList<ScenarioState> regions, string culture) =>
+        Found(c, parent, regions.Select(s => new SecessionPiece { MapIndex = s.MapIndex, Name = s.Name,
+            Population = s.Population, Cause = SecessionCause.Nationality }).ToList(), culture, regions.Sum(s => s.Population));
+
     private static Nation Found(Campaign campaign, Nation parent, List<SecessionPiece> leaving,
         string culture, long people)
     {

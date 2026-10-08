@@ -213,7 +213,7 @@ public sealed partial class GlobePresentation
             var longitude = WrappedFlatX(_flatX) / FlatMapWidth * 360f;
             var latitude = _flatY / FlatMapHeight * 180f;
             _targetYaw = _yaw = Mathf.DegToRad(longitude + 180f);
-            _targetPitch = _pitch = Mathf.Clamp(-Mathf.DegToRad(latitude), -1.20f, 1.20f);
+            _targetPitch = _pitch = Mathf.Clamp(-Mathf.DegToRad(latitude), -MaxPitch, MaxPitch);
             _targetDistance = _distance = DistanceForFlatZoom(_flatZoom);
         }
 
@@ -326,7 +326,7 @@ public sealed partial class GlobePresentation
             var geo = GeographicFromNormal(normal);
             var position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ);
             if (node.Position != position) node.Position = position;
-            OrientSurfaceCounter(node, normal);
+            node.Quaternion = Quaternion.Identity;
         }
         foreach (var (node, normal) in _fleetMarkers)
         {
@@ -366,11 +366,7 @@ public sealed partial class GlobePresentation
         }
 
         foreach (var (node, normal) in _capitalMarkers)
-            if (IsInstanceValid(node))
-            {
-                node.Position = normal * SurfaceMarkerRadius;
-                OrientSurfaceCounter(node, normal);
-            }
+            if (IsInstanceValid(node)) PlaceCapitalMarker(node, normal);
         foreach (var (node, normal) in _fleetMarkers)
             if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
         ReprojectSupportMarkers();

@@ -125,9 +125,9 @@ public partial class DealOrForceGame
         return string.Join("|", nation.Id, _campaign.ElapsedDays, _campaign.MovementRevision, Simulation.Loc.Language,
             _selectedState?.MapIndex ?? -1, _selectedNation?.Id ?? -1, nation == _campaign.Player,
             nation.Treasury.ToString("0.0000"), state.Cadres.ToString("0"), state.Heat.ToString("0.000"),
-            state.Legitimacy.ToString("0.000"), state.RecognisedBy.Count, state.MovingToStateMapIndex,
+            state.Legitimacy.ToString("0.000"), string.Join(",", state.RecognisedBy.OrderBy(id => id)), state.MovingToStateMapIndex,
             state.HeadquartersStateMapIndex, state.LastReport, state.Support.Count, state.Dissolved,
-            state.DesignatedBy.Count, state.SponsoredBy.Count, state.InvitedBy.Count, state.OnTheWay.Count,
+            string.Join(",", state.DesignatedBy.OrderBy(id => id)), state.SponsoredBy.Count, state.InvitedBy.Count, state.OnTheWay.Count,
             state.Infiltrated.Count, _campaign.Player?.Id ?? -1);
     }
 
@@ -256,6 +256,8 @@ public partial class DealOrForceGame
                 Fmt.People(defines.MovementUprisingCadres), Fmt.People(defines.MovementMilitiaPerCadres))));
         figures.AddChild(MovementFigure("diplomacy", state.RecognisedBy.Count.ToString("N0"), Tr("recognitions"),
             Tr("Countries that recognise it. Each one lifts its standing a little every week.")));
+        MovementDiplomaticList(state.RecognisedBy, "RECOGNISED BY");
+        MovementDiplomaticList(state.DesignatedBy, "DESIGNATED AS TERRORIST BY");
         figures.AddChild(MovementFigure("movement_support", behind.ToString("N0"),
             Tr(civic ? "regions ready for a vote" : "regions ready to rise"),
             civic ? Tr("A majority of all residents, public standing and the parent's consent are required.") :
@@ -333,7 +335,7 @@ public partial class DealOrForceGame
         }
         var state = movement.Movement;
         _movementRows.AddChild(MovementHeading(Simulation.Loc.Format("{0} AND IT", player.DisplayName.ToUpperInvariant())));
-        var theirs = CampaignDiplomacy.Get(_campaign, movement.Id, player.Id).Opinion;
+        var theirs = CampaignDiplomacy.Peek(_campaign, movement.Id, player.Id)?.Opinion ?? 0f;
         var where = new List<string>();
         if (state.RecognisedBy.Contains(player.Id)) where.Add(Tr("you recognise it"));
         if (state.SponsoredBy.ContainsKey(player.Id)) where.Add(Tr("you fund it"));

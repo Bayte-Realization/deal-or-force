@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
@@ -383,6 +384,7 @@ public static class UnclaimedLand
     public static int ApplyToGround(Campaign campaign, ProvinceTopology topology, ushort[] controllers)
     {
         if (campaign is null || topology is null) return 0;
+        EnsureAuthoredRegions(campaign, topology);
         var unclaimed = new HashSet<int>(campaign.States.Where(ColonisationCore.IsUnclaimed).Select(state => state.MapIndex));
         if (unclaimed.Count == 0) return 0;
         var cleared = 0;
@@ -394,6 +396,42 @@ public static class UnclaimedLand
             cleared++;
         }
         return cleared;
+    }
+
+    // Some source polygons have a province but no administrative region (Bir Tawil).
+    // Coordinate declarations bind a dossier to actual unowned ground; they do not
+    // change ownership or let a file silently steal another country's province.
+    private static void EnsureAuthoredRegions(Campaign c, ProvinceTopology map)
+    {
+        foreach (var document in GameDataLoader.DataDocuments("map_data", "unclaimed_regions"))
+        using (document)
+        {
+            if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
+            foreach (var row in document.RootElement.EnumerateObject())
+            {
+                var e = row.Value;
+                if (e.ValueKind != JsonValueKind.Object || !e.TryGetProperty("latitude", out var la) || la.ValueKind != JsonValueKind.Number ||
+                    !e.TryGetProperty("longitude", out var lo) || lo.ValueKind != JsonValueKind.Number ||
+                    !la.TryGetSingle(out var lat) || !lo.TryGetSingle(out var lon) || !float.IsFinite(lat) || !float.IsFinite(lon) || Math.Abs(lat) > 90 || Math.Abs(lon) > 180) continue;
+                var x = Math.Clamp((int)((lon + 180) / 360 * map.Width), 0, map.Width - 1);
+                var y = Math.Clamp((int)((90 - lat) / 180 * map.Height), 0, map.Height - 1);
+                var province = map.CellToProvince[y * map.Width + x];
+                if (province <= 0 || map.IsWater(province) || map.ProvinceToNation[province] != 0) continue;
+                var oldRegion = map.ProvinceToState[province];
+                if (c.States.Any(s => s.MapIndex == oldRegion)) continue;
+                var state = c.States.Find(s => s.Id == row.Name);
+                if (state is null)
+                {
+                    var index = Math.Max(c.States.Select(s => s.MapIndex).DefaultIfEmpty(0).Max(), map.ProvinceToState.Max(v => (int)v)) + 1;
+                    if (index >= ushort.MaxValue) continue;
+                    state = new ScenarioState { Id = row.Name, Iso = row.Name, MapIndex = index, NationMapIndex = 0,
+                        Unclaimed = true, Name = e.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : row.Name };
+                    c.States.Add(state);
+                }
+                map.ProvinceToState[province] = (ushort)state.MapIndex;
+                c.InvalidateStateIndex();
+            }
+        }
     }
 }
 

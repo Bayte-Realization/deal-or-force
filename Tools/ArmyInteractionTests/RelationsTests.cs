@@ -29,7 +29,11 @@ static class RelationsTests
         Check(allWeather.Opinion >= c.Defines.AiFriendshipThreshold && allWeather.Stance == DiplomaticStance.Friendly,
             $"China and Pakistan open as friends ({allWeather.Opinion:0})");
         var nato = Between("USA", "GBR");
-        Check(nato.Stance == DiplomaticStance.Allied && nato.Opinion > Between("USA", "FRA").Opinion,
+        // NATO is an organization now (InternationalOrganizations): its members defend each
+        // other through it rather than through forty bilateral alliances.
+        var natoBound = nato.Stance == DiplomaticStance.Allied ||
+            InternationalOrganizations.DefencePartners(c, c.NationByTag("USA").Id).Contains(c.NationByTag("GBR").Id);
+        Check(natoBound && nato.Opinion > Between("USA", "FRA").Opinion,
             "an old friendship inside an alliance leaves the alliance as it was and warms it");
         var war = Between("RUS", "UKR");
         Check(war.Stance == DiplomaticStance.AtWar, "a rivalry between countries at war leaves them at war");

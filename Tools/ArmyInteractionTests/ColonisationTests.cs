@@ -19,6 +19,11 @@ static class ColonisationTests
         var mng = c.NationByTag("MNG");
         var ata = c.NationByTag("ATA");
         c.ConfigureSinglePlayer(aus.Id);
+        var birProvince = ProvinceOwnership.PointCorrections(map).First(p => p.Value == "none").Key;
+        var bir = c.States.First(s => s.MapIndex == map.ProvinceToState[birProvince]);
+        Check(ColonisationCore.IsUnclaimed(bir), "Bir Tawil is selectable unclaimed land, not an ownerless dead region");
+        Check(ColonisationCore.Reaches(c, c.NationByTag("EGY"), bir) && ColonisationCore.Reaches(c, c.NationByTag("SDN"), bir),
+            "both neighbouring countries can reach Bir Tawil for settlement");
         Check(c.Nations.All(n => n.MapIndex > 0), "every country has a place on the map, so 0 can mean nobody");
 
         // --- A: nobody's, on the record and on the ground ---------------------------------

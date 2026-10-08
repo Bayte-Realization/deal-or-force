@@ -1,4 +1,9 @@
 {
   "chronicle.secession": "{0} breaks away from {1} in {3}, and {1} lets it go.",
-  "chronicle.secession_contested": "{0} breaks away from {1} in {3}. {1} goes to war to keep it."
+  "chronicle.secession_contested": "{0} breaks away from {1} in {3}. {1} goes to war to keep it.",
+  "chronicle.civil_war": "Civil war in {1}: {0} takes up arms and holds {3} and the regions around it.",
+  "rising.salvation_front": "National Salvation Front of {0}",
+  "rising.transitional_council": "Transitional Council of {0}",
+  "rising.revolutionary_front": "Revolutionary Front of {0}",
+  "{0} Civil War": "{0} Civil War"
 }

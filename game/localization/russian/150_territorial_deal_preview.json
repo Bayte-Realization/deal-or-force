@@ -1,0 +1,6 @@
+{
+  "TERRITORIAL PACKAGE": "ТЕРРИТОРИИ СДЕЛКИ",
+  "Select regions to see their actual location before signing.": "Выберите регионы: их положение появится на карте до подписания сделки.",
+  "Gold: you give. Green: you ask. Hatching: independence, not annexation. Preview only; no borders change until agreement.": "Золотой: отдаёте. Зелёный: запрашиваете. Штриховка: независимость, не аннексия. Это просмотр — границы изменятся только после согласия.",
+  "How they weigh it, in points\nThe money: {0}\nThe land: {1}\nThe treaties: {2}\nBorder cohesion: {6}\nOld grievances: {3}\nIn all: {4} - they sign at 0 or more\n\nHow we weigh it: {5}": "Как партнёр оценивает сделку, в баллах\nДеньги: {0}\nТерритории: {1}\nДоговоры: {2}\nСвязность границ: {6}\nСтарые обиды: {3}\nИтого: {4} — согласие от 0 и выше\n\nНаша оценка: {5}"
+}

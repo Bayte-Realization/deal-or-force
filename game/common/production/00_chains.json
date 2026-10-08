@@ -38,6 +38,8 @@
 //                         as the peacetime weight plus the difference
 //   hulls                 warship hulls
 //   gdp                   the country's GDP
+//   production_capacity   scenario-scaled physical capacity, adjusted for actual population;
+//                         use this in output, not GDP (which is derived from that output)
 //   arms_productivity     productivity, clamped to the range an arms industry can use
 //
 // Two more fields:
@@ -303,7 +305,7 @@
 
   "national_arms_output": {
     "good": "Arms", "scope": "nation",
-    "output": { "gdp*arms_productivity": 0.004 }
+    "output": { "production_capacity*arms_productivity": 0.004 }
   },
 
   // A modern army is an electronics consumer before it is anything else, and a war is where

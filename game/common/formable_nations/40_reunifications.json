@@ -1,0 +1,81 @@
+// States put back together, and peoples brought under one roof.
+//
+// The 2024 map is full of countries split in two or three - Cyprus, Moldova and Transnistria,
+// Georgia and its two breakaways, Somalia and Somaliland, the Yemens, the Libyas, the Syrias,
+// the Sudans - and every side of every one of them claims to be the real country. Any of them
+// can put it back together and proclaim it under the old name: Transnistria that holds all of
+// Moldova proclaims Moldova, as the Republic of Moldova would. The territory is the authored
+// 2024 ground of every piece, so it is done by treaty or by war, never by a button.
+//
+// Below them, the kin unions the year argued about - Serbia and Montenegro again, Albania and
+// Kosovo.
+//
+// The last block opens the Arab projects to every Arab side, not only to the recognised
+// states: Hamas or a Syrian faction that holds the ground can proclaim them as Egypt could.
+// Entries naming an existing id change only the fields they name.
+{
+  "moldova_reunited": {
+    "name": "Moldova", "description": "One Moldova on both banks of the Dniester. Whoever holds Chișinău and Tiraspol together proclaims it, the government in Chișinău or the one in Tiraspol.",
+    "eligible_tags": ["MDA", "PMR"], "required_tags": ["MDA", "PMR"],
+    "minimum_stability": 0.45, "gdp_cost_share": 0.01, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#3a5ba0"
+  },
+  "georgia_restored": {
+    "name": "Georgia", "description": "Georgia within its Soviet-era borders: Abkhazia and South Ossetia back in one state, whichever capital it is governed from.",
+    "eligible_tags": ["GEO", "ABK", "OST"], "required_tags": ["GEO", "ABK", "OST"],
+    "minimum_stability": 0.45, "gdp_cost_share": 0.01, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#b5313b"
+  },
+  "cyprus_reunited": {
+    "name": "Cyprus", "description": "The island under one government again - the buffer zone dissolved, North Nicosia and Nicosia one city.",
+    "eligible_tags": ["CYP", "CYN"], "required_tags": ["CYP", "CYN", "CNM"],
+    "minimum_stability": 0.5, "gdp_cost_share": 0.01, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#c78a3c"
+  },
+  "somalia_reunited": {
+    "name": "Somalia", "description": "The Somali Republic of 1960 again: Somaliland, Puntland and the south under one flag, by agreement or by arms.",
+    "eligible_tags": ["SOM", "SOL", "PNT", "SHB"], "required_tags": ["SOM", "SOL"],
+    "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#4189dd"
+  },
+  "yemen_reunited": {
+    "name": "Yemen", "description": "Sanaa and Aden under one government once more: the Houthis, the internationally recognised government or the Southern Transitional Council, whoever holds it all.",
+    "eligible_tags": ["YEM", "HTH", "STC"], "required_tags": ["YEM"],
+    "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#ce1126"
+  },
+  "libya_reunited": {
+    "name": "Libya", "description": "Tripoli and Benghazi one country again, the two governments and two banks folded into one.",
+    "eligible_tags": ["LBY", "LNA"], "required_tags": ["LBY"],
+    "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#239e46"
+  },
+  "syria_reunited": {
+    "name": "Syria", "description": "One Syria from Idlib to the Euphrates: the government in Damascus, the north-west, the Turkish-held north and the north-east under one administration.",
+    "eligible_tags": ["SYR", "HTS", "SIG", "SDF"], "required_tags": ["SYR"],
+    "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#007a3d"
+  },
+  "sudan_reunited": {
+    "name": "Sudan", "description": "The army, the Rapid Support Forces and the Nuba Mountains under one state, after the war or instead of it.",
+    "eligible_tags": ["SDN", "RSF", "SPN"], "required_tags": ["SDN"],
+    "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#d21034"
+  },
+  "palestine_united": {
+    "name": "Palestine", "description": "The West Bank and Gaza under one Palestinian government - Fatah's, Hamas's or another's.",
+    "eligible_tags": ["PSE", "HMS"], "eligible_cultures": ["palestinian"], "required_tags": ["PSE"],
+    "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#007a3d"
+  },
+  "serbia_montenegro": {
+    "name": "Serbia and Montenegro", "description": "The state union of 2003 to 2006 again: Belgrade and Podgorica under one president and one army.",
+    "eligible_tags": ["SRB", "MNE"], "eligible_cultures": ["serbian"], "required_tags": ["SRB", "MNE"],
+    "minimum_stability": 0.55, "gdp_cost_share": 0.012, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#3c5f9c"
+  },
+  "united_albania": {
+    "name": "United Albania", "description": "Albania and Kosovo as one state - the union a majority on both sides of the border has told pollsters it wants.",
+    "eligible_tags": ["ALB", "KOS"], "eligible_cultures": ["albanian"], "required_tags": ["ALB", "KOS"],
+    "minimum_stability": 0.55, "gdp_cost_share": 0.012, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#d4282b"
+  },
+
+  "greater_romania": { "eligible_cultures": ["romanian", "moldovan"] },
+  "united_arab_republic": { "eligible_cultures": ["arab_egyptian", "arab_levantine", "arab_iraqi", "palestinian", "arab_sudanese"] },
+  "arab_federation": { "eligible_cultures": ["arab_egyptian", "arab_levantine", "arab_iraqi", "arab_gulf", "arab_saudi", "arab_yemeni", "arab_maghrebi", "arab_sudanese", "palestinian", "omani_arab", "bedouin"] },
+  "levant_union": { "eligible_cultures": ["arab_levantine", "palestinian", "druze_people"] },
+  "caliphate": { "eligible_cultures": ["arab_egyptian", "arab_levantine", "arab_iraqi", "arab_gulf", "arab_saudi", "arab_yemeni", "arab_maghrebi", "arab_sudanese", "palestinian", "bedouin"] },
+  "maghreb_union": { "eligible_cultures": ["arab_maghrebi", "berber"] },
+  "nile_union": { "eligible_cultures": ["arab_egyptian", "arab_sudanese"] },
+  "greater_somalia": { "eligible_cultures": ["somali"] }
+}

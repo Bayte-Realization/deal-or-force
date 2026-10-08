@@ -175,6 +175,10 @@ public static class Program
         // a fresh bench plays is the first morning; the one players complain about is thirty
         // years on, with a hundred countries that were not there in 2024 and a history the
         // size of a novel, and that one can only be had from a save.
+        var integrityAt = Array.IndexOf(args, "--integrity-save");
+        if (integrityAt >= 0 && integrityAt + 1 < args.Length)
+            return CampaignIntegrityReport.Run(campaign, args[integrityAt + 1],
+                integrityAt + 2 < args.Length && int.TryParse(args[integrityAt + 2], out var replayDays) ? replayDays : 0);
         var profileSaveAt = Array.IndexOf(args, "--profile-save");
         if (profileSaveAt >= 0 && profileSaveAt + 1 < args.Length)
             return ProfileSave(campaign, args[profileSaveAt + 1],
@@ -268,6 +272,48 @@ public static class Program
         if (Array.IndexOf(args, "--secession") >= 0)
             return Check("a country can lose a part of itself, and it is a country afterwards",
                 RegionsThatAreNotTheirsCanLeave());
+        // `--manoeuvres` runs the consolidation and railway check alone, on its own sandbox.
+        if (Array.IndexOf(args, "--manoeuvres") >= 0)
+        {
+            var sandbox = Campaign.CreateBootstrap(20260830);
+            if (!AttachMap(sandbox)) return 1;
+            sandbox.IsPaused = false;
+            for (var day = 0; day < 220; day++) sandbox.TickDay();
+            return Check("a consolidation invents nobody and the railways are paid for", ManoeuvresCostWhatTheySave(sandbox));
+        }
+        // `--snapshot-check` runs the network snapshot round trip alone.
+        if (Array.IndexOf(args, "--snapshot-check") >= 0)
+            return Check("a client sent the world is in the world it was sent", ASnapshotCarriesTheWholeWorld());
+        // `--resave <folder> <slot> <out-folder>`: load a save, write it again in both formats,
+        // load the compressed one back and compare the two campaigns field for field.
+        var resaveAt = Array.IndexOf(args, "--resave");
+        if (resaveAt >= 0 && resaveAt + 3 < args.Length)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var loaded = SaveSystem.Load(args[resaveAt + 1], args[resaveAt + 2], "");
+            if (loaded.Campaign is null) { Console.WriteLine("  resave: " + loaded.Warning); return 1; }
+            var original = loaded.Campaign;
+            if (original.ProvinceMap is null) AttachMap(original);
+            Console.WriteLine($"  resave: loaded in {clock.ElapsedMilliseconds} ms, day {original.ElapsedDays}");
+            var before = CampaignFingerprint.Of(original);
+            var outRoot = args[resaveAt + 3];
+            Directory.CreateDirectory(outRoot);
+            original.Defines.SaveTextFormat = false;
+            clock.Restart();
+            SaveSystem.Save(outRoot, "resaved", original, "");
+            Console.WriteLine($"  resave: compressed written in {clock.ElapsedMilliseconds} ms" + $" (defaults left out: {SaveDefaults.Types} types, {SaveDefaults.Members} members)");
+            original.Defines.SaveTextFormat = true;
+            SaveSystem.Save(outRoot, "resaved_text", original, "");
+            foreach (var file in Directory.GetFiles(outRoot))
+                Console.WriteLine($"  resave: {Path.GetFileName(file)} {new FileInfo(file).Length / 1024:N0} KiB");
+            clock.Restart();
+            var back = SaveSystem.Load(outRoot, "resaved", "");
+            if (back.Campaign is null) { Console.WriteLine("  resave: reload failed: " + back.Warning); return 1; }
+            if (back.Campaign.ProvinceMap is null) AttachMap(back.Campaign);
+            var after = CampaignFingerprint.Of(back.Campaign);
+            Console.WriteLine($"  resave: reloaded in {clock.ElapsedMilliseconds} ms; fingerprint {before:X16} -> {after:X16} {(before == after ? "SAME" : "DIFFERENT")}");
+            return before == after ? 0 : 1;
+        }
         // `--counts-cost` asks one strong country about one weak neighbour, with and without a reason.
         if (Array.IndexOf(args, "--counts-cost") >= 0)
             return Check("a country counts the cost before it declares", ACountryCountsTheCost());
@@ -719,6 +765,7 @@ public static class Program
                           $"{bare.Sum(sample => sample.Bare):N0} with a front of their own and nobody of theirs on it.");
         Console.WriteLine($"  divisions of countries at war serving no war, summed over {bare.Count} samples: {idle:N0}.");
         Console.WriteLine($"  the staff re-posted {FrontManager.Reposts:N0} division(s) in {days} day(s).");
+        Console.WriteLine($"  at peace, {ThreatPosture.Moves:N0} division(s) were moved to the borders their countries fear.");
         return 0;
     }
 
@@ -4165,7 +4212,12 @@ public static class Program
             if (written.TradeConcessions) terms.Add("trade concessions");
             if (written.Demilitarise) terms.Add("demilitarisation");
             if (written.Humiliate) terms.Add("humiliation");
-            if (terms.Count == 0)
+            // A war score below the cheapest term buys nothing at all: an empty treaty is then
+            // the only one there is, and the land check below still has to pass.
+            var defines = campaign.Defines;
+            var cheapestTerm = Math.Min(defines.PeaceCostReparations,
+                Math.Min(defines.PeaceCostTradeConcessions, defines.PeaceCostDemilitarise));
+            if (terms.Count == 0 && shaping >= cheapestTerm)
                 return $"{winner.Tag} wrote an entirely empty treaty out of {held.Count:N0} " +
                        $"occupied province(s) with {shaping:0.00} to spend - no land and no terms";
 
@@ -4185,7 +4237,7 @@ public static class Program
 
             Console.WriteLine($"  ai peace: {winner.Tag} held {held.Count:N0} province(s) and signed for " +
                               $"no land - the cheapest whole region on offer was {cheapestWhole:0.00} against " +
-                              $"{shaping:0.00} of war score - taking {string.Join(", ", terms)} instead.");
+                              $"{shaping:0.00} of war score - taking {(terms.Count == 0 ? "nothing, since no term costs that little" : string.Join(", ", terms))} instead.");
             return "";
         }
 
@@ -7031,6 +7083,7 @@ public static class Program
         ("PolicyHeading(", new[] { 1 }),
         ("PolicyText(", new[] { 1 }),
         ("PolicyStat(", new[] { 1 }),
+        ("CrisisGauge(", new[] { 1, 4 }),
         ("Placeholder(", new[] { 1 }),
         ("Loc.Get(", new[] { 0 }),
         ("Loc.Format(", new[] { 0 }),
@@ -7060,7 +7113,7 @@ public static class Program
     private static SortedSet<string> VisibleCaptionIndex(string scripts)
     {
         var result = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
+        foreach (var file in ProductionSourceFiles(scripts))
         {
             var source = File.ReadAllText(file);
             foreach (var caption in Captions(source))
@@ -7088,6 +7141,20 @@ public static class Program
             }
         }
         return result;
+    }
+
+    // A local agent's nested checkout is not game source. Skip it before descent,
+    // rather than scanning its old game/tests and then filtering thousands of files.
+    private static IEnumerable<string> ProductionSourceFiles(string directory)
+    {
+        foreach (var file in Directory.EnumerateFiles(directory, "*.cs")) yield return file;
+        foreach (var child in Directory.EnumerateDirectories(directory))
+        {
+            var name = Path.GetFileName(child);
+            if (name.StartsWith('.') || name is "bin" or "obj" or "build" ||
+                (File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0) continue;
+            foreach (var file in ProductionSourceFiles(child)) yield return file;
+        }
     }
 
     /// <summary>
@@ -7878,6 +7945,20 @@ public static class Program
             "ActionButton(\"Clear plans\", () => ClearPlans(1, 2));").ToHashSet(StringComparer.Ordinal);
         if (captions.Contains("MapSettings") || !captions.Contains("Scenario settings…") || !captions.Contains("Clear plans"))
             return "the caption scanner confused a node identifier with visible text";
+        var fixture = Path.Combine(Path.GetTempPath(), "deal-source-index-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(fixture, "ui"));
+            Directory.CreateDirectory(Path.Combine(fixture, ".kilo", "worktrees", "old", "Scripts"));
+            Directory.CreateDirectory(Path.Combine(fixture, "obj"));
+            File.WriteAllText(Path.Combine(fixture, "ui", "Current.cs"), "Tr(\"Current caption\");");
+            File.WriteAllText(Path.Combine(fixture, ".kilo", "worktrees", "old", "Scripts", "Old.cs"), "Tr(\"Removed command\");");
+            File.WriteAllText(Path.Combine(fixture, "obj", "Generated.cs"), "Tr(\"Generated test caption\");");
+            var indexed = ProductionSourceFiles(fixture).SelectMany(file => Captions(File.ReadAllText(file))).ToArray();
+            if (indexed.Length != 1 || indexed[0] != "Current caption")
+                return "the source scanner indexed nested private checkouts or generated output";
+        }
+        finally { if (Directory.Exists(fixture)) Directory.Delete(fixture, true); }
         var left = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { ["aviation"] = false };
         var right = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { ["AVIATION"] = false };
         if (!DefineValuesAgree(left, right)) return "equivalent feature dictionaries disagree";
@@ -8220,6 +8301,11 @@ public static class Program
                 }
                 continue;
             }
+            // A titles overlay (TerritorialClaims): homeland cores and claims laid over regions
+            // their own files describe. It writes no region, so it cannot write one twice.
+            if (document.RootElement.EnumerateObject().All(entry => entry.Value.ValueKind == JsonValueKind.Object &&
+                    entry.Value.EnumerateObject().All(field => field.Name is "cores" or "claims")))
+                continue;
             if (!string.Equals(name, "unclaimed", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(name, "lakes", StringComparison.OrdinalIgnoreCase) && campaign.NationByTag(name) is null)
                 badNames.Add(name);
@@ -9167,6 +9253,11 @@ public static class Program
         OpinionSystem.Forget(campaign, relation, "non_aggression_pact");
         OpinionSystem.Forget(campaign, relation, "guaranteed_us");
         OpinionSystem.Settle(campaign, relation);
+        // And no shared defence organization: NATO's members cannot go to war with each
+        // other (InternationalOrganizations), which is the tie these checks mean to cut.
+        foreach (var organization in campaign.Organizations)
+            if (organization.Members.Contains(one.Id) && organization.Members.Contains(two.Id))
+                organization.Members.Remove(two.Id);
     }
 
     private static string ADependencyIsABargainAboutPower()
@@ -9988,12 +10079,46 @@ public static class Program
 
         var topology = campaign.ProvinceMap;
         if (topology is null) return "there is no province map to redeploy across";
-        var destination = topology.Neighbors[traveller.ProvinceId]
+        bool Hostile(int province) =>
+            campaign.ProvinceController[province] is var holder && holder != 0 && holder != (ushort)player.MapIndex &&
+            campaign.Nations.Find(n => n.MapIndex == holder) is { } owner && CampaignDiplomacy.AtWar(campaign, player.Id, owner.Id) ||
+            campaign.Armies.Any(army => army.ProvinceId == province && army.NationId != player.Id &&
+                                        CampaignDiplomacy.AtWar(campaign, player.Id, army.NationId));
+        bool Near(int origin, int steps)
+        {
+            var seen = new HashSet<int> { origin };
+            var ring = new List<int> { origin };
+            for (var step = 0; step <= steps; step++)
+            {
+                if (ring.Any(Hostile)) return true;
+                ring = ring.SelectMany(p => topology.Neighbors[p]).Where(p => p > 0 && seen.Add(p)).ToList();
+            }
+            return false;
+        }
+        // Several steps out, so a short hop from the front is not mistaken for no hop at all.
+        var destination = 0;
+        {
+            // Outwards over our own ground, the first province at least three steps away that
+            // nothing hostile is near.
+            var seen = new HashSet<int> { traveller.ProvinceId };
+            var ring = new List<int> { traveller.ProvinceId };
+            for (var step = 1; step <= 40 && destination == 0 && ring.Count > 0; step++)
+            {
+                ring = ring.SelectMany(p => topology.Neighbors[p])
+                    .Where(p => p > 0 && campaign.ProvinceController[p] == (ushort)player.MapIndex && seen.Add(p)).ToList();
+                if (step >= 3) destination = ring.FirstOrDefault(p => !Near(p, 3));
+            }
+        }
+        var oldDestination = topology.Neighbors[traveller.ProvinceId]
             .SelectMany(step => topology.Neighbors[step])
             .SelectMany(step => topology.Neighbors[step])
             .FirstOrDefault(province => province > 0 &&
                 campaign.ProvinceController[province] == (ushort)player.MapIndex &&
-                province != traveller.ProvinceId);
+                province != traveller.ProvinceId &&
+                // Well behind the lines: a front moves, and a destination the enemy reaches the
+                // day the train arrives is a battle whose organisation would be counted as the
+                // train's. Nothing hostile within three provinces.
+                !Near(province, 3));
         if (destination <= 0) return "there is nowhere far enough to redeploy to";
 
         traveller.Organisation = 1f;
@@ -10010,7 +10135,16 @@ public static class Program
         var organisationBefore = traveller.Organisation;
         campaign.IsPaused = false;
         var railDays = 0;
-        for (; railDays < 6 && traveller.IsRedeploying; railDays++) campaign.TickDay();
+        for (; railDays < 6 && traveller.IsRedeploying; railDays++)
+        {
+            campaign.TickDay();
+            if (Environment.GetEnvironmentVariable("RAIL_TRACE") == "1")
+                Console.WriteLine($"  rail day {railDays + 1}: org {traveller.Organisation:0.000} order {traveller.OrderKind} " +
+                                  $"province {traveller.ProvinceId} redeploying {traveller.IsRedeploying} battle {traveller.InBattle} route {traveller.Route.Count} " +
+                                  string.Join(";", campaign.Battles.Where(x => !x.Ended && x.ProvinceId == traveller.ProvinceId)
+                                      .Select(x => $"battle {x.Id} war {x.WarId} attacker {campaign.Armies.Find(a => a.Id == x.AttackerId)?.NationId} defender {campaign.Armies.Find(a => a.Id == x.DefenderId)?.NationId}")) +
+                                  $" controller {campaign.ProvinceController[traveller.ProvinceId]} owner {campaign.ProvinceMap.ProvinceToNation[traveller.ProvinceId]}");
+        }
 
         if (traveller.Organisation >= organisationBefore)
             return "a week on the trains cost nothing in organisation, which makes it a better march";
@@ -11871,16 +12005,57 @@ public static class Program
         // And it has to stay that way: a snapshot that matches now and diverges on the next
         // step has carried the numbers and not the state behind them.
         client.IsPaused = false;
-        for (var day = 0; day < 10; day++) { host.TickDay(); client.TickDay(); }
-        if (CampaignFingerprint.Of(host) != CampaignFingerprint.Of(client))
-            return "the two worlds agreed at the moment of the snapshot and diverged within ten " +
-                   "days, so something the simulation reads is not in it: " + WhatDiffers(host, client);
+        if (Environment.GetEnvironmentVariable("SNAP_DIFF") == "1")
+            Console.WriteLine("  snapshot at the moment of sending: " + SnapshotDifferences(host, client));
+        for (var day = 0; day < 10; day++)
+        {
+            host.TickDay(); client.TickDay();
+            if (CampaignFingerprint.Of(host) == CampaignFingerprint.Of(client)) continue;
+            // The first day they part, and where: the saved worlds compared field by field.
+            return $"the two worlds agreed at the moment of the snapshot and diverged on day {day + 1}, " +
+                   "so something the simulation reads is not in it: " + WhatDiffers(host, client) +
+                   " | first differences: " + SnapshotDifferences(host, client);
+        }
 
         Console.WriteLine($"  snapshot: a world of {host.States.Count:N0} region(s) ({carved:N0} carved by " +
                           $"borders), {biased:N0} stability baselines and {readiness:N0} region(s) part-way " +
                           "to militia went over the wire and came back identical, and stayed identical for " +
                           "ten more days.");
         return "";
+    }
+
+    /// <summary>The first few paths at which two worlds' network snapshots differ.</summary>
+    private static string SnapshotDifferences(Campaign one, Campaign other)
+    {
+        static System.Text.Json.Nodes.JsonNode Read(Campaign campaign)
+        {
+            var wire = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
+            using var input = new MemoryStream(wire);
+            using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
+            return System.Text.Json.Nodes.JsonNode.Parse(gzip);
+        }
+        var found = new List<string>();
+        void Walk(System.Text.Json.Nodes.JsonNode a, System.Text.Json.Nodes.JsonNode b, string path)
+        {
+            if (found.Count >= 8) return;
+            if (System.Text.Json.Nodes.JsonNode.DeepEquals(a, b)) return;
+            if (a is System.Text.Json.Nodes.JsonObject oa && b is System.Text.Json.Nodes.JsonObject ob)
+            {
+                foreach (var key in oa.Select(pair => pair.Key).Union(ob.Select(pair => pair.Key)))
+                    Walk(oa[key], ob[key], path + "." + key);
+                return;
+            }
+            if (a is System.Text.Json.Nodes.JsonArray aa && b is System.Text.Json.Nodes.JsonArray ab && aa.Count == ab.Count)
+            {
+                for (var i = 0; i < aa.Count; i++) Walk(aa[i], ab[i], $"{path}[{i}]");
+                return;
+            }
+            var left = a?.ToJsonString() ?? "null";
+            var right = b?.ToJsonString() ?? "null";
+            found.Add($"{path}: {left[..Math.Min(60, left.Length)]} vs {right[..Math.Min(60, right.Length)]}");
+        }
+        Walk(Read(one), Read(other), "");
+        return found.Count == 0 ? "none in the snapshot itself" : string.Join("; ", found);
     }
 
     private static string PeersMustStepTheSameWay()

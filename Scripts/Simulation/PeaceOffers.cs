@@ -141,7 +141,8 @@ public static class PeaceOffers
                 .ToList();
             var rest = perState.Count - named.Count;
             if (rest > 0) named.Add($"and {rest:N0} more region(s)");
-            lines.Add($"They demand {demand.Provinces.Count:N0} province(s): {string.Join(", ", named)}.");
+            lines.Add(demand.ReleaseRegions ? Loc.Format("They require an independent country in {0}.", string.Join(", ", named))
+                : $"They demand {demand.Provinces.Count:N0} province(s): {string.Join(", ", named)}.");
         }
 
         var extras = new List<string>();

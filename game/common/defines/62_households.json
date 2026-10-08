@@ -1,0 +1,9 @@
+{
+  "HouseholdDynamicsEnabled": true,
+  "HouseholdEmploymentApproach": 0.08,
+  "HouseholdWealthApproach": 0.025,
+  "DemographyBirthBaseAnnual": 0.010,
+  "DemographyLowLiteracyBirthAnnual": 0.018,
+  "DemographyDeathBaseAnnual": 0.006,
+  "DemographyShortageDeathAnnual": 0.005
+}

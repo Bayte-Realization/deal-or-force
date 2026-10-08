@@ -487,7 +487,8 @@ public static class EventSystem
             var target = declareWarOn;
             if (target.Id != nation.Id)
                 CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id, warGoal,
-                    campaign.Homelands.TryGetValue(nation.Id, out var home) && home.Contains(warGoal) ? "reconquest"
+                    campaign.States.Find(s => s.MapIndex == warGoal) is { } home &&
+                    TerritorialClaims.TitleOf(campaign, nation, home) == TerritorialTitle.Homeland ? "reconquest"
                     // The secession question's own war, as it always was; an event file's war
                     // is justified - or not - the way any declaration is.
                     : option.DeclareWarOn != 0 && warGoal < 0 ? "secession" : null);

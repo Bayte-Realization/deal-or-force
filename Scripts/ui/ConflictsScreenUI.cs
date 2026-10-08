@@ -29,7 +29,8 @@ public partial class DealOrForceGame
     private int _conflictWar = -1;
     private int _conflictsBuiltDay = int.MinValue;
 
-    private static readonly string[] ConflictTabNames = { "Hot spots", "Wars and backers", "Our conflicts" };
+    private static readonly string[] ConflictTabNames = { "Hot spots", "Wars and backers", "Our conflicts", "Territorial disputes", "Organizations" };
+    private int _territoryRegion = -1, _territoryClaimant = -1;
 
     private void BuildConflictsScreen()
     {
@@ -41,6 +42,7 @@ public partial class DealOrForceGame
         _conflictsLayer.AddChild(shade);
 
         var panel = TexturedPanel(_conflictsLayer);
+        panel.Name = "ConflictsPanel";
         Ui.Place(panel, "modal.conflicts");
         var rows = PanelRows(panel, 22, 16, 9);
 
@@ -64,6 +66,10 @@ public partial class DealOrForceGame
             var captured = index;
             var tab = ActionButton(ConflictTabNames[index], () => { _conflictTab = captured; RefreshConflictsScreen(force: true); }, 0, 32);
             tab.Name = "ConflictTab" + index;
+            tab.Name = "ConflictTab" + index;
+            tab.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            tab.AddThemeFontSizeOverride("font_size", 13);
+            tab.ClipText = true; tab.TooltipText = Ui.Tip(Tr(ConflictTabNames[index]));
             _conflictTabs[index] = tab;
             tabs.AddChild(tab);
         }
@@ -74,7 +80,8 @@ public partial class DealOrForceGame
 
         var listScroll = new ScrollContainer
         {
-            CustomMinimumSize = new Vector2(560, 0), SizeFlagsVertical = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(430, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = .85f, SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
         body.AddChild(listScroll);
@@ -139,7 +146,9 @@ public partial class DealOrForceGame
         {
             case 0: ListTensions(hot); break;
             case 1: ListWars(wars); break;
-            default: ListOurs(hot, wars); break;
+            case 2: ListOurs(hot, wars); break;
+            case 3: ListTerritorialDisputes(); break;
+            default: ListOrganizations(); break;
         }
         ShowConflictPage();
     }
@@ -327,6 +336,8 @@ public partial class DealOrForceGame
     private void ShowConflictPage()
     {
         ClearRuntimeChildren(_conflictsPage);
+        if (_conflictTab == 3) { ShowTerritoryPage(); return; }
+        if (_conflictTab == 4) { ShowOrganizationPage(); return; }
         if (_conflictWar >= 0 && _campaign.Wars.FirstOrDefault(w => w.Id == _conflictWar && !w.Ended) is { } war)
         {
             ShowWarPage(war);

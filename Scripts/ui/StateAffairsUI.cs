@@ -314,7 +314,7 @@ public partial class DealOrForceGame
 
         StateSection(rows, "THE CABINET",
             "What the government is for this year. One priority at a time, each with a weekly cost and a " +
-            "systemic effect - and the AI governments of the world are choosing from the same list.");
+            "systemic effect - and every other government in the world is choosing from the same list.");
         _stateCabinetControls = new HBoxContainer
         {
             Visible = false,

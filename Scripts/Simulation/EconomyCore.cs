@@ -681,6 +681,7 @@ public static class EconomySystem
     /// </summary>
     public static void CalibrateOutput(Campaign campaign)
     {
+        foreach (var n in campaign.Nations) ProductionCapacity.Initialize(n);
         MarketSystem.Prime(campaign);
 
         foreach (var nation in campaign.Nations)
@@ -790,6 +791,15 @@ public static class EconomySystem
         using (SimProfiler.Measure("eco:market")) MarketSystem.Tick(campaign);
         foreach (var nation in campaign.Nations)
         {
+            // Empty map entities (e.g. the unclaimed Antarctic mask) are not economies.
+            // Their nominal placeholder GDP used to finance imaginary arms output forever.
+            if (nation.Movement is null && !campaign.HasOwnedLand(nation))
+            {
+                nation.Population = 0;
+                nation.Gdp = nation.GrossOutput = 0;
+                nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
+                continue;
+            }
             var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
             SovereignFinance.Prepare(campaign, nation);
             var weeklyOutput = nation.Gdp / 52f;
@@ -873,8 +883,13 @@ public static class EconomySystem
             // week reads as noise rather than as a trend the player can act on.
             if (nation.GrossOutput > 0f && nation.OutputScale > 0f)
             {
-                var target = nation.GrossOutput * 52f * nation.OutputScale;
-                nation.Gdp = MathF.Max(0.01f, M.Lerp(nation.Gdp, target, campaign.Defines.GdpConvergenceRate));
+                // Multiply in double: finite operands can overflow an intermediate float
+                // even when smoothing would conceal the initial source of corruption.
+                var target = nation.GrossOutput * 52d * nation.OutputScale;
+                var next = nation.Gdp + (target - nation.Gdp) * campaign.Defines.GdpConvergenceRate;
+                if (!double.IsFinite(target) || !double.IsFinite(next) || next > float.MaxValue || next < -float.MaxValue)
+                    throw new CampaignIntegrityException("country " + nation.Tag + ".Gdp from production");
+                nation.Gdp = (float)Math.Max(0.01, next);
             }
             var annualGrowth = conditions;
 
@@ -883,11 +898,13 @@ public static class EconomySystem
             using var stateScope = SimProfiler.Measure("eco:states");
             foreach (var state in states)
             {
-                var hospital = state.Buildings.GetValueOrDefault(BuildingKind.Hospital);
-                var weeklyGrowth = (0.0035f + (state.StandardOfLiving - 0.5f) * 0.006f + hospital * 0.0005f) / 52f;
-                var delta = (long)Math.Round(state.Population * weeklyGrowth);
-                state.Population = Math.Max(0, state.Population + delta);
-                GrowGroups(state, delta);
+                if (campaign.Defines.HouseholdDynamicsEnabled) HouseholdEconomy.Review(campaign, nation, state, annualGrowth);
+                else
+                {
+                    var hospital = state.Buildings.GetValueOrDefault(BuildingKind.Hospital);
+                    var weeklyGrowth = (0.0035f + (state.StandardOfLiving - .5f) * .006f + hospital * .0005f) / 52f;
+                    AdjustStatePopulation(state, (long)Math.Round(state.Population * weeklyGrowth));
+                }
                 state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
                 var welfareRadicalism = budget.Radicalism;
                 var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
@@ -1384,14 +1401,15 @@ public static class EconomySystem
     private static void GrowGroups(ScenarioState state, long delta)
     {
         if (state.PopulationGroups.Count == 0 || delta == 0) return;
-        var remaining = delta;
+        var total = state.PopulationGroups.Sum(g => g.Size);
+        long cumulative = 0, assigned = 0;
         for (var index = 0; index < state.PopulationGroups.Count; index++)
         {
-            var addition = index == state.PopulationGroups.Count - 1
-                ? remaining
-                : (long)Math.Round(delta * state.PopulationGroups[index].Size / (double)Math.Max(1, state.Population));
-            state.PopulationGroups[index].Size = Math.Max(0, state.PopulationGroups[index].Size + addition);
-            remaining -= addition;
+            cumulative += state.PopulationGroups[index].Size;
+            var through = index == state.PopulationGroups.Count - 1 ? state.Population :
+                (long)Math.Round(state.Population * (cumulative / (double)Math.Max(1, total)));
+            state.PopulationGroups[index].Size = Math.Max(0, through - assigned);
+            assigned = through;
         }
     }
 

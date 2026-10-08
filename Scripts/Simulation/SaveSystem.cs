@@ -70,10 +70,24 @@ public static class SaveSystem
         PropertyNameCaseInsensitive = true,
         WriteIndented = false,
         PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate,
-        NumberHandling = JsonNumberHandling.AllowReadingFromString
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        // Members still at a fresh object's value are not written (SaveDefaults).
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
+        {
+            Modifiers = { SaveDefaults.Modify }
+        }
     };
 
     private static readonly JsonSerializerOptions MetadataOptions = new(JsonOptions) { WriteIndented = true };
+
+    // A scenario is also an editable document. Its inspector deliberately protects all
+    // stored fields, including zero owners and empty colours; save-size elision belongs
+    // to campaign persistence, not to this complete authoring schema.
+    private static readonly JsonSerializerOptions ScenarioOptions = new(JsonOptions)
+    {
+        WriteIndented = true,
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
+    };
 
     /// <summary>The payload with line breaks and indentation: the format a text editor can
     /// be pointed at. The bulk of a long campaign is the history table, and that stays
@@ -125,7 +139,7 @@ public static class SaveSystem
         payload.Chronicle.Clear();
         payload.ScenarioTerritories = campaign.Nations.ToDictionary(n => n.Tag, n =>
             Enumerable.Range(1, campaign.ProvinceMap.ProvinceCount).Where(p => payload.ProvinceOwner[p] == n.MapIndex).ToArray());
-        return JsonSerializer.Serialize(payload, MetadataOptions);
+        return JsonSerializer.Serialize(payload, ScenarioOptions);
     }
 
     public static Campaign ImportScenarioJson(string json, string scenarioId, int expectedProvinceCount = 0,
@@ -197,6 +211,14 @@ public static class SaveSystem
         // console, the autosave - writes the same way without each having to be told.
         var text = campaign.Defines.SaveTextFormat;
         var payload = CampaignSave.Capture(campaign, modFingerprint);
+        var issues = NumericIntegrity.Inspect(payload);
+        if (campaign.SimulationFault.Length > 0) issues.Insert(0, campaign.SimulationFault);
+        if (issues.Count > 0)
+        {
+            campaign.IsPaused = true;
+            var diagnostic = TryWriteDiagnostic(root, payload, issues);
+            throw new CampaignIntegrityException(string.Join("; ", issues), diagnostic);
+        }
         var metadata = new SaveMetadata
         {
             Slot = slot,
@@ -231,6 +253,40 @@ public static class SaveSystem
             json = JsonSerializer.SerializeToUtf8Bytes(payload, options);
         }
         return new PreparedSave(root, slot, json, history, metadata, text);
+    }
+
+    /// <summary>Never a loadable save and never an overwrite of the last good slot.</summary>
+    public static string WriteDiagnosticSnapshot(string root, Campaign campaign, string issue)
+    {
+        if (campaign?.ProvinceMap is null) return "";
+        return TryWriteDiagnostic(root, CampaignSave.Capture(campaign, ""), new List<string> { issue });
+    }
+
+    private static string TryWriteDiagnostic(string root, CampaignSave payload, List<string> issues)
+    {
+        try
+        {
+            var folder = Path.Combine(Path.GetFullPath(root), "diagnostics");
+            Directory.CreateDirectory(folder);
+            var path = Path.Combine(folder, $"campaign_{payload.ElapsedDays}_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.diagnostic.json");
+            var options = new JsonSerializerOptions(JsonOptions)
+            { NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
+            using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+            JsonSerializer.Serialize(stream, new
+            {
+                Kind = "diagnostic-only; not a playable save",
+                SavedUtc = DateTime.UtcNow,
+                Issues = issues,
+                Campaign = payload
+            }, options);
+            DiagnosticLogs.Write("errors", $"CAMPAIGN_DIAGNOSTIC path={path} issues={string.Join(';', issues)}");
+            return path;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            DiagnosticLogs.Write("errors", "CAMPAIGN_DIAGNOSTIC_FAILED " + exception.Message);
+            return "";
+        }
     }
 
     /// <summary>How the frame's half of a save ends: the history's field, empty, closing the file.</summary>
@@ -638,6 +694,14 @@ public static class SaveSystem
 
         /// <summary>Who is backing whom in somebody else's war (ProxyWars). Absent in older saves.</summary>
         public List<Sponsorship> Sponsorships = new();
+        public List<InternationalOrganization> Organizations = new();
+        /// <summary>The ground each country first held, and which countries' falls are decided
+        /// (Movements). Neither was saved: a loaded campaign forgot every government in exile's
+        /// homeland, and a client's world parted from its host's within a day, because the
+        /// territorial titles and the tension they feed read this. Absent in older saves.</summary>
+        public Dictionary<int, List<int>> Homelands = new();
+        public List<int> Fallen = new();
+        public int NextOrganizationId = 1;
         public int NextSponsorshipId = 1;
 
         /// <summary>Who the world has agreed to contain. Notoriety rides along on the nations.</summary>
@@ -732,6 +796,10 @@ public static class SaveSystem
             Fleets = new List<Fleet>(campaign.Fleets),
             Wars = new List<StrategicWar>(campaign.Wars),
             Sponsorships = new List<Sponsorship>(campaign.Sponsorships),
+            Organizations = new List<InternationalOrganization>(campaign.Organizations),
+            Homelands = campaign.Homelands.ToDictionary(pair => pair.Key, pair => new List<int>(pair.Value)),
+            Fallen = campaign.Fallen.OrderBy(id => id).ToList(),
+            NextOrganizationId = campaign.NextOrganizationId,
             NextSponsorshipId = campaign.NextSponsorshipId,
             Coalitions = new List<Coalition>(campaign.Coalitions),
             FrontLines = new List<DrawnFrontLine>(campaign.FrontLines),
@@ -780,6 +848,12 @@ public static class SaveSystem
             Replace(campaign.Fleets, Fleets);
             Replace(campaign.Wars, Wars);
             Replace(campaign.Sponsorships, Sponsorships);
+            Replace(campaign.Organizations, Organizations ?? new());
+            campaign.Homelands.Clear();
+            foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
+            campaign.Fallen.Clear();
+            foreach (var id in Fallen ?? new()) campaign.Fallen.Add(id);
+            campaign.NextOrganizationId = Math.Max(NextOrganizationId, campaign.Organizations.Count == 0 ? 1 : campaign.Organizations.Max(o => o.Id) + 1);
             campaign.NextSponsorshipId = Math.Max(NextSponsorshipId,
                 campaign.Sponsorships.Count == 0 ? 1 : campaign.Sponsorships.Max(s => s.Id) + 1);
             Replace(campaign.Coalitions, Coalitions);

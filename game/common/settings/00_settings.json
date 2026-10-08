@@ -19,10 +19,10 @@
   "save_format": {
     "category": "game", "scope": "campaign", "order": 95, "kind": "choice",
     "name": "Save format",
-    "description": "Text saves open in any editor: change a number, load the campaign again, carry on - and there is no checksum to argue with. Compressed saves are smaller and quicker to write, which a five-year history written every month will notice.",
-    "values": ["true", "false"],
-    "labels": ["Text (editable)", "Compressed"],
-    "default": "true"
+    "description": "Compressed saves are a tenth of the size and quicker to write, which a century of history written every month will notice. Text saves open in any editor: change a number, load the campaign again, carry on - and there is no checksum to argue with.",
+    "values": ["false", "true"],
+    "labels": ["Compressed", "Text (editable)"],
+    "default": "false"
   },
   "autosave_interval": {
     "category": "game", "scope": "campaign", "order": 100, "kind": "choice",
@@ -32,10 +32,16 @@
     "labels": ["Never", "Weekly", "Monthly", "Quarterly", "Yearly"],
     "default": "30"
   },
+  "civil_wars_players": {
+    "category": "game", "scope": "campaign", "order": 104, "kind": "toggle",
+    "name": "Civil-war outbreaks in player countries",
+    "description": "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.",
+    "default": false
+  },
   "peace_by_provinces": {
     "category": "game", "scope": "campaign", "order": 105, "kind": "toggle",
     "name": "Peace by provinces",
-    "description": "Off: a peace treaty hands over whole regions only, so borders follow the map's regions. On: every treaty, the computer's as well as yours, takes exactly the provinces it names, and the border runs where the armies stopped. Regions cut in two stay cut.",
+    "description": "Off: a peace treaty hands over whole regions only, so borders follow the map's regions. On: every treaty, other governments' as well as yours, takes exactly the provinces it names, and the border runs where the armies stopped. Regions cut in two stay cut.",
     "default": false
   },
   "show_first_steps": {

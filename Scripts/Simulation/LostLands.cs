@@ -45,12 +45,10 @@ public static class LostLands
     public static List<(ScenarioState Region, Nation Holder)> Of(Campaign campaign, Nation nation)
     {
         var lost = new List<(ScenarioState, Nation)>();
-        if (campaign is null || nation is null || !campaign.Homelands.TryGetValue(nation.Id, out var homeland) ||
-            homeland.Count == 0) return lost;
-        var wanted = homeland.ToHashSet();
+        if (campaign is null || nation is null) return lost;
         foreach (var region in campaign.States)
         {
-            if (!wanted.Contains(region.MapIndex) || region.NationMapIndex == nation.MapIndex) continue;
+            if (TerritorialClaims.TitleOf(campaign, nation, region) != TerritorialTitle.Homeland || region.NationMapIndex == nation.MapIndex) continue;
             var holder = NavalOperations.NationAt(campaign, region.NationMapIndex);
             if (holder is null || holder.Id == nation.Id || holder.Population <= 0) continue;
             // Ground our own dependency holds is ours to dispose of already; ground our overlord
@@ -68,13 +66,16 @@ public static class LostLands
     /// </summary>
     public static float Weight(Campaign campaign, Nation nation, Nation other)
     {
-        if (campaign is null || nation is null || other is null ||
-            !campaign.Homelands.TryGetValue(nation.Id, out var homeland) || homeland.Count == 0) return 0f;
-        long people = 0;
+        if (campaign is null || nation is null || other is null) return 0f;
+        double people = 0;
         foreach (var region in campaign.StatesOf(other))
-            if (homeland.Contains(region.MapIndex)) people += region.Population;
+        {
+            var title = TerritorialClaims.TitleOf(campaign, nation, region);
+            if (title == TerritorialTitle.Homeland) people += region.Population;
+            else if (title == TerritorialTitle.Claim) people += region.Population * Math.Clamp(campaign.Defines.TerritorialClaimWeight, 0, 1);
+        }
         if (people <= 0 || other.AnswersTo(nation.Id) || nation.AnswersTo(other.Id)) return 0f;
-        return M.Clamp(people / 12_000_000f, 0f, 2.5f);
+        return M.Clamp((float)(people / 12_000_000), 0f, 2.5f);
     }
 
     /// <summary>Once a day: each human country on its own day of the cycle.</summary>
@@ -157,7 +158,7 @@ public static class LostLands
     /// <summary>Strike a region off a country's homeland: it is not theirs to claim any more.</summary>
     public static void Renounce(Campaign campaign, Nation nation, int regionMapIndex)
     {
-        if (campaign is null || nation is null || !campaign.Homelands.TryGetValue(nation.Id, out var homeland)) return;
-        if (homeland.Remove(regionMapIndex)) campaign.MarkStrategicChange();
+        if (campaign?.States.Find(s => s.MapIndex == regionMapIndex) is { } region)
+            TerritorialClaims.Renounce(campaign, nation, region);
     }
 }

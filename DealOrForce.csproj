@@ -11,7 +11,7 @@
       is the honest fix; a `Compile Remove` would leave Content and None still pointing at
       several hundred megabytes of output.
     -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);build\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;**\.kilo\**;**\.fennara\**;**\.git\**</DefaultItemExcludes>
   </PropertyGroup>
   <!--
     The editor plays the Debug build, and Debug means the optimiser is switched off. For a

@@ -59,7 +59,8 @@ public static class ProductionChains
     /// once here instead of being spelled out twenty times over in the data.
     /// </summary>
     private const int SlotTimberYield = 11;
-    private const int FixedSlots = 12;
+    private const int SlotProductionCapacity = 12;
+    private const int FixedSlots = 13;
 
     // Sized for what a mod might add rather than for what the enums name, because a good or
     // a building declared in data is a number past the last one the enum has a name for, and
@@ -390,6 +391,7 @@ public static class ProductionChains
             case "divisions_at_war": return SlotDivisionsAtWar;
             case "hulls": return SlotHulls;
             case "gdp": return SlotGdp;
+            case "production_capacity": return SlotProductionCapacity;
             case "arms_productivity": return SlotArmsProductivity;
         }
 
@@ -514,6 +516,7 @@ public static class ProductionChains
         slots[SlotDivisionsAtWar] = atWar ? divisions : 0f;
         slots[SlotHulls] = hulls;
         slots[SlotGdp] = nation.Gdp;
+        slots[SlotProductionCapacity] = ProductionCapacity.Of(nation);
         slots[SlotArmsProductivity] = M.Clamp(nation.Productivity, 0.55f, 1.55f);
         Run(National, nation, slots);
     }

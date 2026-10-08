@@ -24,7 +24,7 @@ public sealed class MovementDefinition
     public readonly List<string> Faiths = new();
     /// <summary>The region its headquarters stands in on the first day.</summary>
     public string Headquarters = "";
-    /// <summary>Regions it claims. An uprising anywhere its peoples live is allowed; these are what it wants.</summary>
+    /// <summary>Territorial homeland. Offices, sponsorship and diaspora presence do not extend it.</summary>
     public readonly List<string> Homeland = new();
     public readonly List<string> Traits = new();
     /// <summary>Countries that fund it, in billions a year, while they think well enough of it.</summary>

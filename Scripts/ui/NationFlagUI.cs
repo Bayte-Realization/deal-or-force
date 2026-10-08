@@ -29,6 +29,11 @@ public partial class DealOrForceGame
     /// larger than any panel draws it, so it is downsampled rather than stretched, and
     /// downsampling is the direction that looks fine.
     /// </summary>
+    /// <summary>The flag the interface shows for this country, for the map's own markers:
+    /// one answer everywhere, provisional flag included.</summary>
+    internal static Texture2D FlagTextureFor(string tag) => FlagTexture(tag);
+    internal static string FlagSpriteFor(string tag) => string.IsNullOrWhiteSpace(tag) ? "" : FlagSprite(tag, out _);
+
     private static Texture2D FlagTexture(string tag)
     {
         if (string.IsNullOrWhiteSpace(tag)) return null;

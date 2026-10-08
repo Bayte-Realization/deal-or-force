@@ -147,6 +147,8 @@ public partial class DealOrForceGame
             "Read the terms out in public. Three years of lost war support, stability and quiet anger.");
         AddPeaceTerm(terms, "truce", "Ten-year truce",
             "Neither side may declare on the other for a decade instead of five years.");
+        AddPeaceTerm(terms, "release", "Establish an independent country",
+            "Release the selected whole, connected regions as one independent country instead of annexing them. Treasury and debt are divided by population. The parent keeps other land and its homeland claims; independence cannot be combined with subjugation.");
 
         // One row for each kind in common/subjects, so a mod that adds an arrangement gets
         // a way to demand it without touching the interface. They exclude each other: a
@@ -303,6 +305,7 @@ public partial class DealOrForceGame
             case "demilitarise": _peaceDemand.Demilitarise = !_peaceDemand.Demilitarise; break;
             case "humiliate": _peaceDemand.Humiliate = !_peaceDemand.Humiliate; break;
             case "truce": _peaceDemand.LongTruce = !_peaceDemand.LongTruce; break;
+            case "release": _peaceDemand.ReleaseRegions = !_peaceDemand.ReleaseRegions; break;
             default:
                 if (key.StartsWith("subject:", StringComparison.Ordinal))
                 {
@@ -362,9 +365,11 @@ public partial class DealOrForceGame
     private void ProposeWrittenPeace()
     {
         if (_peaceDemand is null || _peaceWar is null) return;
-        if (PeaceConference.Resolve(_campaign, _peaceWar, _peaceDemand))
+        var command = WrittenPeaceCommand.From(_peaceDemand);
+        _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
+        if (command.Delivered)
         {
-            var summary = _peaceWar.PeaceSummary;
+            var summary = command.Note;
             ClosePeaceConference();
             SetArmyFeedback(summary);
             Refresh();
@@ -411,6 +416,7 @@ public partial class DealOrForceGame
             ? Simulation.Loc.Format("Treaty border: {0} provinces · {1} added, {2} released by region rounding.",
                 signed.Provinces.Count, added, removed)
             : Simulation.Loc.Format("Treaty border: {0} provinces, as drawn.", signed.Provinces.Count);
+        if (_peaceDemand.ReleaseRegions) _peaceBorderNote.Text += "\n" + Tr("Selected regions become independent, not your territory. Homeland claims are retained after a compelled release.");
 
         var block = PeaceConference.BlockReason(_campaign, _peaceWar, _peaceDemand);
         _peaceVerdict.Text = block.Length == 0
@@ -430,13 +436,16 @@ public partial class DealOrForceGame
                 "demilitarise" => _peaceDemand.Demilitarise,
                 "humiliate" => _peaceDemand.Humiliate,
                 "truce" => _peaceDemand.LongTruce,
+                "release" => _peaceDemand.ReleaseRegions,
                 _ => key.StartsWith("subject:", StringComparison.Ordinal) &&
                      string.Equals(_peaceDemand.Subjugate, key["subject:".Length..],
                          StringComparison.OrdinalIgnoreCase)
             });
 
         RefreshPeaceLedgerRows(signed);
-        _globe.SetPeacePreview(signed.Provinces, player.MapIndex);
+        // An independent state has no final map colour yet: do not misrepresent it as annexation.
+        if (signed.ReleaseRegions) _globe.ClearPeacePreview();
+        else _globe.SetPeacePreview(signed.Provinces, player.MapIndex);
     }
 
     private void RefreshPeaceLedgerRows(PeaceDemand signed)

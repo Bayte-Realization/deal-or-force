@@ -97,7 +97,20 @@ public static class CountryNames
             if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
             if (Loc.Has(key)) return Loc.Get(key);
         }
-        return map ? Resolve(nation, false) : Loc.Get(nation.Name);
+        if (map) return Resolve(nation, false);
+        // An armed opposition is named for what it wants and the country it wants it in:
+        // "rising:salvation_front:ETH" reads "National Salvation Front of Ethiopia" in the
+        // reader's own language, with the country's own translated name (CivilWarOutbreak).
+        if (nation.Name.StartsWith("rising:", StringComparison.Ordinal))
+        {
+            var parts = nation.Name.Split(':', 4);
+            if (parts.Length == 4)
+            {
+                var country = Loc.Has($"country.{parts[2]}.name") ? Loc.Get($"country.{parts[2]}.name") : Loc.Get(parts[3]);
+                return Loc.Format("rising." + parts[1], country);
+            }
+        }
+        return Loc.Get(nation.Name);
     }
 
     private static Dictionary<string, CityDefinition> _citiesByName;

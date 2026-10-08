@@ -645,14 +645,14 @@ public sealed partial class Campaign
     /// </summary>
     public void TickDay()
     {
-        if (IsPaused) return;
+        if (IsPaused || SimulationFault.Length > 0) return;
         var until = ElapsedDays + 1;
         for (var steps = 0; ElapsedDays < until && steps < 240; steps++) Tick();
     }
 
     public void Tick()
     {
-        if (IsPaused) return;
+        if (IsPaused || SimulationFault.Length > 0) return;
         DiagnosticLogs.SetDay(ElapsedDays);
         if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
@@ -713,6 +713,13 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             using (SimProfiler.Measure("alliances")) AllianceMaintenance.Tick(this);
             using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
+            // Before political actions read thresholds: comparisons with NaN can otherwise
+            // authorise every uprising. Do not let one bad economy contaminate the map.
+            if (ElapsedDays % 7 == 0 && NumericIntegrity.FirstLiveIssue(this) is { } invalid)
+            {
+                BlockSimulation(invalid);
+                throw new CampaignIntegrityException(invalid);
+            }
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
             using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
@@ -720,6 +727,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("factions")) Factions.Tick(this);
             using (SimProfiler.Measure("coups")) Coups.Tick(this);
             using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
+            using (SimProfiler.Measure("organizations")) InternationalOrganizations.Tick(this);
             using (SimProfiler.Measure("movements"))
             {
                 using (SimProfiler.Measure("  mov:rules")) MovementRules.Tick(this);
@@ -738,11 +746,14 @@ public sealed partial class Campaign
             // out on; it keeps its own weekly schedule, because it also has to clear its
             // report list on the days it does nothing.
             using (SimProfiler.Measure("secession")) SecessionEvents.Tick(this);
+            // And whether any country has lost its government's grip on part of itself.
+            using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
 
             // And whether any country has stopped being what it was. After secession
             // because a state that has just lost a province is a state in exactly the
             // condition this reads.
             using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
+            using (SimProfiler.Measure("domestic crises")) DomesticCrises.Tick(this);
 
             // Settlers on land nobody owns, and whether anybody new sets out for it.
             ColonisationCore.Tick(this);
@@ -1123,6 +1134,11 @@ public sealed partial class Campaign
     public void MarkMapChanged()
     {
         MapRevision++;
+        // The map is authoritative, including annexation by deals and peace. Waiting
+        // for a movement's staggered weekly update can make a landed country look exiled.
+        if (ProvinceMap is not null)
+            foreach (var n in Nations)
+                if (n.Movement is not null) MovementRules.SynchroniseTerritory(this, n);
         InterfaceDirty = true;
     }
 

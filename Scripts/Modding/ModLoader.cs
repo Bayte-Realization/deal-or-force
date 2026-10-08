@@ -182,6 +182,7 @@ public sealed class ModLoader
         DecisionCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
         ModifierCatalog.ResetCatalog();
+        InternationalOrganizations.ResetCatalog();
         OpinionCatalog.ResetCatalog();
         DemographyCatalog.ResetCatalog();
         AiStrategyCatalog.ResetCatalog();

@@ -706,7 +706,7 @@ public partial class DealOrForceGame
             (mine ? Tr("  ·  you are a belligerent") : "") +
             (war.CivilConflict ? "  ·  " + Simulation.Loc.Format("Civil conflict · escalation {0}", war.EscalationStage) : "");
         _warLedgerSummary.TooltipText = war.CivilConflict && !war.Ended
-            ? Ui.Tip(Simulation.Loc.Format("AI negotiations open in {0} days. Total defeat can still end the war; reserve mobilisation requires people and funds.",
+            ? Ui.Tip(Simulation.Loc.Format("Talks can open in {0} days. Total defeat can still end the war; reserve mobilisation requires people and funds.",
                 Math.Max(0, war.AiNegotiationUnlockDay - _campaign.ElapsedDays))) : "";
 
         Label Caption(string text) => RowLabel(text, 11, Ui.Colour("text.caption"));

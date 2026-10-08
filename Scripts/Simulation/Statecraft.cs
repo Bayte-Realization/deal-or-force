@@ -219,6 +219,7 @@ public static class Statecraft
     public static string CasusBelli(Campaign campaign, Nation attacker, Nation defender)
     {
         if (campaign is null || attacker is null || defender is null) return "";
+        if (TerritorialClaims.HoldsOurHomeland(campaign, attacker, defender)) return "reconquest";
         var relation = CampaignDiplomacy.Peek(campaign, attacker.Id, defender.Id);
 
         // They took something of ours, and we have not forgotten. The opinion system has
@@ -336,6 +337,9 @@ public static class Statecraft
         if (attacker is null || defender is null) return 0;
 
         Candidates.Clear();
+        if (!war.CivilConflict && !war.Limited)
+            foreach (var partner in InternationalOrganizations.DefencePartners(campaign, defender.Id))
+                if (partner != attacker.Id && !Candidates.Contains(partner)) Candidates.Add(partner);
         // A civil war is not what an alliance is for. The friends of either side back it -
         // money, weapons, volunteers (ProxyWars) - and only a state the side answers to, or
         // that answers to it, fights in it: the United States was not at war in Sudan, and a
@@ -384,6 +388,9 @@ public static class Statecraft
         {
             var friend = campaign.NationById(friendId);
             if (friend is null || friend.Population <= 0) continue;
+            // A human decides from the war/organization screen. Not answering an automatic
+            // AI call is not a refusal, and must not instantly punish their institutions.
+            if (friend.IsHuman) continue;
             var bond = CampaignDiplomacy.Get(campaign, friendId, defender.Id);
 
             if (WillAnswer(campaign, friend, defender, attacker, bond))
@@ -400,6 +407,9 @@ public static class Statecraft
             }
 
             // Refused. The alliance is over, and everybody knows why.
+            foreach (var org in InternationalOrganizations.Memberships(campaign, defender.Id))
+                if (org.Members.Contains(friendId) && InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
+                    org.Cohesion = Math.Max(0, org.Cohesion - .08f);
             if (bond.Stance == DiplomaticStance.Allied)
             {
                 bond.Stance = DiplomaticStance.Neutral;
@@ -470,6 +480,9 @@ public static class Statecraft
     {
         var result = new List<int>();
         if (campaign is null || war is null || war.Ended || !war.Involves(callerId)) return result;
+        if (!war.CivilConflict && !war.Limited && war.IsDefending(callerId))
+            foreach (var partner in InternationalOrganizations.DefencePartners(campaign, callerId))
+                if (!war.Involves(partner)) result.Add(partner);
         foreach (var relation in campaign.Relations.Values)
         {
             if (relation.A != callerId && relation.B != callerId) continue;
@@ -477,7 +490,7 @@ public static class Statecraft
             if (war.Involves(friendId)) continue;
             if (relation.Stance != DiplomaticStance.Allied && !relation.GuaranteedBy(friendId)) continue;
             if (campaign.NationById(friendId) is null) continue;
-            result.Add(friendId);
+            if (!result.Contains(friendId)) result.Add(friendId);
         }
 
         // And the dependencies that come when they are told to, which is most of what
@@ -579,6 +592,7 @@ public static class Statecraft
 
         var willingness = bond.Opinion / 100f;
         if (bond.Stance == DiplomaticStance.Allied) willingness += favour ? 0.25f : 0.55f;
+        if (!favour && InternationalOrganizations.DefencePartners(campaign, defender.Id).Contains(friend.Id)) willingness += .55f;
         if (bond.GuaranteedBy(friend.Id)) willingness += favour ? 0.15f : 0.45f;
         willingness += M.Clamp(friend.WarSupport - 0.5f, -0.4f, 0.4f);
         willingness += M.Clamp(friend.Stability - 0.5f, -0.3f, 0.3f);

@@ -248,7 +248,6 @@ public static class PeaceShape
         var winnerCultures = new HashSet<string>(
             (IEnumerable<string>)DemographyCatalog.PrimarySet(winner.Tag) ?? winner.FoundedCultures ?? new List<string>(),
             StringComparer.OrdinalIgnoreCase);
-        var homeland = campaign.Homelands.TryGetValue(winner.Id, out var home) ? home.ToHashSet() : new HashSet<int>();
         var winnerRegions = campaign.States.Where(state => state.NationMapIndex == winner.MapIndex).Select(state => state.MapIndex).ToHashSet();
         var anchors = Anchors(campaign, graph, winner, winnerRegions);
         var landlocked = !winnerRegions.Any(graph.Coastal.Contains);
@@ -260,7 +259,7 @@ public static class PeaceShape
             var held = provinces.Count(province => controllers[province] == (ushort)winner.MapIndex) / (float)provinces.Count;
             var goal = state.MapIndex == war.ClaimedStateMapIndex;
             var ours = CultureShare(state, winnerCultures);
-            var wasOurs = homeland.Contains(state.MapIndex);
+            var wasOurs = TerritorialClaims.TitleOf(campaign, winner, state) == TerritorialTitle.Homeland;
             if (!goal && held < defines.PeaceShapeOccupiedShare && !(wasOurs && held > 0f) && !(ours > 0.5f && held > 0.1f)) continue;
 
             var value = (state.Population / 1_000_000f + 0.15f) * (0.35f + held);

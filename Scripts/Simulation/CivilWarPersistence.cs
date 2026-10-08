@@ -16,6 +16,8 @@ public sealed partial class StrategicWar
 {
     public bool CivilConflict;
     public int EscalationStage;
+    /// <summary>Who put the peace that ended it, or -1 while it goes on.</summary>
+    public int PeaceProposerId = -1;
 }
 
 /// <summary>A prolonged civil conflict can mobilise reserves, not spawn endless free armies.</summary>

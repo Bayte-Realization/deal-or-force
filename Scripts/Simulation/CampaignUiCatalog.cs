@@ -51,7 +51,7 @@ public static class CampaignUiCatalog
     {
         ["Nation"] = new[] { "Overview", "Government", "Society" },
         ["Economy"] = new[] { "Budget", "Finance", "Market", "Construction" },
-        ["Laws"] = new[] { "National", "Regional", "Foreign", "Agendas", "Course" },
+        ["Laws"] = new[] { "National", "Regional", "Foreign", "Agendas", "Course", "Crises" },
         ["Region"] = new[] { "Overview", "Population", "Province" },
         ["Ledger"] = new[] { "Overview", "Economy", "Market", "Population", "Military", "Rankings", "Chronicle", "Vulnerabilities" },
         ["Decisions"] = new[] { "Decisions", "Formables", "Opportunities" }

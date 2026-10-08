@@ -10,6 +10,7 @@ static class MapAndPeaceRegressionTests
 
     public static void Run(ProvinceTopology source)
     {
+        MapIdentityRegressionTests.Run();
         Anchors(source);
         RomanSuccession(source);
         DecisivePeace(source);
@@ -132,6 +133,18 @@ static class MapAndPeaceRegressionTests
             "regional influence is weighted by actual residents, not minority approval alone");
         var authorised = c.States.First(s => c.Nations.Any(n => n.MapIndex == s.NationMapIndex && malta.Movement.RecognisedBy.Contains(n.Id)));
         Check(MovementReach.CanOperate(c, malta, authorised, m), "recognised humanitarian partners can receive missions abroad");
+        Check(!MovementReach.CanClaimTerritory(c, malta, authorised),
+            "permission for a humanitarian mission never grants state-founding rights");
+        Check(MovementReach.CanClaimTerritory(c, hamas, gaza), "an armed territorial movement may contest its authored homeland");
+        var jdl = c.NationByTag("JDL");
+        Check(c.States.Where(s => s.Population > 0).All(s => !MovementReach.CanClaimTerritory(c, jdl, s)),
+            "a diaspora lobby cannot become a scattered territorial state, even at its foreign headquarters");
+        var exile = c.NationByTag("PMR");
+        var remembered = c.States.First(s => TerritorialClaims.TitleOf(c, exile, s) == TerritorialTitle.Homeland);
+        exile.Movement = new MovementState { Id = MovementCatalog.ExileTemplate, Exile = true,
+            HeadquartersStateMapIndex = ukraine.MapIndex };
+        Check(MovementReach.CanClaimTerritory(c, exile, remembered) && !MovementReach.CanClaimTerritory(c, exile, ukraine),
+            "an exiled Transnistrian government keeps its real home, not every region hosting its office");
         authorised.StandardOfLiving = 1; authorised.WarDamage = 0;
         Check(MovementActions.Refusal(c, malta, "hospital", authorised.MapIndex, -1).Length > 0,
             "healthy regions cannot be farmed for field-hospital prestige");

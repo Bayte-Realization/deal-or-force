@@ -167,5 +167,6 @@
   "Region info": "Регион",
   "Open the region dossier for the lead division's position. ← Orders in its header, or Escape, brings the orders back.": "Открыть досье региона, где стоит ведущая дивизия. «← Приказы» в его заголовке или Esc возвращают к приказам.",
   "← Orders": "← Приказы",
-  "Back to the orders of the divisions this dossier was opened from (Esc).": "Назад к приказам дивизий, из которых открыто это досье (Esc)."
+  "Back to the orders of the divisions this dossier was opened from (Esc).": "Назад к приказам дивизий, из которых открыто это досье (Esc).",
+  "Compressed saves by default · F5 quicksave · F9 quickload": "По умолчанию сохранения сжаты · F5 — быстро сохранить · F9 — загрузить"
 }

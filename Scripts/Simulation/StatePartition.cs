@@ -131,10 +131,11 @@ public static class StatePartition
         {
             // Whole, but possibly under a new flag.
             var owner = topology.ProvinceToNation[provinces[0]];
+            state.Unclaimed = owner == 0 && !LakeRegions.IsWaterState(state);
             if (state.NationMapIndex != owner)
             {
                 state.NationMapIndex = owner;
-                state.NationId = campaign.Nations.Find(nation => nation.MapIndex == owner)?.Tag ?? state.NationId;
+                state.NationId = campaign.Nations.Find(nation => nation.MapIndex == owner)?.Tag ?? "";
             }
             return Array.Empty<ScenarioState>();
         }
@@ -166,6 +167,7 @@ public static class StatePartition
 
         // The parent keeps its piece and whatever flag flies over it.
         var parentOwner = topology.ProvinceToNation[pieces[parentIndex][0]];
+        state.Unclaimed = parentOwner == 0 && !LakeRegions.IsWaterState(state);
         if (state.NationMapIndex != parentOwner)
         {
             state.NationMapIndex = parentOwner;
@@ -315,11 +317,18 @@ public static class StatePartition
         float Blend(float left, float right) =>
             total <= 0 ? MathF.Max(left, right) : (left * here + right * there) / total;
 
+        if (parent.ResidentAwareness >= 0f || child.ResidentAwareness >= 0f)
+            parent.ResidentAwareness = Blend(ResidentAwareness.Of(campaign, parent), ResidentAwareness.Of(campaign, child));
         parent.Literacy = Blend(parent.Literacy, child.Literacy);
         parent.StandardOfLiving = Blend(parent.StandardOfLiving, child.StandardOfLiving);
         parent.Radicalism = Blend(parent.Radicalism, child.Radicalism);
         parent.Urbanization = Blend(parent.Urbanization, child.Urbanization);
+        parent.NonBuildingJobs = parent.NonBuildingJobs < 0 || child.NonBuildingJobs < 0 ? -1 : parent.NonBuildingJobs + child.NonBuildingJobs;
         parent.Population = total;
+        foreach (var tag in child.CoreTags)
+            if (!parent.CoreTags.Contains(tag, StringComparer.OrdinalIgnoreCase)) parent.CoreTags.Add(tag);
+        foreach (var tag in child.Claims)
+            if (!parent.Claims.Contains(tag, StringComparer.OrdinalIgnoreCase)) parent.Claims.Add(tag);
 
         foreach (var group in child.PopulationGroups)
         {
@@ -416,7 +425,8 @@ public static class StatePartition
         {
             MapIndex = mapIndex,
             NationMapIndex = owner,
-            NationId = nation?.Tag ?? parent.NationId,
+            NationId = nation?.Tag ?? "",
+            Unclaimed = owner == 0 && !LakeRegions.IsWaterState(parent),
             Id = $"{parent.Id}_{mapIndex}",
             Name = name,
             Iso = $"{parent.Iso}-{mapIndex}",
@@ -427,9 +437,17 @@ public static class StatePartition
             Literacy = parent.Literacy,
             StandardOfLiving = parent.StandardOfLiving,
             Radicalism = parent.Radicalism,
+            ResidentAwareness = parent.ResidentAwareness,
             Urbanization = parent.Urbanization
         };
 
+        carved.CoreTags.AddRange(parent.CoreTags);
+        if (parent.NonBuildingJobs >= 0)
+        {
+            carved.NonBuildingJobs = parent.NonBuildingJobs * share;
+            parent.NonBuildingJobs -= carved.NonBuildingJobs;
+        }
+        carved.Claims.AddRange(parent.Claims);
         var population = (long)MathF.Round(parent.Population * share);
         carved.Population = Math.Min(population, parent.Population);
         parent.Population -= carved.Population;

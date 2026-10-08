@@ -1,0 +1,17 @@
+{
+  "campaign": {
+    "screens": {
+      "Laws": {
+        "tabs": [
+          {"id": "National", "label": "Internal tab"},
+          {"id": "Regional", "label": "Regional tab"},
+          {"id": "Foreign", "label": "External tab"},
+          {"id": "Agendas", "label": "Promises"},
+          {"id": "Course", "label": "Course tab"},
+          {"id": "Crises", "label": "Domestic situation"}
+        ]
+      }
+    }
+  },
+  "metrics": {"crises.regions_shown": 40}
+}

@@ -89,6 +89,22 @@ public static class CampaignFingerprint
             Mix(r.TensionStage); Mix(r.LastIncidentDay); Mix(r.TalksUntilDay); Mix(r.LastTalksDay);
         }
         // Who is arming whom in other people's wars (ProxyWars).
+        Mix(campaign.NextOrganizationId);
+        foreach (var o in campaign.Organizations.OrderBy(o => o.Id))
+        {
+            Mix(o.Id); Mix(o.FounderId); Mix(o.FoundedDay); Mix(o.LastReviewDay); Mix(o.NextMotionId);
+            MixText(o.Name); MixText(o.GeneratedCountryTag); MixText(o.CharterId); MixFloat(o.Budget); MixFloat(o.Cohesion); Mix(o.Dissolved ? 1 : 0);
+            MixText(o.LastOutcome); Mix(o.LastYes); Mix(o.LastVoters);
+            foreach (var member in o.Members.OrderBy(id => id)) Mix(member); Mix(-20);
+            foreach (var invitation in o.Invitations.OrderBy(id => id)) Mix(invitation); Mix(-21);
+            foreach (var unpaid in o.UnpaidWeeks.OrderBy(p => p.Key)) { Mix(unpaid.Key); Mix(unpaid.Value); } Mix(-22);
+            if (o.Motion is { } m)
+            {
+                Mix(m.Id); Mix(m.ProposerId); Mix(m.TargetId); Mix(m.EndsDay); MixText(m.Kind); MixFloat(m.Amount);
+                foreach (var v in m.Votes.OrderBy(v => v.Key)) { Mix(v.Key); Mix(v.Value ? 1 : 0); }
+            }
+            Mix(-23);
+        }
         Mix(campaign.Sponsorships.Count); Mix(campaign.NextSponsorshipId);
         foreach (var s in campaign.Sponsorships)
         {
@@ -132,7 +148,17 @@ public static class CampaignFingerprint
             foreach (var conviction in course.Convictions.OrderBy(p => p.Key, StringComparer.Ordinal))
             { MixText(conviction.Key); MixFloat(conviction.Value); }
             Mix(-12);
+            var crisis = nation.DomesticCrisis ?? new DomesticCrisisState();
+            MixFloat(crisis.CoupPressure); Mix(crisis.DaysAboveThreshold); Mix(crisis.LastReviewDay);
+            Mix(crisis.CooldownUntilDay); MixText(crisis.LastOutcomeId); Mix(crisis.LastOutcomeDay);
+            MixText(crisis.ResponseId); Mix(crisis.ResponseUntilDay); Mix(crisis.ResponseCooldownUntilDay);
+            Mix(nation.CoupPlotDay); Mix(nation.LastCoupDay);
+            foreach (var origin in nation.RenouncedTerritoryOrigins.OrderBy(id => id)) Mix(origin);
+            Mix(-17);
             MixFloat(nation.Gdp);
+            Mix(nation.ProductionReferenceInitialized ? 1 : 0);
+            MixFloat(nation.ProductionReferenceGdp); Mix(nation.ProductionReferencePopulation);
+            Mix(nation.LastCivilWarDay);
             MixFloat(nation.Stability);
             // What the country is beyond its conditions, and how it has been governed. Both
             // feed stability, and a world that disagrees about them is a world whose
@@ -143,6 +169,7 @@ public static class CampaignFingerprint
             MixFloat(nation.ManpowerReserve);
             // When it last came apart, which is what decides whether it may again.
             Mix(nation.LastSecessionDay);
+            Mix(nation.LastCivilWarDay);
             Mix(nation.AssessedDay); MixFloat(nation.AssessedStrength);
             MixText(nation.RememberedInstitutions); Mix(nation.InstitutionAgeDays);
             Mix(nation.LastInstitutionReviewDay); Mix(nation.LastSocialReviewDay);
@@ -168,9 +195,23 @@ public static class CampaignFingerprint
         foreach (var state in Ordered(campaign.States, state => state.MapIndex))
         {
             Mix(state.MapIndex);
+            Mix(state.Population); MixFloat(state.StandardOfLiving); MixFloat(state.Radicalism); MixFloat(state.WarDamage);
+            MixFloat(state.NonBuildingJobs); Mix(state.LastHouseholdReviewDay); Mix(state.ReviewBirths); Mix(state.ReviewDeaths);
+            MixFloat(state.BasicNeedsCoverage); MixFloat(state.EmploymentTarget); MixFloat(state.LivelihoodStress);
+            foreach (var group in state.PopulationGroups)
+            {
+                MixText(group.Culture); MixText(group.Religion); MixText(group.Profession); Mix((int)group.Class); Mix((int)group.Sector);
+                Mix(group.Size); MixFloat(group.Employment); MixFloat(group.Wealth); MixFloat(group.StandardOfLiving); MixFloat(group.Radicalism);
+            }
+            Mix(-20);
             MixFloat(state.SecessionPressure);
+            MixFloat(state.ResidentAwareness);
             Mix(state.RememberedOwner); Mix(state.SettledBorderDays); Mix(state.LastBorderReviewDay);
             MixFloat(state.BorderHabit);
+            foreach (var tag in state.CoreTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) MixText(tag);
+            Mix(-18);
+            foreach (var tag in state.Claims.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) MixText(tag);
+            Mix(-19);
         }
         foreach (var army in Ordered(campaign.Armies, army => army.Id))
         {

@@ -139,6 +139,24 @@ capital and `FactionTakeOverShare` of its ground takes the state: every province
 seat and its colour. The government's other wars end; the government itself falls the way any
 country that loses its last ground does - into exile, or gone (`MovementFall`).
 
+## How the computer goes to war, and keeps its army (`AiStatecraft`, `Attrition`, `FrontManager`, `ThreatPosture`)
+
+- **No war without a reason.** A government nobody plays declares a war of its own only with a
+  casus belli: land it lost, its own people across the border, an ally under attack, a
+  refused ultimatum (`AiNeedsCauseForWar`). Without one the war stays a plan - built for, the
+  target's friends worked on.
+- **Deal or force.** Before such a war it demands the region it has a case for - its own people's,
+  or one it lost - by ultimatum (`AiUltimatumsBeforeWar`, once a year per target). A neighbour
+  that cannot face it hands the region over; a refusal is the reason for the war.
+- **Mobilisation.** At war an army grows to what its front needs (`ArmyWarDivisionsPerPost`,
+  up to `ArmyWarCeiling` times the peacetime army); a country being overrun raises several
+  formations at once and on credit (`ArmyWarCeilingOverrun`, `ArmyEmergencyRaises`).
+- **Holes in the line.** The front staff fills a post nobody holds from the war's free reserve,
+  and a hole with the enemy beside it from an advance (`FrontHoleAdvanceNeed`).
+- **At peace,** once a month, a country weighs its neighbours - tension, hostility, rivalry,
+  their strength against ours - and keeps a share of its army on the borders it fears
+  (`ThreatPosture*`), moving a few divisions at a time.
+
 ## Tuning
 
 | define | default | what it does |

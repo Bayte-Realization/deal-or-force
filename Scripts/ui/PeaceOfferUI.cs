@@ -100,7 +100,7 @@ public partial class DealOrForceGame
             : $"They will wait {days:N0} more day(s); after that the offer lapses.";
 
         // The ground they are asking for, in their colours, on the map behind the panel.
-        if (war.PendingOfferIsWritten && war.PendingOffer is not null && proposer is not null)
+        if (war.PendingOfferIsWritten && war.PendingOffer is { ReleaseRegions: false } && proposer is not null)
             _globe.SetPeacePreview(war.PendingOffer.Provinces, proposer.MapIndex);
         else
             _globe.ClearPeacePreview();

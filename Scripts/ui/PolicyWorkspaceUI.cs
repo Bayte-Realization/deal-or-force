@@ -40,7 +40,7 @@ public partial class DealOrForceGame
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
         header.AddChild(ActionButton("My country", () => OpenScreen("Nation"), 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_nation.png"));
-        header.AddChild(HandbookButton("laws"));
+        header.AddChild(HandbookButton("domestic_crises"));
         var close = ActionButton("×", ClosePolicyWorkspace, 38, 32);
         close.Name = "ClosePolicyWorkspace"; close.TooltipText = Ui.Tip(Tr("Close")); header.AddChild(close);
         _policySummary = Title("", 13, Ui.Colour("text.body_soft")); rows.AddChild(_policySummary);
@@ -51,6 +51,8 @@ public partial class DealOrForceGame
             var button = ActionButton(tab.Label, () => SelectPolicyTab(id), 0, 34,
                 iconPath: "res://game/gfx/interface/icons/icon_" + (id == "Course" || id == "Agendas" ? "agenda" : "laws") + ".png");
             button.Name = "PolicyTab_" + id; button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            button.AddThemeFontSizeOverride("font_size", 12);
+            button.ClipText = true; button.TooltipText = Ui.Tip(Tr(tab.Label));
             tabs.AddChild(button); _policyTabs[id] = button;
         }
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -150,6 +152,12 @@ public partial class DealOrForceGame
     {
         if (_policyLayer is not { Visible: true } || _campaign?.Player is null) return;
         ClearPolicyRows(_policyList);
+        if (_policyTab == "Crises")
+        {
+            _policySearch.PlaceholderText = Tr("Find a governed region...");
+            ShowDomesticCrisisWorkspace(); return;
+        }
+        _policySearch.PlaceholderText = Tr("Find a law or category...");
         if (_policyTab == "Course")
         {
             _policyList.AddChild(Title("ACCUMULATED EXPERIENCE", 13, Ui.Colour("text.caption")));
@@ -182,6 +190,7 @@ public partial class DealOrForceGame
         // Do not tear down focused controls on every simulation frame.
         if (_policyBuiltDay == _campaign.ElapsedDays) return;
         _policyBuiltDay = _campaign.ElapsedDays;
+        if (_policyTab == "Crises") { ShowDomesticCrisisWorkspace(); return; }
         if (_policyTab == "Course")
         {
             var scroll = _policyOptionsScroll.ScrollVertical;

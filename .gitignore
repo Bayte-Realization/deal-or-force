@@ -23,6 +23,7 @@ obj/
 # per-machine, not shipped with the project. See README -> "Установка".
 addons/
 .fennara/
+.kilo/
 .vs/
 .vscode/
 .idea/

@@ -168,10 +168,12 @@ public static class CampaignDiplomacy
             return false;
         }
         if (AtWar(campaign, attackerId, defenderId)) { reason = Loc.Get("Already at war."); return false; }
-        var relation = Get(campaign, attackerId, defenderId);
-        if (relation.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }
-        if (relation.NonAggressionPact) { reason = Loc.Get("A non-aggression pact is active."); return false; }
-        if (relation.TruceUntil > campaign.ElapsedDays) { reason = Loc.Format("Truce: {0} days remain.", relation.TruceUntil - campaign.ElapsedDays); return false; }
+        var relation = Peek(campaign, attackerId, defenderId);
+        if (relation?.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }
+        if (relation?.NonAggressionPact == true) { reason = Loc.Get("A non-aggression pact is active."); return false; }
+        if (relation?.TruceUntil > campaign.ElapsedDays) { reason = Loc.Format("Truce: {0} days remain.", relation.TruceUntil - campaign.ElapsedDays); return false; }
+        if (InternationalOrganizations.DefencePartners(campaign, attackerId).Contains(defenderId))
+        { reason = Loc.Get("Leave the shared collective-defence organization first."); return false; }
         if (attacker.IsSubject)
         {
             // A country that answers to another one does not have a foreign policy of its

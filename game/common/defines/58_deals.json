@@ -1,0 +1,11 @@
+{
+  "Features": { "deals": true },
+  "DealMaxRegions": 8,
+  "DealMaxTreasuryShare": 1.0,
+  "DealGrudgeOpinion": -25.0,
+  "DealGrudgePenalty": 15.0,
+  "DealSettlementTruceDays": 180,
+  "DealKinRegionWeight": 1.8,
+  "DealHomelandRegionWeight": 1.5,
+  "DealClaimRegionWeight": 1.2
+}

@@ -45,6 +45,11 @@ static class InterfaceIconTests
         Check(PoliticalPolicyCatalog.AllLaws.Concat(PoliticalPolicyCatalog.AllAgendas).All(p =>
             !string.IsNullOrWhiteSpace(p.Description) && SpriteCatalog.Has("icon_" + p.Icon)),
             "every vanilla law and promise has an explanation and an existing sprite");
+        Check(NationalCourseCatalog.All.All(p => SpriteCatalog.Has("icon_" + p.Icon)),
+            "every organic national course resolves an actual icon, including postwar renewal");
+        Check(SpriteCatalog.Has("icon_" + CampaignUiCatalog.ActionIcon("Review deal")) &&
+            SpriteCatalog.Has("icon_" + CampaignUiCatalog.ActionIcon("Confirm response")),
+            "new deal and crisis actions use existing semantic artwork without doubled prefixes");
         using (var actionDocument = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
             Path.Combine(GameDataLoader.DataFolder(), "gui", "31_action_icons.json"))))
         {

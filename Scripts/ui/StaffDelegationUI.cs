@@ -32,6 +32,20 @@ public partial class DealOrForceGame
             "The general staff raises a formation when the army falls below what the military budget pays for, " +
             "and stands one down after a peace that leaves too many - at your treasury's cost, in your most " +
             "populous region. Take it into your own hands and nothing is raised or disbanded unless you do it."),
+        (Delegation.Command, "The general staff commands the free army", "Let the general staff command the free army",
+            "Hand the formations you have not given orders to the general staff - the one that commands every " +
+            "other country's army. At peace it keeps them where a country keeps its army: the capital, the " +
+            "largest regions and the borders worth watching. At war it fills the holes in your lines from the " +
+            "free reserve, and moves a formation that is starving to ground its supply can reach. It never " +
+            "touches a front you drew or an order you gave. Take it back whenever you like."),
+        (Delegation.Diplomacy, "The foreign ministry runs our relations", "Let the foreign ministry run our relations",
+            "Hand day-to-day diplomacy to the foreign ministry: once a week it does what every other " +
+            "government does with its neighbours - courts friends, cools towards rivals, asks for and gives " +
+            "alliances and guarantees. It never declares a war and never signs a peace; those stay yours."),
+        (Delegation.Cabinet, "The cabinet takes decisions", "Let the cabinet take decisions",
+            "Hand the decisions to the cabinet: once a month it takes the one decision the computer's own " +
+            "governments would take in your place, when one is worth its cost. A decision cannot be undone, " +
+            "so this is the switch to think about before you flip it."),
         (Delegation.Navy, "The admiralty commands the navy", "Let the admiralty command the navy",
             "Hand every fleet to the admiralty - the staff that commands every other country's navy. " +
             "At peace it keeps them in port; at war it blockades, raids or escorts by who has the " +
@@ -46,6 +60,14 @@ public partial class DealOrForceGame
         var nation = _campaign?.Player;
         if (nation is null) return;
         rows.AddChild(Title("THE STAFF", 11, Ui.Colour("text.caption")));
+        // Everything at once, either way: the switch most players actually want.
+        var allHeld = System.Linq.Enumerable.All(StaffPortfolios, entry => Delegation.Holds(nation, entry.Portfolio));
+        var everything = ActionButton(allHeld ? "Take everything back" : "Hand everything to the staff", () =>
+        {
+            foreach (var (portfolio, _, _, _) in StaffPortfolios) DelegatePortfolio(portfolio, !allHeld);
+        }, 0, 32);
+        everything.TooltipText = Ui.Tip(Tr("Every portfolio below at once. Each can still be taken back on its own."));
+        rows.AddChild(everything);
         foreach (var (portfolio, on, off, tooltip) in StaffPortfolios)
         {
             var held = Delegation.Holds(nation, portfolio);

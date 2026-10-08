@@ -171,6 +171,11 @@ public static class WarNames
         if (war.Name.Length > 0 && Loc.Has(war.Name)) return Loc.Get(war.Name);
         var attacker = campaign?.NationById(war.AttackerId);
         var defender = campaign?.NationById(war.DefenderId);
+        // A war against a rising of the country's own people is that country's civil war.
+        var rising = attacker?.Name.StartsWith("rising:", StringComparison.Ordinal) == true ? defender
+            : defender?.Name.StartsWith("rising:", StringComparison.Ordinal) == true ? attacker : null;
+        if (rising is not null && war.CivilConflict)
+            return Loc.Format("{0} Civil War", rising.DisplayName);
         if (attacker is not null && defender is not null &&
             (war.Name.Length == 0 || war.Name == $"{attacker.Name}–{defender.Name} War"))
             return Loc.Format("{0}–{1} War", attacker.DisplayName, defender.DisplayName);

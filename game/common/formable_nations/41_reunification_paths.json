@@ -1,0 +1,14 @@
+// The reunifications and kin unions that can be signed rather than fought: the computer
+// proposes them when both governments are willing (PeacefulFormationAi), and a player can.
+{
+  "moldova_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "georgia_restored": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "cyprus_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "somalia_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "yemen_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "libya_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "sudan_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "palestine_united": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "serbia_montenegro": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "united_albania": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true}
+}

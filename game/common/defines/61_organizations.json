@@ -1,0 +1,4 @@
+{"Features":{"organizations":true}, "FeatureCommands":{"OrganizationCommand":"organizations"},
+ "OrganizationFoundingDeposit":0.25, "OrganizationMembershipLimit":6,
+ "AiMayFoundOrganizations":true, "AiOrganizationWorldLimit":28,
+ "OrganizationArrearsCohesionLoss":0.012, "OrganizationDepartureTruceDays":180}

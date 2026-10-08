@@ -1,0 +1,6 @@
+{
+  "transitions": {
+    "military_coup": { "crisis": "coup" },
+    "quiet_coup": { "crisis": "coup" }
+  }
+}

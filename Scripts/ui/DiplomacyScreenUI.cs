@@ -46,6 +46,7 @@ public partial class DealOrForceGame
     private Button _diplomacyGuaranteeButton = null!;
     private Button _diplomacyWarButton = null!;
     private Button _diplomacyUltimatumButton = null!;
+    private Button _diplomacyDealButton = null!;
     private Button _diplomacyPeaceButton = null!;
     private Button _diplomacyTradeButton = null!;
     private Button _diplomacyPactButton = null!;
@@ -115,6 +116,8 @@ public partial class DealOrForceGame
         ownCountry.Name = "DiplomacyMyCountry";
         ownCountry.TooltipText = Ui.Tip(Tr("Open your own country's diplomacy dossier."));
         header.AddChild(ownCountry);
+        header.AddChild(ActionButton("Organizations", () => { CloseDiplomacyScreen(); _conflictTab = 4; OpenScreen("Conflicts"); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png"));
         header.AddChild(HandbookButton("diplomacy"));
         header.AddChild(ActionButton("×", CloseDiplomacyScreen, 38, 32));
 
@@ -227,6 +230,11 @@ public partial class DealOrForceGame
             () => ToggleAgreement(AgreementKind.TradeAgreement, DiplomacyTarget(), _diplomacyFeedback));
         _diplomacyPactButton = AddDiplomacyAction("AGREEMENTS", "Non-aggression pact",
             () => ToggleAgreement(AgreementKind.NonAggressionPact, DiplomacyTarget(), _diplomacyFeedback));
+        _diplomacyDealButton = AddDiplomacyAction("AGREEMENTS", "Propose a deal",
+            ConfirmOrProposeDeal);
+        _diplomacyDealButton.Name = "ProposeDealWide";
+        _diplomacyDealButton.TooltipText = Ui.Tip(Tr(
+            "Lay a table both sides put something on: cash, provinces, promises. Review before sending."));
         _diplomacyAidButton = AddDiplomacyAction("AGREEMENTS", "Send aid",
             () => SendAidTo(DiplomacyTarget(), _diplomacyFeedback));
         _diplomacyEmbargoButton = AddDiplomacyAction("AGREEMENTS", "Embargo",
@@ -758,6 +766,9 @@ public partial class DealOrForceGame
                 _ => Ui.Colour("text.caption")
             })));
 
+        // ---- what they are in: wars, blocs, backers, claims (DiplomacyStandingUI).
+        AddWorldStanding(nation, Field, Text, Bar);
+
         // ---- the balance of power: a sentence, then each weight as a bar of ours against theirs.
         var mine = DiplomacyStrength(player);
         var theirs = DiplomacyStrength(nation);
@@ -925,78 +936,7 @@ public partial class DealOrForceGame
             readouts.AddChild(readout);
         }
 
-        var allies = AllianceSystem.AlliesOf(_campaign, player);
-        field("ALLIES", "", null).AddChild(DiplomacyChips(allies, Tr("No alliance binds us.")));
-        var subjects = SubjectSystem.SubjectsOf(_campaign, player);
-        if (subjects.Count > 0)
-            field("SUBJECTS", "", null).AddChild(DiplomacyChips(subjects, ""));
-        var guaranteed = _campaign.Nations
-            .Where(other => other.Id != player.Id &&
-                            CampaignDiplomacy.Peek(_campaign, player.Id, other.Id) is { } tie && tie.GuaranteedBy(player.Id))
-            .ToList();
-        if (guaranteed.Count > 0)
-            field("WE HAVE PROMISED TO DEFEND", "", null).AddChild(DiplomacyChips(guaranteed, ""));
-        // And the other way round, which is often the more important half: South Korea has no
-        // alliance on this screen and the United States' promise to fight for it.
-        var guarantors = _campaign.Nations
-            .Where(other => other.Id != player.Id &&
-                            CampaignDiplomacy.Peek(_campaign, player.Id, other.Id) is { } tie && tie.GuaranteedBy(other.Id))
-            .ToList();
-        if (player.IsSubject && _campaign.NationById(player.OverlordId) is { } overlord &&
-            SubjectCatalog.Of(player.SubjectType) is { OverlordDefends: true } && !guarantors.Contains(overlord))
-            guarantors.Add(overlord);
-        if (guarantors.Count > 0)
-            field("PROMISED TO DEFEND US", "", null).AddChild(DiplomacyChips(guarantors, ""));
-
-        // The standoffs we are in, hottest first: what is likeliest to become our next war.
-        var standoffs = Escalation.Hottest(_campaign, 25f)
-            .Where(relation => relation.A == player.Id || relation.B == player.Id)
-            .Take(4).ToList();
-        if (standoffs.Count > 0)
-        {
-            var hot = field("STANDOFFS", "", null);
-            foreach (var relation in standoffs)
-            {
-                var other = _campaign.NationById(relation.A == player.Id ? relation.B : relation.A);
-                if (other is null) continue;
-                var stage = (Simulation.TensionStage)relation.TensionStage;
-                var row = new HBoxContainer();
-                row.AddThemeConstantOverride("separation", 8);
-                row.AddChild(FlagBadge(other.Tag, 18));
-                var name = text(other.DisplayName, 13, Ui.Colour("text.bright"));
-                name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-                row.AddChild(name);
-                row.AddChild(text(Simulation.Loc.Format("{0} · {1:0}", Tr(StageName(stage)), relation.Tension), 12,
-                    stage >= Simulation.TensionStage.Clashes ? Ui.Colour("state.critical") :
-                    stage >= Simulation.TensionStage.Crisis ? Ui.Colour("state.warning") : Ui.Colour("text.caption")));
-                hot.AddChild(row);
-            }
-            hot.AddChild(ActionButton("Open conflicts", () => { CloseDiplomacyScreen(); OpenConflictsScreen(); }, 0, 30));
-        }
-
-        var wars = _campaign.Wars.Where(candidate => !candidate.Ended && candidate.Involves(player.Id)).ToList();
-        var fighting = field("OUR WARS", wars.Count == 0 ? Tr("at peace") : "", Ui.Colour("text.muted"));
-        foreach (var war in wars)
-        {
-            var attacking = war.IsAttacking(player.Id);
-            var score = attacking ? war.WarScore : -war.WarScore;
-            // By the side's members, never by a default id: nation 0 is Indonesia.
-            var enemy = war.EnemiesOf(player.Id).Select(id => _campaign.NationById(id)).FirstOrDefault(other => other is not null);
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 10);
-            row.AddChild(giving(text(WarNames.Of(_campaign, war), 13, Ui.Colour("text.bright"))));
-            var tug = bar(12, 200);
-            tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), WarSideColour(player), WarSideColour(enemy));
-            row.AddChild(tug);
-            var figure = text(score.ToString("+0.0;-0.0;0.0"), 12,
-                Mathf.Abs(score) < 0.5f ? Ui.Colour("text.muted") : score > 0f ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
-            figure.CustomMinimumSize = new Vector2(46, 0);
-            figure.HorizontalAlignment = HorizontalAlignment.Right;
-            row.AddChild(figure);
-            var warId = war.Id;
-            row.AddChild(ActionButton("Open", () => OpenWarPage(warId), 72, 26));
-            fighting.AddChild(row);
-        }
+        AddWorldStanding(player, field, text, bar);
 
         // Who thinks well and ill of us, five each - the people to call on and the people to watch.
         var opinions = _campaign.Nations
@@ -1368,6 +1308,16 @@ public partial class DealOrForceGame
     }
 
     private void ConfirmOrIssueUltimatum() => OpenUltimatumComposer(DiplomacyTarget());
+
+    private void ConfirmOrProposeDeal()
+    {
+        if (!ValidDiplomacyTarget()) return;
+        var target = DiplomacyTarget();
+        if (target.IsHuman) return;
+        if (!Ultimatum.CanOfferDeal(_campaign, _campaign.Player, target, out var reason))
+        { _diplomacyFeedback.Text = reason; return; }
+        OpenDealComposer(target);
+    }
 
     private void IssueSelectedUltimatum(Nation target, Label feedback) => OpenUltimatumComposer(target);
 

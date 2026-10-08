@@ -109,7 +109,7 @@ public static class Coups
 
     public static void Tick(Campaign c)
     {
-        if (c is null || c.ElapsedDays <= 0 || !MechanicFeatures.SystemEnabled(c, nameof(Coups))) return;
+        if (c is null || c.ElapsedDays <= 0 || !c.FeatureEnabled("politics") || !MechanicFeatures.SystemEnabled(c, nameof(Coups))) return;
         var defines = c.Defines;
         var every = Math.Max(1, defines.CoupReviewDays);
         if (c.ElapsedDays % every != 11 % every) return;
@@ -147,6 +147,10 @@ public static class Coups
     /// <summary>The chance of a plot against this government in one review.</summary>
     public static float Chance(Campaign c, Nation nation)
     {
+        if (c is null || nation is null || !MechanicFeatures.SystemEnabled(c, nameof(Coups)) ||
+            !c.FeatureEnabled("politics") || nation.IsSubject || nation.Movement is not null ||
+            nation.FactionId.Length > 0 || c.Fallen.Contains(nation.Id) ||
+            nation.DomesticCrisis?.CooldownUntilDay > c.ElapsedDays) return 0f;
         var defines = c.Defines;
         var threshold = MathF.Max(0.01f, defines.CoupStabilityThreshold);
         if (nation.Stability >= threshold) return 0f;
@@ -162,7 +166,7 @@ public static class Coups
     /// <summary>How the plotting looks from the presidential palace: none, low, high, or under way.</summary>
     public static string Outlook(Campaign c, Nation nation)
     {
-        if (c is null || nation is null) return "none";
+        if (c is null || nation is null || !c.FeatureEnabled("politics") || !MechanicFeatures.SystemEnabled(c, nameof(Coups))) return "none";
         if (nation.CoupPlotDay >= 0) return "plot";
         var chance = Chance(c, nation);
         return chance <= 0f ? "none" : chance < c.Defines.CoupBaseChance * 0.25f ? "low" : "high";
@@ -193,6 +197,8 @@ public static class Coups
     /// <summary>The army takes power.</summary>
     public static void Seize(Campaign c, Nation nation)
     {
+        if (c is null || nation is null) return;
+        EnsureLoaded();
         var defines = c.Defines;
         var before = nation.Government;
         nation.CoupPlotDay = -1;
@@ -202,6 +208,7 @@ public static class Coups
         nation.PoliticsChangedDay = c.ElapsedDays;
         nation.Stability = M.Clamp01(nation.Stability + defines.CoupStabilityGain);
         nation.WarSupport = M.Clamp01(nation.WarSupport + defines.CoupWarSupportGain);
+        RegisterOutcome(c, nation, "Military coup");
         foreach (var other in c.Nations)
         {
             if (other.Id == nation.Id || other.Movement is not null || other.Population <= 0) continue;
@@ -212,5 +219,21 @@ public static class Coups
         c.Chronicle.Record(c, before == nation.Government ? "coup_counter" : "coup", nation.Id);
         c.MarkStrategicChange();
         DiagnosticLogs.Write("simulation", $"COUP nation={nation.Tag} from={before} to={nation.Government}");
+    }
+
+    // Both plotting and accumulated institutional pressure describe the same army
+    // and institutions. One successful coup cancels the other route's pending threat.
+    internal static void RegisterOutcome(Campaign c, Nation nation, string outcome)
+    {
+        nation.CoupPlotDay = -1;
+        nation.LastCoupDay = c.ElapsedDays;
+        var memory = nation.DomesticCrisis ??= new();
+        memory.LastOutcomeId = outcome;
+        memory.LastOutcomeDay = c.ElapsedDays;
+        memory.CooldownUntilDay = (int)Math.Min(int.MaxValue, (long)c.ElapsedDays +
+            Math.Max(0, Math.Max(c.Defines.CoupGraceDays, c.Defines.CoupAftermathCooldownDays)));
+        memory.DaysAboveThreshold = 0;
+        memory.CoupPressure *= .35f;
+        NationalModifiers.Invalidate(nation);
     }
 }

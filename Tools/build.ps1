@@ -59,6 +59,20 @@ function Assert-BuildChild([string]$Target) {
     return $resolved
 }
 
+# Never descend into a private agent checkout, cache or compiled template output.
+# Filtering before recursion also prevents these trees leaking into the .pck.
+function Copy-PlayerTree([string]$Source, [string]$Destination, [string[]]$ExcludedNames = @()) {
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    foreach ($item in Get-ChildItem -LiteralPath $Source -Force) {
+        if ($item.Name -in @('bin', 'obj', 'build') -or $item.Name -in $ExcludedNames -or
+            ($item.Name.StartsWith('.') -and $item.Name -ne '.gdignore') -or
+            ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+        $target = Join-Path $Destination $item.Name
+        if ($item.PSIsContainer) { Copy-PlayerTree $item.FullName $target $ExcludedNames }
+        else { Copy-Item -LiteralPath $item.FullName -Destination $target }
+    }
+}
+
 # Godot's .NET export wants a solution file named after `dotnet/project/assembly_name`, and
 # without one it packs the game, reports a warning rather than an error, and hands you a
 # build with no managed assemblies in it - which starts and immediately does nothing.
@@ -114,7 +128,7 @@ $mode = if ($Debug) { "--export-debug" } else { "--export-release" }
 $stage = Assert-BuildChild (Join-Path $buildRoot (".export-" + [Guid]::NewGuid().ToString('N')))
 New-Item -ItemType Directory -Path $stage | Out-Null
 foreach ($folder in @('Scripts', 'Scenes', 'game')) {
-    Copy-Item -LiteralPath (Join-Path $project $folder) -Destination $stage -Recurse
+    Copy-PlayerTree (Join-Path $project $folder) (Join-Path $stage $folder)
 }
 foreach ($file in @('DealOrForce.csproj', 'DealOrForce.sln', 'export_presets.cfg', 'icon.ico', 'icon_small.png')) {
     Copy-Item -LiteralPath (Join-Path $project $file) -Destination $stage
@@ -143,7 +157,25 @@ if (-not $IncludeExperimentalNativeLuau) {
 $imported = Join-Path $project '.godot\imported'
 if (Test-Path -LiteralPath $imported) {
     New-Item -ItemType Directory -Path (Join-Path $stage '.godot') | Out-Null
-    Copy-Item -LiteralPath $imported -Destination (Join-Path $stage '.godot') -Recurse
+    $stagedImports = Join-Path $stage '.godot\imported'
+    New-Item -ItemType Directory -Path $stagedImports | Out-Null
+    # Copy only cache files referenced by the staged assets. A developer's cache also
+    # contains tens of thousands of addon imports that the player project never uses.
+    $requiredImports = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($settings in Get-ChildItem -LiteralPath $stage -Recurse -File -Filter '*.import') {
+        foreach ($match in [regex]::Matches([IO.File]::ReadAllText($settings.FullName), 'res://\.godot/imported/([^"/\\]+)')) {
+            $cacheName = $match.Groups[1].Value
+            $null = $requiredImports.Add($cacheName)
+            $null = $requiredImports.Add([IO.Path]::GetFileNameWithoutExtension($cacheName) + '.md5')
+        }
+    }
+    foreach ($cacheName in $requiredImports) {
+        $sourceCache = Join-Path $imported $cacheName
+        if (Test-Path -LiteralPath $sourceCache -PathType Leaf) {
+            Copy-Item -LiteralPath $sourceCache -Destination $stagedImports
+        }
+    }
+    Write-Host "  reused $($requiredImports.Count) required import-cache entries, not the editor addon cache" -ForegroundColor DarkGray
 }
 
 # Godot writes a good deal to stderr on a perfectly successful export - deprecation notes,
@@ -177,7 +209,7 @@ if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
 # executable. The loader looks in both places.
 $modsSource = Join-Path $project "mods"
 if (Test-Path $modsSource) {
-    Copy-Item -Path $modsSource -Destination $out -Recurse -Force
+    Copy-PlayerTree $modsSource (Join-Path $out 'mods')
     # A template that somebody once compiled leaves its bin and obj behind; they are not
     # part of the template and they are not small.
     Get-ChildItem -Path (Join-Path $out "mods") -Recurse -Force -Directory -ErrorAction SilentlyContinue |
@@ -252,6 +284,12 @@ if ($dataDirectory) {
 
 Write-Host "== checking the data came with it ==" -ForegroundColor Cyan
 
+# Author permissions and third-party provenance are player-facing redistribution notices.
+foreach ($notice in @('LICENSE', 'LICENSE-EXCEPTIONS.md', 'README.md', 'README.ru.md')) {
+    Copy-Item -LiteralPath (Join-Path $project $notice) -Destination $out
+}
+Copy-PlayerTree (Join-Path $project 'docs') (Join-Path $out 'docs') @('LAUNCHER_RU.md')
+
 # Where the game will look: its own folder, then up to seven parents. Anything below the
 # build folder counts, because that is what ships.
 $needed = @(
@@ -263,6 +301,11 @@ $needed = @(
     "game\localization\english",
     "game\map_data\definition.csv",
     "game\map_data\default.map",
+    "LICENSE",
+    "LICENSE-EXCEPTIONS.md",
+    "docs\THIRD_PARTY_MEDIA.md",
+    "README.md",
+    "README.ru.md",
     "mods"
 )
 
@@ -271,7 +314,10 @@ $needed = @(
 # is why it needs asking about explicitly rather than being left to whoever reads the folder.
 $forbidden = @(
     @{ Path = "dlc"; Why = "unreleased content pack and its entitlement switch" },
-    @{ Path = "LAUNCHER_RU.md"; Why = "internal documentation, and Russian-only at that" }
+    @{ Path = "LAUNCHER_RU.md"; Why = "internal documentation, and Russian-only at that" },
+    @{ Path = ".kilo"; Why = "private nested source checkouts" },
+    @{ Path = ".fennara"; Why = "private editor tooling and logs" },
+    @{ Path = ".git"; Why = "repository metadata" }
 )
 
 $assemblies = Get-ChildItem -Path $out -Recurse -Force -Filter "DealOrForce.dll" -ErrorAction SilentlyContinue |
@@ -331,12 +377,13 @@ if (-not $NoZip) {
     $zip = Join-Path $project "build\Deal or Force $stamp.zip"
     if (Test-Path -LiteralPath $zip) { throw "Archive already exists: $zip" }
     Write-Host "== zipping ==" -ForegroundColor Cyan
-    Compress-Archive -Path $out -DestinationPath $zip -CompressionLevel Optimal
-    $zipSize = [math]::Round((Get-Item $zip).Length / 1MB, 1)
-    Write-Host "  $zip ($zipSize MB)" -ForegroundColor Green
+    & (Join-Path $PSScriptRoot 'package-build.ps1') -OutputDirectory $out -Archive $zip
 }
 
 Write-Host ""
-Write-Host "Done. The archive unpacks to a single folder called 'Deal or Force'; the game is" -ForegroundColor Cyan
-Write-Host "the .exe inside it. It reads its world from the folders beside itself, so moving" -ForegroundColor Cyan
-Write-Host "the .exe out on its own leaves it with nothing to load." -ForegroundColor Cyan
+if ($NoZip) {
+    Write-Host "Done. Verified game folder: $out" -ForegroundColor Cyan
+} else {
+    Write-Host "Done. The archive unpacks to a single folder called 'Deal or Force'." -ForegroundColor Cyan
+}
+Write-Host 'Run the .exe inside that folder; keep the data folders beside it.' -ForegroundColor Cyan

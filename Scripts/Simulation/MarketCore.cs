@@ -348,7 +348,7 @@ public static class MarketSystem
     /// point is that industry has to be staffed by someone, not that every profession is
     /// tracked separately.
     /// </summary>
-    private static float JobsDemanded(ScenarioState state) =>
+    internal static float JobsDemanded(ScenarioState state) =>
         state.Buildings.GetValueOrDefault(BuildingKind.Agriculture) * 0.42f +
         state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry) * 0.85f +
         state.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry) * 0.55f +

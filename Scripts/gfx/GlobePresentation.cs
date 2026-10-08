@@ -198,6 +198,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _dragDistance;
     private Vector2 _previousPointer;
     private float _yaw = -0.35f;
+    // How far north or south the camera may look: 86 degrees, so Greenland, Svalbard and
+    // Antarctica can be brought to the middle of the screen. It stopped at 69 degrees,
+    // where the far north sat squashed against the top edge; short of 90 so the orbit
+    // never flips over the pole.
+    internal const float MaxPitch = 1.50f;
     private float _pitch = 0.30f;
     private float _targetYaw = -0.35f;
     private float _targetPitch = 0.30f;
@@ -696,7 +701,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             ClampFlatCamera();
             return;
         }
-        _targetPitch = Mathf.Clamp(-Mathf.DegToRad(latitude), -1.20f, 1.20f);
+        _targetPitch = Mathf.Clamp(-Mathf.DegToRad(latitude), -MaxPitch, MaxPitch);
         _targetYaw = Mathf.DegToRad(longitude + 180f);
         _targetDistance = Mathf.Clamp(distance, MinimumDistance, MaximumDistance);
     }
@@ -1035,6 +1040,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     private void UpdateCounterScale(bool force = false)
     {
+        UpdateCapitalMarkerScale();
         if (_flatMap)
         {
             _counterWorldPixel = _camera.Size / Math.Max(1f, _camera.GetViewport().GetVisibleRect().Size.Y);
@@ -1046,16 +1052,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
             var strategic = _flatStrategicCounters ? _flatZoom > 2.8f : _flatZoom > 3.3f;
             var detailChanged = strategic != _flatStrategicCounters;
             _flatStrategicCounters = strategic;
-            foreach (var (node, _) in _capitalMarkers)
-                if (node is Sprite3D star)
-                {
-                    if (force || star.FixedSize)
-                    {
-                        star.FixedSize = false;
-                        star.PixelSize = Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_capital_pixels", 14f), 8f, 24f) / star.Texture.GetWidth();
-                    }
-                    star.Scale = Vector3.One * _counterWorldPixel;
-                }
             foreach (var marker in _armyStacks.Values)
             {
                 if (!IsInstanceValid(marker.Node)) continue;
@@ -1100,9 +1096,6 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _counterFlatFar = 1f;
         _flatStrategicCounters = false;
         InvalidateFlatCounterDensity();
-        foreach (var (node, _) in _capitalMarkers)
-            if (node is Sprite3D star) { star.FixedSize = true; star.PixelSize = .00016f; star.Scale = Vector3.One; }
-
         foreach (var marker in _armyStacks.Values)
         {
             if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
@@ -1614,7 +1607,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         var scale = Mathf.Lerp(0.22f, 0.65f, (_targetDistance - MinimumDistance) / (MaximumDistance - MinimumDistance));
         _targetYaw -= delta.X * 0.006f * scale;
-        _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale, -1.20f, 1.20f);
+        _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale, -MaxPitch, MaxPitch);
     }
 
     /// <summary>
@@ -2840,8 +2833,8 @@ void fragment() {
             // the thing under the pointer and reads correctly as taking hold of the globe;
             // the keyboard is not holding anything, and a key that walks the viewpoint is
             // what every map in the genre does.
-            if (DealOrForceGame.Held(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -1.20f, 1.20f);
-            if (DealOrForceGame.Held(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -1.20f, 1.20f);
+            if (DealOrForceGame.Held(Key.W)) _targetPitch = Mathf.Clamp(_targetPitch - (float)delta * 0.7f, -MaxPitch, MaxPitch);
+            if (DealOrForceGame.Held(Key.S)) _targetPitch = Mathf.Clamp(_targetPitch + (float)delta * 0.7f, -MaxPitch, MaxPitch);
             if (DealOrForceGame.Held(Key.A)) _targetYaw -= (float)delta * 0.7f;
             if (DealOrForceGame.Held(Key.D)) _targetYaw += (float)delta * 0.7f;
         }
@@ -2940,7 +2933,7 @@ void fragment() {
             var direction = _freePosition.LengthSquared() > 0.0001f
                 ? _freePosition.Normalized()
                 : Vector3.Back;
-            _targetPitch = Mathf.Clamp(Mathf.Asin(direction.Y), -1.20f, 1.20f);
+            _targetPitch = Mathf.Clamp(Mathf.Asin(direction.Y), -MaxPitch, MaxPitch);
             _targetYaw = Mathf.Atan2(direction.X, direction.Z);
             _pitch = _targetPitch;
             _yaw = _targetYaw;
@@ -3960,7 +3953,12 @@ void fragment() {
         _capitalRevision = campaign.CapitalRevision;
 
         foreach (var child in _capitalRoot.GetChildren())
+        {
+            // QueueFree alone retains the old name until frame end. Rebuilding in that
+            // frame made every replacement a generic @Sprite3D, losing its country identity.
+            _capitalRoot.RemoveChild(child);
             child.QueueFree();
+        }
         _capitalMarkers.Clear();
 
         foreach (var nation in campaign.Nations)
@@ -3976,10 +3974,7 @@ void fragment() {
             {
                 Name = $"Capital_{nation.Tag}",
                 Texture = _capitalTexture,
-                PixelSize = 0.00016f,
-                FixedSize = true,
-                // On the map, not on the window: a star that turned to face the camera spun with
-                // every turn of the globe, like a sticker on the lens rather than a place.
+                FixedSize = false,
                 Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -3989,7 +3984,9 @@ void fragment() {
             marker.Position = SurfacePoint(nation.CapitalLatitude, nation.CapitalLongitude, SurfaceMarkerRadius);
             OrientSurfaceCounter(marker, marker.Position.Normalized());
             _capitalRoot.AddChild(marker);
-            _capitalMarkers.Add((marker, marker.Position.Normalized()));
+            var normal = marker.Position.Normalized();
+            _capitalMarkers.Add((marker, normal));
+            PlaceCapitalMarker(marker, normal);
         }
     }
 

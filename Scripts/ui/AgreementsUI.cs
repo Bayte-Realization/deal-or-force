@@ -28,8 +28,26 @@ public partial class DealOrForceGame
         _embargoButton = ActionButton("Embargo", ToggleSelectedEmbargo, 0, 32);
         row.AddChild(_tradeAgreementButton);
         row.AddChild(_pactButton);
+        // A deal is the treaty a player writes: with the others, before aid and sanctions, in
+        // the dossier as in the full diplomacy screen.
+        var deal = ActionButton("Propose a deal", ProposeDealToSelected, 0, 32);
+        deal.Name = "ProposeDealQuick";
+        deal.TooltipText = Ui.Tip(Tr("Lay a table both sides put something on: cash, provinces, promises. Review before sending."));
+        row.AddChild(deal);
         row.AddChild(_aidButton);
         row.AddChild(_embargoButton);
+    }
+
+    private void ProposeDealToSelected()
+    {
+        var target = _selectedNation;
+        if (target is null || _campaign?.Player is null || target == _campaign.Player || target.IsHuman) return;
+        if (!Ultimatum.CanOfferDeal(_campaign, _campaign.Player, target, out var reason))
+        {
+            if (_countryActionFeedback is not null) _countryActionFeedback.Text = reason;
+            return;
+        }
+        OpenDealComposer(target);
     }
 
     private void RefreshAgreementButtons(Nation nation)

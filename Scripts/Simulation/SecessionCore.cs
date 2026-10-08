@@ -204,9 +204,14 @@ public static class SecessionCore
         if (state.Population < weights.MinimumPopulation) return 0f;
 
         var losing = false;
+        var torn = false;
         foreach (var war in campaign.Wars)
         {
             if (war.Ended || !war.Involves(owner.Id)) continue;
+            // A state fighting a civil war of its own cannot hold its minorities as it did:
+            // the centre is busy, the army is split, and every grievance sees its chance.
+            if (war.CivilConflict && campaign.NationById(war.EnemyLeaderOf(owner.Id)) is { } enemy &&
+                (enemy.SecededFromId == owner.Id || enemy.Movement is not null || enemy.FactionId.Length > 0)) torn = true;
             // Losing, not merely fighting. A war being won is a state demonstrating that it
             // can still do things to people.
             var score = war.AttackerId == owner.Id ? war.WarScore : -war.WarScore;
@@ -219,6 +224,7 @@ public static class SecessionCore
                * (1f - M.Clamp01(state.Stability))
                * (weights.WeaknessFloor + weights.Weakness * (1f - M.Clamp01(owner.Stability)))
                * (losing ? weights.WarMultiplier : 1f)
+               * (torn ? campaign.Defines.SecessionCivilWarMultiplier : 1f)
                * (1f - SocialMemory.BorderRelief(campaign, state));
     }
 

@@ -68,6 +68,8 @@ public partial class MainMenuScene : Control
     public override void _Ready()
     {
         Name = "MainMenu";
+        WrapGuard.Install(GetTree());
+        ControlSkin.Apply();
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // No campaign here: a campaign option set from this screen is where new ones start.
         SettingsCatalog.CurrentCampaign = null;
@@ -338,8 +340,6 @@ public partial class MainMenuScene : Control
         rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) });
         rows.AddChild(MenuCaption("Made by", 13, "text.faint"));
         rows.AddChild(MenuCaption("Bayte Realization (Kamil Suleymanov)", 18, "text.body"));
-        rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 10) });
-        rows.AddChild(MenuCaption("With the explicit use of AI", 13, "text.muted"));
 
         // Expanding, with a floor under it: the expansion pushes the way back to the
         // bottom of the panel, and the floor stops it sitting flush against the last line

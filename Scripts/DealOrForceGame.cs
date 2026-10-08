@@ -63,6 +63,8 @@ public partial class DealOrForceGame : Control
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         Input.MouseMode = Input.MouseModeEnum.Visible;
+        WrapGuard.Install(GetTree());
+        ControlSkin.Apply();
         ApplyCustomCursors();
         // A campaign's own options are read from whichever campaign is on screen now - asked
         // each time, so a loaded save or a new scenario is never answered for by the last one.
@@ -156,12 +158,27 @@ public partial class DealOrForceGame : Control
         {
             _dayAccumulator -= secondsPerDay;
             if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
-            using (SimProfiler.Measure("campaign.day"))
-                _campaign.Tick();
+            try
+            {
+                using (SimProfiler.Measure("campaign.day")) _campaign.Tick();
+                // Mod hooks belong to the same failure boundary as the day's simulation.
+                if (_campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(_campaign);
+            }
+            catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
+            {
+                _applyingNetworkCommand = false;
+                _dayAccumulator = 0;
+                _campaign.BlockSimulation(exception.Message);
+                DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
+                var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, _campaign, exception.Message);
+                ShowCampaignFault(Simulation.Loc.Format(
+                    "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", _campaign.Date.Display()),
+                    path, exception.Message);
+                return;
+            }
             // A hook called "on day advanced" is called when a day advances. At the shipped
             // hourly step a call per step would fire it twenty-four times a day, which would
             // silently multiply by twenty-four whatever every mod in the world does in it.
-            if (_campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(_campaign);
             if (_networkConnected && _networkIsHost && _networkGameStarted)
             {
                 _applyingNetworkCommand = false;
@@ -191,6 +208,15 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_dealComposer))
+        {
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false } dealKey)
+            {
+                if (dealKey.Keycode == Key.Escape) { CloseDealComposer(); GetViewport().SetInputAsHandled(); }
+                else if (dealKey.Keycode is Key.F7 or Key.F10) GetViewport().SetInputAsHandled();
+            }
+            return;
+        }
         if (IsInstanceValid(_ultimatumComposer))
         {
             if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
@@ -428,7 +454,16 @@ public partial class DealOrForceGame : Control
         if (_handoverLayer is { Visible: true }) return;
         if (_eventLayer is { Visible: true }) return;
 
-        if (_handbookLayer is { Visible: true })
+        // The top window first, and back to whatever opened it: the save list and the settings
+        // reached from the pause menu return to it. Neither was in this chain, so Escape went
+        // past them to the pause menu underneath and left the save list standing on screen.
+        if (_settingsLayer is { Visible: true })
+            HideSettings();
+        else if (_saveLoadLayer is { Visible: true })
+            HideSaveLoadInterface();
+        else if (_networkLayer is { Visible: true })
+            CloseNetworkMultiplayer();
+        else if (_handbookLayer is { Visible: true })
             CloseHandbook();
         else if (_peaceLayer is { Visible: true })
             ClosePeaceConference();
@@ -948,6 +983,8 @@ public partial class DealOrForceGame : Control
     private void OpenScreen(string screen)
     {
         if (!Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen)) return;
+        _sideScreenBuiltKey = $"{screen}|{_dossierTab}|{_campaign?.Player?.Id}|" +
+            (_campaign is null ? 0 : _campaign.ElapsedDays / SideScreenInterval(screen));
         if (screen == "Diplomacy") MarkFirstStep("diplomacy");
         if (screen != "Conflicts" && _conflictsLayer is not null) _conflictsLayer.Visible = false;
         if (screen == "Conflicts")
@@ -1427,8 +1464,33 @@ public partial class DealOrForceGame : Control
         if (_supportLayer is { Visible: true }) RefreshSupportScreen();
         if (_researchLayer is { Visible: true }) RefreshResearchScreen();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
-        else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions" or "Laws")
+        else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions" or "Laws" &&
+                 SideScreenDue())
             OpenScreen(_openScreen);
+    }
+
+    // What the side panel was last built for. Refresh runs many times a second; the panel
+    // used to be torn down and rebuilt on every one of them - sixty formable-nation cards,
+    // each counting thousands of provinces, several times a second, which froze the game
+    // and threw away whatever the player was typing into the search box.
+    private string _sideScreenBuiltKey = "";
+
+    private string SideScreenKey()
+    {
+        return $"{_openScreen}|{_dossierTab}|{_campaign.Player?.Id}|{_campaign.ElapsedDays / SideScreenInterval(_openScreen)}";
+    }
+
+    // Formable nations change slowly and cost the most to count: a month at a time; the
+    // opportunity atlas a week; everything else a day.
+    private int SideScreenInterval(string screen) => screen != "Decisions" ? 1 :
+        _dossierTab == "Formables" ? 30 : _dossierTab == "Opportunities" ? 7 : 1;
+
+    private bool SideScreenDue()
+    {
+        // Never under the player's fingers: a rebuild takes the text field they are typing in.
+        if (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit or SpinBox &&
+            _sidePanel.IsAncestorOf(GetViewport().GuiGetFocusOwner())) return false;
+        return SideScreenKey() != _sideScreenBuiltKey;
     }
 
     /// <summary>

@@ -14,6 +14,16 @@ public sealed partial class Defines
     public float AiRestraintWithCause { get; set; } = 0.35f;
 
     /// <summary>
+    /// Whether a government without a reason for the war it wants first demands the region it
+    /// wants by ultimatum, and how long before it asks the same country again.
+    /// </summary>
+    public bool AiUltimatumsBeforeWar { get; set; } = true;
+    public int AiUltimatumIntervalDays { get; set; } = 365;
+
+    /// <summary>Whether a government nobody plays needs a casus belli to declare a war of its own.</summary>
+    public bool AiNeedsCauseForWar { get; set; } = true;
+
+    /// <summary>
     /// How much an authoritarian creed thins the restraint of the arrangement it runs: the
     /// restraint is multiplied by one less this times the ideology's authority above zero. A
     /// presidential republic run on nationalism (authority 0.6) keeps about three fifths of it.
@@ -347,10 +357,16 @@ public static partial class AiStatecraft
             foreach (var tag in faction.Patrons)
                 if (campaign.NationByTag(tag) is { Population: > 0 } patron && patron.Id != attacker.Id)
                     help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, patron) * campaign.Defines.FactionPatronDeterrence;
+        var partners = InternationalOrganizations.DefencePartners(campaign, target.Id).ToArray();
+        var shared = InternationalOrganizations.DefencePartners(campaign, attacker.Id).ToHashSet();
+        foreach (var id in partners)
+            if (id != attacker.Id && !shared.Contains(id) && campaign.NationById(id) is { Population: > 0 } partner)
+                help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, partner);
         if (!FriendsOf.TryGetValue(target.Id, out var friends)) return help;
         foreach (var friendId in friends)
         {
             if (friendId == attacker.Id) continue;
+            if (partners.Contains(friendId)) continue;
             var friend = campaign.NationById(friendId);
             if (friend is null || friend.Population <= 0) continue;
             var theirs = CampaignDiplomacy.Peek(campaign, attacker.Id, friendId);

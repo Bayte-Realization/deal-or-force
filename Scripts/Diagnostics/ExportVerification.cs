@@ -37,12 +37,19 @@ public partial class ExportVerification : Node
             AudioServer.SetBusMute(0, true);
             var tree = GetTree();
             await Wait(DisplayServer.GetName() == "headless" ? .25 : 6);
+            var args = OS.GetCmdlineUserArgs();
+            var languageAt = Array.IndexOf(args, "--verify-language");
+            if (languageAt >= 0 && languageAt + 1 < args.Length)
+                Loc.Language = args[languageAt + 1];
             Check(tree.CurrentScene is MainMenuScene && tree.CurrentScene.FindChildren("*", "Button", true, false).Count > 3,
                 "managed main menu and its controls load");
+            // Source-only UI probes may explicitly permit locally installed tooling.
+            // Shipped-executable verification never supplies this flag.
+            var developmentProbe = OS.GetCmdlineUserArgs().Contains("--verify-development");
             foreach (var property in ProjectSettings.Singleton.GetPropertyList())
             {
                 var key = property["name"].AsString();
-                if (key.StartsWith("autoload/", StringComparison.Ordinal))
+                if (!developmentProbe && key.StartsWith("autoload/", StringComparison.Ordinal))
                     Check(!ProjectSettings.GetSetting(key).AsString().TrimStart('*').StartsWith("res://addons/", StringComparison.Ordinal),
                         "export autoload is not editor tooling: " + key);
             }
@@ -62,6 +69,14 @@ public partial class ExportVerification : Node
             if (game is not null)
             {
                 game.Call("BeginSession");
+                // Startup reapplies the user's saved language. Verification must override
+                // only this isolated process, never write its choice to user preferences.
+                if (languageAt >= 0 && languageAt + 1 < args.Length)
+                {
+                    Loc.Language = args[languageAt + 1];
+                    game.Call("RefreshLocalisedText");
+                    Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
+                }
                 game.Call("OpenScreen", "Laws");
                 await Wait(.25);
                 Check(game.FindChild("PolicySearch", true, false) is not null, "laws workspace is available");
@@ -70,7 +85,11 @@ public partial class ExportVerification : Node
                 await Wait(.25);
                 Check(game.FindChildren("Course_*", "PanelContainer", true, false).Count == 8, "national course definitions and cards load");
                 await Capture("course");
+                await VerifyDomesticWorkspace(game);
                 (game.FindChild("ClosePolicyWorkspace", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
+                await VerifyDealWorkspace(game);
+                await VerifyConflictWorkspaces(game);
+                await VerifyMovementDiplomacy(game);
                 GD.Print(game.Call("ConsoleAdvance", "7").AsString());
                 foreach (var flag in new[] { "roman_empire_v2", "eastern_roman_empire_v2", "western_roman_empire" })
                 {
@@ -88,6 +107,171 @@ public partial class ExportVerification : Node
         }
         GD.Print("EXPORT_VERIFY failures=" + _failures);
         GetTree().Quit(_failures == 0 ? 0 : 1);
+    }
+
+    private async Task VerifyDomesticWorkspace(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var before = CampaignFingerprint.Of(world);
+        game.Call("SelectDossierTab", "Crises");
+        await Wait(.15);
+        Check(game.FindChild("CrisisGauge_couppressure", true, false) is ProgressBar, "actual crisis gauges render");
+        Check(before == CampaignFingerprint.Of(world), "inspecting crises changes no simulation state");
+        var search = game.FindChild("PolicySearch", true, false) as LineEdit;
+        search.Text = "__no_region__";
+        search.EmitSignal(LineEdit.SignalName.TextChanged, search.Text);
+        await Wait(.1);
+        Check(game.FindChildren("CrisisRegion_*", "PanelContainer", true, false).Count == 0,
+            "crisis region search exposes an empty state without stale cards");
+        search.Text = ""; search.EmitSignal(LineEdit.SignalName.TextChanged, "");
+        foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+        {
+            GetTree().Root.Size = size; await Wait(.25);
+            CheckFits(game.FindChild("PolicyPanel", true, false) as Control, "crises " + size.X);
+            await Capture("crises-" + size.X);
+        }
+        var player = world.Player;
+        var treasury = player.Treasury;
+        var action = game.FindChild("CrisisResponse_public_dialogue", true, false) as Button;
+        Check(action is { Disabled: false }, "fresh solvent country can review dialogue");
+        if (action is { Disabled: false })
+        {
+            action.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+            Check(player.Treasury == treasury, "reviewing dialogue charges nothing");
+            action = game.FindChild("CrisisResponse_public_dialogue", true, false) as Button;
+            action?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+            Check(player.Treasury < treasury && player.DomesticCrisis.ResponseId == "public_dialogue",
+                "confirming dialogue starts the real paid response");
+            Check((game.FindChild("CrisisResponse_public_dialogue", true, false) as Button)?.Disabled == true,
+                "active response cannot be bought repeatedly");
+        }
+        GetTree().Root.Size = new(1920, 1080);
+    }
+
+    private async Task VerifyDealWorkspace(DealOrForceGame game)
+    {
+        game.Call("ConsoleTag", "USA");
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var player = world.Player;
+        var partner = world.Nations.First(n => n.Tag == "GBR");
+        var fingerprint = CampaignFingerprint.Of(world);
+        game.OpenDealComposer(partner); await Wait(.15);
+        Check(fingerprint == CampaignFingerprint.Of(world), "opening a peaceful deal is read-only");
+        var send = game.FindChild("SendComposedDeal", true, false) as Button;
+        Check(send?.Disabled == true, "empty deal cannot be sent");
+        var give = game.FindChild("DealGiveCash", true, false) as SpinBox;
+        give.Value = Math.Min(.1, give.MaxValue); await Wait(.1);
+        Check(send is { Disabled: false } && give.Value > 0, "cash offer between existing allies is allowed");
+        var release = game.FindChild("DealGiveRelease", true, false) as CheckBox;
+        var region = game.FindChildren("DealGiveRegion_*", "CheckBox", true, false).OfType<CheckBox>().FirstOrDefault();
+        Check(release is not null && region is not null, "independence is a visible deal term");
+        release.ButtonPressed = true; region.ButtonPressed = true; await Wait(.1);
+        Check(send is { Disabled: false }, "whole populated region can be offered as an independent settlement");
+        var preview = game.FindChild("DealTerritoryPreview", true, false) as TextureRect;
+        Check(preview is { Visible: true, Texture: not null }, "selected territorial package renders its real-map preview");
+        var search = game.FindChild("DealAskRegionSearch", true, false) as LineEdit;
+        search.Text = "__no_region__"; search.EmitSignal(LineEdit.SignalName.TextChanged, search.Text);
+        await Wait(.1);
+        Check((game.FindChild("DealAskEmpty", true, false) as Control)?.Visible == true,
+            "deal search explains no matching regions");
+        var pause = new InputEventKey { Keycode = Key.Space, Pressed = true };
+        Input.ParseInputEvent(pause); await Wait(.1);
+        Check(world.IsPaused, "deal modal blocks the map's time hotkey");
+        foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+        {
+            GetTree().Root.Size = size; await Wait(.25);
+            CheckFits(game.FindChild("DealPanel", true, false) as Control, "deal " + size.X);
+            await Capture("deal-" + size.X);
+        }
+        var cash = player.Treasury; var partnerCash = partner.Treasury;
+        var countryCount = world.Nations.Count;
+        send?.EmitSignal(BaseButton.SignalName.Pressed);
+        Check(player.Treasury == cash && partner.Treasury == partnerCash, "first deal click only requests confirmation");
+        send?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+        Check(player.Treasury < cash && partner.Treasury > partnerCash && send?.Disabled == true,
+            "second click settles through the command and blocks repeat sending");
+        Check(world.Nations.Count == countryCount + 1 && Math.Abs(player.Treasury + partner.Treasury + world.Nations.Last().Treasury - cash - partnerCash) < .01f,
+            "the real UI establishes a third country and conserves all three treasuries");
+        Input.ParseInputEvent(new InputEventKey { Keycode = Key.Escape, Pressed = true }); await Wait(.1);
+        Check(game.FindChild("DealComposer", true, false) is null, "Escape closes and detaches the deal modal");
+        GetTree().Root.Size = new(1920, 1080);
+    }
+
+    private void CheckFits(Control panel, string caption)
+    {
+        var viewport = GetTree().Root.GetVisibleRect();
+        Check(panel is not null && viewport.Encloses(panel.GetGlobalRect()), caption + " panel remains inside the viewport");
+    }
+
+    private async Task VerifyConflictWorkspaces(DealOrForceGame game)
+    {
+        game.Call("OpenScreen", "Conflicts"); await Wait(.1);
+        var world = game.VerificationWorld;
+        Check(world.Organizations.Any(o => o.Name == "NATO" && o.Members.Count > 20), "named defence organizations load as separate institutions");
+        foreach (var tab in new[] { 3, 4 })
+        {
+            (game.FindChild("ConflictTab" + tab, true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
+            await Wait(.1);
+            if (tab == 3 && game.FindChildren("TerritoryDispute_*", "Button", true, false).FirstOrDefault() is Button dispute)
+                dispute.EmitSignal(BaseButton.SignalName.Pressed);
+            if (tab == 4 && world.Organizations.FirstOrDefault(o => !o.Dissolved) is { } first)
+                (game.FindChild("Organization_" + first.Id, true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
+            var before = CampaignFingerprint.Of(world);
+            foreach (var size in new[] { new Vector2I(1920,1080), new Vector2I(1280,720) })
+            {
+                GetTree().Root.Size = size; await Wait(.2);
+                CheckFits(game.FindChild("ConflictsPanel", true, false) as Control, "conflicts " + tab + " at " + size.X);
+                await Capture((tab == 3 ? "territories-" : "organizations-") + size.X);
+            }
+            Check(before == CampaignFingerprint.Of(world), "conflict workspace inspection does not modify institutions or titles");
+        }
+        game.Call("OpenScreen", "Nation");
+    }
+
+    private async Task VerifyMovementDiplomacy(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var designated = world.Nations.First(n => n.Tag == "TTP" && n.Movement is { Dissolved: false });
+        // A real action in this disposable verification campaign, not an invented
+        // historical designation or a change to the player's saved campaign.
+        world.Commands.Enqueue(new MovementDealingCommand { IssuerId = world.Player.Id, MovementId = designated.Id, Action = "designate" });
+        world.Commands.ApplyAll(world);
+        Check(designated.Movement.DesignatedBy.Contains(world.Player.Id), "the movement designation action records its actual issuer");
+        var recognised = world.Nations.Where(n => n.Movement is { Dissolved: false } && n.Movement.RecognisedBy.Count > 0)
+            .OrderByDescending(n => n.Movement.RecognisedBy.Count).First();
+        foreach (var movement in new[] { designated, recognised }.Distinct())
+        {
+            var before = CampaignFingerprint.Of(world);
+            game.VerificationShowMovement(movement); await Wait(.15);
+            foreach (var prefix in new[] { "MovementRecognition", "MovementDesignation" })
+            {
+                var toggle = game.FindChild(prefix + "Toggle", true, false) as Button;
+                Check(toggle is not null, prefix + " countries can be inspected");
+                toggle?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+                var expected = (prefix == "MovementRecognition" ? movement.Movement.RecognisedBy : movement.Movement.DesignatedBy)
+                    .Count(id => world.NationById(id) is not null);
+                Check(game.FindChildren(prefix + "Country_*", "Button", true, false).Count == expected,
+                    prefix + " list reflects exact living records, not an invented count");
+            }
+            foreach (var size in new[] { new Vector2I(1920,1080), new Vector2I(1280,720) })
+            {
+                GetTree().Root.Size = size; await Wait(.2);
+                CheckFits(game.FindChild("MovementPanel", true, false) as Control, "movement at " + size.X);
+                await Capture("movement-" + movement.Tag.ToLowerInvariant() + "-" + size.X);
+            }
+            Check(before == CampaignFingerprint.Of(world), "movement diplomacy inspection changes no simulation state");
+            var countryLink = game.FindChildren("Movement*Country_*", "Button", true, false).OfType<Button>().FirstOrDefault();
+            Check(countryLink is not null, "non-empty movement record exposes a country diplomacy link");
+            countryLink?.EmitSignal(BaseButton.SignalName.Pressed); await Wait(.1);
+            Check((game.FindChild("Diplomacy", true, false) as Control)?.Visible == true,
+                "movement country link opens the full diplomacy workspace");
+            game.Call("OpenScreen", "Nation");
+            game.VerificationCloseMovement();
+        }
+        GetTree().Root.Size = new(1920,1080);
     }
 
     private void Check(bool condition, string caption)
@@ -108,4 +292,12 @@ public partial class ExportVerification : Node
         Check(image.SavePng(System.IO.Path.Combine(_captureDirectory, "export-" + label + ".png")) == Error.Ok,
             "capture " + label);
     }
+}
+
+public partial class DealOrForceGame
+{
+    // A narrow internal test seam; not a script-callable command or saved state.
+    internal Campaign VerificationWorld => _campaign;
+    internal void VerificationShowMovement(Nation movement) => ShowMovement(movement);
+    internal void VerificationCloseMovement() => _movementPanel.Visible = false;
 }

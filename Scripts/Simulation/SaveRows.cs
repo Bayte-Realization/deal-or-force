@@ -35,6 +35,7 @@ public sealed class NationHistorySampleConverter : JsonConverter<NationHistorySa
     private static NationHistorySample ReadRow(ref Utf8JsonReader reader)
     {
         Span<float> values = stackalloc float[21];
+        values.Clear();
         var day = 0;
         var index = 0;
         while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
@@ -44,12 +45,15 @@ public sealed class NationHistorySampleConverter : JsonConverter<NationHistorySa
             else if (index <= values.Length) values[index - 1] = reader.GetSingle();
             index++;
         }
+        if (reader.TokenType != JsonTokenType.EndArray || index != values.Length + 1)
+            throw new JsonException("A history row must contain its day and twenty-one figures.");
         return Build(day, values);
     }
 
     private static NationHistorySample ReadObject(ref Utf8JsonReader reader)
     {
         Span<float> values = stackalloc float[21];
+        values.Clear();
         var day = 0;
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
@@ -76,27 +80,27 @@ public sealed class NationHistorySampleConverter : JsonConverter<NationHistorySa
     {
         writer.WriteStartArray();
         writer.WriteNumberValue(sample.Day);
-        writer.WriteNumberValue(sample.Gdp);
-        writer.WriteNumberValue(sample.Treasury);
-        writer.WriteNumberValue(sample.PopulationMillions);
-        writer.WriteNumberValue(sample.WeeklyIncome);
-        writer.WriteNumberValue(sample.WeeklyExpenses);
-        writer.WriteNumberValue(sample.WeeklyBalance);
-        writer.WriteNumberValue(sample.Productivity);
-        writer.WriteNumberValue(sample.StandardOfLiving);
-        writer.WriteNumberValue(sample.Literacy);
-        writer.WriteNumberValue(sample.Stability);
-        writer.WriteNumberValue(sample.MarketAccess);
-        writer.WriteNumberValue(sample.ShortageIndex);
-        writer.WriteNumberValue(sample.TradeBalance);
-        writer.WriteNumberValue(sample.MilitaryPower);
-        writer.WriteNumberValue(sample.ManpowerMillions);
-        writer.WriteNumberValue(sample.WarSupport);
-        writer.WriteNumberValue(sample.FoodPriceIndex);
-        writer.WriteNumberValue(sample.ConsumerPriceIndex);
-        writer.WriteNumberValue(sample.IndustrialPriceIndex);
-        writer.WriteNumberValue(sample.EnergyPriceIndex);
-        writer.WriteNumberValue(sample.ArmsPriceIndex);
+        SaveNumbers.Write(writer, sample.Gdp, options);
+        SaveNumbers.Write(writer, sample.Treasury, options);
+        SaveNumbers.Write(writer, sample.PopulationMillions, options);
+        SaveNumbers.Write(writer, sample.WeeklyIncome, options);
+        SaveNumbers.Write(writer, sample.WeeklyExpenses, options);
+        SaveNumbers.Write(writer, sample.WeeklyBalance, options);
+        SaveNumbers.Write(writer, sample.Productivity, options);
+        SaveNumbers.Write(writer, sample.StandardOfLiving, options);
+        SaveNumbers.Write(writer, sample.Literacy, options);
+        SaveNumbers.Write(writer, sample.Stability, options);
+        SaveNumbers.Write(writer, sample.MarketAccess, options);
+        SaveNumbers.Write(writer, sample.ShortageIndex, options);
+        SaveNumbers.Write(writer, sample.TradeBalance, options);
+        SaveNumbers.Write(writer, sample.MilitaryPower, options);
+        SaveNumbers.Write(writer, sample.ManpowerMillions, options);
+        SaveNumbers.Write(writer, sample.WarSupport, options);
+        SaveNumbers.Write(writer, sample.FoodPriceIndex, options);
+        SaveNumbers.Write(writer, sample.ConsumerPriceIndex, options);
+        SaveNumbers.Write(writer, sample.IndustrialPriceIndex, options);
+        SaveNumbers.Write(writer, sample.EnergyPriceIndex, options);
+        SaveNumbers.Write(writer, sample.ArmsPriceIndex, options);
         writer.WriteEndArray();
     }
 
@@ -146,6 +150,8 @@ public sealed class PopulationGroupConverter : JsonConverter<PopulationGroup>
                     default: reader.Skip(); break;
                 }
             }
+            if (reader.TokenType != JsonTokenType.EndArray || index != 10)
+                throw new JsonException("A population row must contain ten values.");
             return group;
         }
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -189,10 +195,21 @@ public sealed class PopulationGroupConverter : JsonConverter<PopulationGroup>
         writer.WriteStringValue(group.Religion ?? "");
         writer.WriteStringValue(group.Profession ?? "");
         writer.WriteNumberValue(group.Size);
-        writer.WriteNumberValue(group.Employment);
-        writer.WriteNumberValue(group.Wealth);
-        writer.WriteNumberValue(group.StandardOfLiving);
-        writer.WriteNumberValue(group.Radicalism);
+        SaveNumbers.Write(writer, group.Employment, options);
+        SaveNumbers.Write(writer, group.Wealth, options);
+        SaveNumbers.Write(writer, group.StandardOfLiving, options);
+        SaveNumbers.Write(writer, group.Radicalism, options);
         writer.WriteEndArray();
+    }
+}
+
+/// <summary>Ordinary saves stay strict; only the separate diagnostic writer opts into named values.</summary>
+internal static class SaveNumbers
+{
+    internal static void Write(Utf8JsonWriter writer, float value, JsonSerializerOptions options)
+    {
+        if (!float.IsFinite(value) && (options.NumberHandling & JsonNumberHandling.AllowNamedFloatingPointLiterals) != 0)
+            writer.WriteStringValue(float.IsNaN(value) ? "NaN" : value > 0 ? "Infinity" : "-Infinity");
+        else writer.WriteNumberValue(value);
     }
 }

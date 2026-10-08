@@ -16,6 +16,10 @@ static class FlagModdingTests
         FlagCatalog.ResetCatalog();
         var campaign = Campaign.CreateBootstrap(20260928);
         var saudi = campaign.NationByTag("SAU");
+        var ttp = new Nation { Tag = "TTP", Government = "theocracy", Ideology = "theocratic_rule" };
+        Check(!FlagCatalog.Candidates(campaign, ttp).Contains("flag_ideology_theocratic_rule"),
+            "an Islamist movement cannot inherit the Vatican's flag through generic theocracy");
+        Check(FlagCatalog.Resolve(campaign, campaign.NationByTag("VAT")) == "flag_vat", "Vatican keeps its actual national flag");
         Check(SpriteCatalog.TextureOf(FlagCatalog.Resolve(campaign, saudi)) == SpriteCatalog.TextureOf("flag_sau"),
             "2024 Saudi Arabia resolves to its green national artwork, not merely a Saudi-named sprite");
         var tested = 0;

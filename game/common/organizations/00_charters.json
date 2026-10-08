@@ -1,0 +1,7 @@
+{
+  "charters": {
+    "collective_defence": {"name":"Collective defence treaty", "description":"Members undertake to defend a member attacked from outside. Admission and grants require unanimity. Civil wars and members' own offensives are not covered.", "defence":true, "unanimity":true, "weekly_gdp_dues":0.00001, "vote_days":30},
+    "development": {"name":"Development community", "description":"One country, one vote. Members fund a common treasury and vote on admitting partners and grants for members in need. It creates no automatic military obligation.", "unanimity":false, "weekly_gdp_dues":0.000025, "vote_days":21},
+    "cooperation": {"name":"Cooperation council", "description":"A light voluntary council. Modest dues, majority voting and a common aid fund, without mutual defence or compulsory political alignment.", "unanimity":false, "weekly_gdp_dues":0.000005, "vote_days":14}
+  }
+}

@@ -111,7 +111,7 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.save_load");
         var rows = ScrollablePanelRows(panel, 28, 24, 10);
         rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, Ui.Colour("text.accent")));
-        rows.AddChild(Title("Editable JSON saves by default · F5 quicksave · F9 quickload",
+        rows.AddChild(Title("Compressed saves by default · F5 quicksave · F9 quickload",
             13, Ui.Colour("text.muted")));
 
         var folderRow = new HBoxContainer();
@@ -160,8 +160,12 @@ public partial class DealOrForceGame
         }
     }
 
+    // Opened from the pause menu, the save list goes back to it when it closes.
+    private bool _saveLoadFromPause;
+
     private void ShowSaveLoadInterface()
     {
+        _saveLoadFromPause = _pauseMenuLayer is { Visible: true };
         if (_campaign is not null) _campaign.IsPaused = true;
         if (_pause is not null) _pause.Text = Tr("▶");
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
@@ -172,7 +176,12 @@ public partial class DealOrForceGame
         _saveLoadLayer.MoveToFront();
     }
 
-    private void HideSaveLoadInterface() => _saveLoadLayer.Visible = false;
+    private void HideSaveLoadInterface()
+    {
+        _saveLoadLayer.Visible = false;
+        if (_saveLoadFromPause && _hudLayer is { Visible: true } && _campaign is not null) ShowPauseMenu();
+        _saveLoadFromPause = false;
+    }
 
     /// <summary>
     /// Rebuild the list from the folder.
@@ -306,9 +315,41 @@ public partial class DealOrForceGame
     private void ReportSaveFailure(Exception exception)
     {
         DiagnosticLogs.Write("errors", $"SAVE_EXCEPTION {exception}");
-        var message = Simulation.Loc.Format("Save failed: {0}", exception.Message);
+        var message = exception is CampaignIntegrityException
+            ? Tr("Saving stopped: invalid simulation values. The last good save is unchanged.")
+            : Simulation.Loc.Format("Save failed: {0}", exception.Message);
         if (IsInstanceValid(_saveStatus)) _saveStatus.Text = message;
+        if (exception is CampaignIntegrityException integrity)
+        {
+            _campaign.BlockSimulation(integrity.Issue);
+            ShowCampaignFault(message, integrity.DiagnosticPath, integrity.Issue);
+        }
         GD.PushError(message);
+    }
+
+    private AcceptDialog _campaignFaultDialog;
+
+    private void ShowCampaignFault(string message, string diagnosticPath, string detail)
+    {
+        if (IsInstanceValid(_campaignFaultDialog)) return;
+        var diagnostic = string.IsNullOrEmpty(diagnosticPath)
+            ? Tr("A diagnostic snapshot could not be written; see the error log.")
+            : Simulation.Loc.Format("Diagnostic snapshot (not a playable save): {0}", diagnosticPath);
+        _campaignFaultDialog = new AcceptDialog
+        {
+            Title = Tr("Campaign integrity"),
+            // The complete list is in the diagnostic file. Do not expand a native
+            // dialog beyond the screen with dozens of technical paths.
+            DialogText = message + "\n\n" + diagnostic + "\n\n" +
+                (detail.Length > 240 ? detail[..240] + "…" : detail),
+            MinSize = new Vector2I(680, 250)
+        };
+        _campaignFaultDialog.GetLabel().AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        AddChild(_campaignFaultDialog);
+        _campaignFaultDialog.Confirmed += () => _campaignFaultDialog.QueueFree();
+        _campaignFaultDialog.CloseRequested += () => _campaignFaultDialog.QueueFree();
+        _campaignFaultDialog.PopupCentered();
+        _campaign.MarkStrategicChange();
     }
 
     /// <summary>

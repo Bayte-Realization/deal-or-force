@@ -3,6 +3,22 @@ using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>
+    /// What a front asks of the army at war, in divisions a post of its own: a country at war
+    /// raises past its peacetime establishment until it can hold its line this deep.
+    /// </summary>
+    public float ArmyWarDivisionsPerPost { get; set; } = 1.5f;
+
+    /// <summary>How far past its peacetime establishment a country at war will go - and one being overrun.</summary>
+    public float ArmyWarCeiling { get; set; } = 2.0f;
+    public float ArmyWarCeilingOverrun { get; set; } = 3.5f;
+
+    /// <summary>The most formations a country being overrun raises at once.</summary>
+    public int ArmyEmergencyRaises { get; set; } = 3;
+}
+
 public sealed partial class Nation
 {
     /// <summary>
@@ -268,7 +284,13 @@ public static class Attrition
             // A country being overrun rebuilds three times as often, and on credit (WarWeariness):
             // the money a country is short of is not a reason to stop defending it.
             var overrun = WarWeariness.Overrun(campaign, nation);
-            var interval = overrun ? Math.Max(1, defines.ArmyRebuildIntervalDays / 3) : defines.ArmyRebuildIntervalDays;
+            // A country at war short of the army its front needs raises twice as often; one
+            // being overrun three times as often, and several formations at once.
+            var warNeed = WarNeed(campaign, nation);
+            var shortOfFront = warNeed > strength;
+            var interval = overrun ? Math.Max(1, defines.ArmyRebuildIntervalDays / 3)
+                : shortOfFront ? Math.Max(1, defines.ArmyRebuildIntervalDays / 2)
+                : defines.ArmyRebuildIntervalDays;
             if ((campaign.ElapsedDays + nation.Id) % interval != 0) continue;
 
             // A player who has taken the army's size into their own hands is left to it: no
@@ -289,25 +311,63 @@ public static class Attrition
                 var fighting = false;
                 foreach (var war in campaign.Wars)
                     if (!war.Ended && war.Involves(nation.Id)) { fighting = true; break; }
-                if (!fighting) StandDown(campaign, nation);
-                continue;
+                if (!fighting)
+                {
+                    StandDown(campaign, nation);
+                    continue;
+                }
+                // Over the peacetime army and at war: it may still be short of what its front needs.
+                if (strength >= warNeed) continue;
             }
 
-            if (strength >= nation.EstablishedDivisions * defines.ArmyRebuildCeiling) continue;
-            if (nation.Treasury < defines.ArmyRebuildCost &&
-                !(overrun && nation.Treasury > -nation.Gdp * defines.WarDebtLimitShare)) continue;
-            if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) continue;
+            // In peace the budget's army; at war the army the front needs, up to a ceiling of the
+            // budget's - higher for a country whose ground is being taken. Sudan held ten posts
+            // of its civil war with seven divisions and raised nothing, because seven was its
+            // peacetime establishment.
+            var target = nation.EstablishedDivisions * defines.ArmyRebuildCeiling;
+            if (warNeed > target)
+                target = MathF.Min(warNeed, nation.EstablishedDivisions *
+                    (overrun ? defines.ArmyWarCeilingOverrun : defines.ArmyWarCeiling));
+            if (strength >= target) continue;
+            // At war it borrows for the army it needs, as far as a country at war may.
+            var mayBorrow = (overrun || shortOfFront) && nation.Treasury > -nation.Gdp * defines.WarDebtLimitShare;
+            if (nation.Treasury < defines.ArmyRebuildCost && !mayBorrow) continue;
 
             var home = HomeState(campaign, nation);
             if (home < 0) continue;
-            new RaiseArmyCommand
+            var raises = overrun ? Math.Max(1, Math.Min(defines.ArmyEmergencyRaises, (int)MathF.Ceiling((target - strength) / 3f))) : 1;
+            for (var raise = 0; raise < raises; raise++)
             {
-                IssuerId = nation.Id,
-                StateMapIndex = home,
-                Divisions = 1f
-            }.Apply(campaign);
-            Standing[nation.Id] = strength + 1f;
+                if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) break;
+                if (nation.Treasury < defines.ArmyRebuildCost && !mayBorrow) break;
+                new RaiseArmyCommand
+                {
+                    IssuerId = nation.Id,
+                    StateMapIndex = home,
+                    Divisions = 1f
+                }.Apply(campaign);
+                strength += 1f;
+            }
+            Standing[nation.Id] = strength;
         }
+    }
+
+    /// <summary>
+    /// The army a country's fronts need: its own posts on every war it is fighting, so deep.
+    /// Nothing at peace. A short border war is fought with the army there is.
+    /// </summary>
+    private static float WarNeed(Campaign campaign, Nation nation)
+    {
+        var controllers = campaign.ProvinceController;
+        if (controllers is null) return 0f;
+        var posts = 0;
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended || war.Limited || !war.Involves(nation.Id)) continue;
+            foreach (var province in war.FriendlyFront(nation.Id))
+                if (province < controllers.Length && controllers[province] == (ushort)nation.MapIndex) posts++;
+        }
+        return posts * campaign.Defines.ArmyWarDivisionsPerPost;
     }
 
     /// <summary>

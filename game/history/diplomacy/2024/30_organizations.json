@@ -1,0 +1,48 @@
+// The international organizations of 1 January 2024 other than the two defence blocs, which
+// are written with the alliances in 00_pacts. Membership is as it stood that morning:
+//
+// - the African Union with Mali, Burkina Faso, Niger, Guinea, Gabon and Sudan suspended after
+//   their coups;
+// - ECOWAS before the three Sahel juntas announced their exit (28 January 2024), Guinea suspended;
+// - BRICS the day Egypt, Ethiopia, Iran and the United Arab Emirates joined; Saudi Arabia had not
+//   answered the invitation;
+// - OPEC after Angola left (1 January 2024);
+// - Mercosur with Venezuela suspended and Bolivia not yet a full member (July 2024);
+// - the SCO before Belarus (July 2024);
+// - the CIS with Moldova still formally a member.
+//
+// A charter is what the organization does in the game (common/organizations): "development"
+// for the economic unions with a common budget, "cooperation" for the councils and forums.
+{
+  "organizations": [
+    { "name": "European Union", "charter": "development",
+      "members": ["AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "HUN",
+                  "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"] },
+    { "name": "African Union", "charter": "cooperation",
+      "members": ["DZA", "AGO", "BEN", "BWA", "BDI", "CMR", "CPV", "CAF", "TCD", "COM", "COG", "COD", "DJI", "EGY",
+                  "GNQ", "ERI", "SWZ", "ETH", "GMB", "GHA", "GNB", "CIV", "KEN", "LSO", "LBR", "LBY", "MDG", "MWI",
+                  "MRT", "MUS", "MAR", "MOZ", "NAM", "NGA", "RWA", "ESH", "STP", "SEN", "SYC", "SLE", "SOM", "ZAF",
+                  "SSD", "TZA", "TGO", "TUN", "UGA", "ZMB", "ZWE"] },
+    { "name": "ASEAN", "charter": "cooperation",
+      "members": ["BRN", "KHM", "IDN", "LAO", "MYS", "MMR", "PHL", "SGP", "THA", "VNM"] },
+    { "name": "Arab League", "charter": "cooperation",
+      "members": ["DZA", "BHR", "COM", "DJI", "EGY", "IRQ", "JOR", "KWT", "LBN", "LBY", "MRT", "MAR", "OMN", "PSE",
+                  "QAT", "SAU", "SOM", "SDN", "SYR", "TUN", "ARE", "YEM"] },
+    { "name": "Shanghai Cooperation Organisation", "charter": "cooperation",
+      "members": ["CHN", "RUS", "IND", "PAK", "KAZ", "KGZ", "TJK", "UZB", "IRN"] },
+    { "name": "BRICS", "charter": "cooperation",
+      "members": ["BRA", "RUS", "IND", "CHN", "ZAF", "EGY", "ETH", "IRN", "ARE"] },
+    { "name": "OPEC", "charter": "cooperation",
+      "members": ["SAU", "IRQ", "IRN", "KWT", "VEN", "ARE", "LBY", "NGA", "DZA", "COG", "GNQ", "GAB"] },
+    { "name": "Gulf Cooperation Council", "charter": "cooperation",
+      "members": ["SAU", "ARE", "KWT", "QAT", "BHR", "OMN"] },
+    { "name": "Mercosur", "charter": "development",
+      "members": ["ARG", "BRA", "PRY", "URY"] },
+    { "name": "Commonwealth of Independent States", "charter": "cooperation",
+      "members": ["RUS", "BLR", "KAZ", "KGZ", "TJK", "UZB", "ARM", "AZE", "MDA"] },
+    { "name": "Eurasian Economic Union", "charter": "development",
+      "members": ["RUS", "BLR", "KAZ", "KGZ", "ARM"] },
+    { "name": "ECOWAS", "charter": "development",
+      "members": ["BEN", "CPV", "CIV", "GMB", "GHA", "GNB", "LBR", "NGA", "SEN", "SLE", "TGO", "MLI", "BFA", "NER"] }
+  ]
+}

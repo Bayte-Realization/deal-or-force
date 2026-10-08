@@ -29,8 +29,9 @@
   "chronicle.construction_completed": "{0}: completed “{2}” in {3}.",
   "chronicle.militia_raised": "{0}: {3} takes up arms - its people form a militia of their own.",
   "chronicle.militia_stood_down": "{0}: the danger has passed and {2} goes home.",
-  "chronicle.ultimatum_accepted": "{1} yields {2} to the demand of {0}.",
-  "chronicle.ultimatum_refused": "{1} refuses the demand of {0} over {2}.",
+  "chronicle.ultimatum_accepted": "{1} yields to {0}: {2}.",
+  "chronicle.ultimatum_refused": "{1} refuses the ultimatum of {0}: {2}.",
+  "chronicle.deal_signed": "{0} strikes a bargain with {1}: {2}.",
   "chronicle.accession_signed": "{0} signs the accession treaty: {2}.",
   "chronicle.accession_declined": "{0} declines the invitation into {2}."
 }

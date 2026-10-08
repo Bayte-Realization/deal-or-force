@@ -83,6 +83,10 @@ public static class HistoryDataLoader
                     if (nation is null) errors?.Add($"Unknown country '{member.GetString()}' in an alliance.");
                     else signatories.Add(nation);
                 }
+                if (signatories.Count > 2 && campaign.FeatureEnabled("organizations") &&
+                    bloc.TryGetProperty("name", out var organizationName) && organizationName.ValueKind == JsonValueKind.String &&
+                    InternationalOrganizations.Seed(campaign, organizationName.GetString(), "collective_defence", signatories.Select(n => n.Id)) is not null)
+                    continue;
                 for (var one = 0; one < signatories.Count; one++)
                 for (var two = one + 1; two < signatories.Count; two++)
                 {
@@ -91,6 +95,23 @@ public static class HistoryDataLoader
                     relation.AllianceSinceDay = campaign.ElapsedDays;
                     OpinionSystem.Remember(campaign, relation, "alliance");
                 }
+            }
+
+        // The organizations that are not defence blocs: unions, councils, forums
+        // (history/diplomacy/30_organizations). A member the scenario does not have is left out.
+        if (root.TryGetProperty("organizations", out var organizations) && organizations.ValueKind == JsonValueKind.Array &&
+            campaign.FeatureEnabled("organizations"))
+            foreach (var body in organizations.EnumerateArray())
+            {
+                if (!body.TryGetProperty("name", out var title) || title.ValueKind != JsonValueKind.String ||
+                    !body.TryGetProperty("members", out var roster) || roster.ValueKind != JsonValueKind.Array) continue;
+                var charterId = body.TryGetProperty("charter", out var kind) && kind.ValueKind == JsonValueKind.String
+                    ? kind.GetString() : "cooperation";
+                var ids = roster.EnumerateArray()
+                    .Select(member => campaign.NationByTag(member.GetString() ?? ""))
+                    .Where(nation => nation is not null).Select(nation => nation.Id).ToList();
+                if (InternationalOrganizations.Seed(campaign, title.GetString(), charterId, ids) is null)
+                    errors?.Add($"Organization '{title.GetString()}' could not be founded ({charterId}, {ids.Count} members).");
             }
 
         if (root.TryGetProperty("guarantees", out var guarantees) && guarantees.ValueKind == JsonValueKind.Array)
@@ -417,7 +438,15 @@ public static class HistoryDataLoader
             SetFloat(value, "standard_of_living", number => state.StandardOfLiving = M.Clamp01(number));
             SetFloat(value, "radicalism", number => state.Radicalism = M.Clamp01(number));
             SetFloat(value, "urbanization", number => state.Urbanization = M.Clamp01(number));
-            // Who claims it without holding it (ColonisationCore): Antarctica's seven.
+            if (value.TryGetProperty("cores", out var cores) && cores.ValueKind == JsonValueKind.Array)
+            {
+                state.CoreTags.Clear();
+                foreach (var core in cores.EnumerateArray())
+                    if (core.ValueKind == JsonValueKind.String && core.GetString() is { Length: > 0 } tag &&
+                        !state.CoreTags.Contains(tag, StringComparer.OrdinalIgnoreCase)) state.CoreTags.Add(tag);
+            }
+            // Claims also describe disputed settled territories; unlike cores they are
+            // weaker policy interests, not a homeland entitlement.
             if (value.TryGetProperty("claims", out var claims) && claims.ValueKind == JsonValueKind.Array)
             {
                 state.Claims.Clear();

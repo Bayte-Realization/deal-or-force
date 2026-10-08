@@ -235,6 +235,17 @@ public partial class DealOrForceGame
             Fmt.People(_selectedState.Population), owner?.DisplayName ?? Tr("an unknown flag"));
 
         DetailHeading("THE REGION");
+        if (_selectedState.LastHouseholdReviewDay >= 0 && _campaign.Defines.HouseholdDynamicsEnabled)
+        {
+            DetailRow("Employment", Fmt.Percent(HouseholdEconomy.Employment(_selectedState)),
+                "Employment follows available jobs gradually; factories need labour, not just construction money.");
+            DetailRow("Basic needs covered", Fmt.Percent(_selectedState.BasicNeedsCoverage),
+                "Food, energy and medicine satisfaction in the owner's market, weighted 60%, 25% and 15%. This is supply coverage, not income equality.");
+            DetailRow("Livelihood stress", Fmt.Percent(_selectedState.LivelihoodStress),
+                "Shortages, lack of jobs and local destruction put pressure on living standards and radicalism.");
+            DetailRow("Births / deaths, last review", Loc.Format("{0} / {1}", Fmt.People(_selectedState.ReviewBirths), Fmt.People(_selectedState.ReviewDeaths)),
+                "Aggregate game rates: literacy affects births; living conditions, medicine and local destruction affect deaths. Not a real-world forecast or a migration count.");
+        }
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
         DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),
             "How much of the region can read. Literacy raises productivity and assimilates minorities faster.");

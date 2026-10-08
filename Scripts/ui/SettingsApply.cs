@@ -106,6 +106,10 @@ public partial class DealOrForceGame
                 if (_campaign is not null)
                     _campaign.Defines.SaveTextFormat = SettingsCatalog.Chosen("save_format") != "false";
                 break;
+            case "civil_wars_players":
+                if (_campaign is not null)
+                    _campaign.Defines.CivilWarStrikesPlayers = SettingsCatalog.Chosen("civil_wars_players") == "true";
+                break;
 
             case "hours_per_tick":
                 if (_campaign is not null)

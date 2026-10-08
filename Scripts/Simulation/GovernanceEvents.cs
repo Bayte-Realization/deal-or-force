@@ -23,6 +23,9 @@ public sealed class GovernanceTransition
 
     public string Ideology = "";
 
+    /// <summary>Empty for a weekly political event; "coup" requires sustained institutional strain.</summary>
+    public string Crisis = "";
+
     /// <summary>How likely this is against the others that also apply.</summary>
     public float Weight = 1f;
 
@@ -140,6 +143,11 @@ public static class GovernanceEvents
                     case "name": transition.Name = Text(field.Value, transition.Name); break;
                     case "government": transition.Government = Text(field.Value, transition.Government); break;
                     case "ideology": transition.Ideology = Text(field.Value, transition.Ideology); break;
+                    case "crisis":
+                        var crisis = Text(field.Value, transition.Crisis);
+                        if (crisis is "" or "coup") transition.Crisis = crisis;
+                        else errors?.Add($"common/governance: '{entry.Name}' has unknown crisis '{crisis}'.");
+                        break;
                     case "weight": transition.Weight = Number(field.Value, transition.Weight); break;
                     case "stability_below": transition.StabilityBelow = Number(field.Value, -1f); break;
                     case "stability_above": transition.StabilityAbove = Number(field.Value, -1f); break;
@@ -225,7 +233,7 @@ public static class GovernanceEvents
             {
                 if (war.Ended || !war.Involves(nation.Id)) continue;
                 atWar = true;
-                var score = war.AttackerId == nation.Id ? war.WarScore : -war.WarScore;
+                var score = war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore;
                 if (score < 0f) losing = true;
             }
 
@@ -234,6 +242,7 @@ public static class GovernanceEvents
             var total = 0f;
             foreach (var transition in Transitions)
             {
+                if (transition.Crisis.Length > 0) continue; // DomesticCrises owns its visible progress.
                 if (!Applies(transition, nation, radicalism, atWar, losing)) continue;
                 if (transition.Weight <= 0f) continue;
                 available.Add(transition);
@@ -257,26 +266,48 @@ public static class GovernanceEvents
                 break;
             }
 
-            var wasGovernment = nation.Government;
-            var wasIdeology = nation.Ideology;
-            if (!campaign.ChangePolitics(nation.Id, chosen.Government, chosen.Ideology, out _)) continue;
-
-            Recent.Add(new GovernanceReport
-            {
-                Nation = nation,
-                TransitionId = chosen.Id,
-                Name = chosen.Name.Length > 0 ? chosen.Name : chosen.Id,
-                WasGovernment = wasGovernment,
-                WasIdeology = wasIdeology,
-                NowGovernment = nation.Government,
-                NowIdeology = nation.Ideology,
-                Day = campaign.ElapsedDays
-            });
-            DiagnosticLogs.Write("simulation",
-                $"GOVERNANCE nation={nation.Tag} transition={chosen.Id} " +
-                $"government={wasGovernment}->{nation.Government} " +
-                $"ideology={wasIdeology}->{nation.Ideology}");
+            ApplyTransition(campaign, nation, chosen);
         }
+    }
+
+    public static bool Eligible(Campaign campaign, Nation nation, GovernanceTransition transition)
+    {
+        if (campaign is null || nation is null || transition is null || nation.Population <= 0 ||
+            campaign.ElapsedDays - nation.PoliticsChangedDay < PoliticsCore.ChangeCooldownDays) return false;
+        var atWar = false;
+        var losing = false;
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended || !war.Involves(nation.Id)) continue;
+            atWar = true;
+            if ((war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore) < 0f) losing = true;
+        }
+        return Applies(transition, nation, Radicalism(campaign, nation), atWar, losing);
+    }
+
+    /// <summary>Use the same policy validation, stability cost and report for both ordinary changes and coups.</summary>
+    public static bool ApplyTransition(Campaign campaign, Nation nation, GovernanceTransition chosen)
+    {
+        if (!Eligible(campaign, nation, chosen)) return false;
+        var wasGovernment = nation.Government;
+        var wasIdeology = nation.Ideology;
+        if (!campaign.ChangePolitics(nation.Id, chosen.Government, chosen.Ideology, out _)) return false;
+        Recent.Add(new GovernanceReport
+        {
+            Nation = nation,
+            TransitionId = chosen.Id,
+            Name = chosen.Name.Length > 0 ? chosen.Name : chosen.Id,
+            WasGovernment = wasGovernment,
+            WasIdeology = wasIdeology,
+            NowGovernment = nation.Government,
+            NowIdeology = nation.Ideology,
+            Day = campaign.ElapsedDays
+        });
+        DiagnosticLogs.Write("simulation",
+            $"GOVERNANCE nation={nation.Tag} transition={chosen.Id} " +
+            $"government={wasGovernment}->{nation.Government} " +
+            $"ideology={wasIdeology}->{nation.Ideology}");
+        return true;
     }
 
     /// <summary>How angry the country is, weighted by where its people actually live.</summary>

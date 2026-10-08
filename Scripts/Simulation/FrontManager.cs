@@ -41,6 +41,13 @@ public sealed partial class Defines
     /// until the front next moves.
     /// </summary>
     public bool FrontStaffCallsUpIdle { get; set; } = true;
+
+    /// <summary>
+    /// How threatened a hole in the line must be - its need in divisions, one for being on the
+    /// front and one more for each division's worth of enemy beside it - before the staff
+    /// closes it with a division taken off an advance when no reserve is free.
+    /// </summary>
+    public float FrontHoleAdvanceNeed { get; set; } = 3.5f;
 }
 
 /// <summary>
@@ -272,13 +279,36 @@ public static class FrontManager
             // The nearest donor may have no road to the hole - a salient, a pocket - and the
             // next nearest may; a few are tried before the hole is left for tomorrow.
             Refused.Clear();
+            var filled = false;
             for (var attempt = 0; attempt < 4; attempt++)
             {
                 var mover = Donor(campaign, hole, quota, today, allowThinning: holders < Posts.Count);
                 if (mover is null) break;
-                if (Repost(campaign, nation, mover, hole)) { budget--; break; }
+                if (Repost(campaign, nation, mover, hole)) { budget--; filled = true; break; }
                 Refused.Add(mover.Id);
             }
+            // Nobody on the line to spare: the reserve is what a reserve is for. A hole the enemy
+            // can walk into is filled from the nearest division held back for this war before
+            // the reserve is allowed to stand as a pile behind it - Ukraine kept five divisions
+            // in reserve in one province with five posts of its line held by nobody.
+            // Only a staff the country has handed its army to: a player's reserve and advances
+            // are the player's orders, and the staff does not rewrite them.
+            if (!filled && war is not null && line is null && (!nation.IsHuman || Delegation.Holds(nation, Delegation.Command)))
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    // A hole with the enemy standing next to it may be closed by an advance as
+                    // well, one division of it - an attack that leaves the door open behind it
+                    // is not worth the ground it takes. Only for holes: the advances as a whole
+                    // stay where the planner massed them (FrontStaffMovesAdvances).
+                    var threatened = Need.GetValueOrDefault(hole, 1f) >= campaign.Defines.FrontHoleAdvanceNeed;
+                    var reserve = NearestReserve(campaign, nation, war, hole, today, threatened);
+                    if (reserve is null) break;
+                    var duty = reserve.OrderKind;
+                    reserve.OrderKind = ArmyOrder.DefendFront;
+                    if (Repost(campaign, nation, reserve, hole)) { budget--; holders++; break; }
+                    reserve.OrderKind = duty;
+                    Refused.Add(reserve.Id);
+                }
         }
 
         // Then the weight of the line. Each post's share of the divisions is its share of the
@@ -320,6 +350,33 @@ public static class FrontManager
     }
 
     private static int Count(int post) => Allocated.TryGetValue(post, out var there) ? there.Count : 0;
+
+    /// <summary>The nearest division of this country held in reserve for this war that is free to go.</summary>
+    private static Army NearestReserve(Campaign campaign, Nation nation, StrategicWar war, int hole, int today,
+        bool advancesToo = false)
+    {
+        var target = campaign.ProvinceMap.CenterOf(hole);
+        Army best = null;
+        var bestDistance = float.MaxValue;
+        foreach (var army in campaign.Armies)
+        {
+            if (army.NationId != nation.Id || army.AssignedWarId != war.Id) continue;
+            if (army.OrderKind != ArmyOrder.ReserveFront && !(advancesToo && army.OrderKind == ArmyOrder.AdvanceFront)) continue;
+            if (army.FrontLineId >= 0 || army.InBattle || army.DirectOrder || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0) continue;
+            if (army.TemplateId == MilitiaCore.TemplateId || Refused.Contains(army.Id)) continue;
+            if (today - army.OrderIssuedDay < campaign.Defines.FrontSettleDays) continue;
+            // A reserve standing by, not one already on its way somewhere: turning marching
+            // columns round is what made orders churn.
+            if (army.Route.Count > 0) continue;
+            // A reserve before an advance at the same distance.
+            var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude) *
+                           (army.OrderKind == ArmyOrder.AdvanceFront ? 1.5f : 1f);
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = army;
+        }
+        return best;
+    }
 
     private static List<Army> Take() => Spare.Count > 0 ? Spare.Pop() : new List<Army>();
 

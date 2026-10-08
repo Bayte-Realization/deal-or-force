@@ -69,6 +69,37 @@ public static class MovementReach
         return faithful > 0 ? .04f : 0f;
     }
 
+    /// <summary>Permission to lobby, host an office or provide aid is never permission to found a state.</summary>
+    public static bool CanClaimTerritory(Campaign c, Nation nation, ScenarioState region)
+    {
+        var definition = Movements.DefinitionOf(nation);
+        if (c?.ProvinceMap is null || nation?.Movement is not { Dissolved: false } movement ||
+            region is null || region.Unclaimed || region.Population <= 0 || definition is null ||
+            !definition.CanStageUprising) return false;
+        if ((definition.Has("humanitarian") || definition.Has("diaspora_lobby")) &&
+            !definition.Has("territorial_ambition")) return false;
+        // Return to a remembered homeland, including a partition of it. A refuge abroad
+        // never becomes a new homeland merely because the government has an office there.
+        if (movement.Exile)
+            return TerritorialClaims.TitleOf(c, nation, region) == TerritorialTitle.Homeland;
+        if (IsHomeland(c, definition, region)) return true;
+        if (definition.Homeland.Count == 0 && !definition.Has("territorial_ambition")) return false;
+        var own = MovementRules.PeopleOf(c, region, definition, out _);
+        if (own / (double)region.Population < c.Defines.MovementTerritorialResidentShare) return false;
+        // Expansion of a territorial movement requires an actual common frontier; neither
+        // worldwide minority presence, sponsoring nor headquarters relocation is an anchor.
+        return c.HasOwnedLand(nation) && TerritorialCoherence.TouchesOwnedGround(c, nation, region.MapIndex);
+    }
+
+    private static bool IsHomeland(Campaign c, MovementDefinition definition, ScenarioState region)
+    {
+        if (MovementDefinition.Listed(definition.Homeland, region.Id)) return true;
+        var origin = TerritorialClaims.Origin(region);
+        foreach (var id in definition.Homeland)
+            if (Movements.StateById(c, id) is { } home && TerritorialClaims.Origin(home) == origin) return true;
+        return false;
+    }
+
     /// <summary>The region card shows residents, not the share of a tiny minority that likes a movement.</summary>
     public static float ResidentSupport(Campaign campaign, Nation nation, ScenarioState region)
     {
