@@ -78,12 +78,14 @@ internal static class WarLedgerReport
                               $"day {w.StartedDay}-{(w.Ended ? w.EndedDay.ToString() : "...")} ({length}d) " +
                               $"stage={w.EscalationStage} allies={w.AttackerAllies.Count}/{w.DefenderAllies.Count}[{string.Join(",", w.AttackerAllies.Concat(w.DefenderAllies).Select(id => c.NationById(id)?.Tag))}] " +
                               $"losses={w.AttackerLosses:0.000}/{w.DefenderLosses:0.000} score={w.WarScore:0.00} " +
-                              $"winner={winner} \"{w.Name}\" {w.PeaceSummary}");
+                              $"winner={winner} \"{w.Name}\" {w.PeaceSummary}" + (w.PeaceProposerId >= 0 ? $" (put by {Tag(w.PeaceProposerId)}: {w.LastNegotiation})" : ""));
         }
         // What happened short of wars: incidents, crises, backers (Escalation, ProxyWars).
         var kinds = new[] { "incident", "incident_calm", "tension_crisis", "tension_clashes", "tension_eased",
-            "war_major", "war_total", "proxy_started", "proxy_ended", "secession", "secession_contested", "war_started", "border_war", "coup_plot", "coup", "coup_counter", "coup_foiled", "regime_change" };
+            "war_major", "war_total", "proxy_started", "proxy_ended", "secession", "secession_contested", "war_started", "border_war", "coup_plot", "coup", "coup_counter", "coup_foiled", "regime_change", "ultimatum_accepted", "ultimatum_refused" };
         Console.WriteLine("CHRONICLE " + string.Join(" ", kinds.Select(k => $"{k}={c.Chronicle.Entries.Count(e => e.Kind == k)}")));
+        foreach (var entry in c.Chronicle.Entries.Where(e => e.Kind is "ultimatum_accepted" or "ultimatum_refused"))
+            Console.WriteLine($" ULTIMATUM day {entry.Day} {Tag(entry.ActorId)}->{Tag(entry.TargetId)} {entry.Kind["ultimatum_".Length..]}: {entry.Subject}");
         var shaky = c.Nations.Where(n => n.Movement is null && n.FactionId.Length == 0 && n.Population > 0 && c.StatesOf(n).Length > 0)
             .OrderBy(n => n.Stability).Take(15).Select(n => $"{n.Tag}:{n.Stability:0.00}:{n.Government}");
         Console.WriteLine("LOWEST STABILITY " + string.Join(" ", shaky));

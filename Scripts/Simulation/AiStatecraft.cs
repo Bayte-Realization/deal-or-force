@@ -645,6 +645,26 @@ public static partial class AiStatecraft
             return;
         }
 
+        // Deal or force: before a war it has no reason it could give for, a government asks
+        // for what it wants. A neighbour that cannot face it hands the region over; one that
+        // refuses has handed it the reason (Statecraft.CasusBelli, "ultimatum_refusal").
+        if (TryUltimatumFirst(campaign, nation, target)) return;
+
+        // And no war without a reason a government could give. China looked at Mongolia, an
+        // army a two-hundredth of its own and nobody behind it, and went in in the first year:
+        // weakness counted for less without a cause, but never for nothing. Without one the war
+        // stays a plan - built for, its friends worked on, an ultimatum put - until there is.
+        if (defines.AiNeedsCauseForWar && string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target)))
+        {
+            if (nation.WarPlanTargetId != target.Id)
+            {
+                nation.WarPlanTargetId = target.Id;
+                nation.WarPlanSinceDay = campaign.ElapsedDays;
+            }
+            Count("no_cause");
+            return;
+        }
+
         // Worth having, but not yet worth having now. A government that reaches this point
         // does not forget the idea - it keeps the target, builds, and starts prising the
         // target's friends away. That is the whole of the difference between an AI that is
@@ -677,6 +697,69 @@ public static partial class AiStatecraft
         if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id) is not null) Count("declared");
     }
 
+
+    /// <summary>
+    /// The demand before the war: one region of the target's on our border - our own people's
+    /// if there is one, else its most populous - once a year at most for each target, and only
+    /// to a government nobody plays and when we have no reason of our own already.
+    /// </summary>
+    private static bool TryUltimatumFirst(Campaign campaign, Nation nation, Nation target)
+    {
+        var defines = campaign.Defines;
+        if (!defines.AiUltimatumsBeforeWar || target.IsHuman) return false;
+        if (!string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target))) return false;
+        var key = "ultimatum/" + target.Id;
+        if (nation.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) return false;
+        var map = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        if (map is null || controllers is null) return false;
+
+        // Only for ground there is a case for: ours once, or our own people's. China asking
+        // Mongolia for Dornod because Mongolia could not say no is not a demand anybody makes.
+        var lost = new HashSet<int>();
+        foreach (var (region, holder) in LostLands.Of(campaign, nation))
+            if (holder?.Id == target.Id) lost.Add(region.MapIndex);
+
+        ScenarioState best = null;
+        var bestScore = 0f;
+        foreach (var state in campaign.States)
+        {
+            if (state.NationMapIndex != target.MapIndex || state.Population <= 0) continue;
+            if (!Ultimatum.CanDemand(campaign, target, state.MapIndex)) continue;
+            var touches = false;
+            for (var province = 1; province <= map.ProvinceCount && !touches; province++)
+            {
+                if (map.ProvinceToState[province] != state.MapIndex) continue;
+                foreach (var next in map.Neighbors[province])
+                    if (next < controllers.Length && controllers[next] == (ushort)nation.MapIndex) { touches = true; break; }
+            }
+            if (!touches) continue;
+            long ours = 0;
+            foreach (var group in state.PopulationGroups)
+                if (DemographyCatalog.IsPrimary(nation.Tag, group.Culture)) ours += group.Size;
+            var kin = ours / (float)Math.Max(1, state.Population);
+            if (kin < 0.5f && !lost.Contains(state.MapIndex)) continue;
+            var score = state.Population * (1f + 4f * kin) * (lost.Contains(state.MapIndex) ? 2f : 1f);
+            if (score <= bestScore) continue;
+            bestScore = score;
+            best = state;
+        }
+        if (best is null) { Count("ultimatum_no_region"); return false; }
+
+        var demand = new Ultimatum.Demand { Regions = new[] { best.MapIndex } };
+        var assessment = Ultimatum.Assess(campaign, nation, target, demand);
+        if (!assessment.Valid)
+        {
+            Count("ultimatum_invalid");
+            DiagnosticLogs.Write("ai", $"AI_ULTIMATUM_INVALID {nation.Tag}->{target.Tag} region={best.Id} reason={assessment.Reason}");
+            return false;
+        }
+        nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiUltimatumIntervalDays);
+        Ultimatum.Resolve(campaign, nation, target, demand, assessment.Response);
+        Count(assessment.Response == Ultimatum.Answer.Yield ? "ultimatum_yielded" : "ultimatum_refused");
+        DiagnosticLogs.Write("ai", $"AI_ULTIMATUM {nation.Tag}->{target.Tag} region={best.Id} answer={assessment.Response}");
+        return true;
+    }
 
     /// <summary>
     /// A country at war asks, periodically, whether it is done. Winning it writes a peace
@@ -745,7 +828,10 @@ public static partial class AiStatecraft
             // peace where nobody does (WarWeariness).
             if (nation.WarSupport < defines.AiCapitulationWarSupport &&
                 campaign.ElapsedDays - war.StartedDay > defines.AiMinimumWarDays * 3)
-                PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.WhitePeace);
+                // A government tired of its civil war cannot ask the side that is winning it to
+                // hand the ground back: it concedes the line, and the line is the de facto border.
+                PeaceOffers.Put(campaign, war, nation, opponent,
+                    war.CivilConflict ? WarWeariness.StalemateTerms(campaign, war) : PeaceTerms.WhitePeace);
             else if (WarWeariness.TimeToStop(campaign, war, winning: false))
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
             return;

@@ -249,7 +249,12 @@ public static partial class Warfare
         // line that changed this hour has holes in it this hour.
         using (SimProfiler.Measure("  war:staff"))
         {
-            if (campaign.StepOpensNewDay) FrontManager.Tick(campaign);
+            if (campaign.StepOpensNewDay)
+            {
+                FrontManager.Tick(campaign);
+                // And at peace, the borders it has reason to fear (ThreatPosture).
+                using (SimProfiler.Measure("  war:posture")) ThreatPosture.Tick(campaign);
+            }
             else
                 foreach (var war in Stale)
                     if (Moved.Contains(war.Id)) FrontManager.Balance(campaign, war);

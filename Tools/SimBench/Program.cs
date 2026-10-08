@@ -268,6 +268,15 @@ public static class Program
         if (Array.IndexOf(args, "--secession") >= 0)
             return Check("a country can lose a part of itself, and it is a country afterwards",
                 RegionsThatAreNotTheirsCanLeave());
+        // `--manoeuvres` runs the consolidation and railway check alone, on its own sandbox.
+        if (Array.IndexOf(args, "--manoeuvres") >= 0)
+        {
+            var sandbox = Campaign.CreateBootstrap(20260830);
+            if (!AttachMap(sandbox)) return 1;
+            sandbox.IsPaused = false;
+            for (var day = 0; day < 220; day++) sandbox.TickDay();
+            return Check("a consolidation invents nobody and the railways are paid for", ManoeuvresCostWhatTheySave(sandbox));
+        }
         // `--counts-cost` asks one strong country about one weak neighbour, with and without a reason.
         if (Array.IndexOf(args, "--counts-cost") >= 0)
             return Check("a country counts the cost before it declares", ACountryCountsTheCost());
@@ -719,6 +728,7 @@ public static class Program
                           $"{bare.Sum(sample => sample.Bare):N0} with a front of their own and nobody of theirs on it.");
         Console.WriteLine($"  divisions of countries at war serving no war, summed over {bare.Count} samples: {idle:N0}.");
         Console.WriteLine($"  the staff re-posted {FrontManager.Reposts:N0} division(s) in {days} day(s).");
+        Console.WriteLine($"  at peace, {ThreatPosture.Moves:N0} division(s) were moved to the borders their countries fear.");
         return 0;
     }
 
@@ -4165,7 +4175,12 @@ public static class Program
             if (written.TradeConcessions) terms.Add("trade concessions");
             if (written.Demilitarise) terms.Add("demilitarisation");
             if (written.Humiliate) terms.Add("humiliation");
-            if (terms.Count == 0)
+            // A war score below the cheapest term buys nothing at all: an empty treaty is then
+            // the only one there is, and the land check below still has to pass.
+            var defines = campaign.Defines;
+            var cheapestTerm = Math.Min(defines.PeaceCostReparations,
+                Math.Min(defines.PeaceCostTradeConcessions, defines.PeaceCostDemilitarise));
+            if (terms.Count == 0 && shaping >= cheapestTerm)
                 return $"{winner.Tag} wrote an entirely empty treaty out of {held.Count:N0} " +
                        $"occupied province(s) with {shaping:0.00} to spend - no land and no terms";
 
@@ -4185,7 +4200,7 @@ public static class Program
 
             Console.WriteLine($"  ai peace: {winner.Tag} held {held.Count:N0} province(s) and signed for " +
                               $"no land - the cheapest whole region on offer was {cheapestWhole:0.00} against " +
-                              $"{shaping:0.00} of war score - taking {string.Join(", ", terms)} instead.");
+                              $"{shaping:0.00} of war score - taking {(terms.Count == 0 ? "nothing, since no term costs that little" : string.Join(", ", terms))} instead.");
             return "";
         }
 
@@ -9988,12 +10003,46 @@ public static class Program
 
         var topology = campaign.ProvinceMap;
         if (topology is null) return "there is no province map to redeploy across";
-        var destination = topology.Neighbors[traveller.ProvinceId]
+        bool Hostile(int province) =>
+            campaign.ProvinceController[province] is var holder && holder != 0 && holder != (ushort)player.MapIndex &&
+            campaign.Nations.Find(n => n.MapIndex == holder) is { } owner && CampaignDiplomacy.AtWar(campaign, player.Id, owner.Id) ||
+            campaign.Armies.Any(army => army.ProvinceId == province && army.NationId != player.Id &&
+                                        CampaignDiplomacy.AtWar(campaign, player.Id, army.NationId));
+        bool Near(int origin, int steps)
+        {
+            var seen = new HashSet<int> { origin };
+            var ring = new List<int> { origin };
+            for (var step = 0; step <= steps; step++)
+            {
+                if (ring.Any(Hostile)) return true;
+                ring = ring.SelectMany(p => topology.Neighbors[p]).Where(p => p > 0 && seen.Add(p)).ToList();
+            }
+            return false;
+        }
+        // Several steps out, so a short hop from the front is not mistaken for no hop at all.
+        var destination = 0;
+        {
+            // Outwards over our own ground, the first province at least three steps away that
+            // nothing hostile is near.
+            var seen = new HashSet<int> { traveller.ProvinceId };
+            var ring = new List<int> { traveller.ProvinceId };
+            for (var step = 1; step <= 40 && destination == 0 && ring.Count > 0; step++)
+            {
+                ring = ring.SelectMany(p => topology.Neighbors[p])
+                    .Where(p => p > 0 && campaign.ProvinceController[p] == (ushort)player.MapIndex && seen.Add(p)).ToList();
+                if (step >= 3) destination = ring.FirstOrDefault(p => !Near(p, 3));
+            }
+        }
+        var oldDestination = topology.Neighbors[traveller.ProvinceId]
             .SelectMany(step => topology.Neighbors[step])
             .SelectMany(step => topology.Neighbors[step])
             .FirstOrDefault(province => province > 0 &&
                 campaign.ProvinceController[province] == (ushort)player.MapIndex &&
-                province != traveller.ProvinceId);
+                province != traveller.ProvinceId &&
+                // Well behind the lines: a front moves, and a destination the enemy reaches the
+                // day the train arrives is a battle whose organisation would be counted as the
+                // train's. Nothing hostile within three provinces.
+                !Near(province, 3));
         if (destination <= 0) return "there is nowhere far enough to redeploy to";
 
         traveller.Organisation = 1f;
@@ -10010,7 +10059,16 @@ public static class Program
         var organisationBefore = traveller.Organisation;
         campaign.IsPaused = false;
         var railDays = 0;
-        for (; railDays < 6 && traveller.IsRedeploying; railDays++) campaign.TickDay();
+        for (; railDays < 6 && traveller.IsRedeploying; railDays++)
+        {
+            campaign.TickDay();
+            if (Environment.GetEnvironmentVariable("RAIL_TRACE") == "1")
+                Console.WriteLine($"  rail day {railDays + 1}: org {traveller.Organisation:0.000} order {traveller.OrderKind} " +
+                                  $"province {traveller.ProvinceId} redeploying {traveller.IsRedeploying} battle {traveller.InBattle} route {traveller.Route.Count} " +
+                                  string.Join(";", campaign.Battles.Where(x => !x.Ended && x.ProvinceId == traveller.ProvinceId)
+                                      .Select(x => $"battle {x.Id} war {x.WarId} attacker {campaign.Armies.Find(a => a.Id == x.AttackerId)?.NationId} defender {campaign.Armies.Find(a => a.Id == x.DefenderId)?.NationId}")) +
+                                  $" controller {campaign.ProvinceController[traveller.ProvinceId]} owner {campaign.ProvinceMap.ProvinceToNation[traveller.ProvinceId]}");
+        }
 
         if (traveller.Organisation >= organisationBefore)
             return "a week on the trains cost nothing in organisation, which makes it a better march";

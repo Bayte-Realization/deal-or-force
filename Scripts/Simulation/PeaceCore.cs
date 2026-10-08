@@ -158,9 +158,21 @@ public static class PeaceNegotiation
             duration / MathF.Max(1f, defines.PeaceTimePressureDays));
 
         var definition = PeaceTermCatalog.Of(terms);
+        // A civil war does not tire the way a war between states does, and the side that is
+        // winning it does not settle for the line: every civil war of 2024 was ending in a white
+        // peace around its nine-hundredth day, the junta at -40 included, because two years of
+        // time pressure buy any compromise. The winner's resolve grows with its lead.
+        var winnerResolve = 0f;
+        if (war.CivilConflict)
+        {
+            timePressure *= defines.CivilWarTimePressureShare;
+            // Only against terms that hand ground back: conceding the line is not.
+            if (proposerScore < 0f && terms is not (PeaceTerms.Capitulate or PeaceTerms.StatusQuo))
+                winnerResolve = -proposerScore * defines.CivilWarWinnerResolve;
+        }
         // And the weariness of a long war, on both sides of it (WarWeariness) - less, for a state
         // winning back its own breakaway, whatever it is offered short of the ground (Reintegration).
-        return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight +
+        return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight - winnerResolve +
                        exhaustion + timePressure + WarWeariness.Weariness(campaign, war) -
                        Reintegration.CompromisePenalty(campaign, war, proposerId, terms) -
                        Escalation.SunkCost(campaign, war), 0f, 100f);
@@ -341,6 +353,7 @@ public static class PeaceNegotiation
 
         war.Ended = true;
         war.EndedDay = campaign.ElapsedDays;
+        war.PeaceProposerId = proposerId;
         var sideScore = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
         war.WinnerId = terms == PeaceTerms.Capitulate
             ? war.EnemyLeaderOf(proposerId)

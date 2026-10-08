@@ -69,6 +69,12 @@ public sealed partial class Defines
     /// <summary>How much longer a stalled war goes on before the side not winning asks to stop, per stage, and for a civil war.</summary>
     public int WarStageStalemateDays { get; set; } = 180;
     public int CivilWarStalemateDays { get; set; } = 730;
+    /// <summary>
+    /// How much of a long war's time pressure towards a compromise a civil war feels, and how
+    /// much acceptance of one the winning side loses for each point of its lead.
+    /// </summary>
+    public float CivilWarTimePressureShare { get; set; } = 0.5f;
+    public float CivilWarWinnerResolve { get; set; } = 1.2f;
     /// <summary>The call-up of a total war: extra men a week as a share of the people, while under the ceiling.</summary>
     public float TotalWarMobilisation { get; set; } = 0.0002f;
 }

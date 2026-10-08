@@ -30,6 +30,14 @@ public sealed partial class Defines
     public float ProxyAiGdpPerSponsorship { get; set; } = 1500f;
     /// <summary>The most backers the AI lets one side of a war have.</summary>
     public int ProxyAiBackersPerSide { get; set; } = 6;
+    /// <summary>
+    /// How much less the computer wants to arm a rebellion inside another state, and how much
+    /// less again for each share of its own strength that state has; the highest level it backs
+    /// rebels at on its own initiative.
+    /// </summary>
+    public float ProxyRebelReluctance { get; set; } = 0.6f;
+    public float ProxyRebelGreatPowerFear { get; set; } = 0.8f;
+    public int ProxyRebelMaximumLevel { get; set; } = 1;
 }
 
 /// <summary>One country backing one side of somebody else's war, without fighting in it.</summary>
@@ -341,6 +349,10 @@ public static class ProxyWars
             }
             if (bestWar is null) continue;
             var level = Math.Min(MaximumLevel(sponsor), bestInterest >= 2.1f ? 3 : bestInterest >= 1.5f ? 2 : 1);
+            // Rebels are armed quietly: advisers and money, never weapons at scale by the
+            // computer's own choice (a backing history wrote is another matter).
+            if (IsRebel(bestClient, c.NationById(bestWar.EnemyLeaderOf(bestClient.Id))))
+                level = Math.Min(level, Math.Max(1, c.Defines.ProxyRebelMaximumLevel));
             while (level > 1 && Block(c, sponsor, bestWar, bestClient, level).Length > 0) level--;
             Sponsor(c, sponsor, bestWar, bestClient, level);
         }
@@ -370,6 +382,11 @@ public static class ProxyWars
     }
 
     /// <summary>How much this sponsor wants that client to beat that enemy.</summary>
+    /// <summary>Whether this side of a war is a rebellion against that state: a breakaway, a rising, a faction.</summary>
+    public static bool IsRebel(Nation client, Nation state) =>
+        client is not null && state is not null &&
+        (client.SecededFromId == state.Id || client.Movement is not null || client.FactionId.Length > 0);
+
     public static float Interest(Campaign c, Nation sponsor, Nation client, Nation enemy, StrategicWar war)
     {
         if (sponsor is null || client is null || enemy is null) return 0f;
@@ -384,6 +401,16 @@ public static class ProxyWars
         if (defending && toClient is not null && (toClient.GuaranteeByA || toClient.GuaranteeByB)) interest += 0.4f;
         // Arming an aggression costs a reputation that arming its victim does not.
         if (!defending && !war.CivilConflict) interest -= 0.3f;
+        // And arming a rebellion inside somebody else's state is an act of war in all but name,
+        // the more so the stronger that state: the West armed Ukraine, not Chechen separatists,
+        // and the computer was paying $42 billion a year to an uprising in Dagestan.
+        if (IsRebel(client, enemy))
+        {
+            interest -= c.Defines.ProxyRebelReluctance;
+            var theirs = AiStatecraft.CachedStrength(c, enemy);
+            var ours = MathF.Max(1f, AiStatecraft.CachedStrength(c, sponsor));
+            interest -= c.Defines.ProxyRebelGreatPowerFear * M.Clamp01(theirs / ours);
+        }
         if (client.AnswersTo(sponsor.Id)) interest += 1.0f;
         if (toEnemy is { Stance: DiplomaticStance.Rival }) interest += 0.5f;
 
