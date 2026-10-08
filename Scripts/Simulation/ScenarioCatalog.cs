@@ -239,6 +239,7 @@ public static class ScenarioCatalog
             if (string.IsNullOrEmpty(nation.Ideology)) nation.Ideology = IdeologyCatalog.Default;
         }
         HistoryDataLoader.ApplyBaseCountries(campaign);
+        SovereignFinance.NormalizeAccounts(campaign);
         EconomySystem.Seed(campaign);
         HistoryDataLoader.ApplyBaseStates(campaign);
         // Last of the history, because an alliance is between countries and they all have to

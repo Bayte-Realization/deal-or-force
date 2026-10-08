@@ -878,6 +878,7 @@ public static class SaveSystem
             // The state list was just replaced wholesale, so the ownership index built
             // against the bootstrap campaign no longer describes it.
             campaign.InvalidateStateIndex();
+            SovereignFinance.NormalizeAccounts(campaign);
 
             // And any country this campaign founded rather than loaded says again who it is
             // for. The demography catalogue is read from files and has never heard of it.

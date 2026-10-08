@@ -70,7 +70,7 @@ public sealed partial class Campaign
         var before = FeatureEnabled(id);
         FeatureOverrides[id] = enabled;
         if (id.Equals("public_debt", StringComparison.OrdinalIgnoreCase))
-            foreach (var n in Nations) n.DebtMechanicActive = enabled;
+            SovereignFinance.NormalizeAccounts(this);
         if (id.Equals("national_courses", StringComparison.OrdinalIgnoreCase))
             foreach (var n in Nations)
             {

@@ -38,17 +38,32 @@ public sealed partial class Nation
 /// <summary>A deliberately aggregate sovereign balance sheet, not a bond-by-bond market.</summary>
 public static class SovereignFinance
 {
-    public static void Prepare(Campaign c, Nation n, bool review = true)
+    /// <summary>Import an overdraft as already-incurred principal, without advancing the credit review.</summary>
+    public static void NormalizeAccounts(Campaign c, Nation n)
     {
         n.DebtMechanicActive = c.FeatureEnabled("public_debt");
         if (!n.DebtMechanicActive) return;
-        if (!n.DebtInitialized)
+        // A previously initialized save can also contain a legacy scripted cash charge,
+        // or an overdraft accumulated while this feature was disabled. Clearing the cash
+        // balance, not just an initialization flag, makes the conversion idempotent.
+        if (n.Treasury < 0 && float.IsFinite(n.Treasury) &&
+            float.IsFinite(n.PublicDebt) && float.IsFinite(n.PublicDebt - n.Treasury))
         {
-            // One-time migration, including old saves with an overdrawn treasury.
-            n.PublicDebt += MathF.Max(0, -n.Treasury);
-            n.Treasury = MathF.Max(0, n.Treasury);
-            n.DebtInitialized = true;
+            n.PublicDebt -= n.Treasury;
+            n.Treasury = 0;
         }
+        n.DebtInitialized = true;
+    }
+
+    public static void NormalizeAccounts(Campaign c)
+    {
+        foreach (var n in c.Nations) NormalizeAccounts(c, n);
+    }
+
+    public static void Prepare(Campaign c, Nation n, bool review = true)
+    {
+        NormalizeAccounts(c, n);
+        if (!n.DebtMechanicActive) return;
         var ratio = n.PublicDebt / MathF.Max(.01f, n.Gdp);
         var target = M.Clamp01(.35f + n.Stability * .55f - MathF.Max(0, n.Inflation - .04f) * .7f
             - ratio * .22f - (n.DebtArrears + n.PaymentArrears) / MathF.Max(.01f, n.Gdp) * 3f);
@@ -59,8 +74,9 @@ public static class SovereignFinance
         if (review) n.DebtIssuedWeekly = 0;
     }
 
-    public static float Outstanding(Nation n) => n.DebtMechanicActive
-        ? MathF.Max(0, n.PublicDebt) : MathF.Max(0, -n.Treasury);
+    // Disabled mechanics keep the saved principal. An overdraft is additional exposure,
+    // not an alternative value that hides the bonds issued before the switch was changed.
+    public static float Outstanding(Nation n) => MathF.Max(0, n.PublicDebt) + MathF.Max(0, -n.Treasury);
 
     public static float Capacity(Campaign c, Nation n) => MathF.Max(0, n.Gdp) *
         MathF.Max(0, c.Defines.DebtBaseCapacity + MathF.Max(0, c.Defines.DebtConfidenceCapacity) * n.CreditConfidence) *
@@ -76,6 +92,7 @@ public static class SovereignFinance
     public static float Borrow(Campaign c, Nation n, float requested)
     {
         if (!float.IsFinite(requested) || requested <= 0) return 0;
+        NormalizeAccounts(c, n);
         var raised = MathF.Min(requested, AvailableCredit(c, n));
         n.PublicDebt += raised; n.Treasury += raised; n.DebtIssuedWeekly += raised;
         return raised;
@@ -86,7 +103,15 @@ public static class SovereignFinance
         if (!n.DebtMechanicActive) { n.Treasury += balance; return; }
         n.DebtInterestWeekly = MathF.Max(0, interest);
         n.Treasury += balance;
-        if (n.Treasury < 0) Borrow(c, n, -n.Treasury);
+        // Borrow sees nonnegative cash: this is new spending, not a legacy overdraft.
+        // NormalizeAccounts must never turn this week's unfunded bills into unlimited credit.
+        if (n.Treasury < 0)
+        {
+            var shortfall = -n.Treasury;
+            n.Treasury = 0;
+            Borrow(c, n, shortfall);
+            n.Treasury -= shortfall;
+        }
         var unpaid = MathF.Max(0, -n.Treasury);
         n.Treasury = MathF.Max(0, n.Treasury);
         // Essential primary spending has priority; any unfunded interest becomes contractual arrears.
@@ -172,6 +197,7 @@ public sealed class ManageDebtCommand : ICampaignCommand
     {
         var n = c.NationById(IssuerId);
         if (n is null || !c.FeatureEnabled("public_debt")) return;
+        SovereignFinance.NormalizeAccounts(c, n);
         if (Action == "borrow") SovereignFinance.Borrow(c, n, Amount);
         else if (Action == "repay") SovereignFinance.Repay(n, Amount);
         else if (Action == "restructure") SovereignFinance.StartRestructuring(c, n);
