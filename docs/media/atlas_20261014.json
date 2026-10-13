@@ -1,0 +1,163 @@
+{
+  "generated": [
+    {
+      "id": "atlas_tap",
+      "kind": "sfx",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/478f0a8a-c513-4790-b3f0-58c91c80967c.mp3",
+      "jobId": "ceefe5cb-0744-47ea-8899-a4a1a8ab0007",
+      "assetId": "b3cb5b9c-43d9-4dee-962a-ba6bd64e44d3",
+      "source": ".fennara/atlas-source-20261014/atlas_tap.mp3",
+      "dest": "game/sound/audio/atlas/atlas_tap.wav",
+      "prompt": "One quiet tactile UI click: small brass switch seated on a wooden drafting desk, immediate soft tick with a tiny felt-muted body and clean dry decay. Close microphone, understated warmth, low listening fatigue, no ring, no whoosh, no voice, no music, no ambience."
+    },
+    {
+      "id": "atlas_confirm",
+      "kind": "sfx",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/1c7dc39a-61ba-4531-a846-029365b10439.mp3",
+      "jobId": "6c403224-8e55-4d75-8015-0bc93ac9775d",
+      "assetId": "74b958e7-6966-40a8-907c-9a7f44823bf2",
+      "source": ".fennara/atlas-source-20261014/atlas_confirm.mp3",
+      "dest": "game/sound/audio/atlas/atlas_confirm.wav",
+      "prompt": "Restrained confirmation cue: one soft wooden stamp followed by two tiny glass/electronic pips rising gently, close dry perspective, modest warm body, clean short tail. Satisfying and handmade, not a game victory fanfare. No voice, music bed, bass slam, long reverb or alarm."
+    },
+    {
+      "id": "atlas_decline",
+      "kind": "sfx",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/558be296-c0db-451a-b6ce-6712e5a016d3.mp3",
+      "jobId": "926a5f8d-36c7-4505-9f15-b4d5851675e4",
+      "assetId": "d2ab20d7-dba5-4d56-9044-31a45c403294",
+      "source": ".fennara/atlas-source-20261014/atlas_decline.mp3",
+      "dest": "game/sound/audio/atlas/atlas_decline.wav",
+      "prompt": "Gentle refusal or unavailable-action cue: two felt-muted brass relay ticks with a brief descending electrical blip, close and dry, restrained low-mid texture, clear but never scolding or startling. Clean short ending, no harsh buzzer, voice, music bed or room ambience."
+    },
+    {
+      "id": "atlas_document",
+      "kind": "sfx",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/822f72e8-f1fd-420c-94f5-ef7cb2a72352.mp3",
+      "jobId": "3fd9fcaa-c0a5-444d-8bd4-0d00fe3ddcba",
+      "assetId": "c95dc161-c200-45c9-8958-d0227e0ea279",
+      "source": ".fennara/atlas-source-20261014/atlas_document.mp3",
+      "dest": "game/sound/audio/atlas/atlas_document.wav",
+      "prompt": "A single thin archival paper sheet slides across a wooden desk, followed by one tiny brass clip click. Close dry Foley, delicate real fibers, immediate light movement, short clean decay. Designed for receiving a diplomatic document, no speech, music, stamping boom or long rustling sequence."
+    },
+    {
+      "id": "atlas_warning",
+      "kind": "sfx",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/4f426c0c-d7f4-42b5-bade-8160fb238526.mp3",
+      "jobId": "4f0cc6cd-6d85-441b-b344-f728ee953ecd",
+      "assetId": "21fa96f4-2a3a-4ecb-8a78-35fa31861f2a",
+      "source": ".fennara/atlas-source-20261014/atlas_warning.mp3",
+      "dest": "game/sound/audio/atlas/atlas_warning.wav",
+      "prompt": "Quiet strategic warning: a soft electromechanical relay click opens into two restrained uneven glassy pips with a thin anxious electrical tail. Intimate and slightly unresolved, clear without startling, dry short decay. No literal siren, voices, music bed, epic hit or heavy bass."
+    },
+    {
+      "id": "atlas_crisis",
+      "kind": "sfx",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/4691b6a4-5e26-4b3a-9991-741301e7eb03.mp3",
+      "jobId": "b92179cd-7382-420c-863d-8d76589cc023",
+      "assetId": "bd979e06-d409-4e0e-b127-c01f366b8d2a",
+      "source": ".fennara/atlas-source-20261014/atlas_crisis.mp3",
+      "dest": "game/sound/audio/atlas/atlas_crisis.wav",
+      "prompt": "A serious but non-epic crisis cue: three subdued accelerating relay pulses, a narrow tense analog electrical swell and one muted low wooden knock, then clean fading silence. Close dry small-room texture, controlled bass and highs, no scream, voice, melody, explosion or siren."
+    },
+    {
+      "id": "afterimage_republic",
+      "kind": "music",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/8bf95979-aeea-4e92-8374-c085e30ee3c2.mp3",
+      "jobId": "91da25b7-1d90-4970-9b68-c69ce2a4d06e",
+      "assetId": "dacb5d02-cb37-405e-ab37-7d5a05effec2",
+      "source": ".fennara/atlas-source-20261014/afterimage_republic.mp3",
+      "dest": "game/music/audio/afterimage_republic.ogg",
+      "prompt": "Original instrumental background score for Deal or Force, contemporary geopolitical strategy. Approximately 105 seconds. Intimate postmodern lo-fi electronic chamber music at 83 BPM. Worn electric piano in unresolved chromatic fragments, rounded analog bass, a good slightly crooked broken kick/rim groove, quiet prepared-piano clicks, narrow tape-warped synth and small empty spaces. Soulful, partly amateur home-studio character, a society rebuilding cautiously after loss, warm but no tidy triumph. Start with a sparse pulse and two dissonant notes, gently introduce bass after four bars, return to exposed fragments midway, maintain a modest living groove. No verse/chorus or epic climax, no pentatonic or Asian melodic coloring, no foreground harmonica, no military or cinematic brass. Instrumental only, no voice, lyrics, choir or vocal pads. Quiet background mix with softened transients and controlled upper mids. A short natural ending with an unresolved question. No named artist imitation."
+    },
+    {
+      "id": "faultlines_in_motion",
+      "kind": "music",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/audio/c4a76d5b-c284-4448-81ba-5eda4047e4f8.mp3",
+      "jobId": "5066264f-1d41-4f81-ad78-36e3d0144336",
+      "assetId": "17251cca-f754-4662-87c9-36ba1ed9e2f6",
+      "source": ".fennara/atlas-source-20261014/faultlines_in_motion.mp3",
+      "dest": "game/music/audio/faultlines_in_motion.ogg",
+      "prompt": "Original instrumental underscore for Deal or Force geopolitical simulation. Approximately 105 seconds. Restless postmodern lo-fi electronic music at 117 BPM, domestic crisis and civil fracture rather than heroic combat. Lively stumbling breakbeat, wiry analog bass, short chromatic electric-piano shards, plucked prepared strings, grainy synth breaths, tiny uneven human accents. Almost mischievous momentum with grief underneath, a country still trying to hold together. Stable urgent groove from the first bars, subtle tension shifts, a brief hollow pause in the middle then rhythm returns; no big climax, EDM drop or victorious cadence. Palette coherent with intimate experimental quiet civic music, not a different blockbuster genre. No pentatonic/Asian tune, foreground harmonica, huge strings, brass, literal alarms or weapons. Instrumental only, no voices, lyrics, choirs or vocal pads. Dry small-room texture, restrained dynamics, mono-compatible rhythm, space for UI. Short unresolved natural tail. No named artist imitation."
+    },
+    {
+      "id": "atlas_header",
+      "kind": "image",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/images/db904ad4-e2be-4865-bb8f-c63e08b3677a.png",
+      "jobId": "d0d4b490-f4d6-4ccf-b463-850240333009",
+      "assetId": "209431d4-e8bf-4758-adde-73f55cca42e0",
+      "source": "game/gfx/atmosphere/atlas_header.png",
+      "dest": "game/gfx/atmosphere/atlas_header.png",
+      "prompt": "A wide horizontal ornamental background for a modern geopolitical atlas interface, aspect 4:1. Midnight slate #101D29 with fine faded brass #B89A55 engraved contour curves and interrupted drafting-grid arcs along the outer left and right quarters. Keep the central half nearly plain dark for readable UI text. Extremely restrained line contrast and matte archival paper grain, harmonious with slate-blue panels and warm brass labels. Abstract instrument/contour linework, NOT a real geographic map and not data. Flat 2D printing, no perspective, logo, words, numbers, icon, frame or luminous neon. Calm crafted detail, no medieval scrollwork."
+    },
+    {
+      "id": "night_signal",
+      "kind": "image",
+      "url": "https://cdn.creativeclaw.co/u/c8554121/images/f89ef419-c9f1-48a4-a6f7-6f12b0ee0f4a.png",
+      "jobId": "4a1d7932-66a8-4ebd-a308-581927e846bf",
+      "assetId": "2ca3c278-454c-488e-a117-66377ef3a783",
+      "source": "game/gfx/atmosphere/night_signal.png",
+      "dest": "game/gfx/atmosphere/night_signal.png",
+      "prompt": "A single full-frame key image for an animated contemporary grand-strategy atlas atmosphere, 16:9. Dark slate-blue archival paper #101D29 viewed completely flat from above, sparse worn brass contour curves and fine latitude-like drafting lines, a few subtle dull amber signal dots near the edges. The center is spacious almost plain slate for optional interface overlay. Abstract field of signals and routes, deliberately no real coastlines, borders, named countries or invented readable map. Quiet postmodern analog instrument mood, tactile hand-printed grain, understated warmth and gentle tension. Flat composition with no perspective, no words, digits, logos, frame, neon or epic battlefield."
+    }
+  ],
+  "failed": [
+    {
+      "id": "atlas_paper",
+      "mediaType": "image_status",
+      "status": "failed",
+      "model": "image/nano-banana-2",
+      "prompt": "A seamless flat game-interface material texture, square. Deep midnight slate blue #101D29, very subtle archival cotton-paper fibers and almost invisible charcoal grain, soft uniform diffuse light, matte tactile surface. Low contrast across the entire tile, consistent edges for tiling, no gradients, seams, stains, vignette, decorative frame, symbols, map, text or letters. Serious contemporary geopolitical atlas, restrained handmade printing character, not medieval parchment. Surface only, no objects or perspective.",
+      "jobId": "fbe21d96-3bf9-43e9-bbf0-6288d6111c92",
+      "error": "generation_failed",
+      "errorCode": "content_policy_rejection",
+      "errorCategory": "content_policy",
+      "retryable": false,
+      "contentRestriction": {
+        "group": "rights",
+        "reason": "copyright_or_ip",
+        "specificity": "explicit",
+        "source": "provider",
+        "stage": "unknown",
+        "flaggedInputs": [],
+        "retryUnchanged": false
+      },
+      "suggestedAction": "Ask the user whether they want to try image/seedream-5-pro after reviewing this restriction. Do not switch models or spend credits automatically.",
+      "requiresUserConfirmation": true,
+      "creditsCharged": 0,
+      "creditsRefunded": 16,
+      "suggestedModel": "image/seedream-5-pro",
+      "suggestedModelInput": {
+        "num_images": 1,
+        "extras": {
+          "resolution": "1K"
+        }
+      },
+      "estimatedCredits": 9
+    },
+    {
+      "id": "committee_at_dawn",
+      "mediaType": "audio_status",
+      "status": "failed",
+      "model": "music/lyria-3.5",
+      "prompt": "Original instrumental underscore for Deal or Force. Approximately 105 seconds. Experimental modernist/postmodern lo-fi electronics, 97 BPM, uneasy diplomacy at dawn in a small imperfect bedroom studio. Stable nimble broken beats, muted syncopated analog bass, detuned electric-piano seconds, clipped plucked-string gestures, tape-spliced miniature motifs and dry prepared percussion. Nervous wit and private melancholy, negotiations that could repair the world or quietly wreck it. Begin already moving, leave asymmetrical rests without losing the pulse, briefly expose a brittle two-note phrase midway, end with a small tail instead of a grand resolution. More dissonance than pretty harmony, good beats but no festival drop. No Asian or pentatonic lead, no harmonica lead, no epic orchestra, brass fanfare, military march, sirens or gunshots. Instrumental only with no lyrics, speech, choir or vocal pads. Background-safe soulful handmade feel, restrained bass and nonabrasive high frequencies. No named artist imitation.",
+      "jobId": "aee12ba9-439a-4e9d-8322-d3f59c50e5e9",
+      "error": "generation_failed",
+      "errorCode": "unknown_error",
+      "errorCategory": "unknown",
+      "retryable": false,
+      "suggestedAction": "This request is not retryable unchanged. Explain the failure and correct the underlying input, provider, or account issue before submitting a new generation request.",
+      "requiresUserConfirmation": true,
+      "creditsCharged": 0,
+      "creditsRefunded": 16
+    }
+  ],
+  "video": {
+    "status": "approval_required",
+    "requestId": "d1468e33-6fa9-419e-8a14-a97ee0afff61",
+    "prompt": "Animate this exact abstract atlas artwork in one continuous locked-camera shot lasting 8 seconds, 16:9. Keep all existing contour lines, paper geometry, slate/brass palette and blank central region fixed. Only a handful of the existing amber edge signal dots breathe softly in brightness, in a slow staggered cycle; very faint paper-grain light drifts like a room lamp, not clouds across a real map. The final frame returns precisely to the initial quiet artwork for looping. Subtle contemplative postmodern instrument atmosphere, no cinematic zoom, cuts, added words, letters, countries, neon, objects or flashing alarm. Generate a silent clip: no music, speech, ambience or sound effects.",
+    "model": "video/gemini-omni-flash",
+    "duration": 8,
+    "resolution": "720p"
+  }
+}

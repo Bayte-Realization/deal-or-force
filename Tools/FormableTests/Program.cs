@@ -17,6 +17,7 @@ static class Program
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
         if (args.Contains("--music-only")) { MusicSituationTests.Run(); return; }
         if (args.Contains("--weather-only")) { WeatherReadabilityTests.Run(); return; }
+        if (args.Contains("--media-only")) { MediaLibraryTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
         if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
         if (args.Contains("--households-only")) { HouseholdTests.Run(); return; }
@@ -77,6 +78,7 @@ static class Program
         SituationReportTests.Run();
         MusicSituationTests.Run();
         WeatherReadabilityTests.Run();
+        MediaLibraryTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();
         var terrainErrors = new List<string>();

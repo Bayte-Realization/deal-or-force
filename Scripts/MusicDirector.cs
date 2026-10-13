@@ -28,6 +28,10 @@ public partial class MusicDirector : Node
     private Tween _fade;
     private double _clock;
     private string _region = "";
+    private bool _auditionSuppressed;
+
+    public void SuppressForAudition(bool suppressed)
+    { _auditionSuppressed = suppressed; RefreshVolume(); }
 
     public MusicMood CurrentMood => _mood.Current;
     public string CurrentTrack => _playing.Length == 0 ? "" : Loc.Get(_tracks[_active].Label);
@@ -43,7 +47,7 @@ public partial class MusicDirector : Node
     }
 
     public void FollowScene(Node scene, Func<MusicCatalog.Moment> moment, Func<MusicReadout> situation = null)
-    { _asker = scene; _askMoment = moment; _askSituation = situation; if (IsInsideTree()) Follow(); }
+    { _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; if (IsInsideTree()) Follow(); }
 
     public override void _Ready()
     {
@@ -69,7 +73,8 @@ public partial class MusicDirector : Node
         for (var i = 0; i < _decks.Length; i++)
         {
             if (_decks[i] is null) continue;
-            var share = Mathf.Clamp(SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_music") * _mix[i], 0, 1);
+            var share = Mathf.Clamp(SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_music") * _mix[i] *
+                (_auditionSuppressed ? 0 : 1), 0, 1);
             _decks[i].VolumeDb = share <= .0005f ? -80f : SoundCatalog.GetChannel("music").VolumeDb + _tracks[i].VolumeDb + Mathf.LinearToDb(share);
         }
     }

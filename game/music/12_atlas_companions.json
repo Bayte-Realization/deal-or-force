@@ -1,0 +1,26 @@
+{
+  "tracks": {
+    "afterimage_republic": {
+      "file": "audio/afterimage_republic.ogg",
+      "label": "Afterimage republic",
+      "when": "any",
+      "moods": [
+        "calm",
+        "recovery"
+      ],
+      "weight": 2,
+      "volume_db": 0
+    },
+    "faultlines_in_motion": {
+      "file": "audio/faultlines_in_motion.ogg",
+      "label": "Faultlines in motion",
+      "when": "campaign",
+      "moods": [
+        "crisis",
+        "war"
+      ],
+      "weight": 2,
+      "volume_db": 0
+    }
+  }
+}

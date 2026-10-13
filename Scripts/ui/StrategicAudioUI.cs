@@ -178,6 +178,7 @@ public partial class DealOrForceGame
     {
         _situationAttention.Reset();
         _situationNation = -1;
+        _dealNoticeViewer = -1; _dealNoticeIds.Clear();
         foreach (var player in _audioChannels.Values) player.Stop();
         _strategicAudioQueue.Clear();
         _lastCueAt.Clear();

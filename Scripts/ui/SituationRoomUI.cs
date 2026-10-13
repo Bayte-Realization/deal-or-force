@@ -78,6 +78,9 @@ public partial class DealOrForceGame
         rows.AddChild(SituationText("Current conditions, not guaranteed outcomes. Reviewing an issue never spends money or signs an agreement.", 12, "text.caption"));
         _situationMusic = SituationText("", 12, "text.caption"); _situationMusic.Name = "SituationMusic";
         _situationMusic.MouseFilter = MouseFilterEnum.Stop; rows.AddChild(_situationMusic);
+        var media = ActionButton("Listen and inspect artwork", OpenMediaLibrary, 0, 30);
+        media.Name = "OpenMediaLibrarySituation"; rows.AddChild(media);
+        ApplyAtlasHeading(panel);
         LayoutSituationRoom();
     }
 

@@ -14,6 +14,9 @@ public partial class DealOrForceGame
     private bool _dealInboxVisible;
     private int _dealInboxSelected = -1, _dealInboxConfirm = -1;
     private string _dealInboxKey = "", _dealInboxConfirmKey = "", _dealInboxMessage = "";
+    private int _dealNoticeViewer = -1;
+    private bool _dealNoticeObserver;
+    private System.Collections.Generic.HashSet<int> _dealNoticeIds = new();
 
     private string DealInboxKey()
     {
@@ -26,6 +29,11 @@ public partial class DealOrForceGame
     private void RefreshNegotiationNotifications()
     {
         var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id);
+        var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
+            .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
+        // A load or hotseat change primes quietly; receipt still is not a signature.
+        if (!_observerMode && !_dealNoticeObserver && _dealNoticeViewer == _campaign.Player.Id && incoming.Except(_dealNoticeIds).Any()) PlayStrategicCue("deal_received");
+        _dealNoticeViewer = _campaign.Player.Id; _dealNoticeObserver = _observerMode; _dealNoticeIds = incoming;
         if (IsInstanceValid(_dealInboxHudButton))
         {
             _dealInboxHudButton.Visible = count > 0;

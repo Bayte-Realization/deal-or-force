@@ -98,6 +98,8 @@ public partial class DealOrForceGame
         var reset = ActionButton("Reset this page", ResetSettingsCategory, 200, 40);
         reset.TooltipText = Ui.Tip(Tr("Put every option on this page back to what the game ships with."));
         actions.AddChild(reset);
+        var media = ActionButton("Sound and artwork", OpenMediaLibrary, 190, 40);
+        media.Name = "OpenMediaLibrarySettings"; actions.AddChild(media);
     }
 
     private void ShowSettings()

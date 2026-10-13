@@ -1,0 +1,81 @@
+{
+  "assets": {
+    "afterimage_republic": {
+      "name": "Afterimage republic",
+      "purpose": "A fragile civic groove for quiet periods and recovery; no triumphant ending.",
+      "kind": "music",
+      "file": "music/audio/afterimage_republic.ogg",
+      "source": "CreativeClaw · Lyria 3.5 · generated instrumental"
+    },
+    "faultlines_in_motion": {
+      "name": "Faultlines in motion",
+      "purpose": "Restless broken beats for acute crises and wartime pressure; intimate, not epic.",
+      "kind": "music",
+      "file": "music/audio/faultlines_in_motion.ogg",
+      "source": "CreativeClaw · Lyria 3.5 · generated instrumental"
+    },
+    "last_lap_world": {
+      "name": "Last lap of the world",
+      "purpose": "The world-emergency rising loop; enabled by actual systemic war or an explicit scenario signal.",
+      "kind": "music",
+      "file": "music/audio/last_lap_world.ogg",
+      "source": "CreativeClaw source + deterministic Shepard/Risset layer"
+    },
+    "atlas_header": {
+      "name": "Engraved atlas heading",
+      "purpose": "Subtle brass linework at the edges; the central text area remains quiet.",
+      "kind": "image",
+      "file": "gfx/atmosphere/atlas_header.png",
+      "source": "CreativeClaw · Nano Banana 2 · generated abstract artwork"
+    },
+    "night_signal": {
+      "name": "Night signal",
+      "purpose": "A quiet abstract signal field. Not a geographic map. Animation awaits provider confirmation.",
+      "kind": "image",
+      "file": "gfx/atmosphere/night_signal.png",
+      "source": "CreativeClaw · Nano Banana 2 · generated abstract artwork"
+    },
+    "atlas_tap": {
+      "name": "Atlas Tap",
+      "purpose": "Tactile feedback for ordinary interface actions.",
+      "kind": "sound",
+      "file": "sound/audio/atlas/atlas_tap.wav",
+      "source": "CreativeClaw · ElevenLabs Sound Effects v2 · generated Foley/electronic cue"
+    },
+    "atlas_confirm": {
+      "name": "Atlas Confirm",
+      "purpose": "Short confirmation for a completed save or explicit acknowledgement.",
+      "kind": "sound",
+      "file": "sound/audio/atlas/atlas_confirm.wav",
+      "source": "CreativeClaw · ElevenLabs Sound Effects v2 · generated Foley/electronic cue"
+    },
+    "atlas_decline": {
+      "name": "Atlas Decline",
+      "purpose": "Gentle feedback for an unavailable or rejected action.",
+      "kind": "sound",
+      "file": "sound/audio/atlas/atlas_decline.wav",
+      "source": "CreativeClaw · ElevenLabs Sound Effects v2 · generated Foley/electronic cue"
+    },
+    "atlas_document": {
+      "name": "Atlas Document",
+      "purpose": "An incoming document; receipt is not consent.",
+      "kind": "sound",
+      "file": "sound/audio/atlas/atlas_document.wav",
+      "source": "CreativeClaw · ElevenLabs Sound Effects v2 · generated Foley/electronic cue"
+    },
+    "atlas_warning": {
+      "name": "Atlas Warning",
+      "purpose": "A restrained general event notification.",
+      "kind": "sound",
+      "file": "sound/audio/atlas/atlas_warning.wav",
+      "source": "CreativeClaw · ElevenLabs Sound Effects v2 · generated Foley/electronic cue"
+    },
+    "atlas_crisis": {
+      "name": "Atlas Crisis",
+      "purpose": "A new critical situation, throttled and yielding to more important messages.",
+      "kind": "sound",
+      "file": "sound/audio/atlas/atlas_crisis.wav",
+      "source": "CreativeClaw · ElevenLabs Sound Effects v2 · generated Foley/electronic cue"
+    }
+  }
+}

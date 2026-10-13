@@ -182,6 +182,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private bool _mapApplied;
     public bool IsMapPresentationReady => _mapApplied;
     public bool LoadingInputBlocked { get; set; }
+    public bool MediaLibraryInputBlocked { get; set; }
     public string MapLoadingError { get; private set; } = "";
     public string MapLoadingStage => _pendingMapResult is null
         ? "Reading province and terrain maps"
@@ -492,7 +493,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _Process(double delta)
     {
-        if (!LoadingInputBlocked)
+        if (!LoadingInputBlocked && !MediaLibraryInputBlocked)
         {
             if (_freeCamera) UpdateFreeCamera(delta);
             else UpdateOrbitCamera(delta);
@@ -1443,7 +1444,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _GuiInput(InputEvent inputEvent)
     {
-        if (LoadingInputBlocked) { AcceptEvent(); return; }
+        if (LoadingInputBlocked || MediaLibraryInputBlocked) { AcceptEvent(); return; }
         if (PlanEraseMode && inputEvent is InputEventMouseButton erase && erase.ButtonIndex == MouseButton.Left)
         {
             if (erase.Pressed && TryPickPlan(erase.Position, out var lineId, out var objectiveOnly))

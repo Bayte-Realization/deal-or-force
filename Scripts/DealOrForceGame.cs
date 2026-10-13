@@ -108,6 +108,7 @@ public partial class DealOrForceGame : Control
     public override void _Process(double delta)
     {
         if (_isLoading || !_startupComplete) return;
+        RefreshMediaPreview();
         // Before any of the early returns below it: a panel is read while the game is
         // paused, and a caption squeezed to nothing on a paused screen is still squeezed.
         LayoutAudit.Watch(this, delta);
@@ -209,6 +210,7 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+        if (_mediaLibraryLayer is { Visible: true }) { HandleMediaLibraryInput(inputEvent); return; }
         if (HandleSituationEscape(inputEvent)) return;
         if (IsInstanceValid(_dealComposer))
         {
@@ -409,6 +411,7 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (_mediaLibraryLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         // A diplomatic modal must also shield the map's unhandled keyboard shortcuts.
         if (IsInstanceValid(_dealComposer) || _situationLayer is { Visible: true } && !inputEvent.IsActionPressed("ui_cancel"))
         { GetViewport().SetInputAsHandled(); return; }

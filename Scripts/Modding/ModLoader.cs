@@ -160,6 +160,7 @@ public sealed class ModLoader
         SpriteCatalog.Load();
         SoundCatalog.Load();
         MusicCatalog.Load();
+        MediaLibraryCatalog.Load();
         FontCatalog.Load();
         SubjectCatalog.ResetCatalog();
         TechnologyCatalog.ResetCatalog();
@@ -473,6 +474,8 @@ public sealed class ModLoader
                 $"{package.VirtualRoot}/sound", package.Errors);
             MusicCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "music"),
                 $"{package.VirtualRoot}/music", package.Errors);
+            MediaLibraryCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "presentation"),
+                package.VirtualRoot, package.Errors);
             FontCatalog.LoadTree(Path.Combine(package.PhysicalRoot, "fonts"),
                 $"{package.VirtualRoot}/fonts", package.Errors);
         }

@@ -1,0 +1,42 @@
+{
+  "cues": {
+    "ui_select": {
+      "file": "audio/atlas/atlas_tap.wav",
+      "channel": "interface",
+      "cooldown_ms": 100,
+      "volume_db": 0
+    },
+    "save_complete": {
+      "file": "audio/atlas/atlas_confirm.wav",
+      "channel": "interface",
+      "cooldown_ms": 500,
+      "volume_db": 0
+    },
+    "action_denied": {
+      "file": "audio/atlas/atlas_decline.wav",
+      "channel": "interface",
+      "cooldown_ms": 500,
+      "volume_db": 0
+    },
+    "deal_received": {
+      "file": "audio/atlas/atlas_document.wav",
+      "channel": "notification",
+      "cooldown_ms": 4000,
+      "volume_db": -1,
+      "yields_to_anything_playing": true
+    },
+    "event_alert": {
+      "file": "audio/atlas/atlas_warning.wav",
+      "channel": "strategic",
+      "cooldown_ms": 1500,
+      "volume_db": -3
+    },
+    "situation_alert": {
+      "file": "audio/atlas/atlas_crisis.wav",
+      "channel": "strategic",
+      "cooldown_ms": 12000,
+      "volume_db": -6,
+      "yields_to_anything_playing": true
+    }
+  }
+}
