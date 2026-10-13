@@ -49,7 +49,7 @@ public static partial class Ultimatum
     /// <summary>The whole table: <see cref="From"/> is what the proposer gives.</summary>
     public sealed record Deal(Side From, Side To);
 
-    public sealed record DealOutcome(bool Accepted, string Note);
+    public sealed record DealOutcome(bool Accepted, string Note, int PendingOfferId = 0);
 
     /// <summary>Utility points, not currency or predicted profit. Cash is paid only at face value.</summary>
     public sealed record DealValuation(float Cash, float Land, float Treaties, float Borders = 0f)
@@ -67,6 +67,12 @@ public static partial class Ultimatum
 
     /// <summary>Peaceful negotiation has no border, fleet, alliance or truce prerequisite.</summary>
     public static bool CanOfferDeal(Campaign c, Nation from, Nation to, out string reason)
+        => CanOfferDealCore(c, from, to, out reason, allowHuman: false);
+
+    public static bool CanNegotiateDeal(Campaign c, Nation from, Nation to, out string reason)
+        => CanOfferDealCore(c, from, to, out reason, allowHuman: true);
+
+    private static bool CanOfferDealCore(Campaign c, Nation from, Nation to, out string reason, bool allowHuman)
     {
         reason = "";
         if (c?.ProvinceMap is null || from is null || to is null || from.Id == to.Id ||
@@ -80,7 +86,7 @@ public static partial class Ultimatum
         { reason = Loc.Get("A country without territory cannot sign a territorial deal."); return false; }
         if (CampaignDiplomacy.AtWar(c, from.Id, to.Id))
         { reason = Loc.Get("Use the peace conference while at war."); return false; }
-        if (to.IsHuman) { reason = Loc.Get("They answer for themselves."); return false; }
+        if (to.IsHuman && !allowHuman) { reason = Loc.Get("They answer for themselves."); return false; }
         return true;
     }
 
@@ -203,11 +209,17 @@ public static partial class Ultimatum
     /// on it would be buying land with a shadow.
     /// </summary>
     public static bool ValidateDeal(Campaign c, Nation from, Nation to, Deal deal, out string reason)
+        => ValidateDealCore(c, from, to, deal, out reason, allowHuman: false);
+
+    public static bool ValidateNegotiatedDeal(Campaign c, Nation from, Nation to, Deal deal, out string reason)
+        => ValidateDealCore(c, from, to, deal, out reason, allowHuman: true);
+
+    private static bool ValidateDealCore(Campaign c, Nation from, Nation to, Deal deal, out string reason, bool allowHuman)
     {
         reason = "";
         if (deal?.From is null || deal.To is null)
         { reason = Loc.Get("Invalid target."); return false; }
-        if (!CanOfferDeal(c, from, to, out reason)) return false;
+        if (!CanOfferDealCore(c, from, to, out reason, allowHuman)) return false;
         if (deal.From.ReleaseRegions && deal.To.ReleaseRegions)
         { reason = Loc.Get("Only one independent settlement may be established per deal."); return false; }
         if (deal.From.IsEmpty && deal.To.IsEmpty) { reason = Loc.Get("Select at least one demand."); return false; }
@@ -297,15 +309,21 @@ public static partial class Ultimatum
 
     /// <summary>
     /// The target's answer, computed exactly as the ultimatum's is: a value threshold the
-    /// mod moves through defines, plus a grudge floor. Signed on the spot; there is no
-    /// table to leave a paper on yet.
+    /// mod moves through defines, plus a grudge floor. This automatic answer is for
+    /// governments only; addressed players choose through the negotiation inbox.
     /// </summary>
     public static bool DealAcceptable(Campaign c, Nation from, Nation to, Deal deal)
         => AssessDeal(c, from, to, deal).Acceptable;
 
     public static DealAssessment AssessDeal(Campaign c, Nation from, Nation to, Deal deal)
+        => AssessDealCore(c, from, to, deal, allowHuman: false);
+
+    public static DealAssessment AssessNegotiatedDeal(Campaign c, Nation from, Nation to, Deal deal)
+        => AssessDealCore(c, from, to, deal, allowHuman: true);
+
+    private static DealAssessment AssessDealCore(Campaign c, Nation from, Nation to, Deal deal, bool allowHuman)
     {
-        if (!ValidateDeal(c, from, to, deal, out var reason))
+        if (!ValidateDealCore(c, from, to, deal, out var reason, allowHuman))
             return new(false, reason, false, new(0, 0, 0), new(0, 0, 0), 0,
                 from?.Treasury ?? 0, to?.Treasury ?? 0);
         var theirs = ValueDealSide(c, to, from, deal.From, deal.To);
@@ -345,9 +363,17 @@ public static partial class Ultimatum
     /// Mutations happen only after every check passes; a refusal moves nothing.
     /// </summary>
     public static DealOutcome ResolveDeal(Campaign c, Nation from, Nation to, Deal deal)
+        => ResolveDealCore(c, from, to, deal, explicitConsent: false);
+
+    // Only the negotiation command boundary calls this after checking the recipient,
+    // live offer, deadline and exact unchanged package. A preview is not consent.
+    internal static DealOutcome ResolveAgreedDeal(Campaign c, Nation from, Nation to, Deal deal)
+        => ResolveDealCore(c, from, to, deal, explicitConsent: true);
+
+    private static DealOutcome ResolveDealCore(Campaign c, Nation from, Nation to, Deal deal, bool explicitConsent)
     {
-        var assessment = AssessDeal(c, from, to, deal);
-        if (!assessment.Acceptable) return new(false, assessment.Reason);
+        var assessment = AssessDealCore(c, from, to, deal, explicitConsent);
+        if (!assessment.Valid || (!explicitConsent && !assessment.Acceptable)) return new(false, assessment.Reason);
         var summary = DealSummary(c, from, to, deal);
         // Capture both halves before any annex can reunify or renumber a split region.
         // Otherwise the first cession can erase the ID of the second promised region.
@@ -419,6 +445,7 @@ public sealed class ProposeDealCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public int ToId { get; init; }
+    public int ParentOfferId { get; init; }
     // What the proposer puts on the table, and what it asks for in return.
     public int[] FromRegions = Array.Empty<int>();
     public bool FromReleaseRegions;
@@ -449,6 +476,11 @@ public sealed class ProposeDealCommand : ICampaignCommand
             new Ultimatum.Side { Regions = ToRegions ?? Array.Empty<int>(), Cash = ToCash,
                 ReleaseRegions = ToReleaseRegions,
                 LiftEmbargo = ToLiftEmbargo, NonAggression = ToNonAggression, TradeAgreement = ToTradeAgreement });
+        if (to?.IsHuman == true || ParentOfferId != 0)
+        {
+            Outcome = DealNegotiations.Submit(campaign, from, to, deal, ParentOfferId);
+            return;
+        }
         var assessment = Ultimatum.AssessDeal(campaign, from, to, deal);
         if (!assessment.Acceptable) { Outcome = new(false, assessment.Reason); return; }
         Outcome = Ultimatum.ResolveDeal(campaign, from, to, deal);

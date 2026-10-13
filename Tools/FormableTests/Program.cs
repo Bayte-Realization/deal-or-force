@@ -13,6 +13,7 @@ static class Program
         if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
         if (args.Contains("--integrity-only")) { CampaignIntegrityTests.Run(); return; }
         if (args.Contains("--deals-only")) { DealTests.Run(); return; }
+        if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
         if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
         if (args.Contains("--households-only")) { HouseholdTests.Run(); return; }
@@ -69,6 +70,7 @@ static class Program
         PresentationReloadTests.Run();
         UltimatumTests.Run();
         DealTests.Run();
+        DealNegotiationTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();
         var terrainErrors = new List<string>();

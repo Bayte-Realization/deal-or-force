@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace DealOrForce.Simulation;
 
@@ -190,6 +191,9 @@ public sealed partial class Defines
 	/// campaign hours a second, then 4 and 30 days a second - the last is what twelve steps a
 	/// frame allows. Wider apart than they were, because the slowest speed is now slow.
 	/// </summary>
+	// Save loading otherwise populates this non-empty default list, appending the
+	// saved five speeds on every reload. A saved speed table replaces defaults.
+	[JsonObjectCreationHandling(JsonObjectCreationHandling.Replace)]
 	public List<float> SpeedFactors { get; set; } = new() { 1f, 0.4f, 0.15f, 0.05f, 0.0066f };
 
 	// --- the globe ---

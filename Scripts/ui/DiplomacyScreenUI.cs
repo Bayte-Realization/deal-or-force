@@ -116,6 +116,10 @@ public partial class DealOrForceGame
         ownCountry.Name = "DiplomacyMyCountry";
         ownCountry.TooltipText = Ui.Tip(Tr("Open your own country's diplomacy dossier."));
         header.AddChild(ownCountry);
+        _diplomacyInboxButton = ActionButton("Diplomatic inbox", OpenDealInbox, 0, 32);
+        _diplomacyInboxButton.Name = "DiplomacyInbox";
+        _diplomacyInboxButton.Disabled = _observerMode;
+        header.AddChild(_diplomacyInboxButton);
         header.AddChild(ActionButton("Organizations", () => { CloseDiplomacyScreen(); _conflictTab = 4; OpenScreen("Conflicts"); }, 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png"));
         header.AddChild(HandbookButton("diplomacy"));
@@ -1171,6 +1175,11 @@ public partial class DealOrForceGame
             : Tr("Compose territorial, financial and treaty demands. Review before sending."));
         StyleButton(_diplomacyUltimatumButton, false);
         _diplomacyUltimatumButton.Text = Tr("Issue ultimatum");
+        var canDeal = Ultimatum.CanNegotiateDeal(_campaign, player, nation, out var dealRefusal);
+        _diplomacyDealButton.Disabled = !canDeal || _observerMode;
+        _diplomacyDealButton.TooltipText = Ui.Tip(!canDeal ? dealRefusal : nation.IsHuman
+            ? Tr("Send an offer to this player's inbox. They must explicitly accept; nothing is signed automatically.")
+            : Tr("Compose a peaceful exchange of cash, treaties or regions. Review before sending."));
 
         _diplomacySubjectActions.Visible = nation.AnswersTo(player.Id);
         if (_diplomacySubjectActions.Visible)
@@ -1315,8 +1324,7 @@ public partial class DealOrForceGame
     {
         if (!ValidDiplomacyTarget()) return;
         var target = DiplomacyTarget();
-        if (target.IsHuman) return;
-        if (!Ultimatum.CanOfferDeal(_campaign, _campaign.Player, target, out var reason))
+        if (!Ultimatum.CanNegotiateDeal(_campaign, _campaign.Player, target, out var reason))
         { _diplomacyFeedback.Text = reason; return; }
         OpenDealComposer(target);
     }

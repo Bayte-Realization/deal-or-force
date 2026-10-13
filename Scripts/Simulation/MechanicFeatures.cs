@@ -140,7 +140,7 @@ public static class MechanicFeatures
         Bind("public_debt", "ManageDebtCommand");
         Bind("escalation", "HoldTalksCommand");
         Bind("proxy_wars", "SponsorWarCommand");
-        Bind("deals", "ProposeDealCommand");
+        Bind("deals", "ProposeDealCommand", "RespondDealCommand");
         Bind("organizations", "OrganizationCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;

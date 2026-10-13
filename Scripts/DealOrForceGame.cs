@@ -408,6 +408,8 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        // A diplomatic modal must also shield the map's unhandled keyboard shortcuts.
+        if (IsInstanceValid(_dealComposer)) { GetViewport().SetInputAsHandled(); return; }
         if (IsInstanceValid(_ultimatumComposer)) { GetViewport().SetInputAsHandled(); return; }
         // Escape while the workshop is up is answered in `_Input`, which runs first - see
         // there. Nothing else in the campaign hears a key while that window covers it.
@@ -777,6 +779,10 @@ public partial class DealOrForceGame : Control
         handbook.Name = "OpenHandbook";
         handbook.TooltipText = Ui.Tip(Tr("What every screen is for and what its figures mean (F1)."));
         speeds.AddChild(handbook);
+        _dealInboxHudButton = ActionButton("Deals", OpenDealInbox, 0, 28);
+        _dealInboxHudButton.Name = "PendingDiplomaticOffers";
+        _dealInboxHudButton.Visible = false;
+        speeds.AddChild(_dealInboxHudButton);
         var menu = ActionButton("Menu", ShowPauseMenu, 62, 28);
         menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
         speeds.AddChild(menu);
@@ -1470,6 +1476,7 @@ public partial class DealOrForceGame : Control
         RefreshStrategicAudio();
         RefreshEventInterface();
         RefreshPeaceOfferInterface();
+        RefreshNegotiationNotifications();
         RefreshStrategicHud();
         RefreshBattleDossier();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();

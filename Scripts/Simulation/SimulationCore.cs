@@ -728,6 +728,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("coups")) Coups.Tick(this);
             using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
             using (SimProfiler.Measure("organizations")) InternationalOrganizations.Tick(this);
+            using (SimProfiler.Measure("deal inbox")) DealNegotiations.Tick(this);
             using (SimProfiler.Measure("movements"))
             {
                 using (SimProfiler.Measure("  mov:rules")) MovementRules.Tick(this);

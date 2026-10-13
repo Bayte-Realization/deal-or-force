@@ -99,7 +99,7 @@ static class InterfaceIconTests
                 "PNG file exists: " + name);
         }
         using var recipe = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
-            Path.Combine(root, "..", "Assets", "ArtSource", "Icons", "minimal-icons.json")));
+            Path.Combine(root, "..", "Tools", "IconCompiler", "Source", "Icons", "minimal-icons.json")));
         var authored = recipe.RootElement.EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
         Check(authored.Length == 51 && authored.Distinct().Count() == 51,
             "editable geometry defines fifty-one distinct PNG assets");

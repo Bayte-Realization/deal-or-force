@@ -47,6 +47,27 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        if (campaign.DealOffers.Count > 0 || campaign.NextDealOfferId != 1)
+        {
+            MixText("deal_negotiations"); Mix(campaign.NextDealOfferId); Mix(campaign.DealOffers.Count);
+            foreach (var paper in campaign.DealOffers.OrderBy(o => o.Id))
+            {
+                Mix(paper.Id); Mix(paper.FromId); Mix(paper.ToId); Mix(paper.CreatedDay); Mix(paper.ExpiresDay);
+                // Reason is presentation text; locale must not diverge authoritative state.
+                Mix(paper.ClosedDay); Mix(paper.ParentOfferId); Mix(paper.CounterDepth); Mix((int)paper.State);
+                foreach (var province in paper.FromProvinces ?? Array.Empty<int>()) Mix(province);
+                Mix(-102);
+                foreach (var province in paper.ToProvinces ?? Array.Empty<int>()) Mix(province);
+                Mix(-103);
+                foreach (var side in new[] { paper.From, paper.To })
+                {
+                    MixFloat(side.Cash); Mix(side.ReleaseRegions ? 1 : 0); Mix(side.LiftEmbargo ? 1 : 0);
+                    Mix(side.NonAggression ? 1 : 0); Mix(side.TradeAgreement ? 1 : 0);
+                    foreach (var region in side.Regions ?? Array.Empty<int>()) Mix(region);
+                    Mix(-101);
+                }
+            }
+        }
         foreach (var character in campaign.ScenarioId ?? "2024") Mix(character);
         Mix(-1);
         foreach (var id in campaign.Defines.Features.Keys.Concat(campaign.FeatureOverrides.Keys).Concat(MechanicFeatures.BuiltIns)

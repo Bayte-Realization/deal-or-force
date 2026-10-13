@@ -695,6 +695,8 @@ public static class SaveSystem
         /// <summary>Who is backing whom in somebody else's war (ProxyWars). Absent in older saves.</summary>
         public List<Sponsorship> Sponsorships = new();
         public List<InternationalOrganization> Organizations = new();
+        public List<DealOffer> DealOffers = new();
+        public int NextDealOfferId = 1;
         /// <summary>The ground each country first held, and which countries' falls are decided
         /// (Movements). Neither was saved: a loaded campaign forgot every government in exile's
         /// homeland, and a client's world parted from its host's within a day, because the
@@ -797,6 +799,8 @@ public static class SaveSystem
             Wars = new List<StrategicWar>(campaign.Wars),
             Sponsorships = new List<Sponsorship>(campaign.Sponsorships),
             Organizations = new List<InternationalOrganization>(campaign.Organizations),
+            DealOffers = campaign.DealOffers.Select(DealNegotiations.Copy).ToList(),
+            NextDealOfferId = campaign.NextDealOfferId,
             Homelands = campaign.Homelands.ToDictionary(pair => pair.Key, pair => new List<int>(pair.Value)),
             Fallen = campaign.Fallen.OrderBy(id => id).ToList(),
             NextOrganizationId = campaign.NextOrganizationId,
@@ -849,6 +853,7 @@ public static class SaveSystem
             Replace(campaign.Wars, Wars);
             Replace(campaign.Sponsorships, Sponsorships);
             Replace(campaign.Organizations, Organizations ?? new());
+            DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId);
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();

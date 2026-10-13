@@ -95,8 +95,8 @@ the earlier decorative version. Use `build-minimal-icons.ps1` instead.
 Run from the repository root with **Windows PowerShell 5.1** (System.Drawing):
 
 ```powershell
-powershell -NoProfile -File Tools/IconCompiler/export-atlas.ps1 -Atlas Assets/ArtSource/Icons/army_commands.png -Mapping Assets/ArtSource/Icons/army_commands.mapping.json -OutputDirectory game/gfx/interface/icons
-powershell -NoProfile -File Tools/IconCompiler/export-atlas.ps1 -Atlas Assets/ArtSource/Icons/strategic_goods.png -Mapping Assets/ArtSource/Icons/strategic_goods.mapping.json -OutputDirectory game/gfx/interface/icons
+powershell -NoProfile -File Tools/IconCompiler/export-atlas.ps1 -Atlas Tools/IconCompiler/Source/Icons/army_commands.png -Mapping Tools/IconCompiler/Source/Icons/army_commands.mapping.json -OutputDirectory game/gfx/interface/icons
+powershell -NoProfile -File Tools/IconCompiler/export-atlas.ps1 -Atlas Tools/IconCompiler/Source/Icons/strategic_goods.png -Mapping Tools/IconCompiler/Source/Icons/strategic_goods.mapping.json -OutputDirectory game/gfx/interface/icons
 ```
 
 The exporter divides proportional cells even when the sheet dimensions are not
@@ -116,6 +116,6 @@ Commodity icon names follow the stable data ID, lowercased:
 goods have PNGs. `icon_military_supply.png` is an extra asset available to mods;
 it is not claimed as a new mechanic or a new shipped toolbar action.
 
-`Assets/ArtSource/.gdignore` keeps these working sheets out of Godot's runtime
+`Tools/IconCompiler/Source/.gdignore` keeps these working sheets out of Godot's runtime
 resource scan/export. Only the individual files under `game/gfx/interface/icons`
 are game assets; source-sheet `.import` files are not needed in Git.

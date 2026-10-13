@@ -1,5 +1,5 @@
 param(
-    [string]$Recipe = 'Assets/ArtSource/Icons/minimal-icons.json',
+    [string]$Recipe = 'Tools/IconCompiler/Source/Icons/minimal-icons.json',
     [string]$OutputDirectory = 'game/gfx/interface/icons',
     [string]$Colour = '#e7bd69',
     [string]$GoodsColour = '#b48732'

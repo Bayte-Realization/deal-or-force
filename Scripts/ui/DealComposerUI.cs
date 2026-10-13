@@ -32,12 +32,15 @@ public partial class DealOrForceGame
     private int _dealTarget = -1;
     private bool _dealConfirm, _dealCompleted;
     private int _dealReviewDay = -1;
+    private int _dealCounterParentId;
 
     private void CloseDealComposer()
     {
         if (IsInstanceValid(_dealComposer))
         { _dealComposer.GetParent()?.RemoveChild(_dealComposer); _dealComposer.QueueFree(); }
         _dealComposer = null;
+        _dealInboxVisible = false;
+        _dealCounterParentId = 0;
         _dealGiveRegions.Clear();
         _dealAskRegions.Clear();
         _dealConfirm = false;
@@ -276,29 +279,29 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var target = _campaign.NationById(_dealTarget);
         var deal = ComposedDeal();
-        var assessment = Ultimatum.AssessDeal(_campaign, player, target, deal);
+        var assessment = Ultimatum.AssessNegotiatedDeal(_campaign, player, target, deal);
         var valid = assessment.Valid;
         // The answer is previewed by the same arithmetic the target will use: what it
         // receives minus what it gives, its own hunger for cash, its own distrust of us.
         var acceptable = assessment.Acceptable;
         _dealSend.Disabled = !valid;
         var net = assessment.ToValuation.Total - assessment.GrudgePenalty;
-        _dealMeter.Visible = valid;
+        _dealMeter.Visible = valid && target?.IsHuman != true;
         if (valid) _dealMeter.Lean(Mathf.Clamp(net / 40f, -1f, 1f), Ui.Colour("state.positive"), Ui.Colour("state.negative"));
         _dealBalanceCash = valid && !acceptable ? Ultimatum.CashToBalance(_campaign, player, target, deal) : 0f;
-        _dealBalance.Visible = valid && !acceptable;
+        _dealBalance.Visible = valid && !acceptable && target?.IsHuman != true;
         _dealBalance.Disabled = _dealBalanceCash <= 0f;
         _dealBalance.Text = _dealBalanceCash > 0f
             ? Loc.Format("Pay what they still need: {0}", Fmt.Money(_dealBalanceCash))
             : Tr("Our treasury cannot close this gap");
         _dealAskMoreCash = valid && acceptable ? Ultimatum.CashToAskMore(_campaign, player, target, deal) : 0f;
-        _dealAskMore.Visible = valid && acceptable && _dealAskMoreCash >= 0.01f;
+        _dealAskMore.Visible = valid && acceptable && _dealAskMoreCash >= 0.01f && target?.IsHuman != true;
         _dealAskMore.Text = Loc.Format("They would still pay {0} more - ask for it", Fmt.Money(_dealAskMoreCash));
         _dealSend.Text = _dealConfirm ? Tr("CONFIRM AND SEND") : Tr("Review deal");
-        _dealAssessment.Text = !valid ? Tr(assessment.Reason) :
+        _dealAssessment.Text = !valid ? Tr(assessment.Reason) : target?.IsHuman == true ? Tr("The other player decides; no automatic signature.") :
             Tr(acceptable ? "They are expected to agree" : "They are expected to refuse");
         _dealAssessment.LabelSettings.FontColor = Ui.Colour(!valid ? "state.warning"
-            : acceptable ? "state.positive" : "state.warning");
+            : target?.IsHuman == true ? "text.body" : acceptable ? "state.positive" : "state.warning");
         _dealTerms.Text = valid ? Ultimatum.DealSummary(_campaign, player, target, deal)
             : Tr("No terms have been sent. Change the package to resolve this restriction.");
         if (valid && (deal.From.ReleaseRegions || deal.To.ReleaseRegions))
@@ -311,7 +314,9 @@ public partial class DealOrForceGame
         _dealTreasuries.Text = Loc.Format("Treasury after signing\nYou: {0}\nPartner: {1}",
             Fmt.Money(assessment.FromTreasuryAfter), Fmt.Money(assessment.ToTreasuryAfter));
         string Points(float value) => value.ToString("+0.0;-0.0;0.0");
-        _dealValuation.Text = Loc.Format("How they weigh it, in points\nThe money: {0}\nThe land: {1}\nThe treaties: {2}\nBorder cohesion: {6}\nOld grievances: {3}\nIn all: {4} - they sign at 0 or more\n\nHow we weigh it: {5}",
+        _dealValuation.Text = target?.IsHuman == true
+            ? Tr("A player chooses whether to agree. No score predicts their signature. Sending places these exact terms in their inbox; cash and borders stay unchanged until acceptance.")
+            : Loc.Format("How they weigh it, in points\nThe money: {0}\nThe land: {1}\nThe treaties: {2}\nBorder cohesion: {6}\nOld grievances: {3}\nIn all: {4} - they sign at 0 or more\n\nHow we weigh it: {5}",
             Points(assessment.ToValuation.Cash), Points(assessment.ToValuation.Land), Points(assessment.ToValuation.Treaties),
             Points(-assessment.GrudgePenalty), Points(assessment.ToValue), Points(assessment.FromValue), Points(assessment.ToValuation.Borders));
         _dealTerritoryPreview.Refresh(_campaign, deal.From.Regions, deal.To.Regions, deal.From.ReleaseRegions, deal.To.ReleaseRegions);
@@ -326,7 +331,7 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var target = _campaign.NationById(_dealTarget);
         var deal = ComposedDeal();
-        if (!Ultimatum.ValidateDeal(_campaign, player, target, deal, out _)) { RefreshDealComposer(); return; }
+        if (!Ultimatum.ValidateNegotiatedDeal(_campaign, player, target, deal, out _)) { RefreshDealComposer(); return; }
         if (!_dealConfirm)
         { _dealConfirm = true; _dealReviewDay = _campaign.ElapsedDays; _dealSend.Text = Tr("CONFIRM AND SEND"); return; }
         if (_dealReviewDay != _campaign.ElapsedDays)
@@ -335,7 +340,7 @@ public partial class DealOrForceGame
         // bypass changed ownership, a feature switch or the partner's consent.
         var command = new ProposeDealCommand
         {
-            IssuerId = player.Id, ToId = target.Id,
+            IssuerId = player.Id, ToId = target.Id, ParentOfferId = _dealCounterParentId,
             FromRegions = deal.From.Regions, FromCash = deal.From.Cash,
             FromReleaseRegions = deal.From.ReleaseRegions,
             FromLiftEmbargo = deal.From.LiftEmbargo, FromNonAggression = deal.From.NonAggression,
@@ -350,7 +355,14 @@ public partial class DealOrForceGame
         ForceDiplomacyRefresh();
         RefreshCountryViews("Diplomacy");
         Refresh();
-        if (command.Outcome.Accepted)
+        if (_networkConnected && !_networkIsHost)
+        {
+            _dealCompleted = true;
+            _dealSend.Disabled = true;
+            _dealAssessment.Text = Tr("Offer sent to the host. Awaiting confirmation.");
+            return;
+        }
+        if (command.Outcome.Accepted || command.Outcome.PendingOfferId > 0)
         {
             _dealCompleted = true;
             _dealGiveCash.Editable = _dealAskCash.Editable = false;
@@ -359,7 +371,7 @@ public partial class DealOrForceGame
             _dealSend.Disabled = true;
             _dealSend.Text = Tr("Deal delivered");
             _dealClose.Text = Tr("Close");
-            _dealAssessment.Text = Tr("The bargain is signed");
+            _dealAssessment.Text = Tr(command.Outcome.Accepted ? "The bargain is signed" : "Offer delivered; awaiting a reply.");
             _dealAssessment.LabelSettings.FontColor = Ui.Colour("state.positive");
             _dealTerms.Text = command.Outcome.Note;
             return;

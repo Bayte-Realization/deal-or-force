@@ -1235,7 +1235,7 @@ public static partial class AiStatecraft
     {
         if (campaign is null || buyer is null || seller is null || buyer == seller) return false;
         if (buyer.IsHuman || !MechanicFeatures.SystemEnabled(campaign, nameof(AiStatecraft))) return false;
-        if (!Ultimatum.CanOfferDeal(campaign, buyer, seller, out _)) return false;
+        if (!Ultimatum.CanNegotiateDeal(campaign, buyer, seller, out _)) return false;
         var relation = CampaignDiplomacy.Peek(campaign, buyer.Id, seller.Id);
         if (relation is null || relation.NonAggressionPact || relation.Stance == DiplomaticStance.AtWar) return false;
 
@@ -1257,6 +1257,11 @@ public static partial class AiStatecraft
             IssuerId = buyer.Id, ToId = seller.Id, FromCash = offer, FromNonAggression = true
         };
         command.Apply(campaign);
+        if (command.Outcome.PendingOfferId > 0)
+        {
+            Count("peace_offered");
+            return true; // This week's action was delivery, not a signed pact.
+        }
         if (!command.Outcome.Accepted) return false;
         Count("peace_bought");
         DiagnosticLogs.Write("simulation",

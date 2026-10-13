@@ -4,6 +4,8 @@
 
 A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10.
 
+Active development branch: **ReimAlpha**. [October 13 checkpoint](docs/REIMALPHA_2026_10_13_RU.md).
+
 World rendering scripts now live in
 [`Scripts/gfx`](Scripts/gfx/README.md), separately from UI and simulation rules.
 
