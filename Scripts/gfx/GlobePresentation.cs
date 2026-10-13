@@ -467,6 +467,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _spaceNode = CreateSpace(world);
         CreateGlobe(world);
         CreateFlatMap(world);
+        CreateWeather(world);
         _capitalRoot = new Node3D { Name = "CapitalMarkers" };
         world.AddChild(_capitalRoot);
         _capitalTexture = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_capital_star",
@@ -526,6 +527,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
         UpdateFogTint();
         UpdateFogVisibility();
+        UpdateWeather(delta);
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
         if (_mapApplied && _campaign is not null && _capitalRevision != _campaign.CapitalRevision)
             BuildCapitalMarkers(_campaign);

@@ -456,6 +456,29 @@ public static partial class FrontPlanner
         index < advance ? ArmyOrder.AdvanceFront :
         index < advance + defend ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
 
+    /// <summary>
+    /// How much of the line attacks - and whether the attack is called off. An offensive that
+    /// is losing, costing three of ours for each of theirs and more than AiBleedingLossShare
+    /// of the country's people, goes over to holding what it has: North Korea threw seven
+    /// million men at a line that cost the South ninety thousand, for ten years.
+    /// </summary>
+    internal static float AdvanceShare(Campaign c, StrategicWar war, Nation nation, AiStrategyDefinition profile,
+        bool attacking, out bool pressing)
+    {
+        var share = attacking ? profile.AdvanceShareAttacker : profile.AdvanceShareDefender;
+        pressing = attacking;
+        if (nation is null) return share;
+        var score = attacking ? war.WarScore : -war.WarScore;
+        var ours = attacking ? war.AttackerLosses : war.DefenderLosses;
+        var theirs = attacking ? war.DefenderLosses : war.AttackerLosses;
+        if (score < -10f && ours > theirs * 3f && ours / MathF.Max(1f, nation.Population) > c.Defines.AiBleedingLossShare)
+        {
+            pressing = false;
+            share *= 0.2f;
+        }
+        return share;
+    }
+
     private static int AdvanceCount(int count, float share, bool attacking) =>
         Math.Min(count, Math.Max(attacking && share > 0 && count > 0 ? 1 : 0, (int)MathF.Round(count * share)));
 
@@ -469,8 +492,8 @@ public static partial class FrontPlanner
         var peers = c.Armies.Where(a => a.NationId == nation.Id && a.AssignedWarId == war.Id &&
             a.TemplateId != MilitiaCore.TemplateId).ToArray();
         var attacking = war.IsAttacking(nation.Id);
-        var share = attacking ? profile.AdvanceShareAttacker : profile.AdvanceShareDefender;
-        var wanted = AdvanceCount(peers.Length, share, attacking);
+        var share = AdvanceShare(c, war, nation, profile, attacking, out var pressing);
+        var wanted = AdvanceCount(peers.Length, share, pressing);
         var have = peers.Count(a => a != army && a.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead);
         if (have >= wanted) return;
         new SetArmyOrderCommand { IssuerId = nation.Id, ArmyId = army.Id, WarId = war.Id,
@@ -684,8 +707,8 @@ public static partial class FrontPlanner
         // stopped being useful, not when the list it came from was rebuilt.
         armies.Sort((a, b) => b.Power.CompareTo(a.Power));
 
-        var advanceShare = attacking ? profile.AdvanceShareAttacker : profile.AdvanceShareDefender;
-        var advance = AdvanceCount(armies.Count, advanceShare, attacking);
+        var advanceShare = AdvanceShare(campaign, war, nation, profile, attacking, out var pressing);
+        var advance = AdvanceCount(armies.Count, advanceShare, pressing);
         var spearhead = armies.Count == 0 || profile.SpearheadShare <= 0 ? 0 : Math.Min(advance,
             Math.Max(1, (int)MathF.Round(armies.Count * profile.SpearheadShare)));
         var defend = (int)MathF.Round(armies.Count * profile.DefendShare);
@@ -746,4 +769,10 @@ public static partial class FrontPlanner
                 }.Apply(campaign);
         }
     }
+}
+
+public sealed partial class Defines
+{
+    /// <summary>The share of its people a losing offensive may cost a country before its staff calls it off.</summary>
+    public float AiBleedingLossShare { get; set; } = 0.01f;
 }

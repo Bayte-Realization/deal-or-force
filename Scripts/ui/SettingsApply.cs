@@ -97,6 +97,11 @@ public partial class DealOrForceGame
                     _campaign.Defines.AutosaveIntervalDays = Whole("autosave_interval");
                 break;
 
+            case "event_interval":
+                if (_campaign is not null)
+                    _campaign.Defines.EventIntervalDays = Whole("event_interval");
+                break;
+
             case "peace_by_provinces":
                 if (_campaign is not null)
                     _campaign.Defines.PeaceWholeRegions = !SettingsCatalog.Flag("peace_by_provinces");
@@ -170,6 +175,10 @@ public partial class DealOrForceGame
             case "space_backdrop":
                 if (_globe is not null)
                     _globe.SpaceBackdropEnabled = SettingsCatalog.Flag("space_backdrop");
+                break;
+
+            case "map_weather":
+                if (_globe is not null) _globe.WeatherEnabled = SettingsCatalog.Flag("map_weather");
                 break;
 
             case "map_smoothing":

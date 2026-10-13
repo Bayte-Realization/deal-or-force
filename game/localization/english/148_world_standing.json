@@ -45,5 +45,11 @@
   "Eurasian Economic Union": "Eurasian Economic Union",
   "ECOWAS": "ECOWAS",
   "NATO": "NATO",
-  "CSTO": "CSTO"
+  "CSTO": "CSTO",
+  "Events": "Events",
+  "How often your country is asked to decide something that happened to it. Rarely is a decision or two a year; often is the old cadence, about one a season.": "How often your country is asked to decide something that happened to it. Rarely is a decision or two a year; often is the old cadence, about one a season.",
+  "Never": "Never",
+  "Rarely": "Rarely",
+  "Normally": "Normally",
+  "Often": "Often"
 }

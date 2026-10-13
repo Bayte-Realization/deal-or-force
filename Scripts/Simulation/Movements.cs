@@ -406,11 +406,21 @@ public static partial class Movements
             var (latitude, longitude) = seat > 0
                 ? (campaign.ProvinceMap.CenterOf(seat).Latitude, campaign.ProvinceMap.CenterOf(seat).Longitude)
                 : CentreOf(campaign, region);
+            // In a city, where offices are: the region's own main city, or the great city the
+            // region surrounds - the Mejlis and Ichkeria sat in a field south-west of Kyiv, at
+            // the middle of Kyiv oblast, with Kyiv itself twenty kilometres away.
+            var city = HeadquartersCity(campaign, region, latitude, longitude);
+            if (city is not null)
+            {
+                (latitude, longitude) = (city.Latitude, city.Longitude);
+                var under = CityCatalog.ProvinceUnder(campaign.ProvinceMap, latitude, longitude);
+                if (under > 0) movement.HeadquartersProvinceId = under;
+            }
             movement.HeadquartersLatitude = latitude;
             movement.HeadquartersLongitude = longitude;
             nation.CapitalLatitude = latitude;
             nation.CapitalLongitude = longitude;
-            nation.CapitalName = region.DisplayName;
+            nation.CapitalName = city?.Name ?? region.DisplayName;
         }
         campaign.MovementRevision++;
     }
@@ -495,6 +505,35 @@ public static partial class Movements
     }
 
     /// <summary>The province a headquarters in this region stands on: the host's capital if it is here, else the one nearest the middle.</summary>
+    /// <summary>
+    /// The city a headquarters in this region stands in: the largest town of the region, or a
+    /// greater city just outside it that the region surrounds - weighed so that Kyiv beats Bila
+    /// Tserkva for an office "in Kyiv oblast". Nothing when the map has no city near.
+    /// </summary>
+    internal static CityDefinition HeadquartersCity(Campaign campaign, ScenarioState region, float latitude, float longitude)
+    {
+        var topology = campaign.ProvinceMap;
+        if (topology is null || region is null) return null;
+        CityDefinition best = null;
+        var bestScore = 0.0;
+        foreach (var city in CityCatalog.All)
+        {
+            if (city.Tier > 2) continue;
+            var dLat = city.Latitude - latitude;
+            var dLon = (city.Longitude - longitude) * MathF.Cos(latitude * MathF.PI / 180f);
+            var distance = MathF.Sqrt(dLat * dLat + dLon * dLon);
+            if (distance > 1.6f) continue;
+            var province = CityCatalog.ProvinceUnder(topology, city.Latitude, city.Longitude);
+            var inside = province > 0 && topology.ProvinceToState[province] == region.MapIndex;
+            if (!inside && distance > 0.9f) continue;
+            var score = Math.Max(1L, city.Population) * (inside ? 1.0 : 0.6) / (1.0 + distance);
+            if (score <= bestScore) continue;
+            bestScore = score;
+            best = city;
+        }
+        return best;
+    }
+
     internal static int SeatOf(Campaign campaign, ScenarioState region)
     {
         var topology = campaign.ProvinceMap;

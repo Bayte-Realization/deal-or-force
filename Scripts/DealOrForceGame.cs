@@ -1467,6 +1467,15 @@ public partial class DealOrForceGame : Control
                     : Tr("comfortable"),
                 rate > comfort ? -1 : rate < 0f ? -1 : 0);
         }
+
+        // The half-year threads under the figures.
+        _treasury?.Spark?.Push(day, player.Treasury);
+        _gdp?.Spark?.Push(day, player.Gdp);
+        _population?.Spark?.Push(day, player.Population);
+        if (balanced) _balance?.Spark?.Push(day, player.WeeklyBalance);
+        _stability?.Spark?.Push(day, player.Stability);
+        _manpower?.Spark?.Push(day, player.ManpowerReserve);
+        _inflation?.Spark?.Push(day, player.Inflation);
         WriteMovementTopBar(player);
 
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
@@ -1534,6 +1543,8 @@ public partial class DealOrForceGame : Control
         internal TextureRect Glyph;
         internal string CountryCaption = "";
         internal Control Box;
+        /// <summary>Half a year of the figure under it (Sparkline).</summary>
+        internal Sparkline Spark;
     }
 
 
@@ -1627,7 +1638,15 @@ public partial class DealOrForceGame : Control
         readout.Delta.ClipText = true;
         readout.Delta.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         box.AddChild(readout.Value);
-        box.AddChild(readout.Delta);
+        // The week's movement and, beside it, the half-year it belongs to.
+        var movement = new HBoxContainer { Name = "StatMovement", MouseFilter = MouseFilterEnum.Ignore };
+        movement.AddThemeConstantOverride("separation", 4);
+        readout.Spark = new Sparkline { Name = "StatSpark", Flash = readout.Value,
+            HigherIsBetter = caption is not ("INFLATION" or "DEBT") };
+        movement.AddChild(readout.Spark);
+        readout.Delta.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        movement.AddChild(readout.Delta);
+        box.AddChild(movement);
         return readout;
     }
 
@@ -1924,6 +1943,8 @@ public partial class DealOrForceGame : Control
         _treasuryTrend.Reset();
         _gdpTrend.Reset();
         _populationTrend.Reset();
+        foreach (var stat in new[] { _treasury, _gdp, _population, _balance, _stability, _manpower, _inflation })
+            stat?.Spark?.Reset();
     }
 
     /// <summary>The speed the campaign is actually running at, lit so the player can see it.</summary>

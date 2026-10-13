@@ -77,6 +77,9 @@ public partial class DealOrForceGame
             ? MusicCatalog.Moment.Campaign
             : MusicCatalog.Moment.Menu);
 
+        // And under all of it, the sound of the map from where the camera is.
+        AddChild(new MapAmbience(() => _hudLayer is { Visible: true } ? _globe : null, () => _campaign));
+
         foreach (var cue in SoundCatalog.All)
         {
             if (!ResourceLoader.Exists(cue.File))

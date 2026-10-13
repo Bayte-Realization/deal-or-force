@@ -47,6 +47,86 @@ internal static class ControlSkin
         Set("radio_unchecked_disabled", Box(edge, ground, false, true, mark, 0.35f));
         Set("radio_checked_disabled", Box(accent, ground, true, true, accent, 0.4f));
         theme.SetConstant("h_separation", "CheckBox", 8);
+        Engrave(theme, accent);
+        Gauges(theme, accent, edge);
+        Tooltips(theme, accent);
+    }
+
+    /// <summary>
+    /// Every tooltip in one frame: the stock one was a flat grey box, the breakdowns drew
+    /// their own, and the two looked like they came from different games. The window colour,
+    /// a fine edge, a brass line along the top as on the screens themselves, and a shadow so
+    /// it lifts off the map.
+    /// </summary>
+    private static void Tooltips(Theme theme, Color accent)
+    {
+        var frame = new StyleBoxFlat
+        {
+            BgColor = new Color(Ui.Colour("surface.overlay"), 0.97f),
+            BorderColor = Ui.Colour("surface.line"),
+            CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3, CornerRadiusBottomLeft = 3, CornerRadiusBottomRight = 3,
+            ShadowColor = new Color(0f, 0f, 0f, 0.45f),
+            ShadowSize = 6,
+            ShadowOffset = new Vector2(0, 2)
+        };
+        frame.SetBorderWidthAll(1);
+        frame.BorderWidthTop = 2;
+        frame.BorderColor = new Color(accent, 0.75f);
+        frame.ContentMarginLeft = 11; frame.ContentMarginRight = 11;
+        frame.ContentMarginTop = 8; frame.ContentMarginBottom = 8;
+        theme.SetStylebox("panel", "TooltipPanel", frame);
+        theme.SetColor("font_color", "TooltipLabel", Ui.Colour("text.body"));
+        theme.SetColor("font_shadow_color", "TooltipLabel", new Color(0f, 0f, 0f, 0f));
+    }
+
+    /// <summary>
+    /// A separator as an engraved rule: a brass hairline with a faint shadow under it, fading
+    /// out towards both ends - the line under a heading in an atlas, not a grey bar.
+    /// </summary>
+    private static void Engrave(Theme theme, Color accent)
+    {
+        const int width = 512, height = 5;
+        var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
+        for (var x = 0; x < width; x++)
+        {
+            var u = x / (float)(width - 1);
+            // Bright in the middle third, gone at the edges.
+            var fade = Mathf.Clamp(Mathf.Sin(u * Mathf.Pi) * 1.35f, 0f, 1f);
+            image.SetPixel(x, 1, new Color(accent, 0.10f * fade));
+            image.SetPixel(x, 2, new Color(accent.Lightened(0.1f), 0.55f * fade));
+            image.SetPixel(x, 3, new Color(0f, 0f, 0f, 0.35f * fade));
+        }
+        var rule = new StyleBoxTexture { Texture = ImageTexture.CreateFromImage(image),
+            AxisStretchHorizontal = StyleBoxTexture.AxisStretchMode.Stretch, ContentMarginTop = 2, ContentMarginBottom = 2 };
+        theme.SetStylebox("separator", "HSeparator", rule);
+        theme.SetConstant("separation", "HSeparator", 9);
+    }
+
+    /// <summary>
+    /// Progress bars as gauges: a recessed track with a fine edge, and a brass fill that is
+    /// lighter along its top edge, as a filled groove catches the light.
+    /// </summary>
+    private static void Gauges(Theme theme, Color accent, Color edge)
+    {
+        var track = new StyleBoxFlat
+        {
+            BgColor = new Color(0.03f, 0.05f, 0.08f, 0.85f),
+            BorderColor = new Color(edge, 0.35f),
+            BorderWidthBottom = 1, BorderWidthTop = 1, BorderWidthLeft = 1, BorderWidthRight = 1,
+            CornerRadiusBottomLeft = 2, CornerRadiusBottomRight = 2, CornerRadiusTopLeft = 2, CornerRadiusTopRight = 2
+        };
+        const int height = 16;
+        var image = Image.CreateEmpty(4, height, false, Image.Format.Rgba8);
+        for (var y = 0; y < height; y++)
+        {
+            var v = y / (float)(height - 1);
+            var shade = v < 0.2f ? accent.Lightened(0.35f) : accent.Darkened(0.25f * v);
+            for (var x = 0; x < 4; x++) image.SetPixel(x, y, new Color(shade, 0.95f));
+        }
+        var fill = new StyleBoxTexture { Texture = ImageTexture.CreateFromImage(image),
+            TextureMarginLeft = 1, TextureMarginRight = 1 };
+        theme.SetStylebox("background", "ProgressBar", track);
+        theme.SetStylebox("fill", "ProgressBar", fill);
     }
 
     /// <summary>One icon, drawn by distance so its edges are smooth at any scale.</summary>

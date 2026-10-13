@@ -218,9 +218,10 @@ public partial class DealOrForceGame
         {
             var enemy = _campaign.NationById(war.AttackerId == player.Id ? war.DefenderId : war.AttackerId);
             var score = war.AttackerId == player.Id ? war.WarScore : -war.WarScore;
-            AddOutlinerButton(Simulation.Loc.Format("{0}  score {1:+0;-0;0}  support {2:P0}",
+            var warRow = AddOutlinerButton(Simulation.Loc.Format("{0}  score {1:+0;-0;0}  support {2:P0}",
                     enemy?.Tag ?? "?", score, PlayerWarSupport(war)),
                 () => FocusWar(war), "Open the war dossier and focus its frontline.");
+            BalanceBar.Under(warRow, 0.5f + score / 200f);
         }
 
         AddOutlinerHeader("BATTLES");
@@ -245,6 +246,7 @@ public partial class DealOrForceGame
             battleRow.AddThemeColorOverride("font_color", Ui.Colour(!assessment.Known ? "text.muted" :
                 assessment.ShareFor(attacking) > .55f ? "state.positive" :
                 assessment.ShareFor(attacking) < .45f ? "state.negative" : "state.warning"));
+            BalanceBar.Under(battleRow, assessment.Known ? assessment.ShareFor(attacking) : 0.5f, assessment.Known);
         }
 
         // The navy, in full. The armies list was dropped because it showed seven divisions
@@ -387,11 +389,32 @@ public partial class DealOrForceGame
     {
         _alertsDrawn = _pendingAlerts.Count > 0;
         _pendingAlerts.Sort((left, right) => left.Level.CompareTo(right.Level));
+        var now = Time.GetTicksMsec();
+        var present = new HashSet<string>();
         foreach (var alert in _pendingAlerts)
         {
+            // When it first appeared, so a new alert arrives with a flash. The rail is rebuilt
+            // whenever any figure on it moves, so the flash is timed from that moment rather
+            // than started afresh by every rebuild; and what was already there when the game
+            // opened is not news.
+            var key = AlertKey(alert.Level, alert.Icon, alert.Text);
+            present.Add(key);
+            if (!_alertFirstSeen.ContainsKey(key)) _alertFirstSeen[key] = _alertsPrimed ? now : 0UL;
+            var age = now - _alertFirstSeen[key];
+
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 6);
             _alertRows.AddChild(row);
+
+            // The level as a stripe down the row's edge, read before the words are.
+            var stripe = new ColorRect
+            {
+                Name = "AlertSeverity",
+                Color = Ui.Colour(AlertColour(alert.Level)),
+                CustomMinimumSize = new Vector2(3, 0),
+                MouseFilter = Control.MouseFilterEnum.Ignore
+            };
+            row.AddChild(stripe);
 
             var button = ActionButton(alert.Text, alert.Action, 0, 30,
                 alert.Level == AlertLevel.Critical,
@@ -408,8 +431,39 @@ public partial class DealOrForceGame
             button.AddThemeColorOverride("font_color", colour);
             button.AddThemeColorOverride("font_hover_color", colour.Lightened(0.25f));
             row.AddChild(button);
+            if (age < AlertFlashMs) Flash(row, stripe, age);
         }
+        // An alert that clears and comes back is news again.
+        foreach (var gone in _alertFirstSeen.Keys.Where(key => !present.Contains(key)).ToList())
+            _alertFirstSeen.Remove(gone);
+        _alertsPrimed = true;
         _pendingAlerts.Clear();
+    }
+
+    private const ulong AlertFlashMs = 1600;
+    private readonly Dictionary<string, ulong> _alertFirstSeen = new();
+    private bool _alertsPrimed;
+
+    /// <summary>An alert by what it is, not by the figure in it: a shortage going from 10 % to 11 % is the same alert.</summary>
+    private static string AlertKey(AlertLevel level, string icon, string text) =>
+        $"{level}|{icon}|{new string(text.Where(c => !char.IsDigit(c) && c is not ('.' or ',' or '%' or '+' or '-')).ToArray())}";
+
+    /// <summary>
+    /// A brass glow over the row that fades to nothing, and a stripe that starts wide and
+    /// settles. Picked up where it was if the rail was rebuilt halfway through.
+    /// </summary>
+    private static void Flash(Control row, ColorRect stripe, ulong age)
+    {
+        var left = (AlertFlashMs - age) / 1000f;
+        var start = 1f - age / (float)AlertFlashMs;
+        var glow = new Color(1.55f, 1.35f, 0.85f);
+        row.Modulate = Colors.White.Lerp(glow, start);
+        stripe.CustomMinimumSize = new Vector2(3f + 4f * start, 0f);
+        var tween = row.CreateTween().SetParallel();
+        tween.TweenProperty(row, "modulate", Colors.White, left)
+            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
+        tween.TweenProperty(stripe, "custom_minimum_size", new Vector2(3f, 0f), left)
+            .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
     }
 
     /// <summary>

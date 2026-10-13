@@ -775,11 +775,46 @@ public static partial class Warfare
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
             var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker),
                 defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
+            // However badly a battle goes, it is still two sides shooting at each other: the
+            // worse-off side's daily loss per formation is at most this many times the other's.
+            // The bounds above allowed seventeen to one, and ten years of it put seven million
+            // North Korean casualties against ninety thousand South Korean ones.
+            var exchange = MathF.Max(1f, defines.MaxOrganisationLossRatio);
+            attackerOrgLoss = MathF.Min(attackerOrgLoss, defenderOrgLoss * exchange);
+            defenderOrgLoss = MathF.Min(defenderOrgLoss, attackerOrgLoss * exchange);
             var attackerOrgBefore = AverageOrganisation(attacking);
             var defenderOrgBefore = AverageOrganisation(defending);
-            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss, 1f, out var defenderKilled);
-            var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss,
-                defines.AttackerCasualtyMultiplier, out var attackerKilled);
+            // And the same for the dead. Thin templates, a broken line and an aggressive stance
+            // each multiply a side's casualties after the cap above, so the share of its men a
+            // side loses in a day is held to at most this many times the other side's share.
+            var defenderScale = 1f;
+            var attackerScale = defines.AttackerCasualtyMultiplier;
+            var (defenderMen, defenderDead) = CasualtyTotals(campaign, defending, defenderOrgLoss, defenderScale);
+            var (attackerMen, attackerDead) = CasualtyTotals(campaign, attacking, attackerOrgLoss, attackerScale);
+            var defenderRate = defenderMen > 1f ? defenderDead / defenderMen : 0f;
+            var attackerRate = attackerMen > 1f ? attackerDead / attackerMen : 0f;
+            var bleed = MathF.Max(1f, defines.MaxCasualtyRateRatio);
+            if (attackerRate > defenderRate * bleed && attackerRate > 0f)
+            {
+                var cut = defenderRate * bleed / attackerRate;
+                attackerScale *= cut; attackerDead *= cut;
+            }
+            else if (defenderRate > attackerRate * bleed && defenderRate > 0f)
+            {
+                var cut = attackerRate * bleed / defenderRate;
+                defenderScale *= cut; defenderDead *= cut;
+            }
+            // And in men, not only in shares: every formation in a stack takes at least the
+            // floor of organisation damage, so a big stack paid for its own size: in one bench
+            // war China lost twenty-seven men for each Burmese one. What a side can kill is bounded
+            // by what is shooting at it, however many stand in front of it.
+            var trade = MathF.Max(1f, defines.MaxCasualtyExchange);
+            if (defenderDead > 0f && attackerDead > defenderDead * trade)
+                attackerScale *= defenderDead * trade / attackerDead;
+            else if (attackerDead > 0f && defenderDead > attackerDead * trade)
+                defenderScale *= attackerDead * trade / defenderDead;
+            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss, defenderScale, out var defenderKilled);
+            var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss, attackerScale, out var attackerKilled);
             foreach (var army in attacking)
                 army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningBurnPerCombatDay);
             battle.AttackerLosses += attackerLoss;
@@ -1196,18 +1231,20 @@ public static partial class Warfare
     private static float ApplyDamage(Campaign campaign, IReadOnlyCollection<Army> side,
         float organisationLoss, float casualtyScale, out float killed)
     {
+        // Personnel are read before the organisation falls, as CasualtyTotals reads them.
+        var exposure = side.Select(army => Casualties(campaign, army, side, organisationLoss, casualtyScale)).ToList();
         var defines = campaign.Defines;
         var totalPower = side.Sum(army => M.Max(0.01f, army.Power));
         var lost = 0f;
         killed = 0f;
         var woundedShare = M.Clamp01(defines.WoundedShareOfCasualties);
+        var index = 0;
         foreach (var army in side)
         {
             var template = UnitTypeCatalog.Get(army.TemplateId);
             var share = M.Max(0.01f, army.Power) / totalPower * side.Count;
             var loss = organisationLoss * share / M.Max(0.2f, template.Organisation);
-            var brokenExposure = M.Lerp(defines.BrokenCasualtyMultiplier, 1f,
-                M.Clamp01(army.Organisation / M.Max(0.05f, defines.BattleBreakOrganisation * 4f)));
+            var (personnel, casualties) = exposure[index++];
 
             army.Organisation = M.Clamp01(army.Organisation - loss);
 
@@ -1220,11 +1257,6 @@ public static partial class Warfare
                 - defines.EntrenchmentLostPerCombatDay
                 + defines.EntrenchmentPerDay * defines.EntrenchmentUnderFireShare);
 
-            var personnel = army.Divisions * MilitaryBootstrap.DivisionSize * army.Strength;
-            var casualties = personnel * loss * defines.CasualtiesPerOrganisationPoint *
-                             brokenExposure * casualtyScale *
-                             MilitaryDoctrine.CasualtyExposure(army.Stance) *
-                             (army.CutOff ? defines.EncircledCasualtyMultiplier : 1f);
             if (personnel > 1f) army.Strength = M.Clamp01(army.Strength - casualties / personnel);
             army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(casualties));
             army.Recovering += casualties * defines.WoundedReturningShare;
@@ -1234,6 +1266,39 @@ public static partial class Warfare
             killed += casualties * (1f - woundedShare);
         }
         return lost;
+    }
+
+    /// <summary>One formation's men and the casualties a day of this battle costs it.</summary>
+    private static (float Personnel, float Casualties) Casualties(Campaign campaign, Army army,
+        IReadOnlyCollection<Army> side, float organisationLoss, float casualtyScale)
+    {
+        var defines = campaign.Defines;
+        var totalPower = side.Sum(other => M.Max(0.01f, other.Power));
+        var template = UnitTypeCatalog.Get(army.TemplateId);
+        var share = M.Max(0.01f, army.Power) / totalPower * side.Count;
+        var loss = organisationLoss * share / M.Max(0.2f, template.Organisation);
+        var brokenExposure = M.Lerp(defines.BrokenCasualtyMultiplier, 1f,
+            M.Clamp01(army.Organisation / M.Max(0.05f, defines.BattleBreakOrganisation * 4f)));
+        var personnel = army.Divisions * MilitaryBootstrap.DivisionSize * army.Strength;
+        var casualties = personnel * loss * defines.CasualtiesPerOrganisationPoint *
+                         brokenExposure * casualtyScale *
+                         MilitaryDoctrine.CasualtyExposure(army.Stance) *
+                         (army.CutOff ? defines.EncircledCasualtyMultiplier : 1f);
+        return (personnel, casualties);
+    }
+
+    /// <summary>A side's men, and the casualties a day of this battle would cost it.</summary>
+    private static (float Men, float Dead) CasualtyTotals(Campaign campaign, IReadOnlyCollection<Army> side,
+        float organisationLoss, float casualtyScale)
+    {
+        float men = 0f, dead = 0f;
+        foreach (var army in side)
+        {
+            var (personnel, casualties) = Casualties(campaign, army, side, organisationLoss, casualtyScale);
+            men += personnel;
+            dead += casualties;
+        }
+        return (men, dead);
     }
 
     /// <summary>
@@ -1326,4 +1391,16 @@ public static partial class Warfare
         foreach (var army in campaign.Armies)
             if (army.BattleId == battle.Id) army.BattleId = -1;
     }
+}
+
+public sealed partial class Defines
+{
+    /// <summary>The most one side of a battle can lose per formation per day against the other.</summary>
+    public float MaxOrganisationLossRatio { get; set; } = 3.5f;
+
+    /// <summary>The most of its men one side of a battle can lose in a day, as a multiple of the other's share.</summary>
+    public float MaxCasualtyRateRatio { get; set; } = 2.5f;
+
+    /// <summary>The most men one side of a battle can lose in a day for each it kills.</summary>
+    public float MaxCasualtyExchange { get; set; } = 3f;
 }

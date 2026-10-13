@@ -32,6 +32,14 @@
     "labels": ["Never", "Weekly", "Monthly", "Quarterly", "Yearly"],
     "default": "30"
   },
+  "event_interval": {
+    "category": "game", "scope": "campaign", "order": 101, "kind": "choice",
+    "name": "Events",
+    "description": "How often your country is asked to decide something that happened to it. Rarely is a decision or two a year; often is the old cadence, about one a season.",
+    "values": ["0", "250", "125", "75"],
+    "labels": ["Never", "Rarely", "Normally", "Often"],
+    "default": "125"
+  },
   "civil_wars_players": {
     "category": "game", "scope": "campaign", "order": 104, "kind": "toggle",
     "name": "Civil-war outbreaks in player countries",
@@ -121,6 +129,18 @@
     "category": "interface", "order": 245, "kind": "toggle",
     "name": "Stars behind the globe",
     "description": "The photographed sky the world hangs in. Off leaves the flat colour behind it, which is quieter to look at and one less texture to hold.",
+    "default": true
+  },
+  "map_weather": {
+    "category": "interface", "order": 246, "kind": "toggle",
+    "name": "Clouds and fog",
+    "description": "Clouds drifting over the world from far away, parting as the camera comes down; and up close, the ground hidden by the fog of war under a drifting mist.",
+    "default": true
+  },
+  "map_ambience": {
+    "category": "audio", "order": 425, "kind": "toggle",
+    "name": "Sound of the map",
+    "description": "High wind from the strategic height, open country close to the ground, and the guns of a front the camera is near. At the effects volume.",
     "default": true
   },
 

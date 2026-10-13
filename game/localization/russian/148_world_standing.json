@@ -45,5 +45,11 @@
   "Eurasian Economic Union": "Евразийский экономический союз",
   "ECOWAS": "ЭКОВАС",
   "NATO": "НАТО",
-  "CSTO": "ОДКБ"
+  "CSTO": "ОДКБ",
+  "Events": "События",
+  "How often your country is asked to decide something that happened to it. Rarely is a decision or two a year; often is the old cadence, about one a season.": "Как часто стране приходится решать, как ответить на случившееся. «Редко» - одно-два решения в год; «часто» - прежний ритм, примерно раз в сезон.",
+  "Never": "Никогда",
+  "Rarely": "Редко",
+  "Normally": "Обычно",
+  "Often": "Часто"
 }

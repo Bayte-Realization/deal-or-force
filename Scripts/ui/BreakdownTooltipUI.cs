@@ -74,18 +74,10 @@ public static class BreakdownPanel
     {
         if (breakdown is null || !breakdown.HasEntries) return null;
 
+        // The frame is the tooltip's own (ControlSkin): a second one inside it drew a box in a box.
         var panel = new PanelContainer();
-        var style = new StyleBoxFlat
-        {
-            BgColor = Ui.Colour("surface.overlay"),
-            BorderColor = Ui.Colour("surface.line"),
-            CornerRadiusTopLeft = 3,
-            CornerRadiusTopRight = 3,
-            CornerRadiusBottomLeft = 3,
-            CornerRadiusBottomRight = 3
-        };
-        style.SetBorderWidthAll(1);
-        style.SetContentMarginAll(12);
+        var style = new StyleBoxEmpty();
+        style.SetContentMarginAll(3);
         panel.AddThemeStyleboxOverride("panel", style);
 
         var rows = new VBoxContainer { CustomMinimumSize = new Vector2(268, 0) };

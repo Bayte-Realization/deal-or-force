@@ -60,7 +60,7 @@ public sealed partial class GlobePresentation
         /// capital, and a row drawn on it took the room of the city's own star and name - Kyiv
         /// lost its name to the Mejlis.
         /// </summary>
-        private const float RowSink = 80f;
+        private const float RowSink = 130f;
         private const float PickRadius = 20f;
 
         private readonly GlobePresentation _globe;
