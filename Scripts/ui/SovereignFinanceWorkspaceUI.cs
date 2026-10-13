@@ -61,6 +61,7 @@ public partial class DealOrForceGame
     private void OpenSovereignFinance()
     {
         if (_campaign?.Player is null || !_hudLayer.Visible || _pauseMenuLayer is { Visible: true }) return;
+        if (_situationLayer is not null) _situationLayer.Visible = false;
         if (_sovereignFinanceLayer is null) BuildSovereignFinanceWorkspace();
         _financeReturnFocus = GetViewport().GuiGetFocusOwner();
         _financeFromBudget = _stateAffairsLayer is { Visible: true };
@@ -77,7 +78,10 @@ public partial class DealOrForceGame
         _financeAmount.SetValueNoSignal(Math.Max(.01, _campaign.Player.Gdp * .001));
         _financeFeedback.Text = "";
         RefreshSovereignFinanceWorkspace();
-        _financeClose.GrabFocus();
+        // Opening with the mouse should not make the exit look hovered/selected.
+        // Keyboard navigation starts from a neutral target inside the workspace.
+        _sovereignFinanceLayer.FocusMode = FocusModeEnum.All;
+        _sovereignFinanceLayer.GrabFocus();
         UpdateScreenButtons();
     }
 

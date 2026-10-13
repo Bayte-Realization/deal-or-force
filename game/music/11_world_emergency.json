@@ -1,0 +1,15 @@
+{
+  "director": {
+    "systemic_war_exposure": 0.60,
+    "systemic_war_gdp_share": 0.55,
+    "systemic_belligerents": 10,
+    "emergency_feature": "world_order_emergency"
+  },
+  "tracks": {
+    "last_lap_world": {
+      "file": "audio/last_lap_world.ogg", "label": "Last lap of the world",
+      "when": "campaign", "moods": ["systemiccrisis"], "weight": 1,
+      "loop": true, "volume_db": -1
+    }
+  }
+}

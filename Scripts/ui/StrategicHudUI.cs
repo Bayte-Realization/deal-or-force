@@ -40,6 +40,11 @@ public partial class DealOrForceGame
         toggle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         toggle.ClipText = true;
         column.AddChild(toggle);
+        _situationRailButton = ActionButton("Situation room", OpenSituationRoom, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_ledger.png");
+        _situationRailButton.Name = "OpenSituationRoom";
+        _situationRailButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        column.AddChild(_situationRailButton);
         var scroll = new ScrollContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,

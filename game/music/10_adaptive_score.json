@@ -1,0 +1,28 @@
+{
+  "director": {
+    "fade_seconds": 7,
+    "escalate_seconds": 6,
+    "release_seconds": 35,
+    "minimum_hold_seconds": 45,
+    "war_minimum_hold_seconds": 12,
+    "world_exposure_warning": 0.30,
+    "world_exposure_crisis": 0.60,
+    "shortage_warning": 0.18,
+    "shortage_crisis": 0.45,
+    "stability_warning": 0.35,
+    "regional_radicalism_warning": 0.65,
+    "recovery_days": 180
+  },
+  "tracks": {
+    "menu_theme": { "remove": true },
+    "campaign_ambient": { "remove": true },
+    "war_theme": { "remove": true },
+    "victory_theme": { "remove": true },
+    "frayed_civic": { "file": "audio/frayed_civic.ogg", "label": "Frayed civic", "when": "any", "moods": ["calm", "recovery"], "weight": 2, "volume_db": 0 },
+    "soft_fracture": { "file": "audio/soft_fracture.ogg", "label": "Soft fracture", "when": "campaign", "moods": ["uneasy", "crisis", "war"], "weight": 2, "volume_db": 0 },
+    "night_desk": { "file": "audio/night_desk.ogg", "label": "Night desk", "when": "campaign", "moods": ["calm", "recovery"], "regions": ["asia"], "weight": 3, "volume_db": 0 },
+    "window_after_rain": { "file": "audio/window_after_rain.ogg", "label": "Window after rain", "when": "campaign", "moods": ["calm", "recovery"], "regions": ["asia"], "weight": 3, "volume_db": 0 },
+    "pressure_lines": { "file": "audio/pressure_lines.ogg", "label": "Pressure lines", "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["asia"], "weight": 3, "volume_db": 0 },
+    "unsent_telegram": { "file": "audio/unsent_telegram.ogg", "label": "Unsent telegram", "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["asia"], "weight": 3, "volume_db": 0 }
+  }
+}

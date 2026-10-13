@@ -1,0 +1,8 @@
+{
+  "SituationSupplyWarning": 0.45,
+  "SituationShortageWarning": 0.90,
+  "SituationShortageCritical": 0.65,
+  "SituationCashRunwayWeeks": 4.0,
+  "SituationExpiringDays": 3,
+  "SituationItemLimit": 40
+}

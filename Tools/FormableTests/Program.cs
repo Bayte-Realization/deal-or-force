@@ -14,6 +14,9 @@ static class Program
         if (args.Contains("--integrity-only")) { CampaignIntegrityTests.Run(); return; }
         if (args.Contains("--deals-only")) { DealTests.Run(); return; }
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
+        if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
+        if (args.Contains("--music-only")) { MusicSituationTests.Run(); return; }
+        if (args.Contains("--weather-only")) { WeatherReadabilityTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
         if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
         if (args.Contains("--households-only")) { HouseholdTests.Run(); return; }
@@ -71,6 +74,9 @@ static class Program
         UltimatumTests.Run();
         DealTests.Run();
         DealNegotiationTests.Run();
+        SituationReportTests.Run();
+        MusicSituationTests.Run();
+        WeatherReadabilityTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();
         var terrainErrors = new List<string>();

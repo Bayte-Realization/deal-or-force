@@ -144,9 +144,16 @@ public sealed partial class GlobePresentation
         var paused = _campaign is null || _campaign.IsPaused;
         _weatherClock += delta * (paused ? 0.25 : 1.0);
         var clock = (float)(_weatherClock % 100000.0);
+        var readability = Simulation.WeatherReadability.Read(defines);
 
         _cloudMaterial.SetShaderParameter("presence", clouds);
         _cloudShadeMaterial.SetShaderParameter("presence", clouds);
+        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity);
+        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity);
+        _cloudMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
+        _cloudShadeMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
+        _cloudMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
+        _cloudShadeMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
         _cloudMaterial.SetShaderParameter("wind", clock);
         _cloudShadeMaterial.SetShaderParameter("wind", clock);
         var sun = IsInstanceValid(_weatherSun) ? _weatherSun.GlobalBasis.Z.Normalized() : new Vector3(0.4f, 0.5f, 0.75f);
@@ -155,6 +162,7 @@ public sealed partial class GlobePresentation
         _cloudShadeMaterial.SetShaderParameter("flat_map", _flatMap ? 1f : 0f);
 
         _mistMaterial.SetShaderParameter("presence", mist);
+        _mistMaterial.SetShaderParameter("opacity", readability.MistOpacity);
         _mistMaterial.SetShaderParameter("wind", clock);
         if (mist > 0.001f && _globeMaterial is not null)
         {
@@ -180,6 +188,9 @@ uniform float wind = 0.0;
 uniform vec3 sun_dir = vec3(0.4, 0.5, 0.75);
 uniform float shade_pass = 0.0;
 uniform float flat_map = 0.0;
+uniform float opacity = 0.50;
+uniform float edge_softness = 0.20;
+uniform float detail_strength = 0.08;
 
 float hash(vec3 p) {
     p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
@@ -213,10 +224,14 @@ vec3 sphere_at(vec2 uv) {
 float field(vec2 uv, float shift) {
     vec3 p = sphere_at(vec2(uv.x + shift, uv.y)) * 3.1;
     float evolve = wind * 0.0021;
-    vec3 warp = vec3(fbm(p * 1.4 + vec3(3.1, evolve, 0.0), 3),
-                     fbm(p * 1.4 + vec3(7.7, 0.0, evolve), 3),
-                     fbm(p * 1.4 + vec3(evolve, 12.4, 0.0), 3)) - 0.5;
-    return fbm(p * 2.2 + warp * 1.9, 5);
+    vec3 warp = vec3(fbm(p * 1.1 + vec3(3.1, evolve, 0.0), 2),
+                     fbm(p * 1.1 + vec3(7.7, 0.0, evolve), 2),
+                     fbm(p * 1.1 + vec3(evolve, 12.4, 0.0), 2)) - 0.5;
+    vec3 shaped = p * 1.7 + warp * 1.6;
+    // Broad connected bodies carry the silhouette; small detail cannot tear it apart.
+    float body = fbm(shaped, 3);
+    float detail = fbm(shaped * 3.0, 2);
+    return mix(body, detail, detail_strength);
 }
 void fragment() {
     vec2 uv = UV;
@@ -239,19 +254,19 @@ void fragment() {
     float storms = exp(-pow((alat - 56.0) / 12.0, 2.0));
     float cover = clamp(0.40 + 0.34 * itcz - 0.30 * subtropic + 0.30 * storms, 0.05, 0.95);
     float threshold = mix(0.60, 0.40, cover);
-    float body = smoothstep(threshold, threshold + 0.16, d);
-    float core = smoothstep(threshold + 0.06, threshold + 0.34, d);
+    float body = smoothstep(threshold - edge_softness, threshold + edge_softness, d);
+    float core = smoothstep(threshold, threshold + edge_softness * 1.5, d);
     float limb = flat_map > 0.5 ? 1.0 : smoothstep(0.0, 0.22, dot(NORMAL, VIEW));
     if (shade_pass > 0.5) {
         ALBEDO = vec3(0.02, 0.03, 0.05);
-        ALPHA = body * 0.20 * presence * limb;
+        ALPHA = body * opacity * 0.24 * presence * limb;
     } else {
         vec3 n = sphere_at(UV);
-        float light = flat_map > 0.5 ? 0.92 : 0.62 + 0.38 * clamp(dot(n, normalize(sun_dir)), 0.0, 1.0);
-        vec3 thin = vec3(0.66, 0.71, 0.79);
+        float light = flat_map > 0.5 ? 0.95 : 0.80 + 0.20 * clamp(dot(n, normalize(sun_dir)), 0.0, 1.0);
+        vec3 thin = vec3(0.80, 0.83, 0.88);
         vec3 thick = vec3(0.97, 0.98, 1.0);
         ALBEDO = mix(thin, thick, core) * light;
-        ALPHA = body * mix(0.38, 0.68, core) * presence * limb;
+        ALPHA = body * mix(0.50, 1.0, core) * opacity * presence * limb;
     }
 }";
 
@@ -281,6 +296,7 @@ uniform sampler2D political_map : filter_linear;
 uniform sampler2D fog_visibility : filter_nearest, repeat_disable;
 uniform float presence = 0.0;
 uniform float wind = 0.0;
+uniform float opacity = 0.22;
 
 float hash(vec2 p) {
     vec3 q = fract(vec3(p.xyx) * 0.1031);
@@ -312,9 +328,9 @@ void fragment() {
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     // Banks a couple of degrees across with wisps inside them, in two layers drifting
     // different ways.
-    vec2 q = UV * vec2(2.0, 1.0) * 110.0;
+    vec2 q = UV * vec2(2.0, 1.0) * 48.0;
     float slow = fbm(q + vec2(wind * 0.030, wind * 0.008));
-    float fast = fbm(q * 2.6 - vec2(wind * 0.085, -wind * 0.030));
+    float fast = fbm(q * 2.0 - vec2(wind * 0.085, -wind * 0.030));
     // The edge of the unknown billows: the taps that find it are bent by the mist itself.
     vec2 bend = (vec2(slow, fast) - 0.5) * texel * 14.0;
     float hidden = hidden_at(UV + bend) * 2.0;
@@ -324,13 +340,13 @@ void fragment() {
     }
     hidden /= 10.0;
     float land = smoothstep(0.25, 0.75, texture(political_map, UV).a);
-    // Thick where the banks are, thin enough between them to see the ground through.
-    float billow = smoothstep(0.32, 0.72, slow * 0.7 + fast * 0.3);
-    float wisps = 0.28 + 0.72 * billow;
+    // A soft veil, not white foam. The intelligence mask remains unchanged.
+    float billow = smoothstep(0.24, 0.76, slow * 0.8 + fast * 0.2);
+    float wisps = 0.35 + 0.65 * billow;
     float density = smoothstep(0.05, 0.95, hidden) * land * wisps;
     // The tops of the banks catch the light; the hollows between them are grey.
-    ALBEDO = mix(vec3(0.56, 0.60, 0.67), vec3(0.88, 0.90, 0.93), billow);
-    ALPHA = density * 0.68 * presence;
+    ALBEDO = mix(vec3(0.49, 0.55, 0.63), vec3(0.73, 0.78, 0.84), billow);
+    ALPHA = density * opacity * presence;
 }";
 }
 }

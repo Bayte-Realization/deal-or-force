@@ -75,7 +75,10 @@ public partial class DealOrForceGame
         // campaign while its interface is up, the menu while it is not.
         MusicDirector.Ensure(this).FollowScene(this, () => _hudLayer is { Visible: true }
             ? MusicCatalog.Moment.Campaign
-            : MusicCatalog.Moment.Menu);
+            : MusicCatalog.Moment.Menu,
+            () => _hudLayer is { Visible: true }
+                ? MusicSituation.Read(_campaign, _campaign?.Player, _openScreen == "Region" ? _selectedState : null, _observerMode)
+                : new MusicReadout(MusicMood.Calm, "No campaign pressure recorded."));
 
         // And under all of it, the sound of the map from where the camera is.
         AddChild(new MapAmbience(() => _hudLayer is { Visible: true } ? _globe : null, () => _campaign));
@@ -173,6 +176,8 @@ public partial class DealOrForceGame
 
     private void ResetStrategicAudioState()
     {
+        _situationAttention.Reset();
+        _situationNation = -1;
         foreach (var player in _audioChannels.Values) player.Stop();
         _strategicAudioQueue.Clear();
         _lastCueAt.Clear();

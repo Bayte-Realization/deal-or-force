@@ -1,0 +1,7 @@
+{
+  "adaptive_music": {
+    "category": "audio", "order": 415, "kind": "toggle", "default": true,
+    "name": "Music follows the world",
+    "description": "Adapt the soundtrack to wars, institutional crises, shortages, the selected region and wider world pressure. Changes settle before a smooth crossfade. Disable for the unrestricted playlist."
+  }
+}

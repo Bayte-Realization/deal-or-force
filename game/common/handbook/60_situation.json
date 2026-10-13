@@ -1,0 +1,5 @@
+{
+  "articles": {
+    "situation_room": {"topic": "basics", "order": 25, "screen": "Situation", "related": ["budget", "domestic_crises", "deals", "organizations"]}
+  }
+}

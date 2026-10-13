@@ -45,6 +45,7 @@ public partial class DealOrForceGame
     {
         var open = screen switch
         {
+            "Situation" => _situationLayer?.Visible == true,
             "State Affairs" => _stateAffairsLayer?.Visible == true,
             "Ledger" => _ledgerLayer?.Visible == true,
             "Wars" => _warLedgerLayer?.Visible == true,
@@ -64,7 +65,8 @@ public partial class DealOrForceGame
             OpenScreen(screen);
             return;
         }
-        if (screen == "State Affairs") CloseStateAffairs();
+        if (screen == "Situation") CloseSituationRoom();
+        else if (screen == "State Affairs") CloseStateAffairs();
         else if (screen == "Ledger") _ledgerLayer.Visible = false;
         else if (screen == "Wars") _warLedgerLayer.Visible = false;
         else if (screen == "Diplomacy") CloseDiplomacyScreen();
@@ -82,11 +84,13 @@ public partial class DealOrForceGame
     private void LayoutCampaignShell()
     {
         if (_hudLayer is null) return;
+        LayoutHudReadability();
         // Baseline rectangles remain moddable in game/gui. Only the short outliner is
         // clamped to available height; it must not cover the map toolbar at 720p.
         if (_outliner is not null)
         {
             Ui.Place(_outliner, "hud.outliner");
+            _outliner.OffsetTop += _hudHeaderExtra;
             _outliner.AnchorBottom = 0;
             FitOutliner();
         }

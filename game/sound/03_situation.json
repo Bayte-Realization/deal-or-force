@@ -1,0 +1,11 @@
+{
+  "cues": {
+    "situation_alert": {
+      "file": "audio/event_alert.wav",
+      "channel": "strategic",
+      "cooldown_ms": 12000,
+      "volume_db": -6,
+      "yields_to_anything_playing": true
+    }
+  }
+}

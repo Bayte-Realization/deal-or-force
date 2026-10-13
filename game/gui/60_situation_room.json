@@ -1,0 +1,6 @@
+{
+  "layout": {
+    "workspace.situation": {"anchors": [0.07, 0.115, 0.94, 0.90], "offsets": [0, 0, 0, 0]}
+  },
+  "metrics": { "hud.two_row_below": 1600, "hud.second_row_height": 52 }
+}

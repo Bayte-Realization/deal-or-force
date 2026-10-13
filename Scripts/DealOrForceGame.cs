@@ -209,6 +209,7 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+        if (HandleSituationEscape(inputEvent)) return;
         if (IsInstanceValid(_dealComposer))
         {
             if (inputEvent is InputEventKey { Pressed: true, Echo: false } dealKey)
@@ -409,7 +410,8 @@ public partial class DealOrForceGame : Control
     public override void _UnhandledInput(InputEvent inputEvent)
     {
         // A diplomatic modal must also shield the map's unhandled keyboard shortcuts.
-        if (IsInstanceValid(_dealComposer)) { GetViewport().SetInputAsHandled(); return; }
+        if (IsInstanceValid(_dealComposer) || _situationLayer is { Visible: true } && !inputEvent.IsActionPressed("ui_cancel"))
+        { GetViewport().SetInputAsHandled(); return; }
         if (IsInstanceValid(_ultimatumComposer)) { GetViewport().SetInputAsHandled(); return; }
         // Escape while the workshop is up is answered in `_Input`, which runs first - see
         // there. Nothing else in the campaign hears a key while that window covers it.
@@ -713,19 +715,24 @@ public partial class DealOrForceGame : Control
         AddChild(_hudLayer);
 
         var top = TexturedPanel(_hudLayer);
+        _hudTopPanel = top;
         top.Name = "CampaignTopBar";
         Ui.Place(top, "hud.top");
 
         var margin = Margin(top, 12, 6);
+        _hudTopStack = new VBoxContainer(); _hudTopStack.AddThemeConstantOverride("separation", 4);
+        margin.AddChild(_hudTopStack);
         var row = new HBoxContainer();
+        _hudTopRow = row;
         row.AddThemeConstantOverride("separation", 12);
-        margin.AddChild(row);
+        _hudTopStack.AddChild(row);
 
         // Whose war this is, said in the one way that needs no reading.
         _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
         row.AddChild(_identityFlag);
 
         var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(154, 0) };
+        _hudIdentityBox = identityBox;
         identityBox.AddThemeConstantOverride("separation", 2);
         row.AddChild(identityBox);
         _identity = Title("South Korea", 18, Ui.Colour("text.accent"));
@@ -741,6 +748,7 @@ public partial class DealOrForceGame : Control
         identityBox.AddChild(_identityTag);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _hudStatRow = stats;
         stats.AddThemeConstantOverride("separation", 7);
         row.AddChild(stats);
         foreach (var field in CampaignUiCatalog.TopStats)
@@ -762,6 +770,7 @@ public partial class DealOrForceGame : Control
             }
 
         var clock = new VBoxContainer { CustomMinimumSize = new Vector2(224, 0) };
+        _hudClockBox = clock;
         clock.AddThemeConstantOverride("separation", 2);
         row.AddChild(clock);
         _date = Title("1 January 2024", 15, Ui.Colour("text.bright"));
@@ -800,6 +809,7 @@ public partial class DealOrForceGame : Control
         UpdateSpeedButtons();
 
         var navigation = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
+        _hudNavigationPanel = navigation;
         navigation.Name = "CampaignNavigation";
         Ui.Place(navigation, "hud.navigation");
         var navMargin = Margin(navigation, 4, 6);
@@ -1006,6 +1016,9 @@ public partial class DealOrForceGame : Control
 
     private void OpenScreen(string screen)
     {
+        if (screen == "Situation") { OpenSituationRoom(); return; }
+        if (_situationLayer is not null) _situationLayer.Visible = false;
+        _situationReturn = "";
         if (_sovereignFinanceLayer is not null) _sovereignFinanceLayer.Visible = false;
         if (!Simulation.MechanicFeatures.ScreenEnabled(_campaign, screen)) return;
         _sideScreenBuiltKey = $"{screen}|{_dossierTab}|{_campaign?.Player?.Id}|" +
@@ -1486,6 +1499,7 @@ public partial class DealOrForceGame : Control
         RefreshEventInterface();
         RefreshPeaceOfferInterface();
         RefreshNegotiationNotifications();
+        RefreshSituationRoom();
         RefreshStrategicHud();
         RefreshBattleDossier();
         if (_ledgerLayer is { Visible: true }) RefreshLedger();
@@ -1967,6 +1981,7 @@ public partial class DealOrForceGame : Control
     private void UpdateScreenButtons()
     {
         var open =
+            _situationLayer is { Visible: true } ? "Situation" :
             _sovereignFinanceLayer is { Visible: true } ? "Economy" :
             _stateAffairsLayer is { Visible: true } ? "State Affairs" :
             _ledgerLayer is { Visible: true } ? "Ledger" :

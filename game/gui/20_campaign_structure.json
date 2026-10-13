@@ -4,6 +4,7 @@
     "outliner_order":["FIRST STEPS","WORLD","WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
     "hidden_outliner":[],
     "navigation": [
+      {"screen": "Situation", "label": "Situation room", "short": "Situation", "group": "COUNTRY", "icon": "ledger", "help": "Inspect causes, consequences and available responses."},
       {"screen": "Nation", "short": "Country", "group": "COUNTRY", "icon": "nation", "help": "Capital, people and institutions."},
       {"screen": "State Affairs", "short": "Budget", "group": "COUNTRY", "icon": "state_affairs", "help": "Taxes, spending, the central bank and the government."},
       {"screen": "Laws", "short": "Laws", "group": "COUNTRY", "icon": "laws", "help": "National laws, regional measures, foreign doctrines and political agendas."},
