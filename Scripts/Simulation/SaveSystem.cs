@@ -883,7 +883,12 @@ public static class SaveSystem
             // The state list was just replaced wholesale, so the ownership index built
             // against the bootstrap campaign no longer describes it.
             campaign.InvalidateStateIndex();
-            SovereignFinance.NormalizeAccounts(campaign);
+            // Only the books of a save from before public debt need opening. A country whose
+            // books are open was saved as it stood - an overdraft between two weekly
+            // settlements included - and moving that overdraft into debt here made a loaded
+            // world differ from the one that was saved, which is a desync in multiplayer.
+            foreach (var loadedNation in campaign.Nations)
+                if (!loadedNation.DebtInitialized) SovereignFinance.NormalizeAccounts(campaign, loadedNation);
 
             // And any country this campaign founded rather than loaded says again who it is
             // for. The demography catalogue is read from files and has never heard of it.

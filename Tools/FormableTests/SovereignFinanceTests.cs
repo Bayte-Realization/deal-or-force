@@ -101,13 +101,20 @@ static class SovereignFinanceTests
         var c = new Campaign(714) { ScenarioId = "debt_fixture" };
         c.Nations.Add(new Nation { Id = 0, MapIndex = 501, Tag = "HUM", Treasury = 10, PublicDebt = 30, Gdp = 100,
             OutputScale = 1, IsHuman = true, DebtInitialized = true });
+        // OLD was saved before public debt existed - its books never opened - so its overdraft is
+        // legacy and the load opens them. MID's books are open and it is part-way through a week:
+        // its overdraft is spending since the last settlement, which its next economic week books,
+        // and a load that booked it early made the loaded world differ from the saved one.
         c.Nations.Add(new Nation { Id = 1, MapIndex = 502, Tag = "OLD", Treasury = -5, PublicDebt = 20, Gdp = 100,
-            OutputScale = 1, DebtInitialized = true, DebtCondition = DebtCondition.Default,
+            OutputScale = 1, DebtInitialized = false, DebtCondition = DebtCondition.Default,
             DebtArrears = 2, PaymentArrears = 3, DebtMissedWeeks = 8, DebtIssuedWeekly = .12f });
         c.States.Add(new ScenarioState { MapIndex = 3001, NationMapIndex = 501, Name = "One" });
+        c.Nations.Add(new Nation { Id = 2, MapIndex = 503, Tag = "MID", Treasury = -1.5f, PublicDebt = 7, Gdp = 100,
+            OutputScale = 1, DebtInitialized = true });
         c.States.Add(new ScenarioState { MapIndex = 3002, NationMapIndex = 502, Name = "Two" });
-        var map = ProvinceTopology.Build(new ushort[] { 3001, 3001, 3002, 3002 },
-            new ushort[] { 501, 501, 502, 502 }, 4, 1, _ => false);
+        c.States.Add(new ScenarioState { MapIndex = 3003, NationMapIndex = 503, Name = "Three" });
+        var map = ProvinceTopology.Build(new ushort[] { 3001, 3001, 3002, 3002, 3003, 3003 },
+            new ushort[] { 501, 501, 502, 502, 503, 503 }, 6, 1, _ => false);
         c.AttachProvinceTopology(map); c.ConfigureSinglePlayer(0);
         var restored = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(c, "finance"), "finance");
         Check(restored.Success, "the real save codec can restore a campaign containing legacy deficits: " + restored.Warning);
@@ -115,6 +122,9 @@ static class SovereignFinanceTests
         Check(old.Treasury == 0 && old.PublicDebt == 25 && old.DebtArrears == 2 && old.PaymentArrears == 3 &&
             old.DebtMissedWeeks == 8 && old.DebtIssuedWeekly == .12f,
             "load migrates nonplayer countries before their first economic week and retains crisis history");
+        var midWeek = restored.Campaign.NationByTag("MID");
+        Check(midWeek.Treasury == -1.5f && midWeek.PublicDebt == 7,
+            "a country with open books loads with the week's overdraft it was saved with");
         restored.Campaign.AttachProvinceTopology(map);
         var twice = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(restored.Campaign, "finance"), "finance");
         Check(twice.Success && twice.Campaign.NationByTag("OLD").PublicDebt == 25,

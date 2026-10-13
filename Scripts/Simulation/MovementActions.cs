@@ -62,8 +62,12 @@ public static class MovementActions
         var definition = Movements.DefinitionOf(nation);
         if (definition is null) yield break;
         foreach (var kind in Kinds)
+            // A rising is offered to a movement that stages them by nature - refused, with the
+            // reason, while it is not yet under arms - and to one its own radicalism has
+            // brought to arms. Never to a company that only takes contracts.
             if ((kind.Trait is null || definition.Has(kind.Trait)) &&
-                (kind.Id != "rise" || MovementMethods.WillRise(campaign, nation, definition))) yield return kind;
+                (kind.Id != "rise" || definition.CanStageUprising || MovementMethods.WillRise(campaign, nation, definition)))
+                yield return kind;
     }
 
     /// <summary>What it costs now, in billions.</summary>

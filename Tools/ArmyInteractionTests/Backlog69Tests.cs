@@ -9,20 +9,26 @@ static class Backlog69Tests
         var failures = 0;
         void Check(bool ok, string text) { Console.WriteLine((ok ? "PASS " : "FAIL ") + text); if (!ok) failures++; }
         var n = c.NationByTag("KOR");
-        n.Treasury = -10;
+        // With public debt on, an overdraft is carried as debt (SovereignFinance.NormalizeAccounts),
+        // so what an effect must get right is the country's position - cash less debt - not
+        // which of the two columns the money ends up in.
+        float Position() => n.Treasury - n.PublicDebt;
+        void Overdrawn() { n.PublicDebt = 0; n.Treasury = -10; }
+        Overdrawn();
         ScriptedEffects.From(("treasury", -2f)).Apply(c, n);
-        Check(Math.Abs(n.Treasury + 12) < .0001f, "negative cash event preserves debt and charges its cost");
-        n.Treasury = -10;
+        Check(Math.Abs(Position() + 12) < .0001f, "negative cash event preserves debt and charges its cost");
+        Overdrawn();
         ScriptedEffects.From(("treasury_percent", -.1f)).Apply(c, n);
-        Check(Math.Abs(n.Treasury + 11) < .0001f, "percentage cost cannot forgive debt");
-        n.Treasury = -10;
+        Check(Math.Abs(Position() + 11) < .0001f, "percentage cost cannot forgive debt");
+        Overdrawn();
         ScriptedEffects.From(("treasury_percent", .1f)).Apply(c, n);
-        Check(Math.Abs(n.Treasury + 9) < .0001f, "percentage income reduces debt instead of increasing it");
+        Check(Math.Abs(Position() + 9) < .0001f, "percentage income reduces debt instead of increasing it");
+        n.PublicDebt = 0;
         n.Treasury = 10;
         ScriptedEffects.From(("treasury_percent", -.1f)).Apply(c, n);
         Check(Math.Abs(n.Treasury - 9) < .0001f, "positive treasury percent semantics unchanged");
         ScriptedEffects.From(("treasury_set", -5f)).Apply(c, n);
-        Check(n.Treasury == -5, "explicit signed treasury assignment supported");
+        Check(Math.Abs(Position() + 5) < .0001f, "explicit signed treasury assignment supported");
 
         c.Construction.Clear();
         c.Construction.Add(new ConstructionProject { Id = 901, NationId = n.Id, Cost = 1, Paid = .4f });

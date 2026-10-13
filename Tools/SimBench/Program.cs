@@ -348,6 +348,30 @@ public static class Program
         if (Array.IndexOf(args, "--counts-cost") >= 0)
             return Check("a country counts the cost before it declares", ACountryCountsTheCost());
 
+        // `--save-roundtrip [days]`: run, save as text, load it back, and say what came back different.
+        var roundtripAt = Array.IndexOf(args, "--save-roundtrip");
+        if (roundtripAt >= 0)
+        {
+            var runDays = roundtripAt + 1 < args.Length && int.TryParse(args[roundtripAt + 1], out var rd) ? rd : 0;
+            for (var day = 0; day < runDays; day++) campaign.TickDay();
+            var folder = Path.Combine(Path.GetTempPath(), "dof-roundtrip-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            campaign.Defines.SaveTextFormat = true;
+            SaveSystem.Save(folder, "roundtrip", campaign, "bench");
+            var back = SaveSystem.Load(folder, "roundtrip", "bench");
+            if (back.Campaign is null) { Console.WriteLine("  roundtrip: reload failed: " + back.Warning); return 1; }
+            back.Campaign.AttachProvinceTopology(campaign.ProvinceMap.CloneForOverrides());
+            var same = CampaignFingerprint.Of(back.Campaign) == CampaignFingerprint.Of(campaign);
+            Console.WriteLine($"  roundtrip after {runDays} day(s): fingerprint {(same ? "SAME" : "DIFFERENT")}");
+            if (!same)
+            {
+                Console.WriteLine("  first difference: " + WhatDiffers(campaign, back.Campaign));
+                Console.WriteLine("  snapshot differences: " + SnapshotDifferences(campaign, back.Campaign));
+            }
+            Directory.Delete(folder, true);
+            return same ? 0 : 1;
+        }
+
         var frontsAt = Array.IndexOf(args, "--fronts");
         if (frontsAt >= 0) return FrontsReport(campaign,
             frontsAt + 1 < args.Length && int.TryParse(args[frontsAt + 1], out var frontDays) ? frontDays : 180);

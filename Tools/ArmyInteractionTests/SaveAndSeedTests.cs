@@ -88,7 +88,10 @@ static class SaveAndSeedTests
             var expanded = document.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             Console.WriteLine($"SIZE: compact-readable={new FileInfo(textPath).Length:N0} bytes, " +
                               $"fully-expanded={Encoding.UTF8.GetByteCount(expanded):N0} bytes");
-            Check(new FileInfo(textPath).Length < Encoding.UTF8.GetByteCount(expanded) * .7,
+            // 0.8 since defaults are left out of saves (SaveDefaults): that removed most of the
+            // bulk both versions share, so the rows this format saves are a smaller share of what
+            // is left - 38 MB against 52 at a year in, still a quarter less.
+            Check(new FileInfo(textPath).Length < Encoding.UTF8.GetByteCount(expanded) * .8,
                 "one-row-per-population-group reduces readable save size substantially");
             File.WriteAllText(textPath, expanded);
             var loaded = SaveSystem.Load(folder, "editable", "test-mod");

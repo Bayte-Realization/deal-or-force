@@ -68,7 +68,10 @@ public static class MovementMethods
 
     /// <summary>Whether it will take up arms now: what its traits allow, or what it has become.</summary>
     public static bool WillRise(Campaign c, Nation movement, MovementDefinition definition) =>
-        definition is not null && StageOf(c, movement) >= MovementStage.Armed &&
+        // A company for hire takes contracts, not territory, however many men it has under arms -
+        // unless its definition says outright that it stages uprisings.
+        definition is not null && (!definition.Has("for_hire") || definition.CanStageUprising) &&
+        StageOf(c, movement) >= MovementStage.Armed &&
         (definition.CanStageUprising || Of(movement) >= (c?.Defines ?? Defaults).MovementArmedAt + 0.1f);
 
     /// <summary>Whether it campaigns peacefully now, whatever it began as.</summary>
