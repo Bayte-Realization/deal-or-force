@@ -110,7 +110,7 @@ public partial class DealOrForceGame
         _conflictsPage.AddChild(OrganizationHelp());
         _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("Common fund: {0} · institutional cohesion: {1}%", Fmt.Money(o.Budget), (o.Cohesion * 100).ToString("0")), 16));
         _conflictsPage.AddChild(Gauge(o.Cohesion * 100, Ui.Colour("text.accent"), 200));
-        _conflictsPage.AddChild(WrappedUltimatumText("Dues transfer real treasury money each week. Arrears erode cohesion; at cohesion below 25%, collective defence is suspended. Repeated clicks cannot buy instant trust.", 13));
+        _conflictsPage.AddChild(WrappedUltimatumText("Members pay dues every week. Arrears erode cohesion, and below 25% the collective defence no longer holds.", 13));
         _conflictsPage.AddChild(Caption(Loc.Format("MEMBERS ({0})", o.Members.Count)));
         _conflictsPage.AddChild(DiplomacyChips(o.Members.Select(m => _campaign.NationById(m)).Where(n => n is not null)
             .OrderByDescending(n => n.Gdp), Tr("Nobody.")));

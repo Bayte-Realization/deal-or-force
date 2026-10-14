@@ -1,0 +1,27 @@
+// The province card on the right button (ProvinceContextMenuUI.cs).
+{
+  "THIS REGION": "THIS REGION",
+  "Open the region": "Open the region",
+  "Its people, buildings, garrison and what can be built there.": "Its people, buildings, garrison and what can be built there.",
+  "Recruit here": "Recruit here",
+  "Rebuild what the war broke": "Rebuild what the war broke",
+  "Nothing here is in ruins.": "Nothing here is in ruins.",
+  "Regional laws": "Regional laws",
+  "Confirm: move the capital here ({0})": "Confirm: move the capital here ({0})",
+  "The government moves here. It costs {0} and a little order while it settles.": "The government moves here. It costs {0} and a little order while it settles.",
+  "Cash, regions and promises, both sides on one table.": "Cash, regions and promises, both sides on one table.",
+  "Agents in their country, for {0}. It grows week by week and shows more as it grows.": "Agents in their country, for {0}. It grows week by week and shows more as it grows.",
+  "Send reconnaissance flights here": "Send reconnaissance flights here",
+  "Reconnaissance flies over an enemy's ground, in a war.": "Reconnaissance flies over an enemy's ground, in a war.",
+  "No aircraft or drone of ours that can fly reconnaissance reaches this province.": "No aircraft or drone of ours that can fly reconnaissance reaches this province.",
+  "Disputes over this region": "Disputes over this region",
+  "Crack down on {0}": "Crack down on {0}",
+  "Fund {0}": "Fund {0}",
+  "{0} · {1} people · stability {2}": "{0} · {1} people · stability {2}",
+  "held by {0}": "held by {0}",
+  "at war with us": "at war with us",
+  "opinion {0:+0;-0;0}": "opinion {0:+0;-0;0}",
+  "our network {0}": "our network {0}",
+  "war damage {0}": "war damage {0}",
+  "{0} flies reconnaissance from its base: the fog lifts over enemy ground within {1:0} km.": "{0} flies reconnaissance from its base: the fog lifts over enemy ground within {1:0} km."
+}

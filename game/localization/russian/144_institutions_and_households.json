@@ -12,7 +12,7 @@
   "INSTITUTIONS, NOT A WEB OF TREATIES": "ИНСТИТУТЫ, А НЕ СЕТЬ ДОГОВОРОВ",
   "Choose an organization or found one. Every territorial country can create a council. Members have their own common treasury, membership decisions, votes and obligations; founders cannot spend everyone's money alone.": "Выберите организацию или создайте свою. Любая страна с территорией может учредить совет. У участников есть общий фонд, решения о членстве, голосования и обязательства. Учредитель не может единолично распоряжаться общими деньгами.",
   "Common fund: {0} · institutional cohesion: {1}%": "Общий фонд: {0} · сплочённость организации: {1}%",
-  "Dues transfer real treasury money each week. Arrears erode cohesion; at cohesion below 25%, collective defence is suspended. Repeated clicks cannot buy instant trust.": "Взносы еженедельно переводят реальные деньги из казны. Просрочки снижают сплочённость; ниже 25% коллективная оборона приостанавливается. Повторными нажатиями нельзя мгновенно купить доверие.",
+  "Members pay dues every week. Arrears erode cohesion, and below 25% the collective defence no longer holds.": "Члены платят взносы каждую неделю. Долги подтачивают сплочённость, а ниже 25 % коллективная оборона перестаёт действовать.",
   "MEMBERS AND WEEKLY DUES": "УЧАСТНИКИ И НЕДЕЛЬНЫЕ ВЗНОСЫ",
   "Members and contributions ({0})": "Участники и взносы ({0})",
   "{0} · {1}/week · {2} unpaid weeks": "{0} · {1}/нед. · недель просрочки: {2}",

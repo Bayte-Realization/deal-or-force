@@ -16,5 +16,19 @@
   "org.name.community": "Содружество {0} — {1}",
   "org.name.forum": "Форум {0} — {1}",
   "Walked out of our organization": "Вышли из нашей организации",
-  "Attacked a fellow member": "Напали на члена организации"
+  "Attacked a fellow member": "Напали на члена организации",
+  "The world": "Мир",
+  "RIVALRIES OF THE GREAT POWERS": "СОПЕРНИЧЕСТВО ВЕЛИКИХ ДЕРЖАВ",
+  "The great powers are at peace with one another.": "Великие державы живут друг с другом в мире.",
+  "on the brink": "на грани",
+  "dangerous": "опасно",
+  "tense": "напряжённо",
+  "calm": "спокойно",
+  "THE WORLD": "МИР",
+  "How close the great powers are to war with one another. The worst rivalry counts in full, the next two in part. When it runs high, incidents between the blocs become likelier.": "Насколько великие державы близки к войне друг с другом. Худшее соперничество учитывается полностью, следующие два частично. Чем выше напряжение, тем чаще инциденты между блоками.",
+  "WORLD WARS": "МИРОВЫЕ ВОЙНЫ",
+  "No world war is being fought.": "Мировой войны нет.",
+  "{0} · {1} countries · since {2} days": "{0} · стран: {1} · идёт {2} дн.",
+  "BETWEEN THE BLOCS, LATELY": "МЕЖДУ БЛОКАМИ В ПОСЛЕДНЕЕ ВРЕМЯ",
+  "Nothing has happened between the blocs yet.": "Между блоками пока ничего не произошло."
 }

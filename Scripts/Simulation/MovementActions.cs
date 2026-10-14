@@ -52,6 +52,8 @@ public static class MovementActions
         new("appeal", "Appeal to the world", "Speak at every forum that will listen: standing rises, and the free countries warm to the cause.", false, false, "government_in_exile"),
         new("contract", "Take a contract", "Hire its men out to a country at war that will pay: money every week for half a year.", false, true, "for_hire"),
         new("services", "Social services", "Schools, clinics and food for the poor in a region: support rises twice as fast as a campaign, and the region lives a little better.", true, false, "charity_network"),
+        new("strike", "General strike", "Call the whole following out of work in the country where most of it lives: six weeks in which its economy produces less and its government loses standing. A government of the people tends to give ground after it; a hard one cracks down.", false, false),
+        new("march", "March on the capital", "Fill the streets of a capital whose region follows it. A weak government falls - a political movement takes power, a national one wins the hearing it marched for. A strong one breaks the march up and the movement loses its organisers.", false, false),
     };
 
     public static Kind Of(string id) => Kinds.FirstOrDefault(kind => string.Equals(kind.Id, id, StringComparison.OrdinalIgnoreCase));
@@ -90,6 +92,8 @@ public static class MovementActions
             "patrols" => 0.008f,
             "hospital" => 0.03f,
             "appeal" => 0.01f,
+            "strike" => 0.02f,
+            "march" => 0.05f,
             _ => 0f
         };
     }
@@ -122,6 +126,8 @@ public static class MovementActions
         "call_to_arms" => defines.MovementCallToArmsDays,
         "move" => 0,
         "contract" => 182,
+        "strike" => 365,
+        "march" => 730,
         _ => defines.MovementTraitActionDays
     };
 
@@ -152,6 +158,9 @@ public static class MovementActions
 
         switch (action)
         {
+            case "strike":
+            case "march":
+                return MovementPower.Refusal(campaign, nation, action);
             case "referendum": return CivilIndependence.Refusal(campaign, nation, region);
             case "move":
             {
@@ -259,6 +268,11 @@ public static class MovementActions
 
         switch (action)
         {
+            case "strike":
+            case "march":
+                MovementPower.Do(campaign, nation, action);
+                break;
+
             case "move":
                 state.MovingToStateMapIndex = region.MapIndex;
                 state.ArrivesOnDay = campaign.ElapsedDays + Math.Max(1, defines.MovementRelocationDays);

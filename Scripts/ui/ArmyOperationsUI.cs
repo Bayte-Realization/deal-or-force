@@ -343,14 +343,15 @@ public partial class DealOrForceGame
         if (pick.ProvinceId <= 0) return;
 
         // Nothing selected to command, so the right button is free to mean the other
-        // obvious thing: open the file on whoever owns the ground under the cursor.
+        // obvious thing: what can be done about the ground under the cursor - its region,
+        // its owner's diplomacy, a network, a reconnaissance flight (ProvinceContextMenuUI).
         //
         // It cannot mean both. An army or a fleet selected keeps the order - that is the
         // convention every game of this shape uses and the one a player's hands already
         // know - and this only takes the case where the click did nothing at all.
         if (_selectedArmy is null)
         {
-            OpenDiplomacyWithOwnerOf(pick.ProvinceId);
+            ShowProvinceContextMenu(pick);
             return;
         }
         if (_selectedArmy.NationId != _campaign.Player.Id)
