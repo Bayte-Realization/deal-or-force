@@ -53,6 +53,15 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        // Preserve the old default fingerprint, but detect different modded assault
+        // rules before peers reach a battle and make different decisions.
+        if (campaign.Defines.AutonomousAssaultMinimumOrganisation != .16f ||
+            campaign.Defines.AutonomousAssaultMinimumSupply != .20f)
+        {
+            MixText("autonomous_assault_rules");
+            MixFloat(campaign.Defines.AutonomousAssaultMinimumOrganisation);
+            MixFloat(campaign.Defines.AutonomousAssaultMinimumSupply);
+        }
         var outbreakBudget = CivilWarOutbreak.Budget(campaign);
         if (outbreakBudget.StartsByDay is { Count: > 0 })
         {

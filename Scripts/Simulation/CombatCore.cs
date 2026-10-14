@@ -472,6 +472,13 @@ public static partial class Warfare
                 continue;
             }
 
+            // Reinforcements already waited for organisation and stores; the formation
+            // initiating the same assault did not. Apply one live minimum to both paths.
+            // This comes after empty-ground movement so a hungry formation can still
+            // march out of a pocket or take undefended ground. Explicit direct orders
+            // keep the player's choice to accept risk, rather than silently refusing it.
+            if (!AssaultReadiness.Assess(campaign, army).Ready) continue;
+
             // Found by hand rather than by FirstOrDefault: the lambda captures the war and
             // the target, so it was a fresh closure and a fresh enumerator for every
             // division that advanced anywhere in the world, every day.
@@ -884,8 +891,7 @@ public static partial class Warfare
         foreach (var army in InProvince(provinceId))
         {
             if (army.InBattle || army.AssignedWarId != battle.WarId ||
-                army.ReadyDay > campaign.ElapsedDays ||
-                army.Organisation <= 0.16f || army.SupplyLevel <= 0.20f) continue;
+                army.ReadyDay > campaign.ElapsedDays) continue;
             Reinforcements.Add(army);
         }
     }
@@ -922,14 +928,13 @@ public static partial class Warfare
             // other - being dragged into a fight next door is exactly what a player who
             // pointed at a province did not ask for.
             //
-            // Requiring an active plan and a standing formation on top of that excluded
-            // almost every attacker there was, and an attacker that never joins a battle
-            // never spends anything: the Russian army finished two years at 96 % average
-            // organisation with one formation spent, walked forward against a Ukrainian
-            // army worn to 30 %, and took a hundred and nineteen provinces. Attacking has
-            // to cost the attacker, so whoever is there and able attacks.
+            // A marching formation may still support the neighbouring assault, but an
+            // explicitly paused offensive and a formation below the live assault minimum
+            // are not free reserves for it. The same readout gates starting and joining,
+            // rather than allowing a second path to override the staff's waiting decision.
             if (army.NationId == battle.AttackerId &&
                 (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) &&
+                AssaultReadiness.Assess(campaign, army).Ready &&
                 (!army.DirectOrder ||
                  (army.PlannedRoute.Count > 0 ? army.PlannedRoute[0] : army.OrderProvinceId) == battle.ProvinceId) &&
                 attackerAdded < 2)
@@ -939,7 +944,8 @@ public static partial class Warfare
                 battle.AttackerReinforcements++;
             }
             else if (army.NationId == battle.DefenderId &&
-                     (army.OrderKind == ArmyOrder.DefendFront || army.OrderKind == ArmyOrder.ReserveFront) && defenderAdded < 2)
+                     (army.OrderKind == ArmyOrder.DefendFront || army.OrderKind == ArmyOrder.ReserveFront) &&
+                     army.Organisation > .16f && army.SupplyLevel > .20f && defenderAdded < 2)
             {
                 Join(battle, army, false);
                 defenderAdded++;

@@ -15,6 +15,7 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--assault-readiness-only")) { AssaultReadinessTests.Run(); return; }
         if (args.Contains("--ai-front-recovery-only")) { AiFrontRecoveryTests.Run(); return; }
         if (args.Contains("--plan-erasing-only")) { PlanErasingTests.Run(); return; }
         PlanErasingTests.Run();
@@ -312,6 +313,7 @@ static class Program
         StaffTests.Run(map);
         FrontStaffTests.Run(map);
         AiFrontRecoveryTests.Run();
+        AssaultReadinessTests.Run();
         ModifierTests.Run(map);
     }
 }
