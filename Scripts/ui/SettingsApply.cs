@@ -197,6 +197,10 @@ public partial class DealOrForceGame
                 RefreshMapVisualToggles();
                 break;
 
+            case "map_event_pulses":
+                if (_globe is not null) _globe.EventPulsesShown = SettingsCatalog.Flag("map_event_pulses");
+                break;
+
             case "map_trade_traffic":
                 if (_globe is not null) _globe.TradeTrafficShown = SettingsCatalog.Flag("map_trade_traffic");
                 break;

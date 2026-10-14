@@ -1,0 +1,10 @@
+// What a movement's general strike does to the country it is called in (MovementPower.cs).
+{
+  "general_strike": {
+    "name": "General strike",
+    "description": "Factories, ports and offices stand idle. The country produces less, taxes go uncollected and the government's standing slips every week it lasts.",
+    "days": 42, "positive": false,
+    "effects": { "stability": -0.003 },
+    "modifiers": { "output": -0.06, "tax_efficiency": -0.1 }
+  }
+}

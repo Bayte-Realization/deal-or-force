@@ -854,6 +854,7 @@ public sealed partial class Campaign
             yield return 0;
             using (SimProfiler.Measure("intel networks")) IntelNetworks.Tick(this);
             using (SimProfiler.Measure("addresses")) AddressToNation.Tick(this);
+            using (SimProfiler.Measure("movement power")) MovementPower.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("events")) EventSystem.Tick(this);
             yield return 0;

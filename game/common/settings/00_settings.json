@@ -143,6 +143,12 @@
     "description": "Close up, a drifting veil over the ground your country cannot see. Only its look: what is hidden stays hidden either way. Also a button on the map bar.",
     "default": true
   },
+  "map_event_pulses": {
+    "category": "interface", "order": 250, "kind": "toggle",
+    "name": "Events on the map",
+    "description": "A mark where the news is - a war begun, shooting on a border, a coup, a strike, a bloc split or signed - pulsing while it is fresh. Rest the cursor on one to read it.",
+    "default": true
+  },
   "map_trade_traffic": {
     "category": "interface", "order": 249, "kind": "toggle",
     "name": "Trade on the map",

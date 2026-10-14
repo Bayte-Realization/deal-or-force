@@ -1,0 +1,25 @@
+// Movements as a force: strikes, marches, their own administration (MovementPower.cs).
+{
+  "chronicle.general_strike": "{0} calls a general strike: {1} comes to a standstill.",
+  "chronicle.march_failed": "The march of {0} on {2} is broken up by the government of {1}.",
+  "chronicle.march_toppled": "The government of {1} falls to the march of {0} on {2}.",
+  "chronicle.march_concessions": "The march of {0} on {2} forces the government of {1} to listen.",
+  "General strike": "General strike",
+  "March on the capital": "March on the capital",
+  "Call the whole following out of work in the country where most of it lives: six weeks in which its economy produces less and its government loses standing. A government of the people tends to give ground after it; a hard one cracks down.": "Call the whole following out of work in the country where most of it lives: six weeks in which its economy produces less and its government loses standing. A government of the people tends to give ground after it; a hard one cracks down.",
+  "Fill the streets of a capital whose region follows it. A weak government falls - a political movement takes power, a national one wins the hearing it marched for. A strong one breaks the march up and the movement loses its organisers.": "Fill the streets of a capital whose region follows it. A weak government falls - a political movement takes power, a national one wins the hearing it marched for. A strong one breaks the march up and the movement loses its organisers.",
+  "Momentum": "Momentum",
+  "How much of its people follows it, its standing, its recognitions, its organisers and its money, together. From {0} it can call a general strike, from {1} it governs the regions that follow it, from {2} it can march on a capital.": "How much of its people follows it, its standing, its recognitions, its organisers and its money, together. From {0} it can call a general strike, from {1} it governs the regions that follow it, from {2} it can march on a capital.",
+  "A company for hire does not lead a people.": "A company for hire does not lead a people.",
+  "Momentum is {0}; a general strike takes {1}.": "Momentum is {0}; a general strike takes {1}.",
+  "No country holds enough of its following to stop.": "No country holds enough of its following to stop.",
+  "A movement does not strike against itself.": "A movement does not strike against itself.",
+  "Momentum is {0}; a march on the capital takes {1}.": "Momentum is {0}; a march on the capital takes {1}.",
+  "No capital would follow it into the streets.": "No capital would follow it into the streets.",
+  "Support in {0} is {1}; a march takes {2}.": "Support in {0} is {1}; a march takes {2}.",
+  "It is at war with that government: the streets are not where this is decided.": "It is at war with that government: the streets are not where this is decided.",
+  "A general strike brings {0} to a standstill.": "A general strike brings {0} to a standstill.",
+  "The march on {0} was broken up.": "The march on {0} was broken up.",
+  "The government in {0} has fallen to the street.": "The government in {0} has fallen to the street.",
+  "Factories, ports and offices stand idle. The country produces less, taxes go uncollected and the government's standing slips every week it lasts.": "Factories, ports and offices stand idle. The country produces less, taxes go uncollected and the government's standing slips every week it lasts."
+}

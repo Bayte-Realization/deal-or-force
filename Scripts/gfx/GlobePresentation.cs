@@ -471,6 +471,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         CreateFlatMap(world);
         CreateWeather(world);
         CreateTradeTraffic(world);
+        CreateEventPulses(world);
         _capitalRoot = new Node3D { Name = "CapitalMarkers" };
         world.AddChild(_capitalRoot);
         _capitalTexture = GD.Load<Texture2D>(Simulation.SpriteCatalog.TextureOf("globe_capital_star",
@@ -532,6 +533,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         UpdateFogVisibility();
         UpdateWeather(delta);
         UpdateTradeTraffic(delta);
+        UpdateEventPulses(delta);
         KeepAllowedProjection();
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
         if (_mapApplied && _campaign is not null && _capitalRevision != _campaign.CapitalRevision)
@@ -1636,6 +1638,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         var supportTip = SupportMapTooltip(atPosition);
         if (supportTip.Length > 0) return supportTip;
+        var eventTip = EventPulseTooltip(atPosition);
+        if (eventTip.Length > 0) return eventTip;
         if (TryPickBattle(atPosition, out var battle))
         {
             var attacker = _campaign?.NationById(battle.AttackerId);

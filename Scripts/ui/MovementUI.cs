@@ -271,6 +271,12 @@ public partial class DealOrForceGame
 
         _movementRows.AddChild(MovementGauge("movement_legitimacy", Tr("Standing"), state.Legitimacy, -1f, "text.accent",
             standingHelp));
+        // What it has grown into: the strike, the march and its own administration open as it rises (MovementPower).
+        var momentum = MovementPower.Momentum(_campaign, nation);
+        _movementRows.AddChild(MovementGauge("movement_legitimacy", Tr("Momentum"), momentum, -1f,
+            momentum >= defines.MovementMarchMomentum ? "state.warning" : "text.accent",
+            Simulation.Loc.Format("How much of its people follows it, its standing, its recognitions, its organisers and its money, together. From {0} it can call a general strike, from {1} it governs the regions that follow it, from {2} it can march on a capital.",
+                Fmt.Percent(defines.MovementStrikeMomentum), Fmt.Percent(defines.MovementParallelMomentum), Fmt.Percent(defines.MovementMarchMomentum))));
         // How far it will go, and which way it is moving (MovementMethods).
         var stage = MovementMethods.StageOf(_campaign, nation);
         var methodsToken = stage switch
