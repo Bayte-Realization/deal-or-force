@@ -62,6 +62,21 @@ public static class CampaignFingerprint
             MixFloat(campaign.Defines.AutonomousAssaultMinimumOrganisation);
             MixFloat(campaign.Defines.AutonomousAssaultMinimumSupply);
         }
+        // These rules decide whether a movement strikes, marches or collects a levy.
+        // Compiled defaults add no bytes to an untouched legacy world; a scenario's
+        // different thresholds must be detected before its first divergent command.
+        var movementRules = campaign.Defines;
+        if (movementRules.MovementStrikeMomentum != .4f || movementRules.MovementMarchMomentum != .65f ||
+            movementRules.MovementParallelMomentum != .5f || movementRules.MovementParallelSupport != .6f ||
+            movementRules.MovementParallelLevy != .0006f || movementRules.MovementStrikeDays != 42 ||
+            movementRules.MovementMarchSupport != .5f)
+        {
+            MixText("movement_power_rules");
+            MixFloat(movementRules.MovementStrikeMomentum); MixFloat(movementRules.MovementMarchMomentum);
+            MixFloat(movementRules.MovementParallelMomentum); MixFloat(movementRules.MovementParallelSupport);
+            MixFloat(movementRules.MovementParallelLevy); Mix(movementRules.MovementStrikeDays);
+            MixFloat(movementRules.MovementMarchSupport);
+        }
         var outbreakBudget = CivilWarOutbreak.Budget(campaign);
         if (outbreakBudget.StartsByDay is { Count: > 0 })
         {
@@ -226,7 +241,36 @@ public static class CampaignFingerprint
             MixFloat(nation.LivingOffset);
             MixText(nation.StartGovernment); MixText(nation.StartIdeology);
             Mix(nation.Movement is null ? 0 : 1);
-            if (nation.Movement is { } movement) MixFloat(movement.Militancy);
+            if (nation.Movement is { } movement)
+            {
+                MixFloat(movement.Militancy);
+                // Panel history is not authority. These inputs and cooldowns are: they
+                // can change the next strike/march before any headline total changes.
+                // Keep empty legacy state at its old hash, and exclude LastReport,
+                // whose translated text differs legitimately between participants.
+                if (!string.IsNullOrEmpty(movement.Id) || movement.Dissolved || !movement.Landless ||
+                    movement.Cadres != 0f || movement.Legitimacy != 0f || movement.IncomeWeekly != 0f ||
+                    movement.Support.Count > 0 || movement.RecognisedBy.Count > 0 || movement.ReadyOnDay.Count > 0 ||
+                    movement.MovingToStateMapIndex != -1 || movement.ArrivesOnDay != -1 || movement.Exile ||
+                    movement.Peoples.Count > 0 || movement.Homeland.Count > 0)
+                {
+                    MixText("movement_command_state"); MixText(movement.Id);
+                    Mix(movement.Dissolved ? 1 : 0); Mix(movement.Landless ? 1 : 0);
+                    MixFloat(movement.Cadres); MixFloat(movement.Legitimacy); MixFloat(movement.IncomeWeekly);
+                    Mix(movement.Support.Count);
+                    foreach (var support in movement.Support.OrderBy(p => p.Key)) { Mix(support.Key); MixFloat(support.Value); }
+                    Mix(movement.RecognisedBy.Count);
+                    foreach (var country in movement.RecognisedBy.OrderBy(id => id)) Mix(country);
+                    Mix(movement.ReadyOnDay.Count);
+                    foreach (var clock in movement.ReadyOnDay.OrderBy(p => p.Key, StringComparer.Ordinal))
+                    { MixText(clock.Key); Mix(clock.Value); }
+                    Mix(movement.MovingToStateMapIndex); Mix(movement.ArrivesOnDay); Mix(movement.Exile ? 1 : 0);
+                    // Identity lists remain ordered, just as the exile definition reads
+                    // them. Only unordered maps and recognition sets are canonicalized.
+                    Mix(movement.Peoples.Count); foreach (var people in movement.Peoples) MixText(people);
+                    Mix(movement.Homeland.Count); foreach (var region in movement.Homeland) MixText(region);
+                }
+            }
             Mix(nation.ProductionReferenceInitialized ? 1 : 0);
             MixFloat(nation.ProductionReferenceGdp); Mix(nation.ProductionReferencePopulation);
             Mix(nation.LastCivilWarDay);

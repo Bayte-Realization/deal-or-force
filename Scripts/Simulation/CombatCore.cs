@@ -945,6 +945,7 @@ public static partial class Warfare
             }
             else if (army.NationId == battle.DefenderId &&
                      (army.OrderKind == ArmyOrder.DefendFront || army.OrderKind == ArmyOrder.ReserveFront) &&
+                     // Defensive reserves need condition, not an active offensive plan.
                      army.Organisation > .16f && army.SupplyLevel > .20f && defenderAdded < 2)
             {
                 Join(battle, army, false);

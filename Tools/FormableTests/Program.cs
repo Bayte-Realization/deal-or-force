@@ -43,6 +43,8 @@ static class Program
         if (args.Contains("--alliances-only")) { DynamicAllianceTests.Run(); return; }
         if (args.Contains("--finance-only")) { SovereignFinanceTests.Run(); return; }
         if (args.Contains("--methods-only")) { MovementMethodsTests.Run(); return; }
+        if (args.Contains("--movement-power-state-only")) { MovementPowerStateTests.Run(); return; }
+        if (args.Contains("--movement-power-fingerprint-only")) { MovementPowerFingerprintTests.Run(); return; }
         if (args.Contains("--policies-only")) { PoliticalPolicyTests.Run(); return; }
         if (args.Contains("--regional-content-only")) { RegionalContentTests.Run(); return; }
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
@@ -57,6 +59,8 @@ static class Program
         DomesticCrisesTests.Run();
         SovereignFinanceTests.Run();
         MovementMethodsTests.Run();
+        MovementPowerStateTests.Run();
+        MovementPowerFingerprintTests.Run();
         PoliticalPolicyTests.Run();
         NationalCourseTests.Run();
         RegionalContentTests.Run();
