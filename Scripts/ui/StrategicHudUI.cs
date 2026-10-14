@@ -45,6 +45,12 @@ public partial class DealOrForceGame
         _situationRailButton.Name = "OpenSituationRoom";
         _situationRailButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         column.AddChild(_situationRailButton);
+        _dealInboxHudButton = ActionButton("Diplomatic inbox", OpenDealInbox, 0, 32);
+        _dealInboxHudButton.Name = "OpenDiplomaticInbox";
+        _dealInboxHudButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _dealInboxHudButton.ClipText = true;
+        _dealInboxHudButton.Visible = false;
+        column.AddChild(_dealInboxHudButton);
         var scroll = new ScrollContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,

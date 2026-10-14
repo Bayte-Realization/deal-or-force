@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
+using DealOrForce.Modding;
 
 namespace DealOrForce;
 
@@ -22,7 +23,8 @@ public enum MenuIntent
     /// <summary>One particular save, chosen from the archive on this screen: <see cref="MainMenuScene.WantedSlot"/>.</summary>
     LoadSlot,
     Multiplayer,
-    Settings
+    Settings,
+    ModAction
 }
 
 /// <summary>
@@ -49,6 +51,9 @@ public partial class MainMenuScene : Control
 
     /// <summary>Which save, when the intent is <see cref="MenuIntent.LoadSlot"/>.</summary>
     public static string WantedSlot = "";
+    public static string WantedModAction = "";
+    private readonly ModLoader _menuMods = new();
+    private MenuButton _modActions;
 
     private const string CampaignScene = "res://Scenes/Main.tscn";
     private const string MenuScene = "res://Scenes/MainMenu.tscn";
@@ -151,6 +156,14 @@ public partial class MainMenuScene : Control
         rows.AddChild(_language);
         rows.AddChild(MenuAction("Credits", ShowCredits, 42));
         rows.AddChild(MenuAction("Quit to desktop", () => GetTree().Quit(), 42));
+
+        RefreshModFrontendMenu();
+        _modActions = ModFrontendMenu.Create(_menuMods.FrontendActions, id =>
+        { WantedModAction = id; Enter(MenuIntent.ModAction); });
+        _modActions.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
+        _modActions.OffsetLeft = 24; _modActions.OffsetRight = 214;
+        _modActions.OffsetTop = -70; _modActions.OffsetBottom = -34;
+        AddChild(_modActions);
 
         BuildCopyright();
         BuildCredits();
@@ -300,6 +313,13 @@ public partial class MainMenuScene : Control
         mark.OffsetTop = -40;
         mark.OffsetBottom = -18;
         AddChild(mark);
+        var version = MenuCaption(GameBuildInfo.VersionLabel, 12, "text.caption");
+        version.Name = "GameVersion"; version.HorizontalAlignment = HorizontalAlignment.Right;
+        version.MouseFilter = MouseFilterEnum.Ignore; version.ClipText = true;
+        version.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
+        version.OffsetLeft = 390; version.OffsetRight = -24;
+        version.OffsetTop = -40; version.OffsetBottom = -18;
+        AddChild(version);
     }
 
     /// <summary>
@@ -583,6 +603,7 @@ public partial class MainMenuScene : Control
     /// <summary>Go and be that. The world is built on the other side of this call.</summary>
     private void Enter(MenuIntent intent)
     {
+        if (intent != MenuIntent.ModAction) WantedModAction = "";
         Wanted = intent;
         GetTree().ChangeSceneToFile(CampaignScene);
     }
@@ -595,6 +616,7 @@ public partial class MainMenuScene : Control
     {
         Wanted = MenuIntent.None;
         WantedSlot = "";
+        WantedModAction = "";
         tree?.ChangeSceneToFile(MenuScene);
     }
 
@@ -611,6 +633,15 @@ public partial class MainMenuScene : Control
         PlayerSettings.Set("language", next);
         Relabel(this);
         _language.Text = LanguageLabel();
+    }
+
+    private void RefreshModFrontendMenu()
+    {
+        _menuMods.Discover();
+        // Content captions only: no assemblies, workers or servers run on this screen.
+        foreach (var package in _menuMods.Packages.Where(p => !p.IsContentPack))
+            Loc.LoadDirectory(System.IO.Path.Combine(package.PhysicalRoot, "localization"), package.Errors);
+        if (_modActions is not null) _modActions.Visible = _menuMods.FrontendActions().Count > 0;
     }
 
     private static string LanguageLabel() =>

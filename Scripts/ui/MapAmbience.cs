@@ -22,6 +22,7 @@ public sealed partial class MapAmbience : Node
     private AudioStreamPlayer _high, _land, _front;
     private float _frontNear;
     private double _frontCheck;
+    public bool AuditionSuppressed { get; set; }
 
     public MapAmbience(Func<GlobePresentation> globe, Func<Campaign> campaign)
     {
@@ -51,6 +52,14 @@ public sealed partial class MapAmbience : Node
 
     public override void _Process(double delta)
     {
+        if (AuditionSuppressed)
+        {
+            // Keep the loops' phases; audition must not restart or randomize the map's sound.
+            if (GodotObject.IsInstanceValid(_high)) _high.VolumeDb = -80;
+            if (GodotObject.IsInstanceValid(_land)) _land.VolumeDb = -80;
+            if (GodotObject.IsInstanceValid(_front)) _front.VolumeDb = -80;
+            return;
+        }
         var globe = _globe();
         var campaign = _campaign();
         var level = SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_effects") *

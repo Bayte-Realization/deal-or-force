@@ -13,7 +13,16 @@ public partial class DealOrForceGame
     private Label _mediaTitle, _mediaPurpose, _mediaSource, _mediaPreviewStatus;
     private TextureRect _mediaPicture;
     private CenterContainer _mediaListenHint;
-    private Button _mediaPlay, _mediaStop;
+    private Button _mediaPlay, _mediaStop, _mediaPause;
+    private CheckBox _mediaLoop;
+    private HSlider _mediaSeek;
+    private Label _mediaClock, _mediaWaveCaption;
+    private MediaWaveform _mediaWave;
+    private Control _mediaTimeline;
+    private double _mediaLength;
+    private double? _mediaPausedSeek;
+    private bool _mediaSeekDragging;
+    private bool IsMediaPreviewActive => (_mediaAudio?.HasStreamPlayback() ?? false) || (_mediaVideo?.IsPlaying() ?? false);
     private AudioStreamPlayer _mediaAudio;
     private VideoStreamPlayer _mediaVideo;
     private LibraryMedia _mediaSelected;
@@ -72,19 +81,34 @@ public partial class DealOrForceGame
             MouseFilter = MouseFilterEnum.Ignore }; preview.AddChild(_mediaVideo); _mediaVideo.Hide();
         _mediaListenHint = new CenterContainer { Name = "MediaListenHint", MouseFilter = MouseFilterEnum.Ignore };
         preview.AddChild(_mediaListenHint);
-        var hint = new VBoxContainer { CustomMinimumSize = new(220, 0), MouseFilter = MouseFilterEnum.Ignore };
+        var hint = new VBoxContainer { CustomMinimumSize = new(360, 0), MouseFilter = MouseFilterEnum.Ignore };
         hint.AddThemeConstantOverride("separation", 12); _mediaListenHint.AddChild(hint);
-        var mark = SituationText("♫", 44, "text.accent"); mark.HorizontalAlignment = HorizontalAlignment.Center; hint.AddChild(mark);
-        var instruction = SituationText("This is an audio recording. Press Play preview to listen.", 13, "text.caption");
-        instruction.CustomMinimumSize = new(220, 0); instruction.HorizontalAlignment = HorizontalAlignment.Center; hint.AddChild(instruction);
-        _mediaSource = SituationText("", 11, "text.caption"); right.AddChild(_mediaSource);
+        _mediaWave = new MediaWaveform { Name = "MediaWaveform", CustomMinimumSize = new(360, 110),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, MouseFilter = MouseFilterEnum.Ignore };
+        hint.AddChild(_mediaWave);
+        _mediaWaveCaption = SituationText("", 11, "text.caption");
+        _mediaWaveCaption.HorizontalAlignment = HorizontalAlignment.Center; hint.AddChild(_mediaWaveCaption);
+        var details = ActionButton("Material details", () => _mediaSource.Visible = !_mediaSource.Visible, 0, 26);
+        details.Name = "MediaDetails"; details.TooltipText = Tr("Origin and local file path. The source record remains available here."); right.AddChild(details);
+        _mediaSource = SituationText("", 11, "text.caption"); _mediaSource.Name = "MediaSource"; right.AddChild(_mediaSource); _mediaSource.Hide();
         _mediaPreviewStatus = SituationText("", 12, "text.body_soft"); _mediaPreviewStatus.Name = "MediaPreviewStatus"; right.AddChild(_mediaPreviewStatus);
-        var actions = new HBoxContainer(); right.AddChild(actions);
+        _mediaTimeline = new VBoxContainer(); right.AddChild(_mediaTimeline);
+        _mediaClock = SituationText("", 12, "text.caption"); _mediaClock.Name = "MediaPlaybackClock"; _mediaTimeline.AddChild(_mediaClock);
+        _mediaSeek = new HSlider { Name = "MediaSeek", MinValue = 0, MaxValue = 1, Step = .05,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new(0, 24) };
+        _mediaTimeline.AddChild(_mediaSeek);
+        _mediaSeek.DragStarted += () => _mediaSeekDragging = true;
+        _mediaSeek.DragEnded += _ => { _mediaSeekDragging = false; SeekMediaPreview(_mediaSeek.Value); };
+        _mediaSeek.ValueChanged += value => { if (!_mediaSeekDragging) SeekMediaPreview(value); };
+        var actions = new HFlowContainer(); actions.AddThemeConstantOverride("h_separation", 8); right.AddChild(actions);
         _mediaPlay = ActionButton("Play preview", StartMediaPreview, 0, 36, true); _mediaPlay.Name = "PlayMediaPreview";
         _mediaStop = ActionButton("Stop preview", StopMediaPreview, 0, 36); _mediaStop.Name = "StopMediaPreview";
-        actions.AddChild(_mediaPlay); actions.AddChild(_mediaStop);
+        _mediaPause = ActionButton("Pause preview", PauseMediaPreview, 0, 36); _mediaPause.Name = "PauseMediaPreview";
+        _mediaLoop = new CheckBox { Name = "LoopMediaPreview", Text = Tr("Repeat recording"), ButtonPressed = false };
+        _mediaLoop.TooltipText = Tr("Off by default. Repeat only the recording you selected, not the campaign.");
+        actions.AddChild(_mediaPlay); actions.AddChild(_mediaPause); actions.AddChild(_mediaStop); actions.AddChild(_mediaLoop);
         _mediaAudio = new AudioStreamPlayer { Name = "MediaAudition", ProcessMode = ProcessModeEnum.Always }; AddChild(_mediaAudio);
-        _mediaAudio.Finished += StopMediaPreview; _mediaVideo.Finished += StopMediaPreview;
+        _mediaAudio.Finished += FinishMediaPreview; _mediaVideo.Finished += FinishMediaPreview;
         ApplyAtlasHeading(panel);
     }
     private static string MediaKindName(LibraryMediaKind? kind) => kind switch
@@ -127,15 +151,23 @@ public partial class DealOrForceGame
     private void SelectMedia(LibraryMedia item, bool refreshButtons = true)
     {
         StopMediaPreview(); _mediaSelected = item;
+        _mediaLoop.ButtonPressed = false; _mediaLength = item?.DurationSeconds ?? 0;
         _mediaTitle.Text = item is null ? Tr("No matching material.") : Tr(item.Name);
         _mediaPurpose.Text = item is null ? "" : Tr(item.Purpose);
         _mediaSource.Text = item is null ? "" : Tr(item.Source) + "\n" + item.File;
         _mediaPicture.Texture = null; _mediaPicture.Show(); _mediaVideo.Hide();
         _mediaListenHint.Visible = item is { Kind: LibraryMediaKind.Music or LibraryMediaKind.Sound };
+        _mediaWave.ShowRecording(item?.Peaks);
+        _mediaWaveCaption.Text = Tr(item?.Peaks is { Count: > 0 } ? "Audio waveform" : "This package supplies no waveform.");
+        _mediaWaveCaption.TooltipText = Tr("Measured mono amplitude, not a live spectrum.");
         var available = item is not null && ResourceLoader.Exists(item.File);
         if (available && item.Kind == LibraryMediaKind.Image) _mediaPicture.Texture = GD.Load<Texture2D>(item.File);
         _mediaPlay.Visible = item is { Kind: LibraryMediaKind.Music or LibraryMediaKind.Sound or LibraryMediaKind.Video };
         _mediaPlay.Disabled = !available; _mediaStop.Visible = _mediaPlay.Visible;
+        _mediaPause.Visible = _mediaPlay.Visible; _mediaLoop.Visible = _mediaPlay.Visible;
+        _mediaTimeline.Visible = _mediaPlay.Visible;
+        _mediaSeek.Visible = item is { Kind: LibraryMediaKind.Music or LibraryMediaKind.Sound };
+        UpdateMediaTimeline(0);
         _mediaPreviewStatus.Text = item is null ? "" : !available ? Tr("Local file is unavailable. Check the package path.") :
             item.Kind == LibraryMediaKind.Image ? Tr("Static artwork preview; it does not represent geographic data.") : Tr("Ready for manual preview.");
         if (refreshButtons) foreach (var child in _mediaLibraryList.GetChildren())
@@ -144,26 +176,93 @@ public partial class DealOrForceGame
     private void StartMediaPreview()
     {
         if (_mediaSelected is not { } item || !ResourceLoader.Exists(item.File)) return;
+        if (_audioChannels.Any(pair => pair.Value.Playing && SoundCatalog.GetChannel(pair.Key).Priority >= Ui.Metric("media.preview_interrupt_priority", 2)))
+        { _mediaPreviewStatus.Text = Tr("Wait for the priority alert before auditioning."); return; }
         StopMediaPreview();
         if (item.Kind == LibraryMediaKind.Video)
         {
             var stream = GD.Load<VideoStream>(item.File);
             if (stream is null) { _mediaPreviewStatus.Text = Tr("This format cannot be previewed by the engine."); return; }
-            MusicDirector.Ensure(this).SuppressForAudition(true); UpdateMediaGain();
-            _mediaVideo.Stream = stream; _mediaPicture.Hide(); _mediaVideo.Show(); _mediaVideo.Play();
+            SetMediaAuditionFocus(true); UpdateMediaGain();
+            _mediaVideo.Stream = stream; _mediaVideo.Paused = false; _mediaVideo.Loop = false;
+            _mediaPicture.Hide(); _mediaVideo.Show(); _mediaVideo.Play();
+            _mediaLength = _mediaVideo.GetStreamLength();
         }
         else if (item.Kind is LibraryMediaKind.Music or LibraryMediaKind.Sound)
         {
             var stream = GD.Load<AudioStream>(item.File);
             if (stream is null) { _mediaPreviewStatus.Text = Tr("This format cannot be previewed by the engine."); return; }
-            MusicDirector.Ensure(this).SuppressForAudition(true);
-            _mediaAudio.Stream = stream; UpdateMediaGain(); _mediaAudio.Play();
+            // The score director may loop its cached resource. A manual audition owns its own copy.
+            stream = (AudioStream)stream.Duplicate();
+            if (stream is AudioStreamOggVorbis ogg) ogg.Loop = false;
+            else if (stream is AudioStreamMP3 mp3) mp3.Loop = false;
+            else if (stream is AudioStreamWav wav) wav.LoopMode = AudioStreamWav.LoopModeEnum.Disabled;
+            SetMediaAuditionFocus(true);
+            _mediaLength = stream.GetLength();
+            _mediaAudio.Stream = stream; _mediaAudio.StreamPaused = false; UpdateMediaGain(); _mediaAudio.Play();
         }
+        UpdateMediaTimeline(0);
+    }
+    private void SetMediaAuditionFocus(bool active)
+    {
+        MusicDirector.Ensure(this).SuppressForAudition(active);
+        if (_mapAmbience is not null) _mapAmbience.AuditionSuppressed = active;
+    }
+    private void PauseMediaPreview()
+    {
+        if (_mediaAudio.HasStreamPlayback())
+        {
+            var resume = _mediaAudio.StreamPaused; _mediaAudio.StreamPaused = !resume;
+            if (resume && _mediaPausedSeek is { } position) { _mediaPausedSeek = null; _mediaAudio.Seek((float)position); }
+        }
+        else if (_mediaVideo.IsPlaying()) _mediaVideo.Paused = !_mediaVideo.Paused;
+        RefreshMediaPreview();
+    }
+    private void SeekMediaPreview(double position)
+    {
+        if (!_mediaAudio.HasStreamPlayback() || _mediaLength <= 0 || !double.IsFinite(position)) return;
+        var target = Math.Clamp(position, 0, Math.Max(0, _mediaLength - .01));
+        // Native seek requires a playing voice. Store a paused seek and apply it on resume,
+        // rather than briefly unpausing the sound or letting an end-of-stream event escape.
+        if (_mediaAudio.StreamPaused) _mediaPausedSeek = target;
+        else { _mediaPausedSeek = null; _mediaAudio.Seek((float)target); }
+        UpdateMediaTimeline(target);
+    }
+    private void InterruptMediaForPriority(int priority)
+    {
+        if (!IsMediaPreviewActive || priority < Ui.Metric("media.preview_interrupt_priority", 2)) return;
+        StopMediaPreview(); _mediaPreviewStatus.Text = Tr("Preview stopped for a priority alert.");
+    }
+    private void FinishMediaPreview()
+    {
+        if (_mediaLoop.ButtonPressed && _mediaLibraryLayer is { Visible: true })
+        {
+            if (_mediaSelected.Kind == LibraryMediaKind.Video) { _mediaVideo.Paused = false; _mediaVideo.Play(); }
+            else { _mediaAudio.StreamPaused = false; _mediaAudio.Play(); }
+            UpdateMediaTimeline(0); return;
+        }
+        StopMediaPreview(); UpdateMediaTimeline(_mediaLength);
+        _mediaPreviewStatus.Text = Tr("Recording finished.");
+    }
+    private void UpdateMediaTimeline(double position)
+    {
+        if (_mediaSeek is null) return;
+        var length = double.IsFinite(_mediaLength) ? Math.Max(0, _mediaLength) : 0;
+        position = double.IsFinite(position) ? Math.Clamp(position, 0, length) : 0;
+        _mediaSeek.MaxValue = Math.Max(1, length); _mediaSeek.Editable = _mediaAudio.HasStreamPlayback() && length > 0;
+        if (!_mediaSeekDragging) _mediaSeek.SetValueNoSignal(position);
+        static string Clock(double seconds) => $"{(int)seconds / 60}:{(int)seconds % 60:00}";
+        _mediaClock.Text = Clock(position) + " / " + (length > 0 ? Clock(length) : Tr("Unknown duration"));
+        _mediaWave.ShowProgress(length > 0 ? position / length : 0);
+        var paused = _mediaAudio.HasStreamPlayback() ? _mediaAudio.StreamPaused : _mediaVideo.Paused;
+        _mediaPause.Text = Tr(paused ? "Resume preview" : "Pause preview"); _mediaPause.Disabled = !IsMediaPreviewActive;
     }
     private void StopMediaPreview()
     {
         _mediaAudio?.Stop(); _mediaVideo?.Stop();
-        if (_mediaAudio is not null) MusicDirector.Ensure(this).SuppressForAudition(false);
+        _mediaPausedSeek = null;
+        if (_mediaAudio is not null) { _mediaAudio.StreamPaused = false; _mediaVideo.Paused = false; SetMediaAuditionFocus(false); }
+        _mediaSeekDragging = false; UpdateMediaTimeline(0);
         if (_mediaStop is not null) _mediaStop.Disabled = true;
         if (_mediaPreviewStatus is not null && _mediaSelected is not null) _mediaPreviewStatus.Text = Tr("Ready for manual preview.");
     }
@@ -179,12 +278,14 @@ public partial class DealOrForceGame
         if (_mediaLibraryLayer is not { Visible: true }) return;
         if (_mediaRevision != MediaLibraryCatalog.Revision) { RebuildMediaList(); return; }
         UpdateMediaGain();
-        var playing = _mediaAudio.Playing || _mediaVideo.IsPlaying(); _mediaStop.Disabled = !playing;
+        var playing = IsMediaPreviewActive; _mediaStop.Disabled = !playing;
         if (!playing || _mediaSelected is null) return;
-        var position = _mediaAudio.Playing ? _mediaAudio.GetPlaybackPosition() : _mediaVideo.StreamPosition;
+        var position = _mediaAudio.HasStreamPlayback() ? _mediaPausedSeek ?? _mediaAudio.GetPlaybackPosition() : _mediaVideo.StreamPosition;
+        UpdateMediaTimeline(position);
         var silent = SettingsCatalog.Number("volume_master") * SettingsCatalog.Number(
             _mediaSelected.Kind == LibraryMediaKind.Music ? "volume_music" : "volume_effects") <= .0005f;
-        _mediaPreviewStatus.Text = Loc.Format("Preview {0:0.0}s · {1}", position, Tr(silent ? "Muted" : "Playing"));
+        var paused = _mediaAudio.HasStreamPlayback() ? _mediaAudio.StreamPaused : _mediaVideo.Paused;
+        _mediaPreviewStatus.Text = Tr(paused ? "Preview paused" : silent ? "Muted" : "Playing");
     }
     private bool HandleMediaLibraryInput(InputEvent input)
     {
@@ -196,6 +297,8 @@ public partial class DealOrForceGame
         }
         // Let text fields and buttons receive keys, but block campaign/global hotkeys.
         if (GetViewport().GuiGetFocusOwner() is LineEdit) return false;
+        if (input is InputEventKey { Keycode: Key.Space } && GetViewport().GuiGetFocusOwner() is BaseButton) return false;
+        if (input is InputEventKey { Keycode: Key.Home or Key.End } && GetViewport().GuiGetFocusOwner() is Slider) return false;
         if (input is InputEventKey { Pressed: true, Keycode: Key.Space or Key.F1 or Key.F2 or Key.F3 or Key.F5 or Key.F7 or Key.F9 or Key.F10 })
         { GetViewport().SetInputAsHandled(); return true; }
         if (input is InputEventKey { Pressed: true } key && GetViewport().GuiGetFocusOwner() is not LineEdit &&

@@ -23,25 +23,31 @@ public partial class DealOrForceGame
         var paper = _campaign.DealOffers.FirstOrDefault(o => o.Id == _dealInboxSelected);
         return $"{Loc.Language}|{_campaign.Player.Id}|{_campaign.ElapsedDays}|{_campaign.MapRevision}|" +
             $"{_campaign.DealInboxRevision}|{_campaign.NationById(paper?.FromId ?? -1)?.Treasury:R}|" +
-            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}";
+            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|{AssistanceInboxKey()}";
     }
 
     private void RefreshNegotiationNotifications()
     {
-        var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id);
+        var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id) + ForeignAssistance.Incoming(_campaign, _campaign.Player.Id);
         var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
+        var assistance = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.AssistanceRequests
+            .Where(r => r.State == ForeignAssistanceState.Pending && r.DonorId == _campaign.Player.Id && r.ExpiresDay > _campaign.ElapsedDays).Select(r => r.Id).ToHashSet();
         // A load or hotseat change primes quietly; receipt still is not a signature.
-        if (!_observerMode && !_dealNoticeObserver && _dealNoticeViewer == _campaign.Player.Id && incoming.Except(_dealNoticeIds).Any()) PlayStrategicCue("deal_received");
+        if (!_observerMode && !_dealNoticeObserver && _dealNoticeViewer == _campaign.Player.Id &&
+            (incoming.Except(_dealNoticeIds).Any() || assistance.Except(_assistanceNoticeIds).Any())) PlayStrategicCue("deal_received");
+        _assistanceNoticeIds = assistance;
         _dealNoticeViewer = _campaign.Player.Id; _dealNoticeObserver = _observerMode; _dealNoticeIds = incoming;
         if (IsInstanceValid(_dealInboxHudButton))
         {
+            var visibilityChanged = _dealInboxHudButton.Visible != (count > 0);
             _dealInboxHudButton.Visible = count > 0;
-            _dealInboxHudButton.Text = Loc.Format("Deals ({0})", count);
+            _dealInboxHudButton.Text = Loc.Format("Diplomatic inbox ({0})", count);
             _dealInboxHudButton.TooltipText = Ui.Tip(Tr("Incoming offers await your choice. Opening the inbox never signs or spends anything."));
+            if (visibilityChanged) Callable.From(LayoutCampaignShell).CallDeferred();
         }
         if (IsInstanceValid(_diplomacyInboxButton))
-            _diplomacyInboxButton.Text = count > 0 ? Loc.Format("Deals ({0})", count) : Tr("Diplomatic inbox");
+            _diplomacyInboxButton.Text = count > 0 ? Loc.Format("Diplomatic inbox ({0})", count) : Tr("Diplomatic inbox");
         if (_dealInboxVisible && IsInstanceValid(_dealComposer)) RefreshDealInbox();
     }
 
@@ -65,7 +71,7 @@ public partial class DealOrForceGame
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
         header.AddChild(HandbookButton("deals"));
         header.AddChild(ActionButton("×", CloseDealComposer, 38, 32));
-        rows.AddChild(WrappedUltimatumText("An offer is not an agreement. Review both sides, then accept, decline or counter. Nothing transfers before a signature.", 13));
+        rows.AddChild(WrappedUltimatumText("Diplomatic letters await your decision. Reading is not consent; review the live terms before approving any transfer.", 13));
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
         var listFrame = new PanelContainer { Name = "OfferListFrame", CustomMinimumSize = new(290, 0) };
@@ -107,7 +113,7 @@ public partial class DealOrForceGame
     {
         if (!_dealInboxVisible || !IsInstanceValid(_dealInboxRows)) return;
         var key = DealInboxKey();
-        if (!force && key == _dealInboxKey) return;
+        if (!force && (key == _dealInboxKey || InterfaceInteractionGuard.Busy(_dealComposer))) return;
         if (key != _dealInboxKey) { _dealInboxConfirm = -1; _dealInboxMessage = ""; }
         _dealInboxKey = key;
         var scroll = _dealInboxScroll.ScrollVertical;
@@ -125,15 +131,17 @@ public partial class DealOrForceGame
             var row = ActionButton(Loc.Format("{0} · {1}\n{2}", paper.ToId == player.Id ? Tr("Incoming") : Tr("Outgoing"),
                 counterpart?.DisplayName ?? "?", Tr(OfferStateKey(paper))), () =>
             {
-                _dealInboxSelected = id; _dealInboxMessage = ""; _dealInboxConfirm = -1;
+                _dealInboxSelected = id; _assistanceInboxSelected = -1; _dealInboxMessage = ""; _dealInboxConfirm = -1;
                 RefreshDealInbox(force: true);
             }, 0, 54, id == _dealInboxSelected);
             row.Name = $"DiplomaticOffer_{id}"; row.TooltipText = Loc.Format("Offer #{0}", id);
             _dealInboxRows.AddChild(row);
         }
-        if (papers.Length == 0)
+        var assistanceSelected = AddAssistanceInboxRows();
+        if (papers.Length == 0 && _dealInboxRows.GetChildCount() == 0)
             _dealInboxRows.AddChild(WrappedUltimatumText("No offers yet. Propose a deal from a country's diplomacy page.", 14));
         _dealInboxScroll.SetDeferred("scroll_vertical", scroll);
+        if (assistanceSelected) { _dealInboxKey = DealInboxKey(); return; }
         var selected = papers.FirstOrDefault(o => o.Id == _dealInboxSelected) ?? papers.FirstOrDefault();
         if (selected is null)
         {

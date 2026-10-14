@@ -395,15 +395,17 @@ public partial class DealOrForceGame
         BeginSession();
         PlayStrategicCue("campaign_start");
         UpdateNetworkHud();
-        foreach (var peerId in _networkPeerNations.Keys.Where(id => id != 1).ToArray()) SendNetworkSnapshot(peerId);
+        SendNetworkSnapshots(_networkPeerNations.Keys);
     }
 
     private void SendNetworkSnapshot(long peerId)
     {
-        var snapshot = SaveSystem.ExportNetworkSnapshot(_campaign, ModFingerprint);
-        if (snapshot.Length == 0) return;
-        RpcId(peerId, nameof(ClientReceiveNetworkSnapshot), snapshot);
+        SendNetworkSnapshots(new[] { peerId });
     }
+
+    private void SendNetworkSnapshots(IEnumerable<long> peers) => NetworkSnapshotDelivery.Send(peers,
+        () => SaveSystem.ExportNetworkSnapshot(_campaign, ModFingerprint),
+        (peer, snapshot) => RpcId(peer, nameof(ClientReceiveNetworkSnapshot), snapshot));
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
     private void ClientReceiveNetworkSnapshot(byte[] compressed)
@@ -427,7 +429,7 @@ public partial class DealOrForceGame
         _handoverLayer.Visible = false;
         _hudLayer.Visible = true;
         UpdateNetworkHud();
-        _networkStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? "Campaign synchronised." : result.Warning;
+        _networkStatus.Text = string.IsNullOrWhiteSpace(result.Warning) ? Tr("Campaign synchronised.") : result.Warning;
     }
 
     private void AdoptNetworkCampaign(Campaign campaign)
@@ -615,7 +617,7 @@ public partial class DealOrForceGame
     private void RequestNetworkResync(string reason)
     {
         if (_networkIsHost || _campaign is null) return;
-        if (_campaign.ElapsedDays - _networkResyncRequestedDay < NetworkChecksumEveryDays) return;
+        if (!NetworkSyncCadence.Due(_campaign.ElapsedDays, _networkResyncRequestedDay, NetworkChecksumEveryDays)) return;
         _networkResyncRequestedDay = _campaign.ElapsedDays;
         RpcId(1, nameof(ServerRequestNetworkResync), reason ?? "");
     }
@@ -640,7 +642,7 @@ public partial class DealOrForceGame
     private void BroadcastNetworkChecksum()
     {
         if (!_networkIsHost || !_networkGameStarted || _campaign is null) return;
-        if (_campaign.ElapsedDays - _networkLastChecksumDay < NetworkChecksumEveryDays) return;
+        if (!NetworkSyncCadence.Due(_campaign.ElapsedDays, _networkLastChecksumDay, NetworkChecksumEveryDays)) return;
         _networkLastChecksumDay = _campaign.ElapsedDays;
         Rpc(nameof(ClientCheckNetworkSync), _campaign.ElapsedDays,
             CampaignFingerprint.Of(_campaign).ToString());
@@ -711,6 +713,9 @@ public partial class DealOrForceGame
         _networkConnected = false;
         _networkGameStarted = false;
         _networkLocalNationId = -1;
+        _networkResyncRequestedDay = int.MinValue;
+        _networkLastChecksumDay = 0;
+        _networkClockAccumulator = 0;
         if (_networkHud is not null) _networkHud.Visible = false;
         if (_networkStart is not null) _networkStart.Disabled = true;
         if (_networkCountries is not null) RenderNetworkLobby();

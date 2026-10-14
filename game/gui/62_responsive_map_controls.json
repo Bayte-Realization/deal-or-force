@@ -1,0 +1,8 @@
+{
+  "metrics": {
+    "map_controls.drawer_width": 480,
+    "map_controls.drawer_height": 304,
+    "map_controls.drawer_cell_width": 190,
+    "picker.actions_bottom_inset": 36
+  }
+}

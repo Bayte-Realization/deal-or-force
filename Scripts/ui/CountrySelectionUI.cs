@@ -25,6 +25,9 @@ public partial class DealOrForceGame
     private LineEdit _pickerSeed = null!;
     private Button _pickerSeedApply = null!;
     private Label _pickerSeedNote = null!;
+    private PanelContainer _pickerActionsPanel;
+    private VBoxContainer _pickerActionsStack;
+    private bool _pickerActionsLayoutQueued;
 
     private GridContainer _pickerMovements;
     private VBoxContainer _pickerMovementsBox;
@@ -115,15 +118,20 @@ public partial class DealOrForceGame
         rows.AddChild(_pickerBegin);
 
         var actions = TexturedPanel(_pickerLayer);
+        actions.Name = "CountryPickerActions"; _pickerActionsPanel = actions;
         Ui.Place(actions, "picker.actions");
         var actionMargin = Margin(actions, 10, 8);
         // A MarginContainer gives its one child the whole rectangle, so the rows stack in a
         // box of their own inside it: the buttons, and the seed row underneath them.
         var actionStack = new VBoxContainer();
+        _pickerActionsStack = actionStack;
+        actionStack.MinimumSizeChanged += QueuePickerActionsLayout;
+        actions.Resized += QueuePickerActionsLayout;
         actionStack.AddThemeConstantOverride("separation", 8);
         actionMargin.AddChild(actionStack);
-        var actionRow = new HBoxContainer();
-        actionRow.AddThemeConstantOverride("separation", 8);
+        var actionRow = new HFlowContainer { Name = "PickerActionsFlow", ClipContents = true };
+        actionRow.AddThemeConstantOverride("h_separation", 8);
+        actionRow.AddThemeConstantOverride("v_separation", 6);
         actionStack.AddChild(actionRow);
         actionRow.AddChild(ActionButton("Back", ShowMainMenu, 100, 38));
         actionRow.AddChild(ActionButton("Random nation", PickRandomNation, 150, 38));
@@ -132,6 +140,10 @@ public partial class DealOrForceGame
         // BEFORE they pick a country, and until now the only door to them was the pause
         // menu, which does not exist until a campaign is running.
         actionRow.AddChild(ActionButton("Settings", ShowSettings, 120, 38));
+        var clouds = MapVisualToggle("map_clouds", "Clouds", "Hide or show clouds without changing what your country can see.", 96);
+        clouds.Name = "PickerClouds"; actionRow.AddChild(clouds);
+        var fog = MapVisualToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
+        fog.Name = "PickerFog"; actionRow.AddChild(fog);
 
         // The seed the next world is built from. The same seed builds the same world to the
         // digit - which is what a bug report is made of - and a different seed builds a
@@ -144,7 +156,7 @@ public partial class DealOrForceGame
         seedCaption.AutowrapMode = TextServer.AutowrapMode.Off;
         seedCaption.CustomMinimumSize = new Vector2(92, 0);
         seedRow.AddChild(seedCaption);
-        _pickerSeed = new LineEdit { CustomMinimumSize = new Vector2(150, 34) };
+        _pickerSeed = new LineEdit { Name = "WorldSeedInput", CustomMinimumSize = new Vector2(150, 34) };
         _pickerSeed.MaxLength = 10;
         _pickerSeed.Text = _campaignSeed.ToString();
         Placeholder(_pickerSeed, "Any number");
@@ -161,6 +173,28 @@ public partial class DealOrForceGame
         _pickerSeedNote.ClipText = true;
         seedRow.AddChild(_pickerSeedNote);
         RefreshPickerSeedNote();
+        QueuePickerActionsLayout();
+    }
+
+    private void QueuePickerActionsLayout()
+    {
+        if (_pickerActionsLayoutQueued) return;
+        _pickerActionsLayoutQueued = true;
+        Callable.From(() => { _pickerActionsLayoutQueued = false; LayoutPickerActions(); }).CallDeferred();
+    }
+
+    private void LayoutPickerActions()
+    {
+        if (_pickerActionsPanel is null || _pickerActionsStack is null) return;
+        var authored = InterfaceSkin.Layout("picker.actions");
+        var left = authored.AnchorLeft * Size.X + authored.OffsetLeft;
+        var right = authored.AnchorRight * Size.X + authored.OffsetRight;
+        var bottom = Mathf.Min(authored.AnchorBottom * Size.Y + authored.OffsetBottom,
+            Size.Y - Mathf.Clamp(Ui.Metric("picker.actions_bottom_inset", 36), 18, 120));
+        var height = Mathf.Max(100, Mathf.Max(_pickerActionsPanel.GetCombinedMinimumSize().Y,
+            _pickerActionsStack.GetCombinedMinimumSize().Y + 16));
+        var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, right - left), height), Size.X, Size.Y);
+        PlaceHudBounds(_pickerActionsPanel, bounds);
     }
 
     /// <summary>What the seed field says, if it says a number at all.</summary>

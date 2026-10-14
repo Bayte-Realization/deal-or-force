@@ -607,6 +607,7 @@ public static class SecessionEvents
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, born.Id, parent.Id), "let_us_go");
         OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, parent.Id, born.Id), "seceded_from_us");
 
+        if (fight) CivilWarOutbreak.RecordStart(campaign);
         campaign.Chronicle.Record(campaign, fight ? "civil_war" : outcome == SecessionOutcome.Contested ? "secession_contested" : "secession",
             born.Id, parent.Id, place: leaving[0].Name);
         campaign.MarkStrategicChange();

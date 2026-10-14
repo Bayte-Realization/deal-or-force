@@ -28,6 +28,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot 'PlayerModPackaging.ps1')
 $project = Split-Path -Parent $PSScriptRoot
 # The folder that ships, named the way it should look on somebody else's desktop. It is also
 # the folder that goes into the archive whole - an archive whose entries sit at its root
@@ -209,7 +210,10 @@ if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
 # executable. The loader looks in both places.
 $modsSource = Join-Path $project "mods"
 if (Test-Path $modsSource) {
-    Copy-PlayerTree $modsSource (Join-Path $out 'mods')
+    New-Item -ItemType Directory -Path (Join-Path $out 'mods') -Force | Out-Null
+    foreach ($taskModFolder in Get-BaseBuildModFolders $modsSource) {
+        Copy-PlayerTree $taskModFolder.FullName (Join-Path (Join-Path $out 'mods') $taskModFolder.Name)
+    }
     # A template that somebody once compiled leaves its bin and obj behind; they are not
     # part of the template and they are not small.
     Get-ChildItem -Path (Join-Path $out "mods") -Recurse -Force -Directory -ErrorAction SilentlyContinue |

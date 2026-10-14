@@ -934,6 +934,7 @@ public partial class DealOrForceGame
 
     private void RefreshSupportRaise(Nation player)
     {
+        if (InterfaceInteractionGuard.Busy(_supportLayer)) { RefreshSupportRaiseReadout(); return; }
         if (_supportTypeButtons.Count == 0)
         {
             foreach (var type in SupportTypeCatalog.All.OrderBy(t => t.Kind).ThenBy(t => t.RangeKm))

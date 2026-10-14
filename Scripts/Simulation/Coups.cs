@@ -228,6 +228,7 @@ public static class Coups
         nation.CoupPlotDay = -1;
         nation.LastCoupDay = c.ElapsedDays;
         var memory = nation.DomesticCrisis ??= new();
+        if (outcome == "Military coup") nation.LastMilitaryCoupDay = c.ElapsedDays;
         memory.LastOutcomeId = outcome;
         memory.LastOutcomeDay = c.ElapsedDays;
         memory.CooldownUntilDay = (int)Math.Min(int.MaxValue, (long)c.ElapsedDays +

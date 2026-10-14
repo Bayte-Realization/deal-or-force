@@ -83,6 +83,8 @@ public static class PeacefulFormation
         if (partner.IsHuman && campaign.HumanSeats.Count > 1) return "Human-controlled countries cannot merge in multiplayer.";
         if (founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability)
             return "Both governments need a stable mandate.";
+        if (!FormableNations.ReligionMandate(campaign, founder, definition))
+            return "The founder lacks the required religious population mandate.";
         var map = campaign.ProvinceMap;
         if (!Territory(campaign, definition).Any(p => p > 0 && p <= map.ProvinceCount && map.ProvinceToNation[p] == partner.MapIndex))
             return "The partner owns no territory required for this foundation.";
@@ -129,6 +131,7 @@ public static class PeacefulFormation
         if (founder is null || partner is null || definition is null || !definition.PeacefulAccession ||
             !FormableNations.Eligible(founder, definition) || founder.IsSubject || founder.Id == partner.Id || !FormableNations.CompatibleProclamation(founder, definition) ||
             founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability ||
+            !FormableNations.ReligionMandate(campaign, founder, definition) ||
             !AtPeace(campaign, founder) || !AtPeace(campaign, partner) ||
             (partner.IsSubject && !partner.AnswersTo(founder.Id)) || partner.Movement is not null ||
             (partner.IsHuman && campaign.HumanSeats.Count > 1)) return false;

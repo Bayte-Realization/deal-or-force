@@ -1,0 +1,21 @@
+{
+  "Sound / Art": "Звук / Арт",
+  "Cloud layer": "Слой облаков",
+  "Fog-of-war mist": "Дымка тумана войны",
+  "CLOUDS": "ОБЛАКА",
+  "FOG": "ДЫМКА",
+  "Clouds": "Облака",
+  "Hide or show clouds without changing what your country can see.": "Скрыть или показать облака, не меняя видимость провинций вашей страны.",
+  "Hide or show the visual mist. Unseen provinces remain unseen.": "Скрыть или показать дымку. Неизвестные провинции остаются неизвестными.",
+  "Decorative clouds and their shadows. The Clouds and fog master switch can disable both visual layers.": "Декоративные облака и их тени. Общий переключатель «Облака и туман» отключает оба визуальных слоя.",
+  "Decorative mist over unseen ground. Turning it off does not reveal provinces or enemy forces; the intelligence mask stays unchanged.": "Декоративная дымка над неизвестной территорией. Её отключение не раскрывает провинции или войска противника: маска разведки сохраняется.",
+  "Clouds over the world, seen from far away. Press to hide or show them.": "Облака над миром при взгляде издалека. Нажмите, чтобы скрыть или показать их.",
+  "The drifting mist over ground your country cannot see, close up. Press to hide or show it; what is hidden stays hidden.": "Дымка над территорией, которую страна не видит. Нажмите, чтобы скрыть или показать её; скрытые сведения останутся скрытыми.",
+  "MAP LAYERS": "СЛОИ КАРТЫ",
+  "OTHER SCREENS": "ДРУГИЕ ЭКРАНЫ",
+  "Navigation category": "Раздел навигации",
+  "Choose a group of screens. Every destination remains available on small displays.": "Выберите раздел интерфейса. Все экраны доступны и на небольшом мониторе.",
+  "Choose a map layer. The active layer is named here; every layer is available in the drawer.": "Выберите слой карты. Здесь показан текущий слой; полный список открывается по нажатию.",
+  "Hover a layer for its meaning. Esc returns to the map.": "Описание слоя — при наведении. Esc возвращает к карте.",
+  "Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign.": "Слушайте музыку, проверяйте звуковые эффекты и рассматривайте оформление, не выходя из кампании."
+}

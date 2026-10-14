@@ -76,6 +76,17 @@ public partial class DealOrForceGame
             "a campaign you are willing to lose, not on the one you care about.",
             _ => ConsoleSelfTest());
 
+        Add("modaction", "CONTENT", "modaction [list|package:action]",
+            "List declared actions from enabled mods, or explicitly run one loaded action.",
+            text =>
+            {
+                var id = text.Trim();
+                if (id.Length == 0 || id.Equals("list", StringComparison.OrdinalIgnoreCase))
+                    return string.Join("\n", _modLoader.FrontendActions().Select(a => a.FullId + " · " + Tr(a.Caption)));
+                _modLoader.TryRunFrontendAction(id, out var note);
+                return Tr(note);
+            });
+
         // --------------------------------------------------------------------- the clock --
         Add("pause", "TIME", "pause", "Stop and start the clock.", _ => ConsolePause());
         Add("speed", "TIME", "speed 1-5", "How fast the clock runs while it is running.", ConsoleSpeed);

@@ -34,6 +34,12 @@ public static class CampaignFingerprint
 
         void MixFloat(float value) => Mix(BitConverter.SingleToInt32Bits(value));
         void MixText(string value) { foreach (var character in value ?? "") Mix(character); Mix(-8); }
+        void MixFloatDictionary(string label, Dictionary<int, float> table)
+        {
+            if (table is not { Count: > 0 }) return;
+            MixText(label); Mix(table.Count);
+            foreach (var entry in table.OrderBy(p => p.Key)) { Mix(entry.Key); MixFloat(entry.Value); }
+        }
         void MixImage(PublicImage image)
         {
             Mix(image is null ? 0 : 1);
@@ -47,6 +53,17 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        var outbreakBudget = CivilWarOutbreak.Budget(campaign);
+        if (outbreakBudget.StartsByDay is { Count: > 0 })
+        {
+            var outbreakDays = outbreakBudget.StartsByDay.Where(p =>
+                CivilWarBudgetState.InWindow(p.Key, campaign.ElapsedDays) && p.Value > 0).OrderBy(p => p.Key).ToArray();
+            if (outbreakDays.Length > 0)
+            {
+                MixText("civil_war_budget"); Mix(outbreakDays.Length);
+                foreach (var day in outbreakDays) { Mix(day.Key); Mix(day.Value); }
+            }
+        }
         if (campaign.DealOffers.Count > 0 || campaign.NextDealOfferId != 1)
         {
             MixText("deal_negotiations"); Mix(campaign.NextDealOfferId); Mix(campaign.DealOffers.Count);
@@ -68,6 +85,22 @@ public static class CampaignFingerprint
                 }
             }
         }
+        MixText("foreign_assistance"); Mix(campaign.NextAssistanceRequestId); Mix(campaign.AssistanceLastTickDay);
+        Mix(campaign.AssistanceRequests.Count);
+        foreach (var request in campaign.AssistanceRequests.OrderBy(r => r.Id))
+        {
+            Mix(request.Id); Mix(request.RequesterId); Mix(request.DonorId); Mix(request.WarId);
+            Mix(request.CreatedDay); Mix(request.ExpiresDay); Mix(request.ClosedDay); Mix((int)request.State);
+            MixFloat(request.Amount); MixFloat(request.GrantedAmount); Mix(request.HumanConsent ? 1 : 0);
+        }
+        Mix(campaign.AssistanceCooldowns.Count);
+        foreach (var clock in campaign.AssistanceCooldowns.OrderBy(x => x.RequesterId).ThenBy(x => x.DonorId))
+        { Mix(clock.RequesterId); Mix(clock.DonorId); Mix(clock.ReadyOnDay); }
+        Mix(campaign.Defines.AidRequestCooldownDays); Mix(campaign.Defines.AidRequestOfferDays);
+        Mix(campaign.Defines.AiAidRequestReviewDays); MixFloat(campaign.Defines.AiAidRequestWillingness);
+        Mix(campaign.Defines.AidIntervalDays); MixFloat(campaign.Defines.AidShareOfRecipientGdp);
+        MixFloat(campaign.Defines.AidMaxShareOfTreasury); MixFloat(campaign.Defines.AiAidReserveOfGdp);
+        MixFloat(campaign.Defines.AiAidCrisisTreasuryOfGdp);
         foreach (var character in campaign.ScenarioId ?? "2024") Mix(character);
         Mix(-1);
         foreach (var id in campaign.Defines.Features.Keys.Concat(campaign.FeatureOverrides.Keys).Concat(MechanicFeatures.BuiltIns)
@@ -97,6 +130,7 @@ public static class CampaignFingerprint
         {
             Mix(pair.Key); var r = pair.Value;
             Mix((int)r.Stance); MixFloat(r.Opinion); MixFloat(r.AllianceCohesion);
+            Mix(r.AidSentDay);
             Mix(r.AllianceAssessmentDay); Mix(r.AllianceStrainedDays); Mix(r.AllianceReaffirmedDay);
             Mix(r.AllianceRefusedDay); Mix(r.AllianceSinceDay);
             foreach (var character in r.AllianceProgram ?? "") Mix(character);
@@ -174,9 +208,12 @@ public static class CampaignFingerprint
             Mix(crisis.CooldownUntilDay); MixText(crisis.LastOutcomeId); Mix(crisis.LastOutcomeDay);
             MixText(crisis.ResponseId); Mix(crisis.ResponseUntilDay); Mix(crisis.ResponseCooldownUntilDay);
             Mix(nation.CoupPlotDay); Mix(nation.LastCoupDay);
+            if (nation.LastMilitaryCoupDay >= 0)
+            { MixText("last_military_coup"); Mix(nation.LastMilitaryCoupDay); }
             foreach (var origin in nation.RenouncedTerritoryOrigins.OrderBy(id => id)) Mix(origin);
             Mix(-17);
             MixFloat(nation.Gdp);
+            MixFloat(nation.WeeklyBalance);
             MixFloat(nation.LivingOffset);
             MixText(nation.StartGovernment); MixText(nation.StartIdeology);
             Mix(nation.Movement is null ? 0 : 1);
@@ -210,6 +247,24 @@ public static class CampaignFingerprint
                 Mix(p.StartedDay); Mix(p.LastReviewDay); Mix(p.DurationDays); Mix(p.ProgressDays);
                 Mix(p.CooldownDays); Mix(p.CooldownUntilDay); Mix(p.PausedDay); Mix(p.Cancelled ? 1 : 0);
                 MixFloat(p.PaidCost); MixFloat(p.NationImpulse); MixFloat(p.CultureImpulse);
+            }
+            // These memories affect the next intelligence, membership, union or promise
+            // review before any visible total changes. Empty/default state emits no new
+            // bytes, keeping pre-feature fingerprints compatible with untouched worlds.
+            MixFloatDictionary("intel_networks", nation.IntelNetworks);
+            MixFloatDictionary("organization_belonging_at_start", nation.OrganizationBelongingAtStart);
+            if (!string.IsNullOrEmpty(nation.ConsolidationProject) || nation.ConsolidationFocusId != -1 ||
+                nation.ConsolidationAmbition != 0f)
+            {
+                MixText("consolidation"); MixText(nation.ConsolidationProject);
+                Mix(nation.ConsolidationFocusId); MixFloat(nation.ConsolidationAmbition);
+            }
+            if (nation.LastAddressDay != -9999 || nation.AddressWeariness != 0f ||
+                !string.IsNullOrEmpty(nation.AddressPromise) || nation.AddressPromiseDueDay != -1 ||
+                nation.AddressPromiseMark != 0f)
+            {
+                MixText("address_to_nation"); Mix(nation.LastAddressDay); MixFloat(nation.AddressWeariness);
+                MixText(nation.AddressPromise); Mix(nation.AddressPromiseDueDay); MixFloat(nation.AddressPromiseMark);
             }
         }
 
@@ -247,6 +302,8 @@ public static class CampaignFingerprint
             MixFloat(army.Strength);
             MixFloat(army.Entrenchment);
             Mix(army.Route.Count);
+            if (army.ContractUntilDay >= 0)
+            { MixText("contract_until"); Mix(army.ContractUntilDay); }
         }
         foreach (var war in Ordered(campaign.Wars, war => war.Id))
         {
@@ -255,6 +312,8 @@ public static class CampaignFingerprint
             MixFloat(war.OccupationScore);
             MixFloat(war.BattleScore);
             Mix(war.CivilConflict ? 1 : 0); Mix(war.EscalationStage); Mix(war.AiNegotiationUnlockDay);
+            if (war.WorldWarDay >= 0)
+            { MixText("world_war"); Mix(war.WorldWarDay); }
         }
         var controllers = campaign.ProvinceController;
         if (controllers is null) return hash;

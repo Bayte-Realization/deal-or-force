@@ -1,0 +1,21 @@
+{
+  "Sound / Art": "Sound / Art",
+  "Cloud layer": "Cloud layer",
+  "Fog-of-war mist": "Fog-of-war mist",
+  "CLOUDS": "CLOUDS",
+  "FOG": "FOG",
+  "Clouds": "Clouds",
+  "Hide or show clouds without changing what your country can see.": "Hide or show clouds without changing what your country can see.",
+  "Hide or show the visual mist. Unseen provinces remain unseen.": "Hide or show the visual mist. Unseen provinces remain unseen.",
+  "Decorative clouds and their shadows. The Clouds and fog master switch can disable both visual layers.": "Decorative clouds and their shadows. The Clouds and fog master switch can disable both visual layers.",
+  "Decorative mist over unseen ground. Turning it off does not reveal provinces or enemy forces; the intelligence mask stays unchanged.": "Decorative mist over unseen ground. Turning it off does not reveal provinces or enemy forces; the intelligence mask stays unchanged.",
+  "Clouds over the world, seen from far away. Press to hide or show them.": "Clouds over the world, seen from far away. Press to hide or show them.",
+  "The drifting mist over ground your country cannot see, close up. Press to hide or show it; what is hidden stays hidden.": "The drifting mist over ground your country cannot see, close up. Press to hide or show it; what is hidden stays hidden.",
+  "MAP LAYERS": "MAP LAYERS",
+  "OTHER SCREENS": "OTHER SCREENS",
+  "Navigation category": "Navigation category",
+  "Choose a group of screens. Every destination remains available on small displays.": "Choose a group of screens. Every destination remains available on small displays.",
+  "Choose a map layer. The active layer is named here; every layer is available in the drawer.": "Choose a map layer. The active layer is named here; every layer is available in the drawer.",
+  "Hover a layer for its meaning. Esc returns to the map.": "Hover a layer for its meaning. Esc returns to the map.",
+  "Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign.": "Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign."
+}

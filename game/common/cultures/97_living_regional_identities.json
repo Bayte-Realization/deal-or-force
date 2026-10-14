@@ -1,0 +1,10 @@
+// Authored identity vocabulary, not a fabricated census. No population share or default
+// faith is inferred here. Scenario authors can place these identities in population_groups
+// with an explicit religion, or supply their own cultural religion profile in an overlay.
+{
+  "cornish": {"name": "Cornish", "group": "celtic", "colour": "#857556"},
+  "garifuna": {"name": "Garifuna", "group": "arawakan", "colour": "#aa8b56"},
+  "miskito": {"name": "Miskitu", "group": "misumalpan", "colour": "#6d9a89"},
+  "mixtec": {"name": "Mixtec", "group": "oto_manguean", "colour": "#a46c61"},
+  "zapotec": {"name": "Zapotec", "group": "oto_manguean", "colour": "#b49a60"}
+}

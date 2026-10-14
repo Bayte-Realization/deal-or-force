@@ -1,0 +1,7 @@
+// More precise authored beliefs. These do not rewrite a regional census or force
+// conversion. Alevi-Bektashi is kept in its own family instead of guessing which broad
+// majority-faith classification every community would accept.
+{
+  "alevi_bektashi": {"name": "Alevi-Bektashi", "group": "alevi_bektashi", "colour": "#97646d"},
+  "yazidi": {"name": "Yazidism", "group": "yazidi", "colour": "#c5ad61"}
+}

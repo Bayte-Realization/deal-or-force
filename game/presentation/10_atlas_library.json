@@ -30,7 +30,7 @@
     },
     "night_signal": {
       "name": "Night signal",
-      "purpose": "A quiet abstract signal field. Not a geographic map. Animation awaits provider confirmation.",
+      "purpose": "A quiet abstract signal field. Static artwork, not a geographic map.",
       "kind": "image",
       "file": "gfx/atmosphere/night_signal.png",
       "source": "CreativeClaw · Nano Banana 2 · generated abstract artwork"

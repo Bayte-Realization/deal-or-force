@@ -55,13 +55,31 @@ public static class CivilWarOutbreak
 {
     public static readonly List<string> Recent = new();
 
+    /// <summary>A rolling simulation limit, independent of the truncated presentation chronicle.</summary>
+    public static int StartsInLastYear(Campaign campaign) => campaign is null ? 0 :
+        Budget(campaign).Count(campaign.ElapsedDays);
+
+    internal static CivilWarBudgetState Budget(Campaign campaign) => campaign.CivilWarBudget ??
+        CivilWarBudgetState.FromLegacy(campaign);
+
+    internal static void RecordStart(Campaign campaign)
+    {
+        campaign.CivilWarBudget ??= CivilWarBudgetState.FromLegacy(campaign);
+        campaign.CivilWarBudget.Record(campaign.ElapsedDays);
+    }
+
     public static void Tick(Campaign campaign)
     {
         var d = campaign?.Defines;
-        if (d is null || !d.CivilWarOutbreaks || campaign.ProvinceMap is null) return;
+        if (d is null) return;
+        // Expired budget entries are administrative cleanup, including while outbreaks
+        // are disabled. Turning the mechanic back on cannot resurrect an old year.
+        campaign.CivilWarBudget ??= CivilWarBudgetState.FromLegacy(campaign);
+        campaign.CivilWarBudget.Prune(campaign.ElapsedDays);
+        if (!d.CivilWarOutbreaks || campaign.ProvinceMap is null) return;
         if (!MechanicFeatures.SystemEnabled(campaign, "SecessionEvents")) return;
         if (campaign.ElapsedDays < d.CivilWarEarliestDay || campaign.ElapsedDays % 7 != 3) return;
-        var thisYear = campaign.Chronicle.Entries.Count(e => e.Kind == "civil_war" && campaign.ElapsedDays - e.Day < 365);
+        var thisYear = StartsInLastYear(campaign);
         foreach (var nation in campaign.Nations.ToArray())
         {
             if (thisYear >= d.CivilWarWorldPerYear) return;
@@ -104,13 +122,38 @@ public static class CivilWarOutbreak
             !float.IsFinite(d.CivilWarStabilityThreshold)) return 0f;
         var depth = M.Clamp01((d.CivilWarStabilityThreshold - nation.Stability) / MathF.Max(0.01f, d.CivilWarStabilityThreshold));
         var chance = d.CivilWarWeeklyChance * depth;
-        var coup = c.Chronicle.Entries.Any(e => e.Kind is "coup" or "coup_counter" && e.ActorId == nation.Id && e.Day <= c.ElapsedDays &&
-                                               c.ElapsedDays - e.Day <= d.CivilWarCoupMemoryDays);
+        // Both coup routes set LastCoupDay. The independent military timestamp preserves
+        // an earlier coup's existing multiplier even after a later institutional transition.
+        var coupDay = nation.LastMilitaryCoupDay;
+        var coup = coupDay >= 0 && coupDay <= c.ElapsedDays &&
+            c.ElapsedDays - (long)coupDay <= d.CivilWarCoupMemoryDays;
         if (coup) chance *= 2f;
         // A country at war abroad and losing has its army away from home.
         if (c.Wars.Any(w => !w.Ended && !w.CivilConflict && w.Involves(nation.Id) &&
                             (w.IsAttacking(nation.Id) ? w.WarScore : -w.WarScore) < -10f)) chance *= 1.5f;
         return float.IsFinite(chance) ? Math.Clamp(chance, 0f, 1f) : 0f;
+    }
+
+    internal static void RestoreMilitaryCoupMemory(Campaign campaign)
+    {
+        var days = new Dictionary<int, int>();
+        foreach (var fact in campaign.Chronicle.Entries)
+            if (fact.Kind is "coup" or "coup_counter" && fact.Day >= 0 && fact.Day <= campaign.ElapsedDays)
+                days[fact.ActorId] = Math.Max(days.GetValueOrDefault(fact.ActorId, -99999), fact.Day);
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.LastMilitaryCoupDay >= 0) continue; // current saves retain their independent date
+            var day = days.GetValueOrDefault(nation.Id, -99999);
+            var latest = nation.LastCoupDay;
+            var outcome = nation.DomesticCrisis;
+            var knownInstitutional = outcome is not null && outcome.LastOutcomeDay == latest &&
+                !string.IsNullOrEmpty(outcome.LastOutcomeId) && outcome.LastOutcomeId != "Military coup";
+            // Old saves had only one coup date. An explicit institutional outcome is not
+            // promoted to a military coup; absent outcome metadata uses the stated fallback.
+            if (!knownInstitutional && latest >= 0 && latest <= campaign.ElapsedDays)
+                day = Math.Max(day, latest);
+            if (day >= 0) nation.LastMilitaryCoupDay = day;
+        }
     }
 
     /// <summary>Who rises, where, under what name - and the war.</summary>
@@ -210,8 +253,105 @@ public static class CivilWarOutbreak
     }
 }
 
+/// <summary>
+/// At most one counter per day of the rolling 365-day window. Counts include every
+/// successful uprising that emits the existing civil_war fact, not ordinary secessions
+/// or the civil conflicts authored in a scenario. No randomness or presentation state.
+/// </summary>
+public sealed class CivilWarBudgetState
+{
+    public const int WindowDays = 365;
+    public Dictionary<int, int> StartsByDay = new();
+
+    internal static bool InWindow(int startedDay, int today) => startedDay >= 0 &&
+        startedDay <= today && today - (long)startedDay < WindowDays;
+
+    public int Count(int today)
+    {
+        if (StartsByDay is null || StartsByDay.Count == 0) return 0;
+        long total = 0;
+        foreach (var pair in StartsByDay)
+            if (InWindow(pair.Key, today) && pair.Value > 0)
+                total = Math.Min(int.MaxValue, total + pair.Value);
+        return (int)total;
+    }
+
+    internal void Prune(int today)
+    {
+        StartsByDay ??= new();
+        if (StartsByDay.Count == 0) return;
+        foreach (var pair in StartsByDay.Where(p => !InWindow(p.Key, today) || p.Value <= 0).ToArray())
+            StartsByDay.Remove(pair.Key);
+    }
+
+    internal void Record(int today)
+    {
+        Prune(today);
+        if (today < 0) return;
+        var count = StartsByDay.GetValueOrDefault(today);
+        StartsByDay[today] = count == int.MaxValue ? count : count + 1;
+    }
+
+    internal CivilWarBudgetState Copy(int today) => new()
+    {
+        StartsByDay = (StartsByDay ?? new()).Where(p => InWindow(p.Key, today) && p.Value > 0)
+            .OrderBy(p => p.Key).ToDictionary(p => p.Key, p => p.Value)
+    };
+
+    internal static CivilWarBudgetState FromLegacy(Campaign campaign)
+    {
+        var starts = new HashSet<(int Day, int Born)>();
+        var participants = new HashSet<(int Day, int Nation)>();
+        void Remember(int day, int born, int parent)
+        {
+            if (!InWindow(day, campaign.ElapsedDays) || born < 0) return;
+            starts.Add((day, born));
+            participants.Add((day, born));
+            if (parent >= 0) participants.Add((day, parent));
+        }
+        foreach (var entry in campaign.Chronicle.Entries)
+            if (entry.Kind == "civil_war") Remember(entry.Day, entry.ActorId, entry.TargetId);
+        foreach (var war in campaign.Wars)
+        {
+            if (!war.CivilConflict || war.StartedDay <= 0 || !InWindow(war.StartedDay, campaign.ElapsedDays)) continue;
+            var parent = campaign.NationById(war.AttackerId);
+            var born = campaign.NationById(war.DefenderId);
+            // StrategicWar did not persist its justification. Positive matching outbreak
+            // dates distinguish these from scenario conflicts and ordinary ethnic secessions.
+            if (born?.LastCivilWarDay == war.StartedDay || parent?.LastCivilWarDay == war.StartedDay)
+                Remember(war.StartedDay, war.DefenderId, war.AttackerId);
+        }
+        foreach (var born in campaign.Nations)
+        {
+            var day = born.LastCivilWarDay;
+            if (day <= 0 || !InWindow(day, campaign.ElapsedDays) || born.SecededFromId < 0) continue;
+            if (campaign.NationById(born.SecededFromId)?.LastCivilWarDay == day)
+                Remember(day, born.Id, born.SecededFromId);
+        }
+        var counts = starts.GroupBy(s => s.Day).ToDictionary(g => g.Key, g => g.Count());
+        foreach (var nation in campaign.Nations)
+        {
+            var day = nation.LastCivilWarDay;
+            if (day <= 0 || !InWindow(day, campaign.ElapsedDays) || participants.Contains((day, nation.Id))) continue;
+            // A surviving timestamp proves at least one outbreak that day, but cannot say
+            // whether two countries are parent/rebel. Use the evidenced lower bound; never
+            // count a parent and its rebels twice or fabricate an event from sentinel zero.
+            if (!counts.ContainsKey(day)) counts[day] = 1;
+        }
+        return new CivilWarBudgetState { StartsByDay = counts };
+    }
+}
+
+public sealed partial class Campaign
+{
+    public CivilWarBudgetState CivilWarBudget = new();
+}
+
 public sealed partial class Nation
 {
     /// <summary>The day this country last split in a civil war (CivilWarOutbreak), or 0.</summary>
     public int LastCivilWarDay;
+
+    /// <summary>Separate from institutional coups; negative means no military coup is known.</summary>
+    public int LastMilitaryCoupDay = -99999;
 }

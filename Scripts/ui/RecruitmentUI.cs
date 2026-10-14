@@ -75,7 +75,7 @@ public partial class DealOrForceGame
         _recruitmentViewer = _campaign.Player.Id;
         _recruitmentTemplates = UnitTypeCatalog.All.OrderBy(t => t.RecruitmentCost).Select(t => t.Id).ToArray();
         _recruitmentTemplate.Clear();
-        foreach (var id in _recruitmentTemplates) _recruitmentTemplate.AddItem(UnitTypeCatalog.Get(id).Name);
+        foreach (var id in _recruitmentTemplates) _recruitmentTemplate.AddItem(Tr(UnitTypeCatalog.Get(id).Name));
         _recruitmentTemplate.Select(Math.Max(0, Array.IndexOf(_recruitmentTemplates, "line_infantry")));
         _recruitmentRegion.Clear();
         foreach (var state in _campaign.StatesOf(_campaign.Player).OrderBy(s => s.Name))
@@ -103,7 +103,7 @@ public partial class DealOrForceGame
             "Soft attack {5:0.00} · Hard attack {6:0.00} · Armour {7:0.00}\n" +
             "Speed ×{8:0.00} · Combat width {9:0} · Supply ×{10:0.00}\n" +
             "Available: ${11:0.00}B · {12:N0} personnel\n",
-            count, t.Name, count * t.RecruitmentPersonnel, count * t.RecruitmentCost, t.TrainingDays,
+            count, Tr(t.Name), count * t.RecruitmentPersonnel, count * t.RecruitmentCost, t.TrainingDays,
             t.SoftAttack, t.HardAttack, t.Armour, t.Speed, t.CombatWidth, t.SupplyUse,
             _campaign.Player.Treasury, _campaign.Player.ManpowerReserve) +
             (reason.Length == 0 ? Tr("Ready to fund training.") : reason);
@@ -112,7 +112,7 @@ public partial class DealOrForceGame
         var queueState = _recruitmentViewer + ":" + string.Join(";", _campaign.Recruitment.Where(o => o.NationId == _recruitmentViewer)
             .Select(o => $"{o.Id}:{o.TrainedDays}:{RecruitmentSystem.DeploymentProvince(_campaign, o.NationId, o.StateMapIndex)}"));
         // Do not replace a focused/pressed Cancel button on every HUD refresh.
-        if (queueState == _recruitmentQueueState) return;
+        if (queueState == _recruitmentQueueState || InterfaceInteractionGuard.Busy(_recruitmentQueue)) return;
         _recruitmentQueueState = queueState;
         foreach (var child in _recruitmentQueue.GetChildren()) { _recruitmentQueue.RemoveChild(child); child.QueueFree(); }
         foreach (var order in _campaign.Recruitment.Where(o => o.NationId == _campaign.Player.Id))
@@ -122,7 +122,8 @@ public partial class DealOrForceGame
             var state = _campaign.States.Find(s => s.MapIndex == order.StateMapIndex);
             var paused = RecruitmentSystem.DeploymentProvince(_campaign, order.NationId, order.StateMapIndex) <= 0;
             block.AddChild(Title($"{order.Count} × {Tr(UnitTypeCatalog.Get(order.TemplateId).Name)} — {state?.DisplayName}\n" +
-                $"{order.TrainedDays}/{order.DurationDays} days" + (paused ? " · PAUSED — region unavailable" : " · Training"), 14, Ui.Colour("text.body_soft")));
+                Loc.Format("{0}/{1} training days", order.TrainedDays, order.DurationDays) + " · " +
+                Tr(paused ? "Training paused: region unavailable" : "Training in progress"), 14, Ui.Colour("text.body_soft")));
             block.AddChild(new ProgressBar { MaxValue = order.DurationDays, Value = order.TrainedDays, CustomMinimumSize = new Vector2(0,18) });
             var id = order.Id;
             block.AddChild(ActionButton("Cancel training", () =>

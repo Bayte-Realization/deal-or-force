@@ -21,6 +21,7 @@ public sealed class ModContext
 
     public string ModId { get; }
     public Campaign Campaign { get; internal set; }
+    internal ModFrontendActionCatalog.Registration FrontendActions { get; set; }
     public int Day => Campaign?.ElapsedDays ?? 0;
     public string Date => Campaign?.Date.ToString() ?? "No campaign";
 
@@ -31,6 +32,8 @@ public sealed class ModContext
     }
 
     public Nation Nation(string tag) => Campaign?.NationByTag(tag);
+    /// <summary>Register a declared local action for this loaded package; never executed by discovery.</summary>
+    public bool RegisterFrontendAction(string id, Func<string> handler) => FrontendActions?.Register(id, handler) ?? false;
     public void Queue(ICampaignCommand command) => Campaign?.Commands.Enqueue(command);
     public bool EnactPolicy(string issuerTag, string policyId, string targetTag = "", int region = 0, bool promise = false) =>
         ModOperations.QueuePolicy(Campaign, issuerTag, policyId, targetTag, region, promise);

@@ -126,6 +126,9 @@ public interface ICampaignCommand
 public sealed class CampaignCommandQueue
 {
     private readonly Queue<ICampaignCommand> _pending = new();
+    private readonly Campaign _campaign;
+
+    public CampaignCommandQueue(Campaign campaign = null) => _campaign = campaign;
     /// <summary>Return true to hand authority to an external transport and suppress local application.</summary>
     public Func<ICampaignCommand, bool> SubmitInterceptor;
 
@@ -134,12 +137,16 @@ public sealed class CampaignCommandQueue
     public void Enqueue(ICampaignCommand command)
     {
         if (command is null) return;
+        // Complete the world before a transport stamps/broadcasts an external order.
+        // During a simulation stage this is already protected by FinishStep's guard.
+        _campaign?.FinishStep();
         if (SubmitInterceptor?.Invoke(command) == true) return;
         _pending.Enqueue(command);
     }
 
     public void ApplyAll(Campaign campaign)
     {
+        campaign.FinishStep();
         while (_pending.Count > 0) DiagnosticLogs.TraceCommand(campaign, _pending.Dequeue());
     }
 }
@@ -484,7 +491,7 @@ public sealed partial class Campaign
     public bool ObserverMode;
     public readonly Dictionary<long, DiplomaticRelation> Relations = new();
     public readonly List<int> HumanSeats = new();
-    public readonly CampaignCommandQueue Commands = new();
+    public readonly CampaignCommandQueue Commands;
     public readonly CampaignHistory History = new();
     public readonly SimRandom Random;
     public readonly Defines Defines = new();
@@ -553,6 +560,7 @@ public sealed partial class Campaign
 
     public Campaign(int seed, Defines scenarioRules = null)
     {
+        Commands = new CampaignCommandQueue(this);
         Seed = seed;
         Random = new SimRandom(seed);
         if (scenarioRules is null) GameDataLoader.ApplyDefines(Defines);
@@ -654,13 +662,18 @@ public sealed partial class Campaign
     public void Tick()
     {
         FinishStep();
-        RunStages(TickStages().GetEnumerator(), double.PositiveInfinity);
+        StepFor(double.PositiveInfinity);
     }
 
     private IEnumerator<int> _step;
+    private bool _runningStages;
+    private long _stepStartedHours;
 
     /// <summary>Whether a step has been begun by StepFor and is not finished yet.</summary>
     public bool MidStep => _step is not null;
+
+    /// <summary>A complete step, after its iterator is cleared; saves and external orders share this boundary.</summary>
+    public event Action<Campaign> StepCompleted;
 
     /// <summary>
     /// Begin a step, or carry on with the one begun, for at most this many milliseconds of
@@ -671,20 +684,28 @@ public sealed partial class Campaign
     /// </summary>
     public bool StepFor(double milliseconds)
     {
-        _step ??= TickStages().GetEnumerator();
+        if (_step is null)
+        {
+            _stepStartedHours = ElapsedHours;
+            _step = TickStages().GetEnumerator();
+        }
         return RunStages(_step, milliseconds);
     }
 
     /// <summary>Finish a step in progress, so a save, a snapshot or a command never sees half of one.</summary>
     public void FinishStep()
     {
-        if (_step is not null) RunStages(_step, double.PositiveInfinity);
+        // TickStages applies its initial orders while MoveNext is executing. That is
+        // already a stable boundary, and reentering the same iterator would discard it.
+        if (_step is not null && !_runningStages) RunStages(_step, double.PositiveInfinity);
     }
 
     private bool RunStages(IEnumerator<int> stages, double milliseconds)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var finished = false;
+        var startedHours = _stepStartedHours;
+        _runningStages = true;
         try
         {
             while (true)
@@ -700,12 +721,16 @@ public sealed partial class Campaign
         }
         finally
         {
+            _runningStages = false;
             if (finished)
             {
                 if (ReferenceEquals(stages, _step)) _step = null;
                 stages.Dispose();
             }
         }
+        // Notify only after clearing the iterator. A hook may issue commands or save;
+        // neither should recurse into the day whose last stage just returned.
+        if (finished && ElapsedHours != startedHours) StepCompleted?.Invoke(this);
         return finished;
     }
 
@@ -805,6 +830,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("organization life")) OrganizationDynamics.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("deal inbox")) DealNegotiations.Tick(this);
+            using (SimProfiler.Measure("foreign assistance")) ForeignAssistance.Tick(this);
             yield return 0;
             foreach (var _ in MovementRules.TickStages(this)) yield return 0;
             foreach (var _ in MovementAi.TickStages(this)) yield return 0;

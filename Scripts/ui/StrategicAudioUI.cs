@@ -8,9 +8,10 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private readonly Dictionary<string, AudioStreamPlayer> _audioChannels = new();
+    private MapAmbience _mapAmbience;
     private readonly Dictionary<string, AudioStream> _strategicCues = new();
     private readonly HashSet<int> _knownEndedBattles = new();
-    private readonly Queue<string> _strategicAudioQueue = new();
+    private readonly StrategicCueQueue _strategicAudioQueue = new();
     private readonly Dictionary<string, ulong> _lastCueAt = new();
     private readonly Dictionary<string, float> _channelCueTrim = new();
     private int _audioObservedNation = -1;
@@ -81,7 +82,8 @@ public partial class DealOrForceGame
                 : new MusicReadout(MusicMood.Calm, "No campaign pressure recorded."));
 
         // And under all of it, the sound of the map from where the camera is.
-        AddChild(new MapAmbience(() => _hudLayer is { Visible: true } ? _globe : null, () => _campaign));
+        _mapAmbience = new MapAmbience(() => _hudLayer is { Visible: true } ? _globe : null, () => _campaign);
+        AddChild(_mapAmbience);
 
         foreach (var cue in SoundCatalog.All)
         {
@@ -123,10 +125,9 @@ public partial class DealOrForceGame
         // resolved battles must not become a hundred reports waiting their turn.
         if (cue.Yielding && Occupied(0)) return;
 
-        if (player.Playing)
+        if (player.Playing || Occupied(channel.Priority + 1))
         {
-            if (_strategicAudioQueue.Count < 3 && !_strategicAudioQueue.Contains(name))
-                _strategicAudioQueue.Enqueue(name);
+            _strategicAudioQueue.Enqueue(name);
             return;
         }
 
@@ -157,6 +158,7 @@ public partial class DealOrForceGame
     {
         var gain = Mathf.Clamp(SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_effects"), 0, 1);
         if (gain <= 0.0005f) { player.Stop(); return; }
+        InterruptMediaForPriority(SoundCatalog.GetChannel(cue.Channel).Priority);
         _channelCueTrim[cue.Channel] = cue.VolumeDb;
         player.VolumeDb = SoundCatalog.GetChannel(cue.Channel).VolumeDb + cue.VolumeDb + Mathf.LinearToDb(gain);
         player.Stream = stream;
@@ -166,12 +168,22 @@ public partial class DealOrForceGame
     private void PlayNextStrategicCue()
     {
         if (_strategicAudioQueue.Count == 0) return;
-        var name = _strategicAudioQueue.Dequeue();
-        if (!_strategicCues.TryGetValue(name, out var stream)) return;
-        var cue = SoundCatalog.Get(name);
-        if (!_audioChannels.TryGetValue(cue.Channel, out var player)) return;
-        _lastCueAt[name] = Time.GetTicksMsec();
-        Speak(player, cue, stream);
+        var channels = _audioChannels.Select(pair =>
+        {
+            var channel = SoundCatalog.GetChannel(pair.Key);
+            return new StrategicCueQueue.ChannelState(pair.Key, channel.Priority, channel.Independent, pair.Value.Playing);
+        }).ToArray();
+        _strategicAudioQueue.TryDispatch(name => _strategicCues.ContainsKey(name) ? SoundCatalog.Get(name) : null, channels, cue =>
+        {
+            foreach (var (other, speaking) in _audioChannels)
+            {
+                var declaration = SoundCatalog.GetChannel(other);
+                if (!declaration.Independent && declaration.Priority < SoundCatalog.GetChannel(cue.Channel).Priority && speaking.Playing)
+                    speaking.Stop();
+            }
+            _lastCueAt[cue.Name] = Time.GetTicksMsec();
+            Speak(_audioChannels[cue.Channel], cue, _strategicCues[cue.Name]);
+        });
     }
 
     private void ResetStrategicAudioState()

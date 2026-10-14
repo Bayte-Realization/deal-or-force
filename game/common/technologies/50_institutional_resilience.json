@@ -1,0 +1,94 @@
+// Capabilities rather than prophecies: no fixed invention dates or automatic crisis immunity.
+// Every effect is an existing, observable modifier; no decorative research-only statistics.
+{
+  "transparent_procurement": {
+    "name": "Transparent procurement", "description": "Publish comparable tenders and inspect delivery so public construction loses less money to opaque contracting.",
+    "category": "society", "cost": 260, "requires": ["digital_government"], "icon": "icon_treasury",
+    "effects": {"construction_cost": -0.025, "tax_efficiency": 0.01}
+  },
+  "regional_service_standards": {
+    "name": "Regional service standards", "description": "Make regional clinics, schools and utilities interoperable while retaining locally accountable delivery.",
+    "category": "society", "cost": 380, "requires": ["civil_emergency_coordination", "transparent_procurement"], "icon": "icon_stability",
+    "effects": {"reconstruction_speed": 0.035, "construction_speed": 0.02}
+  },
+  "sovereign_risk_accounting": {
+    "name": "Sovereign risk accounting", "description": "Publish debt maturities, cash needs and contingent obligations so lenders can judge risk with fewer surprises.",
+    "category": "society", "cost": 320, "requires": ["digital_government"], "icon": "icon_treasury",
+    "effects": {"credit_capacity": 0.035, "borrowing_cost": -0.015}
+  },
+  "fiscal_continuity_protocols": {
+    "name": "Fiscal continuity protocols", "description": "Keep payment systems and tax collection functioning when administration is disrupted; liabilities are not erased.",
+    "category": "society", "cost": 510, "requires": ["sovereign_risk_accounting", "regional_service_standards"], "icon": "icon_treasury",
+    "effects": {"tax_efficiency": 0.025, "credit_capacity": 0.025}
+  },
+  "public_data_reproducibility": {
+    "name": "Public data reproducibility", "description": "Preserve methods, provenance and reproducible public statistics for research that survives a change of government.",
+    "category": "society", "cost": 470, "requires": ["distributed_science", "digital_government"], "icon": "icon_research",
+    "effects": {"research_speed": 0.035}
+  },
+  "modular_water_treatment": {
+    "name": "Modular water treatment", "description": "Deploy repairable treatment modules and interchangeable parts to restore utilities after damage or supply disruption.",
+    "category": "industry", "cost": 290, "requires": ["industrial_metrology", "civil_emergency_coordination"], "icon": "icon_building_infrastructure",
+    "effects": {"reconstruction_speed": 0.035, "supply": 0.01}
+  },
+  "repairable_product_standards": {
+    "name": "Repairable product standards", "description": "Standard parts, accessible manuals and longer maintenance support let existing equipment stay productive.",
+    "category": "industry", "cost": 310, "requires": ["circular_manufacturing"], "icon": "icon_building_civilianindustry",
+    "effects": {"output": 0.012, "construction_cost": -0.015}
+  },
+  "low_waste_reconstruction": {
+    "name": "Low-waste reconstruction", "description": "Recover usable materials and coordinate repairs instead of replacing every damaged structure from scratch.",
+    "category": "industry", "cost": 450, "requires": ["advanced_material_recovery", "repairable_product_standards"], "icon": "icon_building_infrastructure",
+    "effects": {"reconstruction_speed": 0.05, "construction_cost": -0.02}
+  },
+  "interoperable_infrastructure": {
+    "name": "Interoperable infrastructure", "description": "Use common interfaces for power, transport and public works so neighbouring regions can share maintenance capacity.",
+    "category": "industry", "cost": 550, "requires": ["resilient_power_control", "modular_water_treatment", "regional_service_standards"], "icon": "icon_building_infrastructure",
+    "effects": {"construction_speed": 0.035, "trade_reach": 0.015}
+  },
+  "distributed_repair_reserves": {
+    "name": "Distributed repair reserves", "description": "Keep essential tools and replacement parts in several depots, making a single lost hub less disruptive.",
+    "category": "logistics", "cost": 320, "requires": ["mobile_maintenance", "repairable_product_standards"], "icon": "icon_alert_supply",
+    "effects": {"supply": 0.015, "support_recovery": 0.07}
+  },
+  "customs_interoperability": {
+    "name": "Customs interoperability", "description": "Exchange compatible manifests and inspection records so legal cargo crosses connected borders with fewer delays.",
+    "category": "logistics", "cost": 280, "requires": ["intermodal_freight", "digital_government"], "icon": "icon_trade",
+    "effects": {"trade_reach": 0.025}
+  },
+  "cargo_rerouting_exercises": {
+    "name": "Cargo rerouting exercises", "description": "Rehearse alternate port and rail schedules before a corridor closes; preparedness does not create access to hostile territory.",
+    "category": "logistics", "cost": 430, "requires": ["customs_interoperability", "supply_disruption_response"], "icon": "icon_trade",
+    "effects": {"trade_reach": 0.02, "supply": 0.018}
+  },
+  "maritime_maintenance_networks": {
+    "name": "Maritime maintenance networks", "description": "Coordinate dockyards, spare parts and civilian repair capacity so building replacement hulls takes less time.",
+    "category": "logistics", "cost": 500, "requires": ["port_throughput_control", "distributed_repair_reserves"], "icon": "icon_navy",
+    "effects": {"shipbuilding_speed": 0.05, "naval_speed": 0.012}
+  },
+  "reserve_training_cycles": {
+    "name": "Reserve training cycles", "description": "Maintain rotating instructors and standardised refresher courses instead of relearning basic training during mobilization.",
+    "category": "military", "cost": 300, "requires": ["territorial_defence_forces"], "icon": "icon_army_defend",
+    "effects": {"recruitment_speed": 0.03, "reinforcement_rate": 0.02}
+  },
+  "combat_recovery_protocols": {
+    "name": "Combat recovery protocols", "description": "Combine rest, unit reorganisation and forward maintenance so exhausted formations recover outside battle.",
+    "category": "military", "cost": 420, "requires": ["reserve_training_cycles", "mobile_maintenance"], "icon": "icon_army_defend",
+    "effects": {"organisation_recovery": 0.035, "support_recovery": 0.04}
+  },
+  "field_protection_engineering": {
+    "name": "Field protection engineering", "description": "Train units to construct dispersed shelters and protected positions with local materials before hostile fire arrives.",
+    "category": "military", "cost": 380, "requires": ["territorial_defence_forces", "industrial_metrology"], "icon": "icon_army_defend",
+    "effects": {"entrenchment_speed": 0.04, "army_defense": 0.01}
+  },
+  "dispersed_medical_logistics": {
+    "name": "Dispersed medical logistics", "description": "Connect evacuation points, medical stockpiles and repair teams without relying on one vulnerable rear hub.",
+    "category": "logistics", "cost": 530, "requires": ["combat_recovery_protocols", "public_health_surveillance"], "icon": "icon_building_hospital",
+    "effects": {"organisation_recovery": 0.03, "supply": 0.012}
+  },
+  "civil_military_reconstruction": {
+    "name": "Civil-military reconstruction planning", "description": "Prepare the handover from emergency repairs to civilian utilities so damaged regions rebuild without permanent mobilization.",
+    "category": "society", "cost": 650, "requires": ["low_waste_reconstruction", "field_protection_engineering", "fiscal_continuity_protocols"], "icon": "icon_stability",
+    "effects": {"reconstruction_speed": 0.045, "construction_speed": 0.02}
+  }
+}

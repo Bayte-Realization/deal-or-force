@@ -277,7 +277,8 @@ public partial class DealOrForceGame
         _situationLayer.Visible = false; _situationReturn = "";
         switch (item.Route)
         {
-            case SituationRoute.Inbox: _dealInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
+            case SituationRoute.Inbox: _assistanceInboxSelected = -1; _dealInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
+            case SituationRoute.Assistance: _dealInboxSelected = -1; _assistanceInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
             case SituationRoute.PeaceOffer: OpenWarLedger(); ShowWarLedgerDetail(item.TargetId); _situationReturn = "Wars"; break;
             case SituationRoute.Organization:
                 _selectedOrganization = item.TargetId; _conflictTab = 4; OpenScreen("Conflicts"); _situationReturn = "Conflicts"; break;
@@ -301,7 +302,7 @@ public partial class DealOrForceGame
     {
         var screen = item.Route switch
         {
-            SituationRoute.Inbox => "Diplomacy", SituationRoute.PeaceOffer => "Wars",
+            SituationRoute.Inbox or SituationRoute.Assistance => "Diplomacy", SituationRoute.PeaceOffer => "Wars",
             SituationRoute.Organization or SituationRoute.Conflict => "Conflicts", SituationRoute.Crises => "Laws",
             SituationRoute.Finance or SituationRoute.Market or SituationRoute.Construction => "Economy", _ => "Military"
         };

@@ -698,12 +698,18 @@ public static class SaveSystem
         public List<ArmyGroup> ArmyGroups = new();
         public List<Fleet> Fleets = new();
         public List<StrategicWar> Wars = new();
+        // Null only for older payloads: reconstruct their surviving outbreak evidence once.
+        public CivilWarBudgetState CivilWarBudget;
 
         /// <summary>Who is backing whom in somebody else's war (ProxyWars). Absent in older saves.</summary>
         public List<Sponsorship> Sponsorships = new();
         public List<InternationalOrganization> Organizations = new();
         public List<DealOffer> DealOffers = new();
         public int NextDealOfferId = 1;
+        public List<ForeignAssistanceRequest> AssistanceRequests = new();
+        public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
+        public int NextAssistanceRequestId = 1;
+        public int AssistanceLastTickDay = -1;
         /// <summary>The ground each country first held, and which countries' falls are decided
         /// (Movements). Neither was saved: a loaded campaign forgot every government in exile's
         /// homeland, and a client's world parted from its host's within a day, because the
@@ -804,10 +810,15 @@ public static class SaveSystem
             ArmyGroups = new List<ArmyGroup>(campaign.ArmyGroups),
             Fleets = new List<Fleet>(campaign.Fleets),
             Wars = new List<StrategicWar>(campaign.Wars),
+            CivilWarBudget = CivilWarOutbreak.Budget(campaign).Copy(campaign.ElapsedDays),
             Sponsorships = new List<Sponsorship>(campaign.Sponsorships),
             Organizations = new List<InternationalOrganization>(campaign.Organizations),
             DealOffers = campaign.DealOffers.Select(DealNegotiations.Copy).ToList(),
             NextDealOfferId = campaign.NextDealOfferId,
+            AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
+            AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
+            NextAssistanceRequestId = campaign.NextAssistanceRequestId,
+            AssistanceLastTickDay = campaign.AssistanceLastTickDay,
             Homelands = campaign.Homelands.ToDictionary(pair => pair.Key, pair => new List<int>(pair.Value)),
             Fallen = campaign.Fallen.OrderBy(id => id).ToList(),
             NextOrganizationId = campaign.NextOrganizationId,
@@ -886,6 +897,13 @@ public static class SaveSystem
             campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
                 HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
                 ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState);
+            ForeignAssistance.Restore(campaign, AssistanceRequests, AssistanceCooldowns,
+                NextAssistanceRequestId, AssistanceLastTickDay);
+            campaign.CivilWarBudget = CivilWarBudget?.Copy(campaign.ElapsedDays) ??
+                CivilWarBudgetState.FromLegacy(campaign);
+            // Both memories were introduced together. Never infer new state while loading
+            // a current payload; its negative military date can be an intentional value.
+            if (CivilWarBudget is null) CivilWarOutbreak.RestoreMilitaryCoupMemory(campaign);
 
             // The state list was just replaced wholesale, so the ownership index built
             // against the bootstrap campaign no longer describes it.

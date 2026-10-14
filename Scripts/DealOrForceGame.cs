@@ -65,6 +65,7 @@ public partial class DealOrForceGame : Control
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         Input.MouseMode = Input.MouseModeEnum.Visible;
         WrapGuard.Install(GetTree());
+        InterfaceInteractionGuard.Install(GetTree());
         ControlSkin.Apply();
         ApplyCustomCursors();
         // A campaign's own options are read from whichever campaign is on screen now - asked
@@ -108,6 +109,7 @@ public partial class DealOrForceGame : Control
     public override void _Process(double delta)
     {
         if (_isLoading || !_startupComplete) return;
+        BindStepCompletion();
         RefreshMediaPreview();
         // Before any of the early returns below it: a panel is read while the game is
         // paused, and a caption squeezed to nothing on a paused screen is still squeezed.
@@ -179,8 +181,6 @@ public partial class DealOrForceGame : Control
                 }
                 // The rest of this step belongs to the next frame.
                 if (!finished) { _applyingNetworkCommand = false; break; }
-                // Mod hooks belong to the same failure boundary as the day's simulation.
-                if (_campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(_campaign);
             }
             catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
             {
@@ -194,19 +194,52 @@ public partial class DealOrForceGame : Control
                     path, exception.Message);
                 return;
             }
-            // A hook called "on day advanced" is called when a day advances. At the shipped
-            // hourly step a call per step would fire it twenty-four times a day, which would
-            // silently multiply by twenty-four whatever every mod in the world does in it.
-            if (_networkConnected && _networkIsHost && _networkGameStarted)
-            {
-                _applyingNetworkCommand = false;
-                Rpc(nameof(ClientAdvanceNetworkDay), _campaign.ElapsedDays);
-                // And every so often, what the world actually looks like, so a client that
-                // has quietly drifted finds out within days instead of never.
-                BroadcastNetworkChecksum();
-            }
+            _applyingNetworkCommand = false;
+            if (_campaign.SimulationFault.Length > 0) return;
             MaybeAutosave();
             days++;
+        }
+    }
+
+    private Campaign _stepCompletionCampaign;
+
+    private void BindStepCompletion()
+    {
+        // Clients advance synchronously in their RPC loop, which owns their mod hook.
+        // Local games and LAN hosts can also finish a step from a save or a UI command.
+        var campaign = IsNetworkClient ? null : _campaign;
+        if (ReferenceEquals(campaign, _stepCompletionCampaign)) return;
+        if (_stepCompletionCampaign is not null) _stepCompletionCampaign.StepCompleted -= CampaignStepCompleted;
+        _stepCompletionCampaign = campaign;
+        if (campaign is not null) campaign.StepCompleted += CampaignStepCompleted;
+    }
+
+    private void CampaignStepCompleted(Campaign campaign)
+    {
+        if (!ReferenceEquals(campaign, _campaign) || IsNetworkClient) return;
+        var wasApplying = _applyingNetworkCommand;
+        _applyingNetworkCommand = true;
+        try
+        {
+            // One hook for a newly opened day, including a day drained by saving.
+            if (campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(campaign);
+        }
+        catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
+        {
+            _dayAccumulator = 0;
+            campaign.BlockSimulation(exception.Message);
+            DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
+            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, campaign, exception.Message);
+            ShowCampaignFault(Simulation.Loc.Format(
+                "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", campaign.Date.Display()),
+                path, exception.Message);
+            return;
+        }
+        finally { _applyingNetworkCommand = wasApplying; }
+        if (_networkConnected && _networkIsHost && _networkGameStarted)
+        {
+            Rpc(nameof(ClientAdvanceNetworkDay), campaign.ElapsedDays);
+            BroadcastNetworkChecksum();
         }
     }
 
@@ -227,6 +260,7 @@ public partial class DealOrForceGame : Control
     public override void _Input(InputEvent inputEvent)
     {
         if (_mediaLibraryLayer is { Visible: true }) { HandleMediaLibraryInput(inputEvent); return; }
+        if (HandleMapControlsInput(inputEvent)) return;
         if (HandleSituationEscape(inputEvent)) return;
         if (IsInstanceValid(_dealComposer))
         {
@@ -428,6 +462,7 @@ public partial class DealOrForceGame : Control
     public override void _UnhandledInput(InputEvent inputEvent)
     {
         if (_mediaLibraryLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
+        if (_mapModeDrawerLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         // A diplomatic modal must also shield the map's unhandled keyboard shortcuts.
         if (IsInstanceValid(_dealComposer) || _situationLayer is { Visible: true } && !inputEvent.IsActionPressed("ui_cancel"))
         { GetViewport().SetInputAsHandled(); return; }
@@ -639,11 +674,19 @@ public partial class DealOrForceGame : Control
     {
         var wanted = MainMenuScene.Wanted;
         MainMenuScene.Wanted = MenuIntent.None;
+        var modAction = MainMenuScene.WantedModAction;
+        MainMenuScene.WantedModAction = "";
         _menuLayer.Visible = false;
 
         switch (wanted)
         {
             case MenuIntent.NewCampaign: OpenScenarioLibrary(); break;
+            case MenuIntent.ModAction:
+                _modLoader.TryRunFrontendAction(modAction, out var modNote);
+                GD.Print("[mod action] " + Tr(modNote));
+                OpenScenarioLibrary();
+                ShowModFrontendResult(modNote);
+                break;
             case MenuIntent.LoadLatest: LoadLatestSave(); break;
             case MenuIntent.LoadSlot:
                 var slot = MainMenuScene.WantedSlot;
@@ -700,6 +743,17 @@ public partial class DealOrForceGame : Control
         rows.AddChild(_modStatus);
 
         rows.AddChild(ActionButton("Singleplayer", OpenScenarioLibrary, 330, 46, true));
+        var modActions = ModFrontendMenu.Create(_modLoader.FrontendActions, id =>
+        {
+            _modLoader.TryRunFrontendAction(id, out var note);
+            GD.Print("[mod action] " + Tr(note));
+            OpenScenarioLibrary();
+            ShowModFrontendResult(note);
+        });
+        modActions.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
+        modActions.OffsetLeft = 24; modActions.OffsetRight = 214;
+        modActions.OffsetTop = -70; modActions.OffsetBottom = -34;
+        _menuLayer.AddChild(modActions);
         rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
 
         var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
@@ -725,6 +779,13 @@ public partial class DealOrForceGame : Control
             Ui.Colour("text.hint"));
         _navigationHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_navigationHint);
+        var version = Title(GameBuildInfo.VersionLabel, 12, Ui.Colour("text.caption"));
+        version.Name = "GameVersion"; version.HorizontalAlignment = HorizontalAlignment.Right;
+        version.MouseFilter = MouseFilterEnum.Ignore; version.ClipText = true;
+        version.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
+        version.OffsetLeft = 24; version.OffsetRight = -24;
+        version.OffsetTop = -40; version.OffsetBottom = -18;
+        _menuLayer.AddChild(version);
     }
 
     private void BuildHud()
@@ -827,54 +888,7 @@ public partial class DealOrForceGame : Control
         }
         UpdateSpeedButtons();
 
-        var navigation = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
-        _hudNavigationPanel = navigation;
-        navigation.Name = "CampaignNavigation";
-        Ui.Place(navigation, "hud.navigation");
-        var navMargin = Margin(navigation, 4, 6);
-        var navScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        navMargin.AddChild(navScroll);
-        var nav = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        nav.AddThemeConstantOverride("separation", 6);
-        navScroll.AddChild(nav);
-
-        // Each screen says what it is, under its icon, and what it is for when rested on. The
-        // rail used to be thirteen bare pictures: a player new to the game had to hover every
-        // one to find the budget. The buttons are filed in groups - the country, its economy,
-        // its forces, the world - with the group's name above them.
-        _screenButtons.Clear();
-        var lastGroup = "";
-        foreach (var item in CampaignUiCatalog.NavigationItems)
-        {
-            var captured = item.Screen;
-            var navWidth = Mathf.Clamp(InterfaceSkin.Metric("shell.navigation_size", 70), 28, 120);
-            var navHeight = Mathf.Clamp(InterfaceSkin.Metric("shell.navigation_height", 50), 28, 96);
-            if (item.Group.Length > 0 && item.Group != lastGroup)
-            {
-                var caption = Title(item.Group, 9, Ui.Colour("text.caption"));
-                caption.HorizontalAlignment = HorizontalAlignment.Center;
-                caption.SetMeta(LocUpperMeta, true);
-                caption.Text = caption.Text.ToUpperInvariant();
-                caption.Name = "NavGroup" + item.Group.Replace(" ", "");
-                if (lastGroup.Length > 0) nav.AddChild(new HSeparator { CustomMinimumSize = new Vector2(0, 4) });
-                nav.AddChild(caption);
-                lastGroup = item.Group;
-            }
-            var button = ActionButton(item.Short, () => ToggleCampaignScreen(captured), navWidth, navHeight,
-                false, SpriteCatalog.TextureOf($"icon_{item.Icon}",
-                    $"res://game/gfx/interface/icons/icon_{item.Icon}.png"));
-            button.Name = "Nav" + item.Screen.Replace(" ", "");
-            button.SetMeta("icon_above", true);
-            StyleButton(button, false);
-            button.AddThemeFontSizeOverride("font_size", 10);
-            button.AddThemeConstantOverride("icon_max_width", (int)Mathf.Clamp(navHeight * 0.46f, 14f, 30f));
-            button.ClipText = true;
-            Tip(button, Tr(item.Label) + "\n" + Tr(item.Help));
-            button.AccessibilityName = Tr(item.Label);
-            _screenButtons[captured] = button;
-            nav.AddChild(button);
-        }
-        UpdateScreenButtons();
+        BuildCampaignNavigation();
 
         _sidePanel = TexturedPanel(_hudLayer);
         _sidePanel.Name = "CampaignDossier";
@@ -1110,6 +1124,13 @@ public partial class DealOrForceGame : Control
         if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
         if (_productionLayer is not null) _productionLayer.Visible = false;
         if (_supportLayer is not null) _supportLayer.Visible = false;
+        RefreshSideScreenContents(screen);
+    }
+
+    private void RefreshSideScreenContents(string screen)
+    {
+        _sideScreenBuiltKey = $"{screen}|{_dossierTab}|{_campaign?.Player?.Id}|" +
+            (_campaign is null ? 0 : _campaign.ElapsedDays / SideScreenInterval(screen));
         _openScreen = screen;
         _sidePanel.Visible = true;
         SetArmyPanelVisible(false);
@@ -1521,22 +1542,27 @@ public partial class DealOrForceGame : Control
         RefreshSituationRoom();
         RefreshStrategicHud();
         RefreshBattleDossier();
-        if (_ledgerLayer is { Visible: true }) RefreshLedger();
+        if (_ledgerLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_ledgerLayer)) RefreshLedger();
         RefreshRecruitment();
-        if (_stateAffairsLayer is { Visible: true }) RefreshStateAffairs();
+        if (_stateAffairsLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_stateAffairsLayer)) RefreshStateAffairs();
+        // These are retained labels/buttons: updating them does not destroy numeric input.
         if (_sovereignFinanceLayer is { Visible: true }) RefreshSovereignFinanceWorkspace();
-        if (_warLedgerLayer is { Visible: true }) RefreshWarLedger();
-        if (_diplomacyLayer is { Visible: true }) RefreshDiplomacyScreen();
-        if (_policyLayer is { Visible: true }) RefreshPolicyWorkspace();
-        if (_conflictsLayer is { Visible: true }) RefreshConflictsScreen();
-        if (_tradeScreenLayer is { Visible: true }) RefreshTradeScreen();
-        if (_productionLayer is { Visible: true }) RefreshProductionScreen();
-        if (_supportLayer is { Visible: true }) RefreshSupportScreen();
-        if (_researchLayer is { Visible: true }) RefreshResearchScreen();
+        if (_warLedgerLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_warLedgerLayer)) RefreshWarLedger();
+        if (_diplomacyLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_diplomacyLayer)) RefreshDiplomacyScreen();
+        if (_policyLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_policyLayer)) RefreshPolicyWorkspace();
+        if (_conflictsLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_conflictsLayer)) RefreshConflictsScreen();
+        if (_tradeScreenLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_tradeScreenLayer)) RefreshTradeScreen();
+        if (_productionLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_productionLayer)) RefreshProductionScreen();
+        if (_supportLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_supportLayer)) RefreshSupportScreen();
+        if (_researchLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_researchLayer)) RefreshResearchScreen();
         if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
         else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions" or "Laws" &&
                  SideScreenDue())
-            OpenScreen(_openScreen);
+        {
+            var scroll = _dossierScroll.ScrollVertical;
+            RefreshSideScreenContents(_openScreen);
+            Callable.From(() => { if (_dossierScroll is not null) _dossierScroll.ScrollVertical = scroll; }).CallDeferred();
+        }
     }
 
     // What the side panel was last built for. Refresh runs many times a second; the panel
@@ -1557,6 +1583,7 @@ public partial class DealOrForceGame : Control
 
     private bool SideScreenDue()
     {
+        if (InterfaceInteractionGuard.Busy(_sidePanel)) return false;
         // Never under the player's fingers: a rebuild takes the text field they are typing in.
         if (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit or SpinBox &&
             _sidePanel.IsAncestorOf(GetViewport().GuiGetFocusOwner())) return false;
@@ -2018,6 +2045,7 @@ public partial class DealOrForceGame : Control
             if (!GodotObject.IsInstanceValid(button)) continue;
             StyleButton(button, screen == open);
         }
+        RefreshMapVisualToggles();
     }
 
     private Control FullLayer(string name)
@@ -2387,6 +2415,7 @@ public partial class DealOrForceGame : Control
     {
         RefreshLocalisedText(this);
         UpdateMapModeButtons(_activeMapMode);
+        LayoutCampaignNavigation();
         _strategicHudFingerprint = int.MinValue;
         RefreshStrategicHud();
 

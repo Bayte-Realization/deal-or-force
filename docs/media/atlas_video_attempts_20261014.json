@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-14",
+  "model": "video/gemini-omni-flash",
+  "prompt": "Animate this exact abstract atlas artwork in one continuous locked-camera shot lasting 8 seconds, 16:9. Keep all existing contour lines, paper geometry, slate/brass palette and blank central region fixed. Only a handful of the existing amber edge signal dots breathe softly in brightness, in a slow staggered cycle; very faint paper-grain light drifts like a room lamp, not clouds across a real map. The final frame returns precisely to the initial quiet artwork for looping. Subtle contemplative postmodern instrument atmosphere, no cinematic zoom, cuts, added words, letters, countries, neon, objects or flashing alarm. Generate a silent clip: no music, speech, ambience or sound effects.",
+  "sourceImage": "https://cdn.creativeclaw.co/u/c8554121/images/f89ef419-c9f1-48a4-a6f7-6f12b0ee0f4a.png",
+  "settings": {
+    "duration": 8,
+    "aspect_ratio": "16:9",
+    "resolution": "720p",
+    "agentic_prompting": false,
+    "reviewMode": "auto"
+  },
+  "attempts": [
+    {
+      "jobId": "cdd6829a-634c-4bbf-a1a7-e93f1c5ffb1e",
+      "status": "failed",
+      "errorCode": "provider_400",
+      "errorCategory": "invalid_input",
+      "retryable": false,
+      "requiresUserConfirmation": true,
+      "generateToolReported": {
+        "creditsCharged": 120,
+        "creditsRefunded": 0
+      },
+      "accountLedger": [
+        {
+          "charged": 0,
+          "refunded": 0
+        }
+      ],
+      "notes": "Included unsupported extras.generate_audio:false."
+    },
+    {
+      "jobId": "28edd294-3206-4938-98ff-182ccf7bc89c",
+      "status": "failed",
+      "errorCode": "provider_400",
+      "errorCategory": "invalid_input",
+      "retryable": false,
+      "requiresUserConfirmation": true,
+      "generateToolReported": {
+        "creditsCharged": 120,
+        "creditsRefunded": 0
+      },
+      "accountLedger": [
+        {
+          "charged": 0,
+          "refunded": 0
+        }
+      ],
+      "notes": "Single user-authorized corrected attempt, extras omitted entirely; same error."
+    }
+  ],
+  "conclusion": "No completed output. Tool charge fields contradict account ledger. Verified ledger shows zero charged/refunded for both; balance unchanged. No further retry or provider switch. User-authorized bug report sent to CreativeClaw."
+}

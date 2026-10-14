@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using DealOrForce.Simulation;
 using Godot;
 
 namespace DealOrForce;
@@ -15,38 +13,10 @@ namespace DealOrForce;
 /// </summary>
 public partial class DealOrForceGame
 {
-    private readonly List<(Button Button, string Setting)> _weatherToggles = new();
+    // Compatibility entry points for source overlays that used the older helper. The HUD
+    // and picker share one registry now; this adapter does not add another row of buttons.
+    private Button WeatherToggle(string setting, string label, string tooltip, float width) =>
+        MapVisualToggle(setting, label, tooltip, width);
 
-    /// <summary>A toggle for one weather option ("map_clouds" or "map_mist").</summary>
-    private Button WeatherToggle(string setting, string label, string tooltip, float width)
-    {
-        var button = ActionButton(label, () => FlipWeather(setting), width, 34);
-        button.Name = "WeatherToggle_" + setting;
-        button.ToggleMode = true;
-        button.TooltipText = Ui.Tip(Tr(tooltip));
-        _weatherToggles.Add((button, setting));
-        StyleWeatherToggle(button, setting);
-        return button;
-    }
-
-    private void FlipWeather(string setting)
-    {
-        SettingsCatalog.Store(setting, !SettingsCatalog.Flag(setting));
-        ApplySetting(setting);
-        RefreshWeatherToggles();
-    }
-
-    /// <summary>Every weather button, after the option changed wherever it was changed from.</summary>
-    private void RefreshWeatherToggles()
-    {
-        _weatherToggles.RemoveAll(entry => !IsInstanceValid(entry.Button));
-        foreach (var (button, setting) in _weatherToggles) StyleWeatherToggle(button, setting);
-    }
-
-    private void StyleWeatherToggle(Button button, string setting)
-    {
-        var on = SettingsCatalog.Flag(setting);
-        button.SetPressedNoSignal(on);
-        StyleButton(button, on);
-    }
+    private void RefreshWeatherToggles() => RefreshMapVisualToggles();
 }

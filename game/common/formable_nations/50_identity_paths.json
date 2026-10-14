@@ -1,0 +1,32 @@
+// Alternate-history founding access, not territorial entitlement or present-day consent.
+// These overlays retain every territory, stability, cost, politics and treaty check.
+{
+  "soviet_union": {
+    "description": "A renewed union of the fifteen republics, founded by any of their successor governments or a culturally related successor state. Socialist institutions, the complete foundation territory, peace and a stable mandate remain mandatory.",
+    "eligible_tags": ["RUS", "BLR", "UKR", "KAZ", "UZB", "TKM", "TJK", "KGZ", "ARM", "AZE", "GEO", "MDA", "LVA", "LTU", "EST"],
+    "eligible_cultures": ["russian", "belarusian", "ukrainian", "kazakh", "uzbek", "turkmen", "tajik", "kyrgyz", "armenian", "azerbaijani", "georgian", "moldovan", "latvian", "lithuanian", "estonian"],
+    "supersedes": ["union_state", "eurasian_union", "central_asian_union", "transcaucasia"],
+    "peaceful_accession": true, "subject_integration": true
+  },
+  "union_state": {"eligible_cultures": ["russian", "belarusian"]},
+  "yugoslavia": {
+    "eligible_tags": ["SRB", "HRV", "SVN", "BIH", "MNE", "MKD"],
+    "eligible_cultures": ["serbian", "croatian", "slovene", "bosniak", "montenegrin", "macedonian"],
+    "supersedes": ["serbia_montenegro"],
+    "peaceful_accession": true, "subject_integration": true, "ai_foundation": true
+  },
+  "czechoslovakia": {"eligible_cultures": ["czech", "slovak"]},
+  "united_korea": {"eligible_cultures": ["korean"]},
+  "china_reunified": {"eligible_cultures": ["han", "cantonese", "hakka", "chinese_diaspora"]},
+  "iberian_union": {"eligible_cultures": ["spanish", "portuguese", "catalan", "galician", "basque"]},
+  "turkic_union": {"eligible_culture_groups": ["turkic"]},
+  "persian_union": {"eligible_cultures": ["persian", "tajik", "pashtun", "hazara", "gilaki", "lur", "talysh"]},
+  "caliphate": {"required_religion_groups": ["muslim"], "minimum_religion_share": 0.5},
+  "moldova_reunited": {"eligible_cultures": ["moldovan", "romanian"]},
+  "georgia_restored": {"eligible_cultures": ["georgian", "abkhaz", "ossetian"]},
+  "somalia_reunited": {"eligible_cultures": ["somali"]},
+  "yemen_reunited": {"eligible_cultures": ["arab_yemeni"]},
+  "libya_reunited": {"eligible_cultures": ["arab_maghrebi", "berber"]},
+  "syria_reunited": {"eligible_cultures": ["arab_levantine", "kurdish", "druze_people", "assyrian"]},
+  "sudan_reunited": {"eligible_cultures": ["arab_sudanese", "fur", "nuba", "beja"]}
+}

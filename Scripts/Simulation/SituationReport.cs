@@ -17,7 +17,7 @@ public sealed partial class Defines
 
 public enum SituationPriority { Critical, Warning, Awaiting, Opportunity }
 public enum SituationArea { Foreign, Society, Economy, Forces, Development }
-public enum SituationRoute { Inbox, PeaceOffer, Organization, Crises, Finance, Market, Army, Conflict, Construction }
+public enum SituationRoute { Inbox, PeaceOffer, Organization, Crises, Finance, Market, Army, Conflict, Construction, Assistance }
 public sealed record SituationFact(string Label, string Value);
 public sealed record SituationItem(string Id, SituationPriority Priority, SituationArea Area,
     string Title, string Summary, string[] Causes, string[] Consequences, SituationFact[] Facts,
@@ -39,6 +39,21 @@ public static class SituationReport
 
         if (!observer)
         {
+            foreach (var request in c.AssistanceRequests.Where(r => r.State == ForeignAssistanceState.Pending &&
+                         r.DonorId == n.Id && r.ExpiresDay > c.ElapsedDays).OrderBy(r => r.ExpiresDay).ThenBy(r => r.Id).Take(8))
+            {
+                var from = c.NationById(request.RequesterId);
+                if (from is null) continue;
+                var preview = ForeignAssistance.Assess(c, request.RequesterId, request.DonorId, request.Amount, request.WarId);
+                items.Add(new("assistance:" + request.Id, Due(request.ExpiresDay), SituationArea.Foreign,
+                    Loc.Format("Financial request from {0}", from.DisplayName), T("The donor's approval is still missing."),
+                    new[] { T("Another government has asked for funds. The request reserves no money.") },
+                    new[] { T("A cash grant is not a loan, arms shipment or entry into a war."),
+                        T("Approval rechecks current cash and cannot exceed the amount you confirmed.") },
+                    new[] { F("Requested", Fmt.Money(request.Amount)), F("Available package now", Fmt.Money(preview.PayableAmount)),
+                        F("Answer within", Loc.Format("{0} days", request.ExpiresDay - c.ElapsedDays)) },
+                    SituationRoute.Assistance, T("Review the financial request"), request.Id, DeadlineDay: request.ExpiresDay));
+            }
             // Existing obligations stay visible even when new deals are disabled: decline is still legal.
             foreach (var offer in c.DealOffers.Where(o => o.Pending && o.ToId == n.Id && o.ExpiresDay > c.ElapsedDays)
                          .OrderBy(o => o.ExpiresDay).ThenBy(o => o.Id).Take(8))

@@ -178,13 +178,23 @@ public partial class DealOrForceGame
                 break;
 
             case "map_clouds":
+                ApplyLegacyWeatherMaster();
                 if (_globe is not null) _globe.CloudsShown = SettingsCatalog.Flag("map_clouds");
                 RefreshWeatherToggles();
+                RefreshMapVisualToggles();
                 break;
 
             case "map_mist":
+                ApplyLegacyWeatherMaster();
                 if (_globe is not null) _globe.MistShown = SettingsCatalog.Flag("map_mist");
                 RefreshWeatherToggles();
+                RefreshMapVisualToggles();
+                break;
+
+            case "map_weather":
+                ApplyLegacyWeatherMaster();
+                RefreshWeatherToggles();
+                RefreshMapVisualToggles();
                 break;
 
             case "map_smoothing":
@@ -196,6 +206,7 @@ public partial class DealOrForceGame
                 var flat = string.Equals(SettingsCatalog.Chosen("projection"), "flat",
                     StringComparison.OrdinalIgnoreCase);
                 _globe?.SetFlatMap(flat);
+                if (_globe is not null) RefreshProjectionControls(_globe.FlatProjection);
                 break;
 
             // ---- what it looks like --------------------------------------------------
@@ -242,6 +253,14 @@ public partial class DealOrForceGame
                 ApplyVolumes();
                 break;
         }
+    }
+
+    // The current base game has independent visual layers. A legacy mod may still declare
+    // the old master; absence must mean "on", not Flag's missing-setting false fallback.
+    private void ApplyLegacyWeatherMaster()
+    {
+        if (_globe is not null)
+            _globe.WeatherEnabled = SettingsCatalog.Of("map_weather") is null || SettingsCatalog.Flag("map_weather");
     }
 
     private static int Whole(string id) =>

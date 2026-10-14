@@ -32,8 +32,23 @@ public sealed partial class GlobePresentation
     private DirectionalLight3D _weatherSun;
     private Node3D _weatherWorld;
     private double _weatherClock;
-    private bool _cloudsOn = true;
-    private bool _mistOn = true;
+    private bool _weatherEnabled = true;
+    private bool _cloudsShown = true;
+    private bool _mistShown = true;
+
+    /// <summary>Visual clouds only; a legacy WeatherEnabled master never overwrites this preference.</summary>
+    public bool CloudsShown
+    {
+        get => _cloudsShown;
+        set { if (_cloudsShown == value) return; _cloudsShown = value; UpdateWeather(0); }
+    }
+
+    /// <summary>The decorative mist only; province vision and the hidden-ground tint are unchanged.</summary>
+    public bool MistShown
+    {
+        get => _mistShown;
+        set { if (_mistShown == value) return; _mistShown = value; UpdateWeather(0); }
+    }
 
     /// <summary>How high the camera is, in the units the weather fades by (MapAmbience listens to it too).</summary>
     public float ViewHeight => ViewDistance;
@@ -43,25 +58,11 @@ public sealed partial class GlobePresentation
         ? (_flatY * 18f, Mathf.Wrap(_flatX * 18f, -180f, 180f))
         : (-Mathf.RadToDeg(_pitch), Mathf.Wrap(Mathf.RadToDeg(_yaw) - 180f, -180f, 180f));
 
-    /// <summary>Clouds on or off (the "map_clouds" setting and the map bar's button).</summary>
-    public bool CloudsShown
-    {
-        get => _cloudsOn;
-        set { _cloudsOn = value; UpdateWeather(0); }
-    }
-
-    /// <summary>The fog-of-war mist on or off (the "map_mist" setting). The fog itself stays: only its look goes.</summary>
-    public bool MistShown
-    {
-        get => _mistOn;
-        set { _mistOn = value; UpdateWeather(0); }
-    }
-
-    /// <summary>Both at once, as the single option before them did.</summary>
+    /// <summary>Legacy master gate for both layers, without changing their individual saved preferences.</summary>
     public bool WeatherEnabled
     {
-        get => _cloudsOn || _mistOn;
-        set { _cloudsOn = _mistOn = value; UpdateWeather(0); }
+        get => _weatherEnabled;
+        set { if (_weatherEnabled == value) return; _weatherEnabled = value; UpdateWeather(0); }
     }
 
     private void CreateWeather(Node3D world)
@@ -141,13 +142,13 @@ public sealed partial class GlobePresentation
                        _weatherWorld.GetNodeOrNull<Node3D>("MovingClouds") is { Visible: true };
         var cloudFull = defines?.CloudFullDistance ?? 10.5f;
         var cloudClear = defines?.CloudClearDistance ?? 7.6f;
-        var clouds = !_cloudsOn || replaced || cloudFull <= cloudClear ? 0f
+        var clouds = !_weatherEnabled || !_cloudsShown || replaced || cloudFull <= cloudClear ? 0f
             : Mathf.SmoothStep(cloudClear, cloudFull, distance);
 
         var mistFull = defines?.MistFullDistance ?? 6.0f;
         var mistClear = defines?.MistClearDistance ?? 8.2f;
         var fogged = FogOfWarActive && _campaign?.Player is { IsHuman: true } && _visionTexture is not null;
-        var mist = !_mistOn || !fogged || mistClear <= mistFull ? 0f
+        var mist = !_weatherEnabled || !_mistShown || !fogged || mistClear <= mistFull ? 0f
             : 1f - Mathf.SmoothStep(mistFull, mistClear, distance);
 
         // Weather keeps moving while the game is paused, only slower: a frozen sky reads as a

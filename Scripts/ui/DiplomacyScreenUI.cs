@@ -241,6 +241,9 @@ public partial class DealOrForceGame
             "Lay a table both sides put something on: cash, provinces, promises. Review before sending."));
         _diplomacyAidButton = AddDiplomacyAction("AGREEMENTS", "Send aid",
             () => SendAidTo(DiplomacyTarget(), _diplomacyFeedback));
+        _diplomacyRequestAssistance = AddDiplomacyAction("AGREEMENTS", "Request funds",
+            () => RequestAssistanceFrom(DiplomacyTarget()));
+        _diplomacyRequestAssistance.Name = "RequestFinancialAssistance";
         _diplomacyEmbargoButton = AddDiplomacyAction("AGREEMENTS", "Embargo",
             () => ToggleEmbargoOn(DiplomacyTarget(), _diplomacyFeedback));
         AddIntelNetworkAction();
@@ -1110,6 +1113,7 @@ public partial class DealOrForceGame
     private void RefreshDiplomacyActions(Nation player, Nation nation)
     {
         RefreshAgreementButtons(nation, _diplomacyTradeButton, _diplomacyPactButton, _diplomacyAidButton, _diplomacyEmbargoButton);
+        RefreshAssistanceAction(nation);
         RefreshSubmissionButtons(nation, _diplomacySubmissionActions, _diplomacySubmissionButtons);
         RefreshDiplomaticPeaceButton(_diplomacyPeaceButton, nation);
         RefreshIntelNetworkAction(player, nation);

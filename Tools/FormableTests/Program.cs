@@ -12,12 +12,23 @@ static class Program
     {
         if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
         if (args.Contains("--integrity-only")) { CampaignIntegrityTests.Run(); return; }
+        if (args.Contains("--living-world-fingerprint-only")) { ClaudeStateFingerprintTests.Run(); return; }
         if (args.Contains("--deals-only")) { DealTests.Run(); return; }
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
         if (args.Contains("--music-only")) { MusicSituationTests.Run(); return; }
         if (args.Contains("--weather-only")) { WeatherReadabilityTests.Run(); return; }
         if (args.Contains("--media-only")) { MediaLibraryTests.Run(); return; }
+        if (args.Contains("--responsive-hud-only")) { ResponsiveHudLayoutTests.Run(); return; }
+        if (args.Contains("--identity-only")) { IdentityResearchTests.Run(); return; }
+        if (args.Contains("--civil-war-budget-only")) { CivilWarBudgetTests.Run(); return; }
+        if (args.Contains("--cue-queue-only")) { StrategicCueQueueTests.Run(); return; }
+        if (args.Contains("--network-cadence-only")) { NetworkSyncCadenceTests.Run(); return; }
+        if (args.Contains("--snapshot-delivery-only")) { NetworkSnapshotDeliveryTests.Run(); return; }
+        if (args.Contains("--staged-boundary-only")) { StagedStepBoundaryTests.Run(); return; }
+        if (args.Contains("--mod-frontend-only")) { ModFrontendActionTests.Run(); return; }
+        if (args.Contains("--assistance-presentation-only")) { ForeignAssistancePresentationTests.Run(); return; }
+        if (args.Contains("--foreign-assistance-only")) { ForeignAssistanceTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
         if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
         if (args.Contains("--households-only")) { HouseholdTests.Run(); return; }
@@ -36,6 +47,7 @@ static class Program
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
         if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
         DynamicAllianceTests.Run();
+        ClaudeStateFingerprintTests.Run();
         CampaignIntegrityTests.Run();
         TerritorialClaimsTests.Run();
         OrganizationTests.Run();
@@ -79,6 +91,16 @@ static class Program
         MusicSituationTests.Run();
         WeatherReadabilityTests.Run();
         MediaLibraryTests.Run();
+        ResponsiveHudLayoutTests.Run();
+        IdentityResearchTests.Run();
+        CivilWarBudgetTests.Run();
+        StrategicCueQueueTests.Run();
+        NetworkSyncCadenceTests.Run();
+        NetworkSnapshotDeliveryTests.Run();
+        StagedStepBoundaryTests.Run();
+        ModFrontendActionTests.Run();
+        ForeignAssistancePresentationTests.Run();
+        ForeignAssistanceTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();
         var terrainErrors = new List<string>();

@@ -82,6 +82,8 @@ public static class FrontManager
     private static readonly HashSet<int> PostSet = new();
     private static readonly Dictionary<int, float> Need = new();
     private static readonly HashSet<int> Refused = new();
+    private static readonly Dictionary<int, int> DonorComponents = new();
+    private static readonly Queue<int> DonorFrontier = new();
 
     /// <summary>Re-postings made since the campaign began, for the bench and the console.</summary>
     public static int Reposts { get; private set; }
@@ -228,6 +230,7 @@ public static class FrontManager
         foreach (var list in Allocated.Values) { list.Clear(); Spare.Push(list); }
         Allocated.Clear();
         Loose.Clear();
+        DonorComponents.Clear();
 
         // Who is holding what: a division counts for the post it is going to, or the post it
         // is standing on when what it is going to is not a post - an advance's objective is
@@ -245,11 +248,28 @@ public static class FrontManager
             if (!Allocated.TryGetValue(post, out var there)) Allocated[post] = there = Take();
             there.Add(army);
         }
-        if (holders == 0) return;
+        var today = campaign.ElapsedDays;
+        var mayBorrow = war is not null && line is null &&
+            (!nation.IsHuman || Delegation.Holds(nation, Delegation.Command));
+        var referenceCount = holders;
+        if (holders == 0)
+        {
+            if (!mayBorrow) return;
+            // An empty line is precisely when a ready reserve is needed. There may be no
+            // defender yet from which to estimate a division's power, so use the available
+            // field formations, without counting them as holders until actually posted.
+            foreach (var army in campaign.Armies)
+            {
+                if (!ReadyReserve(campaign, army, nation, war, today, advancesToo: true)) continue;
+                referenceCount++;
+                power += army.Power;
+            }
+            if (referenceCount == 0) return;
+        }
 
         // What each post is up against, in divisions: one for being on the front at all, and
         // one more for every division's worth of the enemy standing next to it.
-        var typical = MathF.Max(0.01f, power / holders);
+        var typical = MathF.Max(0.01f, power / referenceCount);
         Need.Clear();
         var totalNeed = 0f;
         foreach (var post in Posts)
@@ -263,7 +283,6 @@ public static class FrontManager
         }
 
         var budget = defines.FrontRepostsPerLook + (int)(Posts.Count * defines.FrontRepostsPerPost);
-        var today = campaign.ElapsedDays;
         var quota = (int)MathF.Ceiling(holders / (float)Posts.Count);
 
         // First the holes, the most threatened first.
@@ -276,9 +295,11 @@ public static class FrontManager
         {
             if (budget <= 0) break;
             if (Count(hole) > 0) continue;
-            // The nearest donor may have no road to the hole - a salient, a pocket - and the
-            // next nearest may; a few are tried before the hole is left for tomorrow.
+            // The nearest donor may be in a pocket. After one route failure, refuse the
+            // whole disconnected component for this hole: trying the same four trapped
+            // divisions every day otherwise hides a reachable fifth division forever.
             Refused.Clear();
+            var connectivityChecked = false;
             var filled = false;
             for (var attempt = 0; attempt < 4; attempt++)
             {
@@ -286,6 +307,11 @@ public static class FrontManager
                 if (mover is null) break;
                 if (Repost(campaign, nation, mover, hole)) { budget--; filled = true; break; }
                 Refused.Add(mover.Id);
+                if (!connectivityChecked)
+                {
+                    RefuseDisconnectedDonors(campaign, nation, hole);
+                    connectivityChecked = true;
+                }
             }
             // Nobody on the line to spare: the reserve is what a reserve is for. A hole the enemy
             // can walk into is filled from the nearest division held back for this war before
@@ -293,7 +319,7 @@ public static class FrontManager
             // in reserve in one province with five posts of its line held by nobody.
             // Only a staff the country has handed its army to: a player's reserve and advances
             // are the player's orders, and the staff does not rewrite them.
-            if (!filled && war is not null && line is null && (!nation.IsHuman || Delegation.Holds(nation, Delegation.Command)))
+            if (!filled && mayBorrow)
                 for (var attempt = 0; attempt < 3; attempt++)
                 {
                     // A hole with the enemy standing next to it may be closed by an advance as
@@ -308,6 +334,11 @@ public static class FrontManager
                     if (Repost(campaign, nation, reserve, hole)) { budget--; holders++; break; }
                     reserve.OrderKind = duty;
                     Refused.Add(reserve.Id);
+                    if (!connectivityChecked)
+                    {
+                        RefuseDisconnectedDonors(campaign, nation, hole);
+                        connectivityChecked = true;
+                    }
                 }
         }
 
@@ -351,6 +382,52 @@ public static class FrontManager
 
     private static int Count(int post) => Allocated.TryGetValue(post, out var there) ? there.Count : 0;
 
+    /// <summary>
+    /// A failed route reveals a disconnected pocket, not a reason to test every division
+    /// inside it. Components are labelled lazily, visiting each friendly land province at
+    /// most once in this arrangement; a successful first donor needs no extra search. The
+    /// scratch is cleared at the next arrangement, so captured or reopened corridors and
+    /// other campaigns cannot reuse stale controller information.
+    /// </summary>
+    private static void RefuseDisconnectedDonors(Campaign campaign, Nation nation, int hole)
+    {
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        DonorFrontier.Clear();
+        if (!DonorComponents.TryGetValue(hole, out var component) && !topology.IsWater(hole))
+        {
+            component = hole;
+            DonorComponents.Add(hole, component);
+            DonorFrontier.Enqueue(hole);
+        }
+        while (DonorFrontier.Count > 0)
+        {
+            var current = DonorFrontier.Dequeue();
+            foreach (var next in topology.Neighbors[current])
+            {
+                if (controllers[next] != nation.MapIndex || topology.IsWater(next) ||
+                    !DonorComponents.TryAdd(next, component)) continue;
+                DonorFrontier.Enqueue(next);
+            }
+        }
+        foreach (var army in campaign.Armies)
+            if (army.NationId == nation.Id &&
+                (!DonorComponents.TryGetValue(army.ProvinceId, out var source) || source != component))
+                Refused.Add(army.Id);
+    }
+
+    private static bool ReadyReserve(Campaign campaign, Army army, Nation nation, StrategicWar war, int today,
+        bool advancesToo)
+    {
+        if (army.NationId != nation.Id || army.AssignedWarId != war.Id) return false;
+        if (army.OrderKind != ArmyOrder.ReserveFront && !(advancesToo && army.OrderKind == ArmyOrder.AdvanceFront)) return false;
+        if (army.FrontLineId >= 0 || army.InBattle || army.DirectOrder || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0) return false;
+        if (army.TemplateId == MilitiaCore.TemplateId) return false;
+        if (today - army.OrderIssuedDay < campaign.Defines.FrontSettleDays) return false;
+        // Only formations standing by: a column already on its way is left to arrive.
+        return army.Route.Count == 0;
+    }
+
     /// <summary>The nearest division of this country held in reserve for this war that is free to go.</summary>
     private static Army NearestReserve(Campaign campaign, Nation nation, StrategicWar war, int hole, int today,
         bool advancesToo = false)
@@ -360,14 +437,7 @@ public static class FrontManager
         var bestDistance = float.MaxValue;
         foreach (var army in campaign.Armies)
         {
-            if (army.NationId != nation.Id || army.AssignedWarId != war.Id) continue;
-            if (army.OrderKind != ArmyOrder.ReserveFront && !(advancesToo && army.OrderKind == ArmyOrder.AdvanceFront)) continue;
-            if (army.FrontLineId >= 0 || army.InBattle || army.DirectOrder || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0) continue;
-            if (army.TemplateId == MilitiaCore.TemplateId || Refused.Contains(army.Id)) continue;
-            if (today - army.OrderIssuedDay < campaign.Defines.FrontSettleDays) continue;
-            // A reserve standing by, not one already on its way somewhere: turning marching
-            // columns round is what made orders churn.
-            if (army.Route.Count > 0) continue;
+            if (!ReadyReserve(campaign, army, nation, war, today, advancesToo) || Refused.Contains(army.Id)) continue;
             // A reserve before an advance at the same distance.
             var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude) *
                            (army.OrderKind == ArmyOrder.AdvanceFront ? 1.5f : 1f);

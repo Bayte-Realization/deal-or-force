@@ -14,6 +14,11 @@ public sealed record FormableNation(string Id, string Name, string Description, 
     public bool SubjectIntegration { get; init; }
     public bool AiFoundation { get; init; }
     public string[] EligibleCultures { get; init; } = Array.Empty<string>();
+    public string[] EligibleCultureGroups { get; init; } = Array.Empty<string>();
+    /// <summary>Optional civic mandate from actual residents, not an assumption about a tag.</summary>
+    public string[] RequiredReligions { get; init; } = Array.Empty<string>();
+    public string[] RequiredReligionGroups { get; init; } = Array.Empty<string>();
+    public float MinimumReligionShare { get; init; } = .5f;
     /// <summary>Regions by id, for a state whose ground the scenario writes under other
     /// countries' tags - a Kurdistan of Erbil, Duhok and Sulaymaniyah.</summary>
     public string[] RequiredRegions { get; init; } = Array.Empty<string>();
@@ -45,7 +50,39 @@ public static class FormableNations
         nation is not null && definition is not null &&
         (definition.EligibleTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase) ||
          definition.EligibleCultures.Any(c => DemographyCatalog.IsPrimary(nation.Tag, c) ||
-            nation.FoundedCultures.Contains(c, StringComparer.OrdinalIgnoreCase)));
+            nation.FoundedCultures.Contains(c, StringComparer.OrdinalIgnoreCase)) ||
+         definition.EligibleCultureGroups.Length > 0 &&
+            DemographyCatalog.PrimaryCultures(nation.Tag).Concat(nation.FoundedCultures).Any(c =>
+                definition.EligibleCultureGroups.Contains(DemographyCatalog.Culture(c)?.Group ?? "", StringComparer.OrdinalIgnoreCase)));
+
+    /// <summary>The declared faiths/groups form one union: no resident is counted twice.
+    /// Only current, owned-state population groups count. Missing religion data fails closed;
+    /// it must not turn a culture stereotype or an empty state into a founding mandate.</summary>
+    public static float ReligionShare(Campaign campaign, Nation nation, FormableNation definition)
+    {
+        if (campaign is null || nation is null || definition is null) return 0f;
+        double total = 0, matching = 0;
+        foreach (var state in campaign.StatesOf(nation))
+        {
+            double represented = 0;
+            foreach (var population in state.PopulationGroups)
+            {
+                if (population is null || population.Size <= 0) continue;
+                represented += population.Size;
+                if (definition.RequiredReligions.Contains(population.Religion ?? "", StringComparer.OrdinalIgnoreCase) ||
+                    definition.RequiredReligionGroups.Contains(DemographyCatalog.Religion(population.Religion)?.Group ?? "", StringComparer.OrdinalIgnoreCase))
+                    matching += population.Size;
+            }
+            // A partial scenario profile must not make its unrepresented residents vanish
+            // from the denominator. Counts above the regional total remain bounded too.
+            total += Math.Max(Math.Max(0L, state.Population), represented);
+        }
+        return total > 0 ? (float)(matching / total) : 0f;
+    }
+
+    public static bool ReligionMandate(Campaign campaign, Nation nation, FormableNation definition) =>
+        definition is not null && (definition.RequiredReligions.Length == 0 && definition.RequiredReligionGroups.Length == 0 ||
+            ReligionShare(campaign, nation, definition) >= definition.MinimumReligionShare);
     public static void Merge(JsonElement root, List<string> errors) => MergeInto(root, errors, Definitions);
 
     /// <summary>Validate an editor overlay against current data without changing the
@@ -84,6 +121,10 @@ public static class FormableNations
                     Text("colour", old?.Colour ?? ""))
                 {
                     EligibleCultures = Ids("eligible_cultures", old?.EligibleCultures),
+                    EligibleCultureGroups = Ids("eligible_culture_groups", old?.EligibleCultureGroups),
+                    RequiredReligions = Ids("required_religions", old?.RequiredReligions),
+                    RequiredReligionGroups = Ids("required_religion_groups", old?.RequiredReligionGroups),
+                    MinimumReligionShare = Number("minimum_religion_share", old?.MinimumReligionShare ?? .5f),
                     RequiredRegions = Ids("required_regions", old?.RequiredRegions),
                     Supersedes = Ids("supersedes", old?.Supersedes),
                     PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
@@ -93,8 +134,8 @@ public static class FormableNations
                     AiFoundation = e.TryGetProperty("ai_foundation", out var ai)
                         ? ai.GetBoolean() : old?.AiFoundation ?? false
                 };
-                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0 && d.RequiredRegions.Length == 0) ||
-                    d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
+                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0 && d.EligibleCultureGroups.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0 && d.RequiredRegions.Length == 0) ||
+                    d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain, d.MinimumReligionShare }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
                     throw new FormatException("empty eligibility/territory or values outside 0..1");
                 if (d.RequiredIdeology.Any(id => !IdeologyCatalog.Knows(id)))
                     throw new FormatException("names an ideology nothing declares");
@@ -102,6 +143,13 @@ public static class FormableNations
                     throw new FormatException("a state cannot supersede itself");
                 if (d.RequiredGovernment.Any(id => !GovernmentCatalog.Knows(id)))
                     throw new FormatException("names a form of government nothing declares");
+                if (d.RequiredReligions.Any(id => DemographyCatalog.Religion(id) is null))
+                    throw new FormatException("names a religion nothing declares");
+                if (d.RequiredReligionGroups.Any(id => !DemographyCatalog.Religions.Values.Any(r =>
+                    string.Equals(r.Group, id, StringComparison.OrdinalIgnoreCase))))
+                    throw new FormatException("names a religion group nothing declares");
+                if ((d.RequiredReligions.Length > 0 || d.RequiredReligionGroups.Length > 0) && d.MinimumReligionShare <= 0f)
+                    throw new FormatException("a religion mandate needs a positive population share");
                 definitions[entry.Name] = d;
             }
             catch (Exception ex) { errors?.Add($"formable '{entry.Name}': {ex.Message}"); }
@@ -155,6 +203,20 @@ public static class FormableNations
             requirements.Add(new(Loc.Format("Government: {0}",
                     string.Join(", ", d.RequiredGovernment.Select(id => Loc.Get(GovernmentCatalog.Of(id).Name)))),
                 d.RequiredGovernment.Contains(nation.Government, StringComparer.OrdinalIgnoreCase)));
+        if (d.RequiredReligions.Length > 0 || d.RequiredReligionGroups.Length > 0)
+        {
+            string GroupName(string id)
+            {
+                var key = "religion_group." + id;
+                var translated = Loc.Get(key);
+                return translated == key ? id : translated;
+            }
+            var beliefs = d.RequiredReligions.Select(DemographyCatalog.ReligionName)
+                .Concat(d.RequiredReligionGroups.Select(GroupName));
+            var share = ReligionShare(campaign, nation, d);
+            requirements.Add(new(Loc.Format("Religious founding mandate ({0}): {1:P0} / {2:P0}",
+                string.Join(", ", beliefs), share, d.MinimumReligionShare), share >= d.MinimumReligionShare));
+        }
         return new(requirements.ToArray(), owned, land.Length, cost);
     }
 }

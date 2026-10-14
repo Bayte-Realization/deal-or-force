@@ -21,6 +21,7 @@ public sealed class ModManifest
     [JsonPropertyName("enabled")] public bool Enabled { get; set; } = true;
     [JsonPropertyName("load_order")] public int LoadOrder { get; set; }
     [JsonPropertyName("dependencies")] public List<string> Dependencies { get; set; } = new();
+    [JsonPropertyName("frontend_actions")] public List<ModFrontendActionDeclaration> FrontendActions { get; set; } = new();
     [JsonPropertyName("gdscript_entry")] public string GdscriptEntry { get; set; } = "";
     [JsonPropertyName("engine_script_entry")] public string EngineScriptEntry { get; set; } = "";
     [JsonPropertyName("csharp_assembly")] public string CsharpAssembly { get; set; } = "";
@@ -57,6 +58,7 @@ public sealed class ModLoader
     };
 
     private readonly List<ModPackage> _packages = new();
+    private readonly ModFrontendActionCatalog _frontendActions = new();
     private readonly List<(IGlobalityMod Instance, ModContext Context)> _csharp = new();
     private readonly List<(GodotObject Instance, string ModId)> _gdscript = new();
     private readonly List<(RefCounted Instance, string ModId, Godot.Collections.Dictionary Api)> _engineScripts = new();
@@ -76,6 +78,10 @@ public sealed class ModLoader
     public DlcLoader Dlc { get; } = new();
 
     public IReadOnlyList<ModPackage> Packages => _packages;
+    /// <summary>Metadata only, from enabled dependency-resolved mods, never content packs.</summary>
+    public IReadOnlyList<ModFrontendActionDescriptor> FrontendActions() => _frontendActions.Actions;
+    /// <summary>Explicit UI action; handlers exist only after StartCode, not on discovery.</summary>
+    public bool TryRunFrontendAction(string fullActionId, out string note) => _frontendActions.TryRun(fullActionId, out note);
     public IReadOnlyList<string> Log => _log;
     public int EnabledCount => _packages.Count(package => !package.IsContentPack);
     public int ContentPackCount => _packages.Count(package => package.IsContentPack);
@@ -97,6 +103,7 @@ public sealed class ModLoader
 
     public void Discover()
     {
+        _frontendActions.ResetDeclarations(Array.Empty<(string, IEnumerable<ModFrontendActionDeclaration>)>());
         _packages.Clear();
         _log.Clear();
 
@@ -144,6 +151,9 @@ public sealed class ModLoader
                   (pack.Errors.Count > 0 ? $" ({pack.Errors[0]})" : " (not owned)") + ".");
 
         _packages.AddRange(enabledIds.Select(id => candidates[id]));
+        _frontendActions.ResetDeclarations(_packages.Where(p => !p.IsContentPack)
+            .Select(p => (p.Manifest.Id, (IEnumerable<ModFrontendActionDeclaration>)p.Manifest.FrontendActions)),
+            (id, error) => _packages.FirstOrDefault(p => !p.IsContentPack && string.Equals(p.Manifest.Id, id, StringComparison.OrdinalIgnoreCase))?.Errors.Add(error));
         Write($"Discovery complete: {ContentPackCount} content pack(s), {EnabledCount} enabled mod(s).");
     }
 
@@ -203,8 +213,9 @@ public sealed class ModLoader
             ApplyEvents(package);
             ApplyModifiers(package);
             ApplyOpinionModifiers(package);
-            ApplyTunables(package);
+            // A package may declare a belief and refer to it in a foundation in the same overlay.
             reseed |= ApplyDemography(package);
+            ApplyTunables(package);
             ApplyAiStrategies(package);
             ApplyMapData(package);
             ApplyLocalization(package);
@@ -545,10 +556,14 @@ public sealed class ModLoader
         }
     }
 
-    public void StartCode(ModApi api, Campaign campaign)
+    public void StopCode()
     {
-        _api = api;
-        _api.Bind(campaign);
+        _frontendActions.StopRuntime();
+        foreach (var plugin in _csharp)
+        {
+            plugin.Context.FrontendActions?.Dispose();
+            if (plugin.Instance is IDisposable disposable) Try(plugin.Context.ModId, disposable.Dispose);
+        }
         _csharp.Clear();
         foreach (var context in _managedContexts) context.Unload();
         _managedContexts.Clear();
@@ -561,6 +576,15 @@ public sealed class ModLoader
             plugin.Api.Dispose();
         }
         _engineScripts.Clear();
+        _api = null;
+    }
+
+    public void StartCode(ModApi api, Campaign campaign)
+    {
+        StopCode();
+        _api = api;
+        _api.Bind(campaign);
+        _frontendActions.BeginRuntime();
 
         foreach (var package in _packages)
         {
@@ -854,10 +878,24 @@ public sealed class ModLoader
             foreach (var type in types)
             {
                 if (Activator.CreateInstance(type) is not IGlobalityMod instance) continue;
-                var context = new ModContext(package.Manifest.Id, message => Write($"[{package.Manifest.Id}] {message}")) { Campaign = campaign };
-                instance.OnLoad(context);
-                instance.OnCampaignCreated(context);
-                _csharp.Add((instance, context));
+                var context = new ModContext(package.Manifest.Id, message => Write($"[{package.Manifest.Id}] {message}"))
+                { Campaign = campaign, FrontendActions = _frontendActions.RegisterFor(package.Manifest.Id) };
+                var retained = false;
+                try
+                {
+                    instance.OnLoad(context);
+                    instance.OnCampaignCreated(context);
+                    _csharp.Add((instance, context));
+                    retained = true;
+                }
+                finally
+                {
+                    if (!retained)
+                    {
+                        context.FrontendActions.Dispose();
+                        if (instance is IDisposable disposable) Try(package.Manifest.Id, disposable.Dispose);
+                    }
+                }
             }
         });
     }

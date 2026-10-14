@@ -1,0 +1,14 @@
+{
+  "map_clouds": {
+    "category": "interface", "order": 247, "kind": "toggle",
+    "name": "Cloud layer",
+    "description": "Clouds drifting over the world from far away, parting as the camera comes down. Off leaves the borders clear at every distance. Also a button on the map bar and on the country-select screen.",
+    "default": true
+  },
+  "map_mist": {
+    "category": "interface", "order": 248, "kind": "toggle",
+    "name": "Fog-of-war mist",
+    "description": "Decorative mist over unseen ground. Turning it off does not reveal provinces or enemy forces; the intelligence mask stays unchanged.",
+    "default": true
+  }
+}
