@@ -206,6 +206,10 @@ public static partial class ForeignAssistance
             if (c.AssistanceCooldowns.Count >= MaxCooldowns) return;
             clock = new ForeignAssistanceCooldown { RequesterId = requesterId, DonorId = donorId };
             c.AssistanceCooldowns.Add(clock);
+            // Kept in the order a load restores it in (requester, then donor), so a save written
+            // before a load and one written after are the same file.
+            c.AssistanceCooldowns.Sort((a, b) => a.RequesterId != b.RequesterId
+                ? a.RequesterId.CompareTo(b.RequesterId) : a.DonorId.CompareTo(b.DonorId));
         }
         clock.ReadyOnDay = (int)Math.Min(int.MaxValue, (long)c.ElapsedDays + Math.Clamp(c.Defines.AidRequestCooldownDays, 1, 365));
     }

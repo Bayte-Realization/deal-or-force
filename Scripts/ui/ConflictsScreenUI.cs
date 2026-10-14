@@ -29,7 +29,9 @@ public partial class DealOrForceGame
     private int _conflictWar = -1;
     private int _conflictsBuiltDay = int.MinValue;
 
-    private static readonly string[] ConflictTabNames = { "Hot spots", "Wars and backers", "Our conflicts", "Territorial disputes", "Organizations" };
+    private static readonly string[] ConflictTabNames = { "Hot spots", "Wars and backers", "Our conflicts", "Territorial disputes", "Organizations", "The world" };
+    /// <summary>The order the tabs stand in: tension and wars first, then the order of the world.</summary>
+    private static readonly int[] ConflictTabOrder = { 0, 1, 2, 5, 3, 4 };
     private int _territoryRegion = -1, _territoryClaimant = -1;
 
     private void BuildConflictsScreen()
@@ -61,7 +63,7 @@ public partial class DealOrForceGame
         var tabs = new HBoxContainer();
         tabs.AddThemeConstantOverride("separation", 6);
         rows.AddChild(tabs);
-        for (var index = 0; index < ConflictTabNames.Length; index++)
+        foreach (var index in ConflictTabOrder)
         {
             var captured = index;
             var tab = ActionButton(ConflictTabNames[index], () => { _conflictTab = captured; RefreshConflictsScreen(force: true); }, 0, 32);
@@ -148,6 +150,7 @@ public partial class DealOrForceGame
             case 1: ListWars(wars); break;
             case 2: ListOurs(hot, wars); break;
             case 3: ListTerritorialDisputes(); break;
+            case 5: ListWorldOrder(); break;
             default: ListOrganizations(); break;
         }
         ShowConflictPage();
@@ -338,6 +341,12 @@ public partial class DealOrForceGame
         ClearRuntimeChildren(_conflictsPage);
         if (_conflictTab == 3) { ShowTerritoryPage(); return; }
         if (_conflictTab == 4) { ShowOrganizationPage(); return; }
+        if (_conflictTab == 5)
+        {
+            if (_campaign.Relations.Values.FirstOrDefault(r => PairKey(r) == _conflictPair) is { } rivalry) ShowTensionPage(rivalry);
+            else ShowWorldOrderPage();
+            return;
+        }
         if (_conflictWar >= 0 && _campaign.Wars.FirstOrDefault(w => w.Id == _conflictWar && !w.Ended) is { } war)
         {
             ShowWarPage(war);

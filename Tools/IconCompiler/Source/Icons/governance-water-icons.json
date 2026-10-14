@@ -1,5 +1,4 @@
 [
- {"name":"laws","shapes":[{"kind":"outline","values":[4,3,18,3,18,21,4,21],"width":1.6},{"kind":"line","values":[8,7,14,7],"width":1.4},{"kind":"line","values":[8,11,14,11],"width":1.4},{"kind":"line","values":[8,15,11,15],"width":1.4},{"kind":"line","values":[14,16,17,19,21,13],"width":1.8}]},
  {"name":"agenda","shapes":[{"kind":"ring","values":[3,3,16,16],"width":1.8},{"kind":"ring","values":[7,7,8,8],"width":1.3},{"kind":"line","values":[11,11,21,3],"width":1.8},{"kind":"line","values":[17,3,21,3,21,7],"width":1.6}]},
  {"name":"public_debt","shapes":[{"kind":"outline","values":[5,3,16,3,20,7,20,19,5,19],"width":1.5},{"kind":"line","values":[16,3,16,7,20,7],"width":1.3},{"kind":"line","values":[8,8,12,8],"width":1.5},{"kind":"line","values":[8,12,15,12],"width":1.5},{"kind":"ring","values":[2,14,8,8],"width":1.6}]},
  {"name":"debt_default","shapes":[{"kind":"outline","values":[12,3,22,21,2,21],"width":1.6},{"kind":"line","values":[12,8,12,14],"width":2},{"kind":"ellipse","values":[11,17,2,2]}]},
