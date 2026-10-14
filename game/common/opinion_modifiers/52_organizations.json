@@ -1,0 +1,5 @@
+// What leaving an organisation, or being thrown out of one, leaves with its members (OrganizationDynamics.cs).
+{
+  "left_our_organization": { "name": "Walked out of our organization", "opinion": -12, "days": 730, "decays": true },
+  "attacked_a_fellow_member": { "name": "Attacked a fellow member", "opinion": -30, "days": 1825, "decays": true }
+}

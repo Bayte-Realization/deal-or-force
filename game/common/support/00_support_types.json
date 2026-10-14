@@ -29,6 +29,9 @@
 //                    because a wing is not a regiment of riflemen.
 //   missions         what the formation may be ordered to do. "standby" is always
 //                    available; the rest say what the formation does with its days.
+//                    "reconnaissance" lifts the fog over enemy ground inside the reach,
+//                    as far as the recon figure says (six sees all of it), and pays the
+//                    enemy's sky for it (AirReconnaissance.cs).
 //
 // The stock game's nine kinds are balanced against a division's fire of about one, so
 // that a country's whole long-range establishment over one battle is worth roughly a
@@ -96,7 +99,7 @@
     "recruitment_cost": 1.60,
     "build_days": 90,
     "personnel": 2400,
-    "missions": ["standby", "air_superiority", "close_air_support", "interdiction"]
+    "missions": ["standby", "air_superiority", "close_air_support", "interdiction", "reconnaissance"]
   },
 
   // The ground attack wing: what a close support mission is for. Half a fighter's
@@ -113,7 +116,7 @@
     "recruitment_cost": 1.40,
     "build_days": 80,
     "personnel": 2800,
-    "missions": ["standby", "close_air_support", "interdiction"]
+    "missions": ["standby", "close_air_support", "interdiction", "reconnaissance"]
   },
 
   // The low, slow half of the air war: the shortest reach of any aircraft and the
@@ -130,7 +133,7 @@
     "recruitment_cost": 1.00,
     "build_days": 70,
     "personnel": 3200,
-    "missions": ["standby", "close_air_support"]
+    "missions": ["standby", "close_air_support", "reconnaissance"]
   },
 
   // The deep end: the reach to work the whole theatre and the interdiction to shut a
@@ -146,7 +149,7 @@
     "recruitment_cost": 2.20,
     "build_days": 120,
     "personnel": 4000,
-    "missions": ["standby", "close_air_support", "interdiction"]
+    "missions": ["standby", "close_air_support", "interdiction", "reconnaissance"]
   },
 
   // The eyes. Almost no fire at all, and no country that owns one regrets it: the
@@ -162,7 +165,7 @@
     "recruitment_cost": 0.35,
     "build_days": 30,
     "personnel": 400,
-    "missions": ["standby", "interdiction", "close_air_support"]
+    "missions": ["standby", "interdiction", "close_air_support", "reconnaissance"]
   },
 
   // The modern cheap shot: a quarter of a fighter's cost, most of an attack wing's
@@ -179,6 +182,6 @@
     "recruitment_cost": 0.50,
     "build_days": 40,
     "personnel": 600,
-    "missions": ["standby", "close_air_support", "interdiction"]
+    "missions": ["standby", "close_air_support", "interdiction", "reconnaissance"]
   }
 }

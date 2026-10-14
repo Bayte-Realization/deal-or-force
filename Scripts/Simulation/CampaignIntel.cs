@@ -27,7 +27,8 @@ public static partial class CampaignIntel
 {
     public static bool CanInspect(int viewerId, int nationId) => viewerId >= 0 && viewerId == nationId;
     public static bool PlayerCanInspect(Campaign c, int nationId) => c?.Player is not null &&
-        (!c.Player.IsHuman || CanInspect(c.Player.Id, nationId));
+        (!c.Player.IsHuman || CanInspect(c.Player.Id, nationId) ||
+         IntelNetworks.Strength(c, c.Player.Id, nationId) >= c.Defines.IntelInspectStrength);
     /// <summary>
     /// What a general staff thinks another country's forces are worth.
     ///
@@ -47,6 +48,12 @@ public static partial class CampaignIntel
     {
         if (target is null) return 0;
         if (CanInspect(viewerId, target.Id)) return AiStatecraft.CachedStrength(c, target);
+        // A network in the country narrows the error as it grows, and from the strength that
+        // opens the dossier it reports this morning's figure, not the last assessment's.
+        var network = IntelNetworks.Strength(c, viewerId, target.Id);
+        var error = c.Defines.IntelEstimateError * (1f - M.Clamp01(network));
+        if (network >= c.Defines.IntelInspectStrength)
+            return AiStatecraft.CachedStrength(c, target) * (1f + error * (2f * Error(c.Seed, viewerId, target.Id, c.ElapsedDays / 365) - 1f));
         var every = Math.Max(1, c.Defines.IntelAssessmentDays);
         if (target.AssessedDay < 0 || c.ElapsedDays < target.AssessedDay || c.ElapsedDays - target.AssessedDay >= every)
         {
@@ -54,7 +61,7 @@ public static partial class CampaignIntel
             target.AssessedDay = c.ElapsedDays;
         }
         return target.AssessedStrength *
-               (1f + c.Defines.IntelEstimateError * (2f * Error(c.Seed, viewerId, target.Id, c.ElapsedDays / 365) - 1f));
+               (1f + error * (2f * Error(c.Seed, viewerId, target.Id, c.ElapsedDays / 365) - 1f));
     }
 
     private static float Error(int seed, int viewer, int target, int year)

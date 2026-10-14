@@ -1,0 +1,20 @@
+// Deal or Force - мир на войне: инциденты между блоками и мировые войны.
+{
+  "chronicle.world_war_began": "Начинается {2}: {0} и {1} воюют, а с ними и великие державы.",
+  "chronicle.world_incident": "Инцидент на границе {0} и {1}: каждая сторона обвиняет другую.",
+  "world_war.name.3": "Третья мировая война",
+  "world_war.name.4": "Четвёртая мировая война",
+  "world_war.name.5": "Пятая мировая война",
+  "world_war.name.6": "Шестая мировая война",
+  "world_war.name": "Мировая война № {0}",
+  "chronicle.organization_left": "{0} выходит из организации «{2}».",
+  "chronicle.organization_split": "{0} и {1} вместе покидают организацию «{2}» и создают собственный пакт.",
+  "chronicle.organization_expelled": "Организация «{2}» исключает страну {0} за нападение на своего члена, страну {1}.",
+  "chronicle.organization_dissolved": "Организация «{2}» распущена: её члены в неё больше не верят.",
+  "chronicle.organization_founded": "{0} и {1} подписывают договор: создан {2}.",
+  "org.name.pact": "Пакт {0} — {1}",
+  "org.name.community": "Содружество {0} — {1}",
+  "org.name.forum": "Форум {0} — {1}",
+  "Walked out of our organization": "Вышли из нашей организации",
+  "Attacked a fellow member": "Напали на члена организации"
+}

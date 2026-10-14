@@ -7,17 +7,17 @@
   "EscalationReviewDays": 7,
   // The share of the way to where tension is heading that it covers in a review, rising and
   // falling.
-  "TensionRiseRate": 0.10,
+  "TensionRiseRate": 0.12,
   "TensionFallRate": 0.06,
   // Where the stages begin: friction, crisis, armed clashes. Leaving a stage takes the
   // hysteresis less.
   "TensionFrictionAt": 25,
   "TensionCrisisAt": 50,
-  "TensionClashesAt": 75,
+  "TensionClashesAt": 70,
   "TensionHysteresis": 6,
   // What each reason adds to where tension is heading, in points of 100.
   "TensionFromHostility": 0.20,
-  "TensionFromGrievance": 0.35,
+  "TensionFromGrievance": 0.45,
   "TensionFromLostLand": 12,
   "TensionFromRivalry": 10,
   "TensionFromProxy": 10,
@@ -29,7 +29,7 @@
   "TensionPactFactor": 0.6,
   "TensionTradeFactor": 0.85,
   // The weekly chance of an incident at full tension; it falls with the square of tension.
-  "IncidentChance": 0.05,
+  "IncidentChance": 0.07,
   // A grievance halves in this many years: long enough for a war to be the next generation's.
   "GrievanceHalfLifeYears": 30,
   // Where a standoff stood on 1 January 2024 fades from it: the gap halves in this many years.
@@ -45,8 +45,8 @@
   "AiEscalationAppetite": 0.9,
   // How long a shared border has to be shooting before a border war can come of it, the chance
   // of one a week after that, and how long it is fought before the ceasefire.
-  "BorderWarAfterDays": 120,
-  "BorderWarChancePerWeek": 0.007,
+  "BorderWarAfterDays": 90,
+  "BorderWarChancePerWeek": 0.012,
   // How strong a side has to be, against the other and the friends behind it, to open one.
   "BorderWarStrengthRatio": 0.6,
   "BorderWarDays": 45,

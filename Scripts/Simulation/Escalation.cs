@@ -10,16 +10,16 @@ public sealed partial class Defines
     /// <summary>How often the tension between two countries is weighed, in days.</summary>
     public int EscalationReviewDays { get; set; } = 7;
     /// <summary>The share of the way to where tension is heading that it covers in a review, rising and falling.</summary>
-    public float TensionRiseRate { get; set; } = 0.10f;
+    public float TensionRiseRate { get; set; } = 0.12f;
     public float TensionFallRate { get; set; } = 0.06f;
     /// <summary>Where the stages begin: friction, crisis, armed clashes. Leaving a stage takes the hysteresis less.</summary>
     public float TensionFrictionAt { get; set; } = 25f;
     public float TensionCrisisAt { get; set; } = 50f;
-    public float TensionClashesAt { get; set; } = 75f;
+    public float TensionClashesAt { get; set; } = 70f;
     public float TensionHysteresis { get; set; } = 6f;
     /// <summary>What each reason adds to where tension is heading, in points of 100.</summary>
     public float TensionFromHostility { get; set; } = 0.20f;
-    public float TensionFromGrievance { get; set; } = 0.35f;
+    public float TensionFromGrievance { get; set; } = 0.45f;
     public float TensionFromLostLand { get; set; } = 12f;
     public float TensionFromRivalry { get; set; } = 10f;
     public float TensionFromProxy { get; set; } = 10f;
@@ -31,7 +31,7 @@ public sealed partial class Defines
     public float TensionPactFactor { get; set; } = 0.6f;
     public float TensionTradeFactor { get; set; } = 0.85f;
     /// <summary>The weekly chance of an incident at full tension; it falls with the square of tension.</summary>
-    public float IncidentChance { get; set; } = 0.05f;
+    public float IncidentChance { get; set; } = 0.07f;
     /// <summary>A grievance halves in this many years: long enough for a war to be the next generation's.</summary>
     public float GrievanceHalfLifeYears { get; set; } = 30f;
     /// <summary>
@@ -48,8 +48,8 @@ public sealed partial class Defines
     /// <summary>How much a crisis argues for a war in the AI's sum, at full tension.</summary>
     public float AiEscalationAppetite { get; set; } = 0.9f;
     /// <summary>How long a shared border has to be shooting before a border war can come of it, the chance of one a week after that, and how long it is fought before the ceasefire.</summary>
-    public int BorderWarAfterDays { get; set; } = 120;
-    public float BorderWarChancePerWeek { get; set; } = 0.007f;
+    public int BorderWarAfterDays { get; set; } = 90;
+    public float BorderWarChancePerWeek { get; set; } = 0.012f;
     /// <summary>How strong a side has to be, against the other and the friends behind it, to open a border war.</summary>
     public float BorderWarStrengthRatio { get; set; } = 0.6f;
     public int BorderWarDays { get; set; } = 45;

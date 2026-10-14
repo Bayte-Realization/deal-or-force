@@ -365,7 +365,13 @@ public static class Program
                 if (day % every != 0 && day != sizeDays) continue;
                 campaign.Defines.SaveTextFormat = false;
                 SaveSystem.Save(sizeFolder, "size", campaign, "bench");
-                var file = Directory.GetFiles(sizeFolder).Where(f => !f.EndsWith(".json")).Select(f => new FileInfo(f)).OrderByDescending(f => f.Length).First();
+                var file = new FileInfo(Directory.GetFiles(sizeFolder, "size.*").Where(f => !f.EndsWith(".json")).First());
+                var compressedBytes = file.Length;
+                campaign.Defines.SaveTextFormat = true;
+                SaveSystem.Save(sizeFolder, "size_text", campaign, "bench");
+                var textFile = new FileInfo(Directory.GetFiles(sizeFolder, "size_text*").Where(f => !f.EndsWith(".json")).First());
+                Console.WriteLine($"TEXT day {campaign.ElapsedDays}: {textFile.Length / 1048576.0:0.0} MB as a text save");
+                campaign.Defines.SaveTextFormat = false;
                 var wire = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
                 using var input = new MemoryStream(wire);
                 using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
@@ -397,6 +403,138 @@ public static class Program
                 }
             }
             Directory.Delete(sizeFolder, true);
+            return 0;
+        }
+
+        // `--world <days> [every]`: world tension, incidents between the blocs and world wars (WorldWar).
+        var worldAt = Array.IndexOf(args, "--world");
+        if (worldAt >= 0)
+        {
+            var worldDays = worldAt + 1 < args.Length && int.TryParse(args[worldAt + 1], out var wd) ? wd : 7300;
+            var worldEvery = worldAt + 2 < args.Length && int.TryParse(args[worldAt + 2], out var we) ? we : 365;
+            campaign.IsPaused = false;
+            var incidents = 0;
+            var exposed = 0;
+            long seen = 0;
+            for (var day = 1; day <= worldDays; day++)
+            {
+                campaign.TickDay();
+                var entries = campaign.Chronicle.Read(-1, -1, true);
+                foreach (var entry in entries.Where(e => e.Sequence > seen))
+                {
+                    if (entry.Kind == "world_incident") { incidents++; Console.WriteLine($"   INCIDENT day {entry.Day}: {entry.ActorName} - {entry.TargetName}"); }
+                    if (entry.Kind == "world_war_began") Console.WriteLine($"   WORLD WAR day {entry.Day}: {entry.Subject} ({entry.ActorName} vs {entry.TargetName})");
+                    if (entry.Kind == "spy_network_exposed") exposed++;
+                }
+                if (entries.Length > 0) seen = Math.Max(seen, entries.Max(e => e.Sequence));
+                if (day % worldEvery != 0 && day != worldDays) continue;
+                var big = campaign.Wars.Where(w => !w.Ended).OrderByDescending(w => w.BelligerentCount).FirstOrDefault();
+                var interstate = campaign.Wars.Where(w => !w.CivilConflict && w.StartedDay > 0).ToList();
+                Console.WriteLine($"WORLD day {campaign.ElapsedDays} ({campaign.Date}): tension {WorldWar.Tension(campaign):0.0}, incidents so far {incidents}, " +
+                                  $"world wars {campaign.Wars.Count(w => w.WorldWarDay >= 0)} ({campaign.Wars.Count(w => w.WorldWarDay >= 0 && !w.Ended)} active), " +
+                                  $"largest war {(big is null ? "-" : $"{WarNames.Of(campaign, big)} with {big.BelligerentCount}")}, " +
+                                  $"wars between states begun {interstate.Count} ({interstate.Count(w => !w.Ended)} on, most belligerents {(interstate.Count == 0 ? 0 : interstate.Max(w => w.BelligerentCount))})");
+                var networks = campaign.Nations.SelectMany(n => n.IntelNetworks.Values).ToList();
+                Console.WriteLine($"   intel: {networks.Count} networks, mean strength {(networks.Count == 0 ? 0 : networks.Average()):0.00}, " +
+                                  $"{networks.Count(v => v >= campaign.Defines.IntelInspectStrength)} open a dossier, {exposed} exposed so far");
+                foreach (var (a, b, pair) in WorldWar.Pairs(campaign).Take(3))
+                    Console.WriteLine($"   pair {campaign.NationById(a)?.Tag}-{campaign.NationById(b)?.Tag} {pair:0.0}");
+            }
+            return 0;
+        }
+
+        // `--pulse <days>`: how lively the world is - every kind of chronicle entry, counted year by
+        // year, with the wars between states begun and the largest war of each year.
+        var pulseAt = Array.IndexOf(args, "--pulse");
+        if (pulseAt >= 0)
+        {
+            var pulseDays = pulseAt + 1 < args.Length && int.TryParse(args[pulseAt + 1], out var pd) ? pd : 3650;
+            campaign.IsPaused = false;
+            var year = new Dictionary<string, int>();
+            var total = new Dictionary<string, int>();
+            long pulseSeen = 0;
+            var largest = 0;
+            for (var day = 1; day <= pulseDays; day++)
+            {
+                campaign.TickDay();
+                var entries = campaign.Chronicle.Read(-1, -1, true);
+                foreach (var entry in entries.Where(e => e.Sequence > pulseSeen))
+                {
+                    year[entry.Kind] = year.GetValueOrDefault(entry.Kind) + 1;
+                    total[entry.Kind] = total.GetValueOrDefault(entry.Kind) + 1;
+                    if (entry.Kind == "war_started") Console.WriteLine($"   WAR day {entry.Day}: {entry.ActorName} -> {entry.TargetName}");
+                }
+                if (entries.Length > 0) pulseSeen = Math.Max(pulseSeen, entries.Max(e => e.Sequence));
+                foreach (var war in campaign.Wars) if (!war.Ended && !war.CivilConflict) largest = Math.Max(largest, war.BelligerentCount);
+                if (day % 365 != 0 && day != pulseDays) continue;
+                Console.WriteLine($"PULSE year to day {campaign.ElapsedDays} ({campaign.Date}): largest war between states {largest}; " +
+                                  string.Join(", ", year.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+                year.Clear();
+                largest = 0;
+            }
+            Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            return 0;
+        }
+
+        // `--orgs <days> [every]`: the world's organisations as the years pass - how many, how
+        // united, who walked out, who was thrown out, what split and what was wound up (OrganizationDynamics).
+        var orgsAt = Array.IndexOf(args, "--orgs");
+        if (orgsAt >= 0)
+        {
+            var orgDays = orgsAt + 1 < args.Length && int.TryParse(args[orgsAt + 1], out var od) ? od : 7300;
+            var orgEvery = orgsAt + 2 < args.Length && int.TryParse(args[orgsAt + 2], out var oe) ? oe : 730;
+            campaign.IsPaused = false;
+            var counts = new Dictionary<string, int>();
+            long orgSeen = 0;
+            for (var day = 1; day <= orgDays; day++)
+            {
+                campaign.TickDay();
+                var entries = campaign.Chronicle.Read(-1, -1, true);
+                foreach (var entry in entries.Where(e => e.Sequence > orgSeen && e.Kind.StartsWith("organization_", StringComparison.Ordinal)))
+                {
+                    counts[entry.Kind] = counts.GetValueOrDefault(entry.Kind) + 1;
+                    Console.WriteLine($"   {entry.Kind.Substring(13).ToUpperInvariant()} day {entry.Day}: {entry.ActorName}{(string.IsNullOrEmpty(entry.TargetName) ? "" : " / " + entry.TargetName)} - {entry.Subject}");
+                }
+                if (entries.Length > 0) orgSeen = Math.Max(orgSeen, entries.Max(e => e.Sequence));
+                if (day % orgEvery != 0 && day != orgDays) continue;
+                var active = InternationalOrganizations.Active(campaign).ToList();
+                Console.WriteLine($"ORGS day {campaign.ElapsedDays} ({campaign.Date}): {active.Count} active, {active.Sum(o => o.Members.Count)} memberships, " +
+                                  $"mean cohesion {(active.Count == 0 ? 0 : active.Average(o => o.Cohesion)):0.00}; " +
+                                  string.Join(", ", counts.OrderBy(entry => entry.Key).Select(entry => $"{entry.Key.Substring(13)} {entry.Value}")));
+                foreach (var org in active.Where(o => o.Members.Count >= 3).OrderByDescending(o => o.Members.Count).Take(8))
+                    Console.WriteLine($"   {InternationalOrganizations.DisplayName(campaign, org)}: {org.Members.Count} members, cohesion {org.Cohesion:0.00} (target {OrganizationDynamics.Target(campaign, org):0.00}), " +
+                                      $"least belonging {org.Members.Select(campaign.NationById).Where(n => n is not null).Select(n => (n.Tag, OrganizationDynamics.Belonging(campaign, org, n))).OrderBy(x => x.Item2).Take(2).Select(x => $"{x.Tag} {x.Item2:0.00}").DefaultIfEmpty("-").Aggregate((a, b) => a + " " + b)}");
+            }
+            return 0;
+        }
+
+        // `--unions <days> [every]`: who is bringing which union together, with whom, and what has
+        // been proclaimed - every so many days (Consolidation).
+        var unionsAt = Array.IndexOf(args, "--unions");
+        if (unionsAt >= 0)
+        {
+            var unionDays = unionsAt + 1 < args.Length && int.TryParse(args[unionsAt + 1], out var ud) ? ud : 3650;
+            var unionEvery = unionsAt + 2 < args.Length && int.TryParse(args[unionsAt + 2], out var ue) ? ue : 365;
+            campaign.IsPaused = false;
+            for (var day = 1; day <= unionDays; day++)
+            {
+                campaign.TickDay();
+                if (day % unionEvery != 0 && day != unionDays) continue;
+                var leaders = campaign.Nations.Where(n => !string.IsNullOrEmpty(n.ConsolidationProject)).OrderBy(n => n.Tag).ToList();
+                Console.WriteLine($"UNIONS day {campaign.ElapsedDays} ({campaign.Date}): {leaders.Count} project(s)");
+                foreach (var n in leaders)
+                {
+                    var focus = campaign.NationById(n.ConsolidationFocusId);
+                    var opinion = focus is null ? 0f : CampaignDiplomacy.Get(campaign, n.Id, focus.Id)?.Opinion ?? 0f;
+                    Console.WriteLine($"   {n.Tag} -> {n.ConsolidationProject} ambition {n.ConsolidationAmbition:0.00} focus {focus?.Tag ?? "-"} opinion {opinion:0} " +
+                                      $"willing {(focus is null ? 0f : PeacefulFormation.Willingness(campaign, n, focus)):0} stability {n.Stability:0.00} {n.Ideology}" +
+                                      (focus is null || FormableNations.Find(n.ConsolidationProject) is not { } union ? "" :
+                                          " | " + PeacefulFormation.Refusal(campaign, n, focus, union) +
+                                          " | missing: " + string.Join("; ", FormableNations.Evaluate(campaign, n, union).Requirements.Where(r => !r.Met).Select(r => r.Label))));
+                }
+                foreach (var n in campaign.Nations.Where(n => !string.IsNullOrEmpty(n.FormedNationId)))
+                    Console.WriteLine($"   FORMED {n.Tag} as {n.FormedNationId} on day {n.FormedNationDay}, holds {campaign.StatesOf(n).Length} regions");
+            }
             return 0;
         }
 

@@ -122,6 +122,9 @@ public static partial class CampaignIntel
                 Reveal(fleet.TargetProvinceId, armyDepth);
         }
         Flood();
+        // What agents report and what reconnaissance flights photograph: seen, not seen past.
+        IntelNetworks.RevealInto(c, viewerId, view.Reach);
+        AirReconnaissance.RevealInto(c, viewerId, view.Reach);
         return view;
     }
 

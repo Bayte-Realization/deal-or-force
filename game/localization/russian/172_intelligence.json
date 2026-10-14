@@ -1,0 +1,21 @@
+// Разведывательные сети и воздушная разведка (IntelNetworks.cs, AirReconnaissance.cs).
+{
+  "chronicle.spy_network_exposed": "{0} раскрывает разведсеть страны {1} и высылает её агентов.",
+  "Ran a spy network against us": "Держали против нас шпионскую сеть",
+  "INTELLIGENCE": "РАЗВЕДКА",
+  "Found an intelligence network": "Создать разведсеть",
+  "Recall the network ({0})": "Отозвать сеть ({0})",
+  "Our agents there have reached {0}. They show that share of the country through the fog, a truer and fresher estimate of its forces, and from {1} its dossier. Their counter-intelligence: {2}. The stronger the network, the likelier it is found.": "Наша сеть там выросла до {0}. Такую долю страны она показывает сквозь туман, даёт более точную и свежую оценку её сил, а начиная с {1} открывает досье. Их контрразведка: {2}. Чем сильнее сеть, тем вероятнее её раскроют.",
+  "Agents in their country, for {0}. The network grows a week at a time - slower against a state that watches its own - and as it grows it shows more. If it is found, it is lost, and they will not forget it.": "Агенты в их стране обойдутся в {0}. Сеть растёт неделя за неделей, медленнее там, где государство пристально следит за своими, и чем больше она становится, тем больше показывает. Если её раскроют, она пропадёт, а они этого не забудут.",
+  "The network is recalled. What it learned stays in the files.": "Сеть отозвана. Всё, что она узнала, остаётся в архиве.",
+  "The first agents are in place. The network will grow week by week.": "Первые агенты на месте. Сеть будет расти с каждой неделей.",
+  "The network could not be founded.": "Сеть создать не удалось.",
+  "Choose another country.": "Выберите другую страну.",
+  "Only a state runs intelligence networks.": "Разведсети держат только государства.",
+  "A network is already working there.": "Там уже работает наша сеть.",
+  "The service already runs {0} networks.": "У разведки уже {0} сети, больше она не потянет.",
+  "It costs {0}.": "Это стоит {0}.",
+  "Reconnaissance": "Разведка",
+  "RECON": "РАЗВ",
+  "Look: photograph the enemy's ground inside the reach - the fog lifts there, as far as the formation's sensors see. The enemy's fighters and missiles still take their toll.": "Наблюдение: снимать вражескую территорию в радиусе действия. Туман там рассеивается настолько, насколько позволяет аппаратура соединения. Вражеские истребители и ПВО по-прежнему берут свою дань."
+}

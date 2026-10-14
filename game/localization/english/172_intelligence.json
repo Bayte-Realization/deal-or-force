@@ -1,0 +1,21 @@
+// Intelligence networks and air reconnaissance (IntelNetworks.cs, AirReconnaissance.cs).
+{
+  "chronicle.spy_network_exposed": "{0} has uncovered a {1} intelligence network and expelled its agents.",
+  "Ran a spy network against us": "Ran a spy network against us",
+  "INTELLIGENCE": "INTELLIGENCE",
+  "Found an intelligence network": "Found an intelligence network",
+  "Recall the network ({0})": "Recall the network ({0})",
+  "Our agents there have reached {0}. They show that share of the country through the fog, a truer and fresher estimate of its forces, and from {1} its dossier. Their counter-intelligence: {2}. The stronger the network, the likelier it is found.": "Our agents there have reached {0}. They show that share of the country through the fog, a truer and fresher estimate of its forces, and from {1} its dossier. Their counter-intelligence: {2}. The stronger the network, the likelier it is found.",
+  "Agents in their country, for {0}. The network grows a week at a time - slower against a state that watches its own - and as it grows it shows more. If it is found, it is lost, and they will not forget it.": "Agents in their country, for {0}. The network grows a week at a time - slower against a state that watches its own - and as it grows it shows more. If it is found, it is lost, and they will not forget it.",
+  "The network is recalled. What it learned stays in the files.": "The network is recalled. What it learned stays in the files.",
+  "The first agents are in place. The network will grow week by week.": "The first agents are in place. The network will grow week by week.",
+  "The network could not be founded.": "The network could not be founded.",
+  "Choose another country.": "Choose another country.",
+  "Only a state runs intelligence networks.": "Only a state runs intelligence networks.",
+  "A network is already working there.": "A network is already working there.",
+  "The service already runs {0} networks.": "The service already runs {0} networks.",
+  "It costs {0}.": "It costs {0}.",
+  "Reconnaissance": "Reconnaissance",
+  "RECON": "RECON",
+  "Look: photograph the enemy's ground inside the reach - the fog lifts there, as far as the formation's sensors see. The enemy's fighters and missiles still take their toll.": "Look: photograph the enemy's ground inside the reach - the fog lifts there, as far as the formation's sensors see. The enemy's fighters and missiles still take their toll."
+}

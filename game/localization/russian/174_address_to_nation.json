@@ -1,0 +1,26 @@
+// Обращения к нации (AddressToNation.cs).
+{
+  "chronicle.address_to_nation": "Правительство страны {0} обращается к нации: «{2}».",
+  "chronicle.promise_kept": "Правительство страны {0} сдержало обещание: «{2}».",
+  "chronicle.promise_broken": "Правительство страны {0} не сдержало обещание («{2}»), и страна это запомнила.",
+  "ADDRESS TO THE NATION": "ОБРАЩЕНИЕ К НАЦИИ",
+  "Speak to the country. It works at once and less each time - a people addressed every month stops listening - and whatever is promised is remembered on the day it falls due.": "Обратитесь к стране. Это действует сразу, но с каждым разом слабее: народ, к которому обращаются каждый месяц, перестаёт слушать. А всё обещанное вспомнят в назначенный день.",
+  "The country is listening: an address now lands with {0} of its full weight.": "Страна слушает: обращение сейчас подействует на {0} от полной силы.",
+  "Promised: {0}. It falls due in {1} day(s).": "Обещано: «{0}». Срок наступит через {1} дн.",
+  "stability {0}": "стабильность {0}",
+  "war support {0}": "поддержка войны {0}",
+  "Broken, in {0} days: stability {1}{2}.": "Если не сдержать за {0} дн.: стабильность {1}{2}.",
+  "There is no such address.": "Такого обращения нет.",
+  "A movement speaks to its followers, not to a nation.": "Движение обращается к сторонникам, а не к нации.",
+  "The last address was too recent: {0} day(s) to wait.": "Прошлое обращение было слишком недавно: ждать ещё {0} дн.",
+  "Only a country at war can be promised victory.": "Обещать победу можно только стране, которая воюет.",
+  "An earlier promise is still to be kept: {0} day(s) left.": "Прежнее обещание ещё не исполнено: осталось {0} дн.",
+  "Call for unity": "Призыв к единству",
+  "No promises: the country is asked to stand together. A small, safe steadying.": "Без обещаний: стране предлагают держаться вместе. Небольшая, но безопасная опора.",
+  "Promise victory": "Пообещать победу",
+  "The war will be won. The country rallies now - and in half a year it will ask whether any ground has been lost.": "Война будет выиграна. Страна сплачивается сейчас, а через полгода спросит, не потеряна ли хоть пядь земли.",
+  "Promise prosperity": "Пообещать процветание",
+  "Better times within the year. Believed at once; judged against the economy a year on.": "Лучшие времена в течение года. Верят сразу, а через год сверят с экономикой.",
+  "Promise order": "Пообещать порядок",
+  "The disorder ends here. It steadies a restless country - if the country is not more restless in six months.": "Беспорядкам конец. Это успокаивает беспокойную страну, если через полгода она не станет ещё беспокойнее."
+}

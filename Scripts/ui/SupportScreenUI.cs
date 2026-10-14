@@ -636,6 +636,7 @@ public partial class DealOrForceGame
         SupportCore.MissionCloseAirSupport => "Fire support",
         SupportCore.MissionAirSuperiority => "Air superiority",
         SupportCore.MissionInterdiction => "Interdiction",
+        AirReconnaissance.Mission => "Reconnaissance",
         _ => mission
     };
 
@@ -645,6 +646,7 @@ public partial class DealOrForceGame
         SupportCore.MissionCloseAirSupport => "Support: add fire to every battle of ours inside the reach.",
         SupportCore.MissionAirSuperiority => "Sky: sweep the enemy's aircraft from over our battles - their support fire suffers, and our own aircraft lose less.",
         SupportCore.MissionInterdiction => "Strike: hit what is behind the enemy's line, stripping the defence of every battle inside the reach.",
+        AirReconnaissance.Mission => "Look: photograph the enemy's ground inside the reach - the fog lifts there, as far as the formation's sensors see. The enemy's fighters and missiles still take their toll.",
         _ => mission
     };
 

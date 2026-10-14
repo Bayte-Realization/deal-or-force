@@ -321,6 +321,7 @@ public sealed partial class GlobePresentation
             SupportCore.MissionCloseAirSupport => Loc.Get("FIRE"),
             SupportCore.MissionAirSuperiority => Loc.Get("AIR"),
             SupportCore.MissionInterdiction => Loc.Get("RAID"),
+            AirReconnaissance.Mission => Loc.Get("RECON"),
             _ => Loc.Get("REST")
         };
         var readiness = Math.Clamp((int)MathF.Round(formation.Strength * 100f), 0, 100) + "%" +
@@ -432,6 +433,7 @@ public sealed partial class GlobePresentation
                 SupportCore.MissionCloseAirSupport => "Fire support",
                 SupportCore.MissionAirSuperiority => "Air superiority",
                 SupportCore.MissionInterdiction => "Interdiction",
+                AirReconnaissance.Mission => "Reconnaissance",
                 _ => "Standby / recover"
             }) + (SupportCore.Displaced(_campaign, formation) ? "\n" + Loc.Get("BASE LOST — REBASE IT") : "");
     }

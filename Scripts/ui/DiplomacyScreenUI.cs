@@ -243,6 +243,7 @@ public partial class DealOrForceGame
             () => SendAidTo(DiplomacyTarget(), _diplomacyFeedback));
         _diplomacyEmbargoButton = AddDiplomacyAction("AGREEMENTS", "Embargo",
             () => ToggleEmbargoOn(DiplomacyTarget(), _diplomacyFeedback));
+        AddIntelNetworkAction();
 
         _diplomacySubmissionActions = new VBoxContainer { Name = "WideInfluenceActions" };
         _diplomacySubmissionActions.AddThemeConstantOverride("separation", 6);
@@ -1111,6 +1112,7 @@ public partial class DealOrForceGame
         RefreshAgreementButtons(nation, _diplomacyTradeButton, _diplomacyPactButton, _diplomacyAidButton, _diplomacyEmbargoButton);
         RefreshSubmissionButtons(nation, _diplomacySubmissionActions, _diplomacySubmissionButtons);
         RefreshDiplomaticPeaceButton(_diplomacyPeaceButton, nation);
+        RefreshIntelNetworkAction(player, nation);
         _diplomacyWarButton.Visible = !_diplomacyPeaceButton.Visible;
         var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
         var cooldown = _campaign.ElapsedDays - relation.LastActionDay < 14;

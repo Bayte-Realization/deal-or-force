@@ -1,0 +1,41 @@
+// The world's institutions and wars between the wars: organisations that hold together or come
+// apart (OrganizationDynamics.cs), contractors for hire (Contractors.cs) and addresses to the
+// nation (AddressToNation.cs; the addresses themselves are in common/addresses). Every value
+// here is the compiled default.
+{
+  // How fast an organisation's cohesion follows what its members are to one another, a week.
+  "OrganizationCohesionPull": 0.08,
+  // Below this sense of belonging a member thinks of leaving; the weekly chance it walks out when
+  // it no longer belongs at all; and no departures in an organisation's first days.
+  "OrganizationDepartureBelonging": 0.30,
+  "OrganizationDepartureChance": 0.035,
+  "OrganizationGraceDays": 540,
+  // How fast the first day's standing stops protecting a membership, as a half-life in years.
+  "OrganizationBaselineHalfLifeYears": 10,
+  // Below this cohesion an organisation can be wound up, at this weekly chance.
+  "OrganizationDissolveCohesion": 0.14,
+  "OrganizationDissolveChance": 0.03,
+  // Two estranged members who think this well of each other leave together and found their own.
+  "OrganizationSchismOpinion": 35,
+  // Pacts against a great power its neighbours all fear: the monthly chance, the opinion of the
+  // founder a signatory needs, and the first day one can be signed.
+  "ThreatPactChance": 0.25,
+  "ThreatPactOpinion": 25,
+  "ThreatPactEarliestDay": 365,
+
+  // Contractors: the signing price against a division of line infantry, the weekly fee as a share
+  // of it, the men in a formation and their experience, the length of a contract, the most one
+  // country has at once, and the share of its treasury a government at war will spend on them.
+  "ContractorSigningShare": 1.4,
+  "ContractorWeeklyShare": 0.02,
+  "ContractorPersonnel": 6000,
+  "ContractorExperience": 0.4,
+  "ContractorDays": 182,
+  "ContractorLimit": 3,
+  "AiContractorTreasuryShare": 0.2,
+
+  // Addresses to the nation: the least time between two, and how fast the people stop being tired
+  // of them (a half-life in days).
+  "AddressCooldownDays": 30,
+  "AddressWearinessHalfLifeDays": 180
+}

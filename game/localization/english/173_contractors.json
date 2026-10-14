@@ -1,0 +1,17 @@
+// Private military contractors (Contractors.cs).
+{
+  "chronicle.contractors_hired": "{0} signs {2} formation(s) of private military contractors for its war.",
+  "Only a state signs contractors.": "Only a state signs contractors.",
+  "Contractors are hired for a war, and there is none.": "Contractors are hired for a war, and there is none.",
+  "Choose how many formations.": "Choose how many formations.",
+  "At most {0} contractor formations serve one country at once.": "At most {0} contractor formations serve one country at once.",
+  "There is no ground of ours left to land them on.": "There is no ground of ours left to land them on.",
+  "Signing costs {0}.": "Signing costs {0}.",
+  "{0}. {1} Contractors": "{0}. {1} Contractors",
+  "PRIVATE MILITARY CONTRACTORS": "PRIVATE MILITARY CONTRACTORS",
+  "Veterans who arrive within days and draw no one from the reserve - for a price on signing, a fee every week and only while the war lasts.": "Veterans who arrive within days and draw no one from the reserve - for a price on signing, a fee every week and only while the war lasts.",
+  "Sign the contract": "Sign the contract",
+  "{0} formation(s) of {1:N0} veterans · signing {2} · {3} a week each · {4} days\nIn service: {5}{6}": "{0} formation(s) of {1:N0} veterans · signing {2} · {3} a week each · {4} days\nIn service: {5}{6}",
+  " · the first contract ends in {0} days": " · the first contract ends in {0} days",
+  "Ready to sign.": "Ready to sign."
+}

@@ -1,0 +1,20 @@
+// Deal or Force - the world at war: incidents between the blocs and world wars.
+{
+  "chronicle.world_war_began": "{2} begins: {0} and {1} are at war, and the great powers with them.",
+  "chronicle.world_incident": "An incident on the border between {0} and {1}: each side blames the other.",
+  "world_war.name.3": "Third World War",
+  "world_war.name.4": "Fourth World War",
+  "world_war.name.5": "Fifth World War",
+  "world_war.name.6": "Sixth World War",
+  "world_war.name": "World War {0}",
+  "chronicle.organization_left": "{0} walks out of {2}.",
+  "chronicle.organization_split": "{0} and {1} leave {2} together and found their own pact.",
+  "chronicle.organization_expelled": "{2} expels {0} for attacking {1}, one of its own members.",
+  "chronicle.organization_dissolved": "{2} is wound up: its members no longer believe in it.",
+  "chronicle.organization_founded": "{0} and {1} sign {2}.",
+  "org.name.pact": "{0}–{1} Pact",
+  "org.name.community": "{0}–{1} Community",
+  "org.name.forum": "{0}–{1} Forum",
+  "Walked out of our organization": "Walked out of our organization",
+  "Attacked a fellow member": "Attacked a fellow member"
+}

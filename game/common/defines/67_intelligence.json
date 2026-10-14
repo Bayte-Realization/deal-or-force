@@ -1,0 +1,7 @@
+// Intelligence networks abroad and air reconnaissance (IntelNetworks.cs, AirReconnaissance.cs).
+// "intelligence": false switches off networks for a scenario or a mod; the reconnaissance mission
+// is part of common/support and goes with the formations that fly it.
+{"Features":{"intelligence":true}, "FeatureCommands":{"IntelNetworkCommand":"intelligence"},
+ "IntelNetworkCostShare":0.0008, "IntelNetworkMinimumCost":0.05, "IntelNetworkGrowth":0.012, "IntelNetworkCeiling":0.9,
+ "IntelNetworkExposure":0.004, "IntelInspectStrength":0.35, "IntelNetworkLimit":4, "IntelExposureGrievance":10,
+ "ReconFullSight":6, "ReconMinimumSight":0.2, "ReconExposureShare":0.6}

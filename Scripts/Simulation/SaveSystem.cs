@@ -362,7 +362,10 @@ public static class SaveSystem
         public SaveMetadata Commit()
         {
             Directory.CreateDirectory(_root);
-            var json = Whole();
+            // A text save is laid out for a person reading it: small things on a line each,
+            // large things broken into lines (SaveTextLayout) - half the size of the
+            // serializer's own indentation, and still ordinary JSON.
+            var json = _text ? SaveTextLayout.Relayout(Whole()) : Whole();
             if (_text)
             {
                 // Readable and deliberately unguarded. The point of a text save is that a

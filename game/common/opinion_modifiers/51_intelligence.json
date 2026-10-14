@@ -1,0 +1,4 @@
+// What an exposed intelligence network leaves behind in the country it was found in (IntelNetworks.cs).
+{
+  "spied_on_us": { "name": "Ran a spy network against us", "opinion": -15, "days": 1095, "decays": true, "max_stacks": 2 }
+}

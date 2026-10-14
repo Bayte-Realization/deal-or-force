@@ -766,6 +766,7 @@ public sealed partial class Campaign
         for (var day = 0; day < daysCrossed; day++)
         {
             RecruitmentSystem.Tick(this);
+            Contractors.Tick(this);
             yield return 0;
             SupportCore.Tick(this);
             yield return 0;
@@ -801,6 +802,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("organizations")) InternationalOrganizations.Tick(this);
+            using (SimProfiler.Measure("organization life")) OrganizationDynamics.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("deal inbox")) DealNegotiations.Tick(this);
             yield return 0;
@@ -818,6 +820,15 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("subjects")) SubjectSystem.Tick(this);
             yield return 0;
             foreach (var _ in AiStatecraft.TickStages(this)) yield return 0;
+            using (SimProfiler.Measure("consolidation")) Consolidation.Tick(this);
+            yield return 0;
+            using (SimProfiler.Measure("corridors")) Corridors.Tick(this);
+            yield return 0;
+            using (SimProfiler.Measure("world war")) WorldWar.Tick(this);
+            yield return 0;
+            using (SimProfiler.Measure("intel networks")) IntelNetworks.Tick(this);
+            using (SimProfiler.Measure("addresses")) AddressToNation.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("events")) EventSystem.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("history")) History.Capture(this);

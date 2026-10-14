@@ -229,6 +229,7 @@ public partial class DealOrForceGame
         RefreshCentralBank(nation);
         RefreshPolicyRates(nation);
         RefreshPolitics(nation);
+        RefreshAddress(nation);
         _updatingStateAffairs = false;
 
         RefreshStateBudget(nation);
@@ -312,6 +313,7 @@ public partial class DealOrForceGame
         BuildStateBudget(rows);
         BuildPolicyRates(rows);
         BuildPoliticsControls(rows);
+        BuildAddressControls(rows);
 
         // Trade moved to its own screen: policy, instructions, the market and the partners
         // belong together, and a country's dealings with the world are not a sub-paragraph

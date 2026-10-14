@@ -1,0 +1,26 @@
+// Addresses to the nation (AddressToNation.cs).
+{
+  "chronicle.address_to_nation": "{0}'s government addresses the nation: {2}.",
+  "chronicle.promise_kept": "{0}'s government has kept its promise: {2}.",
+  "chronicle.promise_broken": "{0}'s government has broken its promise ({2}), and the country remembers.",
+  "ADDRESS TO THE NATION": "ADDRESS TO THE NATION",
+  "Speak to the country. It works at once and less each time - a people addressed every month stops listening - and whatever is promised is remembered on the day it falls due.": "Speak to the country. It works at once and less each time - a people addressed every month stops listening - and whatever is promised is remembered on the day it falls due.",
+  "The country is listening: an address now lands with {0} of its full weight.": "The country is listening: an address now lands with {0} of its full weight.",
+  "Promised: {0}. It falls due in {1} day(s).": "Promised: {0}. It falls due in {1} day(s).",
+  "stability {0}": "stability {0}",
+  "war support {0}": "war support {0}",
+  "Broken, in {0} days: stability {1}{2}.": "Broken, in {0} days: stability {1}{2}.",
+  "There is no such address.": "There is no such address.",
+  "A movement speaks to its followers, not to a nation.": "A movement speaks to its followers, not to a nation.",
+  "The last address was too recent: {0} day(s) to wait.": "The last address was too recent: {0} day(s) to wait.",
+  "Only a country at war can be promised victory.": "Only a country at war can be promised victory.",
+  "An earlier promise is still to be kept: {0} day(s) left.": "An earlier promise is still to be kept: {0} day(s) left.",
+  "Call for unity": "Call for unity",
+  "No promises: the country is asked to stand together. A small, safe steadying.": "No promises: the country is asked to stand together. A small, safe steadying.",
+  "Promise victory": "Promise victory",
+  "The war will be won. The country rallies now - and in half a year it will ask whether any ground has been lost.": "The war will be won. The country rallies now - and in half a year it will ask whether any ground has been lost.",
+  "Promise prosperity": "Promise prosperity",
+  "Better times within the year. Believed at once; judged against the economy a year on.": "Better times within the year. Believed at once; judged against the economy a year on.",
+  "Promise order": "Promise order",
+  "The disorder ends here. It steadies a restless country - if the country is not more restless in six months.": "The disorder ends here. It steadies a restless country - if the country is not more restless in six months."
+}

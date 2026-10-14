@@ -1,0 +1,41 @@
+// Addresses to the nation (AddressToNation.cs): what a government can say to its own people.
+//
+//   stability, war_support      what it gives at once, the first time; less each time after,
+//                               as the people tire of speeches (AddressWearinessHalfLifeDays)
+//   requires_war                only a country at war may make it
+//   promise                     "victory" (no ground lost by the day it falls due),
+//                               "prosperity" (a larger economy), "order" (stability kept) - or none
+//   promise_days                when the promise falls due
+//   broken_stability,
+//   broken_war_support          what a broken promise costs that day
+//   kept_stability              what a kept one is worth
+//
+// A mod adds an address with a new key, or changes one field of an old one by naming it alone.
+{
+  "unity": {
+    "name": "Call for unity",
+    "description": "No promises: the country is asked to stand together. A small, safe steadying.",
+    "stability": 0.015
+  },
+  "victory": {
+    "name": "Promise victory",
+    "description": "The war will be won. The country rallies now - and in half a year it will ask whether any ground has been lost.",
+    "stability": 0.01, "war_support": 0.08, "requires_war": true,
+    "promise": "victory", "promise_days": 180,
+    "broken_stability": 0.03, "broken_war_support": 0.12, "kept_stability": 0.01
+  },
+  "prosperity": {
+    "name": "Promise prosperity",
+    "description": "Better times within the year. Believed at once; judged against the economy a year on.",
+    "stability": 0.03,
+    "promise": "prosperity", "promise_days": 365,
+    "broken_stability": 0.05, "kept_stability": 0.015
+  },
+  "order": {
+    "name": "Promise order",
+    "description": "The disorder ends here. It steadies a restless country - if the country is not more restless in six months.",
+    "stability": 0.035,
+    "promise": "order", "promise_days": 180,
+    "broken_stability": 0.06, "kept_stability": 0.01
+  }
+}

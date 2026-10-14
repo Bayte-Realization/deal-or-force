@@ -1,0 +1,17 @@
+// Частные военные подрядчики (Contractors.cs).
+{
+  "chronicle.contractors_hired": "{0} нанимает для своей войны частных военных подрядчиков: соединений — {2}.",
+  "Only a state signs contractors.": "Нанимать подрядчиков может только государство.",
+  "Contractors are hired for a war, and there is none.": "Подрядчиков нанимают на войну, а войны нет.",
+  "Choose how many formations.": "Выберите число соединений.",
+  "At most {0} contractor formations serve one country at once.": "Одной стране одновременно служат не больше {0} соединений подрядчиков.",
+  "There is no ground of ours left to land them on.": "У нас не осталось земли, куда их можно доставить.",
+  "Signing costs {0}.": "Контракт стоит {0}.",
+  "{0}. {1} Contractors": "{0}-е соединение подрядчиков {1}",
+  "PRIVATE MILITARY CONTRACTORS": "ЧАСТНЫЕ ВОЕННЫЕ КОМПАНИИ",
+  "Veterans who arrive within days and draw no one from the reserve - for a price on signing, a fee every week and only while the war lasts.": "Ветераны прибывают за считанные дни и не забирают людей из резерва. Платить нужно при подписании и каждую неделю, и служат они, только пока идёт война.",
+  "Sign the contract": "Подписать контракт",
+  "{0} formation(s) of {1:N0} veterans · signing {2} · {3} a week each · {4} days\nIn service: {5}{6}": "Соединений: {0}, в каждом {1:N0} ветеранов · подписание {2} · {3} в неделю за каждое · {4} дн.\nНа службе: {5}{6}",
+  " · the first contract ends in {0} days": " · ближайший контракт истекает через {0} дн.",
+  "Ready to sign.": "Можно подписывать."
+}

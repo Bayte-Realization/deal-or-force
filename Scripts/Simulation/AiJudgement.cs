@@ -147,6 +147,10 @@ public static partial class AiStatecraft
         // every map the country prints; while the other side holds it, that is a reason.
         value += Part(parts, "revanche", LostLands.Weight(campaign, nation, other) * defines.AiRevancheAppetite);
 
+        // And a member of the union we are bringing together, holding out - counted only by a
+        // government that wants the union badly enough (Consolidation). It still needs a cause.
+        value += Part(parts, "union", Consolidation.WarValue(campaign, nation, other));
+
         // Something we cannot buy. A country short of a good the target sells has a reason
         // that a country with a full market does not - which is the whole point of having
         // made trade bilateral.

@@ -70,6 +70,7 @@ public partial class DealOrForceGame
             _recruitmentQueue = new VBoxContainer();
             _recruitmentQueue.AddThemeConstantOverride("separation", 8);
             body.AddChild(_recruitmentQueue);
+            AddContractorRows(body);
         }
         _recruitmentViewer = _campaign.Player.Id;
         _recruitmentTemplates = UnitTypeCatalog.All.OrderBy(t => t.RecruitmentCost).Select(t => t.Id).ToArray();
@@ -107,6 +108,7 @@ public partial class DealOrForceGame
             _campaign.Player.Treasury, _campaign.Player.ManpowerReserve) +
             (reason.Length == 0 ? Tr("Ready to fund training.") : reason);
         _recruitmentSubmit.Disabled = reason.Length > 0;
+        RefreshContractors();
         var queueState = _recruitmentViewer + ":" + string.Join(";", _campaign.Recruitment.Where(o => o.NationId == _recruitmentViewer)
             .Select(o => $"{o.Id}:{o.TrainedDays}:{RecruitmentSystem.DeploymentProvince(_campaign, o.NationId, o.StateMapIndex)}"));
         // Do not replace a focused/pressed Cancel button on every HUD refresh.

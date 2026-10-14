@@ -55,8 +55,20 @@ public sealed partial class Defines
 /// propose/vote/leave; founders cannot force membership, confiscate funds or spend alone.</summary>
 public static class InternationalOrganizations
 {
-    public static string DisplayName(Campaign c, InternationalOrganization o) => string.IsNullOrEmpty(o.GeneratedCountryTag)
-        ? Loc.Get(o.Name) : Loc.Format("Council of {0}", c.NationByTag(o.GeneratedCountryTag)?.DisplayName ?? o.GeneratedCountryTag);
+    public static string DisplayName(Campaign c, InternationalOrganization o)
+    {
+        if (!string.IsNullOrEmpty(o.GeneratedCountryTag))
+            return Loc.Format("Council of {0}", c.NationByTag(o.GeneratedCountryTag)?.DisplayName ?? o.GeneratedCountryTag);
+        // A name made in play is a template and the capitals it names: "org.name.pact|Warsaw|Vilnius"
+        // (OrganizationDynamics), read in the player's language.
+        if (o.Name.Contains('|'))
+        {
+            var parts = o.Name.Split('|');
+            var places = parts.Skip(1).Select(place => (object)Loc.GetOr("capital." + place, Loc.Get(place))).ToArray();
+            return Loc.Format(parts[0], places);
+        }
+        return Loc.Get(o.Name);
+    }
     private static Dictionary<string, OrganizationCharter> _charters;
     public static IReadOnlyCollection<OrganizationCharter> Charters { get { Ensure(); return _charters.Values; } }
     public static OrganizationCharter Charter(string id) { Ensure(); return _charters.GetValueOrDefault(id ?? ""); }
@@ -241,14 +253,16 @@ public static class InternationalOrganizations
                 foreach (var id in org.Members.ToArray())
                 {
                     var n = c.NationById(id);
-                    if (!Eligible(c, n)) { org.UnpaidWeeks[id] = org.UnpaidWeeks.GetValueOrDefault(id) + 1; unpaid = true; continue; }
+                    // A member with no ground of its own to tax owes nothing: arrears are a government's choice.
+                    if (!Eligible(c, n)) continue;
                     var dues = Dues(c, org, n);
                     if (!float.IsFinite(dues) || n.Treasury < dues) { org.UnpaidWeeks[id] = org.UnpaidWeeks.GetValueOrDefault(id) + 1; unpaid = true; continue; }
                     if (!float.IsFinite(n.Treasury) || !float.IsFinite(org.Budget + dues)) { unpaid = true; continue; }
                     n.Treasury -= dues; org.Budget += dues; org.UnpaidWeeks[id] = 0;
                 }
-                var hostile = org.Members.Any(id => org.Members.Any(other => id < other && CampaignDiplomacy.AtWar(c, id, other)));
-                org.Cohesion = Math.Clamp(org.Cohesion + (unpaid ? -Math.Max(0, c.Defines.OrganizationArrearsCohesionLoss) : .002f) - (hostile ? .05f : 0), 0, 1);
+                // What members at war with each other do to it is part of where its cohesion is
+                // heading (OrganizationDynamics.Target), not a second toll on top.
+                org.Cohesion = Math.Clamp(org.Cohesion + (unpaid ? -Math.Max(0, c.Defines.OrganizationArrearsCohesionLoss) : .002f), 0, 1);
             }
             if (org.Motion is not { } m) continue;
             foreach (var id in org.Members)

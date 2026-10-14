@@ -248,6 +248,7 @@ public static class SupportCore
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(SupportCore))) return;
         Train(campaign);
+        AirReconnaissance.Expose(campaign);
         Attrition(campaign);
         Recover(campaign);
         CommandByAir(campaign);
@@ -288,7 +289,7 @@ public static class SupportCore
     /// missile brigades, thinned by its own side's fighters; for guns the enemy's counter-battery
     /// fire and strikes; for a missile brigade, the strikes flown at it.
     /// </summary>
-    private static float ThreatTo(SupportTypeDefinition type, string mission, SideReach own, SideReach enemy)
+    internal static float ThreatTo(SupportTypeDefinition type, string mission, SideReach own, SideReach enemy)
     {
         switch (type.Kind)
         {
