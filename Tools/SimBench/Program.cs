@@ -177,6 +177,13 @@ public static class Program
         DebugRegion("before map");
         var mapped = AttachMap(campaign);
         DebugRegion("after map");
+        if (Array.IndexOf(args, "--waterfront-check") >= 0)
+            return mapped ? WaterfrontReferenceCheck.Run(campaign) : 2;
+        var tradeProfileAt = Array.IndexOf(args, "--trade-profile");
+        if (tradeProfileAt >= 0)
+            return mapped ? TradeLatencyReport.Run(campaign,
+                tradeProfileAt + 1 < args.Length && int.TryParse(args[tradeProfileAt + 1], out var tradeRepeats)
+                    ? tradeRepeats : 20) : 2;
         if (Array.IndexOf(args, "--authored-world") >= 0)
             return Check("authored national statistics", authoredStatistics) +
                 Check("province ownership matches ground and explicit corrections", ProvincesSitWhereTheirOwnerIs(campaign)) +
