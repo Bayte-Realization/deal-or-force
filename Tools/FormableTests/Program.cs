@@ -28,6 +28,7 @@ static class Program
         if (args.Contains("--staged-boundary-only")) { StagedStepBoundaryTests.Run(); return; }
         if (args.Contains("--mod-frontend-only")) { ModFrontendActionTests.Run(); return; }
         if (args.Contains("--assistance-presentation-only")) { ForeignAssistancePresentationTests.Run(); return; }
+        if (args.Contains("--assault-presentation-only")) { ArmyAssaultPresentationTests.Run(); return; }
         if (args.Contains("--foreign-assistance-only")) { ForeignAssistanceTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
         if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
@@ -100,6 +101,7 @@ static class Program
         StagedStepBoundaryTests.Run();
         ModFrontendActionTests.Run();
         ForeignAssistancePresentationTests.Run();
+        ArmyAssaultPresentationTests.Run();
         ForeignAssistanceTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();

@@ -37,6 +37,8 @@ public partial class DealOrForceGame
     private int _lastRosterClickId = -1;
     private ulong _lastRosterClickMsec;
     private Button _withdrawSelectedButton;
+    private VBoxContainer _armyAssaultReadiness;
+    private Label _armyAssaultReadinessText;
 
     /// <summary>
     /// NATO-ish counters. A player who has played a Paradox game reads these before they
@@ -143,6 +145,16 @@ public partial class DealOrForceGame
         var plansPage = CommandPage(commandTabs, "ORDERS");
         var doctrinePage = CommandPage(commandTabs, "STANCE");
         var organisationPage = CommandPage(commandTabs, "ORGANISE");
+
+        _armyAssaultReadiness = new VBoxContainer { Name = "AssaultReadiness", Visible = false };
+        _armyAssaultReadiness.AddThemeConstantOverride("separation", 2);
+        plansPage.AddChild(_armyAssaultReadiness);
+        _armyAssaultReadiness.AddChild(Title("AUTOMATIC ASSAULT", 11, Ui.Colour("text.caption")));
+        _armyAssaultReadinessText = Title("", 12, Ui.Colour("text.body_soft"));
+        _armyAssaultReadinessText.Name = "AssaultReadinessText";
+        _armyAssaultReadinessText.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _armyAssaultReadinessText.MouseFilter = MouseFilterEnum.Stop;
+        _armyAssaultReadiness.AddChild(_armyAssaultReadinessText);
 
         // ---- battle plans -------------------------------------------------------------
         var plans = new HFlowContainer();
@@ -284,16 +296,28 @@ public partial class DealOrForceGame
 
     private static VBoxContainer CommandPage(TabContainer tabs, string name)
     {
-        var page = new VBoxContainer
+        // A command deck is a workspace, not a fixed-height poster. Translations,
+        // modded font sizes and the 720p layout must still expose the last action.
+        var scroll = new ScrollContainer
         {
             Name = name,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            FollowFocus = true,
+            ClipContents = true
+        };
+        var page = new VBoxContainer
+        {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             ClipContents = true
         };
         page.AddThemeConstantOverride("separation", 6);
-        tabs.AddChild(page);
-        page.SetMeta("loc_tab", name);
-        tabs.SetTabTitle(tabs.GetTabIdxFromControl(page), Tr(name));
+        tabs.AddChild(scroll);
+        scroll.AddChild(page);
+        scroll.SetMeta("loc_tab", name);
+        tabs.SetTabTitle(tabs.GetTabIdxFromControl(scroll), Tr(name));
         return page;
     }
 
@@ -403,6 +427,10 @@ public partial class DealOrForceGame
             : _selectedArmy is null ? new List<Army>() : new List<Army> { _selectedArmy };
         if (divisions.Count == 0) { SetArmyPanelVisible(false); return; }
 
+        // Daily refresh must not replace the roster row between mouse-down and
+        // mouse-up, nor dismiss a command popup that the player is reading.
+        if (InterfaceInteractionGuard.Busy(_armyPanel)) return;
+
         var owner = _campaign.NationById(divisions[0].NationId);
         var mine = owner == _campaign.Player;
         SetArmyPanelVisible(true);
@@ -428,6 +456,7 @@ public partial class DealOrForceGame
 
         RefreshComposition(divisions);
         RefreshRoster(divisions, mine);
+        RefreshAssaultReadiness(divisions);
 
         _armyRosterHint.Visible = mine;
         foreach (var (order, button) in _armyOrderButtons)
@@ -613,6 +642,8 @@ public partial class DealOrForceGame
         if (IsOffensive(army))
             text += Simulation.Loc.Format("Plan preparation: {0:P0} (up to +{1:P0} attack)",
                 army.Planning, _campaign.Defines.MaxPlanningAttackBonus) + "\n";
+        if (IsOffensive(army) && !army.InBattle)
+            text += ArmyAssaultPresentation.Description(_campaign, army) + "\n";
         text += "\n" + Simulation.Loc.Format("{0} · province #{1:N0}",
                     state is null ? Simulation.Loc.Get("Unmapped ground") : state.DisplayName,
                     army.ProvinceId) + "\n" +
@@ -624,6 +655,17 @@ public partial class DealOrForceGame
             text += "\n" + Simulation.Loc.Get(
                 "Route interrupted: territorial control changed and no legal corridor remains. Issue a new destination.");
         return text;
+    }
+
+    private void RefreshAssaultReadiness(List<Army> divisions)
+    {
+        var offensive = divisions.Where(IsOffensive).ToArray();
+        _armyAssaultReadiness.Visible = offensive.Length > 0;
+        if (offensive.Length == 0) return;
+        _armyAssaultReadinessText.Text = ArmyAssaultPresentation.Summary(_campaign, offensive);
+        _armyAssaultReadinessText.TooltipText = Ui.Tip(
+            _armyAssaultReadinessText.Text + "\n\n" + Simulation.Loc.Get(
+                "These are minimum conditions for an automatic assault, not an estimate of victory. Orders, access, enemy strength and battle frontage still matter."));
     }
 
     private string OneLineSummary(Army army)

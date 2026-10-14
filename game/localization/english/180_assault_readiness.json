@@ -1,0 +1,20 @@
+{
+  "AUTOMATIC ASSAULT": "AUTOMATIC ASSAULT",
+  "Already in battle; readiness is checked before a new assault.": "Already in battle; readiness is checked before a new assault.",
+  "Minimum assault readiness met; a reachable defended target is still needed. This is not a prediction of victory.": "Minimum assault readiness met; a reachable defended target is still needed. This is not a prediction of victory.",
+  "An explicit order overrides the automatic readiness floor. Low supply or organisation still weakens the attack.": "An explicit order overrides the automatic readiness floor. Low supply or organisation still weakens the attack.",
+  "The offensive plan is paused. Execute resumes it; Prepare keeps the formation on its line.": "The offensive plan is paused. Execute resumes it; Prepare keeps the formation on its line.",
+  "Recovering: {0:N0} day(s) before a new automatic assault.": "Recovering: {0:N0} day(s) before a new automatic assault.",
+  "Waiting for organisation: {0:P1} available; more than {1:P1} required. Hold the line or use reserves to recover.": "Waiting for organisation: {0:P1} available; more than {1:P1} required. Hold the line or use reserves to recover.",
+  "Waiting for supply: {0:P1} available; more than {1:P1} required. Reduce crowding or improve the supply corridor.": "Waiting for supply: {0:P1} available; more than {1:P1} required. Reduce crowding or improve the supply corridor.",
+  "This formation has no automatic assault order.": "This formation has no automatic assault order.",
+  "No current formation is available for an assault.": "No current formation is available for an assault.",
+  "These are minimum conditions for an automatic assault, not an estimate of victory. Orders, access, enemy strength and battle frontage still matter.": "These are minimum conditions for an automatic assault, not an estimate of victory. Orders, access, enemy strength and battle frontage still matter.",
+  "Automatic assault: {0:N0} of {1:N0} formations meet the minimum.": "Automatic assault: {0:N0} of {1:N0} formations meet the minimum.",
+  "Already fighting: {0:N0}": "Already fighting: {0:N0}",
+  "Explicit orders: {0:N0}; automatic health floors do not apply.": "Explicit orders: {0:N0}; automatic health floors do not apply.",
+  "Plans paused: {0:N0}": "Plans paused: {0:N0}",
+  "Recovering: {0:N0}": "Recovering: {0:N0}",
+  "Waiting for organisation: {0:N0}": "Waiting for organisation: {0:N0}",
+  "Waiting for supply: {0:N0}": "Waiting for supply: {0:N0}"
+}
