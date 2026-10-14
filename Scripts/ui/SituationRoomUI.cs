@@ -75,7 +75,6 @@ public partial class DealOrForceGame
         _situationAction = ActionButton("", FollowSituation, 0, 40, true);
         _situationAction.Name = "SituationAction"; _situationAction.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _situationAction.SizeFlagsHorizontal = SizeFlags.ExpandFill; detail.AddChild(_situationAction);
-        rows.AddChild(SituationText("Current conditions, not guaranteed outcomes. Reviewing an issue never spends money or signs an agreement.", 12, "text.caption"));
         _situationMusic = SituationText("", 12, "text.caption"); _situationMusic.Name = "SituationMusic";
         _situationMusic.MouseFilter = MouseFilterEnum.Stop; rows.AddChild(_situationMusic);
         var media = ActionButton("Listen and inspect artwork", OpenMediaLibrary, 0, 30);
@@ -227,7 +226,7 @@ public partial class DealOrForceGame
             StyleButton(card.Button, item.Id == _situationSelected);
         }
         _situationEmpty.Visible = visible.Length == 0;
-        _situationEmpty.Text = Tr(_situations.Count == 0 ? "No urgent issues are recorded. This is a current assessment, not a promise of permanent safety."
+        _situationEmpty.Text = Tr(_situations.Count == 0 ? "Nothing urgent."
             : "No issues match this filter. Clear the search or choose All issues.");
         _situationList.MoveChild(_situationEmpty, index);
         ShowSituationDetails(visible.FirstOrDefault(i => i.Id == _situationSelected));
@@ -243,8 +242,7 @@ public partial class DealOrForceGame
         _situationAction.Visible = item is not null;
         if (item is null)
         {
-            _situationDetail.AddChild(SituationText("A government needs context, not just alarms.", 24, "text.accent"));
-            _situationDetail.AddChild(SituationText("Select an issue to see the recorded conditions, what may follow, and where to respond. The map and simulation remain the source of truth.", 15, "text.body_soft"));
+            _situationDetail.AddChild(SituationText("Select an issue to see its causes, what may follow and where to act.", 15, "text.body_soft"));
             _situationStatus.Text = Tr("No decision is required here."); return;
         }
         _situationDetail.AddChild(SituationText(SituationPriorityName(item.Priority), 12, SituationColour(item.Priority)));

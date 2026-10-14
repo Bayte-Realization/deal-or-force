@@ -88,11 +88,11 @@ public partial class DealOrForceGame
         var refusal = InternationalOrganizations.Refusal(_campaign, command);
         if (refusal.Length > 0) { _organizationConfirmation = ""; _conflictsFeedback.Text = refusal; return; }
         if (confirmation.Length > 0 && _organizationConfirmation != confirmation)
-        { _organizationConfirmation = confirmation; _conflictsFeedback.Text = Tr("Review the deposit or motion, then press the same action again to confirm. Nothing has changed yet."); return; }
+        { _organizationConfirmation = confirmation; _conflictsFeedback.Text = Tr("Press again to confirm."); return; }
         _organizationConfirmation = ""; _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
         if (command.Action == "create" && command.Changed) _selectedOrganization = _campaign.Organizations.Last().Id;
         RefreshConflictsScreen(true);
-        _conflictsFeedback.Text = Tr(command.Changed ? "Organization decision recorded." : "The host will validate this organization decision.");
+        _conflictsFeedback.Text = Tr(command.Changed ? "Organization decision recorded." : "Sent to the host.");
     }
 
     private void ShowOrganizationPage()

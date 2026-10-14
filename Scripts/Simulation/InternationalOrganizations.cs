@@ -121,7 +121,7 @@ public static class InternationalOrganizations
     {
         if (c is null || !c.FeatureEnabled("organizations")) return Loc.Get("International organizations are disabled.");
         var n = c.NationById(cmd.IssuerId);
-        if (!Eligible(c, n)) return Loc.Get("Only a living territorial country can participate.");
+        if (!Eligible(c, n)) return Loc.Get("Only a country with land of its own can take part.");
         var ownCount = Memberships(c, n.Id).Count();
         if (cmd.Action == "create")
         {

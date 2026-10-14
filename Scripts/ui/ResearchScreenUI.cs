@@ -75,7 +75,6 @@ public partial class DealOrForceGame
         _researchDetails.AddThemeConstantOverride("separation", 10);
         detailScroll.AddChild(_researchDetails);
         rows.AddChild(Title("Select a card to inspect it. Switching research preserves invested points.", 12, Ui.Colour("text.muted")));
-        rows.AddChild(Title("Future tiers represent possible development paths, not dated predictions.", 12, Ui.Colour("text.muted")));
     }
 
     private void OpenResearchScreen()

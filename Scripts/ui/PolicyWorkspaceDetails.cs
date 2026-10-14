@@ -67,9 +67,9 @@ public partial class DealOrForceGame
             if (memory.Challenger.Length > 0)
             {
                 PolicyStat(_policyPreview, "Emerging course", Tr(NationalCourseCatalog.Find(memory.Challenger)?.Name ?? memory.Challenger), "agenda");
-                PolicyText(_policyPreview, Simulation.Loc.Format("Sustained lead: {0} days. A temporary lead is not enough to change the national agenda.", memory.ChallengerDays));
+                PolicyText(_policyPreview, Simulation.Loc.Format("In the lead for {0} days.", memory.ChallengerDays));
             }
-            PolicyText(_policyPreview, "You cannot replace this course by clicking a button. Laws, institutions, living conditions and major events gradually shape it.");
+            PolicyText(_policyPreview, "Laws, living conditions and great events shape it over the years.");
             return;
         }
         if (PolicyIsAgenda) ShowPromiseProgress(n);
@@ -94,7 +94,7 @@ public partial class DealOrForceGame
             PolicyStat(_policyPreview, "Term progress", Simulation.Loc.Format("{0} days", p.DurationDays), "agenda");
             PolicyText(_policyPreview, Tr(p.Goal switch { "living" => "Living standard target", "debt_ratio" => "Debt / GDP ceiling",
                 "peace" => "Remain at peace", _ => "Stability target" }) + (p.Goal == "peace" ? "" : ": " + Fmt.Percent(p.GoalValue)));
-            PolicyText(_policyPreview, "Sustained achievement is required; reaching the goal only on the final day is not enough.");
+            PolicyText(_policyPreview, "The goal must be met at the end and for at least a third of the term.");
         }
         var may = PoliticalPolicies.CanAdopt(_campaign, n, p, _lawTarget, _lawRegion, PolicyIsAgenda, out var refusal);
         var ready = n.PolicyReadyOnDay.GetValueOrDefault(PolicyIsAgenda ? "agenda" : PoliticalPolicies.Slot(p, _lawTarget, _lawRegion));

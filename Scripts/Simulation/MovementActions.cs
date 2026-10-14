@@ -212,7 +212,7 @@ public static class MovementActions
                 var support = state.Support.GetValueOrDefault(region.MapIndex);
                 if (!float.IsFinite(support) || !float.IsFinite(state.Cadres) || !float.IsFinite(state.Legitimacy) ||
                     !float.IsFinite(region.Stability) || !float.IsFinite(nation.Treasury))
-                    return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
+                    return Loc.Get("The campaign data is damaged, so this cannot be done.");
                 if (!definition.Has("for_hire") && support < defines.MovementUprisingSupport)
                     return Loc.Format("Support there is {0}; it takes {1}.", Fmt.Percent(support), Fmt.Percent(defines.MovementUprisingSupport));
                 if (definition.Has("for_hire") && region.Stability > 0.35f)

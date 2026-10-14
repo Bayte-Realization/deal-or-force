@@ -593,7 +593,7 @@ public partial class DealOrForceGame : Control
         // authored 2024 figures. If this ever drifts, the calibration broke, not the map.
         GD.Print("[dof] " + Simulation.EconomySystem.LastCalibrationReport);
         if (IsInstanceValid(_scenarioSummary))
-            _scenarioSummary.Text = Simulation.Loc.Format("{0} nations · {1} states · deterministic campaign simulation", _campaign.Nations.Count, _campaign.States.Count);
+            _scenarioSummary.Text = Simulation.Loc.Format("{0} countries · {1} regions", _campaign.Nations.Count, _campaign.States.Count);
         BindCampaignMods();
         ApplyCustomCursors();
 
@@ -757,7 +757,7 @@ public partial class DealOrForceGame : Control
         rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
 
         var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
-        multiplayer.TooltipText = Ui.Tip(Tr("Host or join an authoritative ENet campaign over LAN, direct IPv4 or a virtual LAN such as Radmin VPN."));
+        multiplayer.TooltipText = Ui.Tip(Tr("Host or join a campaign over LAN, by IPv4 address, or through a virtual LAN such as Radmin VPN."));
         rows.AddChild(multiplayer);
 
         _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 42);
@@ -876,7 +876,7 @@ public partial class DealOrForceGame : Control
         menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 32, 28, true);
-        _pause.TooltipText = Ui.Tip(Tr("Pause and resume campaign time (Space). Space never activates a focused button."));
+        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space)."));
         speeds.AddChild(_pause);
         _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
@@ -967,7 +967,7 @@ public partial class DealOrForceGame : Control
             MaxValue = 1,
             Step = 0.01,
             Scrollable = false,
-            TooltipText = Ui.Tip(Tr("Military allocation; submitted through the deterministic command queue."))
+            TooltipText = Ui.Tip(Tr("How much the state spends on the armed forces."))
         };
         _militarySpending.ValueChanged += OnSpendingChanged;
         sideRows.AddChild(_militarySpending);

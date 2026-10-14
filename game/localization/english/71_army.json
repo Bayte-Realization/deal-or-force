@@ -17,7 +17,7 @@
   "{0} · province #{1:N0}": "{0} · province #{1:N0}",
   "Order: {0} · posture: {1}": "Order: {0} · posture: {1}",
   "Engaged in battle #{0}": "Engaged in battle #{0}",
-  "Route interrupted: territorial control changed and no legal corridor remains. Issue a new destination.": "Route interrupted: territorial control changed and no legal corridor remains. Issue a new destination.",
+  "The route is cut. Choose a new destination.": "The route is cut. Choose a new destination.",
   "{0} · {1} · {2:N0} men": "{0} · {1} · {2:N0} men",
   "unmapped": "unmapped",
   "{0:N0} division of {1} selected.": "{0:N0} division of {1} selected.",

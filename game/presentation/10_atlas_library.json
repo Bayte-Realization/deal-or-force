@@ -2,28 +2,28 @@
   "assets": {
     "afterimage_republic": {
       "name": "Afterimage republic",
-      "purpose": "A fragile civic groove for quiet periods and recovery; no triumphant ending.",
+      "purpose": "Quiet and uneasy, for peace and recovery.",
       "kind": "music",
       "file": "music/audio/afterimage_republic.ogg",
       "source": "CreativeClaw · Lyria 3.5 · generated instrumental"
     },
     "faultlines_in_motion": {
       "name": "Faultlines in motion",
-      "purpose": "Restless broken beats for acute crises and wartime pressure; intimate, not epic.",
+      "purpose": "Broken beats for crises and war.",
       "kind": "music",
       "file": "music/audio/faultlines_in_motion.ogg",
       "source": "CreativeClaw · Lyria 3.5 · generated instrumental"
     },
     "last_lap_world": {
       "name": "Last lap of the world",
-      "purpose": "The world-emergency rising loop; enabled by actual systemic war or an explicit scenario signal.",
+      "purpose": "Rises when the whole world is at war.",
       "kind": "music",
       "file": "music/audio/last_lap_world.ogg",
       "source": "CreativeClaw source + deterministic Shepard/Risset layer"
     },
     "atlas_header": {
       "name": "Engraved atlas heading",
-      "purpose": "Subtle brass linework at the edges; the central text area remains quiet.",
+      "purpose": "Brass ornament at the edges.",
       "kind": "image",
       "file": "gfx/atmosphere/atlas_header.png",
       "source": "CreativeClaw · Nano Banana 2 · generated abstract artwork"

@@ -5,21 +5,21 @@
 {
   "scottish_civic_campaign": {
     "name": "Scottish National Party",
-    "description": "The Scottish National Party is a social-democratic political party seeking Scottish independence through democratic consent. Its organisation is represented separately from the Scottish population: not every Scot supports it, and electoral campaigning does not create an armed uprising.",
+    "description": "The social-democratic party of Scottish independence, in government at Holyrood since 2007. It wants a second referendum.",
     "traits": ["civic_independence", "nonviolence", "diaspora_lobby"],
     "outreach_km": 450,
     "diaspora_reach_km": 2500
   },
   "welsh_civic_campaign": {
     "name": "Plaid Cymru",
-    "description": "Plaid Cymru, the Party of Wales, seeks Welsh independence and social justice through constitutional politics. It competes for support among residents rather than representing every Welsh person; its independence campaign is a peaceful political process, not an automatic rebellion.",
+    "description": "The Party of Wales: independence and social justice, won at the ballot box.",
     "traits": ["civic_independence", "nonviolence", "diaspora_lobby"],
     "outreach_km": 300,
     "diaspora_reach_km": 2000
   },
   "quebec_civic_campaign": {
     "name": "Parti Québécois",
-    "description": "The Parti Québécois is a Quebec political party whose constitutional objective is an independent Quebec. Its sovereignty campaign works through public debate and democratic consent. Party support is not the same as Quebec's entire population or a universal desire for separation.",
+    "description": "The party of Quebec sovereignty. It called the referendums of 1980 and 1995 and promises a third.",
     "traits": ["civic_independence", "nonviolence", "diaspora_lobby"],
     "outreach_km": 700,
     "diaspora_reach_km": 2500
@@ -29,7 +29,7 @@
     "peoples": ["bavarian"], "headquarters": "de_by", "homeland": ["de_by"],
     "government": "parliamentary_republic", "ideology": "conservatism",
     "name": "Bavaria Party",
-    "description": "The Bavaria Party, Bayernpartei, is a regional political party supporting Bavarian self-determination and statehood. It begins as a small constitutional organisation, not the voice of all Bavarians. Greater autonomy or independence requires winning support over time, not automatic armed separatism.",
+    "description": "The Bayernpartei, a small constitutional party that wants Bavaria to be a state of its own.",
     "support": {"de_by": 0.03},
     "legitimacy": 0.25,
     "treasury": 0.01,

@@ -84,7 +84,7 @@ public static class DealNegotiations
             c.DealOffers.Count(o => o.Pending) - (parent is null ? 0 : 1) >= MaxActiveOffers))
             return new(false, Loc.Get("Their diplomatic inbox is full. Wait for a reply."));
         if (c.NextDealOfferId <= 0 || c.NextDealOfferId == int.MaxValue)
-            return new(false, Loc.Get("No further negotiation numbers are available."));
+            return new(false, Loc.Get("No more offers can be made in this campaign."));
         // Counterproposals to governments still use the same current AI assessment.
         // A refusal keeps the original paper on the table.
         var assessment = Ultimatum.AssessNegotiatedDeal(c, from, to, terms);

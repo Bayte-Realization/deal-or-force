@@ -21,7 +21,7 @@ public partial class DealOrForceGame
 
         var card = WorkbenchCard(_ledgerReportRows);
         card.AddChild(Title("Supplier stress test", 18, Ui.Colour("text.accent")));
-        card.AddChild(Title("Remove one supplier's current imports on paper. Production, demand and other imports stay fixed; no replacement trade, price or GDP forecast. This does not impose an embargo.", 13, Ui.Colour("text.caption")));
+        card.AddChild(Title("What if one supplier stopped selling to this country? Today's figures, with no replacement found.", 13, Ui.Colour("text.caption")));
         var picker = new OptionButton { Name = "StressSupplier", FitToLongestItem = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 36) };
         picker.AddItem(Tr("Choose a supplier — baseline only"), -1);
@@ -42,7 +42,7 @@ public partial class DealOrForceGame
             return;
         }
         if (report.ExcludedGoods > 0)
-            card.AddChild(Title(Simulation.Loc.Format("Goods excluded because market and route figures are incomplete or inconsistent: {0}.", report.ExcludedGoods), 13, Ui.Colour("state.warning")));
+            card.AddChild(Title(Simulation.Loc.Format("Goods left out for lack of data: {0}", report.ExcludedGoods), 13, Ui.Colour("state.warning")));
         if (report.Rows.Length == 0)
             card.AddChild(Title("No measurable imports from this supplier in the current snapshot.", 14, Ui.Colour("text.caption")));
         foreach (var row in report.Rows)

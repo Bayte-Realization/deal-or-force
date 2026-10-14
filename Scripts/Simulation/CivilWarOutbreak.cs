@@ -99,9 +99,9 @@ public static class CivilWarOutbreak
         if (c is null || nation is null) return "No governed country selected.";
         var d = c.Defines;
         if (!d.CivilWarOutbreaks || !MechanicFeatures.SystemEnabled(c, "SecessionEvents")) return "Civil-war outbreaks are disabled.";
-        if (!float.IsFinite(nation.Stability) || !float.IsFinite(d.CivilWarStabilityThreshold)) return "Invalid simulation values prevent this action. Pause and inspect the campaign.";
+        if (!float.IsFinite(nation.Stability) || !float.IsFinite(d.CivilWarStabilityThreshold)) return "The campaign data is damaged, so this cannot be done.";
         if (nation.Movement is not null || nation.FactionId.Length > 0 || nation.IsSubject || c.Fallen.Contains(nation.Id))
-            return "This actor is not an independent established government.";
+            return "Only an independent state can have a civil war.";
         if (nation.IsHuman && !d.CivilWarStrikesPlayers) return "Random outbreaks in player countries are disabled in campaign settings.";
         if (c.ElapsedDays < d.CivilWarEarliestDay) return "The campaign is still in its initial protection period.";
         if (nation.LastCivilWarDay > 0 && c.ElapsedDays - nation.LastCivilWarDay < d.CivilWarCooldownDays)

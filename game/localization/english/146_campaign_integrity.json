@@ -1,6 +1,6 @@
 {
   "Offices and foreign support do not grant a territorial mandate here.": "Offices and foreign support do not grant a territorial mandate here.",
-  "Invalid simulation values prevent this action. Pause and inspect the campaign.": "Invalid simulation values prevent this action. Pause and inspect the campaign.",
+  "The campaign data is damaged, so this cannot be done.": "The campaign data is damaged, so this cannot be done.",
   "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.": "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.",
   "Saving stopped: invalid simulation values. The last good save is unchanged.": "Saving stopped: invalid simulation values. The last good save is unchanged.",
   "A diagnostic snapshot could not be written; see the error log.": "A diagnostic snapshot could not be written; see the error log.",

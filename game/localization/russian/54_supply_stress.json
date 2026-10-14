@@ -1,9 +1,9 @@
 {
   "Supplier stress test": "Стресс-тест поставщика",
-  "Remove one supplier's current imports on paper. Production, demand and other imports stay fixed; no replacement trade, price or GDP forecast. This does not impose an embargo.": "Мысленно убираем текущие поставки одной страны. Производство, спрос и прочий импорт неизменны. Замена поставщиков, цены и ВВП не прогнозируются. Эмбарго не вводится.",
+  "What if one supplier stopped selling to this country? Today's figures, with no replacement found.": "Что будет, если один поставщик перестанет продавать этой стране? По сегодняшним цифрам, без замены.",
   "Choose a supplier — baseline only": "Выберите поставщика — пока исходные данные",
   "Stress test unavailable until the next market calculation.": "Стресс-тест недоступен до следующего расчёта рынка.",
-  "Goods excluded because market and route figures are incomplete or inconsistent: {0}.": "Не рассчитано товаров из-за неполных или несогласованных данных рынка и маршрутов: {0}.",
+  "Goods left out for lack of data: {0}": "Товаров не учтено из-за нехватки данных: {0}",
   "No measurable imports from this supplier in the current snapshot.": "В текущем срезе нет измеримых поставок этой страны.",
   "Current supply: {0:P0}": "Снабжение сейчас: {0:P0}",
   "Without supplier: {0:P0}": "Без поставщика: {0:P0}",

@@ -140,7 +140,7 @@
   "standing": "авторитет",
   "{0}, {1}": "{0}, {1}",
   "Movements fly their own flags": "Движения под своими флагами",
-  "Show the flags armed movements really fly instead of neutral banners in their colours. Off by default: a video that shows the flag of a group some governments list as terrorist can be age-restricted or demonetised.": "Показывать флаги, под которыми вооружённые движения выступают на самом деле, вместо нейтральных знамён в их цветах. По умолчанию выключено: видео с флагом группы, которую некоторые правительства считают террористической, могут ограничить по возрасту или лишить монетизации.",
+  "Show the real flags of armed movements instead of plain banners in their colours. Off by default: some are banned in some countries and on video sites.": "Показывать настоящие флаги вооружённых движений вместо простых знамён в их цветах. По умолчанию выключено: часть из них запрещена в некоторых странах и на видеоплатформах.",
   "Cadres": "Кадры",
   "The host's temper": "Терпение хозяина",
   "Support in every region": "Поддержка во всех регионах",

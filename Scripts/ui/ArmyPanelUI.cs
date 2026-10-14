@@ -622,7 +622,7 @@ public partial class DealOrForceGame
             text += "\n" + Simulation.Loc.Format("Engaged in battle #{0}", army.BattleId);
         if (army.LastMoveResult == ArmyMoveResult.RouteInterrupted)
             text += "\n" + Simulation.Loc.Get(
-                "Route interrupted: territorial control changed and no legal corridor remains. Issue a new destination.");
+                "The route is cut. Choose a new destination.");
         return text;
     }
 

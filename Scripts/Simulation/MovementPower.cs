@@ -78,7 +78,8 @@ public static class MovementPower
         {
             var support = state.Support.GetValueOrDefault(region.MapIndex);
             if (support < 0.3f || region.NationMapIndex == nation.MapIndex) continue;
-            var own = MovementRules.PeopleOf(c, region, definition, out var faithful) + faithful;
+            var own = MovementRules.PeopleOf(region, definition, out var faithful) + faithful;
+            if (own <= 0) continue;
             byHost[region.NationMapIndex] = byHost.GetValueOrDefault(region.NationMapIndex) + own * support;
         }
         if (byHost.Count == 0) return null;

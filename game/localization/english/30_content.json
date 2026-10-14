@@ -590,7 +590,6 @@
   "No trade with that country - in everything, or in one good when the rule names one. Either side forbidding it is enough.": "No trade with that country - in everything, or in one good when the rule names one. Either side forbidding it is enough.",
   "Trade": "Trade",
   "Trade instructions": "Trade instructions",
-  "What this country has told its traders to do. Every control here is declared in common/trade, so a mod can change the limits, the defaults and the names of all of them.": "What this country has told its traders to do. Every control here is declared in common/trade, so a mod can change the limits, the defaults and the names of all of them.",
   "Per good": "Per good",
   "Per country": "Per country",
   "Nothing has been decided; every good is traded on its merits.": "Nothing has been decided; every good is traded on its merits.",

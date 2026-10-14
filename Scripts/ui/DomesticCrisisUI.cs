@@ -40,7 +40,7 @@ public partial class DealOrForceGame
         {
             PolicyStat(_policyList, "Military plot under way", Loc.Format("{0} / {1} days",
                 Math.Max(0, _campaign.ElapsedDays - nation.CoupPlotDay), Math.Max(1, _campaign.Defines.CoupPlotDays)), "military");
-            PolicyText(_policyList, "Officers are already plotting. The plot is reviewed periodically; restored stability may prevent it. The institutional route cannot launch a second coup meanwhile.");
+            PolicyText(_policyList, "Officers are plotting. Raise stability before the plot ripens.");
         }
         PolicyText(_policyList, situation.CoupEligible ? "Political conditions permit a coup if the pressure persists."
             : "No eligible coup transition now. Pressure alone does not guarantee regime change.");
@@ -120,8 +120,8 @@ public partial class DealOrForceGame
         var title = CrisisResponseName(action);
         PolicyStat(_policyPreview, title, Fmt.Money(DomesticCrises.Cost(_campaign, nation, action)), "agenda");
         PolicyText(_policyPreview, action == "public_dialogue"
-            ? "A temporary dialogue programme reduces institutional pressure without suppressing population awareness. It is not instant pacification."
-            : "A temporary institutional review strengthens recovery while it runs. It cannot erase grievances or reset a crisis by repeated clicking.");
+            ? "A temporary dialogue programme. Pressure on the institutions falls while it runs."
+            : "A temporary review of the institutions. Recovery is faster while it runs.");
         var button = ActionButton(_crisisResponseConfirmation == action ? "Confirm response" : "Review response", () =>
         {
             if (_crisisResponseConfirmation != action) { _crisisResponseConfirmation = action; ShowDomesticCrisisWorkspace(); return; }

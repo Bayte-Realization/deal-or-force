@@ -445,7 +445,7 @@ public partial class DealOrForceGame
         _sidePanel.Visible = false;
         _pickerSearch.Text = Tr("");
         _pickerHeading.Text = Tr("LOCAL MULTIPLAYER");
-        _pickerSubheading.Text = Tr("Choose 2 or more countries · players share one deterministic world");
+        _pickerSubheading.Text = Tr("Choose two or more countries · one shared world");
         _pickerSeats.Visible = true;
         _pickerSeatToggle.Visible = true;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);
