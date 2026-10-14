@@ -590,7 +590,6 @@
   "No trade with that country - in everything, or in one good when the rule names one. Either side forbidding it is enough.": "Никакой торговли с этой страной — во всём или по одному товару, если правило его называет. Достаточно запрета с любой стороны.",
   "Trade": "Торговля",
   "Trade instructions": "Торговые инструкции",
-  "What this country has told its traders to do. Every control here is declared in common/trade, so a mod can change the limits, the defaults and the names of all of them.": "Что страна велела своим торговцам. Каждый регулятор здесь объявлен в common/trade, так что мод может изменить пределы, значения по умолчанию и названия любого из них.",
   "Per good": "По товарам",
   "Per country": "По странам",
   "Nothing has been decided; every good is traded on its merits.": "Ничего не решено; каждый товар торгуется сам по себе.",

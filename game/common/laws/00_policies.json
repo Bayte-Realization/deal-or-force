@@ -22,7 +22,7 @@
   "labour_protected": { "name": "Strong labour protections", "category": "Labour regulation", "icon": "population", "modifiers": { "living_weekly": 0.0003, "radicalism_weekly": -0.0003, "output": -0.025 } },
   "labour_flexible": { "name": "Flexible labour rules", "category": "Labour regulation", "icon": "population", "modifiers": { "output": 0.04, "radicalism_weekly": 0.0004 } },
   "migration_regulated": { "name": "Regulated entry", "category": "Migration policy", "default": true, "icon": "population", "modifiers": {} },
-  "migration_skilled": { "name": "Skilled entry programme", "category": "Migration policy", "icon": "population", "description": "Institutional support for skills exchange; this does not conjure migrants or population.", "modifiers": { "research_speed": 0.05, "trade_reach": 0.03, "tax_efficiency": -0.02 } },
+  "migration_skilled": { "name": "Skilled entry programme", "category": "Migration policy", "icon": "population", "description": "State support for exchanging skilled people.", "modifiers": { "research_speed": 0.05, "trade_reach": 0.03, "tax_efficiency": -0.02 } },
   "migration_closed": { "name": "Restricted exchange", "category": "Migration policy", "icon": "population", "modifiers": { "movement_activity": -0.06, "trade_reach": -0.04, "research_speed": -0.02 } },
   "environment_standard": { "name": "Standard environmental rules", "category": "Environmental regulation", "default": true, "icon": "construction", "modifiers": {} },
   "environment_restoration": { "name": "Restoration standards", "category": "Environmental regulation", "icon": "construction", "modifiers": { "reconstruction_speed": 0.10, "living_weekly": 0.0002, "construction_cost": 0.05 } },
@@ -43,6 +43,6 @@
   "recovery_social": { "name": "Regional social recovery", "category": "Regional recovery", "scope": "region", "icon": "construction", "modifiers": { "living_weekly": 0.0005, "radicalism_weekly": -0.0003 } },
   "recovery_security": { "name": "Regional security recovery", "category": "Regional recovery", "scope": "region", "icon": "construction", "modifiers": { "stability_weekly": 0.0006, "living_weekly": 0.0002 } },
   "foreign_pragmatic": { "name": "Pragmatic engagement", "category": "Targeted foreign policy", "scope": "foreign", "default": true, "icon": "treaty", "foreign_trust": 0 },
-  "foreign_partnership": { "name": "Strategic partnership doctrine", "category": "Targeted foreign policy", "scope": "foreign", "icon": "treaty", "description": "Declared alignment increases sustainable alliance trust with this target, not instant friendship or a treaty.", "foreign_trust": 0.06 },
-  "foreign_containment": { "name": "Containment doctrine", "category": "Targeted foreign policy", "scope": "foreign", "icon": "treaty", "description": "A hostile doctrine strains any alliance with this target. It is not an automatic declaration of war.", "foreign_trust": -0.15 }
+  "foreign_partnership": { "name": "Strategic partnership doctrine", "category": "Targeted foreign policy", "scope": "foreign", "icon": "treaty", "description": "Builds trust with this country over time.", "foreign_trust": 0.06 },
+  "foreign_containment": { "name": "Containment doctrine", "category": "Targeted foreign policy", "scope": "foreign", "icon": "treaty", "description": "Strains relations with this country.", "foreign_trust": -0.15 }
 }

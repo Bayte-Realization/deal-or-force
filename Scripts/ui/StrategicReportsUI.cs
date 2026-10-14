@@ -29,7 +29,7 @@ public partial class DealOrForceGame
     {
         ClearRuntimeChildren(_ledgerReportRows);
         if (_ledgerTab == "Vulnerabilities") { ShowEconomicExposure(nation); return; }
-        _ledgerSummary.Text = Tr("Recorded facts, not inferred causes. Internal decisions and construction are visible only to their country.");
+        _ledgerSummary.Text = Tr("What has happened. Other countries' internal decisions and building are not shown.");
         if (_chronicleCountry != nation.Id) { _chronicleCountry = nation.Id; _chroniclePage = 0; }
         var filters = new HBoxContainer();
         _ledgerReportRows.AddChild(filters);
@@ -43,7 +43,7 @@ public partial class DealOrForceGame
         var size = (int)Math.Clamp(InterfaceSkin.Metric("chronicle.page_size", 30), 5, 100);
         _chroniclePage = Math.Clamp(_chroniclePage, 0, Math.Max(0, (entries.Length - 1) / size));
         _ledgerReportRows.AddChild(Title(Simulation.Loc.Format("Recorded: {0} · retained limit: {1}", entries.Length, WorldChronicle.Capacity), 12, Ui.Colour("text.caption")));
-        if (entries.Length == 0) _ledgerReportRows.AddChild(Title("No recorded events yet. Earlier history is not reconstructed from the starting scenario.", 15, Ui.Colour("text.body_soft")));
+        if (entries.Length == 0) _ledgerReportRows.AddChild(Title("Nothing has happened yet.", 15, Ui.Colour("text.body_soft")));
         foreach (var entry in entries.Skip(_chroniclePage * size).Take(size))
         {
             var card = WorkbenchCard(_ledgerReportRows);

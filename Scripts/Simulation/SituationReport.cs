@@ -112,7 +112,7 @@ public static class SituationReport
             if (c.FeatureEnabled("coups") && MechanicFeatures.SystemEnabled(c, nameof(Coups)) && n.CoupPlotDay >= 0)
                 items.Add(new("military_plot", SituationPriority.Critical, SituationArea.Society,
                     T("Military plot under way"), T("Officers are organizing against the government."),
-                    new[] { T("The military plot system has recorded an active plot."),
+                    new[] { T("Officers are plotting a coup."),
                         Loc.Format("Stability {0:P1}; the plot threshold is {1:P1}.", n.Stability, d.CoupStabilityThreshold) },
                     new[] { T("Restored stability can prevent the transition. Reviews are periodic, not a guaranteed coup date.") },
                     new[] { F("Plot age", Loc.Format("{0} days", Math.Max(0, c.ElapsedDays - n.CoupPlotDay))),
@@ -196,7 +196,7 @@ public static class SituationReport
                 items.Add(new("standoff:" + rival.Id, (TensionStage)hot.TensionStage >= TensionStage.Clashes
                         ? SituationPriority.Critical : SituationPriority.Warning, SituationArea.Foreign,
                     Loc.Format("Dangerous standoff: {0}", rival.DisplayName), T("Tension has reached the crisis stage or beyond."),
-                    new[] { T("This warning reads the actual bilateral escalation state, not diplomatic opinion alone.") },
+                    new[] { T("Hostility, old grievances, disputed land and rivalry all raise tension.") },
                     new[] { T("Prolonged armed clashes can become a border war. Talks can reduce tension; success is not guaranteed.") },
                     new[] { F("Tension", hot.Tension.ToString("N1")) }, SituationRoute.Conflict, T("Inspect escalation and talks"), rival.Id));
         }
@@ -205,8 +205,8 @@ public static class SituationReport
             !c.Construction.Any(p => p.NationId == n.Id))
             items.Add(new("idle_construction", SituationPriority.Opportunity, SituationArea.Development,
                 T("Construction capacity is idle"), T("No construction project is running in your country."),
-                new[] { T("The construction queue is empty. This is an opportunity, not an emergency.") },
-                new[] { T("A new project consumes real money over time. Check the budget and the region's needs first.") },
+                new[] { T("Nothing is being built.") },
+                new[] { T("Construction capacity is going to waste.") },
                 Array.Empty<SituationFact>(), SituationRoute.Construction, T("Choose a development project")));
 
         return items.OrderBy(i => i.Priority).ThenBy(i => i.DeadlineDay < 0 ? int.MaxValue : i.DeadlineDay)

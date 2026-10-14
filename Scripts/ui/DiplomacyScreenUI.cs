@@ -1026,7 +1026,7 @@ public partial class DealOrForceGame
             var agenda = new VBoxContainer(); agenda.AddThemeConstantOverride("separation", 6);
             council.AddChild(agenda);
             agenda.AddChild(Title(Tr("Alliance council"), 15, Ui.Colour("text.accent")));
-            var explanation = Title(Tr("Trust is earned by kept commitments, not repeated declarations."), 12, Ui.Colour("text.body_soft"));
+            var explanation = Title(Tr("Trust grows with every commitment kept."), 12, Ui.Colour("text.body_soft"));
             explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             agenda.AddChild(explanation);
             var ceiling = Title(Simulation.Loc.Format("Sustainable trust: {0:P0}", AllianceMaintenance.Target(_campaign, relation)), 12, Ui.Colour("text.body_soft"));

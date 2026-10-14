@@ -229,9 +229,9 @@ public static partial class Ultimatum
         { reason = Loc.Get("The deal must change at least one term."); return false; }
         if (!float.IsFinite(deal.From.Cash) || !float.IsFinite(deal.To.Cash) ||
             deal.From.Cash < 0 || deal.To.Cash < 0)
-        { reason = Loc.Get("Payments must be finite and non-negative."); return false; }
+        { reason = Loc.Get("A payment cannot be negative."); return false; }
         if (!float.IsFinite(from.Treasury) || !float.IsFinite(to.Treasury))
-        { reason = Loc.Get("The treasury balance is invalid."); return false; }
+        { reason = Loc.Get("This deal cannot be made."); return false; }
         if (deal.From.Cash > MathF.Max(0f, from.Treasury))
         { reason = Loc.Get("The offer exceeds our treasury."); return false; }
         var maxShare = float.IsFinite(c.Defines.DealMaxTreasuryShare)
@@ -241,7 +241,7 @@ public static partial class Ultimatum
         var fromAfter = (double)from.Treasury - deal.From.Cash + deal.To.Cash;
         var toAfter = (double)to.Treasury - deal.To.Cash + deal.From.Cash;
         if (Math.Abs(fromAfter) > float.MaxValue || Math.Abs(toAfter) > float.MaxValue)
-        { reason = Loc.Get("The resulting treasury balance is too large."); return false; }
+        { reason = Loc.Get("The sums in this deal are too large."); return false; }
         if (!ValidateSide(c, from, deal.From, out reason)) return false;
         if (!ValidateSide(c, to, deal.To, out reason)) return false;
         // Both cannot promise the same arrangement; that is not a deal but a treaty draft

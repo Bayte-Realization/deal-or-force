@@ -5,7 +5,7 @@
   "An outbreak is possible. Restore institutional stability before the next weekly review.": "Возможна вспышка войны. Восстановите стабильность институтов до следующей недельной проверки.",
   "No governed country selected.": "Управляемая страна не выбрана.",
   "Civil-war outbreaks are disabled.": "Вспышки гражданских войн отключены.",
-  "This actor is not an independent established government.": "Этот участник не является самостоятельным действующим правительством.",
+  "Only an independent state can have a civil war.": "Гражданская война возможна только в независимом государстве.",
   "Random outbreaks in player countries are disabled in campaign settings.": "Случайные вспышки в странах игроков отключены в настройках кампании.",
   "The campaign is still in its initial protection period.": "Начальный защитный период кампании ещё не закончился.",
   "The country is protected from another outbreak during recovery.": "Во время восстановления страна защищена от повторной вспышки.",

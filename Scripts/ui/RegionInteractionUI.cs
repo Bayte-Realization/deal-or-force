@@ -244,7 +244,7 @@ public partial class DealOrForceGame
             DetailRow("Livelihood stress", Fmt.Percent(_selectedState.LivelihoodStress),
                 "Shortages, lack of jobs and local destruction put pressure on living standards and radicalism.");
             DetailRow("Births / deaths, last review", Loc.Format("{0} / {1}", Fmt.People(_selectedState.ReviewBirths), Fmt.People(_selectedState.ReviewDeaths)),
-                "Aggregate game rates: literacy affects births; living conditions, medicine and local destruction affect deaths. Not a real-world forecast or a migration count.");
+                "Literacy changes the birth rate; living conditions, medicine and war damage change the death rate.");
         }
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
         DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),

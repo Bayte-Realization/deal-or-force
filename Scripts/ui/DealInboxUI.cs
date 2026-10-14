@@ -145,7 +145,7 @@ public partial class DealOrForceGame
         var selected = papers.FirstOrDefault(o => o.Id == _dealInboxSelected) ?? papers.FirstOrDefault();
         if (selected is null)
         {
-            _dealInboxDetail.AddChild(WrappedUltimatumText("Countries may offer cash, treaties or whole regions. Your consent is never inferred from an opinion score.", 16));
+            _dealInboxDetail.AddChild(WrappedUltimatumText("Offers of cash, treaties and regions from other governments.", 16));
             return;
         }
         _dealInboxSelected = selected.Id;
@@ -169,7 +169,7 @@ public partial class DealOrForceGame
         var ours = selected.FromId == player.Id ? selected.From : selected.To;
         var theirs = selected.FromId == player.Id ? selected.To : selected.From;
         preview.Refresh(_campaign, ours.Regions, theirs.Regions, ours.ReleaseRegions, theirs.ReleaseRegions);
-        _dealInboxDetail.AddChild(WrappedUltimatumText("Gold: you give. Green: you receive. Hatching: independence, not annexation. This is the current map, not a historical border snapshot.", 12));
+        _dealInboxDetail.AddChild(WrappedUltimatumText("Gold: you give. Green: you receive. Hatched: becomes independent.", 12));
         var legal = Ultimatum.ValidateNegotiatedDeal(_campaign, from, to, selected.Terms, out var refusal);
         if (legal && !DealNegotiations.SameGround(_campaign, selected))
         { legal = false; refusal = Tr("The selected regions changed shape. Send a new offer for the current territory."); }
@@ -196,7 +196,7 @@ public partial class DealOrForceGame
                 ReplyToDeal(selected.Id, DealReply.Accept);
             }, 180, 36, true);
             accept.Name = "AcceptDiplomaticOffer"; accept.Disabled = !legal || remaining == 0;
-            accept.TooltipText = Ui.Tip(!legal ? refusal : Tr("Two clicks confirm this exact offer. Opening or reading it never counts as acceptance."));
+            accept.TooltipText = Ui.Tip(!legal ? refusal : Tr("Press twice to sign."));
             actions.AddChild(accept);
             actions.AddChild(ActionButton("Decline", () => ReplyToDeal(selected.Id, DealReply.Decline), 120, 36));
             var counter = ActionButton("Counterproposal", () => CounterDeal(selected), 170, 36);

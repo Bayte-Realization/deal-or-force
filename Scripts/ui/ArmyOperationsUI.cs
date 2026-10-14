@@ -406,7 +406,7 @@ public partial class DealOrForceGame
             SetArmyFeedback(Simulation.Loc.Format(
                 Simulation.Plural.Key("Order for {0:N0} division submitted to the host.", targets.Length),
                 targets.Length) + " " +
-                Simulation.Loc.Get("The authoritative route will appear after validation."));
+                Simulation.Loc.Get("The host will confirm the route."));
             return;
         }
         SetArmyFeedback(MoveResultSummary(results, pick, append) +
@@ -429,7 +429,7 @@ public partial class DealOrForceGame
         AddResult(parts, results, ArmyMoveResult.OrderCancelled, "order cancelled");
         AddResult(parts, results, ArmyMoveResult.AlreadyAtDestination, "already there");
         AddResult(parts, results, ArmyMoveResult.TargetNotControlled, "neutral territory: no military access or active war");
-        AddResult(parts, results, ArmyMoveResult.NoLandRoute, "no legal land corridor (water or neutral territory may block the route)");
+        AddResult(parts, results, ArmyMoveResult.NoLandRoute, "no way through by land");
         AddResult(parts, results, ArmyMoveResult.NotControlled, "not under your control");
         AddResult(parts, results, ArmyMoveResult.InvalidTarget, "invalid destination");
         AddResult(parts, results, ArmyMoveResult.ArmyNotFound, "formation no longer exists");
@@ -749,7 +749,7 @@ public partial class DealOrForceGame
             _selectedArmies.Add(detached);
             _globe.SelectArmies(_selectedArmies.Select(army => army.Id));
             ShowSelectedArmies();
-            _sideBody.Text += "\n\nFormation split successfully. Both independent halves remain selected and visible.";
+            _sideBody.Text += "\n\n" + Simulation.Loc.Get("Split in two.");
         }
         else
         {

@@ -21,7 +21,7 @@
   "The parent country must retain actual territory.": "The parent country must retain actual territory.",
   "Released regions must form one connected settlement.": "Released regions must form one connected settlement.",
   "There is no free country identity for this settlement.": "There is no free country identity for this settlement.",
-  "The country's financial accounts are invalid.": "The country's financial accounts are invalid.",
+  "These regions cannot be released right now.": "These regions cannot be released right now.",
   "Only one independent settlement may be established per deal.": "Only one independent settlement may be established per deal.",
   "Independence and subjugation cannot be combined in one settlement.": "Independence and subjugation cannot be combined in one settlement.",
   "{0}: establish an independent country in {1}": "{0}: establish an independent country in {1}",

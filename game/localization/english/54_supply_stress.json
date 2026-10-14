@@ -1,9 +1,9 @@
 {
   "Supplier stress test": "Supplier stress test",
-  "Remove one supplier's current imports on paper. Production, demand and other imports stay fixed; no replacement trade, price or GDP forecast. This does not impose an embargo.": "Remove one supplier's current imports on paper. Production, demand and other imports stay fixed; no replacement trade, price or GDP forecast. This does not impose an embargo.",
+  "What if one supplier stopped selling to this country? Today's figures, with no replacement found.": "What if one supplier stopped selling to this country? Today's figures, with no replacement found.",
   "Choose a supplier — baseline only": "Choose a supplier — baseline only",
   "Stress test unavailable until the next market calculation.": "Stress test unavailable until the next market calculation.",
-  "Goods excluded because market and route figures are incomplete or inconsistent: {0}.": "Goods excluded because market and route figures are incomplete or inconsistent: {0}.",
+  "Goods left out for lack of data: {0}": "Goods left out for lack of data: {0}",
   "No measurable imports from this supplier in the current snapshot.": "No measurable imports from this supplier in the current snapshot.",
   "Current supply: {0:P0}": "Current supply: {0:P0}",
   "Without supplier: {0:P0}": "Without supplier: {0:P0}",

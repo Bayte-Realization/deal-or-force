@@ -198,7 +198,7 @@
   "movement_flags": {
     "category": "interface", "order": 262, "kind": "toggle",
     "name": "Movements fly their own flags",
-    "description": "Show the flags armed movements really fly instead of neutral banners in their colours. Off by default: a video that shows the flag of a group some governments list as terrorist can be age-restricted or demonetised.",
+    "description": "Show the real flags of armed movements instead of plain banners in their colours. Off by default: some are banned in some countries and on video sites.",
     "default": false
   },
 

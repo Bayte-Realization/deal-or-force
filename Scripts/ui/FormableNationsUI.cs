@@ -47,7 +47,7 @@ public partial class DealOrForceGame
         {
             cards.AddChild(Title(Simulation.Loc.Format("Proclaimed: {0} · campaign day {1}", nation.DisplayName,
                 nation.FormedNationDay), 18, Ui.Colour("text.accent")));
-            cards.AddChild(Title("Compatible foundations may progress to a broader state. Previous proclamations cannot be repeated for rewards.", 13, Ui.Colour("text.body_soft")));
+            cards.AddChild(Title("Your state can later grow into a larger one.", 13, Ui.Colour("text.body_soft")));
         }
         var term = _formationSearch.Trim();
         var definitions = FormableNations.All.Where(d => (_showAllFormables || FormableNations.Eligible(nation, d)) &&

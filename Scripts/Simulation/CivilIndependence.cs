@@ -72,7 +72,7 @@ public static class CivilIndependence
         if (owner is null || owner.Id == movement.Id || c.ProvinceMap is null) return Loc.Get("There is no parent state to negotiate with.");
         if (!float.IsFinite(ResidentSupport(movement, region)) || !float.IsFinite(movement.Movement.Legitimacy) ||
             !float.IsFinite(region.Stability) || !float.IsFinite(owner.Stability) || !float.IsFinite(movement.Treasury))
-            return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
+            return Loc.Get("The campaign data is damaged, so this cannot be done.");
         if (CampaignDiplomacy.AtWar(c, movement.Id, owner.Id) || owner.IsSubject)
             return Loc.Get("Not during war or without a sovereign parent.");
         var held = c.StatesOf(owner);
