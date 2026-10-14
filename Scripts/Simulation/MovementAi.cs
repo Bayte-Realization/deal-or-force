@@ -24,17 +24,28 @@ public static class MovementAi
 {
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementAi))) return;
-        if (campaign.ElapsedDays == 0) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The movements' thinking in stages, one movement at a time, for the smoothed step.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementAi))) yield break;
+        if (campaign.ElapsedDays == 0) yield break;
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
         // On the same day as its week (MovementRules.Tick), so it acts on what that week made of it.
         foreach (var nation in campaign.Nations.ToList())
         {
             if (nation.Movement is not { Dissolved: false } || nation.IsHuman ||
                 !MovementRules.OnItsDay(campaign, nation.Id, week)) continue;
+            using (SimProfiler.Measure("movements"))
+            using (SimProfiler.Measure("  mov:ai"))
             using (SimProfiler.Measure("    mov:think")) Think(campaign, nation);
+            yield return 0;
         }
         // And what the countries do about them.
+        using (SimProfiler.Measure("movements"))
+        using (SimProfiler.Measure("  mov:ai"))
         using (SimProfiler.Measure("    mov:dealings")) MovementDealings.Ai(campaign);
     }
 
@@ -148,15 +159,19 @@ public static class MovementAi
         if (definition.Has("street_patrols") && state.Heat < 0.45f) Try("patrols");
         if (definition.Has("hospitallers"))
         {
+            // The neediest region it may work in. Ranked by need first and asked about in that
+            // order, because asking every one of the world's regions whether it may - each
+            // answer a sentence composed for nobody - was a fifth of a second a week for one
+            // order of knights. The same region wins: the ranking is stable, so of two equally
+            // needy regions the earlier still comes first, as it did.
             ScenarioState needy = null;
-            var need = float.MinValue;
-            foreach (var region in campaign.States)
+            foreach (var region in campaign.States
+                         .Where(region => region.Population > 0)
+                         .OrderByDescending(region => region.WarDamage * 2f + (1f - region.StandardOfLiving)))
             {
-                if (region.Population <= 0 || MovementActions.Refusal(campaign, nation, "hospital", region.MapIndex, -1).Length > 0) continue;
-                var score = region.WarDamage * 2f + (1f - region.StandardOfLiving);
-                if (score <= need) continue;
-                need = score;
+                if (MovementActions.Refusal(campaign, nation, "hospital", region.MapIndex, -1).Length > 0) continue;
                 needy = region;
+                break;
             }
             if (needy is not null) Try("hospital", needy.MapIndex);
         }

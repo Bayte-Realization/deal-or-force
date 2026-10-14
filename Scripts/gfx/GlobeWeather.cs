@@ -32,7 +32,8 @@ public sealed partial class GlobePresentation
     private DirectionalLight3D _weatherSun;
     private Node3D _weatherWorld;
     private double _weatherClock;
-    private bool _weatherEnabled = true;
+    private bool _cloudsOn = true;
+    private bool _mistOn = true;
 
     /// <summary>How high the camera is, in the units the weather fades by (MapAmbience listens to it too).</summary>
     public float ViewHeight => ViewDistance;
@@ -42,15 +43,25 @@ public sealed partial class GlobePresentation
         ? (_flatY * 18f, Mathf.Wrap(_flatX * 18f, -180f, 180f))
         : (-Mathf.RadToDeg(_pitch), Mathf.Wrap(Mathf.RadToDeg(_yaw) - 180f, -180f, 180f));
 
-    /// <summary>Clouds and mist on or off (the "weather" setting).</summary>
+    /// <summary>Clouds on or off (the "map_clouds" setting and the map bar's button).</summary>
+    public bool CloudsShown
+    {
+        get => _cloudsOn;
+        set { _cloudsOn = value; UpdateWeather(0); }
+    }
+
+    /// <summary>The fog-of-war mist on or off (the "map_mist" setting). The fog itself stays: only its look goes.</summary>
+    public bool MistShown
+    {
+        get => _mistOn;
+        set { _mistOn = value; UpdateWeather(0); }
+    }
+
+    /// <summary>Both at once, as the single option before them did.</summary>
     public bool WeatherEnabled
     {
-        get => _weatherEnabled;
-        set
-        {
-            _weatherEnabled = value;
-            UpdateWeather(0);
-        }
+        get => _cloudsOn || _mistOn;
+        set { _cloudsOn = _mistOn = value; UpdateWeather(0); }
     }
 
     private void CreateWeather(Node3D world)
@@ -130,13 +141,13 @@ public sealed partial class GlobePresentation
                        _weatherWorld.GetNodeOrNull<Node3D>("MovingClouds") is { Visible: true };
         var cloudFull = defines?.CloudFullDistance ?? 10.5f;
         var cloudClear = defines?.CloudClearDistance ?? 7.6f;
-        var clouds = !_weatherEnabled || replaced || cloudFull <= cloudClear ? 0f
+        var clouds = !_cloudsOn || replaced || cloudFull <= cloudClear ? 0f
             : Mathf.SmoothStep(cloudClear, cloudFull, distance);
 
         var mistFull = defines?.MistFullDistance ?? 6.0f;
         var mistClear = defines?.MistClearDistance ?? 8.2f;
         var fogged = FogOfWarActive && _campaign?.Player is { IsHuman: true } && _visionTexture is not null;
-        var mist = !_weatherEnabled || !fogged || mistClear <= mistFull ? 0f
+        var mist = !_mistOn || !fogged || mistClear <= mistFull ? 0f
             : 1f - Mathf.SmoothStep(mistFull, mistClear, distance);
 
         // Weather keeps moving while the game is paused, only slower: a frozen sky reads as a
@@ -181,6 +192,12 @@ public sealed partial class GlobePresentation
                 sheet.Visible = sheet.MaterialOverride == _mistMaterial ? mist > 0.002f : clouds > 0.002f;
     }
 
+    // The clouds are gradient noise - smooth at every scale, no grid to show - turned by a
+    // different rotation at every octave so no octave's lattice lines up with another's. The
+    // field they replaced was value noise on one axis-aligned grid, and its creases came
+    // through on the globe as long straight seams; a wind that blew west in the tropics and
+    // east beyond them sheared the band between into threads. Now the whole sky turns slowly
+    // and the clouds change shape as it goes, which is what clouds seen from orbit do.
     private const string CloudShader = @"shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_back, shadows_disabled;
 uniform float presence = 1.0;
@@ -192,81 +209,93 @@ uniform float opacity = 0.50;
 uniform float edge_softness = 0.20;
 uniform float detail_strength = 0.08;
 
-float hash(vec3 p) {
-    p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13));
-    p *= 17.0;
-    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+uvec3 scramble(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
 }
-float noise(vec3 x) {
-    vec3 i = floor(x);
-    vec3 f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x),
-                   mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
-               mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x),
-                   mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+vec3 gradient(vec3 cell) {
+    uvec3 h = scramble(uvec3(ivec3(cell) + 4096));
+    return normalize(vec3(h & uvec3(1023u)) / 511.5 - 1.0 + vec3(0.0001));
 }
+float gnoise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = p - i;
+    vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    float n000 = dot(gradient(i), f);
+    float n100 = dot(gradient(i + vec3(1, 0, 0)), f - vec3(1, 0, 0));
+    float n010 = dot(gradient(i + vec3(0, 1, 0)), f - vec3(0, 1, 0));
+    float n110 = dot(gradient(i + vec3(1, 1, 0)), f - vec3(1, 1, 0));
+    float n001 = dot(gradient(i + vec3(0, 0, 1)), f - vec3(0, 0, 1));
+    float n101 = dot(gradient(i + vec3(1, 0, 1)), f - vec3(1, 0, 1));
+    float n011 = dot(gradient(i + vec3(0, 1, 1)), f - vec3(0, 1, 1));
+    float n111 = dot(gradient(i + vec3(1, 1, 1)), f - vec3(1, 1, 1));
+    return mix(mix(mix(n000, n100, u.x), mix(n010, n110, u.x), u.y),
+               mix(mix(n001, n101, u.x), mix(n011, n111, u.x), u.y), u.z);
+}
+const mat3 TURN = mat3(vec3(0.00, 0.80, 0.60), vec3(-0.80, 0.36, -0.48), vec3(-0.60, -0.48, 0.64));
+// Roughly 0 to 1, centred on a half.
 float fbm(vec3 p, int octaves) {
-    float sum = 0.0, amp = 0.5;
+    float sum = 0.0, amp = 0.5, norm = 0.0;
     for (int k = 0; k < octaves; k++) {
-        sum += amp * noise(p);
-        p = p * 2.03 + vec3(1.7, 9.2, 5.3);
+        sum += amp * gnoise(p);
+        norm += amp;
+        p = TURN * p * 2.03 + vec3(17.1, 3.7, 9.3);
         amp *= 0.5;
     }
-    return sum;
+    return clamp(0.5 + 1.3 * sum / norm, 0.0, 1.0);
 }
 vec3 sphere_at(vec2 uv) {
     float lon = (uv.x - 0.5) * TAU;
     float lat = (0.5 - uv.y) * PI;
     return vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
 }
-// One field of cloud, shifted along its parallel. The shift is how the wind is drawn.
-float field(vec2 uv, float shift) {
-    vec3 p = sphere_at(vec2(uv.x + shift, uv.y)) * 3.1;
-    float evolve = wind * 0.0021;
-    vec3 warp = vec3(fbm(p * 1.1 + vec3(3.1, evolve, 0.0), 2),
-                     fbm(p * 1.1 + vec3(7.7, 0.0, evolve), 2),
-                     fbm(p * 1.1 + vec3(evolve, 12.4, 0.0), 2)) - 0.5;
-    vec3 shaped = p * 1.7 + warp * 1.6;
-    // Broad connected bodies carry the silhouette; small detail cannot tear it apart.
-    float body = fbm(shaped, 3);
-    float detail = fbm(shaped * 3.0, 2);
+// The sky at one point of the planet: turned with the wind, warped gently, and morphing.
+float field(vec3 n) {
+    float drift = wind * 0.0016;
+    float c = cos(drift), s = sin(drift);
+    vec3 p = vec3(c * n.x + s * n.z, n.y, -s * n.x + c * n.z) * 3.1;
+    float evolve = wind * 0.0011;
+    vec3 warp = vec3(fbm(p + vec3(0.0, 0.0, evolve), 2),
+                     fbm(p + vec3(5.2, 1.3, 2.8 - evolve), 2),
+                     fbm(p + vec3(1.7 + evolve, 9.2, 4.4), 2)) - 0.5;
+    vec3 q = p * 1.5 + warp * 0.6;
+    float body = fbm(q, 5);
+    float detail = fbm(q * 2.2 + vec3(11.0, 4.0, 7.0), 2);
     return mix(body, detail, detail_strength);
 }
 void fragment() {
     vec2 uv = UV;
-    if (shade_pass > 0.5) uv += vec2(0.0035, 0.0045);
+    if (shade_pass > 0.5) uv += vec2(0.0030, 0.0040);
+    vec3 n = sphere_at(uv);
     float lat = (0.5 - uv.y) * 180.0;
     float alat = abs(lat);
-    // The trades blow west, the westerlies east; the polar easterlies are left weak.
-    float speed = mix(-1.0, 1.0, smoothstep(24.0, 34.0, alat)) * (1.0 - 0.6 * smoothstep(62.0, 78.0, alat));
-    // Two copies of the field slide and hand over to each other, so the wind can blow for
-    // ever without shearing the clouds into stripes.
-    float t = wind * 0.0045;
-    float phase0 = fract(t);
-    float phase1 = fract(t + 0.5);
-    float weight0 = 1.0 - abs(phase0 * 2.0 - 1.0);
-    float span = 0.07 * speed;
-    float d = field(uv, -span * phase0) * weight0 + field(uv, -span * phase1 + 0.37) * (1.0 - weight0);
+    float d = field(n);
     // Where cloud is common: the equatorial belt, the storm tracks; not the horse latitudes.
-    float itcz = exp(-pow((lat - 5.0) / 9.0, 2.0));
-    float subtropic = exp(-pow((alat - 25.0) / 9.0, 2.0));
-    float storms = exp(-pow((alat - 56.0) / 12.0, 2.0));
-    float cover = clamp(0.40 + 0.34 * itcz - 0.30 * subtropic + 0.30 * storms, 0.05, 0.95);
-    float threshold = mix(0.60, 0.40, cover);
-    float body = smoothstep(threshold - edge_softness, threshold + edge_softness, d);
-    float core = smoothstep(threshold, threshold + edge_softness * 1.5, d);
-    float limb = flat_map > 0.5 ? 1.0 : smoothstep(0.0, 0.22, dot(NORMAL, VIEW));
+    float itcz = exp(-pow((lat - 5.0) / 10.0, 2.0));
+    float subtropic = exp(-pow((alat - 25.0) / 10.0, 2.0));
+    float storms = exp(-pow((alat - 56.0) / 13.0, 2.0));
+    float cover = clamp(0.40 + 0.30 * itcz - 0.26 * subtropic + 0.28 * storms, 0.08, 0.90);
+    float threshold = mix(0.68, 0.47, cover);
+    // Soft edges, and never sharper than a pixel: far away a cloud's edge is a blur.
+    float aa = fwidth(d) * 1.5;
+    // The define is the edge's whole width; half of it either side of the threshold.
+    float soft = edge_softness * 0.65 + aa;
+    float body = smoothstep(threshold - soft, threshold + soft * 1.2, d);
+    float core = smoothstep(threshold, threshold + soft * 2.0, d);
+    float limb = flat_map > 0.5 ? 1.0 : smoothstep(0.0, 0.25, dot(NORMAL, VIEW));
     if (shade_pass > 0.5) {
         ALBEDO = vec3(0.02, 0.03, 0.05);
-        ALPHA = body * opacity * 0.24 * presence * limb;
+        ALPHA = body * body * opacity * 0.22 * presence * limb;
     } else {
-        vec3 n = sphere_at(UV);
-        float light = flat_map > 0.5 ? 0.95 : 0.80 + 0.20 * clamp(dot(n, normalize(sun_dir)), 0.0, 1.0);
-        vec3 thin = vec3(0.80, 0.83, 0.88);
-        vec3 thick = vec3(0.97, 0.98, 1.0);
+        float light = flat_map > 0.5 ? 0.95 : 0.80 + 0.20 * clamp(dot(sphere_at(UV), normalize(sun_dir)), 0.0, 1.0);
+        // Thin cloud is a grey veil the ground shows through; thick cloud is bright on top.
+        vec3 thin = vec3(0.86, 0.89, 0.93);
+        vec3 thick = vec3(0.98, 0.985, 1.0);
         ALBEDO = mix(thin, thick, core) * light;
-        ALPHA = body * mix(0.50, 1.0, core) * opacity * presence * limb;
+        ALPHA = body * mix(0.30, 1.0, core) * opacity * presence * limb;
     }
 }";
 
@@ -298,25 +327,43 @@ uniform float presence = 0.0;
 uniform float wind = 0.0;
 uniform float opacity = 0.22;
 
-float hash(vec2 p) {
-    vec3 q = fract(vec3(p.xyx) * 0.1031);
-    q += dot(q, q.yzx + 33.33);
-    return fract((q.x + q.y) * q.z);
+uvec3 scramble(uvec3 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    v ^= v >> 16u;
+    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
+    return v;
 }
-float noise(vec2 x) {
-    vec2 i = floor(x);
-    vec2 f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+vec3 gradient(vec3 cell) {
+    uvec3 h = scramble(uvec3(ivec3(cell) + 4096));
+    return normalize(vec3(h & uvec3(1023u)) / 511.5 - 1.0 + vec3(0.0001));
 }
-float fbm(vec2 p) {
-    float sum = 0.0, amp = 0.5;
+// Gradient noise on the sphere itself, as the clouds use: no grid to show, and no stretching
+// towards the poles the way noise laid on the map's own coordinates stretches.
+float gnoise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = p - i;
+    vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    return mix(mix(mix(dot(gradient(i), f), dot(gradient(i + vec3(1, 0, 0)), f - vec3(1, 0, 0)), u.x),
+                   mix(dot(gradient(i + vec3(0, 1, 0)), f - vec3(0, 1, 0)), dot(gradient(i + vec3(1, 1, 0)), f - vec3(1, 1, 0)), u.x), u.y),
+               mix(mix(dot(gradient(i + vec3(0, 0, 1)), f - vec3(0, 0, 1)), dot(gradient(i + vec3(1, 0, 1)), f - vec3(1, 0, 1)), u.x),
+                   mix(dot(gradient(i + vec3(0, 1, 1)), f - vec3(0, 1, 1)), dot(gradient(i + vec3(1, 1, 1)), f - vec3(1, 1, 1)), u.x), u.y), u.z);
+}
+const mat3 TURN = mat3(vec3(0.00, 0.80, 0.60), vec3(-0.80, 0.36, -0.48), vec3(-0.60, -0.48, 0.64));
+float fbm(vec3 p) {
+    float sum = 0.0, amp = 0.5, norm = 0.0;
     for (int k = 0; k < 4; k++) {
-        sum += amp * noise(p);
-        p = p * 2.07 + vec2(5.2, 1.3);
+        sum += amp * gnoise(p);
+        norm += amp;
+        p = TURN * p * 2.03 + vec3(17.1, 3.7, 9.3);
         amp *= 0.5;
     }
-    return sum;
+    return clamp(0.5 + 1.2 * sum / norm, 0.0, 1.0);
+}
+vec3 sphere_at(vec2 uv) {
+    float lon = (uv.x - 0.5) * TAU;
+    float lat = (0.5 - uv.y) * PI;
+    return vec3(cos(lat) * sin(lon), sin(lat), cos(lat) * cos(lon));
 }
 float hidden_at(vec2 uv) {
     vec4 encoded = texture(province_ids, vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)));
@@ -328,9 +375,9 @@ void fragment() {
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     // Banks a couple of degrees across with wisps inside them, in two layers drifting
     // different ways.
-    vec2 q = UV * vec2(2.0, 1.0) * 48.0;
-    float slow = fbm(q + vec2(wind * 0.030, wind * 0.008));
-    float fast = fbm(q * 2.0 - vec2(wind * 0.085, -wind * 0.030));
+    vec3 q = sphere_at(UV) * 26.0;
+    float slow = fbm(q + vec3(wind * 0.020, 0.0, wind * 0.006));
+    float fast = fbm(q * 2.1 - vec3(wind * 0.050, wind * 0.012, 0.0));
     // The edge of the unknown billows: the taps that find it are bent by the mist itself.
     vec2 bend = (vec2(slow, fast) - 0.5) * texel * 14.0;
     float hidden = hidden_at(UV + bend) * 2.0;
@@ -340,12 +387,13 @@ void fragment() {
     }
     hidden /= 10.0;
     float land = smoothstep(0.25, 0.75, texture(political_map, UV).a);
-    // A soft veil, not white foam. The intelligence mask remains unchanged.
-    float billow = smoothstep(0.24, 0.76, slow * 0.8 + fast * 0.2);
-    float wisps = 0.35 + 0.65 * billow;
+    // A thin veil that drifts, not a wall: thickest in banks, nearly clear between them, so
+    // the ground under it stays readable. The intelligence mask remains unchanged.
+    float billow = smoothstep(0.30, 0.80, slow * 0.75 + fast * 0.25);
+    float wisps = 0.20 + 0.80 * billow;
     float density = smoothstep(0.05, 0.95, hidden) * land * wisps;
     // The tops of the banks catch the light; the hollows between them are grey.
-    ALBEDO = mix(vec3(0.49, 0.55, 0.63), vec3(0.73, 0.78, 0.84), billow);
+    ALBEDO = mix(vec3(0.56, 0.61, 0.68), vec3(0.80, 0.84, 0.89), billow);
     ALPHA = density * opacity * presence;
 }";
 }

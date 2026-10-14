@@ -650,9 +650,68 @@ public sealed partial class Campaign
         for (var steps = 0; ElapsedDays < until && steps < 240; steps++) Tick();
     }
 
+    /// <summary>One step, all of it now. A step begun by StepFor and not finished is finished first.</summary>
     public void Tick()
     {
-        if (IsPaused || SimulationFault.Length > 0) return;
+        FinishStep();
+        RunStages(TickStages().GetEnumerator(), double.PositiveInfinity);
+    }
+
+    private IEnumerator<int> _step;
+
+    /// <summary>Whether a step has been begun by StepFor and is not finished yet.</summary>
+    public bool MidStep => _step is not null;
+
+    /// <summary>
+    /// Begin a step, or carry on with the one begun, for at most this many milliseconds of
+    /// work; true once it is finished. This is the smoothing: the day's passes and the week's
+    /// economy are spread over as many frames as they need, in the order they always run, and
+    /// the clock does not move on until the step is done - the same world, without the frame
+    /// that used to stop for a third of a second every simulated week.
+    /// </summary>
+    public bool StepFor(double milliseconds)
+    {
+        _step ??= TickStages().GetEnumerator();
+        return RunStages(_step, milliseconds);
+    }
+
+    /// <summary>Finish a step in progress, so a save, a snapshot or a command never sees half of one.</summary>
+    public void FinishStep()
+    {
+        if (_step is not null) RunStages(_step, double.PositiveInfinity);
+    }
+
+    private bool RunStages(IEnumerator<int> stages, double milliseconds)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var finished = false;
+        try
+        {
+            while (true)
+            {
+                if (!stages.MoveNext()) { finished = true; break; }
+                if (clock.Elapsed.TotalMilliseconds >= milliseconds) break;
+            }
+        }
+        catch
+        {
+            finished = true;
+            throw;
+        }
+        finally
+        {
+            if (finished)
+            {
+                if (ReferenceEquals(stages, _step)) _step = null;
+                stages.Dispose();
+            }
+        }
+        return finished;
+    }
+
+    private IEnumerable<int> TickStages()
+    {
+        if (IsPaused || SimulationFault.Length > 0) yield break;
         DiagnosticLogs.SetDay(ElapsedDays);
         if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
@@ -698,6 +757,7 @@ public sealed partial class Campaign
         // countries that lost them start replacing them.
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
         using (SimProfiler.Measure("construction")) ConstructionSystem.Tick(this);
+        yield return 0;
 
         // And these happen on a day rather than during one. An event either fires today or
         // it does not; the economy clears on the week; history takes one sample. Running
@@ -706,13 +766,20 @@ public sealed partial class Campaign
         for (var day = 0; day < daysCrossed; day++)
         {
             RecruitmentSystem.Tick(this);
+            yield return 0;
             SupportCore.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("militia")) MilitiaCore.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("social memory")) SocialMemory.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("alliances")) AllianceMaintenance.Tick(this);
-            using (SimProfiler.Measure("economy")) EconomySystem.Tick(this);
+            yield return 0;
+            foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             // Before political actions read thresholds: comparisons with NaN can otherwise
             // authorise every uprising. Do not let one bad economy contaminate the map.
             if (ElapsedDays % 7 == 0 && NumericIntegrity.FirstLiveIssue(this) is { } invalid)
@@ -721,42 +788,59 @@ public sealed partial class Campaign
                 throw new CampaignIntegrityException(invalid);
             }
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
-            using (SimProfiler.Measure("escalation")) Escalation.Tick(this);
+            yield return 0;
+            foreach (var _ in Escalation.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("factions")) Factions.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("coups")) Coups.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("organizations")) InternationalOrganizations.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("deal inbox")) DealNegotiations.Tick(this);
+            yield return 0;
+            foreach (var _ in MovementRules.TickStages(this)) yield return 0;
+            foreach (var _ in MovementAi.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("movements"))
-            {
-                using (SimProfiler.Measure("  mov:rules")) MovementRules.Tick(this);
-                using (SimProfiler.Measure("  mov:ai")) MovementAi.Tick(this);
-                using (SimProfiler.Measure("  mov:methods")) MovementMethods.Tick(this);
-            }
+            using (SimProfiler.Measure("  mov:methods")) MovementMethods.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("shipbuilding")) Shipbuilding.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("subjects")) SubjectSystem.Tick(this);
-            using (SimProfiler.Measure("statecraft")) AiStatecraft.Tick(this);
+            yield return 0;
+            foreach (var _ in AiStatecraft.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("events")) EventSystem.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("history")) History.Capture(this);
+            yield return 0;
 
             // Whether any part of any country has finished deciding it is not part of it.
             // Last in the day, because it redraws the map the rest of the day was worked
             // out on; it keeps its own weekly schedule, because it also has to clear its
             // report list on the days it does nothing.
             using (SimProfiler.Measure("secession")) SecessionEvents.Tick(this);
+            yield return 0;
             // And whether any country has lost its government's grip on part of itself.
             using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
+            yield return 0;
             CountryNames.Remember(this);
 
             // And whether any country has stopped being what it was. After secession
             // because a state that has just lost a province is a state in exactly the
             // condition this reads.
             using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("domestic crises")) DomesticCrises.Tick(this);
+            yield return 0;
 
             // Settlers on land nobody owns, and whether anybody new sets out for it.
             ColonisationCore.Tick(this);
@@ -767,9 +851,11 @@ public sealed partial class Campaign
             // Ground held by a country nobody is at war with goes home: whatever ended the
             // war today - a peace, a submission, a subjugation - the troops do not stay.
             using (SimProfiler.Measure("occupations")) Occupations.Tick(this);
+            yield return 0;
 
             // And whether a country played by somebody has ground it lost that it could take back.
             using (SimProfiler.Measure("lost lands")) LostLands.Tick(this);
+            yield return 0;
 
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.

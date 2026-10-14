@@ -255,9 +255,15 @@ public static class MarketSystem
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MarketSystem))) return;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
-        Recalculate(campaign, true);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The week's market in stages, for the smoothed step (EconomySystem.TickStages).</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MarketSystem))) yield break;
+        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        foreach (var _ in RecalculateStages(campaign, true)) yield return 0;
     }
 
     /// <summary>
@@ -269,15 +275,27 @@ public static class MarketSystem
 
     private static void Recalculate(Campaign campaign, bool adjustPrice)
     {
-        using (SimProfiler.Measure("    mkt:balance"))
-            foreach (var nation in campaign.Nations)
-                CalculateNationalBalance(campaign, nation);
+        foreach (var _ in RecalculateStages(campaign, adjustPrice)) { }
+    }
+
+    /// <summary>How many countries' balances one stage of the market works out.</summary>
+    private const int BalanceStageCountries = 48;
+
+    private static IEnumerable<int> RecalculateStages(Campaign campaign, bool adjustPrice)
+    {
+        for (var start = 0; start < campaign.Nations.Count; start += BalanceStageCountries)
+        {
+            using (SimProfiler.Measure("    mkt:balance"))
+                for (var index = start; index < Math.Min(campaign.Nations.Count, start + BalanceStageCountries); index++)
+                    CalculateNationalBalance(campaign, campaign.Nations[index]);
+            yield return 0;
+        }
 
         // Who actually sells to whom. This used to be an anonymous pool: a shortfall was
         // met by "the world" at a constant rate, so nobody could be cut off and a trade
         // partner was worth one opinion modifier. Every import and export below is now a
         // named route to a named country - see TradeNetwork.
-        using (SimProfiler.Measure("    mkt:trade")) TradeNetwork.Route(campaign);
+        foreach (var _ in TradeNetwork.RouteStages(campaign)) yield return 0;
 
         using var pricing = SimProfiler.Measure("    mkt:prices");
         foreach (var commodity in CommodityCatalog.All)

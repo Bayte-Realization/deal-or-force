@@ -348,6 +348,58 @@ public static class Program
         if (Array.IndexOf(args, "--counts-cost") >= 0)
             return Check("a country counts the cost before it declares", ACountryCountsTheCost());
 
+        // `--save-size <days> [every]`: run, and every so many days save the world and say what the
+        // save is made of - the whole file, then each part of it by size, then what in the
+        // countries is largest - so a save that grows with the decades shows what grows.
+        var sizeAt = Array.IndexOf(args, "--save-size");
+        if (sizeAt >= 0)
+        {
+            var sizeDays = sizeAt + 1 < args.Length && int.TryParse(args[sizeAt + 1], out var sdays) ? sdays : 3650;
+            var every = sizeAt + 2 < args.Length && int.TryParse(args[sizeAt + 2], out var sev) ? sev : 3650;
+            campaign.IsPaused = false;
+            var sizeFolder = Path.Combine(Path.GetTempPath(), "dof-size-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(sizeFolder);
+            for (var day = 1; day <= sizeDays; day++)
+            {
+                campaign.TickDay();
+                if (day % every != 0 && day != sizeDays) continue;
+                campaign.Defines.SaveTextFormat = false;
+                SaveSystem.Save(sizeFolder, "size", campaign, "bench");
+                var file = Directory.GetFiles(sizeFolder).Where(f => !f.EndsWith(".json")).Select(f => new FileInfo(f)).OrderByDescending(f => f.Length).First();
+                var wire = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
+                using var input = new MemoryStream(wire);
+                using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
+                var root = System.Text.Json.Nodes.JsonNode.Parse(gzip)!.AsObject();
+                var parts = root.Select(pair => (pair.Key, Bytes: (long)(pair.Value?.ToJsonString().Length ?? 0)))
+                    .OrderByDescending(part => part.Bytes).ToList();
+                var total = parts.Sum(part => part.Bytes);
+                Console.WriteLine($"SAVE day {campaign.ElapsedDays} ({campaign.Date}): file {file.Length / 1048576.0:0.0} MB compressed, " +
+                                  $"{total / 1048576.0:0.0} MB of JSON; {campaign.Nations.Count} countries, {campaign.Wars.Count} wars ({campaign.Wars.Count(w => w.Ended)} ended), {campaign.Battles.Count} battles");
+                foreach (var (key, bytes) in parts.Take(14))
+                    Console.WriteLine($"   {key,-34} {bytes / 1048576.0,8:0.00} MB  {100.0 * bytes / Math.Max(1, total),5:0.0} %");
+                if (root["Nations"] is System.Text.Json.Nodes.JsonArray nations)
+                {
+                    var fields = new Dictionary<string, long>();
+                    foreach (var nation in nations.OfType<System.Text.Json.Nodes.JsonObject>())
+                        foreach (var (key, value) in nation)
+                            fields[key] = fields.GetValueOrDefault(key) + (value?.ToJsonString().Length ?? 0);
+                    Console.WriteLine("   in the countries: " + string.Join(", ", fields.OrderByDescending(f => f.Value).Take(10)
+                        .Select(f => $"{f.Key} {f.Value / 1048576.0:0.00} MB")));
+                }
+                if (root["Wars"] is System.Text.Json.Nodes.JsonArray warList)
+                {
+                    var fields = new Dictionary<string, long>();
+                    foreach (var war in warList.OfType<System.Text.Json.Nodes.JsonObject>())
+                        foreach (var (key, value) in war)
+                            fields[key] = fields.GetValueOrDefault(key) + (value?.ToJsonString().Length ?? 0);
+                    Console.WriteLine("   in the wars: " + string.Join(", ", fields.OrderByDescending(f => f.Value).Take(8)
+                        .Select(f => $"{f.Key} {f.Value / 1048576.0:0.00} MB")));
+                }
+            }
+            Directory.Delete(sizeFolder, true);
+            return 0;
+        }
+
         // `--save-roundtrip [days]`: run, save as text, load it back, and say what came back different.
         var roundtripAt = Array.IndexOf(args, "--save-roundtrip");
         if (roundtripAt >= 0)
@@ -378,6 +430,43 @@ public static class Program
 
         var seaAt = Array.IndexOf(args, "--sea");
         if (seaAt >= 0) return SeaReport(campaign, seaAt + 1 < args.Length ? args[seaAt + 1] : "sea_lanes.png");
+
+        // `--smooth <days> <budget ms>`: step the way the smoothed game does, a frame's budget at a
+        // time, and report the frames: the worst is the heaviest stage that cannot be cut.
+        var smoothAt = Array.IndexOf(args, "--smooth");
+        if (smoothAt >= 0)
+        {
+            var smoothDays = smoothAt + 1 < args.Length && int.TryParse(args[smoothAt + 1], out var sd) ? sd : 30;
+            var frameBudget = smoothAt + 2 < args.Length && double.TryParse(args[smoothAt + 2],
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fb) ? fb : 6.0;
+            campaign.IsPaused = false;
+            for (var warm = 0; warm < 3; warm++) campaign.TickDay();
+            var frames = new List<double>();
+            var frameClock = Stopwatch.StartNew();
+            var smoothUntil = campaign.ElapsedDays + smoothDays;
+            var stepsDone = 0;
+            while (campaign.ElapsedDays < smoothUntil)
+            {
+                var totalsBefore = SimProfiler.All.ToDictionary(sample => sample.Name, sample => sample.TotalMilliseconds);
+                frameClock.Restart();
+                if (campaign.StepFor(frameBudget)) stepsDone++;
+                var frameMs = frameClock.Elapsed.TotalMilliseconds;
+                frames.Add(frameMs);
+                if (frameMs > 30)
+                    Console.WriteLine($"  heavy frame {frameMs:0.0} ms on day {campaign.ElapsedDays}: " + string.Join(", ",
+                        SimProfiler.All.Select(sample => (sample.Name, Ms: sample.TotalMilliseconds - totalsBefore.GetValueOrDefault(sample.Name)))
+                            .Where(part => part.Ms >= 2).OrderByDescending(part => part.Ms).Take(6)
+                            .Select(part => $"{part.Name.Trim()} {part.Ms:0.0}")));
+            }
+            campaign.FinishStep();
+            var ordered = frames.OrderBy(ms => ms).ToList();
+            double Share(double share) => ordered[Math.Min(ordered.Count - 1, (int)(ordered.Count * share))];
+            Console.WriteLine($"Smoothed at {frameBudget:0.#} ms a frame: {frames.Count:N0} frames for {stepsDone:N0} steps; " +
+                              $"median {Share(.5):0.00} ms, p95 {Share(.95):0.00}, p99 {Share(.99):0.00}, " +
+                              $"worst {ordered[^1]:0.0}; frames over 16 ms: {frames.Count(ms => ms > 16):N0}, over 33 ms: {frames.Count(ms => ms > 33):N0}.");
+            Console.WriteLine($"  world fingerprint after {campaign.ElapsedDays} day(s): {CampaignFingerprint.Of(campaign):X16}");
+            return 0;
+        }
 
         var profileAt = Array.IndexOf(args, "--profile");
         if (profileAt >= 0) return Profile(campaign,

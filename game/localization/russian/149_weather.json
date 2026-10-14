@@ -3,5 +3,16 @@
   "Clouds and fog": "Облака и туман",
   "Clouds drifting over the world from far away, parting as the camera comes down; and up close, the ground hidden by the fog of war under a drifting mist.": "Издали над миром плывут облака и расходятся, когда камера опускается; а вблизи земля, скрытая туманом войны, тонет в плывущей дымке.",
   "Sound of the map": "Звук карты",
-  "High wind from the strategic height, open country close to the ground, and the guns of a front the camera is near. At the effects volume.": "С высоты - ветер над миром, у земли - открытая местность, а рядом с фронтом, к которому подлетела камера, - его канонада. На громкости эффектов."
+  "High wind from the strategic height, open country close to the ground, and the guns of a front the camera is near. At the effects volume.": "С высоты - ветер над миром, у земли - открытая местность, а рядом с фронтом, к которому подлетела камера, - его канонада. На громкости эффектов.",
+  "Smooth time": "Плавный ход времени",
+  "Spreads each day's and each week's calculations over several frames, so the picture never stops for them. The world comes out exactly the same either way.": "Раскладывает расчёты каждого дня и недели на несколько кадров, чтобы картинка из-за них не замирала. Мир в итоге получается точно таким же.",
+  "Clouds": "Облака",
+  "CLOUDS": "ОБЛАКА",
+  "FOG": "ТУМАН",
+  "Fog-of-war mist": "Дымка тумана войны",
+  "Clouds drifting over the world from far away, parting as the camera comes down. Off leaves the borders clear at every distance. Also a button on the map bar and on the country-select screen.": "Облака, плывущие над миром издали и расходящиеся, когда камера опускается. Если выключить, границы видны чисто на любом расстоянии. Есть и кнопка на панели карты и на экране выбора страны.",
+  "Close up, a drifting veil over the ground your country cannot see. Only its look: what is hidden stays hidden either way. Also a button on the map bar.": "Вблизи — плывущая дымка над землёй, которую ваша страна не видит. Это только вид: скрытое остаётся скрытым в любом случае. Есть и кнопка на панели карты.",
+  "Clouds over the world, seen from far away. Press to hide or show them.": "Облака над миром, видные издали. Нажмите, чтобы скрыть или показать их.",
+  "The drifting mist over ground your country cannot see, close up. Press to hide or show it; what is hidden stays hidden.": "Плывущая вблизи дымка над землёй, которую ваша страна не видит. Нажмите, чтобы скрыть или показать её; скрытое останется скрытым.",
+  "Clouds over the world. Press to hide or show them - the same option as in the settings.": "Облака над миром. Нажмите, чтобы скрыть или показать их — та же настройка, что и в параметрах."
 }

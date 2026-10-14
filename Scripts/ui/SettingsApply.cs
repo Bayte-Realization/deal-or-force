@@ -177,8 +177,14 @@ public partial class DealOrForceGame
                     _globe.SpaceBackdropEnabled = SettingsCatalog.Flag("space_backdrop");
                 break;
 
-            case "map_weather":
-                if (_globe is not null) _globe.WeatherEnabled = SettingsCatalog.Flag("map_weather");
+            case "map_clouds":
+                if (_globe is not null) _globe.CloudsShown = SettingsCatalog.Flag("map_clouds");
+                RefreshWeatherToggles();
+                break;
+
+            case "map_mist":
+                if (_globe is not null) _globe.MistShown = SettingsCatalog.Flag("map_mist");
+                RefreshWeatherToggles();
                 break;
 
             case "map_smoothing":

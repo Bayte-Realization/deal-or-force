@@ -137,6 +137,16 @@ public static class TradeNetwork
     /// </summary>
     public static void Route(Campaign campaign)
     {
+        foreach (var _ in RouteStages(campaign)) { }
+    }
+
+    /// <summary>
+    /// The routing in stages - the preparation, then one good at a time - for the smoothed step.
+    /// The scratch lists below are shared, which is safe because one campaign steps at a time
+    /// and a step in progress is finished before anything else steps (Campaign.FinishStep).
+    /// </summary>
+    public static IEnumerable<int> RouteStages(Campaign campaign)
+    {
         var nations = campaign.Nations;
         campaign.TradeRoutes.Clear();
         _routesInUse = 0;
@@ -152,12 +162,19 @@ public static class TradeNetwork
             }
         }
 
-        EnsureDistances(campaign);
-        MeasureReach(campaign);
-        PartnerScores.Clear();
+        using (SimProfiler.Measure("    mkt:trade"))
+        {
+            EnsureDistances(campaign);
+            MeasureReach(campaign);
+            PartnerScores.Clear();
+        }
+        yield return 0;
 
         foreach (var commodity in CommodityCatalog.All)
-            RouteOne(campaign, commodity);
+        {
+            using (SimProfiler.Measure("    mkt:trade")) RouteOne(campaign, commodity);
+            yield return 0;
+        }
         campaign.TradeRoutesDay = campaign.ElapsedDays;
     }
 

@@ -279,16 +279,32 @@ public static class Escalation
     /// <summary>Once a review: every pair with a reason has its tension moved, staged and possibly an incident.</summary>
     public static void Tick(Campaign c)
     {
-        if (c is null || c.ElapsedDays <= 0) return;
-        if (!MechanicFeatures.SystemEnabled(c, nameof(Escalation))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The review in stages, a batch of relations at a time, for the smoothed step.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0) yield break;
+        if (!MechanicFeatures.SystemEnabled(c, nameof(Escalation))) yield break;
         var defines = c.Defines;
         var every = Math.Max(1, defines.EscalationReviewDays);
-        if (c.ElapsedDays % every != 2 % every) return;
+        if (c.ElapsedDays % every != 2 % every) yield break;
 
-        foreach (var relation in Candidates(c))
-            Review(c, relation, every);
-        GrowWars(c, every);
-        EndBorderWars(c, every);
+        List<DiplomaticRelation> candidates;
+        using (SimProfiler.Measure("escalation")) candidates = Candidates(c);
+        for (var start = 0; start < candidates.Count; start += 64)
+        {
+            using (SimProfiler.Measure("escalation"))
+                for (var index = start; index < Math.Min(candidates.Count, start + 64); index++)
+                    Review(c, candidates[index], every);
+            yield return 0;
+        }
+        using (SimProfiler.Measure("escalation"))
+        {
+            GrowWars(c, every);
+            EndBorderWars(c, every);
+        }
     }
 
     /// <summary>

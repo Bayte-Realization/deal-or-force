@@ -66,17 +66,28 @@ public static class MovementRules
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementRules))) return;
-        if (campaign.ElapsedDays == 0) return;
-        MovementLifecycle.Tick(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The movements' day in stages, one movement's week at a time, for the smoothed step.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementRules))) yield break;
+        if (campaign.ElapsedDays == 0) yield break;
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
-        // What the world decides about who has fallen happens on the week, as it did.
-        if (campaign.ElapsedDays % week == 0)
+        using (SimProfiler.Measure("movements"))
+        using (SimProfiler.Measure("  mov:rules"))
         {
-            Owners(campaign, rebuild: true);
-            using (SimProfiler.Measure("    mov:homelands")) MovementFall.RememberHomelands(campaign);
-            using (SimProfiler.Measure("    mov:fall")) MovementFall.Decide(campaign);
+            MovementLifecycle.Tick(campaign);
+            // What the world decides about who has fallen happens on the week, as it did.
+            if (campaign.ElapsedDays % week == 0)
+            {
+                Owners(campaign, rebuild: true);
+                using (SimProfiler.Measure("    mov:homelands")) MovementFall.RememberHomelands(campaign);
+                using (SimProfiler.Measure("    mov:fall")) MovementFall.Decide(campaign);
+            }
         }
+        yield return 0;
         // Each movement's own week on a day of its own. They all used to fall on the same
         // day, so their cost did not spread: one frame in seven carried every movement's week
         // at once, the largest hitch in a late campaign at the top speed. Every movement still
@@ -84,9 +95,14 @@ public static class MovementRules
         foreach (var nation in campaign.Nations.ToList())
         {
             if (nation.Movement is not { Dissolved: false } || !OnItsDay(campaign, nation.Id, week)) continue;
-            Owners(campaign);
-            using (SimProfiler.Measure("    mov:week")) Week(campaign, nation);
-            using (SimProfiler.Measure("    mov:endure")) MovementFall.Endure(campaign, nation);
+            using (SimProfiler.Measure("movements"))
+            using (SimProfiler.Measure("  mov:rules"))
+            {
+                Owners(campaign);
+                using (SimProfiler.Measure("    mov:week")) Week(campaign, nation);
+                using (SimProfiler.Measure("    mov:endure")) MovementFall.Endure(campaign, nation);
+            }
+            yield return 0;
         }
     }
 

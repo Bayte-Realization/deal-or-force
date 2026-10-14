@@ -192,7 +192,7 @@ public sealed partial class GlobePresentation
 
     public void SetFlatMap(bool enabled)
     {
-        if (_flatMap == enabled || !IsInstanceValid(_camera)) return;
+        if (_flatMap == enabled || !IsInstanceValid(_camera) || !ProjectionAllowed(enabled)) return;
         _flatZoomAnchorActive = false;
         if (enabled)
         {

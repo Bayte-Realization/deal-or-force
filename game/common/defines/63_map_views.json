@@ -1,0 +1,10 @@
+// Which maps the game has.
+//
+// Both are built every time: the 3D globe, and the flat map that wraps round for ever. A
+// player switches between them with the map button or F2. Turn one off and the campaign opens
+// on the other, never switches back, and the switch disappears. Turning both off keeps the
+// globe.
+{
+  "GlobeMapEnabled": true,
+  "FlatMapEnabled": true
+}

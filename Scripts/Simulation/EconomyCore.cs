@@ -792,11 +792,25 @@ public static class EconomySystem
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(EconomySystem))) return;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
-        using (SimProfiler.Measure("eco:market")) MarketSystem.Tick(campaign);
-        foreach (var nation in campaign.Nations)
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>
+    /// The week, in stages: the market, then the countries a batch at a time. A smoothed frame
+    /// loop (Campaign.StepFor) spreads them over frames; everything else runs them straight
+    /// through. Either way they are the same work in the same order - nothing else touches the
+    /// campaign between two stages, because orders wait for the next step.
+    /// </summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(EconomySystem))) yield break;
+        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        foreach (var _ in MarketSystem.TickStages(campaign)) yield return 0;
+        for (var index = 0; index < campaign.Nations.Count; index++)
         {
+            if (index > 0 && index % EconomyStageCountries == 0) yield return 0;
+            using var stage = SimProfiler.Measure("economy");
+            var nation = campaign.Nations[index];
             // Empty map entities (e.g. the unclaimed Antarctic mask) are not economies.
             // Their nominal placeholder GDP used to finance imaginary arms output forever.
             if (nation.Movement is null && !campaign.HasOwnedLand(nation))
@@ -966,6 +980,9 @@ public static class EconomySystem
             nation.WarSupport = settledWarSupport;
         }
     }
+
+    /// <summary>How many countries one stage of the weekly pass settles: about four milliseconds.</summary>
+    private const int EconomyStageCountries = 24;
 
     /// <summary>
     /// The share of a region's people who are not of the nation that governs them.

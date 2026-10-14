@@ -60,8 +60,13 @@ public partial class DealOrForceGame
             return $"flag_{key}_insignia";
         if (nation is null) return sprite;
         var country = nation;
+        // Kept against what the country is - every value a flag can depend on - and nothing
+        // else. It used to carry the map revision too, which changes with every occupation:
+        // a few months into a war every answer was stale at once, and the first screen with a
+        // list of flags on it worked out a hundred and sixty of them again on the frame that
+        // opened it - ten seconds for the conflicts screen. A mod reload clears it instead.
         var situation = key + "|" + string.Join("|", FlagCatalog.All.Select(q =>
-            FlagCatalog.ValueOf(q.Source, FlagWorld, country))) + $"|{FlagWorld.MapRevision}";
+            FlagCatalog.ValueOf(q.Source, FlagWorld, country)));
         if (!ResolvedFlags.TryGetValue(situation, out var resolved))
             ResolvedFlags[situation] = resolved = FlagCatalog.Resolve(FlagWorld, nation);
         return string.IsNullOrEmpty(resolved) ? sprite : resolved;

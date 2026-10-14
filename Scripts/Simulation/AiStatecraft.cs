@@ -69,16 +69,26 @@ public static partial class AiStatecraft
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(AiStatecraft))) return;
-        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
 
-        // An offer nobody answered is withdrawn rather than left standing forever, so a
-        // player who ignored one is asked again later instead of never.
-        PeaceOffers.Expire(campaign);
+    /// <summary>The day's statecraft in stages, a country at a time, for the smoothed step.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(AiStatecraft))) yield break;
+        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) yield break;
 
-        using (SimProfiler.Measure("  ai:foundations")) PeacefulFormationAi.Tick(campaign);
-        EnsureDailyTables(campaign);
-        ThinkAboutTheNeighbours(campaign);
+        using (SimProfiler.Measure("statecraft"))
+        {
+            // An offer nobody answered is withdrawn rather than left standing forever, so a
+            // player who ignored one is asked again later instead of never.
+            PeaceOffers.Expire(campaign);
+
+            using (SimProfiler.Measure("  ai:foundations")) PeacefulFormationAi.Tick(campaign);
+            EnsureDailyTables(campaign);
+        }
+        yield return 0;
+        foreach (var _ in ThinkAboutTheNeighbours(campaign)) yield return 0;
     }
 
     /// <summary>
@@ -196,11 +206,29 @@ public static partial class AiStatecraft
         return RegionCount.GetValueOrDefault(mapIndex);
     }
 
-    private static void ThinkAboutTheNeighbours(Campaign campaign)
+    private static IEnumerable<int> ThinkAboutTheNeighbours(Campaign campaign)
     {
-        foreach (var nation in campaign.Nations)
+        for (var index = 0; index < campaign.Nations.Count; index++)
         {
+            var nation = campaign.Nations[index];
             if (nation.Population <= 0) continue;
+            // A stage ends after each country that had something to think about today.
+            if (!ThinksToday(campaign, nation)) continue;
+            using (SimProfiler.Measure("statecraft")) ThinkToday(campaign, nation);
+            yield return 0;
+        }
+    }
+
+    private static bool ThinksToday(Campaign campaign, Nation nation)
+    {
+        var day = campaign.ElapsedDays + nation.Id;
+        if (nation.IsHuman) return day % 30 == 0 || (day % 7 == 0 && Delegation.Holds(nation, Delegation.Diplomacy));
+        return day % 7 == 0 || day % 30 == 0 || day % 11 == 0;
+    }
+
+    private static void ThinkToday(Campaign campaign, Nation nation)
+    {
+        {
 
             // A player's country is governed by its player - except for the portfolios that
             // player has handed to its own civil service, which are run here on the same
@@ -212,7 +240,7 @@ public static partial class AiStatecraft
                 // The foreign ministry keeps the same weekly round as everybody else's.
                 if ((campaign.ElapsedDays + nation.Id) % 7 == 0 && Delegation.Holds(nation, Delegation.Diplomacy))
                     using (SimProfiler.Measure("  ai:delegated")) Diplomacy(campaign, nation);
-                continue;
+                return;
             }
 
             // Staggered: a nation thinks about its neighbours once a week and about its

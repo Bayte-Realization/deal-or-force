@@ -126,7 +126,9 @@ public partial class DealOrForceGame : Control
         // Reported whether or not time is running: a measurement that only arrives when
         // everything is already going well is no use for finding out why it is not.
         ReportFrameCost(delta);
-        if (_campaign.IsPaused) { _dayAccumulator = 0; return; }
+        // A step the smoothed clock has begun is carried on even under pause: pausing stops the
+        // next step, never half of this one.
+        if (_campaign.IsPaused && !_campaign.MidStep) { _dayAccumulator = 0; return; }
         // Real seconds one step of the simulation is worth. The speed setting is still in
         // days, because that is what a player thinks in; a campaign stepping six hours at a
         // time simply takes four steps to spend one day's worth of them.
@@ -152,17 +154,31 @@ public partial class DealOrForceGame : Control
         // sixteen milliseconds and time runs as fast as it can rather than the frame rate
         // collapsing to keep a promise about days. A speed the machine cannot reach becomes
         // a slower campaign instead of an unresponsive one.
+        //
+        // And with smooth time on, a step is not one piece of work either. The day's passes and
+        // the week's economy run as many stages (Campaign.StepFor), as many of them in a frame
+        // as its budget holds, and the clock moves on when the step is done: the same world,
+        // without the frame that stopped for a third of a second every simulated week.
         var budget = System.Diagnostics.Stopwatch.StartNew();
         var slice = _campaign.Defines.FrameSimulationBudgetMs;
         var cap = _campaign.Defines.MaxDaysPerFrame;
-        while (_dayAccumulator >= secondsPerDay && days < cap &&
+        var smooth = SettingsCatalog.Flag("smooth_ticks");
+        while ((_campaign.MidStep || _dayAccumulator >= secondsPerDay) && days < cap &&
                (days == 0 || budget.Elapsed.TotalMilliseconds < slice))
         {
-            _dayAccumulator -= secondsPerDay;
+            if (!_campaign.MidStep) _dayAccumulator -= secondsPerDay;
             if (_networkConnected && _networkIsHost && _networkGameStarted) _applyingNetworkCommand = true;
             try
             {
-                using (SimProfiler.Measure("campaign.day")) _campaign.Tick();
+                var finished = true;
+                using (SimProfiler.Measure("campaign.day"))
+                {
+                    if (smooth || _campaign.MidStep)
+                        finished = _campaign.StepFor(System.Math.Max(1.0, slice - budget.Elapsed.TotalMilliseconds));
+                    else _campaign.Tick();
+                }
+                // The rest of this step belongs to the next frame.
+                if (!finished) { _applyingNetworkCommand = false; break; }
                 // Mod hooks belong to the same failure boundary as the day's simulation.
                 if (_campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(_campaign);
             }

@@ -201,6 +201,9 @@ public static class SaveSystem
     public static PreparedSave Prepare(string root, string slot, Campaign campaign, string modFingerprint,
         string displayName = "", bool autosave = false)
     {
+        // A step the smoothed clock has begun is finished first: a save of half a day would
+        // load as a day that never happened.
+        campaign?.FinishStep();
         using var timing = SimProfiler.Measure("save.prepare");
         DiagnosticLogs.Write("system", $"SAVE_BEGIN slot={SafeSlot(slot)} autosave={autosave} day={campaign?.ElapsedDays}");
         if (campaign?.Player is null) throw new InvalidOperationException("No active campaign to save.");
@@ -406,6 +409,7 @@ public static class SaveSystem
     /// <summary>Compact authoritative snapshot used for joining and resynchronising LAN peers.</summary>
     public static byte[] ExportNetworkSnapshot(Campaign campaign, string modFingerprint)
     {
+        campaign?.FinishStep();
         if (campaign?.Player is null || campaign.ProvinceMap is null || campaign.ProvinceController is null ||
             campaign.ProvinceOccupation is null) return Array.Empty<byte>();
         var payload = CampaignSave.Capture(campaign, modFingerprint ?? "");

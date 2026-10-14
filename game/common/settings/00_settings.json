@@ -131,10 +131,16 @@
     "description": "The photographed sky the world hangs in. Off leaves the flat colour behind it, which is quieter to look at and one less texture to hold.",
     "default": true
   },
-  "map_weather": {
+  "map_clouds": {
     "category": "interface", "order": 246, "kind": "toggle",
-    "name": "Clouds and fog",
-    "description": "Clouds drifting over the world from far away, parting as the camera comes down; and up close, the ground hidden by the fog of war under a drifting mist.",
+    "name": "Clouds",
+    "description": "Clouds drifting over the world from far away, parting as the camera comes down. Off leaves the borders clear at every distance. Also a button on the map bar and on the country-select screen.",
+    "default": true
+  },
+  "map_mist": {
+    "category": "interface", "order": 247, "kind": "toggle",
+    "name": "Fog-of-war mist",
+    "description": "Close up, a drifting veil over the ground your country cannot see. Only its look: what is hidden stays hidden either way. Also a button on the map bar.",
     "default": true
   },
   "map_ambience": {
@@ -216,6 +222,12 @@
     "values": ["1.0", "0.85", "0.75", "0.5"],
     "labels": ["Native", "85%", "75%", "50%"],
     "default": "1.0"
+  },
+  "smooth_ticks": {
+    "category": "video", "order": 305, "kind": "toggle",
+    "name": "Smooth time",
+    "description": "Spreads each day's and each week's calculations over several frames, so the picture never stops for them. The world comes out exactly the same either way.",
+    "default": true
   },
   "vsync": {
     "category": "video", "order": 310, "kind": "toggle",

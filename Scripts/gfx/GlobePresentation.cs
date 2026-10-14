@@ -529,6 +529,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         UpdateFogTint();
         UpdateFogVisibility();
         UpdateWeather(delta);
+        KeepAllowedProjection();
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
         if (_mapApplied && _campaign is not null && _capitalRevision != _campaign.CapitalRevision)
             BuildCapitalMarkers(_campaign);

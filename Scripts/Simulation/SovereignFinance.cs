@@ -62,6 +62,11 @@ public static class SovereignFinance
 
     public static void Prepare(Campaign c, Nation n, bool review = true)
     {
+        // Explaining the budget to a player (review: false) reads the books as they stand. It
+        // used to open them as well - booking an overdraft as debt - and to set the week's
+        // spread, so the world depended on when the interface last drew: in multiplayer, on
+        // whose screen. The week's own review does both.
+        if (!review) return;
         NormalizeAccounts(c, n);
         if (!n.DebtMechanicActive) return;
         var ratio = n.PublicDebt / MathF.Max(.01f, n.Gdp);
