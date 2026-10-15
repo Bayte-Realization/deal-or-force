@@ -39,7 +39,7 @@ public partial class DealOrForceGame
         _conflictsLayer = FullLayer("Conflicts");
         _conflictsLayer.Visible = false;
         _hudLayer.AddChild(_conflictsLayer);
-        var shade = new ColorRect { Color = new Color(0.015f, 0.026f, 0.041f, 0.72f), MouseFilter = MouseFilterEnum.Stop };
+        var shade = new ColorRect { Color = new Color(Ui.Colour("surface.background"), .72f), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _conflictsLayer.AddChild(shade);
 
@@ -55,23 +55,25 @@ public partial class DealOrForceGame
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
         header.AddChild(HandbookButton("tensions"));
-        header.AddChild(ActionButton("×", CloseConflictsScreen, 38, 32));
+        var close = ActionButton("×", CloseConflictsScreen, 38, 32);
+        close.Name = "CloseConflicts";
+        close.TooltipText = Ui.Tip(Tr("Close"));
+        header.AddChild(close);
 
         _conflictsSummary = Title("", 13, Ui.Colour("text.body_soft"));
         rows.AddChild(_conflictsSummary);
 
-        var tabs = new HBoxContainer();
-        tabs.AddThemeConstantOverride("separation", 6);
+        var tabs = new HFlowContainer { Name = "ConflictNavigation" };
+        tabs.AddThemeConstantOverride("h_separation", 6);
+        tabs.AddThemeConstantOverride("v_separation", 4);
         rows.AddChild(tabs);
         foreach (var index in ConflictTabOrder)
         {
             var captured = index;
-            var tab = ActionButton(ConflictTabNames[index], () => { _conflictTab = captured; RefreshConflictsScreen(force: true); }, 0, 32);
+            var tab = ActionButton(ConflictTabNames[index], () => ChangeConflictTab(captured), 0, 32);
             tab.Name = "ConflictTab" + index;
-            tab.Name = "ConflictTab" + index;
-            tab.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             tab.AddThemeFontSizeOverride("font_size", 13);
-            tab.ClipText = true; tab.TooltipText = Ui.Tip(Tr(ConflictTabNames[index]));
+            tab.TooltipText = Ui.Tip(Tr(ConflictTabNames[index]));
             _conflictTabs[index] = tab;
             tabs.AddChild(tab);
         }
@@ -80,26 +82,34 @@ public partial class DealOrForceGame
         body.AddThemeConstantOverride("separation", 16);
         rows.AddChild(body);
 
-        var listScroll = new ScrollContainer
+        var listDeck = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(430, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            SizeFlagsStretchRatio = .85f, SizeFlagsVertical = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(310, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = .65f, SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        body.AddChild(listDeck);
+        BuildConflictSearch(listDeck);
+        _conflictsListScroll = new ScrollContainer
+        {
+            Name = "ConflictListScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        body.AddChild(listScroll);
+        listDeck.AddChild(_conflictsListScroll);
         _conflictsList = new VBoxContainer { Name = "ConflictsList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _conflictsList.AddThemeConstantOverride("separation", 3);
-        listScroll.AddChild(_conflictsList);
+        _conflictsListScroll.AddChild(_conflictsList);
+        BuildConflictPager(listDeck);
 
-        var pageScroll = new ScrollContainer
+        _conflictsPageScroll = new ScrollContainer
         {
+            Name = "ConflictDetailScroll",
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        body.AddChild(pageScroll);
+        body.AddChild(_conflictsPageScroll);
         _conflictsPage = new VBoxContainer { Name = "ConflictsPage", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _conflictsPage.AddThemeConstantOverride("separation", 10);
-        pageScroll.AddChild(_conflictsPage);
+        _conflictsPageScroll.AddChild(_conflictsPage);
 
         _conflictsFeedback = Title("", 13, Ui.Colour("text.accent"));
         rows.AddChild(_conflictsFeedback);
@@ -114,8 +124,12 @@ public partial class DealOrForceGame
         _conflictsLayer.Visible = true;
         _conflictsLayer.MoveToFront();
         _conflictsFeedback.Text = "";
-        RefreshConflictsScreen(force: true);
+        _conflictsSummary.Text = Tr("Reading the world's conflicts.");
         UpdateScreenButtons();
+        Callable.From(() =>
+        {
+            if (_conflictsLayer is { Visible: true }) RefreshConflictsScreen(force: true);
+        }).CallDeferred();
     }
 
     private void CloseConflictsScreen()
@@ -130,6 +144,7 @@ public partial class DealOrForceGame
     private void RefreshConflictsScreen(bool force = false)
     {
         if (_conflictsLayer is not { Visible: true } || _campaign?.Player is null) return;
+        if (!force && InterfaceInteractionGuard.Busy(_conflictsLayer)) return;
         if (!force && _conflictsBuiltDay == _campaign.ElapsedDays) return;
         _conflictsBuiltDay = _campaign.ElapsedDays;
         foreach (var (index, tab) in _conflictTabs) StyleButton(tab, index == _conflictTab);
@@ -138,61 +153,34 @@ public partial class DealOrForceGame
         var crises = hot.Count(r => Escalation.StageOf(r) == TensionStage.Crisis);
         var clashes = hot.Count(r => Escalation.StageOf(r) == TensionStage.Clashes);
         var wars = _campaign.Wars.Where(w => !w.Ended).ToList();
-        var backed = wars.Count(w => ProxyWars.For(_campaign, w).Any());
+        var backedWarIds = ProxyWars.Active(_campaign).Select(s => s.WarId).ToHashSet();
+        var backed = wars.Count(w => backedWarIds.Contains(w.Id));
         _conflictsSummary.Text = Simulation.Loc.Format(
             "{0} standoffs in the world: {1} in crisis, {2} with armed clashes. {3} wars, {4} of them with foreign backers.",
             hot.Count, crises, clashes, wars.Count, backed);
 
-        ClearRuntimeChildren(_conflictsList);
-        switch (_conflictTab)
+        var scroll = _conflictsListScroll.ScrollVertical;
+        if (_conflictTab is 0 or 1 or 2) RefreshConflictIndex(hot, wars);
+        else if (_conflictTab == 5) ListWorldOrder();
+        else
         {
-            case 0: ListTensions(hot); break;
-            case 1: ListWars(wars); break;
-            case 2: ListOurs(hot, wars); break;
-            case 3: ListTerritorialDisputes(); break;
-            case 5: ListWorldOrder(); break;
-            default: ListOrganizations(); break;
+            _conflictRenderedTab = -1;
+            _conflictRows.Clear();
+            if (_conflictTab == 4) RefreshOrganizationIndex();
+            else
+            {
+                _organizationIndexReady = false;
+                ClearRuntimeChildren(_conflictsList);
+                ListTerritorialDisputes();
+            }
         }
+        _conflictSearch.Visible = _conflictPager.Visible = _conflictTab is 0 or 1 or 2;
+        _conflictListHeading.Visible = _conflictTab == 5;
+        _conflictsListScroll.SetDeferred(ScrollContainer.PropertyName.ScrollVertical, scroll);
         ShowConflictPage();
     }
 
     // ------------------------------------------------------------------- the lists
-
-    private void ListTensions(List<DiplomaticRelation> hot)
-    {
-        if (hot.Count == 0) { _conflictsList.AddChild(Title("The world is calm.", 13, Ui.Colour("text.caption"))); return; }
-        foreach (var relation in hot.Take(80)) AddTensionRow(relation);
-    }
-
-    private void ListWars(List<StrategicWar> wars)
-    {
-        if (wars.Count == 0) { _conflictsList.AddChild(Title("Nobody is at war.", 13, Ui.Colour("text.caption"))); return; }
-        foreach (var war in wars.OrderByDescending(w => w.Involves(_campaign.Player.Id))
-                     .ThenByDescending(w => ProxyWars.For(_campaign, w).Count())
-                     .ThenByDescending(w => w.AttackerLosses + w.DefenderLosses))
-            AddWarRow(war);
-    }
-
-    private void ListOurs(List<DiplomaticRelation> hot, List<StrategicWar> wars)
-    {
-        var player = _campaign.Player;
-        var mine = hot.Where(r => r.A == player.Id || r.B == player.Id).ToList();
-        _conflictsList.AddChild(Caption("STANDOFFS"));
-        if (mine.Count == 0) _conflictsList.AddChild(Title("No country is in a standoff with you.", 13, Ui.Colour("text.caption")));
-        foreach (var relation in mine) AddTensionRow(relation);
-        _conflictsList.AddChild(Caption("WARS WE BACK"));
-        var backing = ProxyWars.Active(_campaign).Where(s => s.SponsorId == player.Id).ToList();
-        if (backing.Count == 0) _conflictsList.AddChild(Title("You are not arming anybody.", 13, Ui.Colour("text.caption")));
-        foreach (var s in backing)
-            if (wars.FirstOrDefault(w => w.Id == s.WarId) is { } war) AddWarRow(war);
-        var arming = ProxyWars.Active(_campaign).Where(s => s.ClientId == player.Id).ToList();
-        if (arming.Count > 0)
-        {
-            _conflictsList.AddChild(Caption("WHO ARMS US"));
-            foreach (var s in arming)
-                if (wars.FirstOrDefault(w => w.Id == s.WarId) is { } war) AddWarRow(war);
-        }
-    }
 
     private Label Caption(string text)
     {
@@ -204,22 +192,12 @@ public partial class DealOrForceGame
 
     private Button ConflictRowButton(bool selected, float height = 34)
     {
-        var button = new Button { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, height) };
+        var button = new ConflictEntryButton { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, height) };
         button.AddThemeStyleboxOverride("normal", ShellRowStyle(selected));
         button.AddThemeStyleboxOverride("hover", ShellRowStyle(true));
         button.AddThemeStyleboxOverride("pressed", ShellRowStyle(true));
         button.AddThemeStyleboxOverride("focus", ShellRowStyle(selected));
         return button;
-    }
-
-    private static HBoxContainer RowInner(Button button)
-    {
-        var inner = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        inner.AddThemeConstantOverride("separation", 7);
-        inner.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        inner.OffsetLeft = 8; inner.OffsetRight = -8; inner.OffsetTop = 3; inner.OffsetBottom = -3;
-        button.AddChild(inner);
-        return inner;
     }
 
     private static Color StageColour(TensionStage stage) => stage switch
@@ -255,55 +233,6 @@ public partial class DealOrForceGame
         return holder;
     }
 
-    private void AddTensionRow(DiplomaticRelation relation)
-    {
-        var a = _campaign.NationById(relation.A);
-        var b = _campaign.NationById(relation.B);
-        if (a is null || b is null) return;
-        var key = PairKey(relation);
-        var button = ConflictRowButton(key == _conflictPair && _conflictWar < 0);
-        var inner = RowInner(button);
-        var stage = Escalation.StageOf(relation);
-        inner.AddChild(FlagBadge(a.Tag, 16));
-        var names = Fixed(Title($"{a.DisplayName} — {b.DisplayName}", 13, Ui.Colour("text.body")));
-        names.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        names.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        inner.AddChild(names);
-        inner.AddChild(FlagBadge(b.Tag, 16));
-        inner.AddChild(Gauge(relation.Tension, StageColour(stage)));
-        var label = Fixed(Title(StageName(stage), 11, StageColour(stage)), 120);
-        inner.AddChild(label);
-        button.TooltipText = Ui.Tip(TensionTip(relation));
-        button.Pressed += () => { _conflictPair = key; _conflictWar = -1; RefreshConflictsScreen(force: true); };
-        _conflictsList.AddChild(button);
-    }
-
-    private void AddWarRow(StrategicWar war)
-    {
-        var attacker = _campaign.NationById(war.AttackerId);
-        var defender = _campaign.NationById(war.DefenderId);
-        if (attacker is null || defender is null) return;
-        var button = ConflictRowButton(war.Id == _conflictWar, 40);
-        var inner = RowInner(button);
-        inner.AddChild(FlagBadge(attacker.Tag, 16));
-        var names = Fixed(Title($"{attacker.DisplayName} — {defender.DisplayName}", 13, Ui.Colour("text.body")));
-        names.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        names.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        inner.AddChild(names);
-        inner.AddChild(FlagBadge(defender.Tag, 16));
-        var tags = new List<string>();
-        if (war.CivilConflict) tags.Add(Tr("civil war"));
-        if (war.Limited) tags.Add(Tr("border war"));
-        tags.Add(war.Intensity >= 2 ? Tr("total war") : war.Intensity == 1 ? Tr("major war") : Tr("limited war"));
-        var backers = ProxyWars.For(_campaign, war).Count();
-        if (ProxyWars.IsConfrontation(_campaign, war)) tags.Add(Tr("proxy confrontation"));
-        else if (backers > 0) tags.Add(Simulation.Loc.Format("{0} backer(s)", backers));
-        var label = Fixed(Title(string.Join(" · ", tags), 11, war.Intensity >= 2 ? Ui.Colour("state.critical") : Ui.Colour("text.caption")), 200);
-        inner.AddChild(label);
-        button.Pressed += () => { _conflictWar = war.Id; _conflictPair = -1; RefreshConflictsScreen(force: true); };
-        _conflictsList.AddChild(button);
-    }
-
     /// <summary>Apply a command now, the way the other screens do, so the page answers at once.</summary>
     private void Submit(ICampaignCommand command)
     {
@@ -315,6 +244,7 @@ public partial class DealOrForceGame
 
     private string TensionTip(DiplomaticRelation relation)
     {
+        if (CampaignDiplomacy.AtWar(_campaign, relation.A, relation.B)) return Tr("At war");
         var d = Escalation.Drivers(_campaign, relation);
         var lines = new List<string> { Simulation.Loc.Format("Tension {0:0} of 100, heading for {1:0}.", relation.Tension, d.Target) };
         void Add(string what, float value) { if (value >= 0.5f) lines.Add($"  {Tr(what)}: +{value:0}"); }
@@ -329,7 +259,7 @@ public partial class DealOrForceGame
         if (MathF.Abs(d.Baseline) >= 0.5f)
             lines.Add($"  {Tr("Where it stood in January 2024 (fading)")}: {(d.Baseline > 0f ? "+" : "")}{d.Baseline:0}");
         if (Escalation.StageOf(relation) < TensionStage.Clashes &&
-            Escalation.Deterred(_campaign, _campaign.NationById(relation.A), _campaign.NationById(relation.B)))
+            Escalation.Deterred(_campaign, _campaign.NationById(relation.A), _campaign.NationById(relation.B), refreshAssessment: false))
             lines.Add(Tr("Neither side would fire first - outmatched by the other and the friends behind it, held back by its own government, or busy with a war elsewhere - so it stops short of shooting."));
         return string.Join("\n", lines);
     }
@@ -338,7 +268,9 @@ public partial class DealOrForceGame
 
     private void ShowConflictPage()
     {
+        var scroll = _conflictsPageScroll.ScrollVertical;
         ClearRuntimeChildren(_conflictsPage);
+        _conflictsPageScroll.SetDeferred(ScrollContainer.PropertyName.ScrollVertical, scroll);
         if (_conflictTab == 3) { ShowTerritoryPage(); return; }
         if (_conflictTab == 4) { ShowOrganizationPage(); return; }
         if (_conflictTab == 5)
@@ -358,13 +290,24 @@ public partial class DealOrForceGame
             ShowTensionPage(relation);
             return;
         }
-        var intro = Title("Choose a standoff or a war on the left. Tension rises with hostility, grievances from past wars, land one holds of the other's, rivalry and wars in which the two back opposite sides; as it rises the two pass through friction, crisis and armed clashes, and incidents happen more often. Armed clashes argue for war, and a border that keeps shooting can become a short border war; talks bring it down.",
-            14, Ui.Colour("text.body_soft"));
-        _conflictsPage.AddChild(intro);
+        _conflictsPage.AddChild(Title("READ THE SITUATION", 22, Ui.Colour("text.accent")));
+        _conflictsPage.AddChild(Title("Choose a conflict on the left to see its causes, recent events and available actions. Search works with country names, tags and war names.",
+            14, Ui.Colour("text.body_soft")));
+        _conflictsPage.AddChild(Caption("TENSION IS NOT WAR"));
+        _conflictsPage.AddChild(Title("Friction can grow into a crisis or armed clashes. Hostility, lost land, rivalry and competing foreign backers all matter; deterrence and talks can hold it back.", 14, Ui.Colour("text.body")));
+        _conflictsPage.AddChild(Caption("SUPPORT WITHOUT INTERVENTION"));
+        _conflictsPage.AddChild(Title("A backer sends money, equipment or volunteers without becoming a belligerent. Open a war to review its sides, costs and support options.", 14, Ui.Colour("text.body")));
+        _conflictsPage.AddChild(Caption("YOUR COUNTRY FIRST"));
+        _conflictsPage.AddChild(Title("Our conflicts brings together your standoffs, the wars you fight, the sides you support and those who arm you.", 14, Ui.Colour("text.body")));
     }
 
     private void ShowTensionPage(DiplomaticRelation relation)
     {
+        // Scenario wars can precede the first escalation review. Never call an active
+        // war "calm" just because its stored peacetime tension has not ticked yet.
+        var ongoing = _campaign.Wars.FirstOrDefault(w => !w.Ended &&
+            (w.IsAttacking(relation.A) && w.IsDefending(relation.B) || w.IsAttacking(relation.B) && w.IsDefending(relation.A)));
+        if (ongoing is not null) { ShowWarPage(ongoing); return; }
         var a = _campaign.NationById(relation.A);
         var b = _campaign.NationById(relation.B);
         if (a is null || b is null) return;
@@ -379,10 +322,12 @@ public partial class DealOrForceGame
         head.AddChild(FlagBadge(b.Tag, 28));
         _conflictsPage.AddChild(head);
 
-        var gaugeRow = new HBoxContainer();
-        gaugeRow.AddThemeConstantOverride("separation", 10);
-        gaugeRow.AddChild(Gauge(relation.Tension, StageColour(stage), 320));
-        gaugeRow.AddChild(Fixed(Title(Simulation.Loc.Format("{0:0} / 100 · {1}", relation.Tension, StageName(stage)), 15, StageColour(stage))));
+        var gaugeRow = new VBoxContainer();
+        gaugeRow.AddThemeConstantOverride("separation", 5);
+        gaugeRow.AddChild(Title(Simulation.Loc.Format("{0:0} / 100 · {1}", relation.Tension, StageName(stage)), 15, StageColour(stage)));
+        var gauge = Gauge(relation.Tension, StageColour(stage), 0);
+        gauge.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        gaugeRow.AddChild(gauge);
         _conflictsPage.AddChild(gaugeRow);
 
         _conflictsPage.AddChild(Caption("WHY"));
@@ -395,11 +340,19 @@ public partial class DealOrForceGame
             _conflictsPage.AddChild(Title(Simulation.Loc.Format("Lost to shooting short of war: {0:N0} people.", relation.ClashLosses), 14, Ui.Colour("text.body")));
 
         _conflictsPage.AddChild(Caption("LATELY"));
-        var recent = _campaign.Chronicle.Entries.Where(e => e.Public &&
-                (e.ActorId == a.Id && e.TargetId == b.Id || e.ActorId == b.Id && e.TargetId == a.Id))
-            .OrderByDescending(e => e.Sequence).Take(8).ToList();
+        // Retain the local branch's bounded reverse walk for long campaigns.
+        var recent = new List<ChronicleEntry>();
+        var chronicle = _campaign.Chronicle.Entries;
+        for (var index = chronicle.Count - 1; index >= 0 && recent.Count < 8; index--)
+        {
+            var entry = chronicle[index];
+            if (!entry.Public) continue;
+            if (entry.ActorId == a.Id && entry.TargetId == b.Id || entry.ActorId == b.Id && entry.TargetId == a.Id)
+                recent.Add(entry);
+        }
         if (recent.Count == 0) _conflictsPage.AddChild(Title("Nothing has happened between them yet.", 13, Ui.Colour("text.caption")));
-        foreach (var line in NewsFeed.Lines(_campaign).Where(l => recent.Any(e => e.Sequence == l.Sequence)))
+        var recentSequences = recent.Select(entry => entry.Sequence).ToHashSet();
+        foreach (var line in NewsFeed.Lines(_campaign).Where(l => recentSequences.Contains(l.Sequence)))
             _conflictsPage.AddChild(Title(Simulation.Loc.Format("{0} days ago · {1}", _campaign.ElapsedDays - line.Day, line.Text), 13, Ui.Colour("text.body")));
 
         var player = _campaign.Player;
@@ -464,8 +417,10 @@ public partial class DealOrForceGame
                 var row = new HBoxContainer();
                 row.AddThemeConstantOverride("separation", 8);
                 row.AddChild(FlagBadge(sponsor.Tag, 16));
-                row.AddChild(Fixed(Title(Simulation.Loc.Format("{0}: level {1}, {2} a week, {3} sent so far", sponsor.DisplayName, s.Level,
-                    Fmt.Money(s.LastWeekCost), Fmt.Money(s.Delivered)), 13, Ui.Colour("text.body"))));
+                var description = Title(Simulation.Loc.Format("{0}: level {1}, {2} a week, {3} sent so far", sponsor.DisplayName, s.Level,
+                    Fmt.Money(s.LastWeekCost), Fmt.Money(s.Delivered)), 13, Ui.Colour("text.body"));
+                description.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                row.AddChild(description);
                 _conflictsPage.AddChild(row);
             }
         }

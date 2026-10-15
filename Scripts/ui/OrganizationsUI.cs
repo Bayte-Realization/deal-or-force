@@ -10,6 +10,33 @@ public partial class DealOrForceGame
 {
     private int _selectedOrganization = -1;
     private string _organizationConfirmation = "";
+    private string _organizationDraftName = "", _organizationDraftCharter = "";
+    private bool _organizationMembersExpanded;
+    private bool _organizationIndexReady;
+    private int _organizationIndexKey;
+
+    // Membership rows and the unsent form do not depend on dues or the clock.
+    // Rebuild only when their displayed identity/order or selection actually changes.
+    private void RefreshOrganizationIndex()
+    {
+        var hash = new HashCode();
+        hash.Add(Loc.Language); hash.Add(_campaign.Player.Id); hash.Add(_selectedOrganization);
+        hash.Add(_campaign.Defines.OrganizationFoundingDeposit);
+        foreach (var o in InternationalOrganizations.Active(_campaign).OrderBy(o => o.Id))
+        {
+            hash.Add(o.Id); hash.Add(InternationalOrganizations.DisplayName(_campaign, o)); hash.Add(o.CharterId);
+            foreach (var id in o.Members.OrderByDescending(id => _campaign.NationById(id)?.Gdp ?? 0))
+            {
+                var n = _campaign.NationById(id); hash.Add(id); hash.Add(n?.Tag); hash.Add(n?.DisplayName);
+            }
+        }
+        foreach (var charter in InternationalOrganizations.Charters.OrderBy(c => c.Id))
+        { hash.Add(charter.Id); hash.Add(charter.Name); hash.Add(charter.Description); }
+        var key = hash.ToHashCode();
+        if (_organizationIndexReady && _organizationIndexKey == key) return;
+        _organizationIndexKey = key; _organizationIndexReady = true;
+        ClearRuntimeChildren(_conflictsList); ListOrganizations();
+    }
     private Button OrganizationHelp()
     {
         var help = HandbookButton("organizations");
@@ -55,17 +82,20 @@ public partial class DealOrForceGame
             _conflictsList.AddChild(flags);
         }
         _conflictsList.AddChild(new HSeparator()); _conflictsList.AddChild(Caption("FOUND YOUR OWN ORGANIZATION"));
-        var name = Placeholder(new LineEdit { Name = "OrganizationName", MaxLength = 80 }, "Organization name...");
+        var name = Placeholder(new LineEdit { Name = "OrganizationName", MaxLength = 80, Text = _organizationDraftName }, "Organization name...");
+        name.TextChanged += value => _organizationDraftName = value;
         _conflictsList.AddChild(name);
         var charters = InternationalOrganizations.Charters.OrderBy(d => d.Id).ToArray();
         var charter = new OptionButton { Name = "OrganizationCharter", CustomMinimumSize = new(0, 36) };
         foreach (var d in charters) charter.AddItem(Tr(d.Name));
+        var draftIndex = Array.FindIndex(charters, c => c.Id == _organizationDraftCharter);
+        if (draftIndex >= 0) charter.Select(draftIndex);
         _conflictsList.AddChild(charter);
         var explanation = WrappedUltimatumText("", 14); _conflictsList.AddChild(explanation);
         void Explain() => explanation.Text = charters.Length == 0 ? Tr("No organization charters are available.") :
             Tr(charters[charter.Selected].Description) + "\n" + Loc.Format("Founding deposit into common fund: {0}.",
                 Fmt.Money(Math.Max(0, _campaign.Defines.OrganizationFoundingDeposit)));
-        charter.ItemSelected += _ => Explain(); Explain();
+        charter.ItemSelected += _ => { _organizationDraftCharter = charters[charter.Selected].Id; Explain(); }; Explain();
         var create = ActionButton("Found organization", () => {
             if (charters.Length == 0) return;
             var cmd = new OrganizationCommand { IssuerId = _campaign.Player.Id, Action = "create", Name = name.Text, CharterId = charters[charter.Selected].Id };
@@ -90,7 +120,8 @@ public partial class DealOrForceGame
         if (confirmation.Length > 0 && _organizationConfirmation != confirmation)
         { _organizationConfirmation = confirmation; _conflictsFeedback.Text = Tr("Press again to confirm."); return; }
         _organizationConfirmation = ""; _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
-        if (command.Action == "create" && command.Changed) _selectedOrganization = _campaign.Organizations.Last().Id;
+        if (command.Action == "create" && command.Changed)
+        { _selectedOrganization = _campaign.Organizations.Last().Id; _organizationDraftName = ""; }
         RefreshConflictsScreen(true);
         _conflictsFeedback.Text = Tr(command.Changed ? "Organization decision recorded." : "Sent to the host.");
     }
@@ -114,10 +145,14 @@ public partial class DealOrForceGame
         _conflictsPage.AddChild(Caption(Loc.Format("MEMBERS ({0})", o.Members.Count)));
         _conflictsPage.AddChild(DiplomacyChips(o.Members.Select(m => _campaign.NationById(m)).Where(n => n is not null)
             .OrderByDescending(n => n.Gdp), Tr("Nobody.")));
-        var members = new VBoxContainer { Name = "OrganizationMembers", Visible = false };
-        _conflictsPage.AddChild(ActionButton(Loc.Format("Weekly dues and arrears ({0})", o.Members.Count), () => members.Visible = !members.Visible, 0, 34));
+        var members = new VBoxContainer { Name = "OrganizationMembers", Visible = _organizationMembersExpanded };
+        _conflictsPage.AddChild(ActionButton(Loc.Format("Weekly dues and arrears ({0})", o.Members.Count), () =>
+        {
+            _organizationMembersExpanded = !_organizationMembersExpanded;
+            RefreshConflictsScreen(true);
+        }, 0, 34));
         _conflictsPage.AddChild(members);
-        foreach (var id in o.Members)
+        foreach (var id in _organizationMembersExpanded ? o.Members : Enumerable.Empty<int>())
         {
             var n = _campaign.NationById(id); if (n is null) continue;
             var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 9); row.AddChild(FlagBadge(n.Tag, 20));

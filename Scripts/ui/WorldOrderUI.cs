@@ -22,11 +22,11 @@ public partial class DealOrForceGame
     /// <summary>The great powers' rivalries, the worst first: each opens the standoff on the right.</summary>
     private void ListWorldOrder()
     {
-        var pairs = WorldWar.Pairs(_campaign);
-        _conflictsList.AddChild(Caption("RIVALRIES OF THE GREAT POWERS"));
-        if (pairs.Count == 0) { _conflictsList.AddChild(Title("The great powers are at peace with one another.", 13, Ui.Colour("text.caption"))); return; }
-        foreach (var (a, b, _) in pairs.Take(24))
-            if (CampaignDiplomacy.Peek(_campaign, a, b) is { } relation) AddTensionRow(relation);
+        var entries = new List<ConflictEntry>();
+        foreach (var (a, b, _) in WorldWar.Pairs(_campaign).Take(24))
+            if (CampaignDiplomacy.Peek(_campaign, a, b) is { } relation && ConflictEntryFor(relation) is { } entry)
+                entries.Add(entry);
+        RenderConflictEntries(entries, "The great powers are at peace with one another.");
     }
 
     private void ShowWorldOrderPage()
@@ -40,10 +40,12 @@ public partial class DealOrForceGame
             _ => (Tr("calm"), Ui.Colour("text.body_soft"))
         };
         _conflictsPage.AddChild(Title("THE WORLD", 22, Ui.Colour("text.bright"), upper: true));
-        var gauge = new HBoxContainer();
-        gauge.AddThemeConstantOverride("separation", 10);
-        gauge.AddChild(Gauge(tension, colour, 320));
-        gauge.AddChild(Fixed(Title(Simulation.Loc.Format("{0:0} / 100 · {1}", tension, word), 15, colour)));
+        var gauge = new VBoxContainer();
+        gauge.AddThemeConstantOverride("separation", 5);
+        gauge.AddChild(Title(Simulation.Loc.Format("{0:0} / 100 · {1}", tension, word), 15, colour));
+        var meter = Gauge(tension, colour, 0);
+        meter.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        gauge.AddChild(meter);
         _conflictsPage.AddChild(gauge);
         _conflictsPage.AddChild(Title("How close the great powers are to war with one another. The worst rivalry counts in full, the next two in part. When it runs high, incidents between the blocs become likelier.",
             13, Ui.Colour("text.body_soft")));

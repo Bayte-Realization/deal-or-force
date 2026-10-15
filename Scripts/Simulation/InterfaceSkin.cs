@@ -306,6 +306,8 @@ public static class InterfaceSkin
         ("modal.diplomacy",    new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
         ("modal.handbook",     new PanelRect(0.10f, 0.10f, 0.90f, 0.92f, 0f, 0f, 0f, 0f)),
         ("modal.conflicts",    new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("workspace.situation", new PanelRect(0.07f, 0.115f, 0.94f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("workspace.media",     new PanelRect(0.07f, 0.13f, 0.94f, 0.91f, 0f, 0f, 0f, 0f)),
         ("modal.policies",     new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
         ("modal.trade",        new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
         // The production page's own file (game/gui/28_production_units.json) ships the panel it
