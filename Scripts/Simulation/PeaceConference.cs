@@ -132,6 +132,7 @@ public static class PeaceConference
                 return Loc.Get("The demand includes ground that is not theirs to give");
 
         var rounded = Round(campaign, war, demand);
+        if (rounded.IsEmpty) return Loc.Get("The demand is empty; offer a white peace instead");
         // A mod or a changed map may contain a region with more than one owner.
         // Rounding must not silently add a neutral or friendly country's ground.
         if (rounded.Provinces.Any(province => !enemyOwners.Contains(topology.ProvinceToNation[province])))
@@ -206,7 +207,13 @@ public static class PeaceConference
             foreach (var province in demand.Provinces) rounded.Provinces.Add(province);
             return rounded;
         }
-        foreach (var province in Tidy(campaign, war, demand.Provinces, proposer.MapIndex))
+        var territory = Tidy(campaign, war, demand.Provinces, proposer.MapIndex);
+        // AI drafts pass through the same shape gate at signature, not only while the
+        // initial demand is being written. Liberation is not annexation: an independent
+        // country need not border its sponsor. A player's explicit painted border stays theirs.
+        if (!proposer.IsHuman && !demand.ReleaseRegions && campaign.Defines.PeaceWholeRegions)
+            territory = PeaceShape.SettleProvinces(campaign, war, territory, proposer);
+        foreach (var province in territory)
             rounded.Provinces.Add(province);
         return rounded;
     }

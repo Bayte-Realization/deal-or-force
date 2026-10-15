@@ -10,6 +10,8 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--peace-intent-only")) { PeaceIntentTests.Run(); return; }
+        if (args.Contains("--restoration-only")) { RestorationTests.Run(); return; }
         if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
         if (args.Contains("--integrity-only")) { CampaignIntegrityTests.Run(); return; }
         if (args.Contains("--conflict-preview-only")) { ConflictReadOnlyTests.Run(); return; }
@@ -56,6 +58,8 @@ static class Program
         if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
         DynamicAllianceTests.Run();
         ConflictReadOnlyTests.Run();
+        RestorationTests.Run();
+        PeaceIntentTests.Run();
         ClaudeStateFingerprintTests.Run();
         CampaignIntegrityTests.Run();
         TerritorialClaimsTests.Run();

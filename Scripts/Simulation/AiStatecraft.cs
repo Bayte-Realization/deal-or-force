@@ -978,7 +978,7 @@ public static partial class AiStatecraft
             demand.Reparations = true;
             spent += defines.PeaceCostReparations;
         }
-        if (demand.Provinces.Count > 0 && Afford(defines.PeaceCostLongTruce))
+        if (demand.Provinces.Count > 0 && WantsLongTruce(campaign, nation, war, demand) && Afford(defines.PeaceCostLongTruce))
         {
             demand.LongTruce = true;
             spent += defines.PeaceCostLongTruce;

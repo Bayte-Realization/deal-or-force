@@ -58,6 +58,8 @@ public static class MovementDealings
 
     public static readonly IReadOnlyList<Kind> Kinds = new Kind[]
     {
+        new("authorise_restoration", "Authorise a return", "Permit this exiled government to recover one homeland region you hold. This can transfer an entire region. Friendship alone grants no permission; it expires after one year or one return.", "treaty"),
+        new("revoke_restoration", "Revoke return permission", "Withdraw permission for a future return. Existing borders are not reversed.", "treaty"),
         new("authorise_referendum", "Authorise referendum", "Permit peaceful votes in this movement's claimed regions for one year. Independence still requires a majority of residents and public standing.", "movement_legitimacy"),
         new("revoke_referendum", "Revoke referendum consent", "Withdraw permission for future votes; already agreed borders are not reversed.", "movement_legitimacy"),
         new("recognise", "Recognise", "Recognise it as the rightful voice of its people. Its standing rises; the country whose ground it claims will not forgive it.", "movement_legitimacy"),
@@ -85,6 +87,8 @@ public static class MovementDealings
         if (CivilIndependence.HasClaim(campaign, movement, country))
             yield return Of(state.ReadyOnDay.GetValueOrDefault(CivilIndependence.ConsentKey(country.Id), -1) >= campaign.ElapsedDays
                 ? "revoke_referendum" : "authorise_referendum");
+        if (Restoration.HoldsHomeland(campaign, movement, country))
+            yield return Of(Restoration.Consents(campaign, movement, country) ? "revoke_restoration" : "authorise_restoration");
         if (state.Landless) yield return Of(Movements.HostOf(campaign, movement) == country ? "expel" : "offer_asylum");
     }
 
@@ -165,6 +169,11 @@ public static class MovementDealings
         var at = campaign.ElapsedDays;
         switch (action)
         {
+            case "authorise_restoration":
+            case "revoke_restoration":
+                return Restoration.HoldsHomeland(campaign, movement, country) && !country.IsSubject &&
+                    !CampaignDiplomacy.AtWar(campaign, country.Id, movement.Id) && !state.DesignatedBy.Contains(country.Id)
+                    ? "" : Loc.Get("There is no peaceful homeland claim to negotiate.");
             case "authorise_referendum":
             case "revoke_referendum":
                 return CivilIndependence.HasClaim(campaign, movement, country) && !country.IsSubject &&
@@ -232,6 +241,14 @@ public static class MovementDealings
 
         switch (action)
         {
+            case "authorise_restoration":
+                state.ReadyOnDay[Restoration.ConsentKey(country.Id)] = campaign.ElapsedDays + 365;
+                state.LastReport = Loc.Format("{0} authorises one return to a homeland region it holds.", country.DisplayName);
+                break;
+            case "revoke_restoration":
+                state.ReadyOnDay.Remove(Restoration.ConsentKey(country.Id));
+                state.LastReport = Loc.Format("{0} withdraws permission for a future return.", country.DisplayName);
+                break;
             case "authorise_referendum":
                 state.ReadyOnDay[CivilIndependence.ConsentKey(country.Id)] = campaign.ElapsedDays +
                     Math.Max(1, defines.CivilReferendumConsentDays);

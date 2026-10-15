@@ -69,6 +69,9 @@ public static class MovementAi
 
         // The host first: a movement that is thrown out loses a fifth of its people.
         if (state.Heat >= 0.6f) Try("lobby");
+        // A return needs actual control or a separate mandate from the current owner.
+        if (state.Exile && Restoration.BestRegion(campaign, nation) is { } restoredHome)
+            Try("restore", restoredHome.MapIndex);
         if (definition.Has("civic_independence"))
             foreach (var id in definition.Homeland)
                 if (Movements.StateById(campaign, id) is { } home && Try("referendum", home.MapIndex)) break;

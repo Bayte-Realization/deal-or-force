@@ -11,6 +11,28 @@ public sealed partial class Defines
 
 public static partial class AiStatecraft
 {
+    /// <summary>Buy a decade of quiet only when it serves the settlement, not out of habit.</summary>
+    internal static bool WantsLongTruce(Campaign campaign, Nation nation, StrategicWar war, PeaceDemand demand)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || nation is null || war is null || demand is null) return true;
+        // Exhaustion can outweigh an unfinished claim. The ordinary truce still applies
+        // in every other case; declining the paid extension never permits an immediate war.
+        if (nation.Stability < campaign.Defines.AiWarStabilityFloor ||
+            nation.WarSupport < campaign.Defines.AiWarSupportFloor) return true;
+        var enemies = war.EnemiesOf(nation.Id).Select(campaign.NationById).Where(n => n is not null)
+            .Select(n => n.MapIndex).ToHashSet();
+        var subject = demand.Subjugate.Length > 0 ? campaign.NationById(war.EnemyLeaderOf(nation.Id))?.MapIndex ?? 0 : 0;
+        var unresolved = campaign.States.Where(s => enemies.Contains(s.NationMapIndex) && s.NationMapIndex != subject &&
+            (s.MapIndex == war.ClaimedStateMapIndex || TerritorialClaims.TitleOf(campaign, nation, s) == TerritorialTitle.Homeland))
+            .Select(s => s.MapIndex).ToHashSet();
+        if (unresolved.Count == 0) return true;
+        for (var p = 1; p <= map.ProvinceCount; p++)
+            if (!map.IsWater(p) && enemies.Contains(map.ProvinceToNation[p]) && map.ProvinceToNation[p] != subject &&
+                unresolved.Contains(map.ProvinceToState[p]) && !demand.Provinces.Contains(p)) return false;
+        return true;
+    }
+
     /// <summary>Compare a complete settlement before spending its budget on a partial border and extras.</summary>
     internal static bool WriteDecisiveSettlement(Campaign campaign, Nation winner, StrategicWar war,
         PeaceLedger ledger, PeaceDemand demand)

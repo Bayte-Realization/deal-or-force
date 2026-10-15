@@ -169,6 +169,8 @@ public static class PeacefulFormation
             partner.Population = remaining;
             if (campaign.StatesOf(partner).Length > 0) continue;
             // Joining is not defeat. Keep people, savings, equipment, training and research.
+            // Retain homeland titles, but a consenting government has not fled a conquest.
+            campaign.Fallen.Add(partner.Id);
             SovereignFinance.MergeAccounts(campaign, founder, partner);
             founder.ManpowerReserve += partner.ManpowerReserve; partner.ManpowerReserve = 0;
             founder.ConvertedCivilianUnits = (int)Math.Min(int.MaxValue, (long)founder.ConvertedCivilianUnits + partner.ConvertedCivilianUnits);

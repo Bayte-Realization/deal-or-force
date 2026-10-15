@@ -45,6 +45,13 @@ public sealed partial class Campaign
 /// </summary>
 public static class CapitalCore
 {
+    /// <summary>A landless government returning home needs a new seat, not its old overseas office.</summary>
+    internal static void Establish(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        if (campaign is null || nation is null || state is null || state.NationMapIndex != nation.MapIndex) return;
+        Place(campaign, nation, state, Seat(campaign.ProvinceMap, nation, state));
+    }
+
     /// <summary>What moving the government costs this country, in the treasury's money.</summary>
     public static float Cost(Campaign campaign, Nation nation) =>
         MathF.Max(campaign.Defines.CapitalMoveCostFloor, nation.Gdp * campaign.Defines.CapitalMoveCostShare);
