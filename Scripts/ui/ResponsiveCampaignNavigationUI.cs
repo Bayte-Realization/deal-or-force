@@ -27,12 +27,14 @@ public partial class DealOrForceGame
         navigation.Resized += LayoutCampaignNavigation;
         navigation.Name = "CampaignNavigation";
         Ui.Place(navigation, "hud.navigation");
-        var margin = Margin(navigation, 4, 6);
-        var stack = new VBoxContainer(); stack.AddThemeConstantOverride("separation", 4); margin.AddChild(stack);
+        var margin = Margin(navigation, (int)Ui.Metric("spacing.xs", 4), 6);
+        var stack = new VBoxContainer();
+        stack.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.navigation_row_gap", 4));
+        margin.AddChild(stack);
 
         _campaignNavigationCategory = new OptionButton
         {
-            Name = "NavigationCategory", CustomMinimumSize = new(0, 32), ClipText = true,
+            Name = "NavigationCategory", CustomMinimumSize = new(0, Ui.Metric("shell.navigation_category_height", 32)), ClipText = true,
             FitToLongestItem = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false
         };
@@ -54,7 +56,7 @@ public partial class DealOrForceGame
         };
         stack.AddChild(_campaignNavigationScroll);
         _campaignNavigationRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _campaignNavigationRows.AddThemeConstantOverride("separation", 4);
+        _campaignNavigationRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.navigation_row_gap", 4));
         _campaignNavigationScroll.AddChild(_campaignNavigationRows);
         _screenButtons.Clear(); _campaignNavigationGroups.Clear(); _campaignNavigationEntries.Clear(); _campaignNavigationCaptions.Clear();
         _campaignNavigationScreenGroups.Clear();
@@ -93,7 +95,7 @@ public partial class DealOrForceGame
         var media = ActionButton("Sound / Art", OpenMediaLibrary, 0, 42, false,
             SpriteCatalog.TextureOf("icon_ledger", "res://game/gfx/interface/icons/icon_ledger.png"));
         media.Name = "OpenMediaLibraryNavigation"; media.SetMeta("icon_above", true); StyleButton(media, false);
-        media.RemoveMeta("icon_caption_minimum"); media.CustomMinimumSize = new(0, 42);
+        media.RemoveMeta("icon_caption_minimum"); media.CustomMinimumSize = new(0, Ui.Metric("shell.navigation_media_height", 42));
         media.ClipText = true; media.AddThemeFontSizeOverride("font_size", 10); media.AddThemeConstantOverride("icon_max_width", 18);
         media.AccessibilityName = Tr("Sound and artwork");
         Tip(media, "Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign.");
@@ -105,7 +107,7 @@ public partial class DealOrForceGame
     {
         if (_campaignNavigationRows is null || _hudNavigationPanel is null) return;
         var preferred = InterfaceSkin.Metric("shell.navigation_height", 50);
-        var rowRoom = Math.Max(0, _hudNavigationPanel.Size.Y - 64);
+        var rowRoom = Math.Max(0, _hudNavigationPanel.Size.Y - Ui.Metric("shell.navigation_row_inset", 64));
         var key = (rowRoom, preferred, _campaignNavigationGroup, Loc.Language);
         if (_navigationLayoutApplied && _navigationLayoutKey == key) return;
         var selectedCount = _campaignNavigationEntries.Count(entry => entry.Group == _campaignNavigationGroup);

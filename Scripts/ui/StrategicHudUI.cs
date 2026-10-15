@@ -25,7 +25,7 @@ public partial class DealOrForceGame
         _outliner.Name = "StrategicOutliner";
         Ui.Place(_outliner, "hud.outliner");
         // One scrollable rail keeps alerts and dossiers inside the available viewport.
-        var outer = Margin(_outliner, 10, 8);
+        var outer = Margin(_outliner, (int)Ui.Metric("panel.pad", 10), (int)Ui.Metric("spacing.sm", 8));
         outer.ClipContents = true;
         var column = new VBoxContainer
         {
@@ -33,7 +33,7 @@ public partial class DealOrForceGame
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             ClipContents = true
         };
-        column.AddThemeConstantOverride("separation", 6);
+        column.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_stack_gap", 6));
         outer.AddChild(column);
         var toggle = ActionButton("Situation report  −", ToggleOutliner, 0, 30);
         toggle.Name = "OutlinerToggle";
@@ -64,10 +64,10 @@ public partial class DealOrForceGame
         _outlinerScroll = scroll;
         column.AddChild(scroll);
         var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 10);
+        body.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_group_gap", 10));
         scroll.AddChild(body);
         _alertRows = new VBoxContainer { Name = "StrategicAlerts" };
-        _alertRows.AddThemeConstantOverride("separation", 4);
+        _alertRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_row_gap", 4));
         body.AddChild(_alertRows);
         _outlinerRows = new VBoxContainer
         {
@@ -75,7 +75,7 @@ public partial class DealOrForceGame
             CustomMinimumSize = Vector2.Zero,
             ClipContents = true
         };
-        _outlinerRows.AddThemeConstantOverride("separation", 4);
+        _outlinerRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_row_gap", 4));
         body.AddChild(_outlinerRows);
     }
 
@@ -414,7 +414,7 @@ public partial class DealOrForceGame
             var age = now - _alertFirstSeen[key];
 
             var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 6);
+            row.AddThemeConstantOverride("separation", (int)Ui.Metric("hud.alert_row_gap", 6));
             _alertRows.AddChild(row);
 
             // The level as a stripe down the row's edge, read before the words are.
@@ -512,7 +512,7 @@ public partial class DealOrForceGame
         var hidden = CampaignUiCatalog.HiddenOutliner.Contains(text);
         var group = new VBoxContainer { Visible = !collapsed && !hidden };
         group.SetMeta("outliner_section", text);
-        group.AddThemeConstantOverride("separation", 3);
+        group.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_section_gap", 3));
         var button = ActionButton((collapsed ? "▸ " : "▾ ") + Tr(text), () =>
         {
             if (!_collapsedOutlinerGroups.Add(text)) _collapsedOutlinerGroups.Remove(text);

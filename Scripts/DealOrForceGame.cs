@@ -1800,6 +1800,25 @@ public partial class DealOrForceGame : Control
         return percent / 100f;
     }
 
+    /// <summary>
+    /// Digits of equal width, so a column of money or people stops shifting sideways as its
+    /// numbers change. The figure beside it is already right-aligned; this lines up the ones
+    /// place as well, which is the difference between a column you can scan and one you re-read
+    /// every time it refreshes. A font without tabular figures simply looks as it did, and a
+    /// mod can turn the whole thing off with `hud.tabular_numbers`.
+    /// </summary>
+    private static void TabularFigures(Label label)
+    {
+        if (label is null || InterfaceSkin.Metric("hud.tabular_numbers", 1) <= 0) return;
+        var font = label.GetThemeFont("font");
+        if (font is null) return;
+        label.AddThemeFontOverride("font", new FontVariation
+        {
+            BaseFont = font,
+            OpentypeFeatures = new Godot.Collections.Dictionary { { "tnum", 1 } }
+        });
+    }
+
     private void DetailRow(string caption, string value, string tooltip = null, string valueToken = "text.bright",
         System.Func<Simulation.Breakdown> explain = null)
     {
@@ -1861,6 +1880,9 @@ public partial class DealOrForceGame : Control
         card.AddThemeStyleboxOverride("panel", ShellRowStyle(_sideDetail.GetChildCount() % 2 == 0));
         card.AddChild(row);
         _sideDetail.AddChild(card);
+        // The row is in the tree now, so the figure can read the real theme font before it is
+        // given tabular digits.
+        TabularFigures(figure);
     }
 
     /// <summary>A small capitalised rule between groups of rows.</summary>

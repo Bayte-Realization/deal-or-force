@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
 using DealOrForce.Simulation;
 
 static class ResponsiveHudLayoutTests
@@ -29,6 +32,46 @@ static class ResponsiveHudLayoutTests
         }
         var extreme = ResponsiveHudLayout.Fit(new(float.PositiveInfinity, -10000, 10000, float.NaN), 1280, 720);
         Check(Inside(extreme, 1280, 720), "out-of-range mod rectangles are clamped, not clipped off-screen");
+        SpacingGrid();
+    }
+
+    // The §2 interface pass moved magic numbers out of the layout code and into named metrics.
+    // These live in the shipped game/gui files, so this reads them the way the game does and
+    // fails if a future edit quietly deletes a token or breaks the 4px rhythm.
+    private static void SpacingGrid()
+    {
+        var gui = Path.Combine(GameDataLoader.DataFolder(), "gui");
+        using (var grid = JsonDocument.Parse(File.ReadAllText(Path.Combine(gui, "63_spacing_grid.json")), GameDataLoader.ForgivingJson))
+        {
+            var metrics = grid.RootElement.GetProperty("metrics");
+            float Token(string name) => metrics.GetProperty(name).GetSingle();
+            var steps = new[] { "spacing.xs", "spacing.sm", "spacing.md", "spacing.lg", "spacing.xl" };
+            var values = steps.Select(Token).ToArray();
+            Check(values.SequenceEqual(new[] { 4f, 8f, 12f, 16f, 24f }) &&
+                  values.All(v => MathF.Abs(v % 4f) < 0.001f) &&
+                  values.SequenceEqual(values.OrderBy(v => v)),
+                "the spacing grid is one ascending 4px rhythm, so unrelated panels share a unit");
+            Check(Token("panel.gutter") > 0 && Token("panel.pad") > 0 && Token("hud.density") > 0,
+                "panel gutter, padding and HUD density are declared once, not improvised per screen");
+        }
+        using (var structure = JsonDocument.Parse(File.ReadAllText(Path.Combine(gui, "20_campaign_structure.json")), GameDataLoader.ForgivingJson))
+        {
+            var shell = structure.RootElement.GetProperty("metrics");
+            float Shell(string name) => shell.GetProperty(name).GetSingle();
+            Check(Shell("shell.navigation_row_inset") == 64 && Shell("shell.navigation_row_gap") == 4 &&
+                  Shell("shell.navigation_category_height") == 32 && Shell("shell.navigation_media_height") == 42,
+                "the campaign navigation rail reads its geometry from named metrics, not literals");
+            Check(Shell("shell.outliner_group_gap") == 10 && Shell("shell.outliner_stack_gap") == 6 &&
+                  Shell("shell.outliner_row_gap") == 4 && Shell("shell.outliner_section_gap") == 3,
+                "the outliner rail reads its gaps from named metrics, not literals");
+        }
+        using (var readability = JsonDocument.Parse(File.ReadAllText(Path.Combine(gui, "29_hud_readability.json")), GameDataLoader.ForgivingJson))
+        {
+            var hud = readability.RootElement.GetProperty("metrics");
+            float Hud(string name) => hud.GetProperty(name).GetSingle();
+            Check(Hud("hud.tabular_numbers") == 1 && Hud("hud.alert_row_gap") == 6,
+                "the HUD declares tabular figures and the alert row gap once, not per screen");
+        }
     }
 
     private static bool Inside(ResponsiveHudLayout.Bounds b, float width, float height) =>

@@ -43,6 +43,7 @@ public static class MovementActions
         new("recruit", "Recruit", "Pay to train organisers and volunteers: cadres, which uprisings are made of.", false, false),
         new("recognition", "Seek recognition", "Ask a country to recognise it. One that thinks well enough of it does, and the movement's standing rises with every one.", false, true),
         new("rise", "Rise up", "Call the following into the streets in a region. If it succeeds, the region is its own: a capital, militia, and a war with the country it rose against.", true, false),
+        new("restore", "Restore the country", "Bring a government in exile home: its own homeland becomes its own again, with the people and the output that are on it. It needs the ground - either the country already holds it, or the country holding it is a friend willing to give it back.", true, false, "government_in_exile"),
         new("referendum", "Negotiate referendum", "Seek a peaceful vote in the homeland. Requires a majority of residents, standing and the parent's consent; no militia or automatic war.", true, false, "civic_independence"),
         new("infiltrate", "Send fighters in", "Smuggle fighters out of the headquarters into a region where its people will hide them. They take days on the road by distance, and an uprising there is stronger for every one that arrives.", true, false),
         new("call_to_arms", "Call to arms", "Hand out rifles in a region it holds: militia out of its supporters there, the more the more of them there are.", true, false),
@@ -84,6 +85,7 @@ public static class MovementActions
             "recruit" => defines.MovementRecruitCostPerThousand * RecruitThousands(nation) *
                          (Movements.DefinitionOf(nation)?.Has("for_hire") == true ? 0.5f : 1f),
             "rise" => defines.MovementUprisingCost,
+            "restore" => defines.RestorationCost,
             "infiltrate" => defines.MovementCampaignCost,
             "call_to_arms" => defines.MovementCallToArmsCost,
             "lobby" => 0.02f,
@@ -118,6 +120,7 @@ public static class MovementActions
         "recruit" => defines.MovementRecruitDays,
         "recognition" => defines.MovementRecognitionDays,
         "rise" => defines.MovementUprisingDays,
+        "restore" => defines.RestorationCooldownDays,
         "infiltrate" => defines.MovementCampaignDays,
         "call_to_arms" => defines.MovementCallToArmsDays,
         "move" => 0,
@@ -153,6 +156,7 @@ public static class MovementActions
         switch (action)
         {
             case "referendum": return CivilIndependence.Refusal(campaign, nation, region);
+            case "restore": return Restoration.Refusal(campaign, nation, region);
             case "move":
             {
                 if (!state.Landless) return Loc.Get("A country with ground of its own is governed from its capital.");
@@ -263,6 +267,10 @@ public static class MovementActions
                 state.MovingToStateMapIndex = region.MapIndex;
                 state.ArrivesOnDay = campaign.ElapsedDays + Math.Max(1, defines.MovementRelocationDays);
                 state.LastReport = Loc.Format("The headquarters is on its way to {0}.", region.DisplayName);
+                break;
+
+            case "restore":
+                Restoration.Return(campaign, nation, region);
                 break;
 
             case "campaign":

@@ -69,6 +69,12 @@ public static class MovementAi
 
         // The host first: a movement that is thrown out loses a fifth of its people.
         if (state.Heat >= 0.6f) Try("lobby");
+        // A government in exile's whole purpose is the way home: it takes it the moment it is open.
+        if (state.Exile)
+        {
+            var home = Restoration.BestRegion(campaign, nation);
+            if (home is not null) Try("restore", home.MapIndex);
+        }
         if (definition.Has("civic_independence"))
             foreach (var id in definition.Homeland)
                 if (Movements.StateById(campaign, id) is { } home && Try("referendum", home.MapIndex)) break;

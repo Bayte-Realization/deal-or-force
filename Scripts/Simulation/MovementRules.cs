@@ -573,10 +573,13 @@ public static class MovementRules
     }
 
     /// <summary>The region is its own: the ground, a capital, militia, and a war with the country it rose against.</summary>
-    internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner, bool peacefully = false)
+    internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner,
+        bool peacefully = false, bool restoration = false)
     {
-        if (peacefully && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
-        if (!peacefully && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
+        // A restoration is its own kind of return: the country is already the country it was, so
+        // it is neither a referendum (peaceful) nor an uprising (armed). Restoration guards it.
+        if (peacefully && !restoration && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
+        if (!peacefully && !restoration && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
         if (campaign?.ProvinceMap is null || nation?.Movement is null || region is null ||
             !float.IsFinite(region.Stability) || !float.IsFinite(region.StandardOfLiving) ||
             !float.IsFinite(region.Literacy) || !float.IsFinite(nation.Gdp) ||
@@ -628,7 +631,8 @@ public static class MovementRules
         var seat = campaign.StatesOf(nation).OrderByDescending(candidate => candidate.Population).FirstOrDefault();
         if (seat is not null) nation.CapitalStateMapIndex = seat.MapIndex;
         campaign.LocateCapitals();
-        nation.Government = peacefully ? definition.Government : "provisional_government";
+        // A restoration keeps the government the country had when it fell; nothing was founded anew.
+        if (!restoration) nation.Government = peacefully ? definition.Government : "provisional_government";
         nation.PoliticsChangedDay = campaign.ElapsedDays;
 
         // The cadres become the country's militia, and so does the street: every supporter in the
@@ -643,7 +647,7 @@ public static class MovementRules
             (int)(street / MathF.Max(1f, defines.MovementMilitiaPerSupporters)) +
             (int)(hidden / MathF.Max(1f, perFormation * 0.5f)));
         if (definition.Has("nonviolence")) formations = Math.Min(formations, 1);
-        if (peacefully) formations = 0;
+        if (peacefully || restoration) formations = 0;
         var raised = 0;
         foreach (var held in campaign.StatesOf(nation))
             for (var attempt = 0; attempt < formations && raised < formations; attempt++)
@@ -655,7 +659,7 @@ public static class MovementRules
         var fromCadres = Math.Min(raised, (int)(state.Cadres / MathF.Max(1f, perFormation)));
         state.Cadres = MathF.Max(0f, state.Cadres - fromCadres * perFormation * 0.5f);
 
-        if (owner is not null && !peacefully)
+        if (owner is not null && !peacefully && !restoration)
         {
             if (nation.SecededFromId < 0) nation.SecededFromId = owner.Id;
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, owner.Id, nation.Id), "rose_against_us");

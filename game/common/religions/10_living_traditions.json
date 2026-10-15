@@ -3,5 +3,19 @@
 // majority-faith classification every community would accept.
 {
   "alevi_bektashi": {"name": "Alevi-Bektashi", "group": "alevi_bektashi", "colour": "#97646d"},
-  "yazidi": {"name": "Yazidism", "group": "yazidi", "colour": "#c5ad61"}
+  "yazidi": {"name": "Yazidism", "group": "yazidi", "colour": "#c5ad61"},
+  // Distinct traditions, not sub-labels of a larger one: Tenrikyo and Caodaism are not "folk
+  // religion", Taoism is not "Shinto", and Mandaeism is not a Christian denomination. Naming
+  // them keeps a religious foundation's demographics honest about who actually lives there.
+  "tenrikyo": {"name": "Tenrikyo", "group": "east_asian", "colour": "#c08f4f"},
+  "caodaism": {"name": "Caodaism", "group": "east_asian", "colour": "#9f6fc0"},
+  "taoism": {"name": "Taoism", "group": "east_asian", "colour": "#8f9f4f"},
+  "mandaean": {"name": "Mandaeism", "group": "mandaean", "colour": "#6f9faf"},
+  // African-diaspora traditions kept together as their own family, and Rastafari apart from it:
+  // a region that believes this is not "animist" by default, and a founding mandate reads the
+  // difference rather than rounding it away.
+  "santeria": {"name": "Santeria", "group": "african_diaspora", "colour": "#c08f6f"},
+  "candomble": {"name": "Candomble", "group": "african_diaspora", "colour": "#a06f8f"},
+  "voodoo": {"name": "Vodou", "group": "african_diaspora", "colour": "#8f6fa0"},
+  "rastafari": {"name": "Rastafari", "group": "rastafari", "colour": "#4f8f5f"}
 }

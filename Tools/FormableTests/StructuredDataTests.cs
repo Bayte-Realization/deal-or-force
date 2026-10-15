@@ -97,7 +97,7 @@ static class StructuredDataTests
             Check(InterfaceSkin.Metric("yaml.test", 0) == 31 && Loc.Get("yaml.test") == "YAML translation",
                 "real presentation reload layers JSON/YAML/YML and localisation");
             Check(errors.Count == 1 && errors[0].Contains("40_broken.yaml"),
-                "bad YAML names its file and does not suppress valid siblings");
+                "bad YAML names its file and does not suppress valid siblings: " + string.Join(" | ", errors));
             File.Delete(Path.Combine(gui, "40_broken.yaml"));
             File.WriteAllText(Path.Combine(gui, "30_override.YML"), "metrics: {yaml.test: 37}");
             errors = PresentationReload.Reload(new[] { directory });

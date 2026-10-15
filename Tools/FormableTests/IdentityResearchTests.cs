@@ -151,11 +151,38 @@ static class IdentityResearchTests
             "the expanded cross-branch research graph lays out without overlapping cards");
         var byId = layout.ToDictionary(slot => slot.Id);
         Check(TechnologyCatalog.All.All(t => t.Requires.All(id => byId[id].Column < byId[t.Id].Column)), "all new cross-branch dependencies point forward in the research view");
-        foreach (var id in new[] { "cornish", "garifuna", "miskito", "mixtec", "zapotec" })
+        foreach (var id in new[] { "cornish", "garifuna", "miskito", "mixtec", "zapotec", "coptic", "hokkien" })
             Check(DemographyCatalog.Culture(id) is { Religions.Count: 0 } && Loc.TextIn("russian", DemographyCatalog.Culture(id).Name) is not null,
                 "regional identity vocabulary is translated without fabricated census or religion fractions: " + id);
         Check(DemographyCatalog.Religion("yazidi").Group != "muslim" && DemographyCatalog.Religion("alevi_bektashi") is not null,
             "the new living faith traditions are distinct catalogue entries rather than converted populations");
+        foreach (var id in new[] { "south_tirol", "ligurian", "venetian" })
+            Check(DemographyCatalog.Culture(id) is not null && Loc.TextIn("russian", DemographyCatalog.Culture(id).Name) is not null,
+                "new regional identities are translated rather than left as an English key: " + id);
+        foreach (var id in new[] { "tenrikyo", "caodaism", "taoism", "mandaean", "santeria", "candomble", "voodoo", "rastafari" })
+            Check(DemographyCatalog.Religion(id) is not null && Loc.TextIn("russian", DemographyCatalog.Religion(id).Name) is not null,
+                "new living faith traditions are translated rather than left as an English key: " + id);
+        Check(DemographyCatalog.Religion("mandaean").Group == "mandaean" && DemographyCatalog.Religion("tenrikyo").Group == "east_asian" &&
+              DemographyCatalog.Religion("rastafari").Group == "rastafari" && DemographyCatalog.Religion("santeria").Group == "african_diaspora",
+            "the new faiths keep their own family instead of being folded into a larger one");
+        foreach (var id in new[]
+                 {
+                     "austria_hungary", "gran_colombia", "central_american_federation", "west_indies_federation",
+                     "czechoslovakia", "serbia_montenegro", "baltic_union", "nordic_union", "benelux_union",
+                     "visegrad_union", "maghreb_union", "levant_union", "united_arab_republic", "nile_union",
+                     "transcaucasia", "cyprus_reunited", "kurdistan", "palestine_united", "greater_india",
+                     "indochinese_federation", "maphilindo", "polynesian_union", "andes_union", "rio_de_la_plata",
+                     "southern_cone_union", "greater_romania", "united_albania", "iberia_greater"
+                 })
+            Check(FormableNations.Find(id) is { EligibleCultures.Length: > 0 } formable &&
+                  formable.EligibleTags.Length > 0 &&
+                  (formable.RequiredTags.Length > 0 || formable.RequiredProvinces.Length > 0 || formable.RequiredRegions.Length > 0),
+                "an existing foundation accepts a culturally related founder while keeping its full required territory: " + id);
+        var unions = Campaign.CreateBootstrap(97);
+        Check(unions.Defines.UnionAiAcceptance <= 65f && unions.Defines.UnionAiMinimumOwnedShare <= 0.30f,
+            "the AI can actually bring a culturally close neighbour into a union, not only admire the idea");
+        Check(FormableNations.Find("yugoslavia") is { AiFoundation: true, PeacefulAccession: true, SubjectIntegration: true },
+            "a country whose neighbours share its history pursues the union itself, not only by hand");
         var baseWorld = Campaign.CreateBootstrap(421);
         var addedCultures = new HashSet<string>(new[] { "cornish", "garifuna", "miskito", "mixtec", "zapotec" }, StringComparer.OrdinalIgnoreCase);
         Check(baseWorld.States.All(s => s.PopulationGroups.All(g => !addedCultures.Contains(g.Culture))),

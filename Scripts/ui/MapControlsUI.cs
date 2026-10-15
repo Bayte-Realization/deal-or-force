@@ -25,7 +25,7 @@ public partial class DealOrForceGame
         _mapControlsPanel = panel;
         panel.Name = "MapControls";
         Ui.Place(panel, "hud.map_controls");
-        var margin = Margin(panel, 8, 4);
+        var margin = Margin(panel, (int)Ui.Metric("spacing.sm", 8), (int)Ui.Metric("spacing.xs", 4));
         var row = new HFlowContainer
         {
             Name = "MapControlsFlow",
@@ -33,8 +33,8 @@ public partial class DealOrForceGame
             ClipContents = true
         };
         _mapControlsFlow = row;
-        row.AddThemeConstantOverride("h_separation", 4);
-        row.AddThemeConstantOverride("v_separation", 4); margin.AddChild(row);
+        row.AddThemeConstantOverride("h_separation", (int)Ui.Metric("map.controls_flow_h_gap", 4));
+        row.AddThemeConstantOverride("v_separation", (int)Ui.Metric("map.controls_flow_v_gap", 4)); margin.AddChild(row);
         row.MinimumSizeChanged += QueueMapControlsLayout;
         panel.Resized += QueueMapControlsLayout;
         panel.VisibilityChanged += () => { if (!panel.IsVisibleInTree()) CloseMapLayerDrawer(); else RefreshMapVisualToggles(); };
@@ -290,7 +290,7 @@ public partial class DealOrForceGame
         button.ClipText = true;
         button.ToggleMode = true;
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        button.CustomMinimumSize = new(0, 34); button.RemoveMeta("icon_caption_minimum");
+        button.CustomMinimumSize = new(0, Ui.Metric("map.controls_button_height", 34)); button.RemoveMeta("icon_caption_minimum");
         button.AccessibilityName = Tr(mode.ToString());
         button.TooltipText = Ui.Tip(Tr(mode.ToString()) + " \u2014 " + Tr(MapModeHelp(mode)));
         row.AddChild(button);

@@ -35,6 +35,13 @@
       "file": "gfx/atmosphere/night_signal.png",
       "source": "CreativeClaw · Nano Banana 2 · generated abstract artwork"
     },
+    "quiet_meridians": {
+      "name": "Quiet meridians",
+      "purpose": "Fine contour lines and meridian arcs over deep navy: a calm backdrop for reading borders and figures.",
+      "kind": "image",
+      "file": "gfx/atmosphere/atlas_quiet_lines.jpg",
+      "source": "CreativeClaw · Nano Banana 2 · generated abstract artwork"
+    },
     "atlas_tap": {
       "name": "Atlas Tap",
       "purpose": "Tactile feedback for ordinary interface actions.",

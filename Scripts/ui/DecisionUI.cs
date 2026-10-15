@@ -29,23 +29,21 @@ public partial class DealOrForceGame
         foreach (var definition in DecisionCatalog.All)
         {
             var block = DecisionCatalog.BlockReason(_campaign, nation, definition);
-            var card = WorkbenchCard(_decisionControls);
-            card.AddChild(Title(definition.Name, 15, Ui.Colour("text.bright")));
-            card.AddChild(Title(definition.Description, 12, Ui.Colour("text.body_soft")));
-            card.AddChild(Title(Simulation.Loc.Format("Cost {0} · cooldown {1} days",
-                Fmt.Money(DecisionCatalog.Cost(nation, definition)), definition.CooldownDays), 12, Ui.Colour("text.accent_dim")));
             var captured = definition.Id;
-            var button = ActionButton("Enact decision", () => TakeDecision(captured), 0, 32, block.Length == 0);
-            button.Name = "Decision_" + captured;
-            button.Disabled = block.Length > 0;
+            var cost = Simulation.Loc.Format("Cost {0} · cooldown {1} days",
+                Fmt.Money(DecisionCatalog.Cost(nation, definition)), definition.CooldownDays);
+            // One card for every action: what it does, what it costs, what it will change, and -
+            // when it cannot be taken - why not. The result lines are the same ones the decision
+            // applies when it runs, not a separate promise.
+            var button = ActionCard(_decisionControls, definition.Name, definition.Description, cost,
+                ScriptedEffects.Lines(definition.Effect), block, "Enact decision", block.Length == 0,
+                () => TakeDecision(captured), "Decision_" + captured);
             // The description, then exactly what enacting it does - the same lines an event
             // option shows - or, while it cannot be enacted, why not.
             var effects = ScriptedEffects.Block(definition.Effect);
             Tip(button, block.Length > 0 ? block
                 : effects.Length == 0 ? definition.Description
                 : Tr(definition.Description) + "\n\n" + effects);
-            card.AddChild(button);
-            if (block.Length > 0) card.AddChild(Title(block, 12, Ui.Colour("state.warning")));
         }
     }
 

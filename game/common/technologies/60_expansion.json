@@ -1,0 +1,65 @@
+// A further tier of capabilities, all of them existing, observable modifiers rather than
+// research-only statistics. Nothing here promises a fixed invention date or immunity from a
+// crisis: each line is something a government can actually fund and then live with.
+{
+  "open_source_industrial_software": {
+    "name": "Open industrial software", "description": "Shared, inspectable control software for factories and utilities so a single vendor cannot strand a whole sector.",
+    "category": "industry", "cost": 340, "requires": ["industrial_digital_twins"], "icon": "icon_building_civilianindustry",
+    "effects": {"output": 0.012, "research_speed": 0.01}
+  },
+  "regional_power_islands": {
+    "name": "Regional power islands", "description": "Let districts keep the lights on alone when the national grid is cut, instead of going dark with it.",
+    "category": "industry", "cost": 300, "requires": ["resilient_power_control"], "icon": "icon_building_infrastructure",
+    "effects": {"construction_speed": 0.015, "output": 0.01}
+  },
+  "civilian_cyber_resilience": {
+    "name": "Civilian cyber resilience", "description": "Harden tax, registry and payment systems against the attacks that arrive before any army does.",
+    "category": "society", "cost": 330, "requires": ["digital_government"], "icon": "icon_research",
+    "effects": {"tax_efficiency": 0.012, "research_speed": 0.01}
+  },
+  "municipal_bond_markets": {
+    "name": "Municipal bond markets", "description": "Let cities borrow against their own tax base, so public works stop competing for one national purse.",
+    "category": "society", "cost": 360, "requires": ["sovereign_risk_accounting"], "icon": "icon_treasury",
+    "effects": {"credit_capacity": 0.025, "borrowing_cost": -0.012}
+  },
+  "talent_retention_programmes": {
+    "name": "Talent retention programmes", "description": "Fund laboratories, housing and visas so the people a country trains do not finish their careers somewhere else.",
+    "category": "society", "cost": 470, "requires": ["research_networks"], "icon": "icon_research",
+    "effects": {"research_speed": 0.03}
+  },
+  "strategic_reserve_inventory": {
+    "name": "Strategic reserve inventories", "description": "Hold fuel, grain and spare parts in national stores so a broken corridor is a delay, not a shortage.",
+    "category": "logistics", "cost": 350, "requires": ["resilient_supply_networks"], "icon": "icon_alert_supply",
+    "effects": {"supply": 0.015, "support_recovery": 0.03}
+  },
+  "rail_electrification_programme": {
+    "name": "Rail electrification programme", "description": "Move freight onto electrified lines so inland trade no longer waits on imported fuel.",
+    "category": "logistics", "cost": 420, "requires": ["electric_transport"], "icon": "icon_trade",
+    "effects": {"trade_reach": 0.018, "supply": 0.01}
+  },
+  "coastal_shipping_resilience": {
+    "name": "Coastal shipping resilience", "description": "Keep short-sea routes and their crews working when a single port or canal is closed to you.",
+    "category": "logistics", "cost": 440, "requires": ["maritime_maintenance_networks"], "icon": "icon_navy",
+    "effects": {"trade_reach": 0.02, "supply": 0.012}
+  },
+  "autonomous_port_logistics": {
+    "name": "Autonomous port logistics", "description": "Automate the quay, the yard and the rail link so a port keeps its throughput through a labour shortage.",
+    "category": "logistics", "cost": 520, "requires": ["autonomous_convoys"], "icon": "icon_trade",
+    "effects": {"trade_reach": 0.022, "construction_speed": 0.012}
+  },
+  "modular_field_hospitals": {
+    "name": "Modular field hospitals", "description": "Deploy the same interchangeable wards to a front, an epidemic or an earthquake, with the same staff.",
+    "category": "logistics", "cost": 400, "requires": ["dispersed_medical_logistics"], "icon": "icon_building_hospital",
+    "effects": {"support_recovery": 0.04, "organisation_recovery": 0.02}
+  },
+  "training_simulator_networks": {
+    "name": "Training simulator networks", "description": "Let crews rehearse combined arms and naval manoeuvre before they meet either for real.",
+    "category": "military", "cost": 380, "requires": ["combined_arms_simulation"], "icon": "icon_army_defend",
+    "effects": {"army_attack": 0.01, "army_defense": 0.01}
+  },
+  "fortified_logistics_hubs": {
+    "name": "Fortified logistics hubs", "description": "Dig in the depots and railheads the front depends on, so a breakthrough does not become a collapse.",
+    "category": "military", "cost": 430, "requires": ["field_protection_engineering"], "icon": "icon_army_defend",
+    "effects": {"entrenchment_speed": 0.03, "support_losses": -0.01}
+  }
+}

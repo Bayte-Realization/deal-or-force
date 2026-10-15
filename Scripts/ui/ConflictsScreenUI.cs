@@ -136,7 +136,12 @@ public partial class DealOrForceGame
         var crises = hot.Count(r => Escalation.StageOf(r) == TensionStage.Crisis);
         var clashes = hot.Count(r => Escalation.StageOf(r) == TensionStage.Clashes);
         var wars = _campaign.Wars.Where(w => !w.Ended).ToList();
-        var backed = wars.Count(w => ProxyWars.For(_campaign, w).Any());
+        // One pass over the sponsorships, kept as plain tuples. ProxyWars.For re-scans the whole
+        // list for every war it is asked about, and this screen asks about every war more than
+        // once; a century-old world has enough of both for that to be felt.
+        var sponsorships = ProxyWars.Active(_campaign).Select(s => (s.WarId, s.SponsorId, s.ClientId)).ToList();
+        var backersByWar = sponsorships.GroupBy(s => s.WarId).ToDictionary(g => g.Key, g => g.Count());
+        var backed = wars.Count(w => backersByWar.ContainsKey(w.Id));
         _conflictsSummary.Text = Simulation.Loc.Format(
             "{0} standoffs in the world: {1} in crisis, {2} with armed clashes. {3} wars, {4} of them with foreign backers.",
             hot.Count, crises, clashes, wars.Count, backed);
@@ -145,8 +150,8 @@ public partial class DealOrForceGame
         switch (_conflictTab)
         {
             case 0: ListTensions(hot); break;
-            case 1: ListWars(wars); break;
-            case 2: ListOurs(hot, wars); break;
+            case 1: ListWars(wars, backersByWar); break;
+            case 2: ListOurs(hot, wars, sponsorships); break;
             case 3: ListTerritorialDisputes(); break;
             default: ListOrganizations(); break;
         }
@@ -161,16 +166,17 @@ public partial class DealOrForceGame
         foreach (var relation in hot.Take(80)) AddTensionRow(relation);
     }
 
-    private void ListWars(List<StrategicWar> wars)
+    private void ListWars(List<StrategicWar> wars, Dictionary<int, int> backersByWar)
     {
         if (wars.Count == 0) { _conflictsList.AddChild(Title("Nobody is at war.", 13, Ui.Colour("text.caption"))); return; }
         foreach (var war in wars.OrderByDescending(w => w.Involves(_campaign.Player.Id))
-                     .ThenByDescending(w => ProxyWars.For(_campaign, w).Count())
+                     .ThenByDescending(w => backersByWar.GetValueOrDefault(w.Id))
                      .ThenByDescending(w => w.AttackerLosses + w.DefenderLosses))
             AddWarRow(war);
     }
 
-    private void ListOurs(List<DiplomaticRelation> hot, List<StrategicWar> wars)
+    private void ListOurs(List<DiplomaticRelation> hot, List<StrategicWar> wars,
+        List<(int WarId, int SponsorId, int ClientId)> sponsorships)
     {
         var player = _campaign.Player;
         var mine = hot.Where(r => r.A == player.Id || r.B == player.Id).ToList();
@@ -178,11 +184,11 @@ public partial class DealOrForceGame
         if (mine.Count == 0) _conflictsList.AddChild(Title("No country is in a standoff with you.", 13, Ui.Colour("text.caption")));
         foreach (var relation in mine) AddTensionRow(relation);
         _conflictsList.AddChild(Caption("WARS WE BACK"));
-        var backing = ProxyWars.Active(_campaign).Where(s => s.SponsorId == player.Id).ToList();
+        var backing = sponsorships.Where(s => s.SponsorId == player.Id).ToList();
         if (backing.Count == 0) _conflictsList.AddChild(Title("You are not arming anybody.", 13, Ui.Colour("text.caption")));
         foreach (var s in backing)
             if (wars.FirstOrDefault(w => w.Id == s.WarId) is { } war) AddWarRow(war);
-        var arming = ProxyWars.Active(_campaign).Where(s => s.ClientId == player.Id).ToList();
+        var arming = sponsorships.Where(s => s.ClientId == player.Id).ToList();
         if (arming.Count > 0)
         {
             _conflictsList.AddChild(Caption("WHO ARMS US"));
@@ -386,11 +392,22 @@ public partial class DealOrForceGame
             _conflictsPage.AddChild(Title(Simulation.Loc.Format("Lost to shooting short of war: {0:N0} people.", relation.ClashLosses), 14, Ui.Colour("text.body")));
 
         _conflictsPage.AddChild(Caption("LATELY"));
-        var recent = _campaign.Chronicle.Entries.Where(e => e.Public &&
-                (e.ActorId == a.Id && e.TargetId == b.Id || e.ActorId == b.Id && e.TargetId == a.Id))
-            .OrderByDescending(e => e.Sequence).Take(8).ToList();
+        // The chronicle of a century-long campaign is long, and this page is rebuilt every time
+        // the screen opens and every time the day turns. Walk it backwards and stop at the eight
+        // lines that are wanted, instead of sorting the whole thing; and match the news by a set
+        // rather than scanning eight entries for every headline.
+        var recent = new List<ChronicleEntry>();
+        var chronicle = _campaign.Chronicle.Entries;
+        for (var index = chronicle.Count - 1; index >= 0 && recent.Count < 8; index--)
+        {
+            var entry = chronicle[index];
+            if (!entry.Public) continue;
+            if (entry.ActorId == a.Id && entry.TargetId == b.Id || entry.ActorId == b.Id && entry.TargetId == a.Id)
+                recent.Add(entry);
+        }
         if (recent.Count == 0) _conflictsPage.AddChild(Title("Nothing has happened between them yet.", 13, Ui.Colour("text.caption")));
-        foreach (var line in NewsFeed.Lines(_campaign).Where(l => recent.Any(e => e.Sequence == l.Sequence)))
+        var recentSequences = recent.Select(entry => entry.Sequence).ToHashSet();
+        foreach (var line in NewsFeed.Lines(_campaign).Where(l => recentSequences.Contains(l.Sequence)))
             _conflictsPage.AddChild(Title(Simulation.Loc.Format("{0} days ago · {1}", _campaign.ElapsedDays - line.Day, line.Text), 13, Ui.Colour("text.body")));
 
         var player = _campaign.Player;

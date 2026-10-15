@@ -271,5 +271,60 @@ static class DomesticCrisesTests
         Console.WriteLine($"Domestic crisis daily review: {watch.Elapsed.TotalMilliseconds / 100:0.000} ms/day, " +
             $"{perDay:N0} bytes/day.");
         Check(perDay < 40_000, "daily simulation does not allocate UI crisis rows for every country");
+        // --- political mood: who the residents actually are, and whether the government is theirs
+        var mood = Campaign.CreateBootstrap(741);
+        var moodNation = mood.Nations.Where(n => n.Population > 0 && n.Movement is null).First();
+        mood.ConfigureSinglePlayer(moodNation.Id);
+        mood.Wars.Clear();
+        var comfortable = mood.Nations.Where(n => n.Population > 0).OrderByDescending(n => n.StandardOfLiving + n.Literacy).First();
+        var poor = mood.Nations.Where(n => n.Population > 0).OrderBy(n => n.StandardOfLiving + n.Literacy).First();
+        Check(PoliticalMood.PopularPosition(mood, comfortable).Economic > PoliticalMood.PopularPosition(mood, poor).Economic,
+            "a comfortable, literate country leans towards the market and a poor one towards the state");
+        var ranked = PoliticalMood.Shares(mood, moodNation);
+        Check(ranked.Count == IdeologyCatalog.All.Count && Math.Abs(ranked.Sum(s => s.Share) - 1f) < .001f &&
+              ranked.Count(s => s.Governing) == 1,
+            "every ideology holds a share of the country and exactly one of them is the government's");
+        Check(ranked.SequenceEqual(PoliticalMood.Shares(mood, moodNation)),
+            "reading the mood is deterministic and remembers nothing");
+        moodNation.Ideology = ranked[0].Ideology;
+        var alignedMandate = PoliticalMood.Mandate(mood, moodNation);
+        moodNation.Ideology = ranked[^1].Ideology;
+        var opposedMandate = PoliticalMood.Mandate(mood, moodNation);
+        Check(alignedMandate > opposedMandate && opposedMandate > 0f && alignedMandate < 1f,
+            "a government that shares the country's own position holds a larger mandate than one that does not");
+        foreach (var state in mood.StatesOf(moodNation)) state.Radicalism = .20f;
+        Day(mood, 7); PoliticalMood.Tick(mood);
+        var afterOpposed = mood.StatesOf(moodNation).Average(r => r.Radicalism);
+        moodNation.Ideology = ranked[0].Ideology;
+        foreach (var state in mood.StatesOf(moodNation)) state.Radicalism = .20f;
+        Day(mood, 14); PoliticalMood.Tick(mood);
+        var afterAligned = mood.StatesOf(moodNation).Average(r => r.Radicalism);
+        Check(afterOpposed > .20f && afterAligned < .20f,
+            "a government nobody shares breeds unrest, and one the country shares calms it");
+
+        // The country's mood is its regions' moods, and its people are shown as the data keeps them.
+        var leanCampaign = Campaign.CreateBootstrap(743);
+        var leanNation = leanCampaign.Nations.Where(n => n.Population > 0 && n.Movement is null)
+            .OrderByDescending(n => leanCampaign.StatesOf(n).Length).First();
+        leanCampaign.ConfigureSinglePlayer(leanNation.Id);
+        leanCampaign.Wars.Clear();
+        var leans = PoliticalMood.GroupLeans(leanCampaign, leanNation);
+        Check(leans.Count is > 0 and <= 6 && leans.All(l => l.Share > 0f && l.Lean > 0f && l.IdeologyName.Length > 0),
+            "the country is broken down by the groups the population data actually keeps");
+        Check(leans.Sum(l => l.Share) is > 0f and <= 1.0001f,
+            "group shares are shares of the country, not of the chart");
+        Check(leans.SequenceEqual(PoliticalMood.GroupLeans(leanCampaign, leanNation)),
+            "the demographic breakdown is deterministic and remembers nothing");
+        // A region's lean comes from its own conditions, not from the country it is in.
+        var richRegion = new ScenarioState { MapIndex = 9101, Population = 100,
+            StandardOfLiving = .95f, Literacy = .95f, Urbanization = .95f, Stability = .8f };
+        var poorRegion = new ScenarioState { MapIndex = 9102, Population = 100,
+            StandardOfLiving = .05f, Literacy = .05f, Urbanization = .05f, Stability = .8f };
+        Check(PoliticalMood.RegionPosition(leanCampaign, richRegion, false).Economic >
+              PoliticalMood.RegionPosition(leanCampaign, poorRegion, false).Economic,
+            "a rich, urban region leans towards the market and a poor, rural one towards the state");
+        Check(PoliticalMood.RegionPosition(leanCampaign, richRegion, true).Authority >
+              PoliticalMood.RegionPosition(leanCampaign, richRegion, false).Authority,
+            "a war pushes a region towards accepting more authority than peace does");
     }
 }

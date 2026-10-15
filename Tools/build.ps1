@@ -131,6 +131,10 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 foreach ($folder in @('Scripts', 'Scenes', 'game')) {
     Copy-PlayerTree (Join-Path $project $folder) (Join-Path $stage $folder)
 }
+# The export-verification probe is game code that lives under Tools/ (see DealOrForce.csproj).
+# It is compiled into the assembly, so the staged copy the export builds from has to carry it,
+# or the staged project would not compile and the release gate would fail for the wrong reason.
+Copy-PlayerTree (Join-Path $project 'Tools\ExportVerification') (Join-Path $stage 'Tools\ExportVerification')
 foreach ($file in @('DealOrForce.csproj', 'DealOrForce.sln', 'export_presets.cfg', 'icon.ico', 'icon_small.png')) {
     Copy-Item -LiteralPath (Join-Path $project $file) -Destination $stage
 }

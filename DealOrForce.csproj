@@ -33,6 +33,15 @@
   <ItemGroup>
     <Compile Remove="mods\**\*.cs" />
     <Compile Remove="Tools\**\*.cs" />
+    <!--
+      One deliberate exception to the line above: the export-verification probe is game code,
+      not a tool. It is compiled into this assembly and runs inside the shipped executable
+      under the `verify-build` flag, which is how the release gate in Tools/build.ps1 tests the
+      actual pack rather than a stand-in. Its source lives under Tools/ because that is where
+      tooling belongs; the build still has to carry it, so it is added back here, and
+      Tools/build.ps1 stages this one folder beside Scripts, Scenes and game.
+    -->
+    <Compile Include="Tools\ExportVerification\**\*.cs" />
     <Content Include="game\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.yaml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.yml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

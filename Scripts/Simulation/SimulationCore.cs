@@ -878,6 +878,10 @@ public sealed partial class Campaign
             yield return 0;
             using (SimProfiler.Measure("domestic crises")) DomesticCrises.Tick(this);
             yield return 0;
+            // And whether the country still agrees with the government that holds it. Derived
+            // from what the residents have and believe, never a bonus or penalty per tag.
+            using (SimProfiler.Measure("political mood")) PoliticalMood.Tick(this);
+            yield return 0;
 
             // Settlers on land nobody owns, and whether anybody new sets out for it.
             ColonisationCore.Tick(this);

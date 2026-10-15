@@ -76,5 +76,13 @@
   "Institutional review in progress": "Проверка институтов действует",
   "quiet_coup": "Захват власти армией",
   "The army takes over": "Армия захватывает власть",
-  "No terms have been sent. Change the package to resolve this restriction.": "Условия ещё не отправлены. Измените предложение, чтобы устранить ограничение."
+  "No terms have been sent. Change the package to resolve this restriction.": "Условия ещё не отправлены. Измените предложение, чтобы устранить ограничение.",
+  "POLITICAL MOOD": "ПОЛИТИЧЕСКОЕ НАСТРОЕНИЕ",
+  "Governing mandate": "Мандат правительства",
+  "The share of the country that leans towards the government's own ideology. Below the plurality line, holding office breeds unrest every week.": "Доля страны, которая разделяет идеологию правительства. Ниже линии относительного большинства власть сама растит недовольство каждую неделю.",
+  "The largest other current is {0} at {1:P1}.": "Крупнейшее иное течение — {0}, {1:P1}.",
+  "DEMOGRAPHY AND MOOD": "ДЕМОГРАФИЯ И НАСТРОЕНИЯ",
+  "{0} · {1}": "{0} · {1}",
+  "{0:P0} → {1}": "{0:P0} → {1}",
+  "Each group leans the way its own regions do, not the way its name does.": "Каждая группа склоняется туда, куда ведут её собственные регионы, а не её название."
 }

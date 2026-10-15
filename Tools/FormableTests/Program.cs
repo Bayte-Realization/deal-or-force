@@ -21,6 +21,7 @@ static class Program
         if (args.Contains("--media-only")) { MediaLibraryTests.Run(); return; }
         if (args.Contains("--responsive-hud-only")) { ResponsiveHudLayoutTests.Run(); return; }
         if (args.Contains("--identity-only")) { IdentityResearchTests.Run(); return; }
+        if (args.Contains("--restoration-only")) { RestorationTests.Run(); return; }
         if (args.Contains("--civil-war-budget-only")) { CivilWarBudgetTests.Run(); return; }
         if (args.Contains("--cue-queue-only")) { StrategicCueQueueTests.Run(); return; }
         if (args.Contains("--network-cadence-only")) { NetworkSyncCadenceTests.Run(); return; }
@@ -93,6 +94,7 @@ static class Program
         MediaLibraryTests.Run();
         ResponsiveHudLayoutTests.Run();
         IdentityResearchTests.Run();
+        RestorationTests.Run();
         CivilWarBudgetTests.Run();
         StrategicCueQueueTests.Run();
         NetworkSyncCadenceTests.Run();

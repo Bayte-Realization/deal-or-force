@@ -1,5 +1,10 @@
 {
   "metrics": {
-    "hud.stat_labels": 1
+    "hud.stat_labels": 1,
+    // A dossier figure keeps its place as its digits change: it is right-aligned already, and
+    // these give every digit one width. A font without tabular figures simply ignores it.
+    "hud.tabular_numbers": 1,
+    // The alert rail's rows, named so a mod can breathe them out without recompiling.
+    "hud.alert_row_gap": 6
   }
 }
