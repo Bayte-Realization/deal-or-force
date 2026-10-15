@@ -774,6 +774,16 @@ public sealed class ProvinceTopology
     /// </summary>
     public int[] FindOperationalRoute(int startProvince, int targetProvince, ushort friendlyMapIndex,
         ushort hostileMapIndex, ushort[] controllers)
+        => FindOperationalRoute(startProvince, targetProvince, friendlyMapIndex, hostileMapIndex, null, controllers);
+
+    /// <summary>Coalition corridor through an explicit live set of belligerent controllers.</summary>
+    public int[] FindOperationalRoute(int startProvince, int targetProvince,
+        IReadOnlySet<ushort> allowedControllers, ushort[] controllers)
+        => allowedControllers is null ? Array.Empty<int>()
+            : FindOperationalRoute(startProvince, targetProvince, 0, 0, allowedControllers, controllers);
+
+    private int[] FindOperationalRoute(int startProvince, int targetProvince, ushort friendlyMapIndex,
+        ushort hostileMapIndex, IReadOnlySet<ushort> allowedControllers, ushort[] controllers)
     {
         if (startProvince <= 0 || targetProvince <= 0 ||
             startProvince >= Neighbors.Length || targetProvince >= Neighbors.Length ||
@@ -782,10 +792,10 @@ public sealed class ProvinceTopology
             return Array.Empty<int>();
         if (startProvince == targetProvince) return Array.Empty<int>();
 
-        static bool Allowed(ushort controller, ushort friendly, ushort hostile) =>
-            controller == friendly || controller == hostile;
-        if (!Allowed(controllers[startProvince], friendlyMapIndex, hostileMapIndex) ||
-            !Allowed(controllers[targetProvince], friendlyMapIndex, hostileMapIndex))
+        static bool Allowed(ushort controller, ushort friendly, ushort hostile, IReadOnlySet<ushort> coalition) =>
+            coalition is null ? controller == friendly || controller == hostile : coalition.Contains(controller);
+        if (!Allowed(controllers[startProvince], friendlyMapIndex, hostileMapIndex, allowedControllers) ||
+            !Allowed(controllers[targetProvince], friendlyMapIndex, hostileMapIndex, allowedControllers))
             return Array.Empty<int>();
 
         var generation = BeginRouteSearch();
@@ -802,7 +812,7 @@ public sealed class ProvinceTopology
             foreach (var next in Neighbors[current])
             {
                 if (stamp[next] == generation || IsWater(next) ||
-                    !Allowed(controllers[next], friendlyMapIndex, hostileMapIndex)) continue;
+                    !Allowed(controllers[next], friendlyMapIndex, hostileMapIndex, allowedControllers)) continue;
                 stamp[next] = generation;
                 previous[next] = current;
                 queue.Enqueue(next);

@@ -324,8 +324,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
                 var captorWar = captor is null ? null : campaign.Wars.FirstOrDefault(candidate =>
                     !candidate.Ended && candidate.Opposes(nation.Id, captor.Id));
                 var breakout = captorWar is null ? Array.Empty<int>()
-                    : topology.FindOperationalRoute(routeStart, TargetProvinceId,
-                        (ushort)nation.MapIndex, (ushort)captor.MapIndex, controllers);
+                    : WarCoalition.OperationalRoute(campaign, captorWar, nation.Id,
+                        routeStart, TargetProvinceId, controllers);
                 if (breakout.Length > 0)
                 {
                     war = captorWar;
@@ -337,8 +337,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
         }
         else
         {
-            plannedRoute = topology.FindOperationalRoute(routeStart, TargetProvinceId,
-                (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers);
+            plannedRoute = WarCoalition.OperationalRoute(campaign, war, nation.Id,
+                routeStart, TargetProvinceId, controllers);
             if (plannedRoute.Length == 0)
             {
                 SetResult(army, campaign, ArmyMoveResult.NoLandRoute);
@@ -346,7 +346,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
             }
             // CombatCore owns every hostile step. The ordinary marcher receives only the
             // friendly prefix, while the complete corridor remains visible and guides it.
-            route = plannedRoute.TakeWhile(province => controllers[province] == nation.MapIndex).ToArray();
+            route = plannedRoute.TakeWhile(province => WarCoalition.FriendlyController(campaign, war, nation.Id, controllers[province])).ToArray();
         }
         if (route.Length == 0)
         {
@@ -563,7 +563,8 @@ public static class MilitaryOperations
             var nation = campaign.NationById(army.NationId);
             var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
             if (nation is null || nextProvince <= 0 || nextProvince > topology.ProvinceCount ||
-                controllers[nextProvince] != nation.MapIndex)
+                (controllers[nextProvince] != nation.MapIndex && !WarCoalition.FriendlyController(campaign,
+                    WarCoalition.AssignedWar(campaign, army), army.NationId, controllers[nextProvince])))
             {
                 StepBlocked(campaign, topology, controllers, army, nation, nextProvince);
                 continue;
@@ -576,7 +577,7 @@ public static class MilitaryOperations
                 topology.TerrainAt(nextProvince).MovementSpeed *
                 StrategicRedeployment.DayOf(campaign, army) *
                 NationalModifiers.Factor(nation, "army_speed") *
-                // And on roads: the march is always through the country's own ground, and a
+                // And on roads: the march is through friendly ground, and a
                 // region with a network of them is crossed faster than one without.
                 MovementPace.Roads(campaign, nextProvince);
             if (army.MoveProgress < 1f) continue;
@@ -588,8 +589,7 @@ public static class MilitaryOperations
             army.OrderStepsCompleted++;
             army.StateMapIndex = topology.ProvinceToState[army.ProvinceId];
             (army.Latitude, army.Longitude) = topology.CenterOf(army.ProvinceId);
-            // Friendly ground by definition - the route above refuses any province the
-            // country does not control - so this is a march within its own lines.
+            // Own or co-belligerent ground: still a march within friendly lines, not a capture.
             army.Entrenchment *= campaign.Defines.EntrenchmentKeptMovingWithinOwnLines;
             army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningLossPerProvince);
             if (army.Route.Count == 0)
@@ -628,7 +628,7 @@ public static class MilitaryOperations
         var blockingNation = nextProvince > 0 && nextProvince <= topology.ProvinceCount
             ? campaign.Nations.Find(n => n.MapIndex == controllers[nextProvince]) : null;
         var crossingWar = nation is null || blockingNation is null ? null : campaign.Wars.Find(w =>
-            !w.Ended && w.Involves(nation.Id) && w.Involves(blockingNation.Id));
+            !w.Ended && w.Opposes(nation.Id, blockingNation.Id));
         if (army.DirectOrder && army.OrderProvinceId > 0 && crossingWar is not null)
         {
             army.Route.Clear();
@@ -1026,20 +1026,17 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                     : heldPost > 0
                         ? PostNear(campaign, army, Order, orderedFront, war.Id, heldPost)
                         : PostOnTheLine(campaign, army, Order, orderedFront, war.Id);
-        var enemyId = war.EnemyLeaderOf(army.NationId);
-        var enemy = campaign.NationById(enemyId);
-        var targetIsHostile = target > 0 && enemy is not null && controllers[target] == enemy.MapIndex;
+        var targetIsHostile = target > 0 && WarCoalition.HostileController(campaign, war, army.NationId, controllers[target]);
         var plannedRoute = target < 0
             ? Array.Empty<int>()
             : targetIsHostile
-                ? campaign.ProvinceMap.FindOperationalRoute(army.ProvinceId, target,
-                    (ushort)nation.MapIndex, (ushort)enemy.MapIndex, controllers)
+                ? WarCoalition.OperationalRoute(campaign, war, army.NationId, army.ProvinceId, target, controllers)
                 : campaign.ProvinceMap.FindRoute(army.ProvinceId, target, (ushort)nation.MapIndex, controllers);
         if (plannedRoute.Length == 0 && army.ProvinceId != target && !targetIsHostile)
             plannedRoute = campaign.ProvinceMap.FindRouteToAny(army.ProvinceId, front,
                 (ushort)nation.MapIndex, controllers);
         var route = targetIsHostile
-            ? plannedRoute.TakeWhile(province => controllers[province] == nation.MapIndex).ToArray()
+            ? plannedRoute.TakeWhile(province => WarCoalition.FriendlyController(campaign, war, army.NationId, controllers[province])).ToArray()
             : plannedRoute;
         army.AssignedWarId = war.Id;
         army.Route.AddRange(route);

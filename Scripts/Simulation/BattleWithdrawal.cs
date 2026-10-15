@@ -29,20 +29,14 @@ public static partial class Warfare
         result = "Not in battle";
         var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
         if (battle is null || army.Divisions < .1f) return false;
+        var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
         var attacking = battle.Attackers.Contains(army.Id);
         if (!attacking && !battle.Defenders.Contains(army.Id)) return false;
 
         var retreat = 0;
         if (!attacking)
         {
-            var nation = campaign.NationById(army.NationId);
-            var map = campaign.ProvinceMap;
-            var control = campaign.ProvinceController;
-            if (nation is not null && map is not null && control is not null &&
-                army.ProvinceId > 0 && army.ProvinceId < map.Neighbors.Length)
-                foreach (var neighbor in map.Neighbors[army.ProvinceId])
-                    if (control[neighbor] == nation.MapIndex && !map.IsWater(neighbor) &&
-                        (retreat == 0 || neighbor < retreat)) retreat = neighbor;
+            retreat = WarCoalition.RetreatProvince(campaign, war, army, army.ProvinceId, lowestId: true);
             // A trapped defender cannot cancel enemy fire by pressing a button. No
             // state changes precede this check, and no surrender is hidden in the order.
             if (retreat == 0) { result = "No friendly line of retreat"; return false; }
@@ -76,18 +70,17 @@ public static partial class Warfare
         // Do not heal strength, organisation, equipment or reset the battle's losses.
         _provinceIndexStale = true;
         EnsureIndexed(campaign);
-        var attackers = Side(battle.Attackers, battle.AttackerId, AttackingSide);
+        var attackers = Side(war, battle.Attackers, battle.AttackerId, AttackingSide);
         if (attackers.Count == 0) Close(campaign, battle, battle.DefenderId, "Attackers withdrew");
         else
         {
             // An uncommitted garrison still defends the province after one unit leaves.
             foreach (var remaining in InProvince(battle.ProvinceId))
-                if (!remaining.InBattle && remaining.NationId == battle.DefenderId && remaining.Divisions >= .1f)
+                if (!remaining.InBattle && WarCoalition.SameSide(war, remaining.NationId, battle.DefenderId) && remaining.Divisions >= .1f)
                     Join(battle, remaining, false);
-            var defenders = Side(battle.Defenders, battle.DefenderId, DefendingSide);
+            var defenders = Side(war, battle.Defenders, battle.DefenderId, DefendingSide);
             if (defenders.Count == 0)
             {
-                var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
                 var occupied = war is not null && Capture(campaign, war, battle.ProvinceId,
                     battle.AttackerId, attackers, defenders, "defenders withdrew");
                 Close(campaign, battle, battle.AttackerId,

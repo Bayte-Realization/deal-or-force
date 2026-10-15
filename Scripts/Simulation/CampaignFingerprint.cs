@@ -386,6 +386,16 @@ public static class CampaignFingerprint
         if (controllers is null) return hash;
         for (var province = 0; province < controllers.Length; province++) Mix(controllers[province]);
         return hash;
+            // Coalition membership changes combat and access before any province moves.
+            // Keep the historical bilateral golden when there are no allied members.
+            if (war.AttackerAllies.Count > 0 || war.DefenderAllies.Count > 0)
+            {
+                MixText("war_coalition"); Mix(war.AttackerId); Mix(war.DefenderId);
+                Mix(war.AttackerAllies.Count);
+                foreach (var member in war.AttackerAllies.OrderBy(id => id)) Mix(member);
+                Mix(war.DefenderAllies.Count);
+                foreach (var member in war.DefenderAllies.OrderBy(id => id)) Mix(member);
+            }
     }
 
     /// <summary>
