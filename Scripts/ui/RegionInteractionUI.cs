@@ -263,6 +263,7 @@ public partial class DealOrForceGame
             "People of no nation this state is for. A starred people below is one of its own.",
             foreign > 0.5f ? "state.negative" : foreign > 0.15f ? "state.warning" : "state.positive");
 
+        DetailDemographicReference();
         DetailComposition("PEOPLES", CultureSlices(_selectedState, owner), total);
         DetailComposition("FAITHS", ReligionSlices(_selectedState), total, 6);
         // Ten rows for ten trades. At nine the last one vanished into "and 1 more", and

@@ -1997,3 +1997,56 @@ The console itself is deliberately English — it prints type names and syntax, 
 its files when checking localisation. The exception is the `FUN` category in
 `DeveloperConsoleExtras.cs`: a joke in a language you cannot read is not a joke, so those strings
 go through the table like any other content.
+
+## Dated regional demographic references
+
+A regional source is an observation, not another live population table. Put complete records in
+`common/regional_demography/*.json` (YAML/YML use the same loader). For a new campaign, select
+a record explicitly in `history/states/2024/*.json`:
+
+```json
+{ "example_region": { "culture_profile": "example_region" } }
+```
+
+A reference record has this shape. **All figures and the source below are fictional examples**:
+
+```json
+{
+  "example_region": {
+    "date": "2020-01-01",
+    "source": "Example census",
+    "url": "https://example.org/census",
+    "table": "1",
+    "areas": [{
+      "name": "Example area",
+      "page": 1,
+      "population": 1000,
+      "counts": { "belarusian": 700, "polish": 250 },
+      "unmapped": 10
+    }]
+  }
+}
+```
+
+Counts are non-negative integers keyed by existing culture ids. `unmapped` is a reported category
+without an unambiguous game culture. The difference between population and listed counts plus
+unmapped is the unlisted remainder. Neither remainder becomes an invented culture or religion.
+The initial model normalises mapped counts only; its coverage is disclosed in the population dossier.
+Multiple areas are combined by **adding absolute counts before normalisation**, not averaging shares.
+
+Dates, source, table, area names, positive page numbers and population are required. A record may
+contain 1–128 distinct areas, each with at most 512 culture keys. Negative/string/duplicate counts,
+unknown cultures, over-counted totals and arithmetic overflow reject that record without removing
+the preceding definition. Overlays replace **complete records by id**, not individual area fields.
+Disabling a mod resets the catalog. Reloading a catalog alone never alters a loaded campaign.
+
+Explicit `cultures` or legacy `nationalities` in a history object takes precedence over
+`culture_profile`. Missing profile ids report a history error and leave population intact.
+The same region id in the reference catalog lets the dossier show its geographic source;
+it does not certify a mod's chosen starting mix. A split region inherits its parent's reference
+with a scale warning. Source and area names are localization keys; add the corresponding EN/RU entries.
+
+No measured faith, language or political preference is inferred from this source.
+Faith shares still follow the separate existing cultural defaults unless other scenario data changes
+them; disclose that estimate rather than calling it a religious census. The current population groups,
+not these historic counts, remain authoritative and are saved in the usual campaign snapshot.

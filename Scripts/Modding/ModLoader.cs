@@ -333,6 +333,7 @@ public sealed class ModLoader
         ("laws", () => PoliticalPolicyCatalog.ResetCatalog(), PoliticalPolicyCatalog.MergeLaws),
         ("agendas", () => { }, PoliticalPolicyCatalog.MergeAgendas),
         ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge),
+        ("regional_demography", () => RegionalDemography.ResetCatalog(), RegionalDemography.Merge),
         ("news", () => NewsFeed.ResetCatalog(), NewsFeed.Merge),
         ("handbook", () => HandbookCatalog.ResetCatalog(), HandbookCatalog.Merge),
         ("escalation", () => IncidentCatalog.ResetCatalog(), (root, errors) => IncidentCatalog.Merge(root.GetRawText(), errors)),

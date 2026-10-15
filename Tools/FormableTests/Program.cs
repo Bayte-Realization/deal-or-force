@@ -10,6 +10,7 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
         if (args.Contains("--peace-intent-only")) { PeaceIntentTests.Run(); return; }
         if (args.Contains("--restoration-only")) { RestorationTests.Run(); return; }
         if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
@@ -56,6 +57,7 @@ static class Program
         if (args.Contains("--regional-content-only")) { RegionalContentTests.Run(); return; }
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
         if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
+        RegionalDemographyTests.Run();
         DynamicAllianceTests.Run();
         ConflictReadOnlyTests.Run();
         RestorationTests.Run();
