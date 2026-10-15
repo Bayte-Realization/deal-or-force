@@ -1,0 +1,16 @@
+// Retain the original files and library previews. Only automatic universal peace
+// selection changes; regional Asian music and crisis/war selection are untouched.
+{
+  "tracks": {
+    "frayed_civic": { "remove": true },
+    "afterimage_republic": { "remove": true },
+    "quiet_current": {
+      "file": "audio/quiet_current.ogg",
+      "label": "Quiet current",
+      "when": "any",
+      "moods": ["calm", "recovery"],
+      "weight": 2,
+      "volume_db": 0
+    }
+  }
+}

@@ -1,6 +1,11 @@
 # The soundtrack
 
-ReimAlpha's active score is now seven recordings: two experimental universal pieces,
+The 15 October soft peace alternative is `quiet_current.ogg`; it replaces the two
+earlier universal calm recordings in automatic selection without deleting them.
+Both originals remain in the listening library. See `docs/QUIET_SOUNDTRACK_RU.md`
+from the project root for provenance, technical checks and the listening caveat.
+
+The earlier ReimAlpha adaptive score introduced seven recordings: two experimental universal pieces,
 four region-tagged Asian companions, and a processed world-emergency loop.
 Scheduling, region/mood tags and crossfade policy live in `../10_adaptive_score.json`
 and `../11_world_emergency.json`. See [provenance and modding notes](../../../docs/ADAPTIVE_SOUNDTRACK_RU.md)

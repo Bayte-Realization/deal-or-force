@@ -1,5 +1,19 @@
 {
   "assets": {
+    "quiet_current": {
+      "name": "Quiet current",
+      "purpose": "A low, warm peace-time groove. Soft-timbre alternative to the earlier recordings.",
+      "kind": "music",
+      "file": "music/audio/quiet_current.ogg",
+      "source": "CreativeClaw · Lyria 3.5 · generated instrumental"
+    },
+    "frayed_civic": {
+      "name": "Frayed civic (original)",
+      "purpose": "Preserved earlier peace-time recording, available for manual listening.",
+      "kind": "music",
+      "file": "music/audio/frayed_civic.ogg",
+      "source": "CreativeClaw · Lyria 3.5 · generated instrumental"
+    },
     "afterimage_republic": {
       "name": "Afterimage republic",
       "purpose": "Quiet and uneasy, for peace and recovery.",

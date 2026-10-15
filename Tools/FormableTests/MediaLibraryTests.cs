@@ -10,7 +10,7 @@ static class MediaLibraryTests
     public static void Run()
     {
         MediaLibraryCatalog.Load();
-        Check(MediaLibraryCatalog.All.Count() == 11, "base library lists ten new delivered assets and the preserved world loop");
+        Check(MediaLibraryCatalog.All.Count() == 13, "base library lists delivered assets and preserved recordings");
         Check(MediaLibraryCatalog.All.All(x => x.Kind != LibraryMediaKind.Video), "unapproved video render is not claimed or loaded as delivered media");
         Check(MediaLibraryCatalog.All.Where(x => x.Kind is LibraryMediaKind.Music or LibraryMediaKind.Sound)
             .All(x => x.DurationSeconds > 0 && x.Peaks is { Count: > 0 } && x.Peaks.Count <= 512 && x.Peaks.Any(p => p > 0 && p < 1)),
@@ -61,8 +61,18 @@ static class MediaLibraryTests
             "incoming documents cannot create an unbounded alert queue");
         Check(MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.SystemicCrisis).Single().Name == "last_lap_world",
             "new companions do not dilute the existential playlist");
-        Check(MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm, "europe").Any(t => t.Name == "afterimage_republic") &&
+        Check(MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm, "europe").Any(t => t.Name == "quiet_current") &&
               MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Crisis, "europe").Any(t => t.Name == "faultlines_in_motion"),
             "new universal score is scheduled by its intended context");
+        Check(MusicCatalog.For(MusicCatalog.Moment.Menu, MusicMood.Calm).Single().Name == "quiet_current" &&
+              MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Recovery, "europe").Single().Name == "quiet_current",
+            "soft peace alternative covers the menus and recovery as well as ordinary calm");
+        Check(!MusicCatalog.All.Any(t => t.Name is "frayed_civic" or "afterimage_republic") &&
+              MediaLibraryCatalog.Find("frayed_civic") is { Kind: LibraryMediaKind.Music } &&
+              MediaLibraryCatalog.Find("afterimage_republic") is { Kind: LibraryMediaKind.Music },
+            "earlier universal recordings leave automatic selection but remain in the listening library");
+        Check(MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm, "asia").Any(t => t.Name == "night_desk") &&
+              MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm, "asia").Any(t => t.Name == "window_after_rain"),
+            "regional Asian peace companions are preserved");
     }
 }
