@@ -1,0 +1,37 @@
+// Covert operations (CovertOperations.cs): what an intelligence network abroad can do past seeing.
+//
+//   effect             what success does - "sabotage" (war damage to one region's works),
+//                      "unrest" (one region angrier and less orderly), "opposition" (the country
+//                      less stable, its capital angrier, its strongest movement funded - up to
+//                      CovertOppositionFundingCap of the target's own output),
+//                      "theft" (a large part of research the country has, carried home)
+//   minimum_strength   the network strength it needs, 0 to 1
+//   days               how long it takes to prepare
+//   cost               what it costs, in multiples of founding a network
+//   power              how hard it hits: 1 is the figures in the defines (Covert*)
+//   risk               added to the chance it is traced back
+//
+// A mod adds an operation with a new key and one of the four effects, or changes one field of an
+// old one by naming it alone.
+{
+  "sabotage": {
+    "name": "Sabotage their industry",
+    "description": "A fire at the works, a transformer that fails, a line cut. The region produces less until it is rebuilt.",
+    "effect": "sabotage", "minimum_strength": 0.3, "days": 21, "cost": 1.5, "risk": 0.05
+  },
+  "unrest": {
+    "name": "Stir up unrest",
+    "description": "Money and rumours for the angriest people in the region. It grows more radical and less orderly.",
+    "effect": "unrest", "minimum_strength": 0.25, "days": 28, "cost": 1.0
+  },
+  "opposition": {
+    "name": "Fund the opposition",
+    "description": "Money for those who want the government gone. The country grows less stable, and its strongest movement gets a share of the money.",
+    "effect": "opposition", "minimum_strength": 0.4, "days": 42, "cost": 2.5, "risk": 0.05
+  },
+  "theft": {
+    "name": "Steal their research",
+    "description": "A large part of what they have learned and we have not: the work we are on now, if they have it, or the most valuable of what we could start.",
+    "effect": "theft", "minimum_strength": 0.45, "days": 56, "cost": 2.0, "risk": -0.05
+  }
+}

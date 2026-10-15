@@ -460,6 +460,8 @@ public static class Program
             var year = new Dictionary<string, int>();
             var total = new Dictionary<string, int>();
             long pulseSeen = 0;
+            long covertSeen = 0;
+            var covert = new Dictionary<string, int>();
             var largest = 0;
             for (var day = 1; day <= pulseDays; day++)
             {
@@ -472,6 +474,14 @@ public static class Program
                     if (entry.Kind == "war_started") Console.WriteLine($"   WAR day {entry.Day}: {entry.ActorName} -> {entry.TargetName}");
                 }
                 if (entries.Length > 0) pulseSeen = Math.Max(pulseSeen, entries.Max(e => e.Sequence));
+                // Covert operations are mostly private: counted from the whole chronicle.
+                foreach (var entry in campaign.Chronicle.Entries)
+                {
+                    if (entry.Sequence <= covertSeen) continue;
+                    covertSeen = entry.Sequence;
+                    if (!entry.Public && entry.Kind.StartsWith("covert_", StringComparison.Ordinal))
+                        covert[entry.Kind] = covert.GetValueOrDefault(entry.Kind) + 1;
+                }
                 foreach (var war in campaign.Wars) if (!war.Ended && !war.CivilConflict) largest = Math.Max(largest, war.BelligerentCount);
                 if (day % 365 != 0 && day != pulseDays) continue;
                 Console.WriteLine($"PULSE year to day {campaign.ElapsedDays} ({campaign.Date}): largest war between states {largest}; " +
@@ -480,6 +490,7 @@ public static class Program
                 largest = 0;
             }
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
             return 0;
         }
 

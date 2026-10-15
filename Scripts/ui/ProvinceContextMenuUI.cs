@@ -187,6 +187,7 @@ public partial class DealOrForceGame
                 flight is null ? Tr("No aircraft or drone of ours that can fly reconnaissance reaches this province.") : "");
             if (region is not null)
                 Action("unrest", "Disputes over this region", () => { CloseProvinceCard(); _territoryRegion = region.MapIndex; _conflictTab = 3; OpenScreen("Conflicts"); });
+            AddCovertCardActions(foreign, region, Section, Action);
         }
 
         if (movements.Count > 0)

@@ -306,6 +306,20 @@ public static class CampaignFingerprint
             // bytes, keeping pre-feature fingerprints compatible with untouched worlds.
             MixFloatDictionary("intel_networks", nation.IntelNetworks);
             MixFloatDictionary("organization_belonging_at_start", nation.OrganizationBelongingAtStart);
+            if (nation.CovertOperations.Count > 0)
+            {
+                MixText("covert_operations"); Mix(nation.CovertOperations.Count);
+                foreach (var operation in nation.CovertOperations)
+                {
+                    MixText(operation.Kind); Mix(operation.TargetId); Mix(operation.RegionMapIndex);
+                    Mix(operation.StartedDay); Mix(operation.DueDay); MixFloat(operation.Spent);
+                }
+            }
+            if (nation.CovertQuietUntil.Count > 0)
+            {
+                MixText("covert_quiet"); Mix(nation.CovertQuietUntil.Count);
+                foreach (var quiet in nation.CovertQuietUntil.OrderBy(p => p.Key)) { Mix(quiet.Key); Mix(quiet.Value); }
+            }
             if (!string.IsNullOrEmpty(nation.ConsolidationProject) || nation.ConsolidationFocusId != -1 ||
                 nation.ConsolidationAmbition != 0f)
             {

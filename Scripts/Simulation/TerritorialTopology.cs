@@ -445,10 +445,13 @@ public static class TerritorialTopology
                 // name the region they come from, but naming it by hand is a thing to get
                 // wrong: the answer is already on the map, in whichever region currently
                 // holds the ground the rule is about to take.
+                // Counted once: asked inside the search, the whole box was counted again for
+                // every region looked at before the one it named.
+                var dominant = string.IsNullOrWhiteSpace(rule.DonorIso)
+                    ? DominantState(control, states, width, height, (ushort)sourceNation.MapIndex, rule)
+                    : -1;
                 var donor = string.IsNullOrWhiteSpace(rule.DonorIso)
-                    ? campaign.States.FirstOrDefault(candidate =>
-                        candidate.MapIndex == DominantState(control, states, width, height,
-                            (ushort)sourceNation.MapIndex, rule))
+                    ? campaign.States.FirstOrDefault(candidate => candidate.MapIndex == dominant)
                     : campaign.States.FirstOrDefault(candidate =>
                         string.Equals(candidate.Iso, rule.DonorIso, StringComparison.OrdinalIgnoreCase));
                 if (donor is not null && donor != state)
@@ -599,9 +602,12 @@ public static class TerritorialTopology
                 summaries.Add(new RepairSummary(piece.Name, "REGION", polarCounts.GetValueOrDefault((ushort)piece.MapIndex)));
             return;
         }
+        // A table of the shares rather than the set: this asks it of every cell in the world.
+        var sharing = new bool[ushort.MaxValue + 1];
+        foreach (var share in shares) sharing[share] = true;
         var ground = new List<int>();
         for (var cell = 0; cell < states.Length; cell++)
-            if (shares.Contains(states[cell])) ground.Add(cell);
+            if (sharing[states[cell]]) ground.Add(cell);
         if (ground.Count == 0) return;
 
         var donor = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == donorIndex);
@@ -819,11 +825,19 @@ public static class TerritorialTopology
             return (fromPole * MathF.Sin(angle), fromPole * MathF.Cos(angle));
         }
 
+        // Where every cell of the ground is, worked out once: the seeds, the costs and the bends
+        // all ask it, and the seeds asked it of the whole band once for every share.
+        var projectedX = new float[size];
+        var projectedY = new float[size];
+        for (var local = 0; local < size; local++)
+            if (ground[local]) (projectedX[local], projectedY[local]) = Projected(local);
+
         var price = new int[size];
         for (var local = 0; local < size; local++)
         {
             if (!ground[local]) continue;
-            var (x, y) = Projected(local);
+            var x = projectedX[local];
+            var y = projectedY[local];
             // Two scales of wander: a border that swings over a few hundred kilometres, and
             // is ragged over a few dozen.
             var wander = 0.55f * PolarNoise(x, y, 60f, 0x51A7u) + 0.30f * PolarNoise(x, y, 20f, 0x2F0Du) +
@@ -849,7 +863,8 @@ public static class TerritorialTopology
             for (var local = 0; local < size; local++)
             {
                 if (!ground[local] || owner[local] != 0) continue;
-                var (x, y) = Projected(local);
+                var x = projectedX[local];
+                var y = projectedY[local];
                 var distance = (x - sx) * (x - sx) + (y - sy) * (y - sy);
                 if (distance >= bestDistance) continue;
                 bestDistance = distance;
@@ -898,7 +913,8 @@ public static class TerritorialTopology
         {
             if (!ground[local]) continue;
             bent[local] = owner[local];
-            var (x, y) = Projected(local);
+            var x = projectedX[local];
+            var y = projectedY[local];
             var shiftX = 0f;
             var shiftY = 0f;
             foreach (var (lattice, reach, salt) in Bends)
@@ -1285,13 +1301,19 @@ public static class TerritorialTopology
             for (var y = minY; y <= maxY; y++) for (var x = minX; x <= maxX; x++)
                 if (control[y * width + x] == sourceNation && states[y * width + x] != state && states[y * width + x] != 0)
                     donors.Add((x, y, states[y * width + x]));
+            // The donors as a grid over the box, so the nearest is found ring by ring around the
+            // cell rather than by measuring every one of them for every cell: the same donor the
+            // whole list would give, ties to the first in the list, in a fraction of the time.
+            var boxWidth = maxX - minX + 1;
+            var boxHeight = maxY - minY + 1;
+            var donorGrid = donors.Count == 0 ? null : new ushort[boxWidth * boxHeight];
+            foreach (var donor in donors) donorGrid[(donor.Y - minY) * boxWidth + (donor.X - minX)] = donor.State;
             for (var y = minY; y <= maxY; y++) for (var x = minX; x <= maxX; x++)
             {
                 var cell = y * width + x;
                 if (control[cell] != nation || donors.Count == 0 ||
                     Contains(rule.Polygon, XToLongitude(x, width), YToLatitude(y, height))) continue;
-                var nearest = donors.MinBy(d => (d.X - x) * (d.X - x) + (d.Y - y) * (d.Y - y));
-                control[cell] = sourceNation; states[cell] = nearest.State; changed++;
+                control[cell] = sourceNation; states[cell] = NearestDonor(donorGrid, boxWidth, boxHeight, x - minX, y - minY); changed++;
             }
         }
         for (var y = minY; y <= maxY; y++)
@@ -1320,6 +1342,37 @@ public static class TerritorialTopology
         rejected.RemoveWhere(cell => states[cell] == state);
         clippedAway = Describe(rejected, width, height);
         return changed;
+    }
+
+    /// <summary>
+    /// The donor nearest a cell of the box, as the scan-ordered list's first minimum would have
+    /// it: least squared distance, then the lower row, then the lower column. A donor on the
+    /// ring r cells out is at least r away, so the search stops at the first ring beyond the
+    /// best distance found - after taking in that ring, which can hold an equal one.
+    /// </summary>
+    private static ushort NearestDonor(ushort[] grid, int boxWidth, int boxHeight, int x, int y)
+    {
+        var best = int.MaxValue;
+        int bestX = 0, bestY = 0;
+        ushort found = 0;
+        void Consider(int cx, int cy)
+        {
+            if (cx < 0 || cx >= boxWidth || cy < 0 || cy >= boxHeight) return;
+            var state = grid[cy * boxWidth + cx];
+            if (state == 0) return;
+            var distance = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+            if (distance > best || distance == best && (cy > bestY || cy == bestY && cx >= bestX)) return;
+            best = distance; bestX = cx; bestY = cy; found = state;
+        }
+        for (var r = 0; ; r++)
+        {
+            if (found != 0 && (long)r * r > best) break;
+            if (x - r < 0 && x + r >= boxWidth && y - r < 0 && y + r >= boxHeight) break;
+            if (r == 0) { Consider(x, y); continue; }
+            for (var cx = x - r; cx <= x + r; cx++) { Consider(cx, y - r); Consider(cx, y + r); }
+            for (var cy = y - r + 1; cy <= y + r - 1; cy++) { Consider(x - r, cy); Consider(x + r, cy); }
+        }
+        return found;
     }
 
     /// <summary>

@@ -1906,6 +1906,69 @@ countries fighting it take the `long_war` and `exhausted_by_war` modifiers
 `PeaceForcedEndDays` ends in the status quo, or in a white peace when neither side leads by
 `PeaceForcedEndLead`.
 
+### Intelligence, covert operations and the living world
+
+**Intelligence networks.** A country founds a network in another (`IntelNetworkCommand`); it grows
+`IntelNetworkGrowth` a week, slower against a watchful state - authority, war and order make the
+counter-intelligence (`IntelNetworks.CounterIntelligence`) - up to `IntelNetworkCeiling`. As it
+grows it shows a share of the target's provinces through the fog, a truer and fresher estimate of
+its strength, and from `IntelInspectStrength` its dossier. Each week it may be found
+(`IntelNetworkExposure`): the network is lost, the target remembers `spied_on_us`
+(`common/opinion_modifiers/51_intelligence.json`) and gains `IntelExposureGrievance`. The numbers
+are in `common/defines/67_intelligence.json`; `"Features": {"intelligence": false}` switches all of
+it off for a scenario or a mod.
+
+**Covert operations** are what a network does past seeing. The kinds are data, in
+`common/covert_operations/*.json`, key by key like every catalogue:
+
+- `effect` - what success does: `sabotage` (war damage to one region's works), `unrest` (one
+  region angrier and less orderly), `opposition` (the country less stable, its capital angrier and
+  its strongest movement funded), `theft` (research the target has, carried home);
+- `minimum_strength` the network needs, `days` to prepare, `cost` in multiples of founding a
+  network, `power` (1 is the defines' figures) and `risk` (added to the chance it is traced).
+
+A mod adds a kind with a new key and one of the four effects, or changes one field of an old one
+by naming it alone. When an operation comes due it works with
+`CovertBaseSuccess + CovertStrengthSuccess x strength - CovertCounterSuccess x counter-intelligence`,
+and it is traced with `CovertExposedOnSuccess`/`CovertExposedOnFailure` plus a share of the
+counter-intelligence. A traced operation keeps `CovertExposureNetworkKept` of the network, leaves
+`covert_operation_against_us` and `CovertExposureGrievance`, and is world news
+(`covert_<effect>_exposed`); one that works unseen tells the target only of a fire it cannot
+explain (`covert_<effect>_suspected`). The network then lies low for `CovertQuietDays`
+(`CovertQuietAfterExposureDays` after an exposure). Governments nobody plays consider an operation
+every `CovertAiReviewDays` with the chance `CovertAiChance`. Every `Covert*` define is in
+`67_intelligence.json`. A player orders them from the right-click card of any province of a
+country where it has a network.
+
+**News.** How much each kind of chronicle entry matters, 0 to 3, is `common/news/*.json`
+(`importance`); the rail beside the map shows `rail_minimum` and above, and everything about the
+player's own country.
+
+**Addresses to the nation** are data in `common/addresses/*.json` - the header of
+`00_addresses.json` lists the fields: what an address gives at once (`stability`, `war_support`),
+whether it needs a war, and the promise it makes (`victory`, `prosperity`, `order`), when that
+falls due and what a broken or a kept promise is worth. A people addressed too often stops
+listening: the weariness halves in `AddressWearinessHalfLifeDays`, and addresses are
+`AddressCooldownDays` apart.
+
+**Organisations that live.** Cohesion follows what the members are to one another; a member that
+no longer belongs may leave, two estranged members may leave together and found their own, a weak
+organisation may be wound up, and neighbours who all fear one great power may sign a pact against
+it. The `Organization*` and `ThreatPact*` defines are in `common/defines/68_living_world.json`.
+
+**Contractors.** A government can hire formations by contract: `ContractorSigningShare` of a
+line infantry division to sign, `ContractorWeeklyShare` of that a week, `ContractorPersonnel` men
+at `ContractorExperience`, for `ContractorDays`, at most `ContractorLimit` at once
+(`68_living_world.json`).
+
+**Movement power.** A movement with momentum (breadth of its following, legitimacy,
+recognitions, cadres and income) can call a general strike in the country where most of its
+following lives (`common/modifiers/42_movement_power.json`, `general_strike`), march on a capital
+that follows it - a march that outweighs the government's standing topples it - and run a parallel
+administration that levies its own dues. The `MovementStrike*`, `MovementMarch*` and
+`MovementParallel*` defines are in `Scripts/Simulation/MovementPower.cs` and can be set from any
+`common/defines` file.
+
 ### The console and mod diagnostics
 
 An experimental native Luau adapter supports `engine_script_entry` and persistent

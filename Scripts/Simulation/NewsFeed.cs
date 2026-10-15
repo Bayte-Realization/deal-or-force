@@ -99,7 +99,9 @@ public static class NewsFeed
         for (var index = campaign.Chronicle.Entries.Count - 1; index >= 0; index--)
         {
             var entry = campaign.Chronicle.Entries[index];
-            if (!entry.Public || entry.Sequence <= since) continue;
+            // A covert operation's outcome is private, and news to the one country it names first.
+            var told = !entry.Public && entry.ActorId == campaign.Player.Id && CovertOperations.TellsActor(entry.Kind);
+            if (!entry.Public && !told || entry.Sequence <= since) continue;
             // Chronicle snapshots retain their historical text. Translate at read time,
             // without rewriting the saved entry or renaming a historical identity.
             string Country(int id, string recorded)

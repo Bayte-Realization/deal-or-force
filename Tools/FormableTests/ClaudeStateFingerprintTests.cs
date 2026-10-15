@@ -41,7 +41,12 @@ public static class ClaudeStateFingerprintTests
             ("existing promise due date", c => c.Nations[0].AddressPromiseDueDay = 180, c => c.Nations[0].AddressPromiseDueDay = 181),
             ("existing promise comparison mark", c => c.Nations[0].AddressPromiseMark = 100f, c => c.Nations[0].AddressPromiseMark = 101f),
             ("existing contractor expiration", c => c.Armies[0].ContractUntilDay = 182, c => c.Armies[0].ContractUntilDay = 183),
-            ("existing world-war recognition date", c => c.Wars[0].WorldWarDay = 12, c => c.Wars[0].WorldWarDay = 13)
+            ("existing world-war recognition date", c => c.Wars[0].WorldWarDay = 12, c => c.Wars[0].WorldWarDay = 13),
+            ("existing covert operation due date", c => c.Nations[0].CovertOperations.Add(new CovertOperation { Kind = "sabotage", TargetId = 1, DueDay = 30 }),
+                c => c.Nations[0].CovertOperations[0].DueDay = 31),
+            ("existing covert operation region", c => c.Nations[0].CovertOperations.Add(new CovertOperation { Kind = "unrest", TargetId = 1, RegionMapIndex = 4 }),
+                c => c.Nations[0].CovertOperations[0].RegionMapIndex = 5),
+            ("existing lying-low date", c => c.Nations[0].CovertQuietUntil[1] = 90, c => c.Nations[0].CovertQuietUntil[1] = 91)
         };
         foreach (var (label, start, change) in changes)
         {
@@ -67,7 +72,9 @@ public static class ClaudeStateFingerprintTests
             ("address promise due on day zero", c => c.Nations[0].AddressPromiseDueDay = 0),
             ("address promise comparison mark", c => c.Nations[0].AddressPromiseMark = 100f),
             ("contract expiration on day zero", c => c.Armies[0].ContractUntilDay = 0),
-            ("world-war recognition on day zero", c => c.Wars[0].WorldWarDay = 0)
+            ("world-war recognition on day zero", c => c.Wars[0].WorldWarDay = 0),
+            ("covert operation under way", c => c.Nations[0].CovertOperations.Add(new CovertOperation { Kind = "theft", TargetId = 0 })),
+            ("network lying low until day zero", c => c.Nations[0].CovertQuietUntil[0] = 0)
         };
         var failures = new List<string>();
         foreach (var (label, change) in changes)
@@ -119,6 +126,8 @@ public static class ClaudeStateFingerprintTests
         n.LastAddressDay = 0; n.AddressWeariness = 2.5f; n.AddressPromise = "order";
         n.AddressPromiseDueDay = 180; n.AddressPromiseMark = .65f;
         c.Armies[0].ContractUntilDay = 182; c.Wars[0].WorldWarDay = 0;
+        n.CovertOperations.Add(new CovertOperation { Kind = "opposition", TargetId = 0, RegionMapIndex = -1, StartedDay = 0, DueDay = 42, Spent = .3f });
+        n.CovertQuietUntil[1] = 0;
         var options = new JsonSerializerOptions
         {
             IncludeFields = true,

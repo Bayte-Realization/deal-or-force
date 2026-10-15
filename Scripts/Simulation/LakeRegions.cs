@@ -92,6 +92,31 @@ public static class LakeRegions
             }
     }
 
+    private static bool[] _water;
+    private static ulong _waterLakes;
+    private static int _waterWidth, _waterHeight;
+
+    /// <summary>
+    /// Which cells are lake water, drawn from the hydrology once and kept until the lakes
+    /// change: a campaign is built more than once a session, and drawing every lake of
+    /// the world onto a sixteen-million-cell raster each time was most of what this pass cost.
+    /// Null when there is no hydrology to draw.
+    /// </summary>
+    private static bool[] LakeWater(int width, int height)
+    {
+        var lakes = HydrologyCatalog.LakeFingerprint;
+        if (_water is not null && _waterLakes == lakes && _waterWidth == width && _waterHeight == height)
+            return _water;
+        HydrologyRaster hydrology;
+        try { hydrology = HydrologyCatalog.BuildVectorRaster(width, height); }
+        catch (Exception) { return null; }
+        if (hydrology.Pixels.Length != width * height * 2) return null;
+        var water = new bool[width * height];
+        for (var cell = 0; cell < water.Length; cell++) water[cell] = hydrology.Pixels[cell * 2] > 0;
+        (_water, _waterLakes, _waterWidth, _waterHeight) = (water, lakes, width, height);
+        return water;
+    }
+
     /// <summary>
     /// Turn every body of water above the threshold into its own region.
     ///
@@ -110,10 +135,8 @@ public static class LakeRegions
         LakeStateIndices.Clear();
         if (campaign is null || control is null || states is null) return 0;
 
-        HydrologyRaster hydrology;
-        try { hydrology = HydrologyCatalog.BuildVectorRaster(width, height); }
-        catch (Exception) { return 0; }
-        if (hydrology.Pixels.Length != width * height * 2) return 0;
+        var water = LakeWater(width, height);
+        if (water is null) return 0;
 
         var cellCount = width * height;
         var visited = new bool[cellCount];
@@ -123,7 +146,7 @@ public static class LakeRegions
 
         for (var seed = 0; seed < cellCount; seed++)
         {
-            if (visited[seed] || hydrology.Pixels[seed * 2] == 0) continue;
+            if (visited[seed] || !water[seed]) continue;
 
             // A body of water, and the land it touches.
             component.Clear();
@@ -144,7 +167,7 @@ public static class LakeRegions
                     if (ny < 0 || ny >= height) continue;
                     nx = (nx + width) % width;
                     var neighbour = ny * width + nx;
-                    if (hydrology.Pixels[neighbour * 2] > 0)
+                    if (water[neighbour])
                     {
                         if (visited[neighbour]) continue;
                         visited[neighbour] = true;

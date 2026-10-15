@@ -1,0 +1,10 @@
+// What covert operations put in the news (CovertOperations.cs). An exposed operation is world news;
+// the rest are private, told only to the country they concern - which sees its own anyway.
+{
+  "importance": {
+    "covert_sabotage_exposed": 2,
+    "covert_unrest_exposed": 1,
+    "covert_opposition_exposed": 2,
+    "covert_theft_exposed": 2
+  }
+}
