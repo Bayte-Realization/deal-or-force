@@ -335,13 +335,13 @@ public static partial class AiStatecraft
     /// of every country every eleven days.
     /// </summary>
     /// <summary>What attacking this country would mean facing, as the attacker reckons it: its forces and its friends'.</summary>
-    internal static float Deterrence(Campaign campaign, Nation attacker, Nation target) =>
-        CampaignIntel.EstimatedStrength(campaign, attacker.Id, target) +
-        HelpFor(campaign, attacker, target) * campaign.Defines.AiAllyCommitment;
+    internal static float Deterrence(Campaign campaign, Nation attacker, Nation target, bool refreshAssessment = true) =>
+        CampaignIntel.EstimatedStrength(campaign, attacker.Id, target, refreshAssessment) +
+        HelpFor(campaign, attacker, target, refreshAssessment) * campaign.Defines.AiAllyCommitment;
 
-    private static float HelpFor(Campaign campaign, Nation attacker, Nation target)
+    private static float HelpFor(Campaign campaign, Nation attacker, Nation target, bool refreshAssessment = true)
     {
-        if (_friendsFor != campaign || _friendsDay != campaign.ElapsedDays)
+        if (refreshAssessment && (_friendsFor != campaign || _friendsDay != campaign.ElapsedDays))
         {
             _friendsFor = campaign;
             _friendsDay = campaign.ElapsedDays;
@@ -360,13 +360,27 @@ public static partial class AiStatecraft
         if (Factions.Of(target) is { Patrons.Count: > 0 } faction)
             foreach (var tag in faction.Patrons)
                 if (campaign.NationByTag(tag) is { Population: > 0 } patron && patron.Id != attacker.Id)
-                    help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, patron) * campaign.Defines.FactionPatronDeterrence;
+                    help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, patron, refreshAssessment) * campaign.Defines.FactionPatronDeterrence;
         var partners = InternationalOrganizations.DefencePartners(campaign, target.Id).ToArray();
         var shared = InternationalOrganizations.DefencePartners(campaign, attacker.Id).ToHashSet();
         foreach (var id in partners)
             if (id != attacker.Id && !shared.Contains(id) && campaign.NationById(id) is { Population: > 0 } partner)
-                help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, partner);
-        if (!FriendsOf.TryGetValue(target.Id, out var friends)) return help;
+                help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, partner, refreshAssessment);
+        IEnumerable<int> friends;
+        if (refreshAssessment)
+        {
+            if (!FriendsOf.TryGetValue(target.Id, out var cached)) return help;
+            friends = cached;
+        }
+        else
+        {
+            // Viewing a page must not prime the planner's day cache. A treaty signed
+            // later today must be seen by its first real strategic assessment.
+            friends = campaign.Relations.Values.Where(r =>
+                    r.A == target.Id && (r.Stance == DiplomaticStance.Allied || r.GuaranteedBy(r.B)) ||
+                    r.B == target.Id && (r.Stance == DiplomaticStance.Allied || r.GuaranteedBy(r.A)))
+                .Select(r => r.A == target.Id ? r.B : r.A);
+        }
         foreach (var friendId in friends)
         {
             if (friendId == attacker.Id) continue;
@@ -375,7 +389,7 @@ public static partial class AiStatecraft
             if (friend is null || friend.Population <= 0) continue;
             var theirs = CampaignDiplomacy.Peek(campaign, attacker.Id, friendId);
             if (theirs is { Stance: DiplomaticStance.Allied }) continue;
-            help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, friend);
+            help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, friend, refreshAssessment);
         }
         return help;
 

@@ -12,6 +12,7 @@ static class Program
     {
         if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
         if (args.Contains("--integrity-only")) { CampaignIntegrityTests.Run(); return; }
+        if (args.Contains("--conflict-preview-only")) { ConflictReadOnlyTests.Run(); return; }
         if (args.Contains("--living-world-fingerprint-only")) { ClaudeStateFingerprintTests.Run(); return; }
         if (args.Contains("--deals-only")) { DealTests.Run(); return; }
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
@@ -54,6 +55,7 @@ static class Program
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
         if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
         DynamicAllianceTests.Run();
+        ConflictReadOnlyTests.Run();
         ClaudeStateFingerprintTests.Run();
         CampaignIntegrityTests.Run();
         TerritorialClaimsTests.Run();
