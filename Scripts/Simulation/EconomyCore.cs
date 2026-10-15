@@ -1484,9 +1484,17 @@ public static class ConstructionSystem
                 if (project is null || item.Id < project.Id) project = item;
             }
             if (project is null) continue;
+            if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
+                !float.IsFinite(project.Paid) || project.Paid < 0 ||
+                !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity)) continue;
             var required = project.Cost / Math.Max(1, project.DurationDays);
-            var paid = Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury));
-            if (paid <= 0f) continue;
+            var outstanding = Math.Max(0f, project.Cost - project.Paid);
+            var paid = Math.Min(outstanding,
+                Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury)));
+            // Capacity can fund a site before its work time is complete. Continue that
+            // work, but never charge beyond the contract or require fresh cash for a
+            // fully funded site. Old overpayments are not refunded or rewritten here.
+            if (outstanding > 0f && paid <= 0f) continue;
             nation.Treasury -= paid;
             project.Paid += paid;
             project.ProgressDays++;
