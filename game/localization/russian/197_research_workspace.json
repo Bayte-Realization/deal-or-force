@@ -1,0 +1,20 @@
+{
+  "Page {0} / {1}": "Страница {0} / {1}",
+  "Once unlocked: {0} week(s) at this pace.": "После открытия доступа: около {0} нед.",
+  "Catalogue": "Каталог",
+  "Dependencies": "Связи",
+  "Any status": "Любая готовность",
+  "Ready or researching": "Доступные и текущий",
+  "Invested projects": "Есть вложения",
+  "Reset filters": "Сбросить фильтры",
+  "Current project: {0} · {1} / {2} points": "Текущий проект: {0} · {1} / {2} очков",
+  "{0} matching technologies": "Найдено технологий: {0}",
+  "Selected project and all prerequisites": "Выбранный проект и все предпосылки",
+  "Lines connect prerequisites to discoveries": "Линии ведут от предпосылок к открытиям",
+  "SELECTED PROJECT": "ВЫБРАННЫЙ ПРОЕКТ",
+  "Show dependency path": "Показать путь к открытию",
+  "Research is disabled in this campaign.": "В этой кампании исследования отключены.",
+  "No research progress at the current pace.": "При текущем темпе исследование не продвигается.",
+  "Switching projects keeps invested points. Inspecting a technology does not start research.": "При смене проекта вложенные очки сохраняются. Просмотр технологии не запускает исследование.",
+  "Future tiers represent possible development paths, not dated predictions.": "Будущие уровни — возможные пути развития, а не прогнозы с точными датами."
+}

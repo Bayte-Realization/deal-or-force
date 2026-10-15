@@ -9,16 +9,26 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private Control _researchLayer;
-    private Label _researchSummary;
-    private Button _researchFocus;
+    private Label _researchSummary, _researchResults, _researchPageLabel;
+    private Button _researchFocus, _researchCatalogView, _researchGraphView, _researchPrevious, _researchNext;
     private ProgressBar _researchProgress;
-    private HFlowContainer _researchCategories;
     private LineEdit _researchSearch;
-    private ScrollContainer _researchScroll;
+    private OptionButton _researchCategoryPicker, _researchStatusPicker;
+    private ScrollContainer _researchScroll, _researchListScroll, _researchDetailScroll;
     private TechnologyTreeCanvas _researchTree;
-    private VBoxContainer _researchDetails;
-    private string _researchCategory = "industry", _researchSelected = "", _researchSignature = "";
+    private VBoxContainer _researchList, _researchDetails;
+    private Label _researchDetailStatus, _researchDetailCost, _researchDetailTime, _researchDetailSpread, _researchDetailReason;
+    private Button _researchStart;
+    private string _researchCategory = "", _researchSelected = "", _researchStructure = "", _researchDetailKey = "", _researchPickerKey = "";
+    private bool _researchGraph, _researchPathOnly;
+    private int _researchPage;
+    private ResearchWorkspace.Filter _researchFilter;
+    private readonly List<string> _researchCategoryIds = new();
     private readonly Dictionary<string, Vector2> _researchPositions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Button> _researchCards = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ProgressBar> _researchBars = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Button> _researchRequirements = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ResearchSystem.DiffusionBreakdown> _researchCosts = new(StringComparer.OrdinalIgnoreCase);
 
     private void BuildResearchScreen()
     {
@@ -30,10 +40,10 @@ public partial class DealOrForceGame
         _researchLayer.AddChild(shade);
         var panel = TexturedPanel(_researchLayer);
         Ui.Place(panel, "modal.research");
-        var rows = PanelRows(panel, 18, 14, 10);
+        var rows = PanelRows(panel, 18, 14, 8);
         var header = new HBoxContainer();
         rows.AddChild(header);
-        var title = Title("Technology tree", 25, Ui.Colour("text.accent"));
+        var title = Title("Research", 25, Ui.Colour("text.accent"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         header.AddChild(title);
         _researchFocus = ActionButton("Show current research", () => SelectResearchTechnology(_campaign.Player.CurrentResearch, true), 0, 32);
@@ -44,37 +54,114 @@ public partial class DealOrForceGame
         _researchSummary = Title("", 14, Ui.Colour("text.body"));
         _researchSummary.Name = "ResearchSummary";
         rows.AddChild(_researchSummary);
-        _researchProgress = new ProgressBar { Name = "ActiveResearchProgress", CustomMinimumSize = new(0, 18), ShowPercentage = true };
-        // A track and a fill that read as a bar: the engine's own grey fill on no track at all
-        // was a short grey smudge with "12%" floating in the middle of the screen.
-        _researchProgress.AddThemeStyleboxOverride("background", new StyleBoxFlat
-        {
-            BgColor = new Color("0c1720"), BorderColor = Ui.Colour("text.muted") with { A = 0.35f },
-            BorderWidthLeft = 1, BorderWidthTop = 1, BorderWidthRight = 1, BorderWidthBottom = 1
-        });
-        _researchProgress.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = Ui.Colour("text.accent") with { A = 0.85f } });
-        _researchProgress.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
-        _researchProgress.AddThemeColorOverride("font_outline_color", new Color("0c1720"));
-        _researchProgress.AddThemeConstantOverride("outline_size", 4);
+        _researchProgress = ResearchProgressBar("ActiveResearchProgress", 10);
         rows.AddChild(_researchProgress);
-        _researchCategories = new HFlowContainer();
-        rows.AddChild(_researchCategories);
-        _researchSearch = new LineEdit { Name = "ResearchSearch", PlaceholderText = Tr("Search technologies…"), ClearButtonEnabled = true };
-        _researchSearch.TextChanged += _ => { _researchSignature = ""; RefreshResearchScreen(); };
-        rows.AddChild(_researchSearch);
+
+        var toolbar = new HBoxContainer();
+        rows.AddChild(toolbar);
+        _researchSearch = new LineEdit { Name = "ResearchSearch", ClearButtonEnabled = true, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _researchSearch.TextChanged += _ => { ResearchFilterChanged(); };
+        toolbar.AddChild(_researchSearch);
+        _researchCatalogView = ActionButton("Catalogue", () => SetResearchView(false), 112, 32, true);
+        _researchCatalogView.Name = "ResearchCatalogueView";
+        toolbar.AddChild(_researchCatalogView);
+        _researchGraphView = ActionButton("Dependencies", () => SetResearchView(true), 112, 32);
+        _researchGraphView.Name = "ResearchDependencyView";
+        toolbar.AddChild(_researchGraphView);
+
+        var filters = new HBoxContainer();
+        rows.AddChild(filters);
+        _researchCategoryPicker = new OptionButton { Name = "ResearchCategoryFilter", CustomMinimumSize = new(165, 32), FitToLongestItem = false };
+        filters.AddChild(_researchCategoryPicker);
+        _researchCategoryPicker.ItemSelected += index =>
+        {
+            _researchCategory = _researchCategoryIds[(int)index]; ResearchFilterChanged();
+        };
+        _researchStatusPicker = new OptionButton { Name = "ResearchStatusFilter", CustomMinimumSize = new(165, 32), FitToLongestItem = false };
+        filters.AddChild(_researchStatusPicker);
+        _researchStatusPicker.ItemSelected += index =>
+        {
+            _researchFilter = (ResearchWorkspace.Filter)index; ResearchFilterChanged();
+        };
+        _researchResults = Title("", 12, Ui.Colour("text.muted"));
+        _researchResults.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        filters.AddChild(_researchResults);
+        filters.AddChild(ActionButton("Reset filters", ResetResearchFilters, 0, 32));
+
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 14);
+        body.AddThemeConstantOverride("separation", 16);
         rows.AddChild(body);
-        _researchScroll = new ScrollContainer { Name = "ResearchTreeScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
-        body.AddChild(_researchScroll);
+        var browser = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        body.AddChild(browser);
+        _researchListScroll = new ScrollContainer { Name = "ResearchCatalogueScroll", SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        browser.AddChild(_researchListScroll);
+        _researchList = new VBoxContainer { Name = "ResearchCatalogue", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _researchList.AddThemeConstantOverride("separation", 6);
+        _researchListScroll.AddChild(_researchList);
+        _researchScroll = new ScrollContainer { Name = "ResearchTreeScroll", SizeFlagsVertical = SizeFlags.ExpandFill, Visible = false };
+        browser.AddChild(_researchScroll);
         _researchTree = new TechnologyTreeCanvas { Name = "TechnologyGraph", MouseFilter = MouseFilterEnum.Pass };
         _researchScroll.AddChild(_researchTree);
-        var detailScroll = new ScrollContainer { Name = "ResearchDetailsScroll", CustomMinimumSize = new(Math.Clamp(InterfaceSkin.Metric("research.details_width", 320), 240, 480), 0), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        body.AddChild(detailScroll);
+        var paging = new HBoxContainer();
+        browser.AddChild(paging);
+        _researchPrevious = ActionButton("Previous", () => { _researchPage--; _researchListScroll.ScrollVertical = 0; RefreshResearchScreen(); }, 0, 28);
+        _researchPrevious.Name = "ResearchPrevious";
+        paging.AddChild(_researchPrevious);
+        _researchPageLabel = Title("", 12, Ui.Colour("text.muted"));
+        _researchPageLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _researchPageLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        paging.AddChild(_researchPageLabel);
+        _researchNext = ActionButton("Next", () => { _researchPage++; _researchListScroll.ScrollVertical = 0; RefreshResearchScreen(); }, 0, 28);
+        _researchNext.Name = "ResearchNext";
+        paging.AddChild(_researchNext);
+        _researchDetailScroll = new ScrollContainer
+        {
+            Name = "ResearchDetailsScroll", CustomMinimumSize = new(Math.Clamp(InterfaceSkin.Metric("research.details_width", 350), 280, 420), 0),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        body.AddChild(_researchDetailScroll);
+        body.Resized += () =>
+        {
+            var minimum = Math.Clamp(InterfaceSkin.Metric("research.details_width", 350), 280, 420);
+            var maximum = Math.Clamp(InterfaceSkin.Metric("research.details_max_width", 560), minimum, 700);
+            var fraction = Math.Clamp(InterfaceSkin.Metric("research.details_fraction", .38f), .25f, .5f);
+            _researchDetailScroll.CustomMinimumSize = new(Math.Clamp(body.Size.X * fraction, minimum, maximum), 0);
+        };
         _researchDetails = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _researchDetails.AddThemeConstantOverride("separation", 10);
-        detailScroll.AddChild(_researchDetails);
-        rows.AddChild(Title("Select a card to inspect it. Switching research preserves invested points.", 12, Ui.Colour("text.muted")));
+        _researchDetails.AddThemeConstantOverride("separation", 8);
+        _researchDetailScroll.AddChild(_researchDetails);
+        var foot = Title("Switching projects keeps invested points. Inspecting a technology does not start research.", 12, Ui.Colour("text.muted"));
+        foot.TooltipText = Ui.Tip(Tr("Future tiers represent possible development paths, not dated predictions."));
+        rows.AddChild(foot);
+    }
+
+    private ProgressBar ResearchProgressBar(string name, int height)
+    {
+        var bar = new ProgressBar { Name = name, CustomMinimumSize = new(0, height), ShowPercentage = false, MouseFilter = MouseFilterEnum.Ignore };
+        bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.overlay") });
+        bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = Ui.Colour("text.accent") });
+        return bar;
+    }
+
+    private void SetResearchView(bool graph)
+    {
+        _researchGraph = graph; _researchPathOnly = false; _researchStructure = "";
+        RefreshResearchScreen();
+    }
+
+    private void ResearchFilterChanged()
+    {
+        _researchPage = 0; _researchPathOnly = false;
+        if (_researchListScroll is not null) _researchListScroll.ScrollVertical = 0;
+        if (_researchScroll is not null) { _researchScroll.ScrollVertical = 0; _researchScroll.ScrollHorizontal = 0; }
+        RefreshResearchScreen();
+    }
+
+    private void ResetResearchFilters()
+    {
+        _researchCategory = ""; _researchFilter = ResearchWorkspace.Filter.All; _researchPathOnly = false; _researchPage = 0;
+        _researchSearch.Text = "";
+        RefreshResearchScreen();
     }
 
     private void OpenResearchScreen()
@@ -88,12 +175,7 @@ public partial class DealOrForceGame
         _researchLayer.Visible = true;
         _researchLayer.MoveToFront();
         if (TechnologyCatalog.Of(_researchSelected) is null)
-        {
-            var initial = TechnologyCatalog.Of(_campaign.Player.CurrentResearch) ?? TechnologyCatalog.All.FirstOrDefault();
-            _researchSelected = initial?.Id ?? "";
-            _researchCategory = initial?.Category ?? "";
-        }
-        _researchSignature = "";
+            _researchSelected = (TechnologyCatalog.Of(_campaign.Player.CurrentResearch) ?? TechnologyCatalog.All.FirstOrDefault())?.Id ?? "";
         RefreshResearchScreen();
         UpdateScreenButtons();
     }
@@ -107,18 +189,47 @@ public partial class DealOrForceGame
 
     private void SelectResearchTechnology(string id, bool reveal = false)
     {
-        var tech = TechnologyCatalog.Of(id);
-        if (tech is null) return;
-        _researchSelected = tech.Id;
-        if (reveal)
-        {
-            _researchCategory = tech.Category;
-            _researchSearch.Text = "";
-        }
-        _researchSignature = "";
+        var technology = TechnologyCatalog.Of(id);
+        if (technology is null) return;
+        _researchSelected = technology.Id;
+        if (reveal) ResetResearchFilters();
         RefreshResearchScreen();
-        if (reveal && _researchPositions.TryGetValue(id, out var position))
+        if (!reveal) return;
+        if (_researchGraph && _researchPositions.TryGetValue(id, out var position))
             Callable.From(() => { _researchScroll.ScrollHorizontal = (int)Math.Max(0, position.X - 20); _researchScroll.ScrollVertical = (int)Math.Max(0, position.Y - 20); }).CallDeferred();
+        else if (!_researchGraph)
+        {
+            var index = Array.FindIndex(TechnologyCatalog.All.ToArray(), entry => string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
+            _researchPage = Math.Max(0, index) / ResearchPageSize;
+            RefreshResearchScreen();
+            if (_researchCards.TryGetValue(id, out var row))
+                Callable.From(() => _researchListScroll.EnsureControlVisible(row)).CallDeferred();
+        }
+    }
+
+    private int ResearchPageSize => (int)Math.Clamp(InterfaceSkin.Metric("research.page_size", 18), 6, 60);
+
+    private void RefreshResearchPickers()
+    {
+        var key = TechnologyCatalog.Revision + "|" + Loc.Language;
+        if (_researchPickerKey != key && !InterfaceInteractionGuard.Busy(_researchLayer))
+        {
+            _researchPickerKey = key;
+            _researchCategoryIds.Clear(); _researchCategoryIds.Add("");
+            _researchCategoryIds.AddRange(TechnologyCatalog.All.Select(technology => technology.Category).Distinct(StringComparer.OrdinalIgnoreCase));
+            _researchCategoryPicker.Clear();
+            foreach (var category in _researchCategoryIds)
+            {
+                var caption = category.Length == 0 ? Tr("All technologies") : Tr("research.category." + category);
+                _researchCategoryPicker.AddItem(caption == "research.category." + category ? category : caption);
+            }
+            _researchStatusPicker.Clear();
+            foreach (var caption in new[] { "Any status", "Ready or researching", "Prerequisites missing", "Researched", "Invested projects" })
+                _researchStatusPicker.AddItem(Tr(caption));
+        }
+        if (_researchCategoryIds.Count > 0)
+            _researchCategoryPicker.Select(Math.Max(0, _researchCategoryIds.FindIndex(id => string.Equals(id, _researchCategory, StringComparison.OrdinalIgnoreCase))));
+        _researchStatusPicker.Select((int)_researchFilter);
     }
 
     private void RefreshResearchScreen()
@@ -126,131 +237,221 @@ public partial class DealOrForceGame
         if (_researchLayer is null || !_researchLayer.Visible || _campaign?.Player is null) return;
         var nation = _campaign.Player;
         var current = TechnologyCatalog.Of(nation.CurrentResearch);
+        var pace = ResearchSystem.WeeklyPoints(_campaign, nation);
+        // Per-refresh projection, not simulation state. Each visible cost is calculated at most once.
+        _researchCosts.Clear();
+        ResearchSystem.DiffusionBreakdown Cost(TechnologyDefinition technology)
+        {
+            if (!_researchCosts.TryGetValue(technology.Id, out var result))
+                _researchCosts[technology.Id] = result = ResearchSystem.DiffusionFor(_campaign, nation, technology);
+            return result;
+        }
         _researchFocus.Disabled = current is null;
         _researchSearch.PlaceholderText = Tr("Search technologies…");
-        var pace = ResearchSystem.WeeklyPoints(_campaign, nation);
-        var cost = current is null ? 0 : ResearchSystem.CostFor(_campaign, nation, current);
+        RefreshResearchPickers();
         var points = current is null ? 0 : nation.ResearchProgress.GetValueOrDefault(current.Id);
+        var cost = current is null ? 0 : Cost(current).EffectiveCost;
         _researchProgress.Value = cost > 0 ? Math.Clamp(points / cost * 100, 0, 100) : 0;
-        // Nothing chosen, nothing to be a share of: an empty bar reading "0%" under "Choose a
-        // research project" looked like a project stuck at the start.
         _researchProgress.Visible = current is not null;
-        _researchSummary.Text = current is null
-            ? Tr("Choose a research project")
-            : $"{Tr(current.Name)} · {points:0.0} / {cost:0.0} · " + Simulation.Loc.Format("About {0} week(s) at this pace.", ResearchSystem.WeeksLeft(_campaign, nation, current));
-        _researchSummary.Text += "  |  " + Simulation.Loc.Format("{0} points/week · {1}/{2} technologies", pace.ToString("0.0"), nation.Technologies.Count(id => TechnologyCatalog.Of(id) is not null), TechnologyCatalog.All.Count);
-        // Selection does not reset scrolling; rebuilding is limited to meaningful changes.
-        var signature = $"{nation.Id}|{TechnologyCatalog.Revision}|{_campaign.ElapsedDays}|{nation.CurrentResearch}|{nation.Technologies.Count}|{points}|{pace}|{_researchCategory}|{_researchSelected}|{_researchSearch.Text}|{Tr("Technology tree")}";
-        if (signature == _researchSignature) return;
-        _researchSignature = signature;
-        ClearRuntimeChildren(_researchCategories);
-        foreach (var category in new[] { "" }.Concat(TechnologyCatalog.All.Select(t => t.Category).Distinct(StringComparer.OrdinalIgnoreCase)))
+        _researchSummary.Text = (current is null ? Tr("Choose a research project") :
+            Loc.Format("Current project: {0} · {1} / {2} points", Tr(current.Name), points.ToString("0.0"), cost.ToString("0.0")))
+            + "\n" + Loc.Format("{0} points/week · {1}/{2} technologies", pace.ToString("0.0"), nation.Technologies.Count(id => TechnologyCatalog.Of(id) is not null), TechnologyCatalog.All.Count);
+        var found = ResearchWorkspace.Browse(TechnologyCatalog.All, nation, _researchCategory, _researchFilter, _researchSearch.Text, text => Tr(text));
+        if (_researchPathOnly)
         {
-            var captured = category;
-            var button = ActionButton(category.Length == 0 ? "All technologies" : "research.category." + category,
-                () => { _researchCategory = captured; _researchSignature = ""; _researchScroll.ScrollHorizontal = 0; _researchScroll.ScrollVertical = 0; RefreshResearchScreen(); }, 0, 32, category == _researchCategory);
-            // Custom categories without a translation remain readable rather than showing a key.
-            if (category.Length > 0 && Tr("research.category." + category) == "research.category." + category) button.Text = category;
-            button.Name = "ResearchCategory_" + (category.Length == 0 ? "all" : category);
-            _researchCategories.AddChild(button);
+            var path = ResearchWorkspace.DependencyPath(TechnologyCatalog.All, _researchSelected);
+            found = TechnologyCatalog.All.Where(technology => path.Contains(technology.Id)).ToArray();
         }
-        ClearRuntimeChildren(_researchTree);
-        _researchTree.Edges.Clear();
+        var pages = Math.Max(1, (found.Length + ResearchPageSize - 1) / ResearchPageSize);
+        _researchPage = Math.Clamp(_researchPage, 0, pages - 1);
+        var shown = _researchGraph ? found : found.Skip(_researchPage * ResearchPageSize).Take(ResearchPageSize).ToArray();
+        _researchResults.Text = _researchPathOnly ? Tr("Selected project and all prerequisites") : Loc.Format("{0} matching technologies", found.Length);
+        _researchPageLabel.Text = _researchGraph ? Tr("Lines connect prerequisites to discoveries") : Loc.Format("Page {0} / {1}", _researchPage + 1, pages);
+        _researchPrevious.Visible = _researchNext.Visible = !_researchGraph;
+        _researchPrevious.Disabled = _researchPage == 0;
+        _researchNext.Disabled = _researchPage + 1 == pages;
+        _researchListScroll.Visible = !_researchGraph;
+        _researchScroll.Visible = _researchGraph;
+        StyleButton(_researchCatalogView, !_researchGraph);
+        StyleButton(_researchGraphView, _researchGraph);
+        // Day, points and inspected selection are absent: ticks update controls in place.
+        var structure = $"{TechnologyCatalog.Revision}|{_researchGraph}|{string.Join(',', shown.Select(technology => technology.Id))}";
+        if (structure != _researchStructure)
+        {
+            _researchStructure = structure;
+            RebuildResearchCards(shown);
+        }
+        foreach (var technology in shown)
+        {
+            var state = ResearchWorkspace.Status(nation, technology);
+            var known = state == ResearchWorkspace.State.Known;
+            var invested = nation.ResearchProgress.GetValueOrDefault(technology.Id);
+            var total = known ? 0 : Cost(technology).EffectiveCost;
+            var card = _researchCards[technology.Id];
+            card.Text = Tr(technology.Name) + "\n" + Tr(ResearchWorkspace.Caption(state)) + (known ? "" : $" · {invested:0.#} / {total:0.#}");
+            card.TooltipText = Ui.Tip(Tr(technology.Name) + "\n" + Tr(technology.Description));
+            StyleButton(card, string.Equals(technology.Id, _researchSelected, StringComparison.OrdinalIgnoreCase));
+            _researchBars[technology.Id].Visible = !known && invested > 0;
+            _researchBars[technology.Id].Value = known ? 100 : Math.Clamp(invested / Math.Max(1, total) * 100, 0, 100);
+        }
+        if (_researchGraph) RefreshResearchEdges(shown);
+        var detailKey = $"{TechnologyCatalog.Revision}|{_researchSelected}|{Loc.Language}";
+        if (detailKey != _researchDetailKey)
+        {
+            _researchDetailKey = detailKey;
+            RebuildResearchDetails();
+            _researchDetailScroll.ScrollVertical = 0;
+        }
+        if (TechnologyCatalog.Of(_researchSelected) is { } selected)
+            RefreshResearchDetails(selected, Cost(selected), pace);
+    }
+
+    private void RebuildResearchCards(TechnologyDefinition[] shown)
+    {
+        // Keep matching instances even when a completion changes a filtered result set.
+        var parent = _researchGraph ? (Control)_researchTree : _researchList;
+        foreach (var pair in _researchCards.ToArray())
+        {
+            if (pair.Value.GetParent() == parent && shown.Any(technology => technology.Id == pair.Key)) continue;
+            pair.Value.GetParent()?.RemoveChild(pair.Value); pair.Value.QueueFree();
+            _researchCards.Remove(pair.Key); _researchBars.Remove(pair.Key);
+        }
+        foreach (var empty in parent.GetChildren().OfType<Label>().ToArray()) { parent.RemoveChild(empty); empty.QueueFree(); }
         _researchPositions.Clear();
         var width = Math.Clamp(InterfaceSkin.Metric("research.card_width", 240), 180, 400);
         var height = Math.Clamp(InterfaceSkin.Metric("research.card_height", 128), 100, 220);
         var gapX = Math.Clamp(InterfaceSkin.Metric("research.column_gap", 64), 30, 180);
         var gapY = Math.Clamp(InterfaceSkin.Metric("research.row_gap", 28), 16, 100);
-        var query = _researchSearch.Text.Trim();
-        var nodes = TechnologyTreeLayout.Build(TechnologyCatalog.All, _researchCategory)
-            .Where(n => query.Length == 0 || Tr(TechnologyCatalog.Of(n.Id).Name).Contains(query, StringComparison.OrdinalIgnoreCase) || n.Id.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+        var layout = TechnologyTreeLayout.Build(_researchPathOnly ? shown : TechnologyCatalog.All).ToDictionary(node => node.Id);
+        var columns = shown.Select(technology => layout[technology.Id].Column).Distinct().Order().ToArray();
         var extent = new Vector2(320, 160);
-        foreach (var node in nodes)
+        for (var index = 0; index < shown.Length; index++)
         {
-            var tech = TechnologyCatalog.Of(node.Id);
-            var known = nation.HasTechnology(tech.Id);
-            var active = tech.Id == nation.CurrentResearch;
-            var available = ResearchSystem.Available(nation, tech);
-            var colour = Ui.Colour(known ? "state.positive" : active ? "state.info" : available ? "text.accent" : "text.muted");
-            // A locked card says nothing about being locked: the colour says it, the tooltip says
-            // what it needs, and "Prerequisites missing" on sixty cards out of sixty-seven was the
-            // loudest line on the screen.
-            var state = known ? Tr("Researched") : active ? Tr("Researching") : available ? Tr("Available") : "";
-            var invested = nation.ResearchProgress.GetValueOrDefault(tech.Id);
-            var total = ResearchSystem.CostFor(_campaign, nation, tech);
-            var caption = Tr(tech.Name) + (state.Length > 0 ? "\n" + state : "") + (known ? "" : $"\n{invested:0.#} / {total:0.#}");
-            var button = ActionButton(caption, () => SelectResearchTechnology(tech.Id), 0, 0, tech.Id == _researchSelected);
-            button.Name = "Technology_" + tech.Id;
-            button.Position = new(16 + node.Column * (width + gapX), 16 + node.Row * (height + gapY));
-            button.ClipText = true;
-            button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            button.AddThemeColorOverride("font_color", colour);
-            button.AddThemeFontSizeOverride("font_size", (int)Math.Clamp(InterfaceSkin.Metric("research.card_font_size", 14), 11, 20));
-            button.Icon = Art(tech.Icon, "res://game/gfx/interface/icons/icon_research.png");
-            button.ExpandIcon = true;
-            button.AddThemeConstantOverride("icon_max_width", 24);
-            button.TooltipText = Ui.Tip(TechnologyTooltip(tech, known ? -1 : ResearchSystem.WeeksLeft(_campaign, nation, tech)));
-            // Assign after wrapping, icon and font: otherwise the original unwrapped
-            // caption's minimum width can permanently enlarge a manually positioned card.
-            button.Size = new(width, height);
-            _researchTree.AddChild(button);
-            // Godot recomputes the shaped, wrapped text minimum after entering the tree.
-            // Reset that first provisional size once those deferred notifications finish.
-            button.SetDeferred(Control.PropertyName.Size, new Vector2(width, height));
-            var bar = new ProgressBar { MouseFilter = MouseFilterEnum.Ignore, ShowPercentage = false, Position = new(8, height - 9), Size = new(width - 16, 4), Value = known ? 100 : Math.Clamp(invested / Math.Max(1, total) * 100, 0, 100) };
-            button.AddChild(bar);
-            _researchPositions[tech.Id] = button.Position;
-            extent.X = Math.Max(extent.X, button.Position.X + width + 16);
-            extent.Y = Math.Max(extent.Y, button.Position.Y + height + 16);
+            var technology = shown[index];
+            if (!_researchCards.TryGetValue(technology.Id, out var card))
+            {
+                card = ActionButton("", () => SelectResearchTechnology(technology.Id), 0, _researchGraph ? 0 : 62);
+                card.Name = "Technology_" + technology.Id;
+                card.ClipText = true; card.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                card.Alignment = HorizontalAlignment.Left;
+                card.AddThemeFontSizeOverride("font_size", (int)Math.Clamp(InterfaceSkin.Metric("research.card_font_size", 14), 11, 20));
+                card.Icon = Art(technology.Icon, "res://game/gfx/interface/icons/icon_research.png");
+                card.ExpandIcon = true; card.AddThemeConstantOverride("icon_max_width", 24);
+                var bar = ResearchProgressBar("ResearchInvestment", 3);
+                card.AddChild(bar);
+                bar.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
+                bar.OffsetLeft = 8; bar.OffsetRight = -8; bar.OffsetTop = -5; bar.OffsetBottom = -2;
+                parent.AddChild(card);
+                _researchCards[technology.Id] = card; _researchBars[technology.Id] = bar;
+            }
+            card.Icon = Art(technology.Icon, "res://game/gfx/interface/icons/icon_research.png");
+            if (!_researchGraph) { _researchList.MoveChild(card, index); continue; }
+            var node = layout[technology.Id];
+            // Compact empty filtered columns; retain authored rows and dependency order.
+            card.Position = new(16 + Array.IndexOf(columns, node.Column) * (width + gapX), 16 + node.Row * (height + gapY));
+            card.Size = new(width, height);
+            card.SetDeferred(Control.PropertyName.Size, new Vector2(width, height));
+            _researchPositions[technology.Id] = card.Position;
+            extent.X = Math.Max(extent.X, card.Position.X + width + 16);
+            extent.Y = Math.Max(extent.Y, card.Position.Y + height + 16);
         }
-        foreach (var node in nodes)
-            foreach (var requirement in TechnologyCatalog.Of(node.Id).Requires)
-                if (_researchPositions.TryGetValue(requirement, out var from))
-                    _researchTree.Edges.Add((from + new Vector2(width, height / 2), _researchPositions[node.Id] + new Vector2(0, height / 2), Ui.Colour(nation.HasTechnology(requirement) ? "state.positive" : "surface.line")));
         _researchTree.CustomMinimumSize = extent;
+        if (shown.Length == 0)
+        {
+            var empty = Title("No matching technologies", 16, Ui.Colour("text.muted"));
+            if (_researchGraph) { empty.Position = new(16, 16); empty.Size = new(288, 64); }
+            parent.AddChild(empty);
+        }
+    }
+
+    private void RefreshResearchEdges(TechnologyDefinition[] shown)
+    {
+        _researchTree.Edges.Clear();
+        var width = Math.Clamp(InterfaceSkin.Metric("research.card_width", 240), 180, 400);
+        var height = Math.Clamp(InterfaceSkin.Metric("research.card_height", 128), 100, 220);
+        foreach (var technology in shown)
+            foreach (var requirement in technology.Requires)
+                if (_researchPositions.TryGetValue(requirement, out var from))
+                    _researchTree.Edges.Add((from + new Vector2(width, height / 2), _researchPositions[technology.Id] + new Vector2(0, height / 2), Ui.Colour(_campaign.Player.HasTechnology(requirement) ? "state.positive" : "surface.line")));
         _researchTree.QueueRedraw();
-        if (nodes.Length == 0) _researchTree.AddChild(Title("No matching technologies", 16, Ui.Colour("text.muted")));
-        RebuildResearchDetails();
     }
 
     private void RebuildResearchDetails()
     {
         ClearRuntimeChildren(_researchDetails);
-        var tech = TechnologyCatalog.Of(_researchSelected);
-        if (tech is null) { _researchDetails.AddChild(Title("Select a technology", 18, Ui.Colour("text.muted"))); return; }
-        var nation = _campaign.Player;
-        _researchDetails.AddChild(Title(tech.Name, 21, Ui.Colour("text.accent")));
-        _researchDetails.AddChild(Title(tech.Description, 14, Ui.Colour("text.body")));
-        _researchDetails.AddChild(Title("Effects", 13, Ui.Colour("text.caption")));
-        foreach (var effect in NationalModifiers.Lines(tech.Effects))
+        _researchRequirements.Clear();
+        var technology = TechnologyCatalog.Of(_researchSelected);
+        if (technology is null) { _researchDetails.AddChild(Title("Select a technology", 18, Ui.Colour("text.muted"))); return; }
+        _researchDetails.AddChild(Title("SELECTED PROJECT", 12, Ui.Colour("text.caption")));
+        _researchDetails.AddChild(Title(technology.Name, 21, Ui.Colour("text.accent")));
+        _researchDetailStatus = Title("", 14, Ui.Colour("text.body"));
+        _researchDetails.AddChild(_researchDetailStatus);
+        _researchDetailCost = Title("", 14, Ui.Colour("text.body"));
+        _researchDetails.AddChild(_researchDetailCost);
+        _researchDetailTime = Title("", 13, Ui.Colour("text.muted"));
+        _researchDetails.AddChild(_researchDetailTime);
+        _researchStart = ActionButton("Start research", () => ChooseResearch(technology.Id), 0, 38, true);
+        _researchStart.Name = "StartResearch";
+        _researchDetails.AddChild(_researchStart);
+        _researchDetailReason = Title("", 13, Ui.Colour("state.warning"));
+        _researchDetails.AddChild(_researchDetailReason);
+        _researchDetails.AddChild(Title(technology.Description, 14, Ui.Colour("text.body")));
+        _researchDetails.AddChild(Title("Effects", 12, Ui.Colour("text.caption")));
+        foreach (var effect in NationalModifiers.Lines(technology.Effects))
             _researchDetails.AddChild(Title(effect, 14, Ui.Colour("text.body")));
-        var cost = ResearchSystem.CostFor(_campaign, nation, tech);
-        if (!nation.HasTechnology(tech.Id))
-            _researchDetails.AddChild(Title(ResearchDiffusionText(tech), 13, Ui.Colour("text.muted")));
-        if (!nation.HasTechnology(tech.Id)) _researchDetails.AddChild(Title(Simulation.Loc.Format("Invested: {0} / {1} points", nation.ResearchProgress.GetValueOrDefault(tech.Id).ToString("0.0"), cost.ToString("0.0")), 14, Ui.Colour("text.body")));
-        if (!nation.HasTechnology(tech.Id)) _researchDetails.AddChild(Title(Simulation.Loc.Format("About {0} week(s) at this pace.", ResearchSystem.WeeksLeft(_campaign, nation, tech)), 13, Ui.Colour("text.muted")));
-        var start = ActionButton(nation.HasTechnology(tech.Id) ? "Researched" : tech.Id == nation.CurrentResearch ? "Researching" : "Start research", () => ChooseResearch(tech.Id), 0, 40, true);
-        start.Name = "StartResearch";
-        start.Disabled = !ResearchSystem.Available(nation, tech) || tech.Id == nation.CurrentResearch;
-        _researchDetails.AddChild(start);
-        if (!nation.HasTechnology(tech.Id) && !ResearchSystem.Available(nation, tech)) _researchDetails.AddChild(Title("Complete every prerequisite first.", 13, Ui.Colour("state.warning")));
-        _researchDetails.AddChild(Title("Prerequisites", 13, Ui.Colour("text.caption")));
-        if (tech.Requires.Count == 0) _researchDetails.AddChild(Title("None", 13, Ui.Colour("text.muted")));
-        foreach (var id in tech.Requires)
+        _researchDetails.AddChild(Title("Prerequisites", 12, Ui.Colour("text.caption")));
+        if (technology.Requires.Count == 0) _researchDetails.AddChild(Title("None", 13, Ui.Colour("text.muted")));
+        foreach (var id in technology.Requires)
         {
-            var parent = TechnologyCatalog.Of(id);
-            var button = ActionButton((nation.HasTechnology(id) ? "✓ " : "→ ") + Tr(parent?.Name ?? id), () => SelectResearchTechnology(id, true), 0, 34);
+            var requirement = TechnologyCatalog.Of(id);
+            var button = ActionButton("", () => SelectResearchTechnology(id, true), 0, 32);
             button.Name = "Prerequisite_" + id;
-            button.Disabled = parent is null;
+            button.Disabled = requirement is null;
             button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            _researchDetails.AddChild(button);
+            _researchDetails.AddChild(button); _researchRequirements[id] = button;
         }
-        _researchDetails.AddChild(Title("Leads to", 13, Ui.Colour("text.caption")));
-        foreach (var child in TechnologyCatalog.All.Where(t => t.Requires.Contains(tech.Id, StringComparer.OrdinalIgnoreCase)))
+        _researchDetails.AddChild(ActionButton("Show dependency path", () =>
         {
-            var button = ActionButton(Tr(child.Name), () => SelectResearchTechnology(child.Id, true), 0, 34);
+            ResetResearchFilters(); _researchGraph = true; _researchPathOnly = true; RefreshResearchScreen();
+        }, 0, 32));
+        _researchDetails.AddChild(Title("Leads to", 12, Ui.Colour("text.caption")));
+        var children = TechnologyCatalog.All.Where(child => child.Requires.Contains(technology.Id, StringComparer.OrdinalIgnoreCase)).ToArray();
+        if (children.Length == 0) _researchDetails.AddChild(Title("None", 13, Ui.Colour("text.muted")));
+        foreach (var child in children)
+        {
+            var button = ActionButton(Tr(child.Name), () => SelectResearchTechnology(child.Id, true), 0, 32);
             button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _researchDetails.AddChild(button);
         }
+        _researchDetailSpread = Title("", 12, Ui.Colour("text.muted"));
+        _researchDetails.AddChild(_researchDetailSpread);
+    }
+
+    private void RefreshResearchDetails(TechnologyDefinition technology, ResearchSystem.DiffusionBreakdown diffusion, float pace)
+    {
+        var nation = _campaign.Player;
+        var state = ResearchWorkspace.Status(nation, technology);
+        var known = state == ResearchWorkspace.State.Known;
+        var enabled = _campaign.FeatureEnabled("research") &&
+            (!_campaign.Defines.FeatureCommands.TryGetValue(nameof(SetResearchCommand), out var feature) ||
+                string.IsNullOrWhiteSpace(feature) || _campaign.FeatureEnabled(feature));
+        _researchDetailStatus.Text = Tr(ResearchWorkspace.Caption(state));
+        _researchDetailStatus.AddThemeColorOverride("font_color", Ui.Colour(known ? "state.positive" : state == ResearchWorkspace.State.Blocked ? "state.warning" : "text.body"));
+        var points = nation.ResearchProgress.GetValueOrDefault(technology.Id);
+        _researchDetailCost.Text = Loc.Format("Invested: {0} / {1} points", points.ToString("0.0"), diffusion.EffectiveCost.ToString("0.0"));
+        _researchDetailCost.Visible = _researchDetailTime.Visible = !known;
+        var weeks = ResearchWorkspace.Weeks(diffusion.EffectiveCost - points, pace);
+        _researchDetailTime.Text = weeks.HasValue ? Loc.Format(state == ResearchWorkspace.State.Blocked
+            ? "Once unlocked: {0} week(s) at this pace." : "About {0} week(s) at this pace.", weeks.Value) : Tr("No research progress at the current pace.");
+        _researchDetailTime.TooltipText = Ui.Tip(Tr("Research pace depends on the economy, literacy, education, universities, laboratories, stability and previous discoveries."));
+        _researchStart.Text = Tr(known ? "Researched" : state == ResearchWorkspace.State.Active ? "Researching" : "Start research");
+        _researchStart.Disabled = !ResearchWorkspace.CanStart(_campaign, nation, technology);
+        StyleButton(_researchStart, !_researchStart.Disabled);
+        _researchDetailReason.Text = !enabled ? Tr("Research is disabled in this campaign.") : state == ResearchWorkspace.State.Blocked ? Tr("Complete every prerequisite first.") : "";
+        _researchDetailReason.Visible = _researchDetailReason.Text.Length > 0;
+        foreach (var (id, button) in _researchRequirements)
+            button.Text = (nation.HasTechnology(id) ? "✓ " : "→ ") + Tr(TechnologyCatalog.Of(id)?.Name ?? id);
+        _researchDetailSpread.Text = known ? "" : Loc.Format("Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.",
+            Fmt.Percent(diffusion.World), Fmt.Percent(diffusion.Neighbours), Fmt.Percent(diffusion.Partners), Fmt.Percent(diffusion.Total));
     }
 }
