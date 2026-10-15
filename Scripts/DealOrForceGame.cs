@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
@@ -122,7 +123,15 @@ public partial class DealOrForceGame : Control
         NetworkProcess(delta);
         // Everything that happened since the interface last drew, drawn once - for a network
         // client as well, whose world arrives by the host's steps rather than its own.
-        if (_campaign is not null) FlushInterfaceIfDue(delta);
+        if (_campaign is not null)
+        {
+            FlushInterfaceIfDue(delta);
+            _modLoader.CaptureCrossoverSurface ??= () => _globe?.CaptureCrossoverSurface();
+            _modLoader.CaptureCrossoverHydrology ??= () => _globe?.CaptureCrossoverHydrology();
+            _modLoader.PresentCrossoverVoxels ??= blocks => _globe?.PresentCrossoverVoxels(blocks);
+            _modLoader.PresentCrossoverWorks ??= works => _globe?.PresentCrossoverWorks(works);
+            _modLoader.OnFrame(_campaign, delta);
+        }
         if (IsNetworkClient) { if (_campaign is not null) ReportFrameCost(delta); return; }
         if (_campaign is null) return;
         // Reported whether or not time is running: a measurement that only arrives when
@@ -593,7 +602,7 @@ public partial class DealOrForceGame : Control
         // authored 2024 figures. If this ever drifts, the calibration broke, not the map.
         GD.Print("[dof] " + Simulation.EconomySystem.LastCalibrationReport);
         if (IsInstanceValid(_scenarioSummary))
-            _scenarioSummary.Text = Simulation.Loc.Format("{0} nations · {1} states · deterministic campaign simulation", _campaign.Nations.Count, _campaign.States.Count);
+            _scenarioSummary.Text = Simulation.Loc.Format("{0} countries · {1} regions", _campaign.Nations.Count, _campaign.States.Count);
         BindCampaignMods();
         ApplyCustomCursors();
 
@@ -630,6 +639,7 @@ public partial class DealOrForceGame : Control
         AddChild(background);
 
         _globe = new GlobePresentation();
+        _modLoader.SetCrossoverPresentation = enabled => _globe.SetCrossoverPresentation(enabled);
         _globe.CountryPicked += OnCountryPicked;
         _globe.UnclaimedPicked += OnUnclaimedPicked;
         _globe.ArmyPicked += OnArmyPicked;
@@ -757,7 +767,7 @@ public partial class DealOrForceGame : Control
         rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
 
         var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
-        multiplayer.TooltipText = Ui.Tip(Tr("Host or join an authoritative ENet campaign over LAN, direct IPv4 or a virtual LAN such as Radmin VPN."));
+        multiplayer.TooltipText = Ui.Tip(Tr("Host or join a campaign over LAN, by IPv4 address, or through a virtual LAN such as Radmin VPN."));
         rows.AddChild(multiplayer);
 
         _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 42);
@@ -876,7 +886,7 @@ public partial class DealOrForceGame : Control
         menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 32, 28, true);
-        _pause.TooltipText = Ui.Tip(Tr("Pause and resume campaign time (Space). Space never activates a focused button."));
+        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space)."));
         speeds.AddChild(_pause);
         _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
@@ -887,6 +897,13 @@ public partial class DealOrForceGame : Control
             speeds.AddChild(button);
         }
         UpdateSpeedButtons();
+
+        _mediaButton = ActionButton("Sound and artwork", OpenMediaLibrary, 0, 28);
+        _mediaButton.Name = "OpenMediaLibrary";
+        _mediaButton.ClipText = true;
+        _mediaButton.TooltipText = Ui.Tip(Tr("Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign."));
+        _mediaButton.AccessibilityName = Tr("Sound and artwork");
+        row.AddChild(_mediaButton);
 
         BuildCampaignNavigation();
 
@@ -967,7 +984,7 @@ public partial class DealOrForceGame : Control
             MaxValue = 1,
             Step = 0.01,
             Scrollable = false,
-            TooltipText = Ui.Tip(Tr("Military allocation; submitted through the deterministic command queue."))
+            TooltipText = Ui.Tip(Tr("How much the state spends on the armed forces."))
         };
         _militarySpending.ValueChanged += OnSpendingChanged;
         sideRows.AddChild(_militarySpending);
@@ -1226,6 +1243,50 @@ public partial class DealOrForceGame : Control
                 DetailRow("Stability", Fmt.Percent(nation.Stability),
                     "Below a third, radicalism starts to bite.",
                     nation.Stability < 0.34f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "state.positive");
+                var seasonThere = Simulation.WaterConditions.SeasonCaption(_campaign, nation.CapitalLatitude);
+                if (seasonThere.Length > 0)
+                    DetailRow("Season", seasonThere,
+                        "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
+                var mood = Simulation.PoliticalCohorts.StrainCaption(_campaign, nation);
+                if (mood.Length > 0)
+                    DetailRow("Public mood", mood,
+                        "Political opinion, read from the regions. A liked country is allowed to say so.",
+                        mood == "Liked enough to argue in the open." ? "state.positive" : "state.warning");
+                var loud = Simulation.PoliticalCohorts.Loudest(_campaign, nation);
+                if (loud is not null && (loud.Cause.Length > 0 || loud.Heat >= 0.35f))
+                    DetailRow("Loudest region", loud.Name.Length > 0 ? loud.Name : "—",
+                        loud.Cause.Length > 0
+                            ? loud.Cause
+                            : "The region whose politics have left the government furthest. The unrest map uses the same heat.",
+                        loud.Heat >= 0.55f ? "state.critical" : loud.Heat >= 0.35f ? "state.warning" : "text.bright");
+                var worn = Simulation.MovementRules.WornWelcome(_campaign, nation);
+                if (worn is not null)
+                    DetailRow("Headquarters here", worn.DisplayName,
+                        Simulation.MovementRules.Patience(_campaign, worn),
+                        worn.Movement.Heat >= _campaign.Defines.MovementExpelHeat * 0.75f ? "state.negative" : "state.warning");
+                if (nation.WeeklyNetMigration != 0 || nation.CumulativeNetMigration != 0 || MathF.Abs(nation.BrainDrainRate) >= 0.01f)
+                {
+                    var destNation = _campaign.NationById(nation.BrainDrainDestinationId);
+                    var srcNation = _campaign.NationById(nation.BrainGainSourceId);
+                    var migrationTip = destNation is not null
+                        ? Simulation.Loc.Format("Weekly migration {0} (cumulative {1}). Skilled specialists are moving primarily to {2}.",
+                            Fmt.PeopleDelta(nation.WeeklyNetMigration), Fmt.PeopleDelta(nation.CumulativeNetMigration), destNation.DisplayName)
+                        : srcNation is not null
+                            ? Simulation.Loc.Format("Weekly migration {0} (cumulative {1}). Skilled specialists are arriving primarily from {2}.",
+                                Fmt.PeopleDelta(nation.WeeklyNetMigration), Fmt.PeopleDelta(nation.CumulativeNetMigration), srcNation.DisplayName)
+                            : Simulation.Loc.Format("Weekly migration {0} (cumulative {1}).",
+                                Fmt.PeopleDelta(nation.WeeklyNetMigration), Fmt.PeopleDelta(nation.CumulativeNetMigration));
+                    DetailRow("Net migration", Fmt.PeopleDelta(nation.WeeklyNetMigration), migrationTip,
+                        nation.WeeklyNetMigration < 0 ? "state.warning" : nation.WeeklyNetMigration > 0 ? "state.positive" : "text.bright");
+                    DetailRow("Brain drain",
+                        nation.BrainDrainRate < -0.005f
+                            ? Simulation.Loc.Format("−{0}", Fmt.Percent(MathF.Abs(nation.BrainDrainRate)))
+                            : nation.BrainDrainRate > 0.005f
+                                ? Simulation.Loc.Format("+{0}", Fmt.Percent(nation.BrainDrainRate))
+                                : Tr("balanced"),
+                        Tr("Human-capital flow: war, low stability and weak living standards push educated specialists abroad; universities, research laboratories and high living standards retain and attract them."),
+                        nation.BrainDrainRate < -0.15f ? "state.negative" : nation.BrainDrainRate < -0.04f ? "state.warning" : nation.BrainDrainRate > 0.04f ? "state.positive" : "text.bright");
+                }
                 break;
 
             case "Economy":
@@ -1475,7 +1536,13 @@ public partial class DealOrForceGame : Control
         // The clock, whenever the campaign is running on something shorter than a day. At a
         // whole-day step the hour is always midnight and printing it would be noise; below
         // that it is the whole point, and it moves.
-        _date.Text = _campaign.Date.Display(_campaign.TickHours < 24);
+        var season = Simulation.WaterConditions.SeasonCaption(_campaign, player.CapitalLatitude);
+        var date = _campaign.Date.Display(_campaign.TickHours < 24);
+        _date.Text = season.Length == 0 ? date : date + " · " + Tr(season);
+        _date.TooltipText = Ui.Tip(season.Length == 0
+            ? "The calendar. Seasons are switched off, so the roads do not care what month it is."
+            : "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
+        _date.MouseFilter = MouseFilterEnum.Stop;
 
         var day = _campaign.ElapsedDays;
         _treasuryTrend.Sample(day, player.Treasury);
@@ -1563,6 +1630,45 @@ public partial class DealOrForceGame : Control
             RefreshSideScreenContents(_openScreen);
             Callable.From(() => { if (_dossierScroll is not null) _dossierScroll.ScrollVertical = scroll; }).CallDeferred();
         }
+    }
+
+    /// <summary>
+    /// A world line in the right rail flies the camera to the same place a map ring would.
+    /// It stays silent. The world writes several of these a day, and a cue on each one
+    /// is noise, not news.
+    /// </summary>
+    private void FocusNews(NewsFeed.Line line)
+    {
+        if (_campaign is null || _globe is null) return;
+        if (!NewsPlace(line.ActorId, line.TargetId, line.Kind, out var latitude, out var longitude)) return;
+        _globe.FocusOn(latitude, longitude, 5.5f);
+    }
+
+    private bool NewsPlace(int actorId, int targetId, string kind, out float latitude, out float longitude)
+    {
+        latitude = longitude = 0f;
+        var actor = _campaign.NationById(actorId);
+        var target = _campaign.NationById(targetId);
+        if (actor?.Movement is not null && target is not null) (actor, target) = (target, null);
+        if (actor is null && target is null) return false;
+        if (actor is not null && target is not null && target.Movement is null)
+        {
+            var dLon = target.CapitalLongitude - actor.CapitalLongitude;
+            while (dLon > 180f) dLon -= 360f;
+            while (dLon < -180f) dLon += 360f;
+            if (MathF.Abs(target.CapitalLatitude - actor.CapitalLatitude) + MathF.Abs(dLon) < 18f)
+            {
+                latitude = (actor.CapitalLatitude + target.CapitalLatitude) * 0.5f;
+                longitude = actor.CapitalLongitude + dLon * 0.5f;
+                return true;
+            }
+            if (kind is "war_started" or "border_war" or "world_war_began") actor = target;
+        }
+        var at = actor ?? target;
+        if (at.CapitalLatitude == 0f && at.CapitalLongitude == 0f) return false;
+        latitude = at.CapitalLatitude;
+        longitude = at.CapitalLongitude;
+        return true;
     }
 
     // What the side panel was last built for. Refresh runs many times a second; the panel
@@ -1932,9 +2038,9 @@ public partial class DealOrForceGame : Control
     private static string RowIcon(string caption) => CampaignUiCatalog.Icon("field." + caption, caption switch
     {
         // ---- the country -------------------------------------------------------------
-        "Population" or "Largest people" or "Largest minority" or "Minorities" => "population",
+        "Population" or "Largest people" or "Largest minority" or "Minorities" or "Net migration" => "population",
         "Capital" or "Form of government" or "Politics" or "Ideology" or "Status" => "government",
-        "Literacy" => "literacy",
+        "Literacy" or "Brain drain" => "literacy",
         "Standard of living" => "living",
         "Radicalism" or "Wants out" => "unrest",
         "Stability" => "stability",

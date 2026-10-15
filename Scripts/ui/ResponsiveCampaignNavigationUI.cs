@@ -19,6 +19,8 @@ public partial class DealOrForceGame
     private (float Height, float Preferred, string Group, string Language) _navigationLayoutKey;
     private bool _navigationLayoutApplied;
     private bool _navigationCategoryMode;
+    private LineEdit _campaignNavigationSearch = null!;
+    private string _campaignNavigationFilter = "";
 
     private void BuildCampaignNavigation()
     {
@@ -47,6 +49,20 @@ public partial class DealOrForceGame
             if (index >= 0 && index < _campaignNavigationGroups.Count)
             { _campaignNavigationGroup = _campaignNavigationGroups[(int)index]; LayoutCampaignNavigation(); }
         };
+
+        _campaignNavigationSearch = new LineEdit
+        {
+            Name = "NavigationSearch", SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            PlaceholderText = Tr("Find a screen…"),
+            TooltipText = Ui.Tip(Tr("Type to filter the navigation rail. Clearing it shows every destination again.")),
+            AccessibilityName = Tr("Navigation search"),
+        };
+        _campaignNavigationSearch.TextChanged += text =>
+        {
+            _campaignNavigationFilter = text;
+            LayoutCampaignNavigation();
+        };
+        stack.AddChild(_campaignNavigationSearch);
 
         _campaignNavigationScroll = new ScrollContainer
         {
@@ -82,6 +98,7 @@ public partial class DealOrForceGame
             var button = ActionButton(item.Short, () => ToggleCampaignScreen(captured), 0, 50, false,
                 SpriteCatalog.TextureOf($"icon_{item.Icon}", $"res://game/gfx/interface/icons/icon_{item.Icon}.png"));
             button.Name = "Nav" + item.Screen.Replace(" ", "");
+            button.SetMeta("navigation_short", item.Short);
             button.SetMeta("icon_above", true); button.ClipText = true;
             button.AddThemeFontSizeOverride("font_size", 10);
             button.AddThemeConstantOverride("icon_max_width", 23);
@@ -121,16 +138,24 @@ public partial class DealOrForceGame
             plan = ResponsiveHudLayout.Navigation(rowRoom, _campaignNavigationEntries.Count,
                 _campaignNavigationCaptions.Count, _campaignNavigationEntries.Count(entry => entry.Group == _campaignNavigationGroup), preferred);
         }
-        _navigationCategoryMode = plan.CategoryMode;
+        var filtering = !string.IsNullOrWhiteSpace(_campaignNavigationFilter);
+        // A search overrides categories: every matching destination stays on the rail,
+        // grouped under its own heading, so a filtered list is still readable.
+        _navigationCategoryMode = filtering ? false : plan.CategoryMode;
         _navigationLayoutKey = (rowRoom, preferred, _campaignNavigationGroup, Loc.Language); _navigationLayoutApplied = true;
-        _campaignNavigationCategory.Visible = plan.CategoryMode;
+        _campaignNavigationCategory.Visible = _navigationCategoryMode;
+        _campaignNavigationSearch.Visible = true;
         var selectedCategory = _campaignNavigationGroups.IndexOf(_campaignNavigationGroup);
         if (selectedCategory >= 0) _campaignNavigationCategory.Select(selectedCategory);
-        foreach (var caption in _campaignNavigationCaptions) caption.Visible = !plan.CategoryMode;
+        foreach (var caption in _campaignNavigationCaptions) caption.Visible = !_navigationCategoryMode && !filtering;
         foreach (var entry in _campaignNavigationEntries)
         {
             var screen = _screenButtons.First(pair => pair.Value == entry.Button).Key;
-            entry.Button.Visible = NavigationDestinationVisible(screen) && NavigationDestinationEnabled(screen);
+            var matchesFilter = filtering &&
+                (entry.Button.Text.Contains(_campaignNavigationFilter, StringComparison.OrdinalIgnoreCase) ||
+                 entry.Button.GetMeta("navigation_short", "").AsString().Contains(_campaignNavigationFilter, StringComparison.OrdinalIgnoreCase));
+            entry.Button.Visible = (!filtering || matchesFilter) &&
+                NavigationDestinationVisible(screen) && NavigationDestinationEnabled(screen);
             entry.Button.CustomMinimumSize = new(0, plan.ButtonHeight);
             entry.Button.SetMeta("icon_above", plan.ButtonHeight >= 42);
             entry.Button.AddThemeConstantOverride("icon_max_width", (int)Math.Clamp(plan.ButtonHeight * .44f, 12, 23));
