@@ -853,6 +853,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("world war")) WorldWar.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("intel networks")) IntelNetworks.Tick(this);
+            using (SimProfiler.Measure("covert operations")) CovertOperations.Tick(this);
             using (SimProfiler.Measure("addresses")) AddressToNation.Tick(this);
             using (SimProfiler.Measure("movement power")) MovementPower.Tick(this);
             yield return 0;

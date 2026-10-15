@@ -51,6 +51,18 @@ public sealed partial class GlobePresentation
         ["organization_left"] = new("alliance", new Color(0.7f, 0.68f, 0.62f), 30),
         ["alliance_ended"] = new("alliance", new Color(0.78f, 0.5f, 0.38f), 30),
         ["spy_network_exposed"] = new("search", new Color(0.62f, 0.72f, 0.82f), 25),
+        ["covert_sabotage_exposed"] = new("search", new Color(0.86f, 0.5f, 0.36f), 35),
+        ["covert_unrest_exposed"] = new("search", new Color(0.86f, 0.5f, 0.36f), 35),
+        ["covert_opposition_exposed"] = new("search", new Color(0.86f, 0.5f, 0.36f), 35),
+        ["covert_theft_exposed"] = new("search", new Color(0.86f, 0.5f, 0.36f), 35),
+        // Told only to the country concerned (NewsFeed): our own operations, and fires nobody can explain.
+        ["covert_sabotage_done"] = new("industry", new Color(0.62f, 0.72f, 0.82f), 25),
+        ["covert_unrest_done"] = new("unrest", new Color(0.62f, 0.72f, 0.82f), 25),
+        ["covert_opposition_done"] = new("movement_fundraise", new Color(0.62f, 0.72f, 0.82f), 25),
+        ["covert_theft_done"] = new("research", new Color(0.62f, 0.72f, 0.82f), 25),
+        ["covert_sabotage_suspected"] = new("industry", new Color(0.88f, 0.52f, 0.3f), 30),
+        ["covert_unrest_suspected"] = new("unrest", new Color(0.88f, 0.52f, 0.3f), 30),
+        ["covert_opposition_suspected"] = new("movement_fundraise", new Color(0.88f, 0.52f, 0.3f), 30),
         ["state_formed"] = new("nation", new Color(0.92f, 0.78f, 0.38f), 60),
         ["peaceful_independence"] = new("nation", new Color(0.7f, 0.82f, 0.5f), 60),
         ["accession_signed"] = new("treaty", new Color(0.82f, 0.76f, 0.5f), 30),
@@ -176,7 +188,10 @@ void fragment() {
         {
             if (entry.Sequence <= _pulseSeen) continue;
             _pulseSeen = entry.Sequence;
-            if (!entry.Public || !PulseStyles.TryGetValue(entry.Kind, out var style)) continue;
+            // The covert outcomes only their own country is told of are marked for it too, as the
+            // news rail shows them (NewsFeed): nobody else's private entries.
+            var told = !entry.Public && entry.ActorId == _campaign.Player?.Id && Simulation.CovertOperations.TellsActor(entry.Kind);
+            if (!entry.Public && !told || !PulseStyles.TryGetValue(entry.Kind, out var style)) continue;
             if (_campaign.ElapsedDays - entry.Day >= style.Days) continue;
             if (!PulsePlace(entry, out var latitude, out var longitude)) continue;
             // One mark per place and kind: a second clash on the same border renews the first.
@@ -199,10 +214,36 @@ void fragment() {
         }
     }
 
+    private bool CovertPlace(Simulation.ChronicleEntry entry, out float latitude, out float longitude)
+    {
+        latitude = longitude = 0f;
+        var place = entry.Place ?? "";
+        if (place.Length > 0)
+        {
+            var id = place.StartsWith("region.", StringComparison.Ordinal) && place.EndsWith(".name", StringComparison.Ordinal)
+                ? place.Substring(7, place.Length - 12) : null;
+            var region = _campaign.States.Find(s => id is not null ? s.Id == id : s.Name == place);
+            if (region is not null)
+            {
+                (latitude, longitude) = Simulation.Movements.CentreOf(_campaign, region);
+                if (latitude != 0f || longitude != 0f) return true;
+            }
+        }
+        // Done by us abroad: where it was done; suspected at home: at home.
+        var at = entry.Kind.EndsWith("_done", StringComparison.Ordinal) || entry.Kind == "covert_operation_failed"
+            ? _campaign.NationById(entry.TargetId) : _campaign.NationById(entry.ActorId);
+        if (at is null || at.CapitalLatitude == 0f && at.CapitalLongitude == 0f) return false;
+        latitude = at.CapitalLatitude;
+        longitude = at.CapitalLongitude;
+        return true;
+    }
+
     /// <summary>Where an event stands: between two neighbouring capitals, else at the capital it concerns.</summary>
     private bool PulsePlace(Simulation.ChronicleEntry entry, out float latitude, out float longitude)
     {
         latitude = longitude = 0f;
+        // A covert operation is marked where it was aimed: the region, else the country it was run in.
+        if (entry.Kind.StartsWith("covert_", StringComparison.Ordinal) && CovertPlace(entry, out latitude, out longitude)) return true;
         var actor = _campaign.NationById(entry.ActorId);
         var target = _campaign.NationById(entry.TargetId);
         // A movement has no capital of its own worth marking: its target country's is the place.

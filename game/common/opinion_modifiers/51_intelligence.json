@@ -1,4 +1,6 @@
-// What an exposed intelligence network leaves behind in the country it was found in (IntelNetworks.cs).
+// What an exposed intelligence network or covert operation leaves behind in the country it was found in
+// (IntelNetworks.cs, CovertOperations.cs).
 {
-  "spied_on_us": { "name": "Ran a spy network against us", "opinion": -15, "days": 1095, "decays": true, "max_stacks": 2 }
+  "spied_on_us": { "name": "Ran a spy network against us", "opinion": -15, "days": 1095, "decays": true, "max_stacks": 2 },
+  "covert_operation_against_us": { "name": "Ran a covert operation against us", "opinion": -25, "days": 1825, "decays": true, "max_stacks": 2 }
 }
