@@ -363,6 +363,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             var colors = new Dictionary<int, uint>(_colorByMapIndex);
             _mapTask = Task.Run(() => BuildPoliticalMap(colors));
+            // The terrain's pictures beside it, on other cores: they wait on nothing the map makes.
+            StartTerrainImages();
             return;
         }
 
@@ -4361,15 +4363,26 @@ void fragment() {
         var regionIds = new byte[MapWidth * MapHeight * 2];
         var provinceIds = new byte[MapWidth * MapHeight * 2];
         var nationIds = new byte[MapWidth * MapHeight * 2];
+        // The rivers and lakes and the label anchors need nothing from the province map and
+        // nothing from each other: each on a core of its own while the provinces are read.
+        // Each only reads the source rasters, which nothing here writes.
+        var hydrologyWork = Task.Run(() => Simulation.HydrologyCatalog.BuildRaster(sourceWidth, sourceHeight));
+        var anchorWork = Task.Run(() => BuildTerritoryLabelAnchors(control, sourceWidth, sourceHeight));
         if (!Simulation.MapRasterCatalog.TryBuildProvinceTopology(
                 states, control, sourceWidth, sourceHeight, out var provinces, out var provinceSource))
             throw new InvalidDataException(
                 $"game/map_data/provinces.png + definition.csv could not be loaded ({provinceSource}). " +
                 "The base game never generates replacement province IDs at runtime; rebuild the data map with " +
                 "Tools/MapDataCompiler or install a mod that supplies a complete raster pair.");
-        var hydrology = Simulation.HydrologyCatalog.BuildRaster(sourceWidth, sourceHeight);
+        // The sea graph is made from the province raster and its water alone, never from who
+        // owns what. Made here, the first fleet that asks for a harbour - every navy in the
+        // world, as the campaign takes the map on the main thread - finds it built.
+        var seaWork = Task.Run(() => Simulation.SeaLanes.CoastalProvinces(provinces));
+        var hydrology = hydrologyWork.GetAwaiter().GetResult();
         provinces.AttachHydrology(hydrology);
-        var labelAnchors = BuildTerritoryLabelAnchors(control, sourceWidth, sourceHeight);
+        var surfaceWork = Task.Run(() => HydrologySurfaceData.Build(hydrology,
+            Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures));
+        var labelAnchors = anchorWork.GetAwaiter().GetResult();
 
         for (var y = 0; y < MapHeight; y++)
         {
@@ -4425,6 +4438,11 @@ void fragment() {
             }
         }
 
+        // A sea graph that could not be made here is made again where it is first asked for,
+        // and fails there with the same reason; the map itself does not wait on it.
+        try { seaWork.Wait(); }
+        catch (AggregateException) { }
+
         // Preserve the decoded grids: exact country/state picking is a core map feature.
         // This prevents a click from falling back to an approximate rendered-color lookup.
         if (provinces.ProvinceCount > ushort.MaxValue)
@@ -4435,8 +4453,7 @@ void fragment() {
             RegionIds = regionIds,
             ProvinceIds = provinceIds,
             NationIds = nationIds,
-            HydrologyPixels = HydrologySurfaceData.Build(hydrology,
-                Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures),
+            HydrologyPixels = surfaceWork.GetAwaiter().GetResult(),
             Provinces = provinces,
             LabelAnchors = labelAnchors,
             ProvinceRasterLoaded = true,
