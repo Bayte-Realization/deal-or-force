@@ -1,0 +1,6 @@
+// A common operating-cash horizon for the cabinet and foreign ministry. This does not
+// prohibit public debt: debt interest is in the ordinary budget; only overdue bills,
+// a debt workout and a runway shorter than this buffer defer discretionary spending.
+{
+  "AiFiscalReserveWeeks": 8
+}

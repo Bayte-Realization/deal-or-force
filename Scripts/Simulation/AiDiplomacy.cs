@@ -92,7 +92,8 @@ public static partial class AiStatecraft
         var defines = campaign.Defines;
         if (relation.Stance != DiplomaticStance.Allied &&
             relation.Opinion < defines.AiAidFriendshipThreshold) return false;
-        if (giver.Treasury < giver.Gdp * defines.AiAidReserveOfGdp) return false;
+        var fiscal = AiFiscalPolicy.Assess(campaign, giver, defines.AiAidReserveOfGdp);
+        if (!fiscal.CanSpend) { Count("aid_fiscal_" + fiscal.Reason); return false; }
         var crisis = recipient.Treasury < recipient.Gdp * defines.AiAidCrisisTreasuryOfGdp;
         if (!crisis)
             foreach (var war in campaign.Wars)
@@ -101,7 +102,12 @@ public static partial class AiStatecraft
                     crisis = true;
                     break;
                 }
-        if (!crisis || AgreementSystem.AidAmount(campaign, giver, recipient, out _) <= 0f) return false;
+        if (!crisis) return false;
+        var package = AgreementSystem.AidAmount(campaign, giver, recipient, out _);
+        // The ordinary aid command sends a full package. Do not invent a different
+        // transfer here, or spend the reserve which was checked only before payment.
+        if (!float.IsFinite(package) || package <= 0f || package > fiscal.DiscretionaryCash)
+        { Count("aid_reserved_cash"); return false; }
         var aid = new SendAidCommand { IssuerId = giver.Id, TargetId = recipient.Id };
         aid.Apply(campaign);
         if (aid.Sent <= 0f) return false;

@@ -507,67 +507,6 @@ public static partial class AiStatecraft
         using (SimProfiler.Measure("    eco:cabinet")) Cabinet(campaign, nation);
     }
 
-    /// <summary>
-    /// Tax, the army's share, what is spent on people, and what is built with the rest.
-    ///
-    /// Split out of <see cref="Economy"/> so a player can hand this portfolio to their own
-    /// civil service and get exactly what every other country in the world gets - see
-    /// <see cref="Delegation"/>. Deliberately NOT including the cabinet: a decision is a
-    /// thing a country does once and cannot undo, and delegating the budget is not consent
-    /// to have your government reformed while you were looking at the map.
-    /// </summary>
-    public static void GovernTheBudget(Campaign campaign, Nation nation)
-    {
-        if (campaign is null || nation is null) return;
-        var defines = campaign.Defines;
-        // Any() with a closure over the nation, on a list of a hundred and forty wars,
-        // for every country that thinks about its budget.
-        var atWar = false;
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
-        var reserves = nation.Gdp <= 0f ? 0f : nation.Treasury / nation.Gdp;
-
-        // Tax. Broke countries tax more; comfortable ones with an unhappy population tax
-        // less, because the alternative to a rebate is a riot.
-        var taxTarget = nation.TaxRate;
-        if (reserves < defines.AiTreasuryFloor) taxTarget += defines.AiTaxStep;
-        else if (reserves > defines.AiTreasuryComfort && nation.Stability < 0.6f) taxTarget -= defines.AiTaxStep;
-        nation.TaxRate = M.Clamp(taxTarget, defines.AiMinimumTaxRate, defines.AiMaximumTaxRate);
-
-        // The army costs what the situation is worth.
-        bool threatened;
-        using (SimProfiler.Measure("    eco:threat"))
-            threatened = !atWar && (nation.WarPlanTargetId >= 0 || Threatened(campaign, nation));
-        var militaryTarget = atWar
-            ? defines.AiWartimeMilitarySpending
-            : threatened ? defines.AiTenseMilitarySpending : defines.AiPeacetimeMilitarySpending;
-        nation.MilitarySpending = M.Lerp(nation.MilitarySpending, militaryTarget, 0.35f);
-
-        // And the war industry follows the budget it is part of. A country at war runs
-        // its plants harder; a country at peace spins them mostly back down. The AI sets
-        // the same capacity pool the player uses, by the same rule it sets the military budget
-        // by - so the world's economies behave like the player's rather than around it.
-        var focusTarget = atWar
-            ? defines.AiWartimeArmsFocus
-            : threatened ? defines.AiWartimeArmsFocus * 0.5f : defines.AiPeacetimeArmsFocus;
-        nation.ArmsFocus = M.Lerp(nation.ArmsFocus, focusTarget, 0.20f);
-        // AI policy is quantised by the same capacity allocator as player orders.
-        nation.ConvertedCivilianUnits = -1;
-
-        // An unhappy country buys quiet, when it can afford it.
-        if ((nation.Stability < defines.AiStabilityConcern || RadicalismCore.NeedsAttention(campaign, nation)) &&
-            reserves > defines.AiTreasuryFloor)
-        {
-            nation.WelfareSpending = M.Clamp(nation.WelfareSpending + defines.AiSocialStep, 0f, 0.18f);
-            nation.EducationSpending = M.Clamp(nation.EducationSpending + defines.AiSocialStep * 0.6f, 0f, 0.15f);
-        }
-        else if (reserves < defines.AiTreasuryFloor * 0.5f)
-        {
-            nation.WelfareSpending = M.Clamp(nation.WelfareSpending - defines.AiSocialStep, 0.01f, 0.20f);
-        }
-
-        using (SimProfiler.Measure("    eco:build")) Build(campaign, nation, atWar, reserves);
-    }
 
     /// <summary>
     /// One decision a month, if the country wants one enough.
@@ -606,53 +545,6 @@ public static partial class AiStatecraft
         new TakeDecisionCommand { IssuerId = nation.Id, DecisionId = best }.Apply(campaign);
     }
 
-    /// <summary>
-    /// One project a month, in the region that most needs it. What a country builds says
-    /// what it thinks is wrong with itself: an army that cannot be fed builds roads, a
-    /// country at war builds guns, and a country at peace builds the thing that makes it
-    /// richer next year.
-    /// </summary>
-    private static void Build(Campaign campaign, Nation nation, bool atWar, float reserves)
-    {
-        var defines = campaign.Defines;
-        if (reserves < defines.AiBuildTreasuryFloor) return;
-        var running = 0;
-        foreach (var project in campaign.Construction)
-            if (project.NationId == nation.Id && ++running >= defines.AiMaxConcurrentProjects) return;
-
-        var states = campaign.StatesOf(nation);
-        if (states.Length == 0) return;
-
-        var congested = false;
-        foreach (var army in campaign.Armies)
-            if (army.NationId == nation.Id && army.SupplyCongestion < 0.75f) { congested = true; break; }
-        var wanted =
-            congested ? BuildingKind.Infrastructure :
-            atWar ? BuildingKind.ArmsIndustry :
-            nation.Literacy < 0.72f ? BuildingKind.University :
-            nation.StandardOfLiving < 0.55f ? BuildingKind.Agriculture :
-            BuildingKind.CivilianIndustry;
-
-        // Put it where there is most to gain: the biggest region that has fewest of these.
-        ScenarioState target = null;
-        var bestScore = float.MinValue;
-        foreach (var state in states)
-        {
-            var already = state.Buildings.GetValueOrDefault(wanted);
-            var score = state.Population / 1_000_000f - already * defines.AiBuildSaturation;
-            if (score <= bestScore) continue;
-            bestScore = score;
-            target = state;
-        }
-        if (target is null) return;
-
-        new QueueConstructionCommand
-        {
-            IssuerId = nation.Id,
-            StateMapIndex = target.MapIndex,
-            Building = wanted
-        }.Apply(campaign);
-    }
 
     // ------------------------------------------------------------- war and peace -------
 
@@ -671,6 +563,8 @@ public static partial class AiStatecraft
             if (!candidate.Ended && candidate.Involves(nation.Id)) { ownWar = candidate; break; }
         if (ownWar is not null) { Negotiate(campaign, nation, ownWar); return; }
         if (!campaign.Defines.AiMayDeclareWar) return;
+        var fiscal = AiFiscalPolicy.Assess(campaign, nation, campaign.Defines.AiTreasuryFloor);
+        if (!fiscal.CanSpend) { Count("war_fiscal_" + fiscal.Reason); return; }
 
         var defines = campaign.Defines;
 
@@ -1276,8 +1170,8 @@ public static partial class AiStatecraft
         // A slice of the treasury, scaled to the gap: the wider the gulf, the larger the
         // cheque - but never more than the country can spare and the table allows.
         var gap = M.Clamp((theirs - mine) / M.Max(0.01f, theirs), 0f, 1f);
-        var offer = M.Clamp(buyer.Treasury * (0.1f + 0.4f * gap), 0f,
-            M.Max(0f, buyer.Treasury));
+        var fiscal = AiFiscalPolicy.Assess(campaign, buyer, campaign.Defines.AiTreasuryFloor);
+        var offer = M.Clamp(buyer.Treasury * (0.1f + 0.4f * gap), 0f, fiscal.DiscretionaryCash);
         if (offer <= 0f) return false;
 
         var command = new ProposeDealCommand

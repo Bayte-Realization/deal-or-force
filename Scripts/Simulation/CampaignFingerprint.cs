@@ -53,6 +53,11 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        if (campaign.Defines.AiFiscalReserveWeeks != 8)
+        {
+            MixText("ai_fiscal_runway");
+            Mix(campaign.Defines.AiFiscalReserveWeeks);
+        }
         // Preserve the old default fingerprint, but detect different modded assault
         // rules before peers reach a battle and make different decisions.
         if (campaign.Defines.AutonomousAssaultMinimumOrganisation != .16f ||
@@ -381,11 +386,6 @@ public static class CampaignFingerprint
             Mix(war.CivilConflict ? 1 : 0); Mix(war.EscalationStage); Mix(war.AiNegotiationUnlockDay);
             if (war.WorldWarDay >= 0)
             { MixText("world_war"); Mix(war.WorldWarDay); }
-        }
-        var controllers = campaign.ProvinceController;
-        if (controllers is null) return hash;
-        for (var province = 0; province < controllers.Length; province++) Mix(controllers[province]);
-        return hash;
             // Coalition membership changes combat and access before any province moves.
             // Keep the historical bilateral golden when there are no allied members.
             if (war.AttackerAllies.Count > 0 || war.DefenderAllies.Count > 0)
@@ -396,6 +396,11 @@ public static class CampaignFingerprint
                 Mix(war.DefenderAllies.Count);
                 foreach (var member in war.DefenderAllies.OrderBy(id => id)) Mix(member);
             }
+        }
+        var controllers = campaign.ProvinceController;
+        if (controllers is null) return hash;
+        for (var province = 0; province < controllers.Length; province++) Mix(controllers[province]);
+        return hash;
     }
 
     /// <summary>

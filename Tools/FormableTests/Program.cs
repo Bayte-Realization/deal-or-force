@@ -43,6 +43,8 @@ static class Program
         if (args.Contains("--civic-only")) { CivicCampaignTests.Run(); return; }
         if (args.Contains("--alliances-only")) { DynamicAllianceTests.Run(); return; }
         if (args.Contains("--finance-only")) { SovereignFinanceTests.Run(); return; }
+        if (args.Contains("--ai-fiscal-only")) { AiFiscalPolicyTests.Run(); return; }
+        if (args.Contains("--construction-funding-only")) { ConstructionFundingTests.Run(); return; }
         if (args.Contains("--methods-only")) { MovementMethodsTests.Run(); return; }
         if (args.Contains("--movement-power-state-only")) { MovementPowerStateTests.Run(); return; }
         if (args.Contains("--movement-power-staging-only")) { MovementPowerStagingTests.Run(); return; }
@@ -60,6 +62,8 @@ static class Program
         DismantlementTests.Run();
         DomesticCrisesTests.Run();
         SovereignFinanceTests.Run();
+        AiFiscalPolicyTests.Run();
+        ConstructionFundingTests.Run();
         MovementMethodsTests.Run();
         MovementPowerStateTests.Run();
         MovementPowerStagingTests.Run();
@@ -97,11 +101,11 @@ static class Program
         DealNegotiationTests.Run();
         SituationReportTests.Run();
         MusicSituationTests.Run();
+        MusicTransitionTests.Run();
         WeatherReadabilityTests.Run();
         MediaLibraryTests.Run();
         ResponsiveHudLayoutTests.Run();
         IdentityResearchTests.Run();
-        MusicTransitionTests.Run();
         CivilWarBudgetTests.Run();
         StrategicCueQueueTests.Run();
         NetworkSyncCadenceTests.Run();
