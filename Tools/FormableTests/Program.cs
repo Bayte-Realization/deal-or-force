@@ -17,6 +17,7 @@ static class Program
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
         if (args.Contains("--music-only")) { MusicSituationTests.Run(); return; }
+        if (args.Contains("--music-transition-only")) { MusicTransitionTests.Run(); return; }
         if (args.Contains("--weather-only")) { WeatherReadabilityTests.Run(); return; }
         if (args.Contains("--media-only")) { MediaLibraryTests.Run(); return; }
         if (args.Contains("--responsive-hud-only")) { ResponsiveHudLayoutTests.Run(); return; }
@@ -100,6 +101,7 @@ static class Program
         MediaLibraryTests.Run();
         ResponsiveHudLayoutTests.Run();
         IdentityResearchTests.Run();
+        MusicTransitionTests.Run();
         CivilWarBudgetTests.Run();
         StrategicCueQueueTests.Run();
         NetworkSyncCadenceTests.Run();
