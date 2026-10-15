@@ -213,23 +213,38 @@ public static class MovementPower
     /// </summary>
     public static void Tick(Campaign c)
     {
-        if (c is null || !c.FeatureEnabled("movements") || !MechanicFeatures.SystemEnabled(c, nameof(MovementPower))) return;
-        if (c.ElapsedDays % 7 != 3) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>
+    /// The same weekly review, one active movement per stage. Each actor is completed
+    /// before yielding: its levy, then march/strike eligibility and command, in nation
+    /// order. No authoritative input is held in a day-wide presentation cache.
+    /// </summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !c.FeatureEnabled("movements") || !MechanicFeatures.SystemEnabled(c, nameof(MovementPower))) yield break;
+        if (c.ElapsedDays % 7 != 3) yield break;
         var defines = c.Defines;
         foreach (var nation in c.Nations)
         {
             if (nation.Movement is not { Dissolved: false } state) continue;
-            var momentum = Momentum(c, nation);
-            if (momentum >= defines.MovementParallelMomentum) Administer(c, nation, state);
-            if (nation.IsHuman) continue;
-            foreach (var action in new[] { "march", "strike" })
+            using (SimProfiler.Measure("movement power"))
             {
-                if (MovementActions.Refusal(c, nation, action, -1, -1).Length > 0) continue;
-                // A strike or a march is a decision, not a habit: one chance in four a week once possible.
-                if (MovementRules.Roll(c.Seed, nation.Id, c.ElapsedDays, action == "march" ? 4721 : 4722) > 0.25f) continue;
-                new MovementActionCommand { IssuerId = nation.Id, Action = action }.Apply(c);
-                break;
+                var momentum = Momentum(c, nation);
+                if (momentum >= defines.MovementParallelMomentum) Administer(c, nation, state);
+                if (!nation.IsHuman)
+                    foreach (var action in new[] { "march", "strike" })
+                    {
+                        if (MovementActions.Refusal(c, nation, action, -1, -1).Length > 0) continue;
+                        // A strike or a march is a decision, not a habit: one chance in four a week once possible.
+                        if (MovementRules.Roll(c.Seed, nation.Id, c.ElapsedDays, action == "march" ? 4721 : 4722) > 0.25f) continue;
+                        new MovementActionCommand { IssuerId = nation.Id, Action = action }.Apply(c);
+                        break;
+                    }
             }
+            // Do not leave the profiler scope open across a frame's wait.
+            yield return 0;
         }
     }
 
