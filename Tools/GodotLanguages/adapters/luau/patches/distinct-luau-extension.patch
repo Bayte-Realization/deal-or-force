@@ -1,0 +1,117 @@
+diff --git a/src/analysis/analysis_utils.cpp b/src/analysis/analysis_utils.cpp
+index 60278b4..8ab86c3 100644
+--- a/src/analysis/analysis_utils.cpp
++++ b/src/analysis/analysis_utils.cpp
+@@ -226,7 +226,7 @@ static bool get_module_type(Luau::AstStatBlock *p_root, LuauScript *p_script, Lu
+ 		return false;
+ 
+ 	String resolve_err;
+-	String full_require_path = p_script->resolve_path(require_finder.require_path + String(".lua"), resolve_err);
++	String full_require_path = p_script->resolve_path(require_finder.require_path + String(".luau"), resolve_err);
+ 	if (!resolve_err.is_empty())
+ 		return false;
+ 
+diff --git a/src/analysis/annotation_class_def.cpp b/src/analysis/annotation_class_def.cpp
+index b3e80cf..462eeb0 100644
+--- a/src/analysis/annotation_class_def.cpp
++++ b/src/analysis/annotation_class_def.cpp
+@@ -49,7 +49,7 @@ void ClassReader::ann_extends(const Annotation &p_annotation) {
+ 		}
+ 
+ 		String path_err;
+-		String script_path = script->resolve_path(require_finder.require_path + String(".lua"), path_err);
++		String script_path = script->resolve_path(require_finder.require_path + String(".luau"), path_err);
+ 		if (!path_err.is_empty()) {
+ 			error(path_err, p_annotation.location);
+ 			return;
+diff --git a/src/scripting/luau_cache.cpp b/src/scripting/luau_cache.cpp
+index 27e5fff..c0af186 100644
+--- a/src/scripting/luau_cache.cpp
++++ b/src/scripting/luau_cache.cpp
+@@ -45,7 +45,7 @@ Ref<LuauScript> LuauCache::get_script(const String &p_path, Error &r_error, bool
+ 			return script;
+ 	}
+ 
+-	if (path.ends_with(".mod.lua")) {
++	if (path.ends_with(".mod.luau")) {
+ 		script->_is_module = true;
+ 	}
+ 
+diff --git a/src/scripting/luau_lib.cpp b/src/scripting/luau_lib.cpp
+index 70bda73..ba3073d 100644
+--- a/src/scripting/luau_lib.cpp
++++ b/src/scripting/luau_lib.cpp
+@@ -230,8 +230,8 @@ static int luascript_require(lua_State *L) {
+ 	if (udata->script->get_path() == full_path)
+ 		luaL_error(L, "scripts cannot require themselves");
+ 
+-	if (FileAccess::file_exists(full_path + ".lua")) {
+-		full_path = full_path + ".lua";
++	if (FileAccess::file_exists(full_path + ".luau")) {
++		full_path = full_path + ".luau";
+ 	} else {
+ 		luaL_error(L, "could not find module: %s", path.utf8().get_data());
+ 	}
+diff --git a/src/scripting/luau_script.cpp b/src/scripting/luau_script.cpp
+index 499cfc2..6116c71 100644
+--- a/src/scripting/luau_script.cpp
++++ b/src/scripting/luau_script.cpp
+@@ -1936,12 +1936,12 @@ String LuauLanguage::_get_type() const {
+ }
+ 
+ String LuauLanguage::_get_extension() const {
+-	return "lua";
++	return "luau";
+ }
+ 
+ PackedStringArray LuauLanguage::_get_recognized_extensions() const {
+ 	PackedStringArray extensions;
+-	extensions.push_back("lua");
++	extensions.push_back("luau");
+ 
+ 	return extensions;
+ }
+diff --git a/src/scripting/luau_script.h b/src/scripting/luau_script.h
+index 21763c1..6e2e823 100644
+--- a/src/scripting/luau_script.h
++++ b/src/scripting/luau_script.h
+@@ -46,7 +46,7 @@ class LuauCache;
+ class LuauScriptInstance;
+ class LuauInterface;
+ 
+-#define INIT_LUA_PATH "res://init.lua"
++#define INIT_LUA_PATH "res://init.luau"
+ 
+ struct LuauData {
+ 	Luau::Allocator allocator;
+diff --git a/src/scripting/resource_format_luau_script.cpp b/src/scripting/resource_format_luau_script.cpp
+index d0c849a..2217201 100644
+--- a/src/scripting/resource_format_luau_script.cpp
++++ b/src/scripting/resource_format_luau_script.cpp
+@@ -15,7 +15,7 @@
+ 
+ PackedStringArray ResourceFormatLoaderLuauScript::_get_recognized_extensions() const {
+ 	PackedStringArray extensions;
+-	extensions.push_back("lua");
++	extensions.push_back("luau");
+ 
+ 	return extensions;
+ }
+@@ -29,7 +29,7 @@ String ResourceFormatLoaderLuauScript::get_resource_type(const String &p_path) {
+ 	if (p_path == INIT_LUA_PATH)
+ 		return "";
+ 
+-	return p_path.get_extension().to_lower() == "lua" ? LuauLanguage::get_singleton()->_get_type() : "";
++	return p_path.get_extension().to_lower() == "luau" ? LuauLanguage::get_singleton()->_get_type() : "";
+ }
+ 
+ String ResourceFormatLoaderLuauScript::_get_resource_type(const String &p_path) const {
+@@ -50,7 +50,7 @@ PackedStringArray ResourceFormatSaverLuauScript::_get_recognized_extensions(cons
+ 
+ 	Ref<LuauScript> ref = p_resource;
+ 	if (ref.is_valid())
+-		extensions.push_back("lua");
++		extensions.push_back("luau");
+ 
+ 	return extensions;
+ }

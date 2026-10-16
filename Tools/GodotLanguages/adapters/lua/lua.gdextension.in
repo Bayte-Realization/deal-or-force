@@ -1,0 +1,7 @@
+[configuration]
+entry_symbol = "luagdextension_entrypoint"
+compatibility_minimum = "4.5"
+reloadable = false
+
+[libraries]
+windows.debug.x86_64 = "./bin/libluagdextension.windows.editor.x86_64.dll"

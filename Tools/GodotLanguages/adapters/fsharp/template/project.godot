@@ -1,0 +1,10 @@
+config_version=5
+
+[application]
+config/name="FSharp LanguageKit smoke test"
+
+[dotnet]
+project/assembly_name="LanguageKitFSharp"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
