@@ -10,6 +10,11 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--ownership-kernel-only")) { OwnershipComponentTests.Run(); return; }
+        if (args.Contains("--ownership-native-only")) { OwnershipComponentTests.Run(true); return; }
+        if (args.Contains("--ownership-fallback-only")) { OwnershipComponentTests.Run(false); return; }
+        if (args.Contains("--ownership-kernel-fixtures")) { OwnershipComponentTests.RunFixtures(args.Last()); return; }
+        if (args.Length == 0) OwnershipComponentTests.Run();
         if (args.Contains("--diplomacy-preview-only")) { DiplomacyPreviewTests.Run(); return; }
         if (args.Contains("--atlas-surfaces-only")) { AtlasSurfaceTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); return; }

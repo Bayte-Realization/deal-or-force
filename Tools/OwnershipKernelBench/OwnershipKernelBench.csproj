@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Scripts/Simulation/**/*.cs" />
+    <Compile Include="../../Tools/GodotLanguages/kernels/ownership/managed/*.cs" />
+    <Compile Include="../../Scripts/Modding/ModOperations.cs" />
+    <Compile Include="../../Scripts/Modding/ModContracts.cs" />
+  </ItemGroup>
+  <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
+</Project>

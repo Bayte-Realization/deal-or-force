@@ -69,6 +69,13 @@ artifacts, not committed game builds.
 
 ## Boundaries
 
+- Rust is reserved for exceptional hard problems with a measured benefit, not
+  everyday game rules. The ownership Rust/Odin experiments live in
+  [kernels/ownership](kernels/ownership/README.md), with the common
+  [benchmark](../OwnershipKernelBench/README.md) in the game repository.
+  Neither implementation beat the existing C# median; no production native hook
+  remains. The game does not require these DLLs.
+
 - Trusted native/managed code can access the host. A native language binding is
   not a security sandbox for downloaded mods.
 - Single-language probes do not prove coexistence, export, hot reload, networking,

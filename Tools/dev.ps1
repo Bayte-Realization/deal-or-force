@@ -49,7 +49,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta1\Godot_v4.8-beta1_mono_win64_console.exe'
 }
 
 function Invoke-Build {
@@ -75,7 +75,9 @@ function Invoke-LoggedNative([string]$Executable, [string[]]$Arguments, [string]
 function Invoke-Tests {
     Write-Host '== test stand ==' -ForegroundColor Cyan
     $log = Join-Path ([IO.Path]::GetTempPath()) ('dof-tests-' + [Guid]::NewGuid().ToString('N') + '.log')
-    $arguments = @('run', '--project', (Join-Path $project 'Tools\FormableTests'), '--no-build', '--')
+    # Incremental compilation is required here: otherwise a new --suite-only flag
+    # can silently run an older assembly's entire stand and report a false pass.
+    $arguments = @('run', '--project', (Join-Path $project 'Tools\FormableTests'), '--')
     if ($TestArgs) { $arguments += $TestArgs.Split(' ', [StringSplitOptions]::RemoveEmptyEntries) }
     $exit = Invoke-LoggedNative 'dotnet' $arguments $log
     $pass = (Select-String -Path $log -Pattern '^PASS ' -ErrorAction SilentlyContinue).Count

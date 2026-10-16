@@ -89,6 +89,15 @@ prefix applies the effect to every region of the country. `mods/_templates` has 
 examples at all three levels: JSON, GDScript, compiled C#. The rest is in
 [MODDING_GUIDE](docs/MODDING_GUIDE.md).
 
+## Language development kit
+
+The project retains source integrations for **Luau, F#, Nim, Odin, Rust and Kotlin**.
+See the [kit and build recipes](Tools/GodotLanguages/README.md) and
+[support levels / migration policy](docs/LANGUAGE_BACKENDS_RU.md). All six ran together
+in the Godot 4.8 Beta1 .NET workbench; this does not certify every export or API.
+The campaign remains C#. Rust is reserved for rare, measured hard cases; players and
+ordinary data-mod authors do not need six toolchains.
+
 ## Building and running
 
 **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) is the full account**, written for
