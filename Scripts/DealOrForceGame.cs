@@ -887,6 +887,7 @@ public partial class DealOrForceGame : Control
             speeds.AddChild(button);
         }
         UpdateSpeedButtons();
+        speeds.AddChild(MusicShortcut());
 
         BuildCampaignNavigation();
 
@@ -2152,6 +2153,9 @@ public partial class DealOrForceGame : Control
         panel.AddThemeStyleboxOverride("panel",
             inCampaign ? CampaignPanelStyle(surface) : PanelStyle(surface));
         parent.AddChild(panel);
+        if (inCampaign)
+            AtlasSurfaceSkin.Attach(panel, surface is PanelSurface.Command or PanelSurface.CommandStrip
+                ? AtlasSurfaceSkin.Level.Instrument : AtlasSurfaceSkin.Level.Document);
         return panel;
     }
 
@@ -2569,19 +2573,20 @@ public partial class DealOrForceGame : Control
         var iconOnly = button.Icon is not null && string.IsNullOrEmpty(button.Text);
         // A rail button carries its picture above its word (`icon_above`).
         var above = button.HasMeta("icon_above") && button.GetMeta("icon_above").AsBool();
+        var rounded = button.HasMeta("atlas_round_button") && button.GetMeta("atlas_round_button").AsBool();
         button.IconAlignment = iconOnly || above ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         button.VerticalIconAlignment = above ? VerticalAlignment.Top : VerticalAlignment.Center;
 
-        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly, above));
-        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly, above));
-        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly, above));
+        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly, above, rounded));
+        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly, above, rounded));
+        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly, above, rounded));
         // `primary` survives into the disabled look, and that is the whole of telling
         // "this is what we are" apart from "you may not have this". The politics screen
         // disables the form of government and the ideology a country already has - you
         // cannot adopt what you already are - and with a flat grey disabled style that made
         // the country's own ideology look exactly like one the game was refusing.
-        button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly, above));
-        button.AddThemeStyleboxOverride("focus", ButtonStyle(primary, 1, iconOnly, above));
+        button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly, above, rounded));
+        button.AddThemeStyleboxOverride("focus", AtlasSurfaceSkin.Focus(rounded));
         button.AddThemeColorOverride("font_color", primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text"));
         button.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
@@ -2597,54 +2602,17 @@ public partial class DealOrForceGame : Control
             button.AddThemeColorOverride("icon_pressed_color", ArtColour(sprite, "button.text_pressed"));
             button.AddThemeColorOverride("icon_disabled_color", ArtColour(sprite, "button.text_disabled"));
         }
+        if (button.HasMeta("atlas_music_button"))
+        {
+            button.AddThemeColorOverride("icon_normal_color", Ui.Colour("text.accent_dim"));
+            button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));
+            button.AddThemeColorOverride("icon_pressed_color", Ui.Colour("button.text_pressed"));
+        }
         button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }
 
-    private static StyleBoxFlat ButtonStyle(bool primary, int state, bool iconOnly = false, bool narrow = false)
-    {
-        var background = state switch
-        {
-            1 => primary ? Ui.Colour("button.primary_fill_hover") : Ui.Colour("button.fill_hover"),
-            2 => primary ? Ui.Colour("button.primary_fill_pressed") : Ui.Colour("button.fill_pressed"),
-            // Settled rather than unavailable: the accent stays, so a chosen option reads as
-            // chosen even though it cannot be pressed again.
-            3 => primary ? Ui.Colour("button.primary_fill") : Ui.Colour("button.fill_disabled"),
-            _ => primary ? Ui.Colour("button.primary_fill") : Ui.Colour("button.fill")
-        };
-        var border = state switch
-        {
-            1 => Ui.Colour("button.border_hover"),
-            2 => Ui.Colour("button.border_pressed"),
-            // The border stays the quiet one even when the fill is the accent: a settled
-            // choice should not shout as loudly as one you can still make.
-            3 => primary ? Ui.Colour("button.primary_border") : Ui.Colour("button.border_disabled"),
-            _ => primary ? Ui.Colour("button.primary_border") : Ui.Colour("button.border")
-        };
-        return new StyleBoxFlat
-        {
-            BgColor = background,
-            BorderColor = border,
-            BorderWidthLeft = state == 1 ? 2 : 1,
-            BorderWidthTop = state == 1 ? 2 : 1,
-            BorderWidthRight = state == 1 ? 2 : 1,
-            BorderWidthBottom = state == 2 ? 1 : 2,
-            CornerRadiusTopLeft = 3,
-            CornerRadiusTopRight = 3,
-            CornerRadiusBottomLeft = 3,
-            CornerRadiusBottomRight = 3,
-            CornerDetail = 4,
-            ShadowColor = new Color(0f, 0f, 0f, state == 3 ? 0.18f : 0.58f),
-            ShadowSize = state == 2 ? 1 : 3,
-            ShadowOffset = new Vector2(0, state == 2 ? 0 : 2),
-            ContentMarginLeft = narrow ? 2 : 10,
-            ContentMarginRight = narrow ? 2 : 10,
-            // A caption rests a pixel high and travels two pixels down when the button is
-            // pressed; a picture rests dead centre and travels the same two.
-            ContentMarginTop = iconOnly ? (state == 2 ? 9 : 7) : (state == 2 ? 7 : 6),
-            ContentMarginBottom = iconOnly ? (state == 2 ? 5 : 7) : (state == 2 ? 5 : 8),
-            AntiAliasing = true
-        };
-    }
+    private static StyleBox ButtonStyle(bool primary, int state, bool iconOnly = false, bool narrow = false, bool rounded = false) =>
+        AtlasSurfaceSkin.Button(primary, state, iconOnly, narrow, rounded);
 
     private StyleBox PanelStyle(PanelSurface surface)
     {

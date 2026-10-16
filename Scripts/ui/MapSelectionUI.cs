@@ -93,19 +93,27 @@ public partial class DealOrForceGame
 
         _countryCardStanding = Title("", 14, Ui.Colour("text.accent"));
         _countryCardStanding.MouseFilter = Control.MouseFilterEnum.Stop;
+        _countryCardStanding.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_countryCardStanding);
+
+        var bodyScroll = new ScrollContainer { Name = "CountryFactsScroll", SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        rows.AddChild(bodyScroll);
+        var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        body.AddThemeConstantOverride("separation", 7);
+        bodyScroll.AddChild(body);
 
         _countryCardRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _countryCardRows.AddThemeConstantOverride("separation", 2);
-        rows.AddChild(_countryCardRows);
+        body.AddChild(_countryCardRows);
 
         _countryCardLinks = new HBoxContainer();
         _countryCardLinks.AddThemeConstantOverride("separation", 5);
-        rows.AddChild(_countryCardLinks);
+        body.AddChild(_countryCardLinks);
 
         _countryCardActionsHost = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-        rows.AddChild(_countryCardActionsHost);
+        body.AddChild(_countryCardActionsHost);
 
         // ---- the region and the province, along the bottom.
         _regionCard = TexturedPanel(_hudLayer, PanelSurface.Command);
@@ -137,7 +145,10 @@ public partial class DealOrForceGame
 
         var columns = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         columns.AddThemeConstantOverride("separation", 16);
-        regionRows.AddChild(columns);
+        var factsScroll = new ScrollContainer { Name = "RegionFactsScroll", SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        regionRows.AddChild(factsScroll);
+        factsScroll.AddChild(columns);
 
         var region = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         region.AddThemeConstantOverride("separation", 2);
@@ -322,7 +333,7 @@ public partial class DealOrForceGame
         }
 
         // ---- where we stand: the stance, the opinion, and under the cursor what it is made of.
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
         var war = _campaign.Wars.Find(candidate =>
             !candidate.Ended && candidate.Involves(player.Id) && candidate.Involves(nation.Id));
         _countryCardStanding.Text = war is not null
@@ -529,6 +540,7 @@ public partial class DealOrForceGame
         _regionCardActions.Visible = owned;
         if (owned) RefreshRegionCardCapitalButton();
         ShowRegionBuildList(state, owned);
+        LayoutMapSelectionCards();
     }
 
     private void RefreshRegionCardCapitalButton()
@@ -598,6 +610,9 @@ public partial class DealOrForceGame
         parent.AddChild(row);
         var label = Title(caption, 13, Ui.Colour("text.body_soft"));
         label.AutowrapMode = TextServer.AutowrapMode.Off;
+        label.ClipText = true;
+        label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        label.TooltipText = Tr(caption);
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         label.MouseFilter = Control.MouseFilterEnum.Ignore;
         row.AddChild(label);
@@ -605,7 +620,8 @@ public partial class DealOrForceGame
         var figure = new Label
         {
             Text = value ?? "", HorizontalAlignment = HorizontalAlignment.Right,
-            CustomMinimumSize = new Vector2(24, 0)
+            CustomMinimumSize = new Vector2(24, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = value ?? ""
         };
         figure.AddThemeFontSizeOverride("font_size", 13);
         figure.AddThemeColorOverride("font_color", Ui.Colour(valueToken));

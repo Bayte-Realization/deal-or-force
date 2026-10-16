@@ -27,6 +27,19 @@ static class ResponsiveHudLayoutTests
             var drawer = ResponsiveHudLayout.Fit(new(toolbar.X + toolbar.Width - 480, toolbar.Y - 310, 480, 304), width, height);
             Check(Inside(toolbar, width, height) && Inside(drawer, width, height), $"toolbar and upward drawer fit {width}x{height}");
         }
+        foreach (var (width, height) in new[] { (1920f, 1080f), (1280f, 720f), (1366f, 768f) })
+        foreach (var toolbarHeight in new[] { 44f, 88f })
+        {
+            var toolbar = new ResponsiveHudLayout.Bounds(width - 720, height - toolbarHeight - 8, 712, toolbarHeight);
+            var card = ResponsiveHudLayout.AboveToolbar(new(552, height - 262, width - 560, 254), toolbar, width, height, 142);
+            Check(Inside(card, width, height) && card.Y + card.Height <= toolbar.Y - 8,
+                $"region dossier clears the {toolbarHeight}px map toolbar at {width}x{height}");
+        }
+        var separate = new ResponsiveHudLayout.Bounds(8, 400, 300, 250);
+        Check(ResponsiveHudLayout.AboveToolbar(separate, new(600, 620, 650, 44), 1280, 720, 90) == separate,
+            "a non-overlapping dock does not jump upwards");
+        var tall = ResponsiveHudLayout.AboveToolbar(new(552, 0, 700, 5000), new(560, 620, 712, 92), 1280, 720, 142);
+        Check(tall.Y >= 142 && tall.Y + tall.Height <= 612, "very tall modded facts use the available scrolling region, not the toolbar");
         var extreme = ResponsiveHudLayout.Fit(new(float.PositiveInfinity, -10000, 10000, float.NaN), 1280, 720);
         Check(Inside(extreme, 1280, 720), "out-of-range mod rectangles are clamped, not clipped off-screen");
     }

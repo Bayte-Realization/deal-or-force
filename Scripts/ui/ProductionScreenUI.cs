@@ -189,6 +189,7 @@ public partial class DealOrForceGame
         var colour = pool == ProductionPool.Civilian ? "production.civilian" : "production.military";
         var plate = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         plate.AddThemeStyleboxOverride("panel", ProductionStyle("production.card", "production.border", 10));
+        AtlasSurfaceSkin.Attach(plate, AtlasSurfaceSkin.Level.Raised, "production.card");
         parent.AddChild(plate);
         var rows = new VBoxContainer();
         plate.AddChild(rows);
@@ -292,6 +293,7 @@ public partial class DealOrForceGame
         var line = new ProductionLineRow();
         line.Root = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         line.Root.AddThemeStyleboxOverride("panel", ProductionStyle("production.card", "production.border", 10));
+        AtlasSurfaceSkin.Attach(line.Root, AtlasSurfaceSkin.Level.Inset, "production.card");
         _productionLineRows.AddChild(line.Root);
         var rows = new VBoxContainer();
         rows.AddThemeConstantOverride("separation", 8);

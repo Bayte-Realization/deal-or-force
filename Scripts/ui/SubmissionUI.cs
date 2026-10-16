@@ -52,7 +52,7 @@ public partial class DealOrForceGame
         foreach (var (route, button) in _submissionButtons)
         {
             var what = SubmissionExplanation(route, nation);
-            var refusal = SubmissionSystem.Refusal(_campaign, player, nation, route);
+            var refusal = SubmissionSystem.Refusal(_campaign, player, nation, route, refreshAssessment: false);
             button.Disabled = refusal.Length > 0;
             if (refusal.Length > 0)
             {
@@ -60,7 +60,7 @@ public partial class DealOrForceGame
                 continue;
             }
             var why = new Breakdown();
-            var willingness = SubmissionSystem.Willingness(_campaign, nation, player, route, why);
+            var willingness = SubmissionSystem.Willingness(_campaign, nation, player, route, why, refreshAssessment: false);
             var parts = why.Entries
                 .OrderByDescending(entry => System.Math.Abs(entry.Value))
                 .Take(4)

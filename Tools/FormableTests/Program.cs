@@ -10,6 +10,8 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--diplomacy-preview-only")) { DiplomacyPreviewTests.Run(); return; }
+        if (args.Contains("--atlas-surfaces-only")) { AtlasSurfaceTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); return; }
         if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
         if (args.Contains("--peace-intent-only")) { PeaceIntentTests.Run(); return; }
@@ -147,6 +149,8 @@ static class Program
         SupplyStressTests.Run();
         TechnologyTreeTests.Run();
         ResearchWorkspaceTests.Run();
+        AtlasSurfaceTests.Run();
+        DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();
         InterfaceIconTests.Run();
         ScenarioMapDraftTests.Run();

@@ -176,6 +176,7 @@ public partial class DealOrForceGame
         var height = Mathf.Max(44, _mapControlsFlow.GetCombinedMinimumSize().Y + 10);
         var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, right - left), height), Size.X, Size.Y);
         PlaceHudBounds(_mapControlsPanel, bounds);
+        LayoutMapSelectionCards();
         if (_mapModeDrawerPanel is not null)
         {
             var drawerWidth = Mathf.Clamp(Ui.Metric("map_controls.drawer_width", 480), 200, 720);

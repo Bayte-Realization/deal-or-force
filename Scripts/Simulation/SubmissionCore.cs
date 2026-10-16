@@ -109,7 +109,8 @@ public static class SubmissionSystem
     };
 
     /// <summary>Why this cannot even be asked, or empty when it can.</summary>
-    public static string Refusal(Campaign campaign, Nation asker, Nation target, SubmissionRoute route)
+    public static string Refusal(Campaign campaign, Nation asker, Nation target, SubmissionRoute route,
+        bool refreshAssessment = true)
     {
         if (campaign is null || asker is null || target is null || asker.Id == target.Id)
             return Loc.Get("No such country.");
@@ -127,12 +128,13 @@ public static class SubmissionSystem
             return Loc.Format("{0} has subjects of its own, and answers to nobody.", target.DisplayName);
         if (CampaignDiplomacy.AtWar(campaign, asker.Id, target.Id)) return Loc.Get("They are at war with each other.");
 
-        var relation = CampaignDiplomacy.Get(campaign, asker.Id, target.Id);
+        var relation = refreshAssessment ? CampaignDiplomacy.Get(campaign, asker.Id, target.Id)
+            : CampaignDiplomacy.ReadOrNeutral(campaign, asker.Id, target.Id);
         var since = campaign.ElapsedDays - relation.SubmissionAskedDay;
         if (since < campaign.Defines.SubmissionRefusalDays)
             return Loc.Format("They said no {0:N0} day(s) ago; they will not be asked again this year.", since);
 
-        if (StrengthRatio(campaign, asker, target) < campaign.Defines.SubmissionMinimumStrengthRatio)
+        if (StrengthRatio(campaign, asker, target, refreshAssessment) < campaign.Defines.SubmissionMinimumStrengthRatio)
             return Loc.Format("{0} is not so much weaker that answering to us is worth discussing.", target.DisplayName);
 
         var cost = Cost(campaign, target, route);
@@ -142,10 +144,10 @@ public static class SubmissionSystem
     }
 
     /// <summary>How much stronger the asker looks to the country being asked.</summary>
-    public static float StrengthRatio(Campaign campaign, Nation asker, Nation target)
+    public static float StrengthRatio(Campaign campaign, Nation asker, Nation target, bool refreshAssessment = true)
     {
         var mine = MathF.Max(0.01f, AiStatecraft.StrengthOf(campaign, target));
-        var theirs = CampaignIntel.EstimatedStrength(campaign, target.Id, asker);
+        var theirs = CampaignIntel.EstimatedStrength(campaign, target.Id, asker, refreshAssessment);
         return theirs / mine;
     }
 
@@ -154,18 +156,19 @@ public static class SubmissionSystem
     /// is yes. Every term is named, so the reasons can be read before anybody asks.
     /// </summary>
     public static float Willingness(Campaign campaign, Nation target, Nation asker, SubmissionRoute route,
-        Breakdown why = null)
+        Breakdown why = null, bool refreshAssessment = true)
     {
         why?.Begin("Whether they would accept", "share");
         if (campaign is null || target is null || asker is null) return 0f;
         var defines = campaign.Defines;
-        var relation = CampaignDiplomacy.Get(campaign, target.Id, asker.Id);
+        var relation = refreshAssessment ? CampaignDiplomacy.Get(campaign, target.Id, asker.Id)
+            : CampaignDiplomacy.ReadOrNeutral(campaign, target.Id, asker.Id);
 
         var willingness = relation.Opinion / 100f;
         why?.Add("How they regard us", relation.Opinion / 100f);
 
         // Strength first, because nothing else is worth saying without it.
-        var ratio = StrengthRatio(campaign, asker, target);
+        var ratio = StrengthRatio(campaign, asker, target, refreshAssessment);
         var weight = M.Clamp(MathF.Log10(MathF.Max(1f, ratio)) -
                              MathF.Log10(MathF.Max(1f, defines.SubmissionMinimumStrengthRatio)), 0f, 1f) *
                      defines.SubmissionStrengthWeight;
@@ -191,7 +194,7 @@ public static class SubmissionSystem
             case SubmissionRoute.Protection:
             {
                 // The reason protectorates were ever asked for: somebody else is worse.
-                var threat = GreatestThreat(campaign, target, asker, out var feared);
+                var threat = GreatestThreat(campaign, target, asker, out var feared, refreshAssessment);
                 if (threat > 0f)
                 {
                     var fear = M.Clamp(threat - 1f, 0f, 2f) * 0.5f * defines.SubmissionThreatWeight +
@@ -247,7 +250,8 @@ public static class SubmissionSystem
     /// of the target's own strength - or 0 when there is none. Fear means a war, or a relation
     /// as bad as a rivalry.
     /// </summary>
-    public static float GreatestThreat(Campaign campaign, Nation target, Nation asker, out Nation feared)
+    public static float GreatestThreat(Campaign campaign, Nation target, Nation asker, out Nation feared,
+        bool refreshAssessment = true)
     {
         feared = null;
         var worst = 0f;
@@ -258,7 +262,7 @@ public static class SubmissionSystem
             var relation = CampaignDiplomacy.Peek(campaign, target.Id, other.Id);
             var atWar = CampaignDiplomacy.AtWar(campaign, target.Id, other.Id);
             if (!atWar && (relation is null || relation.Opinion > campaign.Defines.AiRivalryThreshold)) continue;
-            var multiple = CampaignIntel.EstimatedStrength(campaign, target.Id, other) / mine;
+            var multiple = CampaignIntel.EstimatedStrength(campaign, target.Id, other, refreshAssessment) / mine;
             if (multiple <= worst) continue;
             worst = multiple;
             feared = other;

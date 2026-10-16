@@ -16,9 +16,11 @@ public partial class DealOrForceGame
     private readonly Dictionary<string, string> _campaignNavigationScreenGroups = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Label> _campaignNavigationCaptions = new();
     private string _campaignNavigationGroup = "";
-    private (float Height, float Preferred, string Group, string Language) _navigationLayoutKey;
+    private (float Height, float Preferred, string Group, string Language, string Filter) _navigationLayoutKey;
     private bool _navigationLayoutApplied;
     private bool _navigationCategoryMode;
+    private LineEdit _campaignNavigationSearch = null!;
+    private string _campaignNavigationFilter = "";
 
     private void BuildCampaignNavigation()
     {
@@ -27,12 +29,14 @@ public partial class DealOrForceGame
         navigation.Resized += LayoutCampaignNavigation;
         navigation.Name = "CampaignNavigation";
         Ui.Place(navigation, "hud.navigation");
-        var margin = Margin(navigation, 4, 6);
-        var stack = new VBoxContainer(); stack.AddThemeConstantOverride("separation", 4); margin.AddChild(stack);
+        var margin = Margin(navigation, (int)Ui.Metric("spacing.xs", 4), 6);
+        var stack = new VBoxContainer();
+        stack.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.navigation_row_gap", 4));
+        margin.AddChild(stack);
 
         _campaignNavigationCategory = new OptionButton
         {
-            Name = "NavigationCategory", CustomMinimumSize = new(0, 32), ClipText = true,
+            Name = "NavigationCategory", CustomMinimumSize = new(0, Ui.Metric("shell.navigation_category_height", 32)), ClipText = true,
             FitToLongestItem = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false
         };
@@ -46,6 +50,21 @@ public partial class DealOrForceGame
             { _campaignNavigationGroup = _campaignNavigationGroups[(int)index]; LayoutCampaignNavigation(); }
         };
 
+        _campaignNavigationSearch = Placeholder(new LineEdit
+        {
+            Name = "NavigationSearch", SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new(0, 28), ClearButtonEnabled = true,
+            TooltipText = Ui.Tip(Tr("Type to filter the navigation rail. Clearing it shows every destination again.")),
+            AccessibilityName = Tr("Navigation search")
+        }, "Search");
+        _campaignNavigationSearch.AddThemeFontSizeOverride("font_size", 12);
+        _campaignNavigationSearch.TextChanged += text =>
+        {
+            _campaignNavigationFilter = text.Trim();
+            LayoutCampaignNavigation();
+        };
+        stack.AddChild(_campaignNavigationSearch);
+
         _campaignNavigationScroll = new ScrollContainer
         {
             Name = "CampaignNavigationScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
@@ -54,7 +73,7 @@ public partial class DealOrForceGame
         };
         stack.AddChild(_campaignNavigationScroll);
         _campaignNavigationRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _campaignNavigationRows.AddThemeConstantOverride("separation", 4);
+        _campaignNavigationRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.navigation_row_gap", 4));
         _campaignNavigationScroll.AddChild(_campaignNavigationRows);
         _screenButtons.Clear(); _campaignNavigationGroups.Clear(); _campaignNavigationEntries.Clear(); _campaignNavigationCaptions.Clear();
         _campaignNavigationScreenGroups.Clear();
@@ -80,6 +99,7 @@ public partial class DealOrForceGame
             var button = ActionButton(item.Short, () => ToggleCampaignScreen(captured), 0, 50, false,
                 SpriteCatalog.TextureOf($"icon_{item.Icon}", $"res://game/gfx/interface/icons/icon_{item.Icon}.png"));
             button.Name = "Nav" + item.Screen.Replace(" ", "");
+            button.SetMeta("navigation_short", item.Short);
             button.SetMeta("icon_above", true); button.ClipText = true;
             button.AddThemeFontSizeOverride("font_size", 10);
             button.AddThemeConstantOverride("icon_max_width", 23);
@@ -93,11 +113,16 @@ public partial class DealOrForceGame
         var media = ActionButton("Sound / Art", OpenMediaLibrary, 0, 42, false,
             SpriteCatalog.TextureOf("icon_ledger", "res://game/gfx/interface/icons/icon_ledger.png"));
         media.Name = "OpenMediaLibraryNavigation"; media.SetMeta("icon_above", true); StyleButton(media, false);
-        media.RemoveMeta("icon_caption_minimum"); media.CustomMinimumSize = new(0, 42);
+        media.RemoveMeta("icon_caption_minimum"); media.CustomMinimumSize = new(0, Ui.Metric("shell.navigation_media_height", 42));
         media.ClipText = true; media.AddThemeFontSizeOverride("font_size", 10); media.AddThemeConstantOverride("icon_max_width", 18);
         media.AccessibilityName = Tr("Sound and artwork");
         Tip(media, "Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign.");
-        stack.AddChild(media);
+        var mediaGroup = _campaignNavigationGroups.LastOrDefault() ?? "OTHER SCREENS";
+        media.SetMeta("navigation_short", "Sound and artwork");
+        _screenButtons["MediaLibrary"] = media;
+        _campaignNavigationEntries.Add((media, mediaGroup));
+        _campaignNavigationScreenGroups["MediaLibrary"] = mediaGroup;
+        _campaignNavigationRows.AddChild(media);
         UpdateScreenButtons();
     }
 
@@ -105,8 +130,8 @@ public partial class DealOrForceGame
     {
         if (_campaignNavigationRows is null || _hudNavigationPanel is null) return;
         var preferred = InterfaceSkin.Metric("shell.navigation_height", 50);
-        var rowRoom = Math.Max(0, _hudNavigationPanel.Size.Y - 64);
-        var key = (rowRoom, preferred, _campaignNavigationGroup, Loc.Language);
+        var rowRoom = Math.Max(0, _hudNavigationPanel.Size.Y - _campaignNavigationSearch.GetCombinedMinimumSize().Y - 18);
+        var key = (rowRoom, preferred, _campaignNavigationGroup, Loc.Language, _campaignNavigationFilter);
         if (_navigationLayoutApplied && _navigationLayoutKey == key) return;
         var selectedCount = _campaignNavigationEntries.Count(entry => entry.Group == _campaignNavigationGroup);
         var plan = ResponsiveHudLayout.Navigation(rowRoom, _campaignNavigationEntries.Count,
@@ -119,12 +144,16 @@ public partial class DealOrForceGame
             plan = ResponsiveHudLayout.Navigation(rowRoom, _campaignNavigationEntries.Count,
                 _campaignNavigationCaptions.Count, _campaignNavigationEntries.Count(entry => entry.Group == _campaignNavigationGroup), preferred);
         }
-        _navigationCategoryMode = plan.CategoryMode;
-        _navigationLayoutKey = (rowRoom, preferred, _campaignNavigationGroup, Loc.Language); _navigationLayoutApplied = true;
-        _campaignNavigationCategory.Visible = plan.CategoryMode;
+        var filtering = !string.IsNullOrWhiteSpace(_campaignNavigationFilter);
+        // A search overrides categories: every matching destination stays on the rail,
+        // grouped under its own heading, so a filtered list is still readable.
+        _navigationCategoryMode = filtering ? false : plan.CategoryMode;
+        _navigationLayoutKey = (rowRoom, preferred, _campaignNavigationGroup, Loc.Language, _campaignNavigationFilter); _navigationLayoutApplied = true;
+        _campaignNavigationCategory.Visible = _navigationCategoryMode;
+        _campaignNavigationSearch.Visible = true;
         var selectedCategory = _campaignNavigationGroups.IndexOf(_campaignNavigationGroup);
         if (selectedCategory >= 0) _campaignNavigationCategory.Select(selectedCategory);
-        foreach (var caption in _campaignNavigationCaptions) caption.Visible = !plan.CategoryMode;
+        foreach (var caption in _campaignNavigationCaptions) caption.Visible = !_navigationCategoryMode && !filtering;
         foreach (var entry in _campaignNavigationEntries)
         {
             var screen = _screenButtons.First(pair => pair.Value == entry.Button).Key;
@@ -141,8 +170,20 @@ public partial class DealOrForceGame
         UpdateScreenButtons();
     }
 
-    private bool NavigationDestinationVisible(string screen) => !_navigationCategoryMode ||
-        !_campaignNavigationScreenGroups.TryGetValue(screen, out var group) || group == _campaignNavigationGroup;
+    private bool NavigationDestinationVisible(string screen)
+    {
+        if (!string.IsNullOrWhiteSpace(_campaignNavigationFilter))
+        {
+            if (!_screenButtons.TryGetValue(screen, out var button)) return false;
+            var source = button.GetMeta("navigation_short", screen).AsString();
+            return button.Text.Contains(_campaignNavigationFilter, StringComparison.OrdinalIgnoreCase)
+                || source.Contains(_campaignNavigationFilter, StringComparison.OrdinalIgnoreCase)
+                || Tr(source).Contains(_campaignNavigationFilter, StringComparison.OrdinalIgnoreCase)
+                || screen.Contains(_campaignNavigationFilter, StringComparison.OrdinalIgnoreCase);
+        }
+        return !_navigationCategoryMode ||
+            !_campaignNavigationScreenGroups.TryGetValue(screen, out var group) || group == _campaignNavigationGroup;
+    }
 
     private bool NavigationDestinationEnabled(string screen) => MechanicFeatures.ScreenEnabled(_campaign, screen) &&
         (!string.Equals(screen, "Support", StringComparison.OrdinalIgnoreCase) || SupportTypeCatalog.All.Any(t => SupportCore.Enabled(_campaign, t)));

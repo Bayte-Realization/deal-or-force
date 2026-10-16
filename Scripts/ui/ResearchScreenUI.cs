@@ -92,7 +92,12 @@ public partial class DealOrForceGame
         body.AddThemeConstantOverride("separation", 16);
         rows.AddChild(body);
         var browser = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        body.AddChild(browser);
+        var browserFrame = new PanelContainer { Name = "ResearchCatalogueWell", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        browserFrame.SetMeta("atlas_section_ground", "shell.background");
+        browserFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("shell.background"));
+        AtlasSurfaceSkin.Attach(browserFrame, AtlasSurfaceSkin.Level.Inset);
+        body.AddChild(browserFrame);
+        browserFrame.AddChild(browser);
         _researchListScroll = new ScrollContainer { Name = "ResearchCatalogueScroll", SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
         browser.AddChild(_researchListScroll);
         _researchList = new VBoxContainer { Name = "ResearchCatalogue", SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -119,7 +124,12 @@ public partial class DealOrForceGame
             Name = "ResearchDetailsScroll", CustomMinimumSize = new(Math.Clamp(InterfaceSkin.Metric("research.details_width", 350), 280, 420), 0),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        body.AddChild(_researchDetailScroll);
+        var detailFrame = new PanelContainer { Name = "ResearchProjectPlate" };
+        detailFrame.SetMeta("atlas_section_ground", "surface.inset");
+        detailFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section());
+        AtlasSurfaceSkin.Attach(detailFrame, AtlasSurfaceSkin.Level.Raised, "surface.inset");
+        body.AddChild(detailFrame);
+        detailFrame.AddChild(_researchDetailScroll);
         body.Resized += () =>
         {
             var minimum = Math.Clamp(InterfaceSkin.Metric("research.details_width", 350), 280, 420);

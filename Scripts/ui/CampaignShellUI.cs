@@ -87,6 +87,7 @@ public partial class DealOrForceGame
         LayoutHudReadability();
         LayoutCampaignNavigation();
         LayoutMapControls();
+        LayoutMapSelectionCards();
         LayoutPickerActions();
         // Baseline rectangles remain moddable in game/gui. Only the short outliner is
         // clamped to available height; it must not cover the map toolbar at 720p.
@@ -109,6 +110,8 @@ public partial class DealOrForceGame
         if (_outliner is null) return;
         var collapsed = Math.Max(InterfaceSkin.Metric("shell.outliner_collapsed", 48), _outliner.GetCombinedMinimumSize().Y);
         var room = Mathf.Clamp(Size.Y - _outliner.OffsetTop - 68, 180, InterfaceSkin.Metric("shell.outliner_height", 600));
+        if (_regionCard is { Visible: true } && _outliner.Position.X + _outliner.Size.X > _regionCard.Position.X)
+            room = Mathf.Min(room, Mathf.Max(collapsed, _regionCard.Position.Y - _outliner.OffsetTop - Ui.Metric("hud.dock_gap", 8)));
         var wanted = room;
         // The frame's own minimum is the header, the margins and the border - the scroll counts
         // for nothing there - and what scrolls is measured on its own.

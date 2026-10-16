@@ -39,6 +39,7 @@ public partial class DealOrForceGame
     private VBoxContainer _diplomacyDetailBody = null!;
     private VBoxContainer _diplomacyPactRows = null!;
     private VBoxContainer _diplomacyActionRows = null!;
+    private Control _diplomacyActionColumn = null!;
     private Label _diplomacyFeedback = null!;
     private Button _diplomacyImproveButton = null!;
     private Button _diplomacyDenounceButton = null!;
@@ -199,10 +200,12 @@ public partial class DealOrForceGame
         // ---- the actions: what you can do about any of it.
         var actions = new VBoxContainer
         {
+            Name = "DiplomacyActionColumn",
             CustomMinimumSize = new Vector2(270, 0),
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
         actions.AddThemeConstantOverride("separation", 7);
+        _diplomacyActionColumn = actions;
         body.AddChild(actions);
         var actionScroll = new ScrollContainer
         {
@@ -303,6 +306,8 @@ public partial class DealOrForceGame
         if (_diplomacyActionSections.Add(section))
             _diplomacyActionRows.AddChild(Title(section, 12, Ui.Colour("text.caption")));
         var button = ActionButton(caption, callback, 0, 34, primary);
+        button.ClipText = true;
+        button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _diplomacyActionRows.AddChild(button);
         return button;
@@ -678,6 +683,7 @@ public partial class DealOrForceGame
         {
             var panel = new PanelContainer();
             panel.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 12));
+            AtlasSurfaceSkin.Attach(panel, AtlasSurfaceSkin.Level.Inset, "war.card");
             _diplomacyDetailBody.AddChild(panel);
             var stack = new VBoxContainer();
             stack.AddThemeConstantOverride("separation", 7);
@@ -688,6 +694,8 @@ public partial class DealOrForceGame
             if (aside.Length > 0)
             {
                 var note = Text(aside, 13, asideColour ?? Ui.Colour("text.accent"));
+                note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                note.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 note.HorizontalAlignment = HorizontalAlignment.Right;
                 head.AddChild(note);
             }
@@ -714,6 +722,7 @@ public partial class DealOrForceGame
         // ---- who they are, and what they think of us.
         var banner = new PanelContainer();
         banner.AddThemeStyleboxOverride("panel", WarInsetStyle(18, 14));
+        AtlasSurfaceSkin.Attach(banner, AtlasSurfaceSkin.Level.Raised, "war.card");
         _diplomacyDetailBody.AddChild(banner);
         var top = new HBoxContainer();
         top.AddThemeConstantOverride("separation", 14);
@@ -732,7 +741,7 @@ public partial class DealOrForceGame
                 Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Percent(nation.Stability))
             : Tr("What they have is not known to us."), 12, Ui.Colour("text.muted"))));
 
-        var aside = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter, CustomMinimumSize = new Vector2(160, 0) };
+        var aside = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter, CustomMinimumSize = new Vector2(own ? 0 : 160, 0) };
         aside.AddThemeConstantOverride("separation", 2);
         top.AddChild(aside);
         Label Right(Label label)
@@ -753,15 +762,17 @@ public partial class DealOrForceGame
         }
         if (own)
         {
+            _diplomacyActionColumn.Visible = false;
             _diplomacyActionRows.Visible = false;
             aside.AddChild(Right(RowLabel("YOUR COUNTRY", 11, Ui.Colour("text.accent"))));
             RefreshOwnDiplomacy(player, Field, Text, Giving, Bar);
             Society();
             return;
         }
+        _diplomacyActionColumn.Visible = true;
         _diplomacyActionRows.Visible = true;
 
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
         var opinionColour = relation.Opinion > 0 ? positive : relation.Opinion < 0 ? negative : Ui.Colour("text.body_soft");
         aside.AddChild(Right(RowLabel("THEIR OPINION OF US", 10, Ui.Colour("text.caption"))));
         aside.AddChild(Right(Text(relation.Opinion.ToString("+0;-0;0"), 28, opinionColour)));
@@ -1118,7 +1129,7 @@ public partial class DealOrForceGame
         RefreshDiplomaticPeaceButton(_diplomacyPeaceButton, nation);
         RefreshIntelNetworkAction(player, nation);
         _diplomacyWarButton.Visible = !_diplomacyPeaceButton.Visible;
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
         var cooldown = _campaign.ElapsedDays - relation.LastActionDay < 14;
         _diplomacyImproveButton.Disabled = cooldown || player.Treasury < 0.1f;
         _diplomacyDenounceButton.Disabled = cooldown;
@@ -1138,7 +1149,7 @@ public partial class DealOrForceGame
         else
         {
             _diplomacyAllianceButton.Text = Tr("Propose alliance");
-            var can = AllianceSystem.CanPropose(_campaign, player, nation, out var refusal);
+            var can = AllianceSystem.CanPropose(_campaign, player, nation, out var refusal, preview: true);
             _diplomacyAllianceButton.Disabled = !can;
             if (!can)
             {
@@ -1147,7 +1158,7 @@ public partial class DealOrForceGame
             else
             {
                 var why = new Simulation.Breakdown();
-                var willingness = AllianceSystem.Willingness(_campaign, nation, player, why);
+                var willingness = AllianceSystem.Willingness(_campaign, nation, player, why, refreshAssessment: false);
                 var needed = _campaign.Defines.AllianceWillingness;
                 var parts = why.Entries
                     .OrderByDescending(entry => Math.Abs(entry.Value))

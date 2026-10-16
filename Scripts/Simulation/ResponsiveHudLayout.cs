@@ -44,6 +44,19 @@ public static class ResponsiveHudLayout
             Math.Clamp(Finite(desired.Y, inset), inset, viewportHeight - inset - height), width, height);
     }
 
+    /// <summary>Keep a bottom dossier above the map toolbar, including a wrapped/modded toolbar.</summary>
+    public static Bounds AboveToolbar(Bounds desired, Bounds toolbar, float viewportWidth, float viewportHeight,
+        float topLimit, float gap = 8)
+    {
+        var fitted = Fit(desired, viewportWidth, viewportHeight);
+        topLimit = Math.Clamp(Finite(topLimit, 8), 8, Math.Max(8, Finite(viewportHeight, 16) - 9));
+        gap = Math.Clamp(Finite(gap, 8), 0, 32);
+        if (fitted.X >= toolbar.X + toolbar.Width || fitted.X + fitted.Width <= toolbar.X) return fitted;
+        var bottom = Math.Max(topLimit + 1, Math.Min(fitted.Y + fitted.Height, toolbar.Y - gap));
+        var height = Math.Min(fitted.Height, bottom - topLimit);
+        return Fit(new(fitted.X, bottom - height, fitted.Width, height), viewportWidth, viewportHeight);
+    }
+
     public static int DrawerColumns(float width, float desiredCellWidth = 190, int maximum = 3) =>
         Math.Clamp((int)MathF.Floor(Math.Max(1, Finite(width, 1)) / Math.Max(80, Finite(desiredCellWidth, 190))), 1, Math.Clamp(maximum, 1, 8));
 

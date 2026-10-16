@@ -58,7 +58,7 @@ public partial class DealOrForceGame
     {
         if (_tradeAgreementButton is null || _campaign?.Player is null || nation == _campaign.Player) return;
         var player = _campaign.Player;
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
 
         RefreshAgreementButton(_tradeAgreementButton, nation, relation, AgreementKind.TradeAgreement,
             "Propose trade agreement", "Cancel trade agreement",
@@ -69,7 +69,7 @@ public partial class DealOrForceGame
                 "Break the promise. Without it you may declare war on them - and everybody learns what your word is worth: {0} notoriety, and they will not forget it for five years.",
                 _campaign.Defines.NonAggressionPactBreakNotoriety.ToString("0")));
 
-        var aid = AgreementSystem.AidAmount(_campaign, player, nation, out var why);
+        var aid = AgreementSystem.AidAmount(_campaign, player, nation, out var why, preview: true);
         _aidButton.Text = aid > 0f
             ? Simulation.Loc.Format("Send aid ({0})", Fmt.Money(aid))
             : Tr("Send aid");
@@ -100,7 +100,7 @@ public partial class DealOrForceGame
             return;
         }
         button.Text = Tr(propose);
-        var can = AgreementSystem.CanPropose(_campaign, player, nation, kind, out var refusal);
+        var can = AgreementSystem.CanPropose(_campaign, player, nation, kind, out var refusal, preview: true);
         button.Disabled = !can;
         if (!can)
         {
@@ -108,7 +108,7 @@ public partial class DealOrForceGame
             return;
         }
         var why = new Simulation.Breakdown();
-        var willingness = AgreementSystem.Willingness(_campaign, nation, player, kind, why);
+        var willingness = AgreementSystem.Willingness(_campaign, nation, player, kind, why, preview: true);
         var needed = AgreementSystem.Needed(_campaign, kind);
         var parts = why.Entries
             .OrderByDescending(entry => System.Math.Abs(entry.Value))

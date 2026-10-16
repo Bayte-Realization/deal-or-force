@@ -242,7 +242,7 @@ public partial class DealOrForceGame
     private void RefreshPactButtons(Nation nation)
     {
         if (nation == _campaign.Player) return;
-        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, _campaign.Player.Id, nation.Id);
         var offered = AllianceSystem.OfferedTo(_campaign, _campaign.Player);
 
         if (relation.Stance == DiplomaticStance.Allied)
@@ -260,13 +260,13 @@ public partial class DealOrForceGame
         else
         {
             _allianceButton.Text = Tr("Propose alliance");
-            var can = AllianceSystem.CanPropose(_campaign, _campaign.Player, nation, out var refusal);
+            var can = AllianceSystem.CanPropose(_campaign, _campaign.Player, nation, out var refusal, preview: true);
             _allianceButton.Disabled = !can;
             if (!can) _allianceButton.TooltipText = Ui.Tip(refusal);
             else
             {
                 var why = new Simulation.Breakdown();
-                var willingness = AllianceSystem.Willingness(_campaign, nation, _campaign.Player, why);
+                var willingness = AllianceSystem.Willingness(_campaign, nation, _campaign.Player, why, refreshAssessment: false);
                 var needed = _campaign.Defines.AllianceWillingness;
                 var parts = why.Entries
                     .OrderByDescending(entry => System.Math.Abs(entry.Value))

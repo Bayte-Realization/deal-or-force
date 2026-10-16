@@ -130,6 +130,15 @@ public static class CampaignDiplomacy
             : null;
     }
 
+    /// <summary>
+    /// Read an existing relation or an unrecorded neutral baseline for a preview.
+    /// Never registers the fallback in the campaign. Call Get before writing a decision;
+    /// the existing object returned here is borrowed for reading, not a detached copy.
+    /// </summary>
+    public static DiplomaticRelation ReadOrNeutral(Campaign campaign, int a, int b) =>
+        a == b || a < 0 || b < 0 ? null : Peek(campaign, a, b)
+            ?? new DiplomaticRelation { A = Math.Min(a, b), B = Math.Max(a, b) };
+
     public static bool AtWar(Campaign campaign, int a, int b)
     {
         // Called inside many diplomatic pair/third-country loops. Avoid allocating
